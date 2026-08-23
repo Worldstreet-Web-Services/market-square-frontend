@@ -1,0 +1,300 @@
+/* source(none) keeps Tailwind from scanning outside this app. Every directory
+   holding markup must be listed below — a class used only in an unlisted
+   directory is silently dropped from the stylesheet. */
+@import "tailwindcss" source(none);
+@source "../app";
+@source "../components";
+@source "../features";
+@source "../lib";
+@source "../hooks";
+
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-serif: var(--font-body);
+
+  /* Ark brand is monochrome: no purple, no gold. The accent is silver. */
+  --color-accent: #d4d4d8;
+  /* Gain and loss stay semantic (functional, not brand color). */
+  --color-up: #7ce7b0;
+  --color-down: #f6a5a5;
+  /* Dark text on light (silver/white) buttons. */
+  --color-ink: #0a0a0a;
+  --color-panel: #0a0a0a;
+  --color-sheet: #0c0c0e;
+
+  /* Surface ladder: depth on pure black comes from lighter surfaces plus
+     hairline light borders, never shadows. */
+  --color-ground: #000000;
+  --color-raised: #0f0f11;
+  --color-overlay: #18181b;
+  /* Text ladder: headings #fafafa, body silver, meta zinc — never pure white
+     body text on pure black (halation). */
+  --color-heading: #fafafa;
+  --color-body: #d4d4d8;
+  --color-meta: #71717a;
+
+  --color-grey-100: #f4f4f4;
+  --color-grey-200: #dcdcdc;
+  --color-grey-300: #bfbfbf;
+  --color-grey-400: #9b9b9b;
+  --color-grey-500: #7a7a7a;
+  --color-grey-600: #5a5a5a;
+  --color-grey-700: #3c3c3c;
+  --color-grey-800: #1c1c1c;
+  --color-grey-900: #0f0f0f;
+}
+
+body {
+  background: #000;
+  color: #d4d4d8;
+  font-family: var(--font-sans), sans-serif;
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+@utility ws-display {
+  font-family: var(--font-serif), sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fafafa;
+}
+
+/* Meta line: 12px uppercase, tracked, zinc. */
+@utility ws-meta {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #71717a;
+}
+
+/* Raised / overlay surfaces: lighter fill + top hairline instead of shadow. */
+@utility ws-raised {
+  background: #0f0f11;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility ws-overlay {
+  background: #18181b;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility ws-card {
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+@utility ws-inset {
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Glass is reserved for floating chrome (tab bar, sheets, toasts): dark fill
+   so content reads through without lightening the ground. Never animate the
+   blur radius. */
+@utility ws-glass {
+  background: rgba(20, 20, 22, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Invalid-input state for ws-inset field containers. !important because
+   ws-inset sets border-color through its border shorthand. */
+@utility ws-invalid {
+  border-color: rgba(246, 165, 165, 0.55) !important;
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Radial page wash behind main content — a faint silver bloom on black. */
+@utility ws-wash {
+  background:
+    radial-gradient(1200px 500px at 50% -10%, rgba(212, 212, 216, 0.07), transparent 70%),
+    #000;
+}
+
+/* Skeleton shimmer. Under reduced motion it holds a static tint. */
+@keyframes ws-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@utility ws-skeleton {
+  border-radius: 10px;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.05) 40%,
+    rgba(255, 255, 255, 0.11) 50%,
+    rgba(255, 255, 255, 0.05) 60%
+  );
+  background-size: 200% 100%;
+  animation: ws-shimmer 1.6s linear infinite;
+}
+
+/* The live badge's breathing dot. Reads as a pulse, not a flash. */
+@keyframes ws-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(212, 212, 216, 0.5);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 8px 2px rgba(212, 212, 216, 0.3);
+  }
+}
+
+@utility ws-live-dot {
+  animation: ws-live-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-skeleton,
+  .ws-live-dot {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Motion system (spec §5)
+--------------------------------------------------------------------------- */
+
+/* Press spring: anything touched compresses to 0.97 and springs back. */
+@utility ws-press {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ws-press:active {
+  transform: scale(0.97);
+}
+
+/* Scroll-driven entrance: opacity + 8px rise, compositor-run. Falls back to
+   fully visible where animation-timeline is unsupported. */
+@keyframes ws-enter-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .ws-enter {
+    animation: ws-enter-in linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 40%;
+  }
+}
+
+/* Floating tap reactions: silver hearts drifting up with randomized vars. */
+@keyframes ws-reaction-float {
+  0% {
+    opacity: 0.9;
+    transform: translate(0, 0) scale(0.6) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--rx, 0px), -42vh) scale(1.15) rotate(var(--rr, 0deg));
+  }
+}
+
+.ws-reaction {
+  position: absolute;
+  pointer-events: none;
+  animation: ws-reaction-float var(--rd, 2.4s) ease-out forwards;
+  will-change: transform, opacity;
+}
+
+/* Double-tap heart burst on snap-feed items. */
+@keyframes ws-heart-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  60% {
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05) translateY(-10px);
+  }
+}
+
+.ws-heart-burst {
+  animation: ws-heart-burst 0.9s ease-out forwards;
+}
+
+/* Overlay chat column: upward-scrolling, top fade via mask, glow-free
+   legibility from text shadow rather than an opaque panel. */
+.ws-chat-mask {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 22%);
+}
+
+.ws-text-shadow {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* Vertical snap feed (mobile Home). */
+.ws-snap-feed {
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+}
+.ws-snap-item {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* View Transitions: quick crossfade base; morphs come from per-element
+   view-transition-name set inline on stream thumbnails. */
+@supports (view-transition-name: none) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.22s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-press,
+  .ws-press:active {
+    transition: none;
+    transform: none;
+  }
+  .ws-enter {
+    animation: none;
+  }
+  .ws-reaction {
+    animation-duration: 0.8s;
+  }
+  .ws-heart-burst {
+    animation: ws-heart-burst 0.5s ease-out forwards;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

@@ -1,0 +1,101 @@
+import { z } from "zod";
+import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
+
+// Backend Post: author id plus a hydrated ProfileSummary on feed items.
+// likedByMe is client-side state only — the backend does not return it; the
+// optimistic like cache is the source of truth for the heart's fill.
+export const PostSchema = z.object({
+  id: z.string(),
+  authorId: z.string().optional().default(""),
+  kind: z.enum(["update", "story"]).catch("update"),
+  text: z.string(),
+  mediaUrl: z.string().nullable().optional().default(null),
+  thumbnailUrl: z.string().nullable().optional().default(null),
+  deepLink: DeepLinkSchema.nullable().optional().default(null),
+  storyExpiresAt: z.string().nullable().optional().default(null),
+  createdAt: z.string(),
+  likeCount: z.number(),
+  commentCount: z.number(),
+  likedByMe: z.boolean().optional().default(false),
+  author: ProfileSchema.nullable().optional().default(null),
+});
+
+// Backend Comment carries only authorId — no hydrated author. The sheet
+// falls back to a shortened id when author is absent.
+export const CommentSchema = z.object({
+  id: z.string(),
+  authorId: z.string().optional().default(""),
+  text: z.string(),
+  createdAt: z.string(),
+  author: ProfileSchema.nullable().optional().default(null),
+});
+
+// The feed's view of a backend Stream: no owner object, no live viewerCount
+// (that's detail-only) — peakViewers is what the list carries.
+export const FeedStreamSchema = z.object({
+  id: z.string(),
+  ownerId: z.string().optional().default(""),
+  title: z.string(),
+  category: z.string().optional().default(""),
+  status: z.string(),
+  visibility: z.string().optional().default("public"),
+  ticketPriceKash: z.string().nullable().optional().default(null),
+  vipPriceKash: z.string().nullable().optional().default(null),
+  thumbnailUrl: z.string().nullable().optional().default(null),
+  peakViewers: z.number().optional().default(0),
+  scheduledAt: z.string().nullable().optional().default(null),
+  owner: ProfileSchema.nullable().optional().default(null),
+});
+
+export const FeedActivitySchema = z.object({
+  id: z.string(),
+  hostId: z.string().optional().default(""),
+  type: z.string(),
+  title: z.string(),
+  description: z.string().nullable().optional().default(null),
+  startsAt: z.string(),
+  status: z.string().optional().default("scheduled"),
+  deepLink: DeepLinkSchema.nullable().optional().default(null),
+  owner: ProfileSchema.nullable().optional().default(null),
+});
+
+export const PlatformEventSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  body: z.string().nullable().optional().default(null),
+  occurredAt: z.string(),
+});
+
+export const FeedItemSchema = z.object({
+  id: z.string(),
+  type: z.enum(["post", "stream", "activity", "platform_event"]),
+  occurredAt: z.string(),
+  deepLink: DeepLinkSchema.nullable().optional().default(null),
+  post: PostSchema.nullable().optional().default(null),
+  stream: FeedStreamSchema.nullable().optional().default(null),
+  activity: FeedActivitySchema.nullable().optional().default(null),
+  platformEvent: PlatformEventSchema.nullable().optional().default(null),
+});
+
+export const FeedPageSchema = z.object({
+  items: z.array(FeedItemSchema),
+  nextCursor: z.string().nullable().optional().default(null),
+});
+
+export const CommentsPageSchema = z.object({
+  items: z.array(CommentSchema),
+  nextCursor: z.string().nullable().optional().default(null),
+});
+
+export const LikeResultSchema = z.object({ liked: z.boolean(), likeCount: z.number() });
+
+// Backend report reasons are a fixed enum.
+export const ReportReasonSchema = z.enum(["spam", "abuse", "scam", "other"]);
+
+export type Post = z.infer<typeof PostSchema>;
+export type Comment = z.infer<typeof CommentSchema>;
+export type FeedItem = z.infer<typeof FeedItemSchema>;
+export type FeedStream = z.infer<typeof FeedStreamSchema>;
+export type FeedPage = z.infer<typeof FeedPageSchema>;
+export type ReportReason = z.infer<typeof ReportReasonSchema>;
+export type Lane = "for-you" | "following" | "live" | "platform";
