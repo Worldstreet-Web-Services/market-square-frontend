@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { isVideoUrl } from "@/lib/media";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, relativeTime } from "@/lib/format";
@@ -35,7 +36,9 @@ function PostSlide({ post }: { post: Post }) {
   const gate = useGate();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [burst, setBurst] = useState(0);
+  const [muted, setMuted] = useState(true);
   const lastTap = useRef(0);
+  const hasVideo = Boolean(post.mediaUrl && isVideoUrl(post.mediaUrl));
 
   const doLike = () => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }));
 
@@ -47,6 +50,8 @@ function PostSlide({ post }: { post: Post }) {
       if (!post.likedByMe) gate(() => like.mutate({ postId: post.id, like: true }));
     } else {
       lastTap.current = now;
+      // Sound only on an explicit tap — never autoplayed.
+      if (hasVideo) setMuted((v) => !v);
     }
   };
 
@@ -55,9 +60,29 @@ function PostSlide({ post }: { post: Post }) {
 
   return (
     <section className="ws-snap-item relative flex h-dvh w-full flex-col justify-center overflow-hidden">
-      {/* content stage */}
+      {/* content stage: media fills the slide; text posts stay typographic. */}
+      {post.mediaUrl &&
+        (hasVideo ? (
+          <video
+            src={post.mediaUrl}
+            muted={muted}
+            autoPlay
+            loop
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- author-supplied media
+          <img src={post.mediaUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ))}
       <button className="absolute inset-0 cursor-default" onClick={onTap} aria-label="Post" />
-      <div className="pointer-events-none px-6 pb-40">
+      {hasVideo && muted && (
+        <span className="ws-glass pointer-events-none absolute left-4 top-14 rounded-full px-2.5 py-1 text-[10px] font-semibold text-body">
+          Tap for sound
+        </span>
+      )}
+      <div className={cn("pointer-events-none px-6 pb-40", post.mediaUrl && "ws-text-shadow")}>
         <p className="ws-display text-2xl leading-snug">{post.text}</p>
       </div>
 
@@ -65,7 +90,7 @@ function PostSlide({ post }: { post: Post }) {
       {burst > 0 && (
         <span
           key={burst}
-          className="ws-heart-burst pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-accent"
+          className="ws-heart-burst pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-like"
           aria-hidden
         >
           <IconHeart className="h-24 w-24" filled />
@@ -103,7 +128,7 @@ function PostSlide({ post }: { post: Post }) {
             <span
               className={cn(
                 "flex h-11 w-11 items-center justify-center rounded-full bg-black/40",
-                post.likedByMe ? "text-down" : "text-heading"
+                post.likedByMe ? "text-like" : "text-heading"
               )}
             >
               <IconHeart className="h-5 w-5" filled={post.likedByMe} />

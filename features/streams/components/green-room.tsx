@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { IconCamera, IconCheck, IconCopy, IconLink } from "@/components/ui/icons";
 import { InlineError } from "@/components/ui/states";
+import { UploadField } from "@/components/ui/upload-field";
 import { useDeviceCheck } from "@/features/streams/hooks/use-device-check";
 import { useGoLive, useUpdateStream } from "@/features/streams/hooks/use-streams";
 import { streamPriceLabel } from "@/features/streams/components/stream-card";
@@ -66,6 +67,7 @@ function StreamInfoCard({
   );
   const [ticket, setTicket] = useState(stream.ticketPriceKash ?? "");
   const [vip, setVip] = useState(stream.vipPriceKash ?? "");
+  const [cover, setCover] = useState<string | null>(stream.thumbnailUrl);
 
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/live/${stream.id}` : `/live/${stream.id}`;
 
@@ -96,6 +98,7 @@ function StreamInfoCard({
             <input value={ticket} onChange={(e) => setTicket(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="Ticket KASH" inputMode="decimal" className={inputClass} aria-label="Ticket price" />
             <input value={vip} onChange={(e) => setVip(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="VIP KASH" inputMode="decimal" className={inputClass} aria-label="VIP price" />
           </div>
+          <UploadField value={cover} onChange={setCover} label="Cover" />
           {update.isError && <InlineError error={update.error} fallback="Couldn't save changes." />}
           <div className="flex gap-2">
             <Button
@@ -103,7 +106,13 @@ function StreamInfoCard({
               loading={update.isPending}
               onClick={() =>
                 update.mutate(
-                  { title: title.trim() || undefined, category, ticketPriceKash: ticket, vipPriceKash: vip },
+                  {
+                    title: title.trim() || undefined,
+                    category,
+                    ticketPriceKash: ticket,
+                    vipPriceKash: vip,
+                    thumbnailUrl: cover ?? undefined,
+                  },
                   { onSuccess: () => setEditing(false) }
                 )
               }

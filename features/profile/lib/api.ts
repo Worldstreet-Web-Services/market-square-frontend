@@ -35,7 +35,12 @@ export async function setFollow(profileId: string, follow: boolean) {
   return FollowResultSchema.parse(follow ? await msApi.post(path) : await msApi.del(path));
 }
 
-export async function updateMe(input: { username?: string; displayName?: string; bio?: string }) {
+export async function updateMe(input: {
+  username?: string;
+  displayName?: string;
+  bio?: string;
+  avatarUrl?: string;
+}) {
   return ProfileSchema.parse(await msApi.patch("/me", input));
 }
 

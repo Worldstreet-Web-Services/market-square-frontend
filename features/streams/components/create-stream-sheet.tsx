@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { InlineError } from "@/components/ui/states";
+import { UploadField } from "@/components/ui/upload-field";
 import { useCreateStream } from "@/features/streams/hooks/use-streams";
 import { STREAM_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
 
@@ -88,15 +89,11 @@ export function CreateStreamSheet({
             autoFocus
           />
         </label>
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-semibold text-grey-400">Cover URL (optional)</span>
-          <input
-            value={draft.thumbnailUrl}
-            onChange={(e) => set("thumbnailUrl", e.target.value)}
-            placeholder="https://…"
-            className={inputClass}
-          />
-        </label>
+        <UploadField
+          value={draft.thumbnailUrl || null}
+          onChange={(url) => set("thumbnailUrl", url ?? "")}
+          label="Cover (optional)"
+        />
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold text-grey-400">Category</span>
           <select

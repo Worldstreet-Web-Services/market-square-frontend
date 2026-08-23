@@ -6,6 +6,7 @@ import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
 import { resolveDeepLink } from "@/lib/deeplink";
+import { isVideoUrl } from "@/lib/media";
 import { useGate } from "@/hooks/use-gate";
 import { Avatar } from "@/components/ui/avatar";
 import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
@@ -105,14 +106,23 @@ export function PostCard({ post }: { post: Post }) {
           <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-grey-100">
             {post.text}
           </p>
-          {post.mediaUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
-            <img
-              src={post.mediaUrl}
-              alt=""
-              className="ws-inset mt-3 max-h-96 w-full object-cover"
-            />
-          )}
+          {post.mediaUrl &&
+            (isVideoUrl(post.mediaUrl) ? (
+              <video
+                src={post.mediaUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="ws-inset mt-3 max-h-96 w-full"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+              <img
+                src={post.mediaUrl}
+                alt=""
+                className="ws-inset mt-3 max-h-96 w-full object-cover"
+              />
+            ))}
           {cta && (
             <Link
               href={cta.href}
@@ -127,8 +137,8 @@ export function PostCard({ post }: { post: Post }) {
             <button
               onClick={() => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }))}
               className={cn(
-                "flex items-center gap-1.5 text-xs transition-colors hover:text-down",
-                post.likedByMe && "text-down"
+                "flex items-center gap-1.5 text-xs transition-colors hover:text-like",
+                post.likedByMe && "text-like"
               )}
               aria-label={post.likedByMe ? "Unlike" : "Like"}
             >

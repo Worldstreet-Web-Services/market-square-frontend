@@ -63,7 +63,7 @@ function PostsTab({ username }: { username: string }) {
           <li key={post.id} className="ws-card p-4">
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-grey-100">{post.text}</p>
             <div className="mt-2 flex items-center gap-4 text-xs text-grey-500">
-              <span className="flex items-center gap-1">
+              <span className={cn("flex items-center gap-1", post.likedByMe && "text-like")}>
                 <IconHeart className="h-3.5 w-3.5" filled={post.likedByMe} /> {formatCount(post.likeCount)}
               </span>
               <span className="flex items-center gap-1">

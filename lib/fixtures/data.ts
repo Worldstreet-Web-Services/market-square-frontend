@@ -6,6 +6,7 @@ import "server-only";
 
 export interface FxProfile {
   id: string;
+  avatarUrl?: string | null;
   username: string;
   displayName: string;
   bio: string;
@@ -38,6 +39,7 @@ export interface FxComment {
 
 export interface FxStream {
   id: string;
+  thumbnailUrl?: string | null;
   ownerId: string;
   title: string;
   description: string;

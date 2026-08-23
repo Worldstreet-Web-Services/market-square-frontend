@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
+import { useLogout } from "@/hooks/use-logout";
 import { ClaimUsernameGate } from "@/features/profile";
+import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import {
   IconCalendar,
@@ -65,6 +68,9 @@ function RailProfile() {
   const { ready, authenticated, login } = useAuth();
   const me = useMe();
   const pathname = usePathname();
+  const router = useRouter();
+  const logout = useLogout();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (!ready) return <div className="ws-skeleton h-10 w-10 rounded-full" />;
   if (!authenticated) {
@@ -82,17 +88,49 @@ function RailProfile() {
   const href = me.data ? `/u/${me.data.username}` : "/auth";
   const active = me.data ? isActive(pathname, `/u/${me.data.username}`) : false;
   return (
-    <Link
-      href={href}
-      aria-label="My profile"
-      title={me.data?.displayName ?? "My profile"}
-      className={cn(
-        "ws-press rounded-full",
-        active && "ring-2 ring-accent ring-offset-2 ring-offset-black"
+    <div className="relative">
+      <button
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-label="Account menu"
+        aria-expanded={menuOpen}
+        title={me.data?.displayName ?? "My profile"}
+        className={cn(
+          "ws-press rounded-full",
+          active && "ring-2 ring-accent ring-offset-2 ring-offset-black"
+        )}
+      >
+        <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={36} />
+      </button>
+      {menuOpen && (
+        <>
+          <button
+            aria-label="Close menu"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setMenuOpen(false)}
+          />
+          <div className="ws-overlay absolute bottom-0 left-full z-20 ml-2 w-44 rounded-2xl p-1.5">
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                router.push(href);
+              }}
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-grey-200 transition-colors hover:bg-white/10"
+            >
+              View profile
+            </button>
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                void logout();
+              }}
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-down transition-colors hover:bg-white/10"
+            >
+              Log out
+            </button>
+          </div>
+        </>
       )}
-    >
-      <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={36} />
-    </Link>
+    </div>
   );
 }
 
@@ -101,20 +139,68 @@ function MobileProfileTab() {
   const router = useRouter();
   const me = useMe();
   const pathname = usePathname();
+  const logout = useLogout();
+  const [menuOpen, setMenuOpen] = useState(false);
   const active = me.data ? isActive(pathname, `/u/${me.data.username}`) : false;
   const href = !ready || !authenticated ? "/auth" : me.data ? `/u/${me.data.username}` : "/auth";
+
+  if (!authenticated) {
+    return (
+      <button
+        onClick={() => router.push("/auth")}
+        aria-label="Sign in"
+        className="ws-press flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-full text-meta"
+      >
+        <IconUser className="h-5 w-5" />
+        <span className="text-[9px] font-semibold">Sign in</span>
+      </button>
+    );
+  }
+
   return (
-    <button
-      onClick={() => router.push(href)}
-      aria-label="Profile"
-      className={cn(
-        "ws-press flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-full",
-        active ? "text-heading" : "text-meta"
+    <div className="relative">
+      <button
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-label="Profile menu"
+        aria-expanded={menuOpen}
+        className={cn(
+          "ws-press flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-full",
+          active ? "text-heading" : "text-meta"
+        )}
+      >
+        <IconUser className="h-5 w-5" />
+        <span className="text-[9px] font-semibold">You</span>
+      </button>
+      {menuOpen && (
+        <>
+          <button
+            aria-label="Close menu"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setMenuOpen(false)}
+          />
+          <div className="ws-overlay absolute bottom-14 right-0 z-20 w-44 rounded-2xl p-1.5">
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                router.push(href);
+              }}
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-grey-200 transition-colors hover:bg-white/10"
+            >
+              View profile
+            </button>
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                void logout();
+              }}
+              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-down transition-colors hover:bg-white/10"
+            >
+              Log out
+            </button>
+          </div>
+        </>
       )}
-    >
-      <IconUser className="h-5 w-5" />
-      <span className="text-[9px] font-semibold">You</span>
-    </button>
+    </div>
   );
 }
 
@@ -247,6 +333,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* First-load claim-username prompt for freshly created profiles. */}
       <ClaimUsernameGate />
+      {/* Session-expiry watchdog: logs out properly instead of half-stuck. */}
+      <SessionGuard />
     </div>
   );
 }

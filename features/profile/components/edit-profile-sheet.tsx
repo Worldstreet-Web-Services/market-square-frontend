@@ -5,6 +5,7 @@ import { errorCode } from "@/lib/api/envelope";
 import type { Profile } from "@/lib/api/schemas";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { UploadField } from "@/components/ui/upload-field";
 import { InlineError } from "@/components/ui/states";
 import { cn } from "@/lib/cn";
 import { useUpdateMe } from "@/features/profile/hooks/use-profile";
@@ -25,12 +26,14 @@ export function EditProfileSheet({
   const [displayName, setDisplayName] = useState(me.displayName);
   const [username, setUsername] = useState(me.username);
   const [bio, setBio] = useState(me.bio);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(me.avatarUrl);
 
   const usernameTaken = errorCode(update.error) === "CONFLICT";
 
   return (
     <Sheet open={open} onClose={onClose} title="Edit profile">
       <div className="space-y-4">
+        <UploadField value={avatarUrl} onChange={setAvatarUrl} circular label="Avatar" />
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold text-grey-400">Display name</span>
           <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={50} className={inputClass} />
@@ -61,6 +64,7 @@ export function EditProfileSheet({
                 displayName: displayName.trim() || undefined,
                 username: username.trim() !== me.username ? username.trim() : undefined,
                 bio,
+                avatarUrl: avatarUrl ?? undefined,
               },
               { onSuccess: onClose }
             )

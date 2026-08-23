@@ -2,8 +2,8 @@ import { z } from "zod";
 import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
 
 // Backend Post: author id plus a hydrated ProfileSummary on feed items.
-// likedByMe is client-side state only — the backend does not return it; the
-// optimistic like cache is the source of truth for the heart's fill.
+// likedByMe comes from the backend on authed reads; the optimistic like
+// cache is an overlay on that truth, reconciled on every refetch.
 export const PostSchema = z.object({
   id: z.string(),
   authorId: z.string().optional().default(""),

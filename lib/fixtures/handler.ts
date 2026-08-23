@@ -69,7 +69,7 @@ function publicProfile(p: FxProfile, viewerId: string | null) {
     username: p.username,
     displayName: p.displayName,
     bio: p.bio,
-    avatarUrl: null,
+    avatarUrl: p.avatarUrl ?? null,
     role: p.role,
     verification: p.verification,
     followerCount: p.followerCount,
@@ -84,15 +84,16 @@ function summary(p: FxProfile) {
     id: p.id,
     username: p.username,
     displayName: p.displayName,
-    avatarUrl: null,
+    avatarUrl: p.avatarUrl ?? null,
     role: p.role,
     verification: p.verification,
   };
 }
 
-// Backend Post — authorId, no likedByMe (client-side state).
-function postDto(post: FxPost) {
+// Backend Post — likedByMe reflects the authed viewer on every read.
+function postDto(post: FxPost, viewerId: string | null = null) {
   return {
+    likedByMe: viewerId ? post.likedBy.has(viewerId) : false,
     id: post.id,
     authorId: post.authorId,
     kind: post.kind,
@@ -112,14 +113,14 @@ function postDto(post: FxPost) {
 }
 
 // FeedItem for a post: the one place the backend hydrates an author summary.
-function postFeedItem(post: FxPost) {
+function postFeedItem(post: FxPost, viewerId: string | null = null) {
   const author = profileById(post.authorId);
   return {
     id: `fi_${post.id}`,
     type: "post" as const,
     occurredAt: post.createdAt,
     ...(post.deepLink ? { deepLink: post.deepLink } : {}),
-    post: { ...postDto(post), author: author ? summary(author) : null },
+    post: { ...postDto(post, viewerId), author: author ? summary(author) : null },
   };
 }
 
@@ -131,7 +132,7 @@ function streamDto(s: FxStream) {
     title: s.title,
     description: s.description,
     category: s.category,
-    thumbnailUrl: null,
+    thumbnailUrl: s.thumbnailUrl ?? null,
     status: s.status,
     scheduledAt: s.scheduledAt,
     startedAt: s.startedAt,
@@ -267,7 +268,7 @@ function feedEntries(lane: string, viewerId: string | null): FeedEntry[] {
     case "following":
       entries = updates
         .filter((p) => followed.has(p.authorId) || p.authorId === viewerId)
-        .map(postFeedItem);
+        .map((post) => postFeedItem(post, viewerId));
       break;
     case "live":
       entries = [
@@ -305,7 +306,7 @@ function feedEntries(lane: string, viewerId: string | null): FeedEntry[] {
     default: {
       // for-you: posts plus live streams, interleaved by recency.
       entries = [
-        ...updates.map(postFeedItem),
+        ...updates.map((post) => postFeedItem(post, viewerId)),
         ...streams.filter((s) => s.status === "live").map(streamEntry),
       ];
     }
@@ -386,6 +387,7 @@ export function handleFixture(
       if (typeof body.displayName === "string" && body.displayName.trim())
         me.displayName = body.displayName.trim().slice(0, 50);
       if (typeof body.bio === "string") me.bio = body.bio.slice(0, 280);
+      if (typeof body.avatarUrl === "string") me.avatarUrl = body.avatarUrl || null;
       return ok(publicProfile(me, userId));
     }
     // GET /me/tickets → BARE ARRAY of Ticket & { stream }.
@@ -479,7 +481,7 @@ export function handleFixture(
         Date.now() - Date.parse(x.createdAt) < STORY_TTL_MS &&
         (scope !== "following" || followed.has(x.authorId) || x.authorId === userId)
     );
-    return ok({ items: fresh.map(postFeedItem), nextCursor: null });
+    return ok({ items: fresh.map((post) => postFeedItem(post, userId)), nextCursor: null });
   }
 
   // ---- posts ----
@@ -508,13 +510,13 @@ export function handleFixture(
         likedBy: new Set(),
       };
       posts.unshift(post);
-      return ok(postDto(post));
+      return ok(postDto(post, userId));
     }
 
     const post = posts.find((x) => x.id === p[1]);
     if (!post) return fail(404, "NOT_FOUND", "Post not found");
 
-    if (p.length === 2 && method === "GET") return ok(postDto(post));
+    if (p.length === 2 && method === "GET") return ok(postDto(post, userId));
 
     if (p[2] === "like") {
       const denied = requireAuth(userId);
@@ -612,6 +614,7 @@ export function handleFixture(
         ticketPriceKash: ticketPrice,
         vipPriceKash: vipPrice,
         thumbnailHue: Math.floor(Math.random() * 360),
+        thumbnailUrl: typeof body.thumbnailUrl === "string" ? body.thumbnailUrl : null,
         scheduledAt:
           typeof body.scheduledAt === "string" ? body.scheduledAt : new Date().toISOString(),
         startedAt: null,
@@ -643,6 +646,7 @@ export function handleFixture(
       if (typeof body.ticketPriceKash === "string")
         stream.ticketPriceKash = body.ticketPriceKash || null;
       if (typeof body.vipPriceKash === "string") stream.vipPriceKash = body.vipPriceKash || null;
+      if (typeof body.thumbnailUrl === "string") stream.thumbnailUrl = body.thumbnailUrl || null;
       if (stream.ticketPriceKash || stream.vipPriceKash) stream.visibility = "ticketed";
       return ok(streamDto(stream));
     }
@@ -908,7 +912,7 @@ export function handleFixture(
         .filter((x) => x.authorId === profile.id && x.kind === "update")
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       const { page, nextCursor } = paginate(authored, search.get("cursor"), 20);
-      return ok({ items: page.map(postFeedItem), nextCursor });
+      return ok({ items: page.map((post) => postFeedItem(post, userId)), nextCursor });
     }
     if (p[2] === "streams" && method === "GET") {
       const owned = streams

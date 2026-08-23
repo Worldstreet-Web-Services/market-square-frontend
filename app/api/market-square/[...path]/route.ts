@@ -41,7 +41,57 @@ async function callerUserId(req: NextRequest): Promise<string | null> {
   return claims?.userId ?? null;
 }
 
+const FIXTURE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const FIXTURE_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+
+// Fixture upload: validates like the real endpoint and answers with an
+// offline-renderable placeholder (SVG data URI for images; a small public
+// sample for video, since a data-URI video is impractical).
+async function serveFixtureUpload(req: NextRequest) {
+  const form = await req.formData().catch(() => null);
+  const file = form?.get("file");
+  if (!(file instanceof File)) {
+    return NextResponse.json(
+      { success: false, error: { code: "VALIDATION_ERROR", message: "A `file` field is required." } },
+      { status: 422 }
+    );
+  }
+  const isImage = FIXTURE_IMAGE_TYPES.has(file.type);
+  const isVideo = FIXTURE_VIDEO_TYPES.has(file.type);
+  if (!isImage && !isVideo) {
+    return NextResponse.json(
+      { success: false, error: { code: "VALIDATION_ERROR", message: "Unsupported file type." } },
+      { status: 422 }
+    );
+  }
+  if ((isImage && file.size > 10 * 1024 * 1024) || (isVideo && file.size > 100 * 1024 * 1024)) {
+    return NextResponse.json(
+      { success: false, error: { code: "VALIDATION_ERROR", message: "File is too large." } },
+      { status: 422 }
+    );
+  }
+  const url = isImage
+    ? `data:image/svg+xml,${encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#18181b"/><circle cx="320" cy="180" r="120" fill="#3c3c3c"/><text x="320" y="190" font-family="sans-serif" font-size="24" fill="#d4d4d8" text-anchor="middle">${file.name.slice(0, 24).replace(/[<>&"]/g, "")}</text></svg>`
+      )}`
+    : "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+  return NextResponse.json({
+    success: true,
+    data: {
+      url,
+      kind: isImage ? "image" : "video",
+      contentType: file.type,
+      bytes: file.size,
+    },
+  });
+}
+
 async function serveFixture(req: NextRequest, path: string[], method: string) {
+  if (path[0] === "uploads" && method === "POST") {
+    const userId = await callerUserId(req);
+    if (!userId) return unauthorized();
+    return serveFixtureUpload(req);
+  }
   let body: unknown;
   if (method !== "GET" && method !== "DELETE") {
     body = await req.json().catch(() => undefined);
@@ -67,12 +117,23 @@ async function forward(req: NextRequest, path: string[], method: string) {
   const auth = req.headers.get("authorization");
   if (auth) headers.authorization = auth;
 
-  let body: string | undefined;
+  // Multipart bodies (uploads) stream straight through — buffering them as
+  // text would corrupt binary payloads and blow memory on big videos. JSON
+  // bodies keep the simple text path.
+  const contentType = req.headers.get("content-type") ?? "";
+  let body: BodyInit | undefined;
+  let duplex: { duplex?: "half" } = {};
   if (method !== "GET") {
-    const text = await req.text();
-    if (text) {
-      body = text;
-      headers["content-type"] = "application/json";
+    if (contentType.startsWith("multipart/")) {
+      body = req.body ?? undefined;
+      headers["content-type"] = contentType;
+      duplex = { duplex: "half" };
+    } else {
+      const text = await req.text();
+      if (text) {
+        body = text;
+        headers["content-type"] = "application/json";
+      }
     }
   }
 
@@ -82,7 +143,8 @@ async function forward(req: NextRequest, path: string[], method: string) {
       headers,
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(contentType.startsWith("multipart/") ? 120_000 : 15_000),
+      ...duplex,
     });
     const text = await res.text();
     return new NextResponse(text, {
