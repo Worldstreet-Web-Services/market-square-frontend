@@ -12,6 +12,8 @@ export interface FxProfile {
   bio: string;
   role: "citizen" | "creator" | "ambassador" | "worldstreet";
   verification: "none" | "earned" | "paid";
+  // Assigned admin-only on the real service, never derived from role.
+  orgBadge?: "market" | "ark" | null;
   followerCount: number;
   followingCount: number;
 }
@@ -155,6 +157,7 @@ export const profiles: FxProfile[] = [
     bio: "Markets analyst. Live desk every weekday. Charts, coffee, conviction.",
     role: "creator",
     verification: "earned",
+    orgBadge: "ark",
     followerCount: 48_200,
     followingCount: 312,
   },
@@ -185,6 +188,7 @@ export const profiles: FxProfile[] = [
     bio: "The official Ark platform account.",
     role: "worldstreet",
     verification: "earned",
+    orgBadge: "market",
     followerCount: 210_000,
     followingCount: 12,
   },

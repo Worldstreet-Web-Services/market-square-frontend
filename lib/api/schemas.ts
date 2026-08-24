@@ -17,6 +17,11 @@ export const DeepLinkSchema = z.object({
 const RoleSchema = z.enum(["citizen", "creator", "ambassador", "worldstreet"]).catch("citizen");
 // Verification states include "pending" (request in review).
 const VerificationSchema = z.enum(["none", "pending", "earned", "paid"]).catch("none");
+// The organisation badge is assigned admin-only and is NOT derived from role —
+// product decides who carries one, so the two are independent signals that can
+// appear together. `catch(null)` keeps an unknown future value from failing the
+// parse, and the default keeps a backend without the field parsing cleanly.
+const OrgBadgeSchema = z.enum(["market", "ark"]).nullable().catch(null);
 
 const RawProfileSchema = z.object({
   id: z.string(),
@@ -26,6 +31,7 @@ const RawProfileSchema = z.object({
   avatarUrl: z.string().nullable().optional().default(null),
   role: RoleSchema,
   verification: VerificationSchema,
+  orgBadge: OrgBadgeSchema.optional().default(null),
   followerCount: z.number().optional().default(0),
   followingCount: z.number().optional().default(0),
   isFollowing: z.boolean().optional().default(false),
@@ -55,3 +61,4 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export type DeepLink = z.infer<typeof DeepLinkSchema>;
 export type ProfileRole = z.infer<typeof RoleSchema>;
 export type VerificationState = z.infer<typeof VerificationSchema>;
+export type OrgBadge = z.infer<typeof OrgBadgeSchema>;

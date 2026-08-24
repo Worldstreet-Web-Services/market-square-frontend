@@ -1,5 +1,7 @@
 import { cn } from "@/lib/cn";
 import { IconCheck } from "@/components/ui/icons";
+import { BadgeArkGlyph, BadgeMarketGlyph } from "@/components/ui/org-badge-glyphs";
+import type { OrgBadge } from "@/lib/api/schemas";
 
 // Earned and paid verification both render the same silver check — the tier
 // is a backend economics detail, not a visual hierarchy. "pending" shows
@@ -21,6 +23,41 @@ export function VerifiedBadge({
       )}
     >
       <IconCheck className="h-2.5 w-2.5 [&]:stroke-[3]" />
+    </span>
+  );
+}
+
+/**
+ * The organisation badge — the design's MARKET / ARK lockup.
+ *
+ * Assigned admin-only and deliberately NOT derived from `role`: product
+ * decides who carries one, so this and `RoleChip` are independent signals that
+ * can sit side by side. When `orgBadge` is null nothing renders — there is no
+ * fallback to invent one from role or verification.
+ *
+ * Chip geometry is the design's: a 21px-radius capsule at 4% white with a 19%
+ * hairline, wrapping the brand glyph at 7px tall.
+ */
+export function OrgBadgeChip({
+  orgBadge,
+  className,
+}: {
+  orgBadge: OrgBadge;
+  className?: string;
+}) {
+  if (!orgBadge) return null;
+  const Glyph = orgBadge === "market" ? BadgeMarketGlyph : BadgeArkGlyph;
+  return (
+    <span
+      title={orgBadge === "market" ? "Market" : "Ark"}
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-1 py-[2.5px]",
+        className
+      )}
+    >
+      <span className="sr-only">{orgBadge === "market" ? "Market" : "Ark"}</span>
+      {/* Width tracks the glyph's own aspect ratio, height is fixed. */}
+      <Glyph className={orgBadge === "market" ? "h-[7px] w-[35px]" : "h-[7px] w-[34px]"} />
     </span>
   );
 }

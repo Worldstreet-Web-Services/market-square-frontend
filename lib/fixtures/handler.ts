@@ -90,6 +90,7 @@ function publicProfile(p: FxProfile, viewerId: string | null) {
     avatarUrl: p.avatarUrl ?? null,
     role: p.role,
     verification: p.verification,
+    orgBadge: p.orgBadge ?? null,
     followerCount: p.followerCount,
     followingCount: p.followingCount,
     ...(viewerId ? { isFollowing: myFollows(viewerId).has(p.id), isBlocked: blocksFor(viewerId).has(p.id) } : {}),
@@ -105,6 +106,7 @@ function summary(p: FxProfile) {
     avatarUrl: p.avatarUrl ?? null,
     role: p.role,
     verification: p.verification,
+    orgBadge: p.orgBadge ?? null,
   };
 }
 

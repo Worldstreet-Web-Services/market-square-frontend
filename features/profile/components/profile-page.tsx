@@ -8,7 +8,7 @@ import { resolveDeepLink } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
-import { LiveBadge, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { LiveBadge, OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconCalendar, IconHeart, IconComment } from "@/components/ui/icons";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
@@ -263,6 +263,7 @@ export function ProfilePage({
           <h1 className="ws-display flex items-center gap-2 text-xl">
             {data.displayName}
             <VerifiedBadge verification={data.verification} className="h-5 w-5" />
+            <OrgBadgeChip orgBadge={data.orgBadge} />
             <RoleChip role={data.role} />
           </h1>
           <p className="text-[15px] text-meta">@{data.username}</p>

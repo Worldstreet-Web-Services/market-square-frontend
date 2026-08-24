@@ -45,6 +45,12 @@ Market Square: the social, discovery, streaming and ARK Store surface of the Ark
 - `--color-featured` (amber) is semantic — **featured, premium, top-ranked, or coin value**, never decoration. The ramp is `--color-featured` `#e8b74a` → `--color-featured-deep` `#cda243` for buttons, `--color-featured-hi` `#ffb900` for Citizen Spotlight's heading and `--color-featured-chip` `#ffd230` for its chip. In use: the liked heart, Citizen Spotlight, Spotlight's podium ranks and window chip, VIP ticket tiers, the paid Supporter badge, and every coin mark in the live room. `Pill` carries a `featured` tone for it. Everything else stays on the silver ramp
 - Slices never import each other, so `components/layout/*-screen.tsx` composes across them: `home-screen` joins profile's `FollowPill` + streams' live count into the feed, `profile-screen` joins messages' `Message` button into the profile — the same route-slot pattern the stream room uses
 
+## Identity chips
+- Three independent signals sit on an author line and can co-exist: `VerifiedBadge` (verification), `RoleChip` (role), and `OrgBadgeChip` (the design's MARKET / ARK lockup)
+- `orgBadge` is `'market' | 'ark' | null`, assigned **admin-only** and deliberately **not derived from role** — product decides who carries one. Never infer it from `role`, `verification` or anything else; when it is null, render nothing
+- The lockups are brand artwork, so `components/ui/org-badge-glyphs.tsx` keeps their real fills rather than recolouring to `currentColor` (unlike `design-icons.tsx`). Chip geometry is the design's: 21px-radius capsule, 4% white fill, 19% white hairline, glyph 7px tall
+- The schema defaults to null and `catch`es unknown values, so a backend without the field — or with a future third badge — parses cleanly instead of blanking the surface. `lib/api/schemas.test.ts` pins that
+
 ## Counts, badges and unread
 - **Never derive a badge from a loaded page.** `GET /me/unread` answers `{ messages, notifications }`, both global, in one call — `hooks/use-unread.ts` owns it and polls at **45s**. Anything that changes a count locally (send, mark-thread-read, mark-notifications-read) calls `useRefreshUnread()` so the badge moves immediately; the poll only catches other people's activity
 - `GET /categories` counts are authoritative and `real-world-assets` / `prediction-markets` return `count: null` **by design** — other services own that data. Null renders as an em-dash, never `0`

@@ -12,7 +12,7 @@ import { InlineVideo } from "@/components/ui/inline-video";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
-import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconFlag, IconSend } from "@/components/ui/icons";
 import {
   IconMsBookmark,
@@ -260,6 +260,7 @@ export function PostCard({
                   {author.displayName}
                 </Link>
                 <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5" />
+                <OrgBadgeChip orgBadge={author.orgBadge} />
                 <RoleChip role={author.role} />
               </>
             )}
