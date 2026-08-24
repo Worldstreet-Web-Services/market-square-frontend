@@ -37,8 +37,11 @@ export function RoleChip({ role, className }: { role: string; className?: string
   if (!label) return null;
   return (
     <span
+      // Chip geometry is the design's: a flat 21px-radius capsule at 4% white
+      // with a 19% hairline. The design fills it with a MARKET / ARK brand
+      // glyph; until a field distinguishes those, it carries the real role.
       className={cn(
-        "rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-grey-300",
+        "rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-2 py-px text-[9px] font-semibold uppercase tracking-wide text-grey-200",
         className
       )}
     >

@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "@/components/ui/icons";
+import { useMe } from "@/hooks/use-me";
 import { useStories } from "@/features/feed/hooks/use-feed";
 import type { Post } from "@/features/feed/lib/types";
 
@@ -115,19 +116,21 @@ function StoryCard({
 }) {
   const cover = group.stories.find((story) => story.mediaUrl)?.mediaUrl ?? null;
   return (
-    <span className={cn("ws-story-ring block !rounded-2xl", seen && "ws-story-seen")}>
-      <span className="ws-story-gap block !rounded-[14px]">
-        <span className="relative block h-[104px] w-[72px] overflow-hidden rounded-xl">
+    // Landscape-ish 100×96 tile in the design, cover art under a flat 27%
+    // black scrim with the author's avatar pinned top-left.
+    <span className={cn("ws-story-ring block !rounded-[18px]", seen && "ws-story-seen")}>
+      <span className="ws-story-gap block !rounded-[17px]">
+        <span className="relative block h-24 w-[100px] overflow-hidden rounded-[16.5px]">
           <GradientThumb seed={group.username} className="absolute inset-0 h-full w-full" />
           {cover && (
             // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
             <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
           )}
-          <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 to-transparent" />
-          <span className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center gap-1">
-            <Avatar name={group.displayName} src={group.avatarUrl} size={18} />
-            <span className="truncate text-[9px] font-semibold text-white">{group.username}</span>
+          <span className="absolute inset-0 bg-black/[0.27]" />
+          <span className="absolute left-2 top-2">
+            <Avatar name={group.displayName} src={group.avatarUrl} size={24} />
           </span>
+          <span className="sr-only">{group.username}</span>
         </span>
       </span>
     </span>
@@ -315,7 +318,83 @@ function StoryViewer({
   );
 }
 
+/**
+ * Circular story rail — the mobile frame's shape.
+ *
+ * Same author grouping, same seen semantics and same viewer as the desktop
+ * card strip; only the tile geometry differs (41px ring, name beneath).
+ */
+export function StoriesRail() {
+  const me = useMe();
+  const stories = useStories();
+  const [openAt, setOpenAt] = useState<number | null>(null);
+  const seen = useSyncExternalStore(subscribeSeen, getSeenSnapshot, getSeenServerSnapshot);
+  const groups = useMemo(() => groupByAuthor(stories.data?.items ?? []), [stories.data]);
+
+  if (stories.isPending) return <div className="h-[74px]" />;
+
+  return (
+    <>
+      <div className="flex items-center gap-[11px] overflow-x-auto rounded-[22px] border border-white/[0.18] bg-[#101012]/62 px-3 py-2 backdrop-blur-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <Link
+          href="/?compose=story"
+          aria-label="Add to your story"
+          className="ws-press flex w-[41px] shrink-0 flex-col items-center gap-1"
+        >
+          <span className="relative flex h-[41px] w-[41px] items-center justify-center rounded-full border border-white/20 bg-white/5">
+            <span className="opacity-60">
+              <Avatar name={me.data?.displayName ?? "You"} src={me.data?.avatarUrl} size={33} />
+            </span>
+            <span className="absolute -bottom-0.5 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-black">
+              <IconPlus className="h-2.5 w-2.5 [&]:stroke-[3]" />
+            </span>
+          </span>
+          <span className="w-full truncate text-center text-[8px] text-white/60">Your Story</span>
+        </Link>
+
+        {groups.map((group, i) => {
+          const allSeen = group.stories.every((story) => seen.has(story.id));
+          return (
+            <button
+              key={group.username}
+              onClick={() => setOpenAt(i)}
+              aria-label={`Stories from ${group.displayName}`}
+              className="ws-press flex w-[41px] shrink-0 flex-col items-center gap-1"
+            >
+              <span
+                className={cn(
+                  "ws-story-ring block !h-[41px] !w-[41px] !p-[1.4px]",
+                  allSeen && "ws-story-seen"
+                )}
+              >
+                <span className="ws-story-gap block !p-0">
+                  <Avatar name={group.displayName} src={group.avatarUrl} size={38} />
+                </span>
+              </span>
+              <span className="w-full truncate text-center text-[8px] text-white/80">
+                {group.displayName.split(" ")[0]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence>
+        {openAt !== null && groups[openAt] && (
+          <StoryViewer
+            groups={groups}
+            startGroup={openAt}
+            onClose={() => setOpenAt(null)}
+            onSeen={markStorySeen}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 export function StoriesRow() {
+  const me = useMe();
   const stories = useStories();
   const [openAt, setOpenAt] = useState<number | null>(null);
   const seen = useSyncExternalStore(subscribeSeen, getSeenSnapshot, getSeenServerSnapshot);
@@ -324,9 +403,9 @@ export function StoriesRow() {
 
   if (stories.isPending) {
     return (
-      <div className="flex gap-2">
+      <div className="flex gap-[5px]">
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-[104px] w-[72px] shrink-0 rounded-2xl" />
+          <Skeleton key={i} className="h-24 w-[100px] shrink-0 rounded-[16.5px]" />
         ))}
       </div>
     );
@@ -336,13 +415,18 @@ export function StoriesRow() {
   // that first tile is how Instagram teaches the gesture.
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-[5px] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* "Your Story" leads: an outlined tile carrying the viewer's own
+            avatar, a white + badge cut into it, and the label beneath. */}
         <Link href="/?compose=story" className="ws-press shrink-0" aria-label="Add to your story">
-          <span className="ws-hair relative flex h-[104px] w-[72px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-ink">
-              <IconPlus className="h-4 w-4 [&]:stroke-[3]" />
+          <span className="ws-story-card relative flex h-24 w-[100px] flex-col items-center justify-center gap-1">
+            <span className="relative">
+              <Avatar name={me.data?.displayName ?? "You"} src={me.data?.avatarUrl} size={48} />
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-black bg-white text-black">
+                <IconPlus className="h-2.5 w-2.5 [&]:stroke-[3]" />
+              </span>
             </span>
-            <span className="text-[9px] font-semibold text-body">Your story</span>
+            <span className="text-[8px] font-bold text-white/40">Your Story</span>
           </span>
         </Link>
 

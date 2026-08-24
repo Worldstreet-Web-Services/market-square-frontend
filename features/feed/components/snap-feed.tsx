@@ -18,15 +18,18 @@ import { IconComment, IconHeart, IconPlay, IconPlus } from "@/components/ui/icon
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useFeed, useLikePost } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
+import { StoriesRail } from "@/features/feed/components/stories-row";
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { pricePillLabel } from "@/features/feed/components/feed-cards";
 import type { FeedItem, Lane, Post } from "@/features/feed/lib/types";
 
-const LANES: Array<{ lane: Lane; label: string }> = [
-  { lane: "for-you", label: "For you" },
+// The mobile frame's lane set and wording — "Live Streams" carries a live
+// count badge, which is a real tally off the stream list, never a placeholder.
+const LANES: Array<{ lane: Lane; label: string; counted?: boolean }> = [
+  { lane: "for-you", label: "For You" },
   { lane: "following", label: "Following" },
-  { lane: "live", label: "Live" },
-  { lane: "platform", label: "Platform" },
+  { lane: "live", label: "Live Streams", counted: true },
+  { lane: "platform", label: "Trending" },
 ];
 
 const DOUBLE_TAP_MS = 300;
@@ -216,7 +219,7 @@ function SlideFor({ item }: { item: FeedItem }) {
 }
 
 // Mobile Home: one item per viewport, mandatory snap, TikTok-grammar rails.
-export function SnapFeed() {
+export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
   const [lane, setLane] = useState<Lane>("for-you");
   const { authenticated } = useAuth();
   const [composerOpen, setComposerOpen] = useState(false);
@@ -229,22 +232,35 @@ export function SnapFeed() {
 
   return (
     <div className="relative">
-      {/* floating lane pills over the feed */}
-      <div className="fixed inset-x-0 top-11 z-30 flex justify-center px-4">
-        <div className="ws-glass flex gap-1 rounded-full p-1">
-          {LANES.map(({ lane: value, label }) => (
+      {/* The mobile frame's lane bar: one 20px-radius slab at 92% near-black
+          with an 18% hairline, the active lane simply brighter. */}
+      <div className="fixed inset-x-0 top-11 z-30 px-[5px]">
+        <div className="flex items-center justify-between rounded-[20px] border border-white/[0.18] bg-[#0a0a0a]/92 px-2 py-[3px] backdrop-blur-sm">
+          {LANES.map(({ lane: value, label, counted }) => (
             <button
               key={value}
               onClick={() => setLane(value)}
+              aria-current={lane === value ? "true" : undefined}
               className={cn(
-                "ws-press rounded-full px-3 py-1 text-xs font-semibold",
-                lane === value ? "bg-accent text-ink" : "text-body"
+                "ws-press flex items-center gap-1.5 rounded-full px-2.5 py-2 text-[12px] leading-5",
+                lane === value ? "text-white" : "text-white/50"
               )}
             >
               {label}
+              {counted && liveCount > 0 && (
+                <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E7000B] px-1.5 text-[12px] leading-5 text-white">
+                  {liveCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Circular story rail, the mobile frame's shape (the desktop column
+          uses portrait cards instead). */}
+      <div className="fixed inset-x-0 top-[92px] z-30 px-[5px]">
+        <StoriesRail />
       </div>
 
       <div className="ws-snap-feed h-dvh snap-y snap-mandatory overflow-y-auto">

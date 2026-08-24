@@ -6,7 +6,7 @@ import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconEye } from "@/components/ui/icons";
+import { IconMsPlay } from "@/components/ui/design-icons";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import type { FeedItem } from "@/features/feed/lib/types";
 
@@ -29,8 +29,9 @@ function toSlide(item: FeedItem): Slide | null {
     const stream = item.stream;
     return {
       key: stream.id,
-      eyebrow: `Spotlight · ${stream.category || "live"} · Market Square`,
-      reference: `#${stream.id.slice(0, 8).toUpperCase()}`,
+      // The design names the surface, not the record: the hero is the arena.
+      eyebrow: "Native Live & Arcade Arena",
+      reference: stream.owner ? `Hosted by ${stream.owner.displayName}` : "",
       title: stream.title,
       href: `/live/${stream.id}?source=home:featured`,
       action: stream.status === "live" ? "Join Live Arena" : "View session",
@@ -43,8 +44,8 @@ function toSlide(item: FeedItem): Slide | null {
     const activity = item.activity;
     return {
       key: activity.id,
-      eyebrow: `Spotlight · ${activity.type} · Market Square`,
-      reference: `#${activity.id.slice(0, 8).toUpperCase()}`,
+      eyebrow: "Native Live & Arcade Arena",
+      reference: activity.owner ? `Hosted by ${activity.owner.displayName}` : "",
       title: activity.title,
       href: "/schedule",
       action: "Reserve a seat",
@@ -65,44 +66,52 @@ export function FeaturedArena() {
     .filter((slide): slide is Slide => slide !== null)
     .slice(0, 5);
 
-  if (feed.isPending) return <Skeleton className="h-[92px] w-full rounded-2xl" />;
+  if (feed.isPending) return <Skeleton className="h-[148px] w-full rounded-[21px]" />;
   if (slides.length === 0) return null;
 
   const slide = slides[Math.min(index, slides.length - 1)];
 
   return (
     <section aria-label="Featured on the square">
-      <div className="ws-post flex items-center gap-3 p-3">
-        <GradientThumb seed={slide.seed} className="h-14 w-14 shrink-0 rounded-xl" />
+      {/* The design's hero: a 21px-radius slab washed left-to-right from 25% to
+          72% black, ringed in mid grey, with the artwork inset on the left. */}
+      <div className="flex items-center gap-5 rounded-[21px] border border-[#999999] bg-[linear-gradient(90deg,rgba(0,0,0,0.25),rgba(0,0,0,0.72))] p-4">
+        <GradientThumb seed={slide.seed} className="h-[129px] w-[125px] shrink-0 rounded-xl" />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[9px] font-bold uppercase tracking-[0.12em] text-featured">
+          <p className="truncate bg-[linear-gradient(135deg,#3C3C3C,#7A7A7A_45%,#5A5A5A)] bg-clip-text text-[10px] font-bold uppercase tracking-[0.025em] text-transparent">
             {slide.eyebrow}
           </p>
-          <p className="tnum truncate text-[9px] text-meta">{slide.reference}</p>
-          <p className="mt-1 truncate text-[14px] font-bold text-heading">{slide.title}</p>
           {slide.meta && (
-            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-meta">
-              <IconEye className="h-3 w-3" />
-              {slide.meta}
-            </p>
+            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-white/10 px-1.5 py-0.5">
+              <span className="h-[3px] w-[3px] rounded-full bg-[#00D492]" aria-hidden />
+              <span className="text-[10px] leading-none text-white/50">{slide.meta}</span>
+            </span>
+          )}
+          <p className="mt-2 line-clamp-2 text-[14.7px] font-bold leading-[1.15] text-white">
+            {slide.title}
+          </p>
+          {slide.reference && (
+            <p className="mt-1.5 truncate text-[10px] text-white/80">{slide.reference}</p>
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <Link
-            href={slide.href}
-            className="ws-press rounded-full bg-accent px-4 py-1.5 text-[12px] font-bold text-ink transition-colors hover:bg-white"
-          >
-            {slide.action}
+        <div className="flex shrink-0 items-center gap-3 rounded-full bg-[linear-gradient(180deg,#D4D4D8,#3C3C3C)] py-2.5 pl-4 pr-2.5">
+          <Link href={slide.href} className="ws-press flex items-center gap-1.5">
+            <IconMsPlay className="h-[18px] w-[18px] text-grey-700" />
+            <span className="text-[14px] font-bold leading-5 text-white">{slide.action}</span>
           </Link>
-          {slide.price && <span className="tnum text-[11px] text-meta">{slide.price}</span>}
+          {slide.price && (
+            <span className="tnum rounded-full bg-black/20 px-3.5 py-0.5 text-[12px] font-bold text-white">
+              {slide.price}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Carousel dots, only once there is more than one thing to feature. */}
       {slides.length > 1 && (
-        <div className="mt-2 flex items-center justify-center gap-1.5">
+        <div className="mt-2 flex items-center justify-center gap-[7px]">
           {slides.map((item, i) => (
             <button
               key={item.key}
@@ -110,8 +119,8 @@ export function FeaturedArena() {
               aria-label={`Show featured item ${i + 1}`}
               aria-current={i === index}
               className={cn(
-                "h-1.5 rounded-full transition-all",
-                i === index ? "w-5 bg-accent" : "w-1.5 bg-white/25 hover:bg-white/40"
+                "h-[7px] rounded-full transition-all",
+                i === index ? "w-[22px] bg-grey-600" : "w-[7px] bg-grey-800 hover:bg-grey-700"
               )}
             />
           ))}

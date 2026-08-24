@@ -19,6 +19,8 @@ Market Square: the social, discovery, streaming and ARK Store surface of the Ark
 - Backend envelope: `{ success: true, data } | { success: false, error: { code, message, details? } }` — `unwrap<T>()` in `lib/api/envelope.ts` throws typed errors
 - Data flow: component → hook (useQuery/useMutation) → feature api client → `app/api/market-square/[...path]` BFF proxy → `${WSAPI_BASE_URL}/v1/market-square/*`
 - Components NEVER call fetch directly or hold base URLs. The BFF verifies the Privy session and forwards `Authorization`
+- Which GETs a signed-out visitor may read lives in `lib/api/public-routes.ts` (`isPublicGet`), and its **source of truth is the backend's `openapi.json`**: a GET is public exactly when its operation carries no `security` requirement. `lib/api/public-routes.test.ts` asserts that table in **both** directions — a route that silently becomes secured upstream fails as loudly as one that becomes public. Re-derive both from the spec (the `jq` one-liner is in the file header) whenever backend routes land; never patch the predicate one bug at a time
+- A public GET skips our session check but still forwards the caller's token when present, so `likedByMe` / `bookmarkedByMe` keep resolving for signed-in readers
 - Query keys are tuples: `["ms","feed",lane]`, `["ms","stream",id]`; mutations invalidate subtrees
 - Monetary/KASH amounts are decimal strings end-to-end — never parseFloat for arithmetic, only for display formatting
 
@@ -31,10 +33,29 @@ Market Square: the social, discovery, streaming and ARK Store surface of the Ark
 
 ## Home (Market Square design)
 - Home is **card-based**, not divider-based: posts, streams and activities are `ws-post` slabs with gaps. `ws-row` stays for the other column surfaces — do not mix the two on one page
-- Column order: section switcher + Schedule Stream/Create Post → stories strip → featured hero → lane tabs → card timeline. Home gets its own wider column (`md:max-w-[720px]`); everything else stays at 600px
-- Stories are **portrait cards** here (the design's shape), keeping the seen/unseen ring semantics and the Instagram viewer. The circular rail is gone
-- Post actions are comment / repost / like, an inline "Comment here" field, then share. There is **no bookmark endpoint** — do not add the icon until one exists
-- `--color-featured` (amber) is semantic — **featured, premium, top-ranked, or coin value**, never decoration. In use: the home hero eyebrow and Citizen Spotlight, Spotlight's podium ranks and window chip, VIP ticket tiers, the paid Supporter badge, and every coin mark in the live room (Get Coins, gift prices, balance, the gift button). `Pill` carries a `featured` tone for it. Everything else stays on the silver ramp
+- `ws-post` is an **outline**, not a panel: transparent fill, one hairline at 10% white, 16.5px radius. Depth on home comes from the border, never a lighter fill
+- Column order: breadcrumb (in `AppShell`, spanning column + rail) → section switcher + Schedule Stream/Create Post → stories strip → featured hero → lane tabs → card timeline. Home gets its own wider column (`md:max-w-[720px]`); everything else stays at 600px
+- The section switcher and both creation actions live inside **one long outlined pill** (`ws-tabbar`): `Feeds · Discover · Messages · Notifications · Arkmarks`, then Schedule Stream and Create Post. Active Feeds is `ws-btn-silver`; Create Post is `ws-btn-featured`
+- Lane tabs are `For You · Live Streaming · Reels · Following · Trending`. The rule is full-width at 8% white with a **white** active segment — not amber. Every one is a real backend lane (`reels` and `trending` included) — never filter a lane client-side
+- Clips render through `InlineVideo`: muted autoplay once 60% is in view, pause + re-mute on exit, sound only on an explicit tap. Under `prefers-reduced-motion` it does not autoplay and keeps native controls. Detect video with `isVideoPost` (backend `mediaKind` first, URL sniffing as the fallback), never `isVideoUrl` alone
+- A repost arrives as the **original post** with `repostedBy` on the FeedItem; the card keeps the original author and the attribution line names who passed it on
+- Stories are **portrait cards** on desktop (100×96) and the **circular rail** on mobile (`StoriesRail`, 41px rings + names) — both share the grouping, seen/unseen semantics and the Instagram viewer
+- Post actions: a tallies pill (comment / repost / like), the inline "Comment here…" pill, then share, **Arkmark** and a ringed 38px more-menu. `POST|DELETE /posts/:id/bookmark` and `GET /me/bookmarks` back the Arkmark; a 404 means "not deployed", so the control goes quiet (`useBookmarkPost().unavailable`) rather than faking a save
+- A **liked heart is amber**, not red — the design uses the same semantic amber as featured. `--color-like` survives only for the mobile snap feed's burst
+- `--color-featured` (amber) is semantic — **featured, premium, top-ranked, or coin value**, never decoration. The ramp is `--color-featured` `#e8b74a` → `--color-featured-deep` `#cda243` for buttons, `--color-featured-hi` `#ffb900` for Citizen Spotlight's heading and `--color-featured-chip` `#ffd230` for its chip. In use: the liked heart, Citizen Spotlight, Spotlight's podium ranks and window chip, VIP ticket tiers, the paid Supporter badge, and every coin mark in the live room. `Pill` carries a `featured` tone for it. Everything else stays on the silver ramp
+- Slices never import each other, so `components/layout/*-screen.tsx` composes across them: `home-screen` joins profile's `FollowPill` + streams' live count into the feed, `profile-screen` joins messages' `Message` button into the profile — the same route-slot pattern the stream room uses
+
+## Counts, badges and unread
+- **Never derive a badge from a loaded page.** `GET /me/unread` answers `{ messages, notifications }`, both global, in one call — `hooks/use-unread.ts` owns it and polls at **45s**. Anything that changes a count locally (send, mark-thread-read, mark-notifications-read) calls `useRefreshUnread()` so the badge moves immediately; the poll only catches other people's activity
+- `GET /categories` counts are authoritative and `real-world-assets` / `prediction-markets` return `count: null` **by design** — other services own that data. Null renders as an em-dash, never `0`
+- The category rail renders the API's own labels and order; `PRESENTATION` in the rail maps `key` → href + glyph only
+
+## Messages (1:1 DMs)
+- `POST /conversations { userId }` is idempotent from either side; `GET /me/conversations` (global `totalUnread`), `GET|POST /conversations/:id/messages`, `POST /conversations/:id/read`. Non-participants get FORBIDDEN on every conversation route even with a valid id
+- Messages are ≤2000 chars (rate limited 30/min) — the composer stops at the same cap rather than letting the service reject it
+- The thread returns **newest-first**; the view reverses it to read oldest-first
+- Realtime publishes `market-square.message.sent` **without the body**, so it is a refetch signal, not a payload. Until ws-gateway carries it, an open thread polls at 5s (the live room's chat cadence). Do not build a websocket for this
+- Opening a thread is the acknowledgement: mark-as-read fires once per thread, not on every poll tick
 
 ## Layout (three-column shell)
 - `AppShell` centres a max-1280px frame: labelled sidebar (icon rail below `xl`), a 600px centre column, then `RightRail`. Routes in its `WIDE` list (store, operations, studio, schedule) drop the rail and spread; `/live/[id]` renders bare
@@ -65,7 +86,8 @@ Market Square: the social, discovery, streaming and ARK Store surface of the Ark
 - `clsx` + `tailwind-merge` via a `cn()` helper
 - Loading skeletons + inline error states for every query; empty states designed, not blank
 - `.env`: `WSAPI_BASE_URL`, `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_SECRET`
-- Gates: `pnpm lint && pnpm typecheck && pnpm build` must pass
+- Gates: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` must pass
+- Tests run on Node's built-in runner (`node --test`, zero dependencies) over `lib/**/*.test.ts`, using Node 24 native type stripping — hence `allowImportingTsExtensions` and the real `.ts` import specifier in test files
 
 ## Do NOT
 - Import from wsws-frontend; use any component library; use Redux/Zustand/Context-as-store; put logic in route files; use floats for money; use `any`

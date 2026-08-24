@@ -1,94 +1,188 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { relativeTime } from "@/lib/format";
+import { cn } from "@/lib/cn";
+import { useAuth } from "@/hooks/use-auth";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
+import { Avatar } from "@/components/ui/avatar";
+import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { cn } from "@/lib/cn";
 import {
+  useMarkNotificationsRead,
   useNotifications,
-  useReadAllNotifications,
-  useReadNotification,
 } from "@/features/notifications/hooks/use-notifications";
+import type { MarketNotification } from "@/features/notifications/lib/types";
 
-const GLYPHS = {
+// One glyph per kind. Unknown kinds coerce to "follow" at the schema boundary,
+// so this map is total.
+const GLYPHS: Record<MarketNotification["kind"], string> = {
   follow: "◎",
-  activity: "◇",
+  like: "♥",
+  comment: "◇",
+  repost: "⇄",
+  bookmark: "▱",
+  ticket_purchased: "▣",
   stream_live: "◉",
-  ticket: "▱",
-  product: "◈",
-  account: "○",
-} as const;
+  verification_resolved: "✓",
+  role_resolved: "○",
+};
+
+// The service sends structured events, not prose — the copy lives here so it
+// stays in the product's voice.
+function describe(item: MarketNotification): string {
+  switch (item.kind) {
+    case "follow":
+      return "followed you";
+    case "like":
+      return "liked your post";
+    case "comment":
+      return "commented on your post";
+    case "repost":
+      return "reposted your post";
+    case "bookmark":
+      return "saved your post to their Arkmarks";
+    case "ticket_purchased":
+      return "bought a ticket to your stream";
+    case "stream_live":
+      return "is live now";
+    case "verification_resolved":
+      return "resolved your verification request";
+    case "role_resolved":
+      return "resolved your role request";
+  }
+}
+
+// Where a notification points. Nulls are real — a like on a deleted post has
+// no post to open — so the row stays unclickable rather than linking nowhere.
+function hrefFor(item: MarketNotification): string | null {
+  if (item.streamId) return `/live/${item.streamId}`;
+  if (item.postId) return `/?post=${item.postId}`;
+  if (item.actor) return `/u/${item.actor.username}`;
+  return null;
+}
+
+function Row({ item }: { item: MarketNotification }) {
+  const href = hrefFor(item);
+  const unread = !item.readAt;
+
+  const body = (
+    <>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center text-xl text-featured">
+        {GLYPHS[item.kind]}
+      </span>
+      {item.actor ? (
+        <Avatar name={item.actor.displayName} src={item.actor.avatarUrl} size={36} />
+      ) : null}
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] leading-normal text-body">
+          <span className="font-bold text-heading">
+            {item.actor?.displayName ?? "Someone"}
+          </span>{" "}
+          {describe(item)}
+        </span>
+        {item.createdAt && (
+          <span className="mt-1 block text-[13px] text-meta">{relativeTime(item.createdAt)}</span>
+        )}
+      </span>
+      {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-featured" />}
+    </>
+  );
+
+  const className = cn(
+    "ws-row flex items-start gap-3 px-4 py-3",
+    // Unread rows carry a faint silver wash, the way X tints new items.
+    unread && "bg-white/4"
+  );
+
+  if (!href) return <div className={className}>{body}</div>;
+  return (
+    <Link href={href} className={className}>
+      {body}
+    </Link>
+  );
+}
 
 export function NotificationsPage() {
+  const { ready, authenticated, login } = useAuth();
   const notifications = useNotifications();
-  const read = useReadNotification();
-  const readAll = useReadAllNotifications();
-  const unread = notifications.data?.items.filter((item) => !item.read).length ?? 0;
+  const markRead = useMarkNotificationsRead();
+  const sentinel = useInfiniteScroll(
+    () => notifications.fetchNextPage(),
+    Boolean(notifications.hasNextPage && !notifications.isFetchingNextPage)
+  );
+
+  const items = notifications.data?.pages.flatMap((page) => page.items) ?? [];
+  const unread = notifications.data?.pages[0]?.unreadCount ?? 0;
+
+  // Mark-as-read on view: opening the surface is the acknowledgement, so it
+  // fires once per arrival at the page rather than on every refetch.
+  const acknowledged = useRef(false);
+  useEffect(() => {
+    if (!authenticated || acknowledged.current || unread === 0) return;
+    acknowledged.current = true;
+    markRead.mutate(undefined);
+  }, [authenticated, unread, markRead]);
 
   return (
     <>
-      <ColumnHeader
-        title="Notifications"
-        subtitle="Activity from people and products you follow"
-        action={
-          unread > 0 ? (
-            <button
-              onClick={() => readAll.mutate()}
-              disabled={readAll.isPending}
-              className="ws-press shrink-0 rounded-full border border-white/20 px-4 py-1.5 text-sm font-bold text-body transition-colors hover:bg-white/10 disabled:opacity-50"
-            >
-              Mark all read
-            </button>
-          ) : undefined
-        }
-      />
+      <ColumnHeader title="Notifications" subtitle="Activity from across the square" />
 
-      {notifications.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
-      {notifications.isError && (
-        <div className="p-4">
-          <ErrorState
-            error={notifications.error}
-            fallback="Couldn't load notifications."
-            onRetry={() => notifications.refetch()}
-          />
-        </div>
-      )}
-      {notifications.isSuccess && notifications.data.items.length === 0 && (
+      {ready && !authenticated && (
         <div className="p-4">
           <EmptyState
             glyph="○"
-            title="You're all caught up"
-            body="Follow creators, products and activities to see updates here."
+            title="Sign in to see your notifications"
+            body="Follows, likes and replies land here."
+            action={
+              <button
+                onClick={login}
+                className="ws-btn-silver ws-press rounded-full px-5 py-2 text-[13px] font-bold"
+              >
+                Sign in
+              </button>
+            }
           />
         </div>
       )}
 
-      {notifications.data?.items.map((item) => (
-        <Link
-          key={item.id}
-          href={item.href ?? "#"}
-          onClick={() => !item.read && read.mutate(item.id)}
-          className={cn(
-            "ws-row flex items-start gap-3 px-4 py-3",
-            // Unread rows carry a faint silver wash, the way X tints new items.
-            !item.read && "bg-white/4"
+      {authenticated && (
+        <>
+          {notifications.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
+          {notifications.isError && (
+            <div className="p-4">
+              <ErrorState
+                error={notifications.error}
+                fallback="Couldn't load notifications."
+                onRetry={() => notifications.refetch()}
+              />
+            </div>
           )}
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center text-xl text-accent">
-            {GLYPHS[item.kind]}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2 text-[15px] font-bold text-heading">
-              {!item.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />}
-              {item.title}
-            </span>
-            <span className="mt-0.5 block text-[15px] leading-normal text-body">{item.body}</span>
-            <span className="mt-1 block text-[13px] text-meta">{relativeTime(item.createdAt)}</span>
-          </span>
-        </Link>
-      ))}
+          {notifications.isSuccess && items.length === 0 && (
+            <div className="p-4">
+              <EmptyState
+                glyph="○"
+                title="You're all caught up"
+                body="Follow creators, products and activities to see updates here."
+              />
+            </div>
+          )}
+
+          {items.map((item) => (
+            <Row key={item.id} item={item} />
+          ))}
+
+          <div ref={sentinel} />
+          {notifications.isFetchingNextPage && (
+            <div className="flex justify-center py-6">
+              <Spinner className="h-6 w-6 text-meta" />
+            </div>
+          )}
+        </>
+      )}
     </>
   );
 }

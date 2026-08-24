@@ -6,6 +6,7 @@ import { unwrap } from "@/lib/api/envelope";
 import { z } from "zod";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
+  BookmarkResultSchema,
   CommentSchema,
   CommentsPageSchema,
   FeedPageSchema,
@@ -59,6 +60,19 @@ const MentionSearchSchema = z.object({ items: z.array(MentionSchema) });
 
 export async function searchMentions(query: string) {
   return MentionSearchSchema.parse(await msApi.get("/mentions/search", { q: query.trim(), limit: 8 }));
+}
+
+// Arkmarks. POST saves, DELETE unsaves; GET /me/bookmarks pages the saved
+// posts back as feed items, so the Arkmarks tab reuses the timeline shape.
+export async function bookmarkPost(postId: string, bookmark: boolean) {
+  const path = `/posts/${postId}/bookmark`;
+  return BookmarkResultSchema.parse(
+    (bookmark ? await msApi.post(path) : await msApi.del(path)) ?? {}
+  );
+}
+
+export async function fetchBookmarks(cursor?: string) {
+  return FeedPageSchema.parse(await msApi.authedGet("/me/bookmarks", { limit: 30, cursor }));
 }
 
 export async function likePost(postId: string, like: boolean) {

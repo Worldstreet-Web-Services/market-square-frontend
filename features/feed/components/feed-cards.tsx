@@ -10,6 +10,7 @@ import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { IconCalendar, IconEye, IconLive, IconPlay, IconShare } from "@/components/ui/icons";
 import type { FeedItem, FeedStream } from "@/features/feed/lib/types";
+import type { Profile } from "@/lib/api/schemas";
 import { PostCard } from "@/features/feed/components/post-card";
 import { MARKET_FLAGS } from "@/lib/market-config";
 
@@ -132,8 +133,15 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
   );
 }
 
-export function FeedItemCard({ item }: { item: FeedItem }) {
-  if (item.type === "post" && item.post) return <PostCard post={item.post} />;
+export function FeedItemCard({
+  item,
+  followSlot,
+}: {
+  item: FeedItem;
+  followSlot?: (author: Profile) => React.ReactNode;
+}) {
+  if (item.type === "post" && item.post)
+    return <PostCard post={item.post} repostedBy={item.repostedBy} followSlot={followSlot} />;
   if (item.type === "stream" && item.stream) return <StreamFeedCard stream={item.stream} />;
 
   if (item.type === "activity" && item.activity) {

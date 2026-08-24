@@ -108,6 +108,134 @@ function summary(p: FxProfile) {
   };
 }
 
+// Arkmarks: post ids saved per viewer, newest first. Insertion order is the
+// listing order, so a re-save moves the post back to the top.
+const bookmarks = new Map<string, Set<string>>([
+  // Two seeded saves so the Arkmarks tab has something to render in fixture
+  // mode; the real backend starts every account empty.
+  [ME_ID, new Set(posts.filter((post) => post.kind === "update").slice(0, 2).map((p) => p.id))],
+]);
+
+function bookmarksFor(userId: string): Set<string> {
+  let set = bookmarks.get(userId);
+  if (!set) {
+    set = new Set();
+    bookmarks.set(userId, set);
+  }
+  return set;
+}
+
+// ---- 1:1 messaging ----
+// A conversation is keyed by its sorted participant pair, so opening one is
+// idempotent from either side.
+interface FxConversation {
+  id: string;
+  participants: [string, string];
+  createdAt: string;
+}
+interface FxMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
+}
+
+// One seeded thread so fixture mode has an inbox to open; the real backend
+// starts every account empty.
+const SEED_PEER = profiles.find((p) => p.id !== ME_ID);
+const conversations: FxConversation[] = SEED_PEER
+  ? [
+      {
+        id: "cv_seed",
+        participants: [ME_ID, SEED_PEER.id],
+        createdAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+      },
+    ]
+  : [];
+const messages: FxMessage[] = SEED_PEER
+  ? [
+      {
+        id: "mg_seed_1",
+        conversationId: "cv_seed",
+        senderId: SEED_PEER.id,
+        text: "Saw your post on the arena — are you streaming the qualifier?",
+        createdAt: new Date(Date.now() - 90 * 60_000).toISOString(),
+      },
+      {
+        id: "mg_seed_2",
+        conversationId: "cv_seed",
+        senderId: ME_ID,
+        text: "Planning to. I'll put tickets up tomorrow.",
+        createdAt: new Date(Date.now() - 80 * 60_000).toISOString(),
+      },
+      {
+        id: "mg_seed_3",
+        conversationId: "cv_seed",
+        senderId: SEED_PEER.id,
+        text: "Perfect — send me the link when it's live.",
+        createdAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+      },
+    ]
+  : [];
+// conversationId → userId → ISO timestamp of their last read.
+const conversationReads = new Map<string, Map<string, string>>();
+
+function pairKey(a: string, b: string): string {
+  return [a, b].sort().join("|");
+}
+
+function findConversation(a: string, b: string): FxConversation | undefined {
+  return conversations.find((c) => pairKey(...c.participants) === pairKey(a, b));
+}
+
+function readsFor(conversationId: string): Map<string, string> {
+  let map = conversationReads.get(conversationId);
+  if (!map) {
+    map = new Map();
+    conversationReads.set(conversationId, map);
+  }
+  return map;
+}
+
+function unreadIn(conversation: FxConversation, userId: string): number {
+  const since = readsFor(conversation.id).get(userId);
+  return messages.filter(
+    (m) =>
+      m.conversationId === conversation.id &&
+      m.senderId !== userId &&
+      (!since || Date.parse(m.createdAt) > Date.parse(since))
+  ).length;
+}
+
+function conversationDto(conversation: FxConversation, viewerId: string) {
+  const peerId = conversation.participants.find((id) => id !== viewerId) ?? viewerId;
+  const peer = profileById(peerId);
+  const thread = messages
+    .filter((m) => m.conversationId === conversation.id)
+    .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  const last = thread[thread.length - 1] ?? null;
+  return {
+    id: conversation.id,
+    peer: peer ? summary(peer) : null,
+    lastMessage: last?.text ?? null,
+    lastMessageAt: last?.createdAt ?? null,
+    unreadCount: unreadIn(conversation, viewerId),
+  };
+}
+
+function messageDto(message: FxMessage) {
+  const sender = profileById(message.senderId);
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    senderId: message.senderId,
+    sender: sender ? summary(sender) : null,
+    text: message.text,
+    createdAt: message.createdAt,
+  };
+}
+
 // Backend Post — likedByMe reflects the authed viewer on every read; a quoted
 // post is hydrated inline so the timeline can render it without a second call.
 function postDto(post: FxPost, viewerId: string | null = null) {
@@ -115,11 +243,18 @@ function postDto(post: FxPost, viewerId: string | null = null) {
   const quotedAuthor = quoted ? profileById(quoted.authorId) : null;
   return {
     likedByMe: viewerId ? post.likedBy.has(viewerId) : false,
+    bookmarkedByMe: viewerId ? bookmarksFor(viewerId).has(post.id) : false,
     id: post.id,
     authorId: post.authorId,
     kind: post.kind,
     text: post.text,
     mediaUrl: post.mediaUrl,
+    // The service types its own media; renderers prefer this over sniffing.
+    mediaKind: post.mediaUrl
+      ? /\.(mp4|webm)(\?|#|$)/i.test(post.mediaUrl)
+        ? "video"
+        : "image"
+      : null,
     thumbnailUrl: null,
     deepLink: post.deepLink,
     storyExpiresAt:
@@ -143,14 +278,22 @@ function postDto(post: FxPost, viewerId: string | null = null) {
 }
 
 // FeedItem for a post: the one place the backend hydrates an author summary.
+//
+// A repost carries the ORIGINAL post, attributed to whoever passed it on —
+// the card still belongs to the original author, and `repostedBy` names the
+// person whose action put it in this timeline.
 function postFeedItem(post: FxPost, viewerId: string | null = null) {
-  const author = profileById(post.authorId);
+  const original = post.repostOfId ? posts.find((x) => x.id === post.repostOfId) : null;
+  const subject = original ?? post;
+  const author = profileById(subject.authorId);
+  const reposter = original ? profileById(post.authorId) : null;
   return {
     id: `fi_${post.id}`,
     type: "post" as const,
     occurredAt: post.createdAt,
-    ...(post.deepLink ? { deepLink: post.deepLink } : {}),
-    post: { ...postDto(post, viewerId), author: author ? summary(author) : null },
+    ...(reposter ? { repostedBy: summary(reposter) } : {}),
+    ...(subject.deepLink ? { deepLink: subject.deepLink } : {}),
+    post: { ...postDto(subject, viewerId), author: author ? summary(author) : null },
   };
 }
 
@@ -320,6 +463,23 @@ function feedEntries(lane: string, viewerId: string | null): FeedEntry[] {
           ),
       ];
       break;
+    // Clips only — the lane is defined by the media, not by ranking.
+    case "reels":
+      entries = updates
+        .filter((p) => p.mediaUrl && /\.(mp4|webm)(\?|#|$)/i.test(p.mediaUrl))
+        .map((post) => postFeedItem(post, viewerId));
+      break;
+    // Busiest first. Recency still breaks ties through the final sort, so the
+    // engagement score decides the order here.
+    case "trending":
+      entries = [...updates]
+        .sort(
+          (a, b) =>
+            b.likeCount + b.commentCount * 2 - (a.likeCount + a.commentCount * 2)
+        )
+        .map((post) => postFeedItem(post, viewerId));
+      // Already ranked — skip the recency sort below.
+      return entries;
     case "platform":
       entries = platformEvents.map((e) => ({
         id: `fi_${e.id}`,
@@ -386,12 +546,34 @@ function blocksFor(userId: string): Set<string> {
   return set;
 }
 
-const fixtureNotifications = [
-  { id: "nt_live", kind: "stream_live", title: "Amara is live", body: "Morning Desk is live now. Your ticket is ready.", href: "/live/st_desk", createdAt: new Date(Date.now() - 8 * 60_000).toISOString() },
-  { id: "nt_activity", kind: "activity", title: "Activity starting soon", body: "The Last Man qualifier begins in two hours.", href: "/schedule", createdAt: new Date(Date.now() - 42 * 60_000).toISOString() },
-  { id: "nt_product", kind: "product", title: "New in the ARK Store", body: "KASH Checkout SDK is now available to download.", href: "/store", createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString() },
-  { id: "nt_follow", kind: "follow", title: "New follower", body: "Nina followed your Market Square profile.", href: "/u/nina", createdAt: new Date(Date.now() - 7 * 60 * 60_000).toISOString() },
-] as const;
+// Notifications mirror the service shape: a kind, a hydrated actor, nullable
+// post/stream targets and a nullable readAt. No prose — the client owns copy.
+const fixtureNotifications: Array<{
+  id: string;
+  kind: string;
+  actorId: string;
+  postId: string | null;
+  streamId: string | null;
+  createdAt: string;
+}> = [
+  { id: "nt_live", kind: "stream_live", actorId: profiles[1]?.id ?? ME_ID, postId: null, streamId: streams[0]?.id ?? null, createdAt: new Date(Date.now() - 8 * 60_000).toISOString() },
+  { id: "nt_like", kind: "like", actorId: profiles[2]?.id ?? ME_ID, postId: posts[0]?.id ?? null, streamId: null, createdAt: new Date(Date.now() - 42 * 60_000).toISOString() },
+  { id: "nt_repost", kind: "repost", actorId: profiles[3]?.id ?? ME_ID, postId: posts[0]?.id ?? null, streamId: null, createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString() },
+  { id: "nt_follow", kind: "follow", actorId: profiles[1]?.id ?? ME_ID, postId: null, streamId: null, createdAt: new Date(Date.now() - 7 * 60 * 60_000).toISOString() },
+];
+
+function notificationDto(item: (typeof fixtureNotifications)[number]) {
+  const actor = profileById(item.actorId);
+  return {
+    id: item.id,
+    kind: item.kind,
+    actor: actor ? summary(actor) : null,
+    postId: item.postId,
+    streamId: item.streamId,
+    readAt: readNotifications.has(item.id) ? new Date().toISOString() : null,
+    createdAt: item.createdAt,
+  };
+}
 
 function bansFor(streamId: string): Set<string> {
   let set = chatBans.get(streamId);
@@ -510,23 +692,84 @@ export function handleFixture(
     return ok({ accepted: true });
   }
 
-  // ---- notifications ----
-  if (p[0] === "notifications") {
+  // ---- conversations ----
+  if (p[0] === "conversations") {
     const denied = requireAuth(userId);
     if (denied) return denied;
-    if (p.length === 1 && method === "GET") {
-      return ok({ items: fixtureNotifications.map((item) => ({ ...item, read: readNotifications.has(item.id) })) });
+
+    // POST /conversations { userId } — idempotent from either side.
+    if (p.length === 1 && method === "POST") {
+      const peerId = typeof body.userId === "string" ? body.userId : "";
+      if (!peerId || peerId === userId)
+        return fail(400, "VALIDATION", "Pick someone other than yourself.");
+      if (!profileById(peerId)) return fail(404, "NOT_FOUND", "That person wasn't found.");
+      const existing = findConversation(userId!, peerId);
+      if (existing) return ok(conversationDto(existing, userId!));
+      const created: FxConversation = {
+        id: nextId("cv"),
+        participants: [userId!, peerId],
+        createdAt: new Date().toISOString(),
+      };
+      conversations.push(created);
+      return ok(conversationDto(created, userId!));
     }
-    if (p[1] === "read-all" && method === "POST") {
-      fixtureNotifications.forEach((item) => readNotifications.add(item.id));
-      return ok({ updated: fixtureNotifications.length });
+
+    const conversation = conversations.find((c) => c.id === p[1]);
+    if (!conversation) return fail(404, "NOT_FOUND", "Conversation not found");
+    // Every conversation route is participants-only, even with a valid id.
+    if (!conversation.participants.includes(userId!))
+      return fail(403, "FORBIDDEN", "You're not in this conversation.");
+
+    // GET /conversations/:id/messages → NEWEST first.
+    if (p[2] === "messages" && method === "GET") {
+      const thread = messages
+        .filter((m) => m.conversationId === conversation.id)
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+        .map(messageDto);
+      const { page, nextCursor } = paginate(
+        thread,
+        search.get("cursor"),
+        Math.min(Number(search.get("limit")) || 50, 50)
+      );
+      return ok({ items: page, nextCursor });
     }
-    if (p.length === 2 && method === "PATCH") {
-      const item = fixtureNotifications.find((notification) => notification.id === p[1]);
-      if (!item) return fail(404, "NOT_FOUND", "Notification not found.");
-      readNotifications.add(item.id);
-      return ok({ ...item, read: true });
+
+    if (p[2] === "messages" && method === "POST") {
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text) return fail(422, "VALIDATION", "Write something first.");
+      if (text.length > 2000) return fail(422, "VALIDATION", "Messages are 2000 characters max.");
+      const created: FxMessage = {
+        id: nextId("mg"),
+        conversationId: conversation.id,
+        senderId: userId!,
+        text,
+        createdAt: new Date().toISOString(),
+      };
+      messages.push(created);
+      // Sending is also reading your own side of the thread.
+      readsFor(conversation.id).set(userId!, created.createdAt);
+      return ok(messageDto(created));
     }
+
+    if (p[2] === "read" && method === "POST") {
+      readsFor(conversation.id).set(userId!, new Date().toISOString());
+      return ok({ unreadCount: unreadIn(conversation, userId!) });
+    }
+  }
+
+  // ---- categories ----
+  // A BARE ARRAY, like the real service. real-world-assets and
+  // prediction-markets carry a null count on purpose: other services own that
+  // data, and null means unknown — never zero.
+  if (p[0] === "categories" && method === "GET") {
+    return ok([
+      { key: "all-posts", label: "All Posts", count: posts.filter((x) => x.kind === "update").length },
+      { key: "live-streams", label: "Live Streams", count: streams.filter((s) => s.status === "live").length },
+      { key: "real-world-assets", label: "Real World Assets", count: null },
+      { key: "prediction-markets", label: "Prediction Markets", count: null },
+      { key: "creators-audio", label: "Creators & Audio", count: profiles.filter((x) => x.role === "creator").length },
+      { key: "ark-store", label: "ARK Store Products", count: storeItems.length },
+    ]);
   }
 
   // ---- authorized operations console ----
@@ -606,6 +849,80 @@ export function handleFixture(
       if (typeof body.avatarUrl === "string") me.avatarUrl = body.avatarUrl || null;
       return ok(publicProfile(me, userId));
     }
+    // GET /me/unread → both nav badges in one call. Both counts are GLOBAL.
+    if (p[1] === "unread" && method === "GET") {
+      return ok({
+        messages: conversations
+          .filter((c) => c.participants.includes(userId!))
+          .reduce((total, c) => total + unreadIn(c, userId!), 0),
+        notifications: fixtureNotifications.filter((item) => !readNotifications.has(item.id))
+          .length,
+      });
+    }
+
+    // GET /me/conversations → newest activity first, with a GLOBAL totalUnread.
+    if (p[1] === "conversations" && method === "GET") {
+      const mine = conversations.filter((c) => c.participants.includes(userId!));
+      const totalUnread = mine.reduce((total, c) => total + unreadIn(c, userId!), 0);
+      const rows = mine
+        .map((c) => conversationDto(c, userId!))
+        .sort(
+          (a, b) =>
+            Date.parse(b.lastMessageAt ?? "0") - Date.parse(a.lastMessageAt ?? "0")
+        );
+      const { page, nextCursor } = paginate(
+        rows,
+        search.get("cursor"),
+        Math.min(Number(search.get("limit")) || 30, 30)
+      );
+      return ok({ items: page, nextCursor, totalUnread });
+    }
+
+    // GET /me/notifications → a cursor page plus the global unread tally.
+    if (p[1] === "notifications" && p.length === 2 && method === "GET") {
+      const sorted = [...fixtureNotifications].sort(
+        (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)
+      );
+      const { page, nextCursor } = paginate(
+        sorted.map(notificationDto),
+        search.get("cursor"),
+        Math.min(Number(search.get("limit")) || 30, 30)
+      );
+      // Counted across everything, not just this page.
+      const unreadCount = fixtureNotifications.filter(
+        (item) => !readNotifications.has(item.id)
+      ).length;
+      return ok({ items: page, unreadCount, nextCursor });
+    }
+
+    // POST /me/notifications/read { ids? } — omitting ids marks all read.
+    if (p[1] === "notifications" && p[2] === "read" && method === "POST") {
+      const ids = Array.isArray(body.ids) ? (body.ids as string[]) : null;
+      for (const item of fixtureNotifications) {
+        if (!ids || ids.includes(item.id)) readNotifications.add(item.id);
+      }
+      const unreadCount = fixtureNotifications.filter(
+        (item) => !readNotifications.has(item.id)
+      ).length;
+      return ok({ unreadCount });
+    }
+
+    // GET /me/bookmarks → a cursor page of FeedItems, newest save first, so
+    // the Arkmarks tab renders through the same timeline as every other lane.
+    if (p[1] === "bookmarks" && method === "GET") {
+      const saved = [...bookmarksFor(userId!)].reverse();
+      const items = saved
+        .map((id) => posts.find((post) => post.id === id))
+        .filter((post): post is FxPost => Boolean(post))
+        .map((post) => postFeedItem(post, userId));
+      const { page, nextCursor } = paginate(
+        items,
+        search.get("cursor"),
+        Number(search.get("limit")) || 30
+      );
+      return ok({ items: page, nextCursor });
+    }
+
     // GET /me/tickets → BARE ARRAY of Ticket & { stream }.
     if (p[1] === "tickets" && method === "GET") {
       return ok(
@@ -814,6 +1131,17 @@ export function handleFixture(
         if (repostIndex >= 0) posts.splice(repostIndex, 1);
       }
       return ok({ reposted: post.repostedBy.has(userId!), repostCount: post.repostedBy.size });
+    }
+
+    if (p[2] === "bookmark") {
+      const denied = requireAuth(userId);
+      if (denied) return denied;
+      const saved = bookmarksFor(userId!);
+      // Delete-then-add on POST so a re-save lifts the post to the top of the
+      // listing rather than leaving it where it was.
+      saved.delete(post.id);
+      if (method === "POST") saved.add(post.id);
+      return ok({ bookmarked: saved.has(post.id) });
     }
 
     if (p[2] === "comments") {

@@ -8,6 +8,7 @@ import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { ClaimUsernameGate } from "@/features/profile";
+import { useUnread } from "@/hooks/use-unread";
 import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark, Wordmark } from "@/components/ui/wordmark";
@@ -19,6 +20,7 @@ import {
   IconDots,
   IconHome,
   IconLive,
+  IconMail,
   IconMore,
   IconPlus,
   IconSearch,
@@ -47,6 +49,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
+  { href: "/messages", label: "Messages", icon: IconMail, authed: true },
   { href: "/notifications", label: "Notifications", icon: IconBell, authed: true },
   { href: "/live", label: "Live", icon: IconLive },
   { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
@@ -93,30 +96,46 @@ function OnAirPill({ streamId, compact }: { streamId: string | null; compact?: b
   );
 }
 
-/** Sidebar row: icon at every width, label only once the rail is expanded. */
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+/**
+ * Sidebar row.
+ *
+ * The design draws a nav item as a 12px-radius capsule with a 16px glyph and a
+ * 12px bold label — and marks the active one by filling it at 10% white,
+ * ringing it at 15%, and turning its glyph amber. That amber dot is the only
+ * hue in the rail.
+ */
+function NavLink({
+  item,
+  active,
+  badge = 0,
+}: {
+  item: NavItem;
+  active: boolean;
+  /** Unread tally shown on the glyph. 0 renders nothing. */
+  badge?: number;
+}) {
   const Icon = item.icon;
   return (
     <Link
       href={item.href}
-      aria-label={item.label}
+      aria-label={badge > 0 ? `${item.label}, ${badge} unread` : item.label}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "ws-nav group flex items-center gap-4 p-3 xl:pr-6",
-        active ? "text-heading" : "text-body"
+        "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-colors",
+        active
+          ? "border border-white/15 bg-white/10 text-white"
+          : "border border-transparent text-body hover:bg-white/[0.06]"
       )}
     >
-      <span className="relative shrink-0">
-        <Icon className="h-6 w-6" filled={active} />
-      </span>
-      <span
-        className={cn(
-          "hidden text-xl xl:block",
-          active ? "ws-display font-bold" : "font-medium"
+      <span className={cn("relative shrink-0", active && "text-nav-dot")}>
+        <Icon className="h-4 w-4" filled={active} />
+        {badge > 0 && (
+          <span className="tnum absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-featured px-1 text-[9px] font-bold text-ink">
+            {badge > 99 ? "99+" : badge}
+          </span>
         )}
-      >
-        {item.label}
       </span>
+      <span className="hidden text-[12px] font-bold xl:block">{item.label}</span>
       {/* Icon-rail tooltip, since the label is hidden below xl. */}
       <span className="ws-overlay pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block xl:!hidden">
         {item.label}
@@ -124,6 +143,15 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
     </Link>
   );
 }
+
+// Which nav hrefs wear a badge, and which global count feeds each.
+const BADGE_FOR: Record<
+  string,
+  ((counts: { messages: number; notifications: number } | undefined) => number) | undefined
+> = {
+  "/notifications": (counts) => counts?.notifications ?? 0,
+  "/messages": (counts) => counts?.messages ?? 0,
+};
 
 function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
   if (items.length === 0) return null;
@@ -175,18 +203,20 @@ function AccountChip() {
     );
   }
 
+  // Pinned to the foot of the rail as a bordered 12px-radius card, sat under
+  // its own hairline — the design's account block, not a bare row.
   return (
     <div className="group relative">
       <Link
         href={me.data ? `/u/${me.data.username}` : "/auth"}
-        className="flex w-full items-center gap-3 rounded-full p-2 transition-colors hover:bg-white/8"
+        className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 transition-colors hover:bg-white/8"
       >
-        <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={40} />
+        <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={34} />
         <span className="hidden min-w-0 flex-1 xl:block">
-          <span className="block truncate text-sm font-bold text-heading">
+          <span className="block truncate text-[12px] font-bold leading-4 text-white">
             {me.data?.displayName ?? "You"}
           </span>
-          <span className="block truncate text-sm text-meta">
+          <span className="block truncate text-[10px] leading-[15px] text-white/40">
             @{me.data?.username ?? "…"}
           </span>
         </span>
@@ -214,6 +244,8 @@ function Sidebar({ pathname }: { pathname: string }) {
   const { authenticated } = useAuth();
   const me = useMe();
   const broadcast = useBroadcastStatus();
+  // Both badges come from one global endpoint, never from a loaded page.
+  const unread = useUnread();
 
   const visible = NAV.filter(
     (item) =>
@@ -222,27 +254,33 @@ function Sidebar({ pathname }: { pathname: string }) {
   );
 
   return (
-    <aside className="sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center px-1 py-1 md:flex xl:w-[268px] xl:items-stretch xl:px-2">
+    <aside className="ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center border-r bg-[#0f0f0f] px-3 py-5 md:flex xl:w-[224px] xl:items-stretch">
+      {/* The wordmark lockup sits over its own hairline. */}
       <Link
         href="/"
         aria-label="Market Square home"
         title="Market Square"
-        className="ws-press mt-1 mb-1 flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-white/8 xl:ml-1 xl:w-auto xl:justify-start xl:px-3"
+        className="ws-press mb-4 flex items-center justify-center border-b border-white/10 pb-4 xl:justify-start xl:px-2.5"
       >
-        {/* The wordmark needs width, so the 68px rail wears the mark and the
+        {/* The wordmark needs width, so the icon rail wears the mark and the
             expanded sidebar wears the wordmark. */}
-        <LogoMark size={36} className="xl:hidden" />
-        <Wordmark height={17} className="hidden xl:block" />
+        <LogoMark size={32} className="xl:hidden" />
+        <Wordmark height={14} className="hidden xl:block" />
       </Link>
 
-      <nav className="flex flex-col gap-0.5" aria-label="Primary">
+      <nav className="flex flex-col gap-1" aria-label="Primary">
         {visible
           .filter((item) => !item.secondary)
           .map((item) => (
-            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+            <NavLink
+              key={item.href}
+              item={item}
+              active={isActive(pathname, item.href)}
+              badge={BADGE_FOR[item.href]?.(unread.data) ?? 0}
+            />
           ))}
         {/* Expanded rail shows everything; the icon rail folds the rest away. */}
-        <div className="hidden flex-col gap-0.5 xl:flex">
+        <div className="hidden flex-col gap-1 xl:flex">
           {visible
             .filter((item) => item.secondary)
             .map((item) => (
@@ -273,7 +311,7 @@ function Sidebar({ pathname }: { pathname: string }) {
         </Link>
       </div>
 
-      <div className="mt-auto w-full pb-2">
+      <div className="mt-auto w-full border-t border-white/10 pt-4">
         {broadcast.live && (
           <div className="mb-2 flex justify-center xl:justify-start xl:pl-2">
             <OnAirPill streamId={broadcast.streamId} compact />
@@ -282,6 +320,40 @@ function Sidebar({ pathname }: { pathname: string }) {
         <AccountChip />
       </div>
     </aside>
+  );
+}
+
+// The breadcrumb strip above the columns. Only the leaf changes — the root is
+// always the ecosystem the square belongs to.
+const CRUMB: Array<[RegExp, string]> = [
+  [/^\/$/, "Market Square"],
+  [/^\/discover/, "Discover"],
+  [/^\/arkmarks/, "Arkmarks"],
+  [/^\/messages/, "Messages"],
+  [/^\/notifications/, "Notifications"],
+  [/^\/live\b/, "Live"],
+  [/^\/tickets/, "Tickets"],
+  [/^\/store/, "ARK Store"],
+  [/^\/schedule/, "Schedule"],
+  [/^\/studio/, "Studio"],
+  [/^\/operations/, "Operations"],
+  [/^\/spotlight/, "Citizen Spotlight"],
+  [/^\/u\//, "Profile"],
+  [/^\/auth/, "Sign in"],
+];
+
+function Breadcrumb({ pathname }: { pathname: string }) {
+  const leaf = CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Market Square";
+  return (
+    <div className="ws-hair hidden h-[69px] shrink-0 items-center border-b bg-[#0f0f0f] px-6 md:flex">
+      <nav aria-label="Breadcrumb" className="text-[16px] text-[#979797]">
+        <Link href="/" className="hover:text-body">
+          Ark Ecosystem
+        </Link>
+        <span aria-hidden>/ </span>
+        <span aria-current="page">{leaf}</span>
+      </nav>
+    </div>
   );
 }
 
@@ -305,25 +377,30 @@ function MobileBar({ pathname }: { pathname: string }) {
       {tabs.map((item) => {
         const active = isActive(pathname, item.href);
         return (
+          // The mobile frame labels every tab under a 24px glyph and dims the
+          // inactive ones to #6D6D6D.
           <Link
             key={item.href}
             href={item.href}
-            aria-label={item.label}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "ws-press flex flex-1 items-center justify-center py-3",
-              active ? "text-heading" : "text-meta"
+              "ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5",
+              active ? "text-[#E6E6E6]" : "text-[#6D6D6D]"
             )}
           >
             <item.icon className="h-6 w-6" filled={active} />
+            <span className={cn("text-[12px] leading-[14.8px]", active && "text-white")}>
+              {item.label}
+            </span>
           </Link>
         );
       })}
       <button
         onClick={() => router.push(me.data ? `/u/${me.data.username}` : "/auth")}
-        aria-label="Profile"
-        className="ws-press flex flex-1 items-center justify-center py-3 text-meta"
+        className="ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5 text-[#6D6D6D]"
       >
         <IconUser className="h-6 w-6" />
+        <span className="text-[12px] leading-[14.8px]">You</span>
       </button>
     </nav>
   );
@@ -349,7 +426,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] justify-center">
+    <div className="mx-auto flex w-full max-w-[1600px] justify-center">
       <Sidebar pathname={pathname} />
 
       {/* Mobile top strip: wordmark plus the two things worth reaching from
@@ -369,18 +446,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <main
-        className={cn(
-          "ws-hair min-h-dvh min-w-0 flex-1 border-x pt-12 pb-16 md:pt-0 md:pb-0",
-          // Home carries the design's wider timeline; the other column
-          // surfaces stay at the narrower reading width.
-          !wide && (pathname === "/" ? "md:max-w-[720px]" : "md:max-w-[600px]")
-        )}
-      >
-        {children}
-      </main>
+      {/* The breadcrumb spans the column and the rail together, so both live
+          inside one flex-column beside the sidebar. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Breadcrumb pathname={pathname} />
+        <div className="flex min-w-0 flex-1 justify-center">
+          <main
+            className={cn(
+              "ws-hair min-h-dvh min-w-0 flex-1 border-x pt-12 pb-16 md:pt-0 md:pb-0",
+              // Home carries the design's wider timeline; the other column
+              // surfaces stay at the narrower reading width.
+              !wide && (pathname === "/" ? "md:max-w-[720px]" : "md:max-w-[600px]")
+            )}
+          >
+            {children}
+          </main>
 
-      {!wide && <RightRail />}
+          {!wide && <RightRail />}
+        </div>
+      </div>
 
       {/* Mobile compose: a floating silver core, the one elevated control. */}
       <Link

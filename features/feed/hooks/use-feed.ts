@@ -7,11 +7,14 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
-import { errorMessage } from "@/lib/api/envelope";
+import { errorCode, errorMessage } from "@/lib/api/envelope";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   addComment,
+  bookmarkPost,
+  fetchBookmarks,
   createPost,
   fetchComments,
   fetchFeed,
@@ -64,6 +67,7 @@ export function useCreatePost() {
             id: `local_${post.id}`,
             type: "post" as const,
             occurredAt: post.createdAt,
+            repostedBy: null,
             deepLink: post.deepLink,
             post,
             stream: null,
@@ -163,6 +167,70 @@ export function useLikePost() {
       applyLike(postId, !like);
       toast.error(errorMessage(error, "Couldn't update your like."));
     },
+  });
+}
+
+/**
+ * Arkmarks.
+ *
+ * The bookmark endpoints ship on their own cadence. Until they land the API
+ * answers 404, and a 404 here is "not deployed", not "your save failed" — so
+ * the mutation rolls the optimistic flag back and reports the feature as
+ * unavailable instead of raising an error toast. `unavailable` is what the
+ * button reads to go quiet; it never invents a saved state.
+ */
+export function useBookmarkPost() {
+  const queryClient = useQueryClient();
+  const [unavailable, setUnavailable] = useState(false);
+
+  const applyBookmark = (postId: string, bookmarked: boolean) => {
+    const patch = (post: Post): Post =>
+      post.id === postId ? { ...post, bookmarkedByMe: bookmarked } : post;
+    queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ["ms", "feed"] }, (data) =>
+      data
+        ? {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) =>
+                item.post ? { ...item, post: patch(item.post) } : item
+              ),
+            })),
+          }
+        : data
+    );
+  };
+
+  const mutation = useMutation({
+    mutationFn: ({ postId, bookmark }: { postId: string; bookmark: boolean }) =>
+      bookmarkPost(postId, bookmark),
+    onMutate: ({ postId, bookmark }) => applyBookmark(postId, bookmark),
+    onError: (error, { postId, bookmark }) => {
+      applyBookmark(postId, !bookmark);
+      if (errorCode(error) === "NOT_FOUND") {
+        setUnavailable(true);
+        return;
+      }
+      toast.error(errorMessage(error, "Couldn't update your Arkmark."));
+    },
+    onSuccess: (_result, { bookmark }) => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "bookmarks"] });
+      toast.success(bookmark ? "Saved to Arkmarks" : "Removed from Arkmarks");
+    },
+  });
+
+  return { ...mutation, unavailable };
+}
+
+export function useBookmarks() {
+  return useInfiniteQuery({
+    queryKey: ["ms", "bookmarks"],
+    queryFn: ({ pageParam }) => fetchBookmarks(pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    // A missing endpoint is a deployment gap, not a transient fault — retrying
+    // it just delays the quiet unavailable state.
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
   });
 }
 

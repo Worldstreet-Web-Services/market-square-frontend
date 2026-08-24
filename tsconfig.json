@@ -15,6 +15,9 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // `node --test` runs the .ts test files directly via Node's native type
+    // stripping, which requires the real .ts specifier. Safe with noEmit.
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [

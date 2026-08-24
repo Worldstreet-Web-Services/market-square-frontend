@@ -1,20 +1,39 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from "@/features/notifications/lib/api";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { errorMessage } from "@/lib/api/envelope";
+import { useAuth } from "@/hooks/use-auth";
+import { useRefreshUnread } from "@/hooks/use-unread";
+import {
+  fetchNotifications,
+  markNotificationsRead,
+} from "@/features/notifications/lib/api";
 
 const key = ["ms", "notifications"] as const;
 
 export function useNotifications() {
-  return useQuery({ queryKey: key, queryFn: fetchNotifications, refetchInterval: 30_000 });
+  const { authenticated } = useAuth();
+  return useInfiniteQuery({
+    queryKey: key,
+    queryFn: ({ pageParam }) => fetchNotifications(pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: authenticated,
+    refetchInterval: 30_000,
+  });
 }
 
-export function useReadNotification() {
+export function useMarkNotificationsRead() {
   const client = useQueryClient();
-  return useMutation({ mutationFn: markNotificationRead, onSuccess: () => client.invalidateQueries({ queryKey: key }) });
-}
-
-export function useReadAllNotifications() {
-  const client = useQueryClient();
-  return useMutation({ mutationFn: markAllNotificationsRead, onSuccess: () => client.invalidateQueries({ queryKey: key }) });
+  const refreshUnread = useRefreshUnread();
+  return useMutation({
+    mutationFn: (ids?: string[]) => markNotificationsRead(ids),
+    // Pull the badge forward rather than waiting out the poll.
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: key });
+      refreshUnread();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't mark those as read.")),
+  });
 }

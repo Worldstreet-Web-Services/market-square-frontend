@@ -14,8 +14,17 @@
 
   /* Ark brand is monochrome: no purple, no gold. The accent is silver. */
   --color-accent: #d4d4d8;
-  /* Featured/spotlight marker. Semantic like up/down — never decoration. */
-  --color-featured: #f5a524;
+  /* Featured/spotlight marker. Semantic like up/down — never decoration.
+     The three amber stops are lifted verbatim from the design: the button
+     gradient runs --color-featured → --color-featured-deep, Citizen
+     Spotlight's heading is --color-featured-hi and its chip label
+     --color-featured-chip. */
+  --color-featured: #e8b74a;
+  --color-featured-deep: #cda243;
+  --color-featured-hi: #ffb900;
+  --color-featured-chip: #ffd230;
+  /* The sidebar's active-item dot. */
+  --color-nav-dot: #ffba00;
   /* Gain and loss stay semantic (functional, not brand color). */
   --color-up: #7ce7b0;
   --color-down: #f6a5a5;
@@ -458,40 +467,83 @@ body {
    column surfaces elsewhere keep their dividers.
 --------------------------------------------------------------------------- */
 
+/* The post slab. The design draws it as an *outline* on the page ground —
+   transparent fill, one hairline at 10% white, 16.5px radius — not as a
+   lighter panel. Depth comes from the border alone. */
 @utility ws-post {
-  border-radius: 18px;
-  background: #111113;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16.5px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: border-color 0.15s ease;
 }
 .ws-post:hover {
-  border-color: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
-/* Rail module on the home page: same slab, tighter radius. */
+/* The hairline under a post's identity row. Its own colour in the design. */
+@utility ws-post-rule {
+  border-color: #222222;
+}
+
+/* Rail module on the home page: 22px radius, a near-black wash and a
+   brighter hairline than the timeline's. */
 @utility ws-panel {
-  border-radius: 14px;
-  background: #111113;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 22px;
+  background: rgba(16, 16, 18, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 /* Featured/spotlight treatment. The amber is the one hue in the product and
-   it is semantic — it marks "featured", never decoration. Everything else
-   stays on the silver ramp. */
+   it is semantic — it marks "featured", never decoration. The wash is the
+   design's own vertical gradient: amber at the crown, falling to the panel
+   ground by two thirds. */
 @utility ws-featured {
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(245, 165, 36, 0.14), rgba(245, 165, 36, 0.03) 60%), #111113;
-  border: 1px solid rgba(245, 165, 36, 0.3);
+  border-radius: 22px;
+  background: linear-gradient(178deg, var(--color-featured-deep) 0%, #0f0f0f 67%);
+  border: 0.5px solid var(--color-featured);
 }
 
-/* Inline comment affordance inside a post's action row. */
+/* The amber call to action: Create Post and every twin of it. */
+@utility ws-btn-featured {
+  background: linear-gradient(155deg, var(--color-featured) 0%, var(--color-featured-deep) 100%);
+  color: #0f0f0f;
+}
+
+/* The silver call to action: the active section tab, Follow, the floating
+   compose button. Same geometry, the silver ramp instead of amber. */
+@utility ws-btn-silver {
+  background: linear-gradient(155deg, #ffffff 0%, #999999 100%);
+  color: #000000;
+}
+
+/* The section switcher's outline: one long pill enclosing the tab strip and
+   both creation actions. */
+@utility ws-tabbar {
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* A grouped run of post actions — the counts cluster and the reply field are
+   each their own soft pill in the design. */
+@utility ws-action-pill {
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Story tile: a portrait card, not a circle. */
+@utility ws-story-card {
+  border-radius: 16.5px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Inline comment affordance inside a post's action row. Shares the action
+   pill's fill so the row reads as two halves of one control. */
 @utility ws-comment-field {
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  background: rgba(255, 255, 255, 0.03);
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
 }
 .ws-comment-field:focus-within {
   background: #000;
-  border-color: rgba(212, 212, 216, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(212, 212, 216, 0.5);
 }

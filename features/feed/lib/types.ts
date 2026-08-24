@@ -17,6 +17,9 @@ export const PostSchema = z.object({
   kind: z.enum(["update", "story"]).catch("update"),
   text: z.string(),
   mediaUrl: z.string().nullable().optional().default(null),
+  // The backend now types its own media. Renderers prefer this over sniffing
+  // the URL's extension; `isVideoPost` falls back to the sniff when absent.
+  mediaKind: z.string().nullable().optional().default(null),
   thumbnailUrl: z.string().nullable().optional().default(null),
   deepLink: DeepLinkSchema.nullable().optional().default(null),
   storyExpiresAt: z.string().nullable().optional().default(null),
@@ -33,6 +36,9 @@ export const PostSchema = z.object({
   }).nullable().optional().default(null),
   mentions: z.array(MentionSchema).optional().default([]),
   likedByMe: z.boolean().optional().default(false),
+  // Arkmarks. Defaults to false so a backend that has not shipped the field
+  // yet parses cleanly — the button reads "not saved" rather than throwing.
+  bookmarkedByMe: z.boolean().optional().default(false),
   author: ProfileSchema.nullable().optional().default(null),
 });
 
@@ -86,6 +92,9 @@ export const FeedItemSchema = z.object({
   id: z.string(),
   type: z.enum(["post", "stream", "activity", "platform_event"]),
   occurredAt: z.string(),
+  // Present when the item reaches the viewer through someone's repost: the
+  // original post, attributed to whoever passed it on.
+  repostedBy: ProfileSchema.nullable().optional().default(null),
   deepLink: DeepLinkSchema.nullable().optional().default(null),
   post: PostSchema.nullable().optional().default(null),
   stream: FeedStreamSchema.nullable().optional().default(null),
@@ -104,6 +113,11 @@ export const CommentsPageSchema = z.object({
 });
 
 export const LikeResultSchema = z.object({ liked: z.boolean(), likeCount: z.number() });
+// POST/DELETE /posts/:id/bookmark. The backend contract returns the resulting
+// state; older builds answer with an empty body, hence the optional field.
+export const BookmarkResultSchema = z.object({
+  bookmarked: z.boolean().optional(),
+});
 export const RepostResultSchema = z.object({ reposted: z.boolean(), repostCount: z.number() });
 
 // Backend report reasons are a fixed enum.
@@ -116,4 +130,4 @@ export type FeedStream = z.infer<typeof FeedStreamSchema>;
 export type FeedPage = z.infer<typeof FeedPageSchema>;
 export type ReportReason = z.infer<typeof ReportReasonSchema>;
 export type Mention = z.infer<typeof MentionSchema>;
-export type Lane = "for-you" | "following" | "live" | "platform";
+export type Lane = "for-you" | "following" | "live" | "platform" | "reels" | "trending";

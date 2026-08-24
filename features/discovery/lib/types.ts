@@ -21,3 +21,15 @@ export const DiscoverySchema = z.object({
 
 export type DiscoveryResult = z.infer<typeof DiscoveryResultSchema>;
 export type DiscoveryType = DiscoveryResult["type"];
+
+// GET /categories → a bare array. `count` is deliberately null for the
+// categories other services own (real-world assets, prediction markets):
+// that is "unknown", never zero.
+export const CategorySchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  count: z.number().nullable().optional().default(null),
+});
+
+export const CategoryListSchema = z.array(CategorySchema);
+export type MarketCategory = z.infer<typeof CategorySchema>;

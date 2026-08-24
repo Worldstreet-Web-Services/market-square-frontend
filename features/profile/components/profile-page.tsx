@@ -183,7 +183,14 @@ function ActivitiesTab({ username }: { username: string }) {
   );
 }
 
-export function ProfilePage({ username }: { username: string }) {
+export function ProfilePage({
+  username,
+  messageSlot,
+}: {
+  username: string;
+  /** Composed from outside — profile never imports the messages slice. */
+  messageSlot?: (profile: Profile) => React.ReactNode;
+}) {
   const profile = useProfile(username);
   const me = useMe();
   const [tab, setTab] = useState<Tab>("posts");
@@ -245,6 +252,7 @@ export function ProfilePage({ username }: { username: string }) {
             ) : (
               <>
                 <SafetyActions profile={data} />
+                {messageSlot?.(data)}
                 <FollowButton profile={data} />
               </>
             )}

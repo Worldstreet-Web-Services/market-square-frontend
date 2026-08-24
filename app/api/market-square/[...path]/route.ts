@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { verifyRequest } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
+import { isPublicGet } from "@/lib/api/public-routes";
 
 // BFF proxy for Market Square. Verifies the Privy session server-side and
 // forwards the caller's Authorization to `${WSAPI_BASE_URL}/v1/market-square/*`.
@@ -18,18 +19,6 @@ const PRIVY_CONFIGURED = Boolean(
   process.env.NEXT_PUBLIC_PRIVY_APP_ID && process.env.PRIVY_APP_SECRET
 );
 
-// GET paths a signed-out visitor may read. Everything else requires a
-// verified session.
-function isPublicGet(path: string[]): boolean {
-  const head = path[0];
-  if (head === "feed" || head === "stories" || head === "spotlight") return true;
-  if (head === "streams") return true; // list, detail, chat reads
-  if (head === "store") return true;
-  if (head === "profiles") return true;
-  if (head === "activities") return true;
-  if (head === "verification" && path[1] === "rule") return true;
-  return false;
-}
 
 function unauthorized() {
   return NextResponse.json(

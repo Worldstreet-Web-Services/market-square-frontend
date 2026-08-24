@@ -22,8 +22,8 @@ function SpotlightFollow({ profile }: { profile: Profile }) {
       }}
       className={
         profile.isFollowing
-          ? "ws-press shrink-0 rounded-full border border-white/20 px-3 py-1 text-[11px] font-bold text-body"
-          : "ws-press shrink-0 rounded-full bg-accent px-3 py-1 text-[11px] font-bold text-ink transition-colors hover:bg-white"
+          ? "ws-press shrink-0 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[12px] text-white/90"
+          : "ws-btn-silver ws-press shrink-0 rounded-full px-3 py-1 text-[12px] font-bold transition-opacity hover:opacity-90"
       }
     >
       {profile.isFollowing ? "Following" : "Follow"}
@@ -53,29 +53,36 @@ export function CitizenSpotlightRail() {
   if (people.length === 0) return null;
 
   return (
-    <section className="ws-featured p-3">
-      <Link href="/spotlight" className="flex items-center gap-1.5">
-        <IconSpark className="h-3.5 w-3.5 text-featured" />
-        <h2 className="text-[12px] font-bold text-heading hover:underline">Citizen Spotlight</h2>
-        <span className="rounded-full bg-featured/20 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-featured">
+    <section className="ws-featured p-4">
+      <Link href="/spotlight" className="flex items-center gap-2">
+        <IconSpark className="h-4 w-4 text-featured-hi" />
+        <h2 className="text-[13.5px] font-bold leading-5 text-featured-hi hover:underline">
+          Citizen Spotlight
+        </h2>
+        <span className="rounded-full bg-[#FE9A00]/20 px-2 py-0.5 text-[10px] font-bold leading-[15px] text-featured-chip">
           Featured
         </span>
       </Link>
-      <p className="mt-1.5 text-[10px] leading-relaxed text-meta">
-        High-performing and verified members making waves across Market Square.
+      <p className="mt-2 text-[11.8px] leading-4 text-white/60">
+        High performers &amp; verified ambassadors making
+        <br />
+        moves across Market Square.
       </p>
 
-      <ul className="mt-2.5 space-y-2">
+      <ul className="mt-4 space-y-3">
         {people.map((row) => (
           <li key={row.profile.id}>
-            <Link href={`/u/${row.profile.username}`} className="flex items-center gap-2">
-              <Avatar name={row.profile.displayName} src={row.profile.avatarUrl} size={26} />
+            <Link
+              href={`/u/${row.profile.username}`}
+              className="flex items-center gap-[9px] rounded-xl border border-white/10 bg-white/[0.03] p-2"
+            >
+              <Avatar name={row.profile.displayName} src={row.profile.avatarUrl} size={38} />
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1 truncate text-[11px] font-bold text-heading">
+                <span className="flex items-center gap-1 truncate text-[12px] font-bold leading-4 text-white">
                   <span className="truncate">{row.profile.displayName}</span>
                   <VerifiedBadge verification={row.profile.verification} className="h-3 w-3" />
                 </span>
-                <span className="block truncate text-[9px] text-meta">
+                <span className="block truncate text-[11px] leading-[16.5px] text-white/50">
                   {formatCount(row.profile.followerCount)} followers
                 </span>
               </span>
@@ -87,7 +94,7 @@ export function CitizenSpotlightRail() {
 
       <Link
         href="/spotlight"
-        className="mt-2.5 flex items-center gap-1 text-[10px] font-bold text-featured hover:underline"
+        className="mt-3 flex items-center gap-1 text-[11px] font-bold text-featured-chip hover:underline"
       >
         See the full ranking <IconChevronRight className="h-2.5 w-2.5" />
       </Link>
