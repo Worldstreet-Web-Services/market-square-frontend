@@ -10,6 +10,7 @@ import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { ClaimUsernameGate } from "@/features/profile";
 import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
+import { LogoMark, Wordmark } from "@/components/ui/wordmark";
 import { RightRail } from "@/components/layout/right-rail";
 import {
   IconBell,
@@ -228,9 +229,8 @@ function Sidebar({ pathname }: { pathname: string }) {
         title="Market Square"
         className="ws-press mt-1 mb-1 flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-white/8 xl:ml-1"
       >
-        <span className="ws-display flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-lg text-ink">
-          M
-        </span>
+        {/* Icon rail: the mark only — the wordmark cannot survive 68px. */}
+        <LogoMark size={36} />
       </Link>
 
       <nav className="flex flex-col gap-0.5" aria-label="Primary">
@@ -353,9 +353,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile top strip: wordmark plus the two things worth reaching from
           anywhere — what's live, and search. */}
       <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between px-4 md:hidden">
-        <Link href="/" className="ws-display text-base">
-          Market <span className="text-accent">Square</span>
-        </Link>
+        <Wordmark height={16} />
         <div className="flex items-center gap-3">
           {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
           <Link href="/discover" className="text-meta" aria-label="Explore">

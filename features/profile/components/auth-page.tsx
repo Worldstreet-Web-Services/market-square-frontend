@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { Button, Spinner } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
+import { LogoMark, Wordmark } from "@/components/ui/wordmark";
 
 export function AuthPage() {
   const { ready, authenticated, login, logout } = useAuth();
@@ -21,11 +22,9 @@ export function AuthPage() {
     <div className="flex min-h-[80dvh] items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-7 text-center">
         <div>
-          <span className="ws-display mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-xl text-ink">
-            M
-          </span>
-          <h1 className="ws-display text-3xl tracking-tight">
-            Market <span className="text-accent">Square</span>
+          <LogoMark size={48} className="mx-auto mb-5 rounded-2xl" />
+          <h1 className="text-3xl tracking-tight">
+            <Wordmark height={30} />
           </h1>
           <p className="mt-2 text-[15px] leading-normal text-meta">
             The social square of the Ark platform. Streams, the ARK Store, creators and community — one account.

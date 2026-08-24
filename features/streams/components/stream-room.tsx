@@ -9,6 +9,7 @@ import { formatCount, formatCountdown, formatDateTime } from "@/lib/format";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
+import { BrandLink } from "@/components/ui/wordmark";
 import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { Button, Spinner } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -292,10 +293,7 @@ function SuggestedCreators({ currentId }: { currentId: string }) {
 function StreamNav({ stream }: { stream: Stream }) {
   return (
     <aside className="hidden h-dvh w-[250px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-black px-5 py-6 text-body xl:flex 2xl:w-[304px]">
-      <Link href="/" className="mb-8 flex items-center gap-3 px-2">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-xl font-black text-ink">M</span>
-        <span className="ws-display text-xl">Market Square</span>
-      </Link>
+      <BrandLink className="mb-8 flex items-center gap-3 px-2" markSize={40} wordmarkHeight={20} />
       <nav className="space-y-1" aria-label="Streaming navigation">
         {STREAM_NAV.map((item) => (
           <Link
