@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/envelope";
+import { trackMarketEvent } from "@/lib/analytics";
 import type { Profile } from "@/lib/api/schemas";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -16,6 +17,8 @@ import {
   fetchSpotlight,
   fetchVerificationRule,
   requestVerification,
+  reportProfile,
+  setBlocked,
   setFollow,
   updateMe,
 } from "@/features/profile/lib/api";
@@ -25,6 +28,22 @@ export function useProfile(username: string) {
     queryKey: ["ms", "profile", username],
     queryFn: () => fetchProfile(username),
   });
+}
+
+export function useProfileSafety(profile: Profile) {
+  const queryClient = useQueryClient();
+  const block = useMutation({
+    mutationFn: (blocked: boolean) => setBlocked(profile.id, blocked),
+    onSuccess: (_, blocked) => {
+      queryClient.setQueryData<Profile>(["ms", "profile", profile.username], (old) => old ? { ...old, isBlocked: blocked, isFollowing: blocked ? false : old.isFollowing } : old);
+      toast.success(blocked ? "Profile blocked" : "Profile unblocked");
+    },
+  });
+  const report = useMutation({
+    mutationFn: () => reportProfile(profile.id),
+    onSuccess: () => toast.success("Report sent for review"),
+  });
+  return { block, report };
 }
 
 export function useProfilePosts(username: string) {
@@ -72,6 +91,7 @@ export function useFollow(profile: Profile) {
       toast.error(errorMessage(error, "Couldn't update follow."));
     },
     onSuccess: () => {
+      trackMarketEvent("follow_created", { surface: "profile", entityType: "profile", entityId: profile.id });
       queryClient.invalidateQueries({ queryKey: ["ms", "feed", "following"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "stories"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "spotlight"] });

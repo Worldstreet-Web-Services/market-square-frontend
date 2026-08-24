@@ -1,6 +1,9 @@
 node_modules/
 .next/
 out/
+
+# Runtime upload artifacts — user data, not source.
+public/uploads/
 .env
 .env.local
 *.tsbuildinfo

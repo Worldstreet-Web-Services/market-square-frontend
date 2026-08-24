@@ -14,14 +14,19 @@ export interface ResolvedLink {
   label: string;
 }
 
-export function resolveDeepLink(link: DeepLink): ResolvedLink {
+export function resolveDeepLink(link: DeepLink, source?: string): ResolvedLink {
+  const internal = (href: string, label: string): ResolvedLink => ({
+    href: source ? `${href}${href.includes("?") ? "&" : "?"}source=${encodeURIComponent(source)}` : href,
+    external: false,
+    label,
+  });
   switch (link.kind) {
     case "stream":
-      return { href: `/live/${link.ref}`, external: false, label: "Watch" };
+      return internal(`/live/${link.ref}`, "Watch");
     case "store_item":
-      return { href: `/store/${link.ref}`, external: false, label: "Open" };
+      return internal(`/store/${link.ref}`, "Open");
     case "profile":
-      return { href: `/u/${link.ref}`, external: false, label: "View profile" };
+      return internal(`/u/${link.ref}`, "View profile");
     case "listing":
       return { href: `${ARK_APP_BASE}/listings/${link.ref}`, external: true, label: "View listing" };
     case "market":

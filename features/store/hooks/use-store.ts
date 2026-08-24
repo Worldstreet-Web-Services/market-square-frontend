@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { trackMarketEvent } from "@/lib/analytics";
 import {
   fetchMyOrders,
   fetchStoreItem,
@@ -30,6 +31,8 @@ export function usePlaceOrder(slug: string) {
   return useMutation({
     mutationFn: () => placeOrder(slug),
     onSuccess: () => {
+      trackMarketEvent("purchase_completed", { surface: "store_detail", entityType: "store_item", entityId: slug });
+      trackMarketEvent("entitlement_issued", { surface: "store_detail", entityType: "store_item", entityId: slug });
       queryClient.invalidateQueries({ queryKey: ["ms", "store-item", slug] });
       queryClient.invalidateQueries({ queryKey: ["ms", "store"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "my-orders"] });

@@ -1,0 +1,137 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
+import { IconCamera, IconUser } from "@/components/ui/icons";
+import { useGate } from "@/hooks/use-gate";
+import { usePublisher } from "@/features/streams/hooks/use-publisher";
+import {
+  useMySpeakerRequest,
+  useRequestToSpeak,
+  useResolveSpeakerRequest,
+  useSpeakerRequests,
+} from "@/features/streams/hooks/use-streams";
+import type { Ingest, Stream } from "@/features/streams/lib/types";
+
+export function GuestSpeakerControl({ stream }: { stream: Stream }) {
+  const gate = useGate();
+  const [open, setOpen] = useState(false);
+  const request = useRequestToSpeak(stream.id);
+  const mine = useMySpeakerRequest(stream.id, stream.status === "live");
+  const resolve = useResolveSpeakerRequest(stream.id);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const approved = mine.data?.status === "approved";
+  const ingest: Ingest | null = approved && mine.data?.joinUrl && mine.data.joinToken
+    ? { url: mine.data.joinUrl, roomToken: mine.data.joinToken, rtmpUrl: null, streamKey: null }
+    : null;
+  const publisher = usePublisher({
+    ingest,
+    enabled: approved,
+    streamId: `${stream.id}:guest`,
+    previewRef,
+  });
+
+  const statusLabel = approved ? "On stage" : mine.data?.status === "pending" ? "Requested" : "Join live";
+
+  return (
+    <>
+      <button
+        onClick={() => gate(() => setOpen(true))}
+        aria-label="Request to join this live"
+        className="ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full bg-black/50 text-heading"
+      >
+        <IconUser className="h-5 w-5" />
+        <span className="mt-0.5 text-[8px] font-bold">JOIN</span>
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Join this LIVE">
+        {!mine.data || ["declined", "left", "removed"].includes(mine.data.status) ? (
+          <div className="space-y-4 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/8">
+              <IconCamera className="h-7 w-7 text-accent" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-heading">Ask to speak with the host</p>
+              <p className="mt-1 text-xs leading-5 text-grey-400">The host can bring you on stage. Your camera and microphone only start after approval.</p>
+            </div>
+            <Button className="w-full" loading={request.isPending} onClick={() => request.mutate()}>
+              Request to join
+            </Button>
+          </div>
+        ) : mine.data.status === "pending" ? (
+          <div className="space-y-4 py-4 text-center">
+            <span className="mx-auto block h-3 w-3 animate-pulse rounded-full bg-accent" />
+            <p className="text-sm font-semibold text-heading">Waiting for the host</p>
+            <p className="text-xs text-grey-400">You can keep watching. This panel updates automatically.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div ref={previewRef} className="aspect-video overflow-hidden rounded-2xl bg-black">
+              {publisher.state !== "publishing" && (
+                <div className="flex h-full items-center justify-center text-xs text-grey-400">
+                  {!ingest
+                    ? "Approved — waiting for the stage connection…"
+                    : publisher.state === "denied"
+                      ? "Allow camera and microphone access to join."
+                      : "Connecting you to the stage…"}
+                </div>
+              )}
+            </div>
+            <p className="text-center text-sm font-semibold text-heading">{statusLabel}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant={publisher.micOn ? "secondary" : "danger"} onClick={() => void publisher.toggleMic()}>
+                {publisher.micOn ? "Mute" : "Unmute"}
+              </Button>
+              <Button variant={publisher.camOn ? "secondary" : "danger"} onClick={() => void publisher.toggleCam()}>
+                {publisher.camOn ? "Camera off" : "Camera on"}
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              className="w-full"
+              loading={resolve.isPending}
+              onClick={() => resolve.mutate({ requestId: mine.data!.id, action: "leave" })}
+            >
+              Leave stage
+            </Button>
+          </div>
+        )}
+      </Sheet>
+    </>
+  );
+}
+
+export function SpeakerRequestQueue({ stream }: { stream: Stream }) {
+  const requests = useSpeakerRequests(stream.id, stream.status === "live");
+  const resolve = useResolveSpeakerRequest(stream.id);
+  const pending = requests.data?.items.filter((item) => item.status === "pending") ?? [];
+  const active = requests.data?.items.filter((item) => item.status === "approved") ?? [];
+
+  return (
+    <div className="space-y-3 p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-grey-300">Guest speakers</p>
+        {pending.length > 0 && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-ink">{pending.length} waiting</span>}
+      </div>
+      {pending.map((item) => (
+        <div key={item.id} className="ws-inset flex items-center gap-2 p-2">
+          <Avatar name={item.user?.displayName ?? "Viewer"} src={item.user?.avatarUrl} size={32} />
+          <span className="min-w-0 flex-1 truncate text-xs text-heading">{item.user?.displayName ?? "Viewer"}</span>
+          <Button size="sm" onClick={() => resolve.mutate({ requestId: item.id, action: "approve" })}>Accept</Button>
+          <Button size="sm" variant="ghost" onClick={() => resolve.mutate({ requestId: item.id, action: "decline" })}>Decline</Button>
+        </div>
+      ))}
+      {active.map((item) => (
+        <div key={item.id} className="flex items-center gap-2 rounded-xl bg-white/5 p-2">
+          <span className="h-2 w-2 rounded-full bg-up" />
+          <span className="min-w-0 flex-1 truncate text-xs text-grey-300">{item.user?.displayName ?? "Guest"} is on stage</span>
+          <button className="text-[11px] text-down" onClick={() => resolve.mutate({ requestId: item.id, action: "remove" })}>Remove</button>
+        </div>
+      ))}
+      {!requests.isPending && pending.length === 0 && active.length === 0 && (
+        <p className="py-2 text-center text-xs text-grey-600">No guest requests yet.</p>
+      )}
+    </div>
+  );
+}

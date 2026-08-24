@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
 
+export const MentionSchema = z.object({
+  type: z.enum(["profile", "group"]),
+  id: z.string(),
+  label: z.string(),
+  handle: z.string(),
+});
+
 // Backend Post: author id plus a hydrated ProfileSummary on feed items.
 // likedByMe is client-side state only — the backend does not return it; the
 // optimistic like cache is the source of truth for the heart's fill.
@@ -16,6 +23,15 @@ export const PostSchema = z.object({
   createdAt: z.string(),
   likeCount: z.number(),
   commentCount: z.number(),
+  repostCount: z.number().optional().default(0),
+  repostedByMe: z.boolean().optional().default(false),
+  quotedPost: z.object({
+    id: z.string(),
+    text: z.string(),
+    mediaUrl: z.string().nullable().optional().default(null),
+    author: ProfileSchema.nullable().optional().default(null),
+  }).nullable().optional().default(null),
+  mentions: z.array(MentionSchema).optional().default([]),
   likedByMe: z.boolean().optional().default(false),
   author: ProfileSchema.nullable().optional().default(null),
 });
@@ -88,6 +104,7 @@ export const CommentsPageSchema = z.object({
 });
 
 export const LikeResultSchema = z.object({ liked: z.boolean(), likeCount: z.number() });
+export const RepostResultSchema = z.object({ reposted: z.boolean(), repostCount: z.number() });
 
 // Backend report reasons are a fixed enum.
 export const ReportReasonSchema = z.enum(["spam", "abuse", "scam", "other"]);
@@ -98,4 +115,5 @@ export type FeedItem = z.infer<typeof FeedItemSchema>;
 export type FeedStream = z.infer<typeof FeedStreamSchema>;
 export type FeedPage = z.infer<typeof FeedPageSchema>;
 export type ReportReason = z.infer<typeof ReportReasonSchema>;
+export type Mention = z.infer<typeof MentionSchema>;
 export type Lane = "for-you" | "following" | "live" | "platform";

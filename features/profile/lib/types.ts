@@ -70,6 +70,7 @@ export const FollowResultSchema = z.object({
 // Backend VerificationRule: { eligibility: { minFollowers,
 // minParticipationScore }, paid: { priceKash }, economics: "proposed" }.
 export const VerificationRuleSchema = z.object({
+  status: z.enum(["draft", "approved"]).optional().default("draft"),
   eligibility: z
     .object({
       minFollowers: z.number().optional().default(0),

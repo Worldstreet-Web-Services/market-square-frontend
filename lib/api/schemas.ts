@@ -29,6 +29,7 @@ const RawProfileSchema = z.object({
   followerCount: z.number().optional().default(0),
   followingCount: z.number().optional().default(0),
   isFollowing: z.boolean().optional().default(false),
+  isBlocked: z.boolean().optional().default(false),
 });
 
 // "Member ·A1B2" beats "Someone": derived from the tail of the Privy DID so

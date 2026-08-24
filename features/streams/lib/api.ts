@@ -13,6 +13,8 @@ import {
   PlaybackSchema,
   QuoteSchema,
   StreamEventsSchema,
+  SpeakerRequestListSchema,
+  SpeakerRequestSchema,
   StreamListSchema,
   StreamSchema,
   StreamStatsSchema,
@@ -111,6 +113,10 @@ export async function cancelActivity(id: string) {
   return ActivitySchema.parse(await msApi.post(`/activities/${id}/cancel`));
 }
 
+export async function updateActivity(id: string, patch: { title?: string; startsAt?: string }) {
+  return ActivitySchema.parse(await msApi.patch(`/activities/${id}`, patch));
+}
+
 // ---- Studio v2 additions (backend contracts in progress; callers treat
 // failures as "not available yet", never as fatal) ----
 
@@ -142,4 +148,30 @@ export async function deleteChatMessage(streamId: string, messageId: string) {
 
 export async function banFromChat(streamId: string, userId: string) {
   return msApi.post<{ banned: boolean }>(`/streams/${streamId}/bans`, { userId });
+}
+
+export async function requestToSpeak(streamId: string) {
+  return SpeakerRequestSchema.parse(await msApi.post(`/streams/${streamId}/speaker-requests`));
+}
+
+export async function fetchMySpeakerRequest(streamId: string) {
+  return SpeakerRequestSchema.nullable().parse(
+    await msApi.authedGet(`/streams/${streamId}/speaker-requests/me`)
+  );
+}
+
+export async function fetchSpeakerRequests(streamId: string) {
+  return SpeakerRequestListSchema.parse(
+    await msApi.authedGet(`/streams/${streamId}/speaker-requests`)
+  );
+}
+
+export async function resolveSpeakerRequest(
+  streamId: string,
+  requestId: string,
+  action: "approve" | "decline" | "remove" | "leave"
+) {
+  return SpeakerRequestSchema.parse(
+    await msApi.post(`/streams/${streamId}/speaker-requests/${requestId}/${action}`)
+  );
 }

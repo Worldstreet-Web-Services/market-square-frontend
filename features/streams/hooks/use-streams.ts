@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/envelope";
+import { trackMarketEvent } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import {
@@ -12,6 +13,7 @@ import {
   fetchStreamEvents,
   fetchStreamStats,
   updateStream,
+  updateActivity,
   createActivity,
   createStream,
   endStream,
@@ -22,6 +24,10 @@ import {
   goLive,
   purchaseTicket,
   quoteTicket,
+  requestToSpeak,
+  fetchMySpeakerRequest,
+  fetchSpeakerRequests,
+  resolveSpeakerRequest,
 } from "@/features/streams/lib/api";
 import type { Stream, TicketTier } from "@/features/streams/lib/types";
 
@@ -65,7 +71,9 @@ export function usePurchaseTicket(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (tier: TicketTier) => purchaseTicket(streamId, tier),
-    onSuccess: () => {
+    onSuccess: (ticket) => {
+      trackMarketEvent("ticket_purchased", { surface: "ticket_checkout", entityType: "stream", entityId: streamId, accessType: ticket.tier });
+      trackMarketEvent("entitlement_issued", { surface: "ticket_checkout", entityType: "ticket", entityId: ticket.id });
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId] });
       queryClient.invalidateQueries({ queryKey: ["ms", "my-tickets"] });
       toast.success("Ticket confirmed — enjoy the stream.");
@@ -168,7 +176,8 @@ export function useCreateActivity() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createActivity,
-    onSuccess: () => {
+    onSuccess: (activity) => {
+      trackMarketEvent("activity_scheduled", { surface: "schedule", entityType: "activity", entityId: activity.id });
       queryClient.invalidateQueries({ queryKey: ["ms", "activities"] });
       toast.success("Activity scheduled");
     },
@@ -185,6 +194,18 @@ export function useCancelActivity() {
       toast.success("Activity cancelled");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't cancel that.")),
+  });
+}
+
+export function useUpdateActivity(activityId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: { title?: string; startsAt?: string }) => updateActivity(activityId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "activities"] });
+      toast.success("Activity updated");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't update that activity.")),
   });
 }
 
@@ -249,5 +270,51 @@ export function useBanFromChat(streamId: string) {
       toast.success("Banned from chat");
     },
     onError: (error) => toast.error(errorMessage(error, "Moderation isn't available yet.")),
+  });
+}
+
+export function useMySpeakerRequest(streamId: string, enabled: boolean) {
+  const { ready, authenticated } = useAuth();
+  return useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-request", "me"],
+    queryFn: () => fetchMySpeakerRequest(streamId),
+    enabled: enabled && ready && authenticated,
+    retry: false,
+    refetchInterval: enabled ? 3_000 : false,
+  });
+}
+
+export function useRequestToSpeak(streamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => requestToSpeak(streamId),
+    onSuccess: (request) => {
+      queryClient.setQueryData(["ms", "stream", streamId, "speaker-request", "me"], request);
+      toast.success("Request sent to the host");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't request to speak.")),
+  });
+}
+
+export function useSpeakerRequests(streamId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-requests"],
+    queryFn: () => fetchSpeakerRequests(streamId),
+    enabled,
+    retry: false,
+    refetchInterval: enabled ? 3_000 : false,
+  });
+}
+
+export function useResolveSpeakerRequest(streamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, action }: { requestId: string; action: "approve" | "decline" | "remove" | "leave" }) =>
+      resolveSpeakerRequest(streamId, requestId, action),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't update the speaker.")),
   });
 }

@@ -26,6 +26,10 @@ export interface FxPost {
   likeCount: number;
   commentCount: number;
   likedBy: Set<string>;
+  repostedBy?: Set<string>;
+  quotedPostId?: string | null;
+  repostOfId?: string | null;
+  mentions?: Array<{ type: "profile" | "group"; id: string; label: string; handle: string }>;
 }
 
 export interface FxComment {
@@ -739,6 +743,7 @@ export const orders: FxOrder[] = [
 ];
 
 export const verificationRule = {
+  status: "draft" as const,
   eligibility: { minFollowers: 100, minParticipationScore: 50 },
   paid: { priceKash: "25" },
   economics: "proposed" as const,

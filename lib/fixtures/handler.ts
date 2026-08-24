@@ -47,6 +47,24 @@ const fail = (status: number, code: string, message: string): FixtureResult => (
 let seq = 1000;
 const nextId = (prefix: string) => `${prefix}_${seq++}`;
 
+interface FixtureSpeakerRequest {
+  id: string;
+  streamId: string;
+  userId: string;
+  status: "pending" | "approved" | "declined" | "left" | "removed";
+  requestedAt: string;
+  resolvedAt: string | null;
+  joinUrl: string | null;
+  joinToken: string | null;
+}
+
+const speakerRequests: FixtureSpeakerRequest[] = [];
+
+function speakerRequestDto(request: FixtureSpeakerRequest) {
+  const user = profileById(request.userId);
+  return { ...request, user: user ? summary(user) : null };
+}
+
 const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 
 function profileById(id: string): FxProfile | undefined {
@@ -74,7 +92,7 @@ function publicProfile(p: FxProfile, viewerId: string | null) {
     verification: p.verification,
     followerCount: p.followerCount,
     followingCount: p.followingCount,
-    ...(viewerId ? { isFollowing: myFollows(viewerId).has(p.id) } : {}),
+    ...(viewerId ? { isFollowing: myFollows(viewerId).has(p.id), isBlocked: blocksFor(viewerId).has(p.id) } : {}),
   };
 }
 
@@ -91,7 +109,9 @@ function summary(p: FxProfile) {
 }
 
 // Backend Post — authorId, no likedByMe (client-side state).
-function postDto(post: FxPost) {
+function postDto(post: FxPost, viewerId: string | null = null) {
+  const quoted = post.quotedPostId ? posts.find((item) => item.id === post.quotedPostId) : null;
+  const quotedAuthor = quoted ? profileById(quoted.authorId) : null;
   return {
     id: post.id,
     authorId: post.authorId,
@@ -106,20 +126,29 @@ function postDto(post: FxPost) {
         : null,
     likeCount: post.likeCount,
     commentCount: post.commentCount,
+    repostCount: post.repostedBy?.size ?? 0,
+    repostedByMe: viewerId ? Boolean(post.repostedBy?.has(viewerId)) : false,
+    quotedPost: quoted ? {
+      id: quoted.id,
+      text: quoted.text,
+      mediaUrl: quoted.mediaUrl,
+      author: quotedAuthor ? summary(quotedAuthor) : null,
+    } : null,
+    mentions: post.mentions ?? [],
     status: "active",
     createdAt: post.createdAt,
   };
 }
 
 // FeedItem for a post: the one place the backend hydrates an author summary.
-function postFeedItem(post: FxPost) {
+function postFeedItem(post: FxPost, viewerId: string | null = null) {
   const author = profileById(post.authorId);
   return {
     id: `fi_${post.id}`,
     type: "post" as const,
     occurredAt: post.createdAt,
     ...(post.deepLink ? { deepLink: post.deepLink } : {}),
-    post: { ...postDto(post), author: author ? summary(author) : null },
+    post: { ...postDto(post, viewerId), author: author ? summary(author) : null },
   };
 }
 
@@ -141,6 +170,8 @@ function streamDto(s: FxStream) {
     vipPriceKash: s.vipPriceKash,
     vipEarlyAccessMinutes: null,
     replayUrl: s.replayUrl,
+    refundPolicy: "Automatic refund when the host cancels before the stream begins.",
+    replayPolicy: "Confirmed tickets include replay access when a replay is published.",
     peakViewers: s.viewerCount,
     totalViewSeconds: s.viewerCount * 240,
     createdAt: s.scheduledAt ?? new Date().toISOString(),
@@ -210,7 +241,9 @@ function storeItemDto(item: FxStoreItem) {
     priceKash: item.priceKash,
     actionKind: item.actionKind,
     actionUrl: item.actionUrl,
-    ownerTeam: "worldstreet",
+    ownerTeam: "WorldStreet",
+    availability: "Available now",
+    supportPolicy: "Includes entitlement lookup and support through your Market Square receipt.",
     status: "published",
     installCount: item.installCount,
     createdAt: new Date().toISOString(),
@@ -267,7 +300,7 @@ function feedEntries(lane: string, viewerId: string | null): FeedEntry[] {
     case "following":
       entries = updates
         .filter((p) => followed.has(p.authorId) || p.authorId === viewerId)
-        .map(postFeedItem);
+        .map((post) => postFeedItem(post, viewerId));
       break;
     case "live":
       entries = [
@@ -305,7 +338,7 @@ function feedEntries(lane: string, viewerId: string | null): FeedEntry[] {
     default: {
       // for-you: posts plus live streams, interleaved by recency.
       entries = [
-        ...updates.map(postFeedItem),
+        ...updates.map((post) => postFeedItem(post, viewerId)),
         ...streams.filter((s) => s.status === "live").map(streamEntry),
       ];
     }
@@ -337,6 +370,26 @@ const creatorApplications = new Map<string, FxCreatorApplication>();
 // Moderation state: banned users and removed chat messages per stream.
 const chatBans = new Map<string, Set<string>>();
 const removedMessages = new Set<string>();
+const readNotifications = new Set<string>();
+const moderationCaseStatus = new Map<string, "open" | "resolved" | "dismissed">();
+const blockedProfiles = new Map<string, Set<string>>();
+const analyticsEvents: Array<Record<string, unknown>> = [];
+
+function blocksFor(userId: string): Set<string> {
+  let set = blockedProfiles.get(userId);
+  if (!set) {
+    set = new Set();
+    blockedProfiles.set(userId, set);
+  }
+  return set;
+}
+
+const fixtureNotifications = [
+  { id: "nt_live", kind: "stream_live", title: "Amara is live", body: "Morning Desk is live now. Your ticket is ready.", href: "/live/st_desk", createdAt: new Date(Date.now() - 8 * 60_000).toISOString() },
+  { id: "nt_activity", kind: "activity", title: "Activity starting soon", body: "The Last Man qualifier begins in two hours.", href: "/schedule", createdAt: new Date(Date.now() - 42 * 60_000).toISOString() },
+  { id: "nt_product", kind: "product", title: "New in the ARK Store", body: "KASH Checkout SDK is now available to download.", href: "/store", createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString() },
+  { id: "nt_follow", kind: "follow", title: "New follower", body: "Nina followed your Market Square profile.", href: "/u/nina", createdAt: new Date(Date.now() - 7 * 60 * 60_000).toISOString() },
+] as const;
 
 function bansFor(streamId: string): Set<string> {
   let set = chatBans.get(streamId);
@@ -364,6 +417,168 @@ export function handleFixture(
 ): FixtureResult {
   const body = (rawBody ?? {}) as Record<string, unknown>;
   const p = path;
+
+  // ---- unified discovery ----
+  if (p[0] === "search" && method === "GET") {
+    const query = (search.get("q") ?? "").trim().toLowerCase();
+    const type = search.get("type") ?? "all";
+    const matches = (...values: Array<string | null | undefined>) =>
+      !query || values.some((value) => value?.toLowerCase().includes(query));
+
+    const results = [
+      ...profiles
+        .filter((profile) => (type === "all" || type === "profile") && matches(profile.displayName, profile.username, profile.bio, profile.role))
+        .map((profile) => ({
+          id: profile.id,
+          type: "profile",
+          title: profile.displayName,
+          subtitle: `@${profile.username} · ${profile.bio}`,
+          status: profile.verification === "none" ? null : "verified",
+          category: profile.role,
+          thumbnailUrl: null,
+          href: `/u/${profile.username}`,
+          actionLabel: "View profile",
+        })),
+      ...streams
+        .filter((stream) => (type === "all" || type === "stream") && matches(stream.title, stream.description, stream.category, stream.status))
+        .map((stream) => ({
+          id: stream.id,
+          type: "stream",
+          title: stream.title,
+          subtitle: stream.description,
+          status: stream.status,
+          category: stream.category,
+          thumbnailUrl: null,
+          href: `/live/${stream.id}`,
+          actionLabel: stream.status === "live" ? "Watch now" : stream.status === "scheduled" ? "View schedule" : "Watch replay",
+          deepLink: { kind: "stream", ref: stream.id },
+        })),
+      ...activities
+        .filter((activity) => (type === "all" || type === "activity") && matches(activity.title, activity.type, activity.status))
+        .map((activity) => ({
+          id: activity.id,
+          type: "activity",
+          title: activity.title,
+          subtitle: `${activity.type} · ${activity.startsAt}`,
+          status: activity.status,
+          category: activity.type,
+          thumbnailUrl: null,
+          href: activity.deepLink?.kind === "stream" ? `/live/${activity.deepLink.ref}` : "/schedule",
+          actionLabel: "View activity",
+          deepLink: activity.deepLink,
+        })),
+      ...storeItems
+        .filter((item) => (type === "all" || type === "product") && matches(item.name, item.tagline, item.description, item.category))
+        .map((item) => ({
+          id: item.id,
+          type: "product",
+          title: item.name,
+          subtitle: item.tagline,
+          status: item.pricing === "free" ? "free" : "KASH",
+          category: item.category,
+          thumbnailUrl: null,
+          href: `/store/${item.slug}`,
+          actionLabel: item.actionKind === "download" ? "Download" : item.actionKind === "purchase" ? "Buy" : "Open",
+          deepLink: { kind: "store_item", ref: item.slug },
+        })),
+      ...posts
+        .filter((post) => (type === "all" || type === "content") && matches(post.text, profileById(post.authorId)?.displayName))
+        .map((post) => ({
+          id: post.id,
+          type: "content",
+          title: profileById(post.authorId)?.displayName ?? "Market update",
+          subtitle: post.text,
+          status: post.kind,
+          category: "update",
+          thumbnailUrl: post.mediaUrl,
+          href: post.deepLink?.kind === "stream" ? `/live/${post.deepLink.ref}` : "/",
+          actionLabel: post.deepLink ? "Open update" : "View feed",
+          deepLink: post.deepLink,
+        })),
+    ];
+    return ok({ items: results.slice(0, 40), query });
+  }
+
+  // ---- versioned product analytics ----
+  if (p[0] === "analytics" && p[1] === "events" && method === "POST") {
+    if (typeof body.name !== "string" || typeof body.sessionId !== "string")
+      return fail(422, "VALIDATION", "Event name and session are required.");
+    analyticsEvents.push({ ...body, receivedAt: new Date().toISOString(), userId });
+    if (analyticsEvents.length > 1000) analyticsEvents.shift();
+    return ok({ accepted: true });
+  }
+
+  // ---- notifications ----
+  if (p[0] === "notifications") {
+    const denied = requireAuth(userId);
+    if (denied) return denied;
+    if (p.length === 1 && method === "GET") {
+      return ok({ items: fixtureNotifications.map((item) => ({ ...item, read: readNotifications.has(item.id) })) });
+    }
+    if (p[1] === "read-all" && method === "POST") {
+      fixtureNotifications.forEach((item) => readNotifications.add(item.id));
+      return ok({ updated: fixtureNotifications.length });
+    }
+    if (p.length === 2 && method === "PATCH") {
+      const item = fixtureNotifications.find((notification) => notification.id === p[1]);
+      if (!item) return fail(404, "NOT_FOUND", "Notification not found.");
+      readNotifications.add(item.id);
+      return ok({ ...item, read: true });
+    }
+  }
+
+  // ---- authorized operations console ----
+  if (p[0] === "operations") {
+    const denied = requireAuth(userId);
+    if (denied) return denied;
+    if (p[1] === "summary" && method === "GET") {
+      const totalWatchSeconds = streams.reduce((sum, stream) => sum + stream.viewerCount * 240, 0);
+      const cases = [
+        { id: "case_1", target: "Post · p_live_desk", reason: "Potential financial misinformation", reporter: "@nina", createdAt: new Date(Date.now() - 35 * 60_000).toISOString() },
+        { id: "case_2", target: "Chat · st_blitz", reason: "Harassment", reporter: "@demo", createdAt: new Date(Date.now() - 90 * 60_000).toISOString() },
+      ].map((item) => ({ ...item, status: moderationCaseStatus.get(item.id) ?? "open" }));
+      return ok({
+        metrics: [
+          { label: "Qualified Market Activity", value: "3.8K", detail: "Unique meaningful actors · 7 days" },
+          { label: "Qualified watch time", value: `${Math.round(totalWatchSeconds / 3600)}h`, detail: "Live and replay, excluding starts" },
+          { label: "Content → action", value: "18.4%", detail: "Internal destination conversion" },
+          { label: "Entitlement success", value: "99.2%", detail: "Tickets and store orders" },
+        ],
+        alerts: [
+          { id: "alert_1", severity: "warning", title: "Playback start latency elevated", detail: "p95 is 3.1s against the 2.5s pilot target.", createdAt: new Date(Date.now() - 12 * 60_000).toISOString() },
+          { id: "alert_2", severity: "info", title: "Notification delivery healthy", detail: "99.6% delivered in the last 24 hours.", createdAt: new Date(Date.now() - 50 * 60_000).toISOString() },
+        ],
+        cases,
+        audits: [
+          { id: "audit_1", actor: "WorldStreet Ops", action: "published spotlight", target: "Amara Okafor · weekly", occurredAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString() },
+          { id: "audit_2", actor: "Streaming Ops", action: "ended stream", target: "The Last Man qualifier", occurredAt: new Date(Date.now() - 6 * 60 * 60_000).toISOString() },
+          { id: "audit_3", actor: "Support", action: "confirmed entitlement", target: "t_demo_desk", occurredAt: new Date(Date.now() - 10 * 60 * 60_000).toISOString() },
+        ],
+      });
+    }
+    if (p[1] === "cases" && p[2] && method === "PATCH") {
+      const resolution = body.resolution;
+      if (resolution !== "resolved" && resolution !== "dismissed") return fail(422, "VALIDATION", "Choose a valid resolution.");
+      moderationCaseStatus.set(p[2], resolution);
+      return ok({ id: p[2], status: resolution });
+    }
+    if (p[1] === "entitlements" && p[2] && method === "GET") {
+      const reference = decodeURIComponent(p[2]);
+      const ticket = tickets.find((item) => item.id === reference);
+      if (ticket) {
+        const owner = profileById(ticket.userId);
+        const stream = streams.find((item) => item.id === ticket.streamId);
+        return ok({ reference, type: "ticket", status: ticket.status, owner: owner?.displayName ?? ticket.userId, item: stream?.title ?? ticket.streamId, createdAt: ticket.createdAt, supportReference: `SUP-${ticket.id.toUpperCase()}` });
+      }
+      const order = orders.find((item) => item.id === reference);
+      if (order) {
+        const owner = profileById(order.userId);
+        const item = storeItems.find((entry) => entry.slug === order.itemSlug);
+        return ok({ reference, type: "order", status: order.status, owner: owner?.displayName ?? order.userId, item: item?.name ?? order.itemSlug, createdAt: order.createdAt, supportReference: `SUP-${order.id.toUpperCase()}` });
+      }
+      return fail(404, "NOT_FOUND", "Entitlement not found.");
+    }
+  }
 
   // ---- me ----
   if (p[0] === "me") {
@@ -469,6 +684,20 @@ export function handleFixture(
     return ok({ items: page, nextCursor });
   }
 
+  if (p[0] === "mentions" && p[1] === "search" && method === "GET") {
+    const query = (search.get("q") ?? "").trim().toLowerCase();
+    const people = profiles
+      .filter((profile) => !query || profile.displayName.toLowerCase().includes(query) || profile.username.toLowerCase().includes(query))
+      .slice(0, 6)
+      .map((profile) => ({ type: "profile" as const, id: profile.id, label: profile.displayName, handle: profile.username }));
+    const groups = [
+      { type: "group" as const, id: "group_ark_builders", label: "Ark Builders", handle: "ark-builders" },
+      { type: "group" as const, id: "group_market_watch", label: "Market Watch", handle: "market-watch" },
+      { type: "group" as const, id: "group_creator_circle", label: "Creator Circle", handle: "creator-circle" },
+    ].filter((group) => !query || group.label.toLowerCase().includes(query) || group.handle.includes(query));
+    return ok({ items: [...people, ...groups].slice(0, 8) });
+  }
+
   // ---- stories: FeedItems, scope=all|following ----
   if (p[0] === "stories" && method === "GET") {
     const scope = search.get("scope") ?? "all";
@@ -479,7 +708,22 @@ export function handleFixture(
         Date.now() - Date.parse(x.createdAt) < STORY_TTL_MS &&
         (scope !== "following" || followed.has(x.authorId) || x.authorId === userId)
     );
-    return ok({ items: fresh.map(postFeedItem), nextCursor: null });
+    return ok({ items: fresh.map((post) => postFeedItem(post, userId)), nextCursor: null });
+  }
+
+  // Device media upload. Fixture mode returns an in-memory data URL; the
+  // production service replaces this with durable object storage.
+  if (p[0] === "media" && method === "POST") {
+    const denied = requireAuth(userId);
+    if (denied) return denied;
+    const mediaType = typeof body.mediaType === "string" ? body.mediaType : "";
+    const size = typeof body.size === "number" ? body.size : 0;
+    const dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
+    if (!mediaType.startsWith("image/") && !mediaType.startsWith("video/"))
+      return fail(422, "VALIDATION", "Only images and videos can be uploaded.");
+    if (!dataUrl || size <= 0 || size > 50 * 1024 * 1024)
+      return fail(422, "VALIDATION", "The media file is invalid or too large.");
+    return ok({ url: dataUrl, mediaType, size });
   }
 
   // ---- posts ----
@@ -488,8 +732,8 @@ export function handleFixture(
       const denied = requireAuth(userId);
       if (denied) return denied;
       const text = typeof body.text === "string" ? body.text.trim() : "";
-      if (!text || text.length > 2000)
-        return fail(422, "VALIDATION", "Posts are 1-2000 characters.");
+      if ((!text && typeof body.mediaUrl !== "string") || text.length > 2000)
+        return fail(422, "VALIDATION", "Add text or media to your post.");
       const kind = body.kind === "story" ? "story" : "update";
       const deepLink =
         body.deepLink && typeof body.deepLink === "object"
@@ -506,15 +750,24 @@ export function handleFixture(
         likeCount: 0,
         commentCount: 0,
         likedBy: new Set(),
+        repostedBy: new Set(),
+        quotedPostId: typeof body.quotedPostId === "string" ? body.quotedPostId : null,
+        mentions: Array.isArray(body.mentions)
+          ? body.mentions.filter((item): item is { type: "profile" | "group"; id: string; label: string; handle: string } => {
+              if (!item || typeof item !== "object") return false;
+              const mention = item as Record<string, unknown>;
+              return (mention.type === "profile" || mention.type === "group") && typeof mention.id === "string" && typeof mention.label === "string" && typeof mention.handle === "string";
+            }).slice(0, 10)
+          : [],
       };
       posts.unshift(post);
-      return ok(postDto(post));
+      return ok(postDto(post, userId));
     }
 
     const post = posts.find((x) => x.id === p[1]);
     if (!post) return fail(404, "NOT_FOUND", "Post not found");
 
-    if (p.length === 2 && method === "GET") return ok(postDto(post));
+    if (p.length === 2 && method === "GET") return ok(postDto(post, userId));
 
     if (p[2] === "like") {
       const denied = requireAuth(userId);
@@ -528,6 +781,36 @@ export function handleFixture(
         post.likeCount -= 1;
       }
       return ok({ liked: post.likedBy.has(userId!), likeCount: post.likeCount });
+    }
+
+    if (p[2] === "repost") {
+      const denied = requireAuth(userId);
+      if (denied) return denied;
+      post.repostedBy ??= new Set();
+      if (method === "POST" && !post.repostedBy.has(userId!)) {
+        post.repostedBy.add(userId!);
+        posts.unshift({
+          id: nextId("rp"),
+          authorId: userId!,
+          kind: "update",
+          text: "Reposted",
+          mediaUrl: null,
+          deepLink: null,
+          createdAt: new Date().toISOString(),
+          likeCount: 0,
+          commentCount: 0,
+          likedBy: new Set(),
+          repostedBy: new Set(),
+          quotedPostId: post.id,
+          repostOfId: post.id,
+        });
+      }
+      if (method === "DELETE" && post.repostedBy.has(userId!)) {
+        post.repostedBy.delete(userId!);
+        const repostIndex = posts.findIndex((item) => item.repostOfId === post.id && item.authorId === userId);
+        if (repostIndex >= 0) posts.splice(repostIndex, 1);
+      }
+      return ok({ reposted: post.repostedBy.has(userId!), repostCount: post.repostedBy.size });
     }
 
     if (p[2] === "comments") {
@@ -708,6 +991,71 @@ export function handleFixture(
       return ok({ banned: true });
     }
 
+    if (p[2] === "speaker-requests") {
+      const denied = requireAuth(userId);
+      if (denied) return denied;
+
+      if (p.length === 3 && method === "POST") {
+        if (stream.status !== "live") return fail(409, "NOT_LIVE", "The stream is not live.");
+        if (stream.ownerId === userId) return fail(422, "VALIDATION", "The host is already on stage.");
+        const existing = speakerRequests.find(
+          (item) => item.streamId === stream.id && item.userId === userId && ["pending", "approved"].includes(item.status)
+        );
+        if (existing) return ok(speakerRequestDto(existing));
+        const request: FixtureSpeakerRequest = {
+          id: nextId("sr"),
+          streamId: stream.id,
+          userId: userId!,
+          status: "pending",
+          requestedAt: new Date().toISOString(),
+          resolvedAt: null,
+          joinUrl: null,
+          joinToken: null,
+        };
+        speakerRequests.push(request);
+        return ok(speakerRequestDto(request));
+      }
+
+      if (p[3] === "me" && method === "GET") {
+        const mine = [...speakerRequests].reverse().find(
+          (item) => item.streamId === stream.id && item.userId === userId
+        );
+        return ok(mine ? speakerRequestDto(mine) : null);
+      }
+
+      if (p.length === 3 && method === "GET") {
+        if (stream.ownerId !== userId) return fail(403, "FORBIDDEN", "Owner only.");
+        return ok({
+          items: speakerRequests
+            .filter((item) => item.streamId === stream.id && ["pending", "approved"].includes(item.status))
+            .map(speakerRequestDto),
+        });
+      }
+
+      if (p.length === 5 && method === "POST") {
+        const request = speakerRequests.find((item) => item.id === p[3] && item.streamId === stream.id);
+        if (!request) return fail(404, "NOT_FOUND", "Speaker request not found.");
+        const action = p[4];
+        if (action === "leave") {
+          if (request.userId !== userId) return fail(403, "FORBIDDEN", "Not your request.");
+          request.status = "left";
+        } else {
+          if (stream.ownerId !== userId) return fail(403, "FORBIDDEN", "Owner only.");
+          if (action === "approve") {
+            request.status = "approved";
+            // Production returns a scoped LiveKit publisher token here. The
+            // fixture records approval but intentionally has no media server.
+            request.joinUrl = null;
+            request.joinToken = null;
+          } else if (action === "decline") request.status = "declined";
+          else if (action === "remove") request.status = "removed";
+          else return fail(422, "VALIDATION", "Unknown speaker action.");
+        }
+        request.resolvedAt = new Date().toISOString();
+        return ok(speakerRequestDto(request));
+      }
+    }
+
     if (p[2] === "tickets") {
       const denied = requireAuth(userId);
       if (denied) return denied;
@@ -881,6 +1229,20 @@ export function handleFixture(
 
   // ---- profiles ----
   if (p[0] === "profiles") {
+    if (p[2] === "block") {
+      const denied = requireAuth(userId);
+      if (denied) return denied;
+      const target = profiles.find((x) => x.id === p[1]);
+      if (!target) return fail(404, "NOT_FOUND", "Profile not found");
+      if (target.id === userId) return fail(422, "VALIDATION", "You can't block yourself.");
+      const mine = blocksFor(userId!);
+      if (method === "POST") {
+        mine.add(target.id);
+        myFollows(userId!).delete(target.id);
+      }
+      if (method === "DELETE") mine.delete(target.id);
+      return ok({ blocked: mine.has(target.id) });
+    }
     if (p[2] === "follow") {
       const denied = requireAuth(userId);
       if (denied) return denied;
@@ -908,7 +1270,7 @@ export function handleFixture(
         .filter((x) => x.authorId === profile.id && x.kind === "update")
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       const { page, nextCursor } = paginate(authored, search.get("cursor"), 20);
-      return ok({ items: page.map(postFeedItem), nextCursor });
+      return ok({ items: page.map((post) => postFeedItem(post, userId)), nextCursor });
     }
     if (p[2] === "streams" && method === "GET") {
       const owned = streams
@@ -979,6 +1341,16 @@ export function handleFixture(
       if (!activity) return fail(404, "NOT_FOUND", "Activity not found");
       if (activity.hostId !== userId) return fail(403, "FORBIDDEN", "Not your activity.");
       activity.status = "cancelled";
+      return ok(activityDto(activity));
+    }
+    if (p.length === 2 && method === "PATCH") {
+      const denied = requireAuth(userId);
+      if (denied) return denied;
+      const activity = activities.find((a) => a.id === p[1]);
+      if (!activity) return fail(404, "NOT_FOUND", "Activity not found");
+      if (activity.hostId !== userId) return fail(403, "FORBIDDEN", "Not your activity.");
+      if (typeof body.title === "string" && body.title.trim()) activity.title = body.title.trim();
+      if (typeof body.startsAt === "string" && !Number.isNaN(Date.parse(body.startsAt))) activity.startsAt = body.startsAt;
       return ok(activityDto(activity));
     }
   }

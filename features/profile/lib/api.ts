@@ -35,6 +35,19 @@ export async function setFollow(profileId: string, follow: boolean) {
   return FollowResultSchema.parse(follow ? await msApi.post(path) : await msApi.del(path));
 }
 
+export async function setBlocked(profileId: string, blocked: boolean) {
+  const path = `/profiles/${profileId}/block`;
+  return blocked ? msApi.post<{ blocked: boolean }>(path) : msApi.del<{ blocked: boolean }>(path);
+}
+
+export async function reportProfile(profileId: string) {
+  return msApi.post<{ id: string; status: string }>("/reports", {
+    targetType: "profile",
+    targetId: profileId,
+    reason: "other",
+  });
+}
+
 export async function updateMe(input: { username?: string; displayName?: string; bio?: string }) {
   return ProfileSchema.parse(await msApi.patch("/me", input));
 }

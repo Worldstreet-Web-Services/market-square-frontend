@@ -1,16 +1,22 @@
 "use client";
 
 import { msApi } from "@/lib/api/service";
+import { apiFetch } from "@/lib/api/client";
+import { unwrap } from "@/lib/api/envelope";
+import { z } from "zod";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   CommentSchema,
   CommentsPageSchema,
   FeedPageSchema,
   LikeResultSchema,
+  MentionSchema,
+  RepostResultSchema,
   PostSchema,
   type Lane,
   type Post,
   type ReportReason,
+  type Mention,
 } from "@/features/feed/lib/types";
 
 export async function fetchFeed(lane: Lane, cursor?: string) {
@@ -29,8 +35,30 @@ export async function createPost(input: {
   text: string;
   mediaUrl?: string;
   deepLink?: DeepLink;
+  quotedPostId?: string;
+  mentions?: Mention[];
 }) {
   return PostSchema.parse(await msApi.post("/posts", input));
+}
+
+export async function repostPost(postId: string, repost: boolean) {
+  const path = `/posts/${postId}/repost`;
+  return RepostResultSchema.parse(repost ? await msApi.post(path) : await msApi.del(path));
+}
+
+const MediaUploadSchema = z.object({ url: z.string(), mediaType: z.string(), size: z.number() });
+
+export async function uploadPostMedia(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiFetch("/api/market-square/media", { method: "POST", body: form }, { requireAuth: true });
+  return MediaUploadSchema.parse(await unwrap<unknown>(response, "Couldn't upload media."));
+}
+
+const MentionSearchSchema = z.object({ items: z.array(MentionSchema) });
+
+export async function searchMentions(query: string) {
+  return MentionSearchSchema.parse(await msApi.get("/mentions/search", { q: query.trim(), limit: 8 }));
 }
 
 export async function likePost(postId: string, like: boolean) {

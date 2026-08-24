@@ -27,6 +27,7 @@ import {
   useUpdateStream,
 } from "@/features/streams/hooks/use-streams";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
+import { SpeakerRequestQueue } from "@/features/streams/components/guest-speaker-control";
 import {
   STREAM_CATEGORIES,
   type Ingest,
@@ -424,6 +425,9 @@ export function LiveCockpit({
                 {value}
               </button>
             ))}
+          </div>
+          <div className="max-h-[34%] overflow-y-auto border-b border-white/8">
+            <SpeakerRequestQueue stream={stream} />
           </div>
           {rightTab === "activity" && (
             <div className="max-h-[40%] min-h-0 overflow-y-auto border-b border-white/8">
