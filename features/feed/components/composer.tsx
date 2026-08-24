@@ -6,9 +6,10 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { DeepLink } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
-import { IconImage, IconLink, IconPoll, IconX } from "@/components/ui/icons";
+import { IconClock, IconImage, IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useCreatePost, useMentionSearch, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
+import type { Mention, Post } from "@/features/feed/lib/types";
 
 const MAX = 2000;
 
@@ -51,10 +52,15 @@ function CountRing({ used }: { used: number }) {
 export function Composer({
   autoFocus = false,
   asStory = false,
+  quoted = null,
+  onDone,
 }: {
   autoFocus?: boolean;
   /** Open already in story mode — the stories rail's "Your story" entry. */
   asStory?: boolean;
+  /** The post being quoted, previewed above the field and sent as quotedPostId. */
+  quoted?: Post | null;
+  onDone?: () => void;
 }) {
   const me = useMe();
   const gate = useGate();
@@ -67,9 +73,15 @@ export function Composer({
   const [previewUrl, setPreviewUrl] = useState("");
   const [linkKind, setLinkKind] = useState<string | null>(null);
   const [linkRef, setLinkRef] = useState("");
-  const [kind, setKind] = useState<"update" | "story">(asStory ? "story" : "update");
+  const [kind, setKind] = useState<"update" | "story">(asStory && !quoted ? "story" : "update");
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
+  const [linkMenuOpen, setLinkMenuOpen] = useState(false);
+  // The picker used to insert "@handle" text and throw the Mention away, so
+  // nobody was ever actually mentioned. POST /posts takes `mentions`, so the
+  // chosen objects are kept and sent — filtered on submit to whoever is still
+  // written in the body, since a handle can be edited or deleted afterwards.
+  const [picked, setPicked] = useState<Mention[]>([]);
   const mentionResults = useMentionSearch(mentionQuery, mentionRange !== null);
 
   useEffect(() => {
@@ -86,6 +98,9 @@ export function Composer({
   const submit = () => {
     const body = text.trim();
     if (!body && !mediaFile) return;
+    const mentions = picked.filter((mention) =>
+      new RegExp(`(^|\\s)@${mention.handle}\\b`).test(body)
+    );
     gate(() => void (async () => {
       let mediaUrl: string | undefined;
       try {
@@ -97,8 +112,22 @@ export function Composer({
         // The current post contract requires a non-empty text field. An
         // invisible separator preserves media-only posts without displaying
         // a synthetic caption to readers.
-        { kind, text: body || "\u2063", mediaUrl, deepLink },
-        { onSuccess: () => {
+        {
+          kind,
+          text: body || "\u2063",
+          mediaUrl,
+          deepLink,
+          ...(quoted ? { quotedPostId: quoted.id } : {}),
+          ...(mentions.length > 0 ? { mentions } : {}),
+        },
+        { onSuccess: (created) => {
+          // The service silently ignores fields it does not know. If the quote
+          // did not come back attached, say so rather than letting the reader
+          // believe they quoted something.
+          if (quoted && !created.quotedPost) {
+            toast.error("Posted, but quoting isn't available yet — it went out as a plain post.");
+          }
+          onDone?.();
           setText("");
           setMediaFile(null);
           setPreviewUrl("");
@@ -106,6 +135,7 @@ export function Composer({
           setLinkRef("");
           setMentionQuery("");
           setMentionRange(null);
+          setPicked([]);
           if (fileInput.current) fileInput.current.value = "";
         } }
       );
@@ -127,8 +157,14 @@ export function Composer({
     setMentionQuery(match[1]);
   };
 
-  const insertMention = (handle: string) => {
+  const insertMention = (mention: Mention) => {
     if (!mentionRange) return;
+    const handle = mention.handle;
+    setPicked((current) =>
+      current.some((entry) => entry.type === mention.type && entry.id === mention.id)
+        ? current
+        : [...current, mention]
+    );
     const inserted = `@${handle} `;
     const next = `${text.slice(0, mentionRange.start)}${inserted}${text.slice(mentionRange.end)}`.slice(0, MAX);
     const caret = Math.min(mentionRange.start + inserted.length, next.length);
@@ -172,6 +208,30 @@ export function Composer({
           </button>
         )}
 
+        {/* The post being quoted, previewed so the writer sees what they are
+            replying to. One level only — the preview never shows its own
+            quoted card. */}
+        {quoted && (
+          <div className="ws-inset mb-2 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Avatar
+                name={quoted.author?.displayName ?? "?"}
+                src={quoted.author?.avatarUrl}
+                size={20}
+              />
+              <span className="truncate text-[13px] font-bold text-heading">
+                {quoted.author?.displayName ?? "Unknown"}
+              </span>
+              {quoted.author && (
+                <span className="truncate text-[12px] text-meta">@{quoted.author.username}</span>
+              )}
+            </div>
+            <p className="mt-1.5 line-clamp-3 text-[13px] leading-normal text-body">
+              {quoted.text}
+            </p>
+          </div>
+        )}
+
         <textarea
           ref={field}
           value={text}
@@ -192,7 +252,7 @@ export function Composer({
               <button
                 key={`${mention.type}:${mention.id}`}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => insertMention(mention.handle)}
+                onClick={() => insertMention(mention)}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/8"
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/8 text-xs font-bold text-accent">{mention.type === "group" ? "GR" : mention.label.slice(0, 2).toUpperCase()}</span>
@@ -272,9 +332,13 @@ export function Composer({
 
           {/* Deep links are the square's answer to a GIF picker: attach a
               stream, a store item or an external URL. */}
-          <div className="group relative">
+          {/* Hover-only menus are unreachable by tap and by keyboard, so the
+              trigger owns the open state. */}
+          <div className="relative">
             <button
+              onClick={() => setLinkMenuOpen((open) => !open)}
               aria-label="Attach a link"
+              aria-expanded={linkMenuOpen}
               title="Attach a link"
               className={cn(
                 "rounded-full p-2 transition-colors hover:bg-white/10",
@@ -283,20 +347,28 @@ export function Composer({
             >
               <IconLink className="h-[18px] w-[18px]" />
             </button>
-            <div className="ws-glass absolute left-0 top-full z-30 hidden w-44 rounded-2xl p-1.5 group-focus-within:block group-hover:block">
-              {LINK_KINDS.map((k) => (
-                <button
-                  key={k.kind}
-                  onClick={() => setLinkKind(linkKind === k.kind ? null : k.kind)}
-                  className={cn(
-                    "block w-full rounded-xl px-3 py-2 text-left text-sm transition-colors hover:bg-white/10",
-                    linkKind === k.kind ? "text-heading" : "text-body"
-                  )}
-                >
-                  {k.label}
-                </button>
-              ))}
-            </div>
+            {linkMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setLinkMenuOpen(false)} />
+                <div className="ws-glass absolute left-0 top-full z-30 w-44 rounded-2xl p-1.5">
+                  {LINK_KINDS.map((k) => (
+                    <button
+                      key={k.kind}
+                      onClick={() => {
+                        setLinkKind(linkKind === k.kind ? null : k.kind);
+                        setLinkMenuOpen(false);
+                      }}
+                      className={cn(
+                        "block w-full rounded-xl px-3 py-2 text-left text-sm transition-colors hover:bg-white/10",
+                        linkKind === k.kind ? "text-heading" : "text-body"
+                      )}
+                    >
+                      {k.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <button
@@ -305,11 +377,14 @@ export function Composer({
             title="Stories expire after 24 hours"
             aria-pressed={kind === "story"}
             className={cn(
-              "rounded-full p-2 transition-colors hover:bg-white/10",
+              "flex items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-bold transition-colors hover:bg-white/10",
               kind === "story" ? "text-heading" : "text-accent"
             )}
           >
-            <IconPoll className="h-[18px] w-[18px]" />
+            {/* This toggles update/story. It used to wear a poll glyph, which
+                promised a poll composer that does not exist. */}
+            <IconClock className="h-[18px] w-[18px]" />
+            24h
           </button>
 
           <div className="ml-auto flex items-center gap-3">

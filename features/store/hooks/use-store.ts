@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { trackMarketEvent } from "@/lib/analytics";
@@ -13,9 +13,11 @@ import {
 import type { StoreCategory } from "@/features/store/lib/types";
 
 export function useStoreItems(category?: StoreCategory) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["ms", "store", category ?? "all"],
-    queryFn: () => fetchStoreItems(category),
+    queryFn: ({ pageParam }) => fetchStoreItems(category, pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
   });
 }
 

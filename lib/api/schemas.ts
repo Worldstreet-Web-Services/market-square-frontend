@@ -15,8 +15,18 @@ export const DeepLinkSchema = z.object({
 
 // Backend roles: citizen | creator | ambassador | worldstreet.
 const RoleSchema = z.enum(["citizen", "creator", "ambassador", "worldstreet"]).catch("citizen");
-// Verification states include "pending" (request in review).
-const VerificationSchema = z.enum(["none", "pending", "earned", "paid"]).catch("none");
+/**
+ * Verification lifecycle.
+ *
+ * The platform GRANTS verification — nobody applies for it or buys in. Once
+ * granted it is kept current by a recurring KASH payment; letting that lapse
+ * pauses the badge without touching the underlying grant, so paying restores
+ * it instantly with no re-approval.
+ *
+ * The silver check renders on `verified` ONLY. `lapsed` is a verified account
+ * whose payment has run out, and it must not carry the check anywhere.
+ */
+const VerificationSchema = z.enum(["none", "pending", "verified", "lapsed"]).catch("none");
 // The organisation badge is assigned admin-only and is NOT derived from role —
 // product decides who carries one, so the two are independent signals that can
 // appear together. `catch(null)` keeps an unknown future value from failing the
@@ -32,6 +42,10 @@ const RawProfileSchema = z.object({
   role: RoleSchema,
   verification: VerificationSchema,
   orgBadge: OrgBadgeSchema.optional().default(null),
+  // Set by the service on GET /me for operator accounts. Presentation only —
+  // every /admin route is enforced server-side, so hiding the UI is a courtesy
+  // to non-admins, never the access control.
+  isAdmin: z.boolean().optional().default(false),
   followerCount: z.number().optional().default(0),
   followingCount: z.number().optional().default(0),
   isFollowing: z.boolean().optional().default(false),

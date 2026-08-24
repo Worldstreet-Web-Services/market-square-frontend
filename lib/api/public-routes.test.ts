@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isPublicGet } from "./public-routes.ts";
+import { isPublicGet, isSafePath } from "./public-routes.ts";
 
 /**
  * SOURCE OF TRUTH for this table: the backend's OpenAPI document. A GET is
@@ -28,7 +28,7 @@ import { isPublicGet } from "./public-routes.ts";
  * never inspects id values.
  */
 
-// Every GET the service publishes with NO security requirement (21 of them).
+// Every GET the service publishes with NO security requirement (22 of them).
 const PUBLIC: string[][] = [
   ["activities"],
   ["categories"],
@@ -38,6 +38,7 @@ const PUBLIC: string[][] = [
   ["posts", "post_1"],
   ["posts", "post_1", "comments"],
   ["profiles", "adeey"],
+  ["search"],
   ["profiles", "adeey", "posts"],
   ["profiles", "adeey", "streams"],
   ["profiles", "adeey", "activities"],
@@ -68,6 +69,25 @@ const SECURED: string[][] = [
   ["me", "verification"],
   ["streams", "st_1", "events"],
   ["streams", "st_1", "stats"],
+];
+
+/**
+ * Path-traversal attempts. Next decodes segments, so `%2e%2e` reaches the
+ * handler as `..`. Joined naively these normalise upstream into a DIFFERENT
+ * service's route while the head still reads as an allowlisted one — which
+ * would turn the BFF into an unauthenticated relay to any gateway path.
+ */
+const TRAVERSAL: string[][] = [
+  ["streams", "x", "..", "..", "..", "kash", "balances"],
+  ["streams", ".."],
+  ["streams", "x", ".."],
+  ["feed", "..", "..", "admin", "role-applications"],
+  ["profiles", "..", "me"],
+  ["store", "items", "..", "..", "me", "orders"],
+  ["categories", "."],
+  ["streams", "x/../../kash"],
+  ["streams", "x\\..\\..\\kash"],
+  ["feed", ""],
 ];
 
 const show = (path: string[]) => `/${path.join("/")}`;
@@ -143,6 +163,55 @@ describe("isPublicGet", () => {
     it("gates unknown and empty paths", () => {
       assert.equal(isPublicGet([]), false);
       assert.equal(isPublicGet(["definitely-not-a-route"]), false);
+    });
+  });
+
+  describe("path traversal is rejected", () => {
+    for (const path of TRAVERSAL) {
+      it(`isSafePath rejects ${show(path)}`, () => {
+        assert.equal(
+          isSafePath(path),
+          false,
+          `${show(path)} contains a traversal segment and must never be joined upstream.`
+        );
+      });
+
+      it(`isPublicGet rejects ${show(path)}`, () => {
+        // Belt and braces: even though the handler rejects these before the
+        // allowlist runs, the allowlist must not vouch for them either.
+        assert.equal(
+          isPublicGet(path),
+          false,
+          `${show(path)} must not be treated as a public GET — its head only LOOKS allowlisted.`
+        );
+      });
+    }
+
+    it("accepts ordinary segments", () => {
+      assert.equal(isSafePath(["streams", "st_1", "chat"]), true);
+      assert.equal(isSafePath(["profiles", "adeey"]), true);
+      // A dot inside a segment is fine — only a bare "." or ".." is not.
+      assert.equal(isSafePath(["profiles", "first.last"]), true);
+      assert.equal(isSafePath(["openapi.json"]), true);
+    });
+  });
+
+  // The streams rule used to match on the head alone, which vouched for every
+  // sub-resource under /streams — including the two owner-only ones.
+  describe("regression: /streams matches exact shapes, not a head prefix", () => {
+    it("allows exactly the list, the detail and chat", () => {
+      assert.equal(isPublicGet(["streams"]), true);
+      assert.equal(isPublicGet(["streams", "st_1"]), true);
+      assert.equal(isPublicGet(["streams", "st_1", "chat"]), true);
+    });
+
+    it("gates every other shape under /streams", () => {
+      assert.equal(isPublicGet(["streams", "st_1", "events"]), false);
+      assert.equal(isPublicGet(["streams", "st_1", "stats"]), false);
+      assert.equal(isPublicGet(["streams", "st_1", "tickets"]), false);
+      assert.equal(isPublicGet(["streams", "st_1", "heartbeat"]), false);
+      assert.equal(isPublicGet(["streams", "st_1", "chat", "msg_1"]), false);
+      assert.equal(isPublicGet(["streams", "st_1", "chat", "msg_1", "extra"]), false);
     });
   });
 

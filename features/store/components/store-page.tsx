@@ -45,14 +45,10 @@ function StoreCard({ item }: { item: StoreItem }) {
   );
 }
 
-const PAGE_SIZE = 12;
-
 export function StorePage() {
   const [category, setCategory] = useState<StoreCategory | undefined>(undefined);
-  const [visible, setVisible] = useState(PAGE_SIZE);
   const items = useStoreItems(category);
-  const all = items.data?.items ?? [];
-  const shown = all.slice(0, visible);
+  const all = items.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <>
@@ -63,10 +59,7 @@ export function StorePage() {
           <ColumnTabs
             tabs={CATEGORIES.map((c) => ({ value: c.value ?? "all", label: c.label }))}
             value={category ?? "all"}
-            onChange={(next) => {
-              setCategory(next === "all" ? undefined : (next as StoreCategory));
-              setVisible(PAGE_SIZE);
-            }}
+            onChange={(next) => setCategory(next === "all" ? undefined : (next as StoreCategory))}
           />
         </div>
       </ColumnHeader>
@@ -88,13 +81,13 @@ export function StorePage() {
       {items.isError && (
         <ErrorState error={items.error} fallback="Couldn't load the store." onRetry={() => items.refetch()} />
       )}
-      {items.isSuccess && items.data.items.length === 0 && (
+      {items.isSuccess && all.length === 0 && (
         <EmptyState glyph="◈" title="Nothing in this category yet" body="New listings land every week." />
       )}
       {items.isSuccess && all.length > 0 && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((item) => (
+            {all.map((item) => (
               <div key={item.id} className="ws-enter">
                 <StoreCard item={item} />
               </div>
@@ -102,16 +95,18 @@ export function StorePage() {
           </div>
           {/* Load-more, never infinite scroll: commerce needs position memory
               and a reachable end. */}
-          {visible < all.length ? (
+          {items.hasNextPage ? (
             <div className="flex justify-center pt-2">
-              <Button variant="secondary" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
-                Load more ({all.length - visible} left)
+              <Button
+                variant="secondary"
+                loading={items.isFetchingNextPage}
+                onClick={() => void items.fetchNextPage()}
+              >
+                Load more
               </Button>
             </div>
           ) : (
-            all.length > PAGE_SIZE && (
-              <p className="pt-2 text-center text-sm text-meta">That&apos;s everything.</p>
-            )
+            <p className="pt-2 text-center text-sm text-meta">That&apos;s everything.</p>
           )}
         </>
       )}

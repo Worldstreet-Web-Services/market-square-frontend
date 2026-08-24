@@ -60,12 +60,12 @@ function describe(item: MarketNotification): string {
 // no post to open — so the row stays unclickable rather than linking nowhere.
 function hrefFor(item: MarketNotification): string | null {
   if (item.streamId) return `/live/${item.streamId}`;
-  if (item.postId) return `/?post=${item.postId}`;
+  if (item.postId) return `/p/${item.postId}`;
   if (item.actor) return `/u/${item.actor.username}`;
   return null;
 }
 
-function Row({ item }: { item: MarketNotification }) {
+function Row({ item, onMarkRead }: { item: MarketNotification; onMarkRead: (id: string) => void }) {
   const href = hrefFor(item);
   const unread = !item.readAt;
 
@@ -88,7 +88,23 @@ function Row({ item }: { item: MarketNotification }) {
           <span className="mt-1 block text-[13px] text-meta">{relativeTime(item.createdAt)}</span>
         )}
       </span>
-      {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-featured" />}
+      {/* The unread dot is the per-row acknowledgement. `useMarkNotificationsRead`
+          has always taken ids; the UI only ever passed `undefined`, so a reader
+          could clear everything or nothing. */}
+      {unread && (
+        <button
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onMarkRead(item.id);
+          }}
+          aria-label="Mark as read"
+          title="Mark as read"
+          className="ws-press shrink-0 rounded-full p-1.5 transition-colors hover:bg-white/10"
+        >
+          <span className="block h-2 w-2 rounded-full bg-featured" />
+        </button>
+      )}
     </>
   );
 
@@ -172,7 +188,7 @@ export function NotificationsPage() {
           )}
 
           {items.map((item) => (
-            <Row key={item.id} item={item} />
+            <Row key={item.id} item={item} onMarkRead={(id) => markRead.mutate([id])} />
           ))}
 
           <div ref={sentinel} />

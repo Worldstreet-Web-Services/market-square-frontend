@@ -1,5 +1,6 @@
 export { FeedPage } from "./components/feed-page";
 export { ArkmarksPage } from "./components/arkmarks-page";
+export { PostDetailPage } from "./components/post-detail-page";
 export { useBookmarkPost, useBookmarks } from "./hooks/use-feed";
 export { PostCard } from "./components/post-card";
 export { FeaturedArena } from "./components/featured-arena";

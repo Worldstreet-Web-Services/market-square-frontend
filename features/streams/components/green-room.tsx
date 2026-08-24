@@ -42,7 +42,7 @@ function MicMeter({ level }: { level: number }) {
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10" aria-label="Microphone level">
       <div
-        className="h-full rounded-full bg-accent transition-[width] duration-75"
+        className="h-full rounded-full bg-accent transition-[width] duration-75 motion-reduce:transition-none"
         style={{ width: `${Math.round(level * 100)}%` }}
       />
     </div>
@@ -164,8 +164,11 @@ export function GreenRoom({
 
   const goLive = () =>
     live.mutate(stream.id, {
-      onSuccess: (result) =>
-        onWentLive(result.ingest, { cameraId: devices.cameraId, micId: devices.micId }),
+      onSuccess: (result) => {
+        const chosen = { cameraId: devices.cameraId, micId: devices.micId };
+        devices.release();
+        onWentLive(result.ingest, chosen);
+      },
     });
 
   return (

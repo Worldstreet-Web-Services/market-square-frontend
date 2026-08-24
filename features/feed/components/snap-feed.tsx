@@ -5,10 +5,11 @@ import { isVideoUrl } from "@/lib/media";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, relativeTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
 import { useAuth } from "@/hooks/use-auth";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useQueryParam } from "@/hooks/use-query-param";
 import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
@@ -29,7 +30,7 @@ const LANES: Array<{ lane: Lane; label: string; counted?: boolean }> = [
   { lane: "for-you", label: "For You" },
   { lane: "following", label: "Following" },
   { lane: "live", label: "Live Streams", counted: true },
-  { lane: "platform", label: "Trending" },
+  { lane: "trending", label: "Trending" },
 ];
 
 const DOUBLE_TAP_MS = 300;
@@ -58,7 +59,7 @@ function PostSlide({ post }: { post: Post }) {
     }
   };
 
-  const cta = post.deepLink ? resolveDeepLink(post.deepLink) : null;
+  const cta = resolveCta(post.deepLink);
   const author = post.author;
 
   return (
@@ -185,7 +186,7 @@ function SlideFor({ item }: { item: FeedItem }) {
 
   if (item.type === "activity" && item.activity) {
     const activity = item.activity;
-    const cta = activity.deepLink ? resolveDeepLink(activity.deepLink) : null;
+    const cta = resolveCta(activity.deepLink);
     return (
       <section className="ws-snap-item relative flex h-dvh w-full flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="ws-meta">{activity.type} · {formatDateTime(activity.startsAt)}</p>
@@ -201,7 +202,7 @@ function SlideFor({ item }: { item: FeedItem }) {
 
   if (item.type === "platform_event" && item.platformEvent) {
     const event = item.platformEvent;
-    const cta = item.deepLink ? resolveDeepLink(item.deepLink) : null;
+    const cta = resolveCta(item.deepLink);
     return (
       <section className="ws-snap-item relative flex h-dvh w-full flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="ws-meta text-accent">WorldStreet</p>
@@ -223,6 +224,21 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
   const [lane, setLane] = useState<Lane>("for-you");
   const { authenticated } = useAuth();
   const [composerOpen, setComposerOpen] = useState(false);
+  // "Your Story" and the sidebar Post action both navigate to /?compose=…;
+  // on mobile this component IS home, so it has to honour the parameter or
+  // those entries land on an unchanged timeline.
+  const compose = useQueryParam("compose");
+  const composeStory = compose === "story";
+  const composeOpen = composerOpen || compose === "1" || composeStory;
+
+  // Closing has to drop the parameter as well, or the sheet reopens from the
+  // URL on the very next render and cannot be dismissed at all.
+  const closeComposer = () => {
+    setComposerOpen(false);
+    if (compose !== null) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  };
   const feed = useFeed(lane);
   const sentinel = useInfiniteScroll(
     () => feed.fetchNextPage(),
@@ -300,8 +316,12 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
           <IconPlus className="h-5 w-5" />
         </button>
       )}
-      <Sheet open={composerOpen} onClose={() => setComposerOpen(false)} title="New post">
-        <Composer />
+      <Sheet
+        open={composeOpen}
+        onClose={closeComposer}
+        title={composeStory ? "New story" : "New post"}
+      >
+        <Composer asStory={composeStory} onDone={closeComposer} />
       </Sheet>
     </div>
   );

@@ -1,9 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LocalTrack, Room } from "livekit-client";
+import type { AudioCaptureOptions, LocalAudioTrack, LocalTrack, Room } from "livekit-client";
 import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 import type { Ingest } from "@/features/streams/lib/types";
+
+// Speech capture profile for a talking host. These are stated explicitly
+// rather than left to the browser for three reasons:
+//   * `createLocalTracks()` is a standalone helper — unlike
+//     `room.localParticipant.setMicrophoneEnabled()`, it does NOT merge the
+//     SDK's `audioDefaults`, so `audio: true` publishes with whatever raw
+//     constraint set the UA picks. Toggling the mic off and on then produced a
+//     *differently processed* track than the one we went live with.
+//   * A guest speaker publishes from inside the stream room, where the host's
+//     audio is coming out of the same laptop's speakers. Without an explicit
+//     `echoCancellation`, that loop is re-broadcast to everyone as echo.
+//   * `channelCount: 1` is load-bearing: LiveKit disables Opus RED *and* DTX
+//     for tracks it detects as stereo (LocalParticipant.publishTrack →
+//     `if (isStereo) { opts.dtx ??= false; opts.red ??= false }`). RED is the
+//     redundant-encoding that hides packet loss, so a mic reporting two
+//     channels silently costs us our packet-loss protection.
+const SPEECH_CAPTURE: AudioCaptureOptions = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  voiceIsolation: true,
+  channelCount: 1,
+};
 
 export type PublisherState =
   | "idle"
@@ -20,6 +43,8 @@ export interface PublisherControls {
   quality: ConnectionQuality;
   micOn: boolean;
   camOn: boolean;
+  /** 0..1 smoothed level of the track we are actually publishing. */
+  micLevel: number;
   toggleMic: () => Promise<void>;
   toggleCam: () => Promise<void>;
   switchCamera: (deviceId: string) => Promise<void>;
@@ -51,6 +76,7 @@ export function usePublisher({
   const [quality, setQuality] = useState<ConnectionQuality>("unknown");
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [micLevel, setMicLevel] = useState(0);
 
   const url = ingest?.url ?? "";
   const token = ingest?.roomToken ?? "";
@@ -63,16 +89,78 @@ export function usePublisher({
     let room: Room | null = null;
     let tracks: LocalTrack[] = [];
 
+    let meter: { stop: () => void } | null = null;
+
     void import("livekit-client").then(
-      async ({ Room, RoomEvent, Track, ConnectionQuality: CQ, createLocalTracks }) => {
+      async ({
+        Room,
+        RoomEvent,
+        Track,
+        ConnectionQuality: CQ,
+        AudioPresets,
+        createLocalTracks,
+        createAudioAnalyser,
+      }) => {
         if (cancelled) return;
         setState("connecting");
         setQuality("unknown");
-        const instance = new Room();
+        const audioCapture: AudioCaptureOptions = preferredMic
+          ? { ...SPEECH_CAPTURE, deviceId: preferredMic }
+          : SPEECH_CAPTURE;
+        const instance = new Room({
+          // Mirrors the initial capture so a mic toggle (which re-creates the
+          // track through the SDK) republishes with the same processing and
+          // the same device instead of falling back to the system default.
+          audioCaptureDefaults: audioCapture,
+          publishDefaults: {
+            // 48 kbps mono Opus. Stated rather than inherited, and *not*
+            // dropped to AudioPresets.speech (24 kbps): the reported symptom
+            // is quality, not bandwidth, and RED already doubles the effective
+            // audio rate — ~96 kbps total is still ~5% of the 1.7 Mbps the
+            // 720p video track budgets, so there is nothing to buy by
+            // squeezing speech further.
+            audioPreset: AudioPresets.music,
+            // Explicit because the SDK only defaults these on for tracks it
+            // considers mono; pinning them means a mic that misreports its
+            // channel count cannot quietly turn off loss concealment.
+            red: true,
+            dtx: true,
+            forceStereo: false,
+          },
+        });
         room = instance;
         roomRef.current = instance;
 
+        const stopMeter = () => {
+          meter?.stop();
+          meter = null;
+          setMicLevel(0);
+        };
+        const startMeter = (track: LocalAudioTrack) => {
+          stopMeter();
+          const analyser = createAudioAnalyser(track);
+          const timer = setInterval(() => {
+            // calculateVolume() returns a 0..1 RMS; speech sits low in that
+            // range, so scale it the same way the green-room meter does.
+            setMicLevel(Math.min(1, analyser.calculateVolume() * 3));
+          }, 100);
+          meter = {
+            stop: () => {
+              clearInterval(timer);
+              void analyser.cleanup().catch(() => {});
+            },
+          };
+        };
+
         instance
+          .on(RoomEvent.LocalTrackPublished, (publication) => {
+            if (publication.kind === Track.Kind.Audio && publication.track) {
+              startMeter(publication.track as LocalAudioTrack);
+            }
+          })
+          .on(RoomEvent.LocalTrackUnpublished, (publication) => {
+            if (publication.kind === Track.Kind.Audio) stopMeter();
+          })
           .on(RoomEvent.Reconnecting, () => setState("reconnecting"))
           .on(RoomEvent.Reconnected, () => setState("publishing"))
           .on(RoomEvent.Disconnected, () => setState("failed"))
@@ -91,7 +179,7 @@ export function usePublisher({
 
         try {
           tracks = await createLocalTracks({
-            audio: preferredMic ? { deviceId: preferredMic } : true,
+            audio: audioCapture,
             video: preferredCamera ? { deviceId: preferredCamera } : true,
           });
         } catch {
@@ -125,6 +213,8 @@ export function usePublisher({
 
     return () => {
       cancelled = true;
+      meter?.stop();
+      setMicLevel(0);
       tracks.forEach((track) => track.stop());
       void room?.disconnect();
       roomRef.current = null;
@@ -185,5 +275,15 @@ export function usePublisher({
 
   // Outside an active session the publisher is idle by definition.
   const effectiveState = active ? state : "idle";
-  return { state: effectiveState, quality, micOn, camOn, toggleMic, toggleCam, switchCamera, switchMic };
+  return {
+    state: effectiveState,
+    quality,
+    micOn,
+    camOn,
+    micLevel: micOn ? micLevel : 0,
+    toggleMic,
+    toggleCam,
+    switchCamera,
+    switchMic,
+  };
 }

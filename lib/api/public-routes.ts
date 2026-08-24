@@ -26,7 +26,30 @@
  * is still forwarded when present, so personalised fields (`likedByMe`,
  * `bookmarkedByMe`) keep resolving for signed-in readers.
  */
+/**
+ * Is every segment safe to join into an upstream URL?
+ *
+ * Next hands us decoded segments, so `%2e%2e` arrives as `..`. Joining those
+ * lets `/streams/x/../../../kash/balances` normalise upstream into a DIFFERENT
+ * service's route while `isPublicGet` still sees head === "streams" — turning
+ * the BFF into an unauthenticated relay to any gateway path. Reject the whole
+ * request rather than trying to sanitise it.
+ */
+export function isSafePath(path: string[]): boolean {
+  return path.every(
+    (segment) =>
+      segment.length > 0 &&
+      segment !== "." &&
+      segment !== ".." &&
+      !segment.includes("/") &&
+      !segment.includes("\\")
+  );
+}
+
 export function isPublicGet(path: string[]): boolean {
+  // A traversal attempt is never public, whatever its head looks like.
+  if (!isSafePath(path)) return false;
+
   const [head, second, third] = path;
 
   // Public in their entirety.
@@ -40,6 +63,8 @@ export function isPublicGet(path: string[]): boolean {
   // /store/items and /store/items/{slug}.
   if (head === "store") return true;
   if (head === "health" || head === "openapi.json") return true;
+  // Search is public; an optional token only enriches viewer state.
+  if (head === "search") return true;
 
   // /posts/{id} and /posts/{id}/comments only. Every other posts route (like,
   // repost, bookmark) is a write and never reaches this predicate.
@@ -47,11 +72,14 @@ export function isPublicGet(path: string[]): boolean {
     return path.length === 2 || (path.length === 3 && third === "comments");
   }
 
-  // Stream list, detail and chat reads are public — but /streams/{id}/events
-  // and /streams/{id}/stats are owner-only (bearerAuth), so they stay behind
-  // the session check instead of being forwarded upstream to collect a 401.
+  // Stream reads are public at three EXACT shapes only: the list, one stream,
+  // and its chat. Matching on the head alone let anything under /streams
+  // through — including owner-only sub-resources and, before `isSafePath`,
+  // traversal out of the namespace entirely.
   if (head === "streams") {
-    return !(path.length === 3 && (third === "events" || third === "stats"));
+    if (path.length === 1) return true;
+    if (path.length === 2) return true;
+    return path.length === 3 && third === "chat";
   }
 
   if (head === "verification" && second === "rule") return true;

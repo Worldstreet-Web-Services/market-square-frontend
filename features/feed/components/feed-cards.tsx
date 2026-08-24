@@ -4,12 +4,12 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { formatDateTime, formatKash, formatCount, relativeTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { IconCalendar, IconEye, IconLive, IconPlay, IconShare } from "@/components/ui/icons";
-import type { FeedItem, FeedStream } from "@/features/feed/lib/types";
+import type { FeedItem, FeedStream, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { PostCard } from "@/features/feed/components/post-card";
 import { MARKET_FLAGS } from "@/lib/market-config";
@@ -106,9 +106,15 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
           <div className="flex items-center gap-2 px-3.5 py-2.5 text-xs text-meta">
             <span className="truncate font-semibold text-body">{stream.title}</span>
             {stream.category && <span className="shrink-0">· {stream.category}</span>}
-            {stream.status === "live" && stream.peakViewers > 0 && (
-              <span className="tnum ml-auto flex shrink-0 items-center gap-1">
-                <IconEye className="h-3.5 w-3.5" /> {formatCount(stream.peakViewers)}
+            {/* The feed's stream payload carries PEAK viewers only — the live
+                count is detail-only — so the number is labelled for what it
+                is rather than passed off as "now watching". */}
+            {stream.peakViewers > 0 && (
+              <span
+                className="tnum ml-auto flex shrink-0 items-center gap-1"
+                title="Peak viewers for this stream"
+              >
+                <IconEye className="h-3.5 w-3.5" /> peak {formatCount(stream.peakViewers)}
               </span>
             )}
           </div>
@@ -136,17 +142,26 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
 export function FeedItemCard({
   item,
   followSlot,
+  onQuote,
 }: {
   item: FeedItem;
   followSlot?: (author: Profile) => React.ReactNode;
+  onQuote?: (post: Post) => void;
 }) {
   if (item.type === "post" && item.post)
-    return <PostCard post={item.post} repostedBy={item.repostedBy} followSlot={followSlot} />;
+    return (
+      <PostCard
+        post={item.post}
+        repostedBy={item.repostedBy}
+        followSlot={followSlot}
+        onQuote={onQuote}
+      />
+    );
   if (item.type === "stream" && item.stream) return <StreamFeedCard stream={item.stream} />;
 
   if (item.type === "activity" && item.activity) {
     const activity = item.activity;
-    const cta = activity.deepLink ? resolveDeepLink(activity.deepLink, `feed:activity:${activity.id}`) : null;
+    const cta = resolveCta(activity.deepLink, `feed:activity:${activity.id}`);
     return (
       <article className="ws-post flex items-center gap-3 p-3">
         <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body">
@@ -176,7 +191,7 @@ export function FeedItemCard({
 
   if (item.type === "platform_event" && item.platformEvent) {
     const event = item.platformEvent;
-    const cta = item.deepLink ? resolveDeepLink(item.deepLink, `feed:platform:${event.id}`) : null;
+    const cta = resolveCta(item.deepLink, `feed:platform:${event.id}`);
     return (
       <article className="ws-post flex gap-3 p-3">
         <span className="ws-display flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base text-ink">

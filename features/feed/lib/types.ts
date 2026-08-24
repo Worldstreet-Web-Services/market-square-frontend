@@ -28,10 +28,16 @@ export const PostSchema = z.object({
   commentCount: z.number(),
   repostCount: z.number().optional().default(0),
   repostedByMe: z.boolean().optional().default(false),
+  // The quoted original, hydrated one level deep only — a quote of a quote
+  // shows the inner card's text, never a third nested frame. When the original
+  // has been removed or expired the backend flags it rather than dropping the
+  // field, so the card can say so instead of silently losing context.
   quotedPost: z.object({
     id: z.string(),
-    text: z.string(),
+    text: z.string().optional().default(""),
     mediaUrl: z.string().nullable().optional().default(null),
+    createdAt: z.string().optional().default(""),
+    unavailable: z.boolean().optional().default(false),
     author: ProfileSchema.nullable().optional().default(null),
   }).nullable().optional().default(null),
   mentions: z.array(MentionSchema).optional().default([]),

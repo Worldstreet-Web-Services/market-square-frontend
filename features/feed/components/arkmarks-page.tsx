@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { errorCode } from "@/lib/api/envelope";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { useBookmarks } from "@/features/feed/hooks/use-feed";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
+import { Composer } from "@/features/feed/components/composer";
+import type { Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -25,6 +28,9 @@ export function ArkmarksPage({
 }) {
   const { ready, authenticated, login } = useAuth();
   const bookmarks = useBookmarks();
+  // Quote lives on every post card's repost menu. Without a composer to open,
+  // choosing it on /arkmarks did nothing at all.
+  const [quoting, setQuoting] = useState<Post | null>(null);
   const sentinel = useInfiniteScroll(
     () => bookmarks.fetchNextPage(),
     Boolean(bookmarks.hasNextPage && !bookmarks.isFetchingNextPage)
@@ -54,6 +60,12 @@ export function ArkmarksPage({
               </button>
             }
           />
+        )}
+
+        {ready && authenticated && quoting && (
+          <div className="ws-post">
+            <Composer autoFocus quoted={quoting} onDone={() => setQuoting(null)} />
+          </div>
         )}
 
         {ready && authenticated && (
@@ -86,7 +98,7 @@ export function ArkmarksPage({
 
             {items.map((item) => (
               <div key={item.id} className="ws-enter">
-                <FeedItemCard item={item} followSlot={followSlot} />
+                <FeedItemCard item={item} followSlot={followSlot} onQuote={setQuoting} />
               </div>
             ))}
 

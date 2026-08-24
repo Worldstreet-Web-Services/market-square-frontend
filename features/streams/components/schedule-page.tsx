@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { useMe } from "@/hooks/use-me";
 import { Button } from "@/components/ui/button";
 import { IconCalendar } from "@/components/ui/icons";
@@ -107,7 +107,7 @@ function ActivityRow({ activity, mine }: { activity: Activity; mine: boolean }) 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(activity.title);
   const [startsAt, setStartsAt] = useState(() => activity.startsAt.slice(0, 16));
-  const cta = activity.deepLink ? resolveDeepLink(activity.deepLink) : null;
+  const cta = resolveCta(activity.deepLink);
   return (
     <li className="ws-row flex flex-wrap items-center gap-4 px-4 py-3 lg:px-6">
       <span className="ws-inset flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-body">

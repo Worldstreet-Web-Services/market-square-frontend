@@ -36,6 +36,14 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   return rtf.format(Math.round(delta), "year");
 }
 
+// Date only — for anniversaries and billing dates, where a clock time is
+// noise. Invalid input yields "" so callers can render nothing.
+export function formatDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";

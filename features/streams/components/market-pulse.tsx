@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 
 export type PulseChoice = "bullish" | "neutral" | "bearish";
@@ -12,15 +11,16 @@ const OPTIONS: Array<{ id: PulseChoice; emoji: string; label: string; color: str
   { id: "bearish", emoji: "↘", label: "Bearish", color: "#fb7185" },
 ];
 
-export function MarketPulse({
-  counts,
-  selected,
-  onSelect,
-}: {
-  counts: PulseCounts;
-  selected: PulseChoice | null;
-  onSelect: (choice: PulseChoice) => void;
-}) {
+/**
+ * Market Pulse — READ ONLY.
+ *
+ * There is no vote endpoint on the service. The panel used to offer three
+ * buttons that moved the tally in local state and recorded nothing, so a
+ * viewer watched "their" vote land and then saw it vanish on the next fetch.
+ * Until `POST /streams/:id/pulse` exists this reports the room's sentiment and
+ * offers no affordance to change it — the counts shown are the service's own.
+ */
+export function MarketPulse({ counts }: { counts: PulseCounts }) {
   const total = counts.bullish + counts.neutral + counts.bearish;
 
   return (
@@ -52,23 +52,18 @@ export function MarketPulse({
         {OPTIONS.map((option) => {
           const percent = total ? Math.round((counts[option.id] / total) * 100) : 0;
           return (
-            <button
+            <div
               key={option.id}
-              onClick={() => onSelect(option.id)}
-              aria-pressed={selected === option.id}
-              className={cn(
-                "ws-press rounded-2xl border px-2 py-2.5 text-center transition-colors",
-                selected === option.id ? "border-white/30 bg-white/10" : "border-white/8 bg-white/[0.03]"
-              )}
+              className="rounded-2xl border border-white/8 bg-white/[0.03] px-2 py-2.5 text-center"
             >
               <span className="block text-xl font-black" style={{ color: option.color }}>{option.emoji}</span>
               <span className="mt-0.5 block text-[11px] font-semibold text-white">{option.label}</span>
               <span className="tnum block text-[10px] text-grey-500">{percent}%</span>
-            </button>
+            </div>
           );
         })}
       </div>
-      <p className="mt-3 text-center text-[10px] text-grey-600">One live vote per viewer · change anytime</p>
+      <p className="mt-3 text-center text-[10px] text-grey-600">Live sentiment from the room</p>
     </div>
   );
 }

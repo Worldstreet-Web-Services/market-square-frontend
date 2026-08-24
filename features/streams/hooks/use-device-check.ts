@@ -18,7 +18,20 @@ export interface DeviceCheck {
   /** 0..1 smoothed mic input level, driven by a WebAudio analyser. */
   micLevel: number;
   request: () => void;
+  /** Hand the devices back before the publisher opens its own capture. */
+  release: () => void;
 }
+
+// Kept identical to the publisher's SPEECH_CAPTURE constants on purpose: the
+// meter is only a preview of the published track if it is measuring the same
+// processing chain. Noise suppression and AGC change the RMS materially, so a
+// raw `audio: true` preview reads a level the viewer never hears.
+const PREVIEW_AUDIO: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  channelCount: 1,
+};
 
 // Green-room device check: a real getUserMedia preview with device pickers
 // and a live mic meter, so nobody goes live blind. Independent of LiveKit —
@@ -32,11 +45,23 @@ export function useDeviceCheck(
   const [cameraId, setCameraId] = useState("");
   const [micId, setMicId] = useState("");
   const [micLevel, setMicLevel] = useState(0);
+  // What the browser actually gave us, which is not necessarily what was
+  // asked for. Before this, both ids stayed "" until the user touched a
+  // dropdown, so the publisher received `undefined` and re-resolved "default"
+  // itself — the meter could be reading a headset while the broadcast went
+  // out on the laptop's built-in mic.
+  const [resolvedCameraId, setResolvedCameraId] = useState("");
+  const [resolvedMicId, setResolvedMicId] = useState("");
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<{ ctx: AudioContext; raf: number } | null>(null);
   const [wanted, setWanted] = useState(false);
 
   const request = useCallback(() => setWanted(true), []);
+  // Flipping `wanted` runs the effect's cleanup, which stops the tracks and
+  // closes the AudioContext. Two live captures of the same microphone let the
+  // second one inherit constraints negotiated for the first, so the green room
+  // must let go before the publisher opens its own.
+  const release = useCallback(() => setWanted(false), []);
 
   useEffect(() => {
     if (!wanted) return;
@@ -62,13 +87,15 @@ export function useDeviceCheck(
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: cameraId ? { deviceId: { exact: cameraId } } : true,
-          audio: micId ? { deviceId: { exact: micId } } : true,
+          audio: micId ? { ...PREVIEW_AUDIO, deviceId: { exact: micId } } : PREVIEW_AUDIO,
         });
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
         streamRef.current = stream;
+        setResolvedCameraId(stream.getVideoTracks()[0]?.getSettings().deviceId ?? "");
+        setResolvedMicId(stream.getAudioTracks()[0]?.getSettings().deviceId ?? "");
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           void videoRef.current.play().catch(() => {});
@@ -127,11 +154,13 @@ export function useDeviceCheck(
     status,
     cameras,
     mics,
-    cameraId,
-    micId,
+    // Report the device in use, not the (possibly empty) request.
+    cameraId: resolvedCameraId || cameraId,
+    micId: resolvedMicId || micId,
     setCameraId,
     setMicId,
     micLevel,
     request,
+    release,
   };
 }

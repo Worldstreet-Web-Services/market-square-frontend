@@ -49,3 +49,40 @@ describe("ProfileSchema.orgBadge", () => {
     assert.equal(parsed.orgBadge, "ark");
   });
 });
+
+describe("ProfileSchema.verification", () => {
+  const states = ["none", "pending", "verified", "lapsed"] as const;
+
+  for (const state of states) {
+    it(`carries "${state}" through`, () => {
+      assert.equal(ProfileSchema.parse({ ...base, verification: state }).verification, state);
+    });
+  }
+
+  it("coerces the retired 'earned' tier to none rather than throwing", () => {
+    // The old enum was none|pending|earned|paid. A stale payload must degrade
+    // to "no check" — never to a check the account no longer holds.
+    assert.equal(ProfileSchema.parse({ ...base, verification: "earned" }).verification, "none");
+  });
+
+  it("coerces the retired 'paid' tier to none", () => {
+    assert.equal(ProfileSchema.parse({ ...base, verification: "paid" }).verification, "none");
+  });
+
+  it("coerces an unknown state to none", () => {
+    assert.equal(ProfileSchema.parse({ ...base, verification: "banned" }).verification, "none");
+  });
+
+  it("never carries billing fields on a public profile", () => {
+    // Billing lives only on /me/verification. Even if a backend leaked these,
+    // the profile schema must not surface them to other users' views.
+    const parsed = ProfileSchema.parse({
+      ...base,
+      verification: "verified",
+      paidThrough: "2026-01-01T00:00:00Z",
+      daysRemaining: 9,
+    }) as Record<string, unknown>;
+    assert.equal(parsed.paidThrough, undefined);
+    assert.equal(parsed.daysRemaining, undefined);
+  });
+});

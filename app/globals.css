@@ -30,7 +30,9 @@
   --color-down: #f6a5a5;
   /* The one deliberate color exception to silver-only: the liked heart.
      Semantic state, universal affordance — not chrome. */
-  --color-like: #f87171;
+  /* Liked state — the design specifies amber, matching the featured accent.
+     One token so the heart reads identically on cards, profile and snap feed. */
+  --color-like: #e8b74a;
   /* Dark text on light (silver/white) buttons. */
   --color-ink: #0a0a0a;
   --color-panel: #0a0a0a;

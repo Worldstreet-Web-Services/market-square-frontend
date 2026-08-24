@@ -1,6 +1,6 @@
 "use client";
 
-import { FeedPage, ArkmarksPage } from "@/features/feed";
+import { FeedPage, ArkmarksPage, PostDetailPage } from "@/features/feed";
 import { FollowPill } from "@/features/profile";
 import { useStreamList } from "@/features/streams";
 
@@ -20,4 +20,8 @@ export function HomeScreen() {
 
 export function ArkmarksScreen() {
   return <ArkmarksPage followSlot={followSlot} />;
+}
+
+export function PostScreen({ postId }: { postId: string }) {
+  return <PostDetailPage postId={postId} followSlot={followSlot} />;
 }

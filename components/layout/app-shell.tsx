@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -13,6 +14,7 @@ import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark, Wordmark } from "@/components/ui/wordmark";
 import { RightRail } from "@/components/layout/right-rail";
+import { Sheet } from "@/components/ui/sheet";
 import {
   IconBell,
   IconCalendar,
@@ -36,6 +38,8 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string; filled?: boolean }>;
   authed?: boolean;
   operator?: boolean;
+  /** Operator console — shown only to accounts the service flags as admin. */
+  admin?: boolean;
   /** Folded into the "More" menu below xl, where vertical room runs out. */
   secondary?: boolean;
 }
@@ -56,6 +60,7 @@ const NAV: NavItem[] = [
   { href: "/store", label: "Store", icon: IconStore },
   { href: "/schedule", label: "Schedule", icon: IconCalendar, authed: true, secondary: true },
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
+  { href: "/admin", label: "Admin", icon: IconShield, authed: true, admin: true, secondary: true },
   { href: "/operations", label: "Operations", icon: IconShield, authed: true, operator: true, secondary: true },
 ];
 
@@ -153,31 +158,47 @@ const BADGE_FOR: Record<
   "/messages": (counts) => counts?.messages ?? 0,
 };
 
+/**
+ * The icon rail's overflow.
+ *
+ * It used to open on hover and `focus-within` only, so a tap opened nothing
+ * and closed nothing. The trigger owns the state now, which also makes it
+ * reachable from the keyboard.
+ */
 function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
+  const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   return (
-    <div className="group relative xl:hidden">
+    <div className="relative xl:hidden">
       <button
         aria-label="More"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
         className="ws-nav flex w-full items-center gap-4 p-3 text-body"
       >
         <IconMore className="h-6 w-6 shrink-0" />
       </button>
-      <div className="ws-glass absolute bottom-0 left-full z-50 ml-2 hidden w-52 rounded-2xl p-1.5 group-focus-within:block group-hover:block">
-        {items.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-white/10",
-              isActive(pathname, item.href) ? "text-heading" : "text-body"
-            )}
-          >
-            <item.icon className="h-5 w-5" />
-            {item.label}
-          </Link>
-        ))}
-      </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="ws-glass absolute bottom-0 left-full z-50 ml-2 w-52 rounded-2xl p-1.5">
+            {items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-white/10",
+                  isActive(pathname, item.href) ? "text-heading" : "text-body"
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -250,7 +271,10 @@ function Sidebar({ pathname }: { pathname: string }) {
   const visible = NAV.filter(
     (item) =>
       (!item.authed || authenticated) &&
-      (!item.operator || me.data?.role === "worldstreet")
+      (!item.operator || me.data?.role === "worldstreet") &&
+      // Presentation only. Every /admin route is enforced server-side, so a
+      // non-admin who types the URL still gets a refusal.
+      (!item.admin || Boolean(me.data?.isAdmin))
   );
 
   return (
@@ -336,8 +360,10 @@ const CRUMB: Array<[RegExp, string]> = [
   [/^\/store/, "ARK Store"],
   [/^\/schedule/, "Schedule"],
   [/^\/studio/, "Studio"],
+  [/^\/admin/, "Admin"],
   [/^\/operations/, "Operations"],
   [/^\/spotlight/, "Citizen Spotlight"],
+  [/^\/p\//, "Post"],
   [/^\/u\//, "Profile"],
   [/^\/auth/, "Sign in"],
 ];
@@ -357,16 +383,127 @@ function Breadcrumb({ pathname }: { pathname: string }) {
   );
 }
 
+/**
+ * Everything the sidebar offers, on a phone.
+ *
+ * The bottom bar holds four tabs; the sidebar's "More" menu and the account
+ * dropdown are both `md:` only. That left Tickets, Store, Live, Studio,
+ * Schedule, Admin, Operations — and Log out — with NO mobile entry point at
+ * all: about half the app was unreachable without a desktop browser. This
+ * drawer is that entry point, listing the same items the sidebar does under
+ * the same visibility rules.
+ */
+function MobileMenu({
+  open,
+  onClose,
+  items,
+  pathname,
+}: {
+  open: boolean;
+  onClose: () => void;
+  items: NavItem[];
+  pathname: string;
+}) {
+  const { ready, authenticated, login } = useAuth();
+  const me = useMe();
+  const logout = useLogout();
+
+  // A route change means the drawer did its job.
+  useEffect(() => {
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- close on navigation only
+  }, [pathname]);
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Menu">
+      <div className="space-y-4">
+        {ready && !authenticated ? (
+          <button
+            onClick={() => {
+              onClose();
+              login();
+            }}
+            className="ws-press flex w-full items-center justify-center rounded-full bg-accent px-6 py-3 font-bold text-ink"
+          >
+            Sign in
+          </button>
+        ) : (
+          <Link
+            href={me.data ? `/u/${me.data.username}` : "/auth"}
+            onClick={onClose}
+            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:bg-white/8"
+          >
+            <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={40} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-heading">
+                {me.data?.displayName ?? "You"}
+              </span>
+              <span className="block truncate text-xs text-meta">@{me.data?.username ?? "…"}</span>
+            </span>
+            <span className="shrink-0 text-xs text-meta">View profile</span>
+          </Link>
+        )}
+
+        <nav aria-label="All sections" className="grid grid-cols-2 gap-2">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onClose}
+              aria-current={isActive(pathname, item.href) ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border px-3 py-3 text-sm font-semibold transition-colors",
+                isActive(pathname, item.href)
+                  ? "border-white/15 bg-white/10 text-heading"
+                  : "border-white/10 text-body hover:bg-white/[0.06]"
+              )}
+            >
+              <item.icon className="h-5 w-5 shrink-0" />
+              <span className="truncate">{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        {authenticated && (
+          <Link
+            href="/studio"
+            onClick={onClose}
+            className="ws-press flex w-full items-center justify-center gap-2 rounded-full border border-white/20 py-3 font-bold text-body transition-colors hover:bg-white/8"
+          >
+            <IconCamera className="h-5 w-5" /> Go live
+          </Link>
+        )}
+
+        {authenticated && (
+          <button
+            onClick={() => {
+              onClose();
+              void logout();
+            }}
+            className="w-full rounded-full border border-white/10 py-3 text-sm font-semibold text-body transition-colors hover:bg-white/8"
+          >
+            Log out{me.data?.username ? ` @${me.data.username}` : ""}
+          </button>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 function MobileBar({ pathname }: { pathname: string }) {
   const { authenticated } = useAuth();
-  const router = useRouter();
   const me = useMe();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Five slots, profile included — six icons crowd a 390px bar. Tickets and
-  // Store stay one tap away through Explore and the profile menu.
-  const tabs = NAV.filter(
-    (item) => !item.secondary && item.href !== "/studio" && (!item.authed || authenticated)
-  ).slice(0, 4);
+  // Four tabs plus the drawer. Everything else the sidebar lists lives behind
+  // that fifth slot rather than being unreachable.
+  const visible = NAV.filter(
+    (item) =>
+      (!item.authed || authenticated) &&
+      (!item.operator || me.data?.role === "worldstreet") &&
+      (!item.admin || Boolean(me.data?.isAdmin))
+  );
+  const tabs = visible.filter((item) => !item.secondary && item.href !== "/studio").slice(0, 4);
 
   return (
     <nav
@@ -396,12 +533,20 @@ function MobileBar({ pathname }: { pathname: string }) {
         );
       })}
       <button
-        onClick={() => router.push(me.data ? `/u/${me.data.username}` : "/auth")}
+        onClick={() => setMenuOpen(true)}
+        aria-label="More sections"
+        aria-expanded={menuOpen}
         className="ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5 text-[#6D6D6D]"
       >
-        <IconUser className="h-6 w-6" />
-        <span className="text-[12px] leading-[14.8px]">You</span>
+        <IconMore className="h-6 w-6" />
+        <span className="text-[12px] leading-[14.8px]">More</span>
       </button>
+      <MobileMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={visible}
+        pathname={pathname}
+      />
     </nav>
   );
 }

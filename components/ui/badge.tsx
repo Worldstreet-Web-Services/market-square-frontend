@@ -1,22 +1,28 @@
 import { cn } from "@/lib/cn";
 import { IconCheck } from "@/components/ui/icons";
 import { BadgeArkGlyph, BadgeMarketGlyph } from "@/components/ui/org-badge-glyphs";
-import type { OrgBadge } from "@/lib/api/schemas";
+import type { OrgBadge, VerificationState } from "@/lib/api/schemas";
 
-// Earned and paid verification both render the same silver check — the tier
-// is a backend economics detail, not a visual hierarchy. "pending" shows
-// nothing: the badge appears only once verification lands.
+/**
+ * The silver check.
+ *
+ * Renders on `verified` and nothing else. `pending` has not been granted yet;
+ * `lapsed` was granted but the subscription ran out, and a lapsed account must
+ * not keep the check anywhere on the square — that is the whole point of the
+ * state. This is the single gate for every surface, so widening it here
+ * silently re-badges lapsed users across the app.
+ */
 export function VerifiedBadge({
   verification,
   className,
 }: {
-  verification: "none" | "pending" | "earned" | "paid";
+  verification: VerificationState;
   className?: string;
 }) {
-  if (verification === "none" || verification === "pending") return null;
+  if (verification !== "verified") return null;
   return (
     <span
-      title={verification === "paid" ? "Verified (supporter)" : "Verified"}
+      title="Verified"
       className={cn(
         "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent text-ink",
         className
@@ -74,9 +80,8 @@ export function RoleChip({ role, className }: { role: string; className?: string
   if (!label) return null;
   return (
     <span
-      // Chip geometry is the design's: a flat 21px-radius capsule at 4% white
-      // with a 19% hairline. The design fills it with a MARKET / ARK brand
-      // glyph; until a field distinguishes those, it carries the real role.
+      // Shares the org badge's capsule geometry so the two sit together
+      // cleanly. Role and org badge are independent signals — see OrgBadgeChip.
       className={cn(
         "rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-2 py-px text-[9px] font-semibold uppercase tracking-wide text-grey-200",
         className

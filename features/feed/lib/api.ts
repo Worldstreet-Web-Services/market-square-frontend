@@ -1,9 +1,8 @@
 "use client";
 
-import { msApi } from "@/lib/api/service";
-import { apiFetch } from "@/lib/api/client";
-import { unwrap } from "@/lib/api/envelope";
 import { z } from "zod";
+import { msApi } from "@/lib/api/service";
+import { uploadFile } from "@/lib/api/upload";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   BookmarkResultSchema,
@@ -42,18 +41,29 @@ export async function createPost(input: {
   return PostSchema.parse(await msApi.post("/posts", input));
 }
 
+// Single post, by id — the permalink's source. Public GET: a signed-out
+// reader can open a shared link, and a signed-in one still gets likedByMe.
+export async function fetchPost(postId: string) {
+  return PostSchema.parse(await msApi.get(`/posts/${postId}`));
+}
+
 export async function repostPost(postId: string, repost: boolean) {
   const path = `/posts/${postId}/repost`;
   return RepostResultSchema.parse(repost ? await msApi.post(path) : await msApi.del(path));
 }
 
-const MediaUploadSchema = z.object({ url: z.string(), mediaType: z.string(), size: z.number() });
-
+/**
+ * Post media goes through the service's own `POST /uploads`, which decides the
+ * stored content type and extension server-side from the bytes, never from the
+ * client's filename, and namespaces the key by the verified user.
+ *
+ * The BFF used to write these to `public/uploads/` using the client-supplied
+ * extension, which let an `x.html` declared as `image/png` be served back as
+ * same-origin HTML — stored XSS against the session cookie. That handler is
+ * gone; do not reintroduce a local-disk upload path.
+ */
 export async function uploadPostMedia(file: File) {
-  const form = new FormData();
-  form.append("file", file);
-  const response = await apiFetch("/api/market-square/media", { method: "POST", body: form }, { requireAuth: true });
-  return MediaUploadSchema.parse(await unwrap<unknown>(response, "Couldn't upload media."));
+  return uploadFile(file);
 }
 
 const MentionSearchSchema = z.object({ items: z.array(MentionSchema) });

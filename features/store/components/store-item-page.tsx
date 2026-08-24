@@ -26,15 +26,31 @@ function OrderCta({ item }: { item: StoreItem }) {
   // Owned state comes from /me/orders — items don't embed the viewer's order.
   const myOrder = useMyOrderFor(item.id);
 
+  // `actionUrl` schema-defaults to "" — a listing can be owned with nowhere to
+  // send the buyer yet. The button says so instead of swallowing the tap.
+  const openable = item.actionUrl.length > 0;
   const openAction = () => {
-    if (item.actionUrl) window.open(item.actionUrl, "_blank", "noopener");
+    if (openable) window.open(item.actionUrl, "_blank", "noopener");
   };
 
   if (myOrder) {
     return (
-      <Button size="lg" className="w-full sm:w-auto" onClick={openAction}>
-        Open
-      </Button>
+      <div className="space-y-2">
+        <Button
+          size="lg"
+          className="w-full sm:w-auto"
+          disabled={!openable}
+          title={openable ? undefined : "This listing has no link to open yet"}
+          onClick={openAction}
+        >
+          Open
+        </Button>
+        {!openable && (
+          <p className="text-[13px] text-meta">
+            You own this. The publisher hasn&apos;t added a link to open it yet.
+          </p>
+        )}
+      </div>
     );
   }
 

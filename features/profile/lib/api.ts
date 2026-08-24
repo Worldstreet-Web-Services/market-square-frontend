@@ -7,6 +7,7 @@ import {
   FollowResultSchema,
   MaybeCreatorApplicationSchema,
   MyVerificationSchema,
+  RenewVerificationSchema,
   ProfileActivitiesSchema,
   ProfilePostsSchema,
   ProfileStreamsSchema,
@@ -65,8 +66,13 @@ export async function fetchMyVerification() {
   return MyVerificationSchema.parse(await msApi.authedGet("/me/verification"));
 }
 
-export async function requestVerification() {
-  return msApi.post<{ id: string; status: string }>("/verification/requests", { type: "earned" });
+/**
+ * Extend the paid period. Early renewal stacks days rather than resetting the
+ * clock, so it is safe to offer at any point in the cycle — including while
+ * lapsed, which is how a paused badge comes back with no re-approval.
+ */
+export async function renewVerification() {
+  return RenewVerificationSchema.parse(await msApi.post("/me/verification/renew"));
 }
 
 // Backend supports window=weekly only; the param is fixed here so the UI can

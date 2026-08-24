@@ -23,8 +23,12 @@ import {
   storeItems,
   streams,
   tickets,
+  verificationBilling,
   verificationRequests,
   verificationRule,
+  VERIFICATION_PERIOD_DAYS,
+  VERIFICATION_PRICE_KASH,
+  VERIFICATION_TRIAL_DAYS,
   type FxActivity,
   type FxPost,
   type FxProfile,
@@ -94,6 +98,7 @@ function publicProfile(p: FxProfile, viewerId: string | null) {
     followerCount: p.followerCount,
     followingCount: p.followingCount,
     ...(viewerId ? { isFollowing: myFollows(viewerId).has(p.id), isBlocked: blocksFor(viewerId).has(p.id) } : {}),
+    ...(viewerId === p.id ? { isAdmin: adminUserIds.has(p.id) } : {}),
   };
 }
 
@@ -238,6 +243,49 @@ function messageDto(message: FxMessage) {
   };
 }
 
+// ---- verification billing ----
+// A toy KASH ledger so renewal can actually succeed and, after a few goes,
+// actually fail — PAYMENT_FAILED needs to be reachable in the demo. Whole
+// KASH only, so this stays integer arithmetic rather than float money.
+let kashBalance = 60;
+
+/**
+ * The owner's billing view. Dates and days are computed here and returned ONLY
+ * from `/me/verification` — `publicProfile` and `summary` never carry them, so
+ * one user can never see another's renewal state.
+ */
+function verificationDto(profile: FxProfile) {
+  const billing = verificationBilling.get(profile.id) ?? null;
+  const request = verificationRequests.find((r) => r.userId === profile.id) ?? null;
+  const expiry = billing?.paidThrough ?? billing?.trialEndsAt ?? null;
+  const daysRemaining = expiry
+    ? Math.max(0, Math.ceil((Date.parse(expiry) - Date.now()) / 86_400_000))
+    : null;
+  return {
+    status: profile.verification,
+    verifiedSince: billing?.verifiedSince ?? null,
+    paidThrough: billing?.paidThrough ?? null,
+    daysRemaining,
+    priceKash: VERIFICATION_PRICE_KASH,
+    periodDays: VERIFICATION_PERIOD_DAYS,
+    trialDays: VERIFICATION_TRIAL_DAYS,
+    // Renewal is offered to granted accounts only — never to `none`/`pending`.
+    canRenew: profile.verification === "verified" || profile.verification === "lapsed",
+    economics: verificationRule.economics,
+    latestRequest: request
+      ? {
+          id: request.id,
+          userId: request.userId,
+          type: request.type,
+          status: request.status,
+          note: null,
+          createdAt: request.createdAt,
+          resolvedAt: null,
+        }
+      : null,
+  };
+}
+
 // Backend Post — likedByMe reflects the authed viewer on every read; a quoted
 // post is hydrated inline so the timeline can render it without a second call.
 function postDto(post: FxPost, viewerId: string | null = null) {
@@ -267,12 +315,28 @@ function postDto(post: FxPost, viewerId: string | null = null) {
     commentCount: post.commentCount,
     repostCount: post.repostedBy?.size ?? 0,
     repostedByMe: viewerId ? Boolean(post.repostedBy?.has(viewerId)) : false,
-    quotedPost: quoted ? {
-      id: quoted.id,
-      text: quoted.text,
-      mediaUrl: quoted.mediaUrl,
-      author: quotedAuthor ? summary(quotedAuthor) : null,
-    } : null,
+    // One level of nesting: the quoted card carries no quotedPost of its own.
+    // A quote whose original has gone keeps its slot and is flagged, so the
+    // reader sees "unavailable" rather than commentary with no referent.
+    quotedPost: post.quotedPostId
+      ? quoted
+        ? {
+            id: quoted.id,
+            text: quoted.text,
+            mediaUrl: quoted.mediaUrl,
+            createdAt: quoted.createdAt,
+            unavailable: false,
+            author: quotedAuthor ? summary(quotedAuthor) : null,
+          }
+        : {
+            id: post.quotedPostId,
+            text: "",
+            mediaUrl: null,
+            createdAt: "",
+            unavailable: true,
+            author: null,
+          }
+      : null,
     mentions: post.mentions ?? [],
     status: "active",
     createdAt: post.createdAt,
@@ -528,8 +592,53 @@ interface FxCreatorApplication {
   createdAt: string;
 }
 
+// ---- operator console ----
+// The demo user is an admin so the console is reachable offline. On the real
+// service this comes from profiles.is_admin and is enforced per request.
+const adminUserIds = new Set<string>([ME_ID]);
+
+interface FxReport {
+  id: string;
+  reporterId: string;
+  targetType: string;
+  targetId: string;
+  reason: string;
+  note: string | null;
+  status: "open" | "actioned" | "dismissed";
+  createdAt: string;
+}
+
+const reports: FxReport[] = [
+  {
+    id: "rp_seed_1",
+    reporterId: "u_nina",
+    targetType: "post",
+    targetId: posts[0]?.id ?? "",
+    reason: "spam",
+    note: "Posting the same link on every thread.",
+    status: "open",
+    createdAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+  },
+  {
+    id: "rp_seed_2",
+    reporterId: "u_leo",
+    targetType: "post",
+    targetId: "p_already_gone",
+    reason: "abuse",
+    note: null,
+    status: "open",
+    createdAt: new Date(Date.now() - 5 * 60 * 60_000).toISOString(),
+  },
+];
+
+// Seeded so the applications queue — the console's headline — has work in it.
+const seededApplications: Array<[string, FxCreatorApplication]> = [
+  ["u_nina", { id: "ra_seed_1", requestedRole: "creator", status: "pending", note: "I host a weekly markets show and want to stream it here.", createdAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString() }],
+  ["u_leo", { id: "ra_seed_2", requestedRole: "creator", status: "pending", note: null, createdAt: new Date(Date.now() - 26 * 60 * 60_000).toISOString() }],
+];
+
 // Creator-role applications, keyed by user id.
-const creatorApplications = new Map<string, FxCreatorApplication>();
+const creatorApplications = new Map<string, FxCreatorApplication>(seededApplications);
 
 // Moderation state: banned users and removed chat messages per stream.
 const chatBans = new Map<string, Set<string>>();
@@ -605,84 +714,86 @@ export function handleFixture(
   const p = path;
 
   // ---- unified discovery ----
+  // Mixed-kind results, each carrying its own entity payload. A blank query
+  // returns nothing — the service does not list everything for an empty q.
   if (p[0] === "search" && method === "GET") {
     const query = (search.get("q") ?? "").trim().toLowerCase();
     const type = search.get("type") ?? "all";
-    const matches = (...values: Array<string | null | undefined>) =>
-      !query || values.some((value) => value?.toLowerCase().includes(query));
+    if (!query) return ok({ items: [], nextCursor: null });
 
-    const results = [
-      ...profiles
-        .filter((profile) => (type === "all" || type === "profile") && matches(profile.displayName, profile.username, profile.bio, profile.role))
-        .map((profile) => ({
-          id: profile.id,
-          type: "profile",
-          title: profile.displayName,
-          subtitle: `@${profile.username} · ${profile.bio}`,
-          status: profile.verification === "none" ? null : "verified",
-          category: profile.role,
-          thumbnailUrl: null,
-          href: `/u/${profile.username}`,
-          actionLabel: "View profile",
-        })),
-      ...streams
-        .filter((stream) => (type === "all" || type === "stream") && matches(stream.title, stream.description, stream.category, stream.status))
-        .map((stream) => ({
-          id: stream.id,
-          type: "stream",
-          title: stream.title,
-          subtitle: stream.description,
-          status: stream.status,
-          category: stream.category,
-          thumbnailUrl: null,
-          href: `/live/${stream.id}`,
-          actionLabel: stream.status === "live" ? "Watch now" : stream.status === "scheduled" ? "View schedule" : "Watch replay",
-          deepLink: { kind: "stream", ref: stream.id },
-        })),
-      ...activities
-        .filter((activity) => (type === "all" || type === "activity") && matches(activity.title, activity.type, activity.status))
-        .map((activity) => ({
-          id: activity.id,
-          type: "activity",
-          title: activity.title,
-          subtitle: `${activity.type} · ${activity.startsAt}`,
-          status: activity.status,
-          category: activity.type,
-          thumbnailUrl: null,
-          href: activity.deepLink?.kind === "stream" ? `/live/${activity.deepLink.ref}` : "/schedule",
-          actionLabel: "View activity",
-          deepLink: activity.deepLink,
-        })),
-      ...storeItems
-        .filter((item) => (type === "all" || type === "product") && matches(item.name, item.tagline, item.description, item.category))
-        .map((item) => ({
-          id: item.id,
-          type: "product",
-          title: item.name,
-          subtitle: item.tagline,
-          status: item.pricing === "free" ? "free" : "KASH",
-          category: item.category,
-          thumbnailUrl: null,
-          href: `/store/${item.slug}`,
-          actionLabel: item.actionKind === "download" ? "Download" : item.actionKind === "purchase" ? "Buy" : "Open",
-          deepLink: { kind: "store_item", ref: item.slug },
-        })),
-      ...posts
-        .filter((post) => (type === "all" || type === "content") && matches(post.text, profileById(post.authorId)?.displayName))
-        .map((post) => ({
-          id: post.id,
-          type: "content",
-          title: profileById(post.authorId)?.displayName ?? "Market update",
-          subtitle: post.text,
-          status: post.kind,
-          category: "update",
-          thumbnailUrl: post.mediaUrl,
-          href: post.deepLink?.kind === "stream" ? `/live/${post.deepLink.ref}` : "/",
-          actionLabel: post.deepLink ? "Open update" : "View feed",
-          deepLink: post.deepLink,
-        })),
+    const hit = (...values: Array<string | null | undefined>) =>
+      values.some((value) => value?.toLowerCase().includes(query));
+
+    const wants = (kind: string) => type === "all" || type === kind;
+
+    const results: Array<Record<string, unknown>> = [
+      ...(wants("people")
+        ? profiles
+            .filter((x) => hit(x.displayName, x.username, x.bio, x.role))
+            .map((x) => ({ kind: "profile", id: x.id, profile: summary(x) }))
+        : []),
+      ...(wants("posts")
+        ? posts
+            .filter((x) => x.kind === "update" && hit(x.text, profileById(x.authorId)?.displayName))
+            .map((x) => {
+              const author = profileById(x.authorId);
+              return {
+                kind: "post",
+                id: x.id,
+                post: {
+                  id: x.id,
+                  text: x.text,
+                  mediaUrl: x.mediaUrl,
+                  createdAt: x.createdAt,
+                  author: author ? summary(author) : null,
+                },
+              };
+            })
+        : []),
+      ...(wants("streams")
+        ? streams
+            .filter((x) => hit(x.title, x.description, x.category, x.status))
+            .map((x) => {
+              const owner = profileById(x.ownerId);
+              return {
+                kind: "stream",
+                id: x.id,
+                stream: {
+                  id: x.id,
+                  title: x.title,
+                  status: x.status,
+                  category: x.category,
+                  thumbnailUrl: x.thumbnailUrl ?? null,
+                  owner: owner ? summary(owner) : null,
+                },
+              };
+            })
+        : []),
+      ...(wants("products")
+        ? storeItems
+            .filter((x) => hit(x.name, x.tagline, x.description, x.category))
+            .map((x) => ({
+              kind: "product",
+              id: x.id,
+              product: {
+                id: x.id,
+                slug: x.slug,
+                name: x.name,
+                tagline: x.tagline,
+                category: x.category,
+                pricing: x.pricing,
+                thumbnailUrl: null,
+              },
+            }))
+        : []),
     ];
-    return ok({ items: results.slice(0, 40), query });
+
+    const { page, nextCursor } = paginate(
+      results,
+      search.get("cursor"),
+      Math.min(Number(search.get("limit")) || 30, 30)
+    );
+    return ok({ items: page, nextCursor });
   }
 
   // ---- versioned product analytics ----
@@ -978,23 +1089,38 @@ export function handleFixture(
       }
     }
 
-    // GET /me/verification → { current, latestRequest }.
-    if (p[1] === "verification" && method === "GET") {
-      const request = verificationRequests.find((r) => r.userId === userId) ?? null;
-      return ok({
-        current: me.verification,
-        latestRequest: request
-          ? {
-              id: request.id,
-              userId: request.userId,
-              type: request.type,
-              status: request.status,
-              note: null,
-              createdAt: request.createdAt,
-              resolvedAt: null,
-            }
-          : null,
+    // GET /me/verification → the owner's billing view. Dates live ONLY here,
+    // never on a public profile.
+    if (p[1] === "verification" && p.length === 2 && method === "GET") {
+      return ok(verificationDto(me));
+    }
+
+    // POST /me/verification/renew → debit KASH, extend the period, and flip a
+    // lapsed badge back to verified with no re-approval.
+    if (p[1] === "verification" && p[2] === "renew" && method === "POST") {
+      if (me.verification !== "verified" && me.verification !== "lapsed") {
+        return fail(409, "CONFLICT", "Verification hasn't been granted on this account.");
+      }
+      // The demo wallet is thin on purpose so PAYMENT_FAILED is reachable.
+      if (kashBalance < Number(VERIFICATION_PRICE_KASH)) {
+        return fail(402, "PAYMENT_FAILED", "Not enough KASH to renew.");
+      }
+      kashBalance -= Number(VERIFICATION_PRICE_KASH);
+      const billing = verificationBilling.get(me.id);
+      // Early renewal STACKS: extend from whichever is later, now or the
+      // existing expiry — renewing early must never cost the reader days.
+      const base = Math.max(
+        Date.now(),
+        Date.parse(billing?.paidThrough ?? billing?.trialEndsAt ?? "") || Date.now()
+      );
+      const paidThrough = new Date(base + VERIFICATION_PERIOD_DAYS * 86_400_000).toISOString();
+      verificationBilling.set(me.id, {
+        verifiedSince: billing?.verifiedSince ?? new Date().toISOString(),
+        paidThrough,
+        trialEndsAt: null,
       });
+      me.verification = "verified";
+      return ok(verificationDto(me));
     }
   }
 
@@ -1035,18 +1161,7 @@ export function handleFixture(
 
   // Device media upload. Fixture mode returns an in-memory data URL; the
   // production service replaces this with durable object storage.
-  if (p[0] === "media" && method === "POST") {
-    const denied = requireAuth(userId);
-    if (denied) return denied;
-    const mediaType = typeof body.mediaType === "string" ? body.mediaType : "";
-    const size = typeof body.size === "number" ? body.size : 0;
-    const dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
-    if (!mediaType.startsWith("image/") && !mediaType.startsWith("video/"))
-      return fail(422, "VALIDATION", "Only images and videos can be uploaded.");
-    if (!dataUrl || size <= 0 || size > 50 * 1024 * 1024)
-      return fail(422, "VALIDATION", "The media file is invalid or too large.");
-    return ok({ url: dataUrl, mediaType, size });
-  }
+
 
   // ---- posts ----
   if (p[0] === "posts") {
@@ -1172,6 +1287,210 @@ export function handleFixture(
         return ok(commentDto(comment));
       }
     }
+  }
+
+  // ---- admin console ----
+  // Authenticated as an admin USER, exactly like the real service: no internal
+  // key is involved, and the gateway would strip one anyway.
+  if (p[0] === "admin") {
+    const denied = requireAuth(userId);
+    if (denied) return denied;
+    if (!adminUserIds.has(userId!)) return fail(403, "FORBIDDEN", "Admin access required.");
+
+    if (p[1] === "stats" && method === "GET") {
+      return ok({
+        profiles: profiles.length,
+        posts: posts.filter((x) => x.kind === "update").length,
+        streams: streams.length,
+        liveStreams: streams.filter((x) => x.status === "live").length,
+        storeItems: storeItems.length,
+        verifiedProfiles: profiles.filter((x) => x.verification === "verified").length,
+        openReports: reports.filter((x) => x.status === "open").length,
+        pendingVerification: verificationRequests.filter((x) => x.status === "pending").length,
+        pendingRoleApplications: [...creatorApplications.values()].filter(
+          (x) => x.status === "pending"
+        ).length,
+      });
+    }
+
+    if (p[1] === "role-applications" && p.length === 2 && method === "GET") {
+      const wanted = search.get("status") ?? "pending";
+      const rows = [...creatorApplications.entries()]
+        .filter(([, application]) => application.status === wanted)
+        .map(([applicantId, application]) => {
+          const applicant = profileById(applicantId);
+          return {
+            id: application.id,
+            userId: applicantId,
+            requestedRole: application.requestedRole,
+            note: application.note,
+            status: application.status,
+            createdAt: application.createdAt,
+            resolvedAt: null,
+            applicant: applicant ? summary(applicant) : null,
+          };
+        })
+        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+      const { page, nextCursor } = paginate(rows, search.get("cursor"), 30);
+      return ok({ items: page, nextCursor });
+    }
+
+    if (p[1] === "role-applications" && p[3] === "resolve" && method === "POST") {
+      const entry = [...creatorApplications.entries()].find(([, a]) => a.id === p[2]);
+      if (!entry) return fail(404, "NOT_FOUND", "Application not found.");
+      const [applicantId, application] = entry;
+      const approve = body.approve === true;
+      application.status = approve ? "approved" : "rejected";
+      // Approving grants the role, which is the whole point of the queue.
+      const applicant = profileById(applicantId);
+      if (approve && applicant) applicant.role = "creator";
+      return ok({
+        id: application.id,
+        userId: applicantId,
+        requestedRole: application.requestedRole,
+        note: application.note,
+        status: application.status,
+        createdAt: application.createdAt,
+        resolvedAt: new Date().toISOString(),
+      });
+    }
+
+    if (p[1] === "verification-requests" && method === "GET") {
+      const wanted = search.get("status") ?? "pending";
+      const rows = verificationRequests
+        .filter((request) => request.status === wanted)
+        .map((request) => {
+          const applicant = profileById(request.userId);
+          return {
+            id: request.id,
+            userId: request.userId,
+            type: request.type,
+            status: request.status,
+            note: null,
+            createdAt: request.createdAt,
+            resolvedAt: null,
+            applicant: applicant ? summary(applicant) : null,
+          };
+        });
+      const { page, nextCursor } = paginate(rows, search.get("cursor"), 30);
+      return ok({ items: page, nextCursor });
+    }
+
+    if (p[1] === "verification" && p[3] === "resolve" && method === "POST") {
+      const request = verificationRequests.find((x) => x.id === p[2]);
+      if (!request) return fail(404, "NOT_FOUND", "Request not found.");
+      const approve = body.approve === true;
+      request.status = approve ? "approved" : "rejected";
+      const subject = profileById(request.userId);
+      if (subject) {
+        subject.verification = approve ? "verified" : "none";
+        if (approve && !verificationBilling.has(subject.id)) {
+          verificationBilling.set(subject.id, {
+            verifiedSince: new Date().toISOString(),
+            paidThrough: null,
+            trialEndsAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+          });
+        }
+      }
+      return ok({
+        id: request.id,
+        userId: request.userId,
+        type: request.type,
+        status: request.status,
+        note: null,
+        createdAt: request.createdAt,
+        resolvedAt: new Date().toISOString(),
+      });
+    }
+
+    if (p[1] === "profiles" && p.length === 2 && method === "GET") {
+      const query = (search.get("q") ?? "").trim().toLowerCase();
+      const rows = profiles
+        .filter(
+          (profile) =>
+            !query ||
+            profile.displayName.toLowerCase().includes(query) ||
+            profile.username.toLowerCase().includes(query)
+        )
+        .map((profile) => ({
+          ...publicProfile(profile, userId),
+          // The people table is operator-only, so the admin flag rides along
+          // for every row here — unlike a public profile read.
+          isAdmin: adminUserIds.has(profile.id),
+        }));
+      const { page, nextCursor } = paginate(rows, search.get("cursor"), 30);
+      return ok({ items: page, nextCursor });
+    }
+
+    // Direct grant / revoke — no request needed, the platform decides.
+    if (p[1] === "profiles" && p[3] === "verification" && method === "POST") {
+      const subject = profileById(p[2]);
+      if (!subject) return fail(404, "NOT_FOUND", "Profile not found.");
+      const verified = body.verified === true;
+      subject.verification = verified ? "verified" : "none";
+      if (verified && !verificationBilling.has(subject.id)) {
+        verificationBilling.set(subject.id, {
+          verifiedSince: new Date().toISOString(),
+          paidThrough: null,
+          trialEndsAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+        });
+      }
+      return ok(publicProfile(subject, userId));
+    }
+
+    if (p[1] === "profiles" && p[3] === "org-badge" && method === "POST") {
+      const subject = profileById(p[2]);
+      if (!subject) return fail(404, "NOT_FOUND", "Profile not found.");
+      const badge = body.badge;
+      if (badge !== null && badge !== "market" && badge !== "ark")
+        return fail(422, "VALIDATION", "badge must be market, ark or null.");
+      subject.orgBadge = badge;
+      return ok(publicProfile(subject, userId));
+    }
+
+    if (p[1] === "reports" && p.length === 2 && method === "GET") {
+      const wanted = search.get("status") ?? "open";
+      const rows = reports
+        .filter((report) => report.status === wanted)
+        .map((report) => {
+          const reporter = profileById(report.reporterId);
+          const post = posts.find((x) => x.id === report.targetId);
+          const author = post ? profileById(post.authorId) : null;
+          return {
+            ...report,
+            reporter: reporter ? summary(reporter) : null,
+            // Null once the content is gone — the queue says so rather than
+            // pretending it still exists.
+            target: post
+              ? {
+                  text: post.text,
+                  mediaUrl: post.mediaUrl,
+                  author: author ? summary(author) : null,
+                  createdAt: post.createdAt,
+                }
+              : null,
+          };
+        })
+        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+      const { page, nextCursor } = paginate(rows, search.get("cursor"), 30);
+      return ok({ items: page, nextCursor });
+    }
+
+    if (p[1] === "reports" && p[3] === "resolve" && method === "POST") {
+      const report = reports.find((x) => x.id === p[2]);
+      if (!report) return fail(404, "NOT_FOUND", "Report not found.");
+      const action = body.action;
+      if (action !== "remove" && action !== "dismiss")
+        return fail(422, "VALIDATION", "action must be remove or dismiss.");
+      report.status = action === "remove" ? "actioned" : "dismissed";
+      if (action === "remove") {
+        const index = posts.findIndex((x) => x.id === report.targetId);
+        if (index >= 0) posts.splice(index, 1);
+      }
+      return ok({ ...report });
+    }
+
+    return fail(404, "NOT_FOUND", "Route not found");
   }
 
   // ---- reports ----

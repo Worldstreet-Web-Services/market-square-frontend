@@ -1,10 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { mkdir, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 import { verifyRequest } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
-import { isPublicGet } from "@/lib/api/public-routes";
+import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
 
 // BFF proxy for Market Square. Verifies the Privy session server-side and
 // forwards the caller's Authorization to `${WSAPI_BASE_URL}/v1/market-square/*`.
@@ -33,23 +30,6 @@ async function callerUserId(req: NextRequest): Promise<string | null> {
   return claims?.userId ?? null;
 }
 
-async function storeMedia(req: NextRequest) {
-  if (!(await callerUserId(req))) return unauthorized();
-  const form = await req.formData().catch(() => null);
-  const file = form?.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ success: false, error: { code: "VALIDATION", message: "Choose a file to upload." } }, { status: 422 });
-  }
-  if ((!file.type.startsWith("image/") && !file.type.startsWith("video/")) || file.size > 50 * 1024 * 1024) {
-    return NextResponse.json({ success: false, error: { code: "VALIDATION", message: "Upload an image or video up to 50 MB." } }, { status: 422 });
-  }
-  const extension = file.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "").toLowerCase() || (file.type.startsWith("video/") ? "mp4" : "jpg");
-  const fileName = `${randomUUID()}.${extension}`;
-  const uploadDirectory = join(process.cwd(), "public", "uploads");
-  await mkdir(uploadDirectory, { recursive: true });
-  await writeFile(join(uploadDirectory, fileName), Buffer.from(await file.arrayBuffer()));
-  return NextResponse.json({ success: true, data: { url: `${req.nextUrl.origin}/uploads/${fileName}`, mediaType: file.type, size: file.size } });
-}
 
 async function searchMentionTargets(req: NextRequest) {
   const query = req.nextUrl.searchParams.get("q")?.trim() ?? "";
@@ -57,16 +37,39 @@ async function searchMentionTargets(req: NextRequest) {
     const result = handleFixture("GET", ["mentions", "search"], req.nextUrl.searchParams, undefined, await callerUserId(req));
     return NextResponse.json(result.body, { status: result.status });
   }
-  const upstream = await fetch(`${BASE}/search?q=${encodeURIComponent(query)}&type=all`, {
-    headers: { accept: "application/json", ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}) },
-    cache: "no-store",
-  });
+  // There is no mentions endpoint: this rewrites onto /search and keeps the
+  // people. Results are discriminated by `kind` and carry the profile payload,
+  // so the handle comes off `profile.username` — never parsed out of a href.
+  const upstream = await fetch(
+    `${BASE}/search?q=${encodeURIComponent(query)}&type=people&limit=8`,
+    {
+      headers: {
+        accept: "application/json",
+        ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}),
+      },
+      cache: "no-store",
+    }
+  );
   if (!upstream.ok) return new NextResponse(await upstream.text(), { status: upstream.status, headers: { "content-type": "application/json" } });
-  const envelope = await upstream.json() as { data?: { items?: Array<{ id: string; type: string; title: string; href?: string }> } };
+  const envelope = (await upstream.json()) as {
+    data?: {
+      items?: Array<{
+        kind?: string;
+        id?: string;
+        profile?: { id?: string; username?: string | null; displayName?: string | null };
+      }>;
+    };
+  };
   const people = (envelope.data?.items ?? [])
-    .filter((item) => item.type === "profile" || item.type === "group")
+    .filter((item) => item.kind === "profile" && item.profile?.username)
     .slice(0, 8)
-    .map((item) => ({ type: item.type, id: item.id, label: item.title, handle: item.href?.split("/").pop() ?? item.id }));
+    .map((item) => ({
+      type: "profile" as const,
+      id: item.profile?.id ?? item.id ?? "",
+      // A profile with no chosen display name still needs a label to pick.
+      label: item.profile?.displayName ?? item.profile?.username ?? "",
+      handle: item.profile?.username ?? "",
+    }));
   return NextResponse.json({ success: true, data: { items: people } });
 }
 
@@ -204,7 +207,17 @@ async function forward(req: NextRequest, path: string[], method: string) {
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
   const method = req.method;
-  if (path.length === 1 && path[0] === "media" && method === "POST") return storeMedia(req);
+
+  // Reject traversal BEFORE anything looks at the head, dispatches on it, or
+  // joins it into an upstream URL. Next decodes segments for us, so `%2e%2e`
+  // arrives here as `..` and is caught the same way.
+  if (!isSafePath(path)) {
+    return NextResponse.json(
+      { success: false, error: { code: "NOT_FOUND", message: "That wasn't found." } },
+      { status: 404 }
+    );
+  }
+
   if (path[0] === "mentions" && path[1] === "search" && method === "GET") return searchMentionTargets(req);
   if (!BASE) return serveFixture(req, path, method);
   return forward(req, path, method);

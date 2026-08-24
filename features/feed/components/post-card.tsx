@@ -6,14 +6,14 @@ import { toast } from "sonner";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
-import { IconFlag, IconSend } from "@/components/ui/icons";
+import { IconFlag, IconQuote, IconSend } from "@/components/ui/icons";
 import {
   IconMsBookmark,
   IconMsComment,
@@ -126,6 +126,58 @@ function CountAction({
   );
 }
 
+/**
+ * The quoted original, inset inside the quoting post.
+ *
+ * One level only: this card never renders its own quotedPost, so a quote of a
+ * quote stops here rather than nesting frames forever. A removed or expired
+ * original keeps its slot and says so — dropping it silently would leave the
+ * commentary above it dangling with no referent.
+ */
+function QuotedPost({ quoted }: { quoted: NonNullable<Post["quotedPost"]> }) {
+  if (quoted.unavailable) {
+    return (
+      <div className="ws-inset mt-3 px-4 py-3">
+        <p className="text-[13px] text-meta">This post is unavailable.</p>
+      </div>
+    );
+  }
+
+  const author = quoted.author;
+  return (
+    <Link
+      href={`/p/${quoted.id}`}
+      className="ws-inset mt-3 block px-3 py-2.5 transition-colors hover:bg-white/[0.04]"
+    >
+      <span className="flex items-center gap-2">
+        <Avatar name={author?.displayName ?? "?"} src={author?.avatarUrl} size={20} />
+        <span className="truncate text-[13px] font-bold text-heading">
+          {author?.displayName ?? "Unknown"}
+        </span>
+        {author && (
+          <>
+            <VerifiedBadge verification={author.verification} className="h-3 w-3" />
+            <span className="truncate text-[12px] text-meta">@{author.username}</span>
+          </>
+        )}
+      </span>
+      {quoted.text && (
+        <span className="mt-1.5 line-clamp-3 block text-[13px] leading-normal text-body">
+          {quoted.text}
+        </span>
+      )}
+      {quoted.mediaUrl && !isVideoPost(quoted) && (
+        // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+        <img
+          src={quoted.mediaUrl}
+          alt=""
+          className="mt-2 max-h-40 w-full rounded-lg object-cover"
+        />
+      )}
+    </Link>
+  );
+}
+
 /** A bare 24px glyph action — share, Arkmark, more. */
 function GlyphAction({
   label,
@@ -153,6 +205,77 @@ function GlyphAction({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Repost, or quote it with your own commentary.
+ *
+ * The tally stays on the trigger so the row reads the same as the other two
+ * actions; the choice opens underneath. Undoing a repost is a direct toggle —
+ * only the "add" direction needs the menu.
+ */
+function RepostMenu({
+  post,
+  onRepost,
+  onQuote,
+}: {
+  post: Post;
+  onRepost: () => void;
+  onQuote: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  // Already reposted: the only sensible action is to undo it.
+  if (post.repostedByMe) {
+    return (
+      <CountAction
+        label="Undo repost"
+        count={post.repostCount}
+        active
+        activeClass="text-up"
+        onClick={onRepost}
+      >
+        <IconMsRepost className="h-[18px] w-[18px]" />
+      </CountAction>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <CountAction
+        label="Repost or quote"
+        count={post.repostCount}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <IconMsRepost className="h-[18px] w-[18px]" />
+      </CountAction>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="ws-glass absolute bottom-full left-0 z-20 mb-2 w-44 rounded-2xl p-1.5">
+            <button
+              onClick={() => {
+                setOpen(false);
+                onRepost();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
+            >
+              <IconMsRepost className="h-4 w-4" /> Repost
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                onQuote();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
+            >
+              <IconQuote className="h-4 w-4" /> Quote
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -198,8 +321,11 @@ export function PostCard({
   post,
   repostedBy,
   followSlot,
+  onQuote,
 }: {
   post: Post;
+  /** Opens the composer with this post quoted. Omitted where there is no composer. */
+  onQuote?: (post: Post) => void;
   /** Set when this post reached the timeline through someone's repost. */
   repostedBy?: Profile | null;
   /** Composed from outside the slice — feed never imports profile. */
@@ -211,10 +337,12 @@ export function PostCard({
   const gate = useGate();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const author = post.author;
-  const cta = post.deepLink ? resolveDeepLink(post.deepLink, `feed:post:${post.id}`) : null;
+  const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
+  // Share the POST, not its author's profile — a reader following the link
+  // has to land on the thing they were shown.
   const share = async () => {
-    const url = `${window.location.origin}/u/${author?.username ?? ""}`;
+    const url = `${window.location.origin}/p/${post.id}`;
     try {
       if (navigator.share) await navigator.share({ text: post.text, url });
       else {
@@ -298,6 +426,8 @@ export function PostCard({
         {post.text}
       </p>
 
+      {post.quotedPost && <QuotedPost quoted={post.quotedPost} />}
+
       {cta && (
         <Link
           href={cta.href}
@@ -321,17 +451,13 @@ export function PostCard({
           >
             <IconMsComment className="h-[18px] w-[18px]" />
           </CountAction>
-          <CountAction
-            label={post.repostedByMe ? "Undo repost" : "Repost"}
-            count={post.repostCount}
-            active={post.repostedByMe}
-            activeClass="text-up"
-            onClick={() =>
+          <RepostMenu
+            post={post}
+            onRepost={() =>
               gate(() => repost.mutate({ postId: post.id, repost: !post.repostedByMe }))
             }
-          >
-            <IconMsRepost className="h-[18px] w-[18px]" />
-          </CountAction>
+            onQuote={() => gate(() => onQuote?.(post))}
+          />
           {/* Liked is amber in the design, not red — the same semantic amber
               that marks featured and premium elsewhere. */}
           <CountAction
@@ -341,7 +467,7 @@ export function PostCard({
             activeClass="text-featured"
             onClick={() => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }))}
           >
-            <IconMsLike className="h-[18px] w-[18px]" />
+            <IconMsLike className="h-[18px] w-[18px]" filled={post.likedByMe} />
           </CountAction>
         </div>
 
@@ -370,7 +496,7 @@ export function PostCard({
                 )
               }
             >
-              <IconMsBookmark className="h-5 w-5" />
+              <IconMsBookmark className="h-5 w-5" filled={post.bookmarkedByMe} />
             </GlyphAction>
           </div>
           <ReportMenu targetId={post.id} />

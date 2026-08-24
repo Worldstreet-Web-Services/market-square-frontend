@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -151,9 +151,18 @@ function StoryViewer({
   const [groupIndex, setGroupIndex] = useState(startGroup);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Progress is driven from the SAME clock that advances the story, so a hold
+  // freezes the bar with the story instead of racing on to 100% underneath a
+  // paused card.
+  const [progress, setProgress] = useState(0);
 
   const group = groups[groupIndex];
   const story = group?.stories[index];
+  const storyKey = `${groupIndex}:${index}`;
+  // The authoritative elapsed fraction, so a pause/resume cycle can pick up
+  // where it stopped without re-arming the frame loop on every tick.
+  const progressRef = useRef(0);
+  const storyKeyRef = useRef(storyKey);
 
   // Advance within the author, then to the next author, then close — the
   // Instagram traversal.
@@ -183,9 +192,28 @@ function StoryViewer({
 
   useEffect(() => {
     if (paused) return;
-    const timer = setTimeout(next, STORY_MS);
-    return () => clearTimeout(timer);
-  }, [next, paused, index, groupIndex]);
+    // A new story starts from zero; a resumed one continues from the hold.
+    if (storyKeyRef.current !== storyKey) {
+      storyKeyRef.current = storyKey;
+      progressRef.current = 0;
+    }
+    const elapsed = progressRef.current * STORY_MS;
+    let frame = 0;
+    let start: number | null = null;
+    const tick = (now: number) => {
+      if (start === null) start = now;
+      const ratio = Math.min(1, (elapsed + (now - start)) / STORY_MS);
+      progressRef.current = ratio;
+      setProgress(ratio);
+      if (ratio >= 1) {
+        next();
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [next, paused, storyKey]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -198,7 +226,7 @@ function StoryViewer({
   }, [next, previous, onClose]);
 
   if (!group || !story) return null;
-  const cta = story.deepLink ? resolveDeepLink(story.deepLink) : null;
+  const cta = resolveCta(story.deepLink);
 
   return (
     <motion.div
@@ -222,13 +250,11 @@ function StoryViewer({
         <div className="relative z-20 flex gap-1 px-3 pt-3">
           {group.stories.map((s, i) => (
             <div key={s.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/25">
-              <motion.div
+              <div
                 className="h-full bg-white"
-                initial={{ width: i < index ? "100%" : "0%" }}
-                animate={{ width: i < index ? "100%" : i === index ? "100%" : "0%" }}
-                transition={
-                  i === index ? { duration: STORY_MS / 1000, ease: "linear" } : { duration: 0 }
-                }
+                style={{
+                  width: i < index ? "100%" : i === index ? `${progress * 100}%` : "0%",
+                }}
               />
             </div>
           ))}

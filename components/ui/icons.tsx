@@ -456,3 +456,25 @@ export function IconCollapseRight({ className }: IconProps) {
     </svg>
   );
 }
+
+// Leaving Market Square: box with an arrow escaping it. Marks a link that
+// hands the reader to another Ark product.
+export function IconExternal({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
+      <path d="M14 4h6v6" />
+      <path d="M20 4l-8 8" />
+      <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+    </svg>
+  );
+}
+
+// Quote: speech marks. Distinguishes "quote with comment" from a plain repost.
+export function IconQuote({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+      <path d="M9.5 5.5A5.5 5.5 0 0 0 4 11v6.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1H6.2A3.5 3.5 0 0 1 9.5 7.5a1 1 0 0 0 0-2Z" />
+      <path d="M18.5 5.5A5.5 5.5 0 0 0 13 11v6.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1h-3.8a3.5 3.5 0 0 1 3.3-3.5a1 1 0 0 0 0-2Z" />
+    </svg>
+  );
+}

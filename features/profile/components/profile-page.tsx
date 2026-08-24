@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, formatKash, relativeTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
@@ -51,14 +51,34 @@ function SafetyActions({ profile }: { profile: Profile }) {
   return (
     <div className="flex gap-2">
       <Button variant="ghost" size="sm" onClick={() => gate(() => safety.report.mutate())}>Report</Button>
-      <Button variant={profile.isBlocked ? "secondary" : "danger"} size="sm" onClick={() => gate(() => safety.block.mutate(!profile.isBlocked))}>
+      {/* Once the service has answered "no such route", the danger-styled
+          button stops offering an action it cannot perform. */}
+      <Button
+        variant={profile.isBlocked ? "secondary" : "danger"}
+        size="sm"
+        disabled={safety.blockUnavailable || safety.block.isPending}
+        title={safety.blockUnavailable ? "Blocking isn't available yet" : undefined}
+        onClick={() => gate(() => safety.block.mutate(!profile.isBlocked))}
+      >
         {profile.isBlocked ? "Unblock" : "Block"}
       </Button>
     </div>
   );
 }
 
-function PostsTab({ username }: { username: string }) {
+/** The action under an empty profile tab — own profile only. */
+function TabCta({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="ws-press inline-flex rounded-full border border-white/20 px-4 py-1.5 text-[13px] font-bold text-body transition-colors hover:bg-white/10"
+    >
+      {label}
+    </Link>
+  );
+}
+
+function PostsTab({ username, isMe }: { username: string; isMe: boolean }) {
   const posts = useProfilePosts(username);
   if (posts.isPending) return <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>;
   if (posts.isError)
@@ -70,13 +90,22 @@ function PostsTab({ username }: { username: string }) {
   if (posts.data.items.length === 0)
     return (
       <div className="p-4">
-        <EmptyState glyph="◌" title="No posts yet" body="Updates land here when they post." />
+        <EmptyState
+          glyph="◌"
+          title={isMe ? "You haven't posted yet" : "No posts yet"}
+          body={
+            isMe
+              ? "Your updates show up here and in your followers' feeds."
+              : "When they post, it shows up here."
+          }
+          action={isMe ? <TabCta href="/?compose=1" label="Create a post" /> : undefined}
+        />
       </div>
     );
   return (
     <ul>
       {posts.data.items.map((post) => {
-        const cta = post.deepLink ? resolveDeepLink(post.deepLink) : null;
+        const cta = resolveCta(post.deepLink);
         return (
           <li key={post.id} className="ws-row px-4 py-3">
             <p className="whitespace-pre-wrap break-words text-[15px] leading-normal text-body">{post.text}</p>
@@ -101,7 +130,7 @@ function PostsTab({ username }: { username: string }) {
   );
 }
 
-function StreamsTab({ username }: { username: string }) {
+function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
   const streams = useProfileStreams(username);
   if (streams.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
   if (streams.isError)
@@ -113,7 +142,16 @@ function StreamsTab({ username }: { username: string }) {
   if (streams.data.items.length === 0)
     return (
       <div className="p-4">
-        <EmptyState glyph="◉" title="No streams" body="Hosted sessions show up here." />
+        <EmptyState
+          glyph="◉"
+          title={isMe ? "You haven't streamed yet" : "No streams yet"}
+          body={
+            isMe
+              ? "Sessions you host show up here once you've gone live."
+              : "Sessions they host will show up here."
+          }
+          action={isMe ? <TabCta href="/studio" label="Go live" /> : undefined}
+        />
       </div>
     );
   return (
@@ -141,7 +179,7 @@ function StreamsTab({ username }: { username: string }) {
   );
 }
 
-function ActivitiesTab({ username }: { username: string }) {
+function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) {
   const activities = useProfileActivities(username);
   if (activities.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
   if (activities.isError)
@@ -153,13 +191,22 @@ function ActivitiesTab({ username }: { username: string }) {
   if (activities.data.items.length === 0)
     return (
       <div className="p-4">
-        <EmptyState glyph="◇" title="No activities" body="Scheduled games, streams and events show here." />
+        <EmptyState
+          glyph="◇"
+          title={isMe ? "Nothing scheduled" : "No activities yet"}
+          body={
+            isMe
+              ? "Schedule a stream or an event and it appears here for your followers."
+              : "Scheduled games, streams and events show here."
+          }
+          action={isMe ? <TabCta href="/schedule" label="Schedule one" /> : undefined}
+        />
       </div>
     );
   return (
     <ul>
       {activities.data.items.map((activity) => {
-        const cta = activity.deepLink ? resolveDeepLink(activity.deepLink) : null;
+        const cta = resolveCta(activity.deepLink);
         return (
           <li key={activity.id} className="ws-row flex items-center gap-3 px-4 py-3">
             <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body">
@@ -302,9 +349,9 @@ export function ProfilePage({
         />
       </div>
 
-      {tab === "posts" && <PostsTab username={username} />}
-      {tab === "streams" && <StreamsTab username={username} />}
-      {tab === "activities" && <ActivitiesTab username={username} />}
+      {tab === "posts" && <PostsTab username={username} isMe={isMe} />}
+      {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
+      {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}
 
       {isMe && <EditProfileSheet me={data} open={editOpen} onClose={() => setEditOpen(false)} />}
     </>

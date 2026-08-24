@@ -8,7 +8,7 @@ import { useGate } from "@/hooks/use-gate";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/ui/states";
-import { IconChevronRight, IconDots, IconEmoji, IconSend } from "@/components/ui/icons";
+import { IconDots, IconEmoji, IconSend } from "@/components/ui/icons";
 import { useChat, useSendChat } from "@/features/streams/hooks/use-chat";
 import type { ChatMessage, Stream } from "@/features/streams/lib/types";
 
@@ -33,9 +33,9 @@ function TopViewers({ messages }: { messages: ChatMessage[] }) {
 
   return (
     <div className="ws-hair shrink-0 border-b px-5 py-4">
-      <button className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-meta transition-colors hover:text-body">
-        Top viewers <IconChevronRight className="h-3.5 w-3.5" />
-      </button>
+      {/* A label, not a control: there is no expanded leaderboard behind it,
+          so it no longer dresses itself as a link. */}
+      <p className="mb-3 text-[13px] font-semibold text-meta">Top viewers</p>
 
       {leaders.length === 0 ? (
         <p className="text-[13px] text-grey-600">Viewer rankings appear as chat gets going.</p>

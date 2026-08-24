@@ -18,6 +18,7 @@ import {
   createPost,
   fetchComments,
   fetchFeed,
+  fetchPost,
   fetchStories,
   likePost,
   repostPost,
@@ -33,6 +34,15 @@ export function useFeed(lane: Lane) {
     queryFn: ({ pageParam }) => fetchFeed(lane, pageParam ?? undefined),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+/** One post by id, for the permalink at /p/[id]. */
+export function usePost(postId: string) {
+  return useQuery({
+    queryKey: ["ms", "post", postId],
+    queryFn: () => fetchPost(postId),
+    enabled: postId.length > 0,
   });
 }
 

@@ -6,21 +6,41 @@ import { Spinner } from "@/components/ui/button";
 // HLS playback: native <video> where the browser supports HLS (Safari),
 // hls.js everywhere else. hls.js is imported lazily so the room's first paint
 // does not pay for it.
+/**
+ * The rendition ladder, surfaced so the room's control bar can offer a real
+ * quality pick instead of a decorative "AUTO" label. `current` is hls.js's
+ * `currentLevel`: -1 means adaptive. Native (Safari) HLS owns its own ABR and
+ * exposes no ladder, so no api is reported there and the control stays hidden.
+ */
+export interface QualityApi {
+  levels: Array<{ height: number }>;
+  current: number;
+  setLevel: (index: number) => void;
+}
+
 export function HlsPlayer({
   src,
   onPlayingChange,
   fill = false,
   captionSrc,
+  onQuality,
 }: {
   src: string;
   onPlayingChange?: (playing: boolean) => void;
   /** Full-bleed mode: fills the parent instead of a rounded 16:9 box. */
   fill?: boolean;
   captionSrc?: string | null;
+  onQuality?: (api: QualityApi | null) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
+  // The callback identity must not re-run the attach effect (a new hls.js
+  // instance per render would tear playback down).
+  const qualityRef = useRef(onQuality);
+  useEffect(() => {
+    qualityRef.current = onQuality;
+  }, [onQuality]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -45,12 +65,24 @@ export function HlsPlayer({
         instance.on(Hls.Events.ERROR, (_event, data) => {
           if (data.fatal) setFailed(true);
         });
+        const publish = () =>
+          qualityRef.current?.({
+            levels: instance.levels.map((level) => ({ height: level.height })),
+            current: instance.currentLevel,
+            setLevel: (index: number) => {
+              instance.currentLevel = index;
+              publish();
+            },
+          });
+        instance.on(Hls.Events.MANIFEST_PARSED, publish);
+        instance.on(Hls.Events.LEVEL_SWITCHED, publish);
         hls = instance;
       });
     }
 
     return () => {
       cancelled = true;
+      qualityRef.current?.(null);
       hls?.destroy();
       video.removeAttribute("src");
       video.load();

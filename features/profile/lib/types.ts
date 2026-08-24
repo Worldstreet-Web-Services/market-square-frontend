@@ -82,9 +82,26 @@ export const VerificationRuleSchema = z.object({
   economics: z.string().optional().default("proposed"),
 });
 
-// GET /me/verification → { current, latestRequest }.
+/**
+ * GET /me/verification — the owner's billing view of their own badge.
+ *
+ * Billing dates live ONLY here. They are never present on a public profile, so
+ * no surface may render another user's renewal state.
+ *
+ * `latestRequest` survives for legacy pending records only: verification is
+ * granted by the platform now, so nothing new is ever requested.
+ */
 export const MyVerificationSchema = z.object({
-  current: z.enum(["none", "pending", "earned", "paid"]).catch("none"),
+  status: z.enum(["none", "pending", "verified", "lapsed"]).catch("none"),
+  verifiedSince: z.string().nullable().optional().default(null),
+  paidThrough: z.string().nullable().optional().default(null),
+  daysRemaining: z.number().nullable().optional().default(null),
+  // KASH is a decimal string end to end.
+  priceKash: z.string().optional().default("0"),
+  periodDays: z.number().optional().default(30),
+  trialDays: z.number().optional().default(30),
+  canRenew: z.boolean().optional().default(false),
+  economics: z.string().optional().default(""),
   latestRequest: z
     .object({
       id: z.string(),
@@ -96,6 +113,9 @@ export const MyVerificationSchema = z.object({
     .optional()
     .default(null),
 });
+
+// POST /me/verification/renew → the refreshed billing view.
+export const RenewVerificationSchema = MyVerificationSchema;
 
 // Spotlight: weekly only; score is a decimal STRING.
 export const SpotlightSchema = z.object({

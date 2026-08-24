@@ -21,13 +21,13 @@ import {
   IconCoin,
   IconCollapseRight,
   IconComment,
-  IconDots,
   IconEye,
   IconFullscreen,
   IconHeart,
   IconLink,
   IconLive,
   IconPause,
+  IconPlay,
   IconPip,
   IconRefresh,
   IconShare,
@@ -40,16 +40,12 @@ import { ErrorState, InlineError } from "@/components/ui/states";
 import type { Profile } from "@/lib/api/schemas";
 import { useStream, useStreamList } from "@/features/streams/hooks/use-streams";
 import { useHeartbeat, usePlaybackToken } from "@/features/streams/hooks/use-playback";
-import { HlsPlayer } from "@/features/streams/components/hls-player";
+import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-player";
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { GiftSheet, LIVE_GIFTS, type LiveGift } from "@/features/streams/components/gift-sheet";
 import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
-import {
-  MarketPulse,
-  type PulseChoice,
-  type PulseCounts,
-} from "@/features/streams/components/market-pulse";
+import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
 import { TicketSheet } from "@/features/streams/components/ticket-sheet";
 import { streamPriceLabel } from "@/features/streams/components/stream-card";
 import type { Stream } from "@/features/streams/lib/types";
@@ -88,10 +84,13 @@ function PlaybackSurface({
   stream,
   mode,
   onNeedTicket,
+  onQuality,
 }: {
   stream: Stream;
   mode: "live" | "replay";
   onNeedTicket: () => void;
+  /** Renditions reported by hls.js, so the control bar can offer a real pick. */
+  onQuality?: (api: QualityApi | null) => void;
 }) {
   const playback = usePlaybackToken(stream.id, true);
   const [playing, setPlaying] = useState(false);
@@ -131,11 +130,27 @@ function PlaybackSurface({
       <LiveKitPlayer url={playback.data.url} token={playback.data.token} onPlayingChange={setPlaying} fill />
     );
   }
-  return <HlsPlayer src={playback.data.url} captionSrc={playback.data.captionUrl} onPlayingChange={setPlaying} fill />;
+  return (
+    <HlsPlayer
+      src={playback.data.url}
+      captionSrc={playback.data.captionUrl}
+      onPlayingChange={setPlaying}
+      onQuality={onQuality}
+      fill
+    />
+  );
 }
 
 // Non-live states rendered on the same immersive stage.
-function StageBody({ stream, onOpenTickets }: { stream: Stream; onOpenTickets: () => void }) {
+function StageBody({
+  stream,
+  onOpenTickets,
+  onQuality,
+}: {
+  stream: Stream;
+  onOpenTickets: () => void;
+  onQuality?: (api: QualityApi | null) => void;
+}) {
   const gate = useGate();
   const needsTicket =
     stream.visibility === "ticketed" &&
@@ -181,9 +196,13 @@ function StageBody({ stream, onOpenTickets }: { stream: Stream; onOpenTickets: (
         </div>
       );
     }
-    return <PlaybackSurface stream={stream} mode="replay" onNeedTicket={() => gate(onOpenTickets)} />;
+    return (
+      <PlaybackSurface stream={stream} mode="replay" onNeedTicket={() => gate(onOpenTickets)} onQuality={onQuality} />
+    );
   }
-  return <PlaybackSurface stream={stream} mode="live" onNeedTicket={() => gate(onOpenTickets)} />;
+  return (
+    <PlaybackSurface stream={stream} mode="live" onNeedTicket={() => gate(onOpenTickets)} onQuality={onQuality} />
+  );
 }
 
 interface Reaction {
@@ -309,15 +328,11 @@ function StreamNav({ stream }: { stream: Stream }) {
             {item.label}
           </Link>
         ))}
-        <button className="flex w-full items-center gap-4 rounded-lg px-3 py-3 text-[16px] font-semibold text-body transition-colors hover:bg-white/[0.07]">
-          <IconDots className="h-6 w-6" /> More
-        </button>
+        {/* No "More" here: the four entries above ARE the room's navigation,
+            and a menu with nothing behind it is worse than no menu. Coin
+            purchase is likewise absent — there is no coin ledger to buy into
+            (see the gifting note in StreamRoom). */}
       </nav>
-      {MARKET_FLAGS.liveGifts && (
-        <button className="ws-press mt-6 flex items-center justify-center gap-2 rounded-lg bg-featured px-4 py-3 text-sm font-bold text-ink transition-colors hover:brightness-110">
-          <IconCoin className="h-4 w-4" /> Get Coins
-        </button>
-      )}
 
       <SuggestedCreators currentId={stream.id} />
       <div className="mt-auto border-t border-white/10 px-1 pt-5 text-[12px] leading-6 text-grey-600">
@@ -346,21 +361,23 @@ export function StreamRoom({
   const [pulseOpen, setPulseOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
   const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [localLikeCount, setLocalLikeCount] = useState(0);
   const [giftBursts, setGiftBursts] = useState<GiftBurst[]>([]);
-  const [pulseVote, setPulseVote] = useState<PulseChoice | null>(null);
-  const [localPulse, setLocalPulse] = useState<PulseCounts>({ bullish: 0, neutral: 0, bearish: 0 });
   const reactionTimers = useRef<number[]>([]);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [muted, setMuted] = useState(false);
+  const [paused, setPaused] = useState(true);
+  const [quality, setQuality] = useState<QualityApi | null>(null);
+  const [qualityOpen, setQualityOpen] = useState(false);
 
   useEffect(() => {
     const timers = reactionTimers.current;
     return () => timers.forEach((t) => clearTimeout(t));
   }, []);
 
+  // Ambient decoration only. There is no stream-like endpoint, so a tap floats
+  // a heart and changes nothing else — it must never move the displayed tally,
+  // which is the service's own count.
   const spawnReaction = useCallback((burst = 1) => {
-    setLocalLikeCount((count) => count + burst);
     setReactions((current) => {
       const room = Math.max(0, MAX_REACTIONS - current.length);
       const additions = Array.from({ length: Math.min(burst, room) }, (_, index): Reaction => ({
@@ -391,18 +408,16 @@ export function StreamRoom({
       reactionTimers.current = reactionTimers.current.filter((id) => id !== timer);
     }, 3200);
     reactionTimers.current.push(timer);
-    toast.success(`${gift.name} ×${quantity} sent`);
+    // NO success toast, and no network call, because there is no gifting
+    // endpoint: the burst above is a local animation and nothing more. Telling
+    // the viewer a gift "was sent" would claim they spent money and that the
+    // creator was paid — neither is true.
+    //
+    // BEFORE FLIPPING `MARKET_FLAGS.liveGifts` ON, the backend must ship a
+    // coin ledger and a gift endpoint, and this callback must await it and
+    // report its real result. The flag gates the whole tray, the coin balance
+    // and the "Get Coins" chrome precisely so none of it can be reached first.
   }, []);
-
-  const votePulse = useCallback((choice: PulseChoice) => {
-    setLocalPulse((current) => {
-      const next = { ...current };
-      if (pulseVote) next[pulseVote] = Math.max(0, next[pulseVote] - 1);
-      next[choice] += 1;
-      return next;
-    });
-    setPulseVote(choice);
-  }, [pulseVote]);
 
   const share = useCallback(() => {
     const url = window.location.href;
@@ -415,6 +430,14 @@ export function StreamRoom({
   }, [stream.data?.title]);
 
   const videoElement = useCallback(() => stageRef.current?.querySelector("video") ?? null, []);
+  // LiveKit puts remote audio on its own <audio> elements beside the <video>,
+  // so muting the video alone left the room audible. Every media element in
+  // the stage moves together.
+  const mediaElements = useCallback(
+    (): HTMLMediaElement[] =>
+      Array.from(stageRef.current?.querySelectorAll<HTMLMediaElement>("video, audio") ?? []),
+    []
+  );
   const togglePlayback = useCallback(() => {
     const video = videoElement();
     if (!video) return;
@@ -428,11 +451,46 @@ export function StreamRoom({
     void video.play();
   }, [videoElement]);
   const toggleMute = useCallback(() => {
-    const video = videoElement();
-    if (!video) return;
-    video.muted = !video.muted;
-    setMuted(video.muted);
-  }, [videoElement]);
+    const elements = mediaElements();
+    if (elements.length === 0) return;
+    const next = !elements.some((element) => element.muted);
+    elements.forEach((element) => {
+      element.muted = next;
+    });
+    setMuted(next);
+  }, [mediaElements]);
+  // Transport state is the PLAYER's, not the button's: reflect it rather than
+  // hardcoding a pause glyph. The stage swaps its media elements when playback
+  // reconnects or a LiveKit track re-subscribes, so re-bind periodically and
+  // re-apply the viewer's mute choice to anything newly attached.
+  useEffect(() => {
+    let bound: HTMLMediaElement | null = null;
+    const sync = () => setPaused(Boolean(bound?.paused ?? true));
+    const rebind = () => {
+      const found = stageRef.current?.querySelector("video");
+      if (found !== bound) {
+        bound?.removeEventListener("play", sync);
+        bound?.removeEventListener("pause", sync);
+        bound = found ?? null;
+        bound?.addEventListener("play", sync);
+        bound?.addEventListener("pause", sync);
+        sync();
+      }
+      if (muted) {
+        stageRef.current?.querySelectorAll<HTMLMediaElement>("video, audio").forEach((element) => {
+          element.muted = true;
+        });
+      }
+    };
+    rebind();
+    const interval = window.setInterval(rebind, 1000);
+    return () => {
+      window.clearInterval(interval);
+      bound?.removeEventListener("play", sync);
+      bound?.removeEventListener("pause", sync);
+    };
+  }, [muted]);
+
   const pictureInPicture = useCallback(() => {
     const video = videoElement();
     if (!video || !("requestPictureInPicture" in video)) return;
@@ -465,12 +523,9 @@ export function StreamRoom({
   // Gifting is governance-gated: with it off the panel is absent entirely,
   // and so is every piece of coin chrome that would imply it exists.
   const giftsAvailable = data.status === "live" && MARKET_FLAGS.liveGifts;
-  const likeCount = data.likeCount + localLikeCount;
-  const pulseCounts: PulseCounts = {
-    bullish: data.pulse.bullish + localPulse.bullish,
-    neutral: data.pulse.neutral + localPulse.neutral,
-    bearish: data.pulse.bearish + localPulse.bearish,
-  };
+  // The service's own tally, never inflated by unsaved local taps.
+  const likeCount = data.likeCount;
+  const pulseCounts: PulseCounts = data.pulse;
 
   return (
     <div className="flex h-dvh w-full bg-black">
@@ -552,15 +607,10 @@ export function StreamRoom({
             >
               <IconShare className="h-4 w-4" />
             </button>
-            <button
-              aria-label="More stream actions"
-              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-body transition-colors hover:bg-white/10 lg:flex"
-            >
-              <IconDots className="h-4 w-4" />
-            </button>
-            <button className="hidden rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-[13px] font-bold text-heading transition-colors hover:bg-white/10 lg:block">
-              Subscribe
-            </button>
+            {/* The overflow menu and "Subscribe" both used to sit here doing
+                nothing. Subscribing to a host IS following them, which the
+                Follow control beside this already does, so it was a second
+                door with no room behind it. */}
             {/* Follow is the filled, loudest control in the header. */}
             {owner && followSlot?.(owner)}
             {data.status === "live" && !data.myTicket && data.visibility === "ticketed" && (
@@ -580,7 +630,11 @@ export function StreamRoom({
           <div className="relative h-full w-full bg-black">
             <div className="h-full w-full bg-black lg:mx-auto lg:aspect-[9/16] lg:w-auto lg:border-x lg:border-white/10">
               <div ref={stageRef} className="h-full w-full">
-                <StageBody stream={data} onOpenTickets={() => setTicketsOpen(true)} />
+                <StageBody
+                  stream={data}
+                  onOpenTickets={() => setTicketsOpen(true)}
+                  onQuality={setQuality}
+                />
               </div>
             </div>
 
@@ -604,22 +658,15 @@ export function StreamRoom({
               {data.status === "live" && <LiveBadge />}
             </div>
 
-            <button
-              aria-label="Next live stream"
-              className="absolute right-5 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-heading transition-colors hover:bg-white/15 lg:flex"
-            >
-              <IconChevronDown className="h-6 w-6" />
-            </button>
-
             {/* Transport and window controls sit ON the frame, bottom edge. */}
             <div className="absolute inset-x-0 bottom-0 z-10 hidden items-center px-5 pb-3 lg:flex">
               <div className="flex items-center gap-1">
                 <button
                   onClick={togglePlayback}
-                  aria-label="Play or pause"
+                  aria-label={paused ? "Play" : "Pause"}
                   className="rounded-lg p-2 text-heading transition-colors hover:bg-white/10"
                 >
-                  <IconPause className="h-5 w-5" />
+                  {paused ? <IconPlay className="h-5 w-5" /> : <IconPause className="h-5 w-5" />}
                 </button>
                 <button
                   onClick={restartPlayback}
@@ -647,9 +694,58 @@ export function StreamRoom({
                 )}
               </div>
               <div className="ml-auto flex items-center gap-1">
-                <button className="rounded-lg px-2 py-1.5 text-[10px] font-bold tracking-wide text-body transition-colors hover:bg-white/10">
-                  AUTO
-                </button>
+                {/* Quality is offered only where it is real: hls.js reports
+                    the manifest's renditions, so the menu switches between
+                    them. A LiveKit room has no such ladder here, so the
+                    control is absent rather than inert. */}
+                {quality && quality.levels.length > 1 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setQualityOpen((open) => !open)}
+                      aria-label="Playback quality"
+                      aria-expanded={qualityOpen}
+                      className="rounded-lg px-2 py-1.5 text-[10px] font-bold tracking-wide text-body transition-colors hover:bg-white/10"
+                    >
+                      {quality.current === -1
+                        ? "AUTO"
+                        : `${quality.levels[quality.current]?.height ?? "—"}P`}
+                    </button>
+                    {qualityOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setQualityOpen(false)} />
+                        <div className="ws-glass absolute bottom-full right-0 z-20 mb-2 w-32 rounded-2xl p-1.5">
+                          <button
+                            onClick={() => {
+                              quality.setLevel(-1);
+                              setQualityOpen(false);
+                            }}
+                            className={cn(
+                              "block w-full rounded-xl px-3 py-2 text-left text-xs transition-colors hover:bg-white/10",
+                              quality.current === -1 ? "text-heading" : "text-body"
+                            )}
+                          >
+                            Auto
+                          </button>
+                          {quality.levels.map((level, index) => (
+                            <button
+                              key={`${level.height}-${index}`}
+                              onClick={() => {
+                                quality.setLevel(index);
+                                setQualityOpen(false);
+                              }}
+                              className={cn(
+                                "block w-full rounded-xl px-3 py-2 text-left text-xs transition-colors hover:bg-white/10",
+                                quality.current === index ? "text-heading" : "text-body"
+                              )}
+                            >
+                              {level.height}p
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <button
                   onClick={fullscreen}
                   aria-label="Theater mode"
@@ -726,20 +822,8 @@ export function StreamRoom({
               </button>
             </div>
 
-            <div className="ws-hair flex items-center gap-3 border-t px-4 py-2 text-xs text-meta">
-              <span className="flex items-center gap-1.5">
-                Coin balance:
-                <IconCoin className="h-3.5 w-3.5 text-featured" />
-                <strong className="tnum text-heading">0</strong>
-              </span>
-              <button
-                onClick={() => gate(() => setGiftsOpen(true))}
-                className="ws-press rounded-md border border-featured/50 px-2 py-0.5 font-bold text-featured transition-colors hover:bg-featured/10"
-              >
-                Get Coins
-              </button>
-              <span className="ml-auto text-[10px]">Gifts support the creator</span>
-            </div>
+            {/* The balance strip is gone: it read a hardcoded "0" from no
+                ledger, and "Get Coins" only reopened this same tray. */}
           </div>
         )}
 
@@ -827,11 +911,7 @@ export function StreamRoom({
             className="absolute bottom-20 right-16 z-20 lg:bottom-24 lg:left-5 lg:right-auto"
             style={{ marginBottom: "max(env(safe-area-inset-bottom), 16px)" }}
           >
-            <MarketPulse
-              counts={pulseCounts}
-              selected={pulseVote}
-              onSelect={(choice) => gate(() => votePulse(choice))}
-            />
+            <MarketPulse counts={pulseCounts} />
           </div>
         )}
 

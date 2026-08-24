@@ -36,7 +36,9 @@ function toSlide(item: FeedItem): Slide | null {
       href: `/live/${stream.id}?source=home:featured`,
       action: stream.status === "live" ? "Join Live Arena" : "View session",
       price: stream.ticketPriceKash ? formatKash(stream.ticketPriceKash) : null,
-      meta: stream.peakViewers > 0 ? `${formatCount(stream.peakViewers)} watching` : null,
+      // The feed payload carries PEAK viewers, not the live count — labelling
+      // it "watching" beside a live dot overstated the room every time.
+      meta: stream.peakViewers > 0 ? `peak ${formatCount(stream.peakViewers)} viewers` : null,
       seed: stream.id,
     };
   }
