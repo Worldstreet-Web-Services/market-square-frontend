@@ -5,87 +5,94 @@ interface IconProps {
   className?: string;
 }
 
-function base(className?: string) {
+// Nav icons take `filled` for their active state: the same closed path, solid.
+// Stroke thins when filled so the glyph keeps its silhouette instead of
+// bulking up.
+interface NavIconProps extends IconProps {
+  filled?: boolean;
+}
+
+function base(className?: string, filled = false) {
   return {
     className,
     width: 20,
     height: 20,
     viewBox: "0 0 24 24",
-    fill: "none",
+    fill: filled ? "currentColor" : "none",
     stroke: "currentColor",
-    strokeWidth: 1.6,
+    strokeWidth: filled ? 1 : 1.6,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
     "aria-hidden": true,
   };
 }
 
-export function IconHome({ className }: IconProps) {
+export function IconHome({ className, filled }: NavIconProps) {
   return (
-    <svg {...base(className)}>
+    <svg {...base(className, filled)}>
       <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />
     </svg>
   );
 }
 
-export function IconLive({ className }: IconProps) {
+export function IconLive({ className, filled }: NavIconProps) {
   return (
     <svg {...base(className)}>
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M7.4 7.4a6.5 6.5 0 0 0 0 9.2M16.6 7.4a6.5 6.5 0 0 1 0 9.2" />
-      <path d="M4.6 4.6a10.4 10.4 0 0 0 0 14.8M19.4 4.6a10.4 10.4 0 0 1 0 14.8" />
+      <circle cx="12" cy="12" r="3.2" fill={filled ? "currentColor" : "none"} />
+      <path d="M7.4 7.4a6.5 6.5 0 0 0 0 9.2M16.6 7.4a6.5 6.5 0 0 1 0 9.2" strokeWidth={filled ? 2.2 : 1.6} />
+      <path d="M4.6 4.6a10.4 10.4 0 0 0 0 14.8M19.4 4.6a10.4 10.4 0 0 1 0 14.8" strokeWidth={filled ? 2.2 : 1.6} />
     </svg>
   );
 }
 
-export function IconStore({ className }: IconProps) {
+export function IconStore({ className, filled }: NavIconProps) {
   return (
-    <svg {...base(className)}>
+    <svg {...base(className, filled)}>
       <path d="M4.5 9.5 6 4h12l1.5 5.5M4.5 9.5h15M4.5 9.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9.5" />
-      <path d="M9.5 20v-6h5v6" />
+      <path d="M9.5 20v-6h5v6" fill={filled ? "#000" : "none"} />
     </svg>
   );
 }
 
-export function IconTicket({ className }: IconProps) {
+export function IconTicket({ className, filled }: NavIconProps) {
   return (
-    <svg {...base(className)}>
+    <svg {...base(className, filled)}>
       <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z" />
-      <path d="M14 6v2.5M14 11v2M14 15.5V18" strokeDasharray="0.1 3.4" />
+      <path d="M14 6v2.5M14 11v2M14 15.5V18" strokeDasharray="0.1 3.4" stroke={filled ? "#000" : "currentColor"} />
     </svg>
   );
 }
 
-export function IconUser({ className }: IconProps) {
+export function IconUser({ className, filled }: NavIconProps) {
   return (
-    <svg {...base(className)}>
+    <svg {...base(className, filled)}>
       <circle cx="12" cy="8.5" r="3.5" />
       <path d="M5 20c1.2-3.2 3.9-5 7-5s5.8 1.8 7 5" />
     </svg>
   );
 }
 
-export function IconSpark({ className }: IconProps) {
+export function IconSpark({ className, filled }: NavIconProps) {
   return (
-    <svg {...base(className)}>
+    <svg {...base(className, filled)}>
       <path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z" />
       <path d="M18.5 16.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
     </svg>
   );
 }
 
-export function IconCalendar({ className }: IconProps) {
+export function IconCalendar({ className, filled }: NavIconProps) {
   return (
-    <svg {...base(className)}>
+    <svg {...base(className, filled)}>
       <rect x="4" y="5.5" width="16" height="15" rx="2" />
-      <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+      <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" stroke={filled ? "#000" : "currentColor"} />
     </svg>
   );
 }
 
-export function IconCamera({ className }: IconProps) {
+export function IconCamera({ className, filled }: NavIconProps) {
   return (
-    <svg {...base(className)}>
+    <svg {...base(className, filled)}>
       <rect x="3.5" y="7" width="13" height="11" rx="2" />
       <path d="M16.5 11l4-2.5v8L16.5 14" />
     </svg>
@@ -207,6 +214,245 @@ export function IconDots({ className }: IconProps) {
       <circle cx="5.5" cy="12" r="0.8" fill="currentColor" />
       <circle cx="12" cy="12" r="0.8" fill="currentColor" />
       <circle cx="18.5" cy="12" r="0.8" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function IconSearch({ className, filled }: NavIconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="10.5" cy="10.5" r="6.5" strokeWidth={filled ? 2.4 : 1.6} />
+      <path d="m15.5 15.5 4.5 4.5" strokeWidth={filled ? 2.4 : 1.6} />
+    </svg>
+  );
+}
+
+export function IconBell({ className, filled }: NavIconProps) {
+  return (
+    <svg {...base(className, filled)}>
+      <path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 6 2.5 6.5 2.5 6.5H4S6.5 16 6.5 10z" />
+      <path d="M10 19.5a2.3 2.3 0 0 0 4 0" />
+    </svg>
+  );
+}
+
+export function IconShield({ className, filled }: NavIconProps) {
+  return (
+    <svg {...base(className, filled)}>
+      <path d="M12 3.5 19 6v5.2c0 4.4-2.7 7.6-7 9.3-4.3-1.7-7-4.9-7-9.3V6z" />
+      <path d="m9 12 2 2 4-4" stroke={filled ? "#000" : "currentColor"} />
+    </svg>
+  );
+}
+
+// --- Timeline action rail (reply / repost / like / views / bookmark / share).
+// The comment, heart and dots icons above complete the set.
+
+export function IconRepost({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M5 9V7.5a2 2 0 0 1 2-2h9M5 9 2.8 6.6M5 9l2.2-2.4" />
+      <path d="M19 15v1.5a2 2 0 0 1-2 2H8M19 15l2.2 2.4M19 15l-2.2 2.4" />
+    </svg>
+  );
+}
+
+export function IconBookmark({ className, filled }: NavIconProps) {
+  return (
+    <svg {...base(className, filled)}>
+      <path d="M6 4.5h12v16l-6-4.2-6 4.2z" />
+    </svg>
+  );
+}
+
+export function IconShare({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M12 15V4M12 4 8.5 7.5M12 4l3.5 3.5" />
+      <path d="M5 13v5.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V13" />
+    </svg>
+  );
+}
+
+export function IconStats({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4.5 19.5V13M9.5 19.5V8M14.5 19.5v-9M19.5 19.5V4.5" />
+    </svg>
+  );
+}
+
+// --- Composer affordances (media row under the "What's happening" field).
+
+export function IconImage({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="8.75" cy="9.5" r="1.4" />
+      <path d="m4 16.5 4.5-4.2 3.6 3.3 3.2-2.8 4.7 4.2" />
+    </svg>
+  );
+}
+
+export function IconGif({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
+      <path d="M11 10.2a1.9 1.9 0 1 0 0 3.6c.9 0 1.5-.5 1.5-1.4h-1.2" />
+      <path d="M14.8 10.1v3.8M17 13.9v-3.8h2.2M17 12.2h1.8" />
+      <path d="M7.4 10.2H6.3a1.9 1.9 0 0 0 0 3.6h1.1v-1.6" />
+    </svg>
+  );
+}
+
+export function IconPoll({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M7.5 15.5V11M12 15.5V8.5M16.5 15.5v-2.5" />
+    </svg>
+  );
+}
+
+export function IconEmoji({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.6 14.2a4 4 0 0 0 6.8 0" />
+      <circle cx="9.2" cy="9.8" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="14.8" cy="9.8" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// --- Shell chrome.
+
+export function IconMore({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="8.4" cy="12" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="15.6" cy="12" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function IconMail({ className, filled }: NavIconProps) {
+  return (
+    <svg {...base(className, filled)}>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+      <path d="m4 8 8 5.2L20 8" stroke={filled ? "#000" : "currentColor"} />
+    </svg>
+  );
+}
+
+export function IconChevronRight({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M9.5 5.5 16 12l-6.5 6.5" />
+    </svg>
+  );
+}
+
+export function IconArrowLeft({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M20 12H4M4 12l6-6M4 12l6 6" />
+    </svg>
+  );
+}
+
+// --- Player chrome (live room control bar).
+
+export function IconPause({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M9 5.5v13M15 5.5v13" strokeWidth={2.2} />
+    </svg>
+  );
+}
+
+export function IconRefresh({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M19.5 12a7.5 7.5 0 1 1-2.6-5.7" />
+      <path d="M19.7 4.5v4.2h-4.2" />
+    </svg>
+  );
+}
+
+export function IconPip({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <rect x="12" y="12" width="7" height="5.5" rx="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function IconTheater({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <path d="M3 9h18M3 15h18" />
+    </svg>
+  );
+}
+
+export function IconFullscreen({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M9 4.5H4.5V9M15 4.5h4.5V9M9 19.5H4.5V15M15 19.5h4.5V15" />
+    </svg>
+  );
+}
+
+export function IconVolume({ className, muted }: IconProps & { muted?: boolean }) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 9.5h3L12 5.5v13L7 14.5H4z" />
+      {muted ? (
+        <path d="M16 9.5l4 5M20 9.5l-4 5" />
+      ) : (
+        <path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.6a7.6 7.6 0 0 1 0 10.8" />
+      )}
+    </svg>
+  );
+}
+
+export function IconChevronDown({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M5.5 9.5 12 16l6.5-6.5" />
+    </svg>
+  );
+}
+
+export function IconChevronUp({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M5.5 14.5 12 8l6.5 6.5" />
+    </svg>
+  );
+}
+
+/** KASH coin: a ring with a bar, the currency mark used on gift prices. */
+export function IconCoin({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.2 9.2h5.6M9.2 14.8h5.6M12 8v8" strokeWidth={1.4} />
+    </svg>
+  );
+}
+
+/** Collapse the chat column back into the stage (arrow into a wall). */
+export function IconCollapseRight({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 12h11M15 12l-4-4M15 12l-4 4" />
+      <path d="M20 4.5v15" />
     </svg>
   );
 }

@@ -4,5 +4,8 @@ export { StudioHome } from "./components/studio-home";
 export { StudioStreamScreen } from "./components/studio-stream-screen";
 export { SchedulePage } from "./components/schedule-page";
 export { TicketWallet } from "./components/ticket-wallet";
+export { LiveNowRail } from "./components/live-now-rail";
+export { TicketsRail } from "./components/tickets-rail";
 export { StreamCard } from "./components/stream-card";
+export { useStreamList } from "./hooks/use-streams";
 export type { Stream } from "./lib/types";

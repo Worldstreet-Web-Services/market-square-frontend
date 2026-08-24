@@ -10,11 +10,13 @@ export function HlsPlayer({
   src,
   onPlayingChange,
   fill = false,
+  captionSrc,
 }: {
   src: string;
   onPlayingChange?: (playing: boolean) => void;
   /** Full-bleed mode: fills the parent instead of a rounded 16:9 box. */
   fill?: boolean;
+  captionSrc?: string | null;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [failed, setFailed] = useState(false);
@@ -76,7 +78,7 @@ export function HlsPlayer({
       ) : (
         <video
           ref={videoRef}
-          controls
+          controls={!fill}
           autoPlay
           playsInline
           className="h-full w-full"
@@ -88,7 +90,9 @@ export function HlsPlayer({
           onWaiting={() => setLoading(true)}
           onEnded={() => onPlayingChange?.(false)}
           onError={() => setFailed(true)}
-        />
+        >
+          {captionSrc && <track kind="captions" src={captionSrc} srcLang="en" label="English" default />}
+        </video>
       )}
     </div>
   );

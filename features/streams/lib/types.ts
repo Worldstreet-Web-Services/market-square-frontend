@@ -35,11 +35,20 @@ export const StreamSchema = z.object({
   startedAt: z.string().nullable().optional().default(null),
   endedAt: z.string().nullable().optional().default(null),
   replayUrl: z.string().nullable().optional().default(null),
+  refundPolicy: z.string().optional().default("Refunds are available when the host cancels before the stream begins."),
+  replayPolicy: z.string().optional().default("Replay access follows the entitlement shown on your ticket."),
   peakViewers: z.number().optional().default(0),
   totalViewSeconds: z.number().optional().default(0),
   createdAt: z.string().optional().default(""),
   // StreamDetail additions; absent on list rows.
   viewerCount: z.number().optional().default(0),
+  // Aggregate live reactions. Optional until all gateway deployments expose it.
+  likeCount: z.number().optional().default(0),
+  pulse: z.object({
+    bullish: z.number().optional().default(0),
+    neutral: z.number().optional().default(0),
+    bearish: z.number().optional().default(0),
+  }).optional().default({ bullish: 0, neutral: 0, bearish: 0 }),
   myTicket: TicketSchema.nullable().optional().default(null),
 });
 
@@ -59,6 +68,7 @@ export const PlaybackSchema = z.object({
   url: z.string(),
   token: z.string(),
   expiresAt: z.string(),
+  captionUrl: z.string().nullable().optional().default(null),
 });
 
 export const HeartbeatSchema = z.object({
@@ -147,8 +157,25 @@ export const StreamEventsSchema = z.object({
   nextCursor: z.string().nullable().optional().default(null),
 });
 
+export const SpeakerRequestSchema = z.object({
+  id: z.string(),
+  streamId: z.string(),
+  userId: z.string(),
+  user: ProfileSchema.nullable().optional().default(null),
+  status: z.enum(["pending", "approved", "declined", "left", "removed"]),
+  requestedAt: z.string(),
+  resolvedAt: z.string().nullable().optional().default(null),
+  joinUrl: z.string().nullable().optional().default(null),
+  joinToken: z.string().nullable().optional().default(null),
+});
+
+export const SpeakerRequestListSchema = z.object({
+  items: z.array(SpeakerRequestSchema),
+});
+
 export type StreamStats = z.infer<typeof StreamStatsSchema>;
 export type StreamEvent = z.infer<typeof StreamEventSchema>;
+export type SpeakerRequest = z.infer<typeof SpeakerRequestSchema>;
 
 export type Stream = z.infer<typeof StreamSchema>;
 export type Ticket = z.infer<typeof TicketSchema>;

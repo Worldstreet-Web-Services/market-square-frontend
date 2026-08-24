@@ -17,9 +17,12 @@ import {
   fetchFeed,
   fetchStories,
   likePost,
+  repostPost,
+  uploadPostMedia,
+  searchMentions,
   reportTarget,
 } from "@/features/feed/lib/api";
-import type { FeedPage, Lane, Post } from "@/features/feed/lib/types";
+import type { FeedPage, Lane, Mention, Post } from "@/features/feed/lib/types";
 
 export function useFeed(lane: Lane) {
   return useInfiniteQuery({
@@ -46,6 +49,8 @@ export function useCreatePost() {
       text: string;
       mediaUrl?: string;
       deepLink?: DeepLink;
+      quotedPostId?: string;
+      mentions?: Mention[];
     }) => createPost(input),
     onSuccess: (post) => {
       // Optimistic prepend into every cached lane, then refetch for truth.
@@ -76,6 +81,47 @@ export function useCreatePost() {
       toast.success(post.kind === "story" ? "Story posted" : "Posted to the square");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't post right now.")),
+  });
+}
+
+export function useRepostPost() {
+  const queryClient = useQueryClient();
+  const patchCaches = (postId: string, reposted: boolean) => {
+    const patch = (post: Post): Post => post.id === postId
+      ? { ...post, repostedByMe: reposted, repostCount: Math.max(0, post.repostCount + (reposted ? 1 : -1)) }
+      : post;
+    queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ["ms", "feed"] }, (data) => data ? ({
+      ...data,
+      pages: data.pages.map((page) => ({ ...page, items: page.items.map((item) => item.post ? { ...item, post: patch(item.post) } : item) })),
+    }) : data);
+  };
+  return useMutation({
+    mutationFn: ({ postId, repost }: { postId: string; repost: boolean }) => repostPost(postId, repost),
+    onMutate: ({ postId, repost }) => patchCaches(postId, repost),
+    onError: (error, { postId, repost }) => {
+      patchCaches(postId, !repost);
+      toast.error(errorMessage(error, "Couldn't update the repost."));
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
+      toast.success(result.reposted ? "Reposted to your followers" : "Repost removed");
+    },
+  });
+}
+
+export function useUploadPostMedia() {
+  return useMutation({
+    mutationFn: uploadPostMedia,
+    onError: (error) => toast.error(errorMessage(error, "Couldn't upload that file.")),
+  });
+}
+
+export function useMentionSearch(query: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ms", "mentions", query.trim()],
+    queryFn: () => searchMentions(query),
+    enabled,
+    staleTime: 30_000,
   });
 }
 

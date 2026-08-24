@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPlaybackToken, sendHeartbeat } from "@/features/streams/lib/api";
+import { trackMarketEvent } from "@/lib/analytics";
 
 // Playback token, re-requested 30 s before it expires so the player never
 // holds a lapsed token. A 403 means "no ticket" and is surfaced, not retried.
@@ -27,6 +28,7 @@ const HEARTBEAT_MS = 15_000;
 // so the backend can stitch one continuous view session.
 export function useHeartbeat(streamId: string, mode: "live" | "replay", playing: boolean) {
   const sessionId = useRef<string | null>(null);
+  const qualifiedSent = useRef(false);
 
   useEffect(() => {
     if (!playing) return;
@@ -34,7 +36,13 @@ export function useHeartbeat(streamId: string, mode: "live" | "replay", playing:
     const beat = async () => {
       try {
         const result = await sendHeartbeat(streamId, sessionId.current, mode);
-        if (!cancelled) sessionId.current = result.sessionId;
+        if (!cancelled) {
+          sessionId.current = result.sessionId;
+          if (!qualifiedSent.current && result.watchSeconds >= 30) {
+            qualifiedSent.current = true;
+            trackMarketEvent("qualified_watch_time_reached", { surface: "stream_room", entityType: "stream", entityId: streamId, accessType: mode, metadata: { watchSeconds: result.watchSeconds } });
+          }
+        }
       } catch {
         // A missed heartbeat is not worth surfacing; the next one retries.
       }

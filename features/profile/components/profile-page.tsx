@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, formatKash, relativeTime } from "@/lib/format";
 import { resolveDeepLink } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
@@ -11,7 +10,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconCalendar, IconHeart, IconComment } from "@/components/ui/icons";
-import { Skeleton } from "@/components/ui/skeleton";
+import { GradientThumb } from "@/components/ui/gradient-thumb";
+import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
+import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import type { Profile } from "@/lib/api/schemas";
 import {
@@ -20,10 +21,12 @@ import {
   useProfileActivities,
   useProfilePosts,
   useProfileStreams,
+  useProfileSafety,
 } from "@/features/profile/hooks/use-profile";
 import { EditProfileSheet } from "@/features/profile/components/edit-profile-sheet";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import { CreatorCard } from "@/features/profile/components/creator-card";
+import { useMarketView } from "@/lib/analytics";
 
 type Tab = "posts" | "streams" | "activities";
 
@@ -41,33 +44,47 @@ function FollowButton({ profile }: { profile: Profile }) {
   );
 }
 
+function SafetyActions({ profile }: { profile: Profile }) {
+  const safety = useProfileSafety(profile);
+  const gate = useGate();
+  return (
+    <div className="flex gap-2">
+      <Button variant="ghost" size="sm" onClick={() => gate(() => safety.report.mutate())}>Report</Button>
+      <Button variant={profile.isBlocked ? "secondary" : "danger"} size="sm" onClick={() => gate(() => safety.block.mutate(!profile.isBlocked))}>
+        {profile.isBlocked ? "Unblock" : "Block"}
+      </Button>
+    </div>
+  );
+}
+
 function PostsTab({ username }: { username: string }) {
   const posts = useProfilePosts(username);
-  if (posts.isPending)
+  if (posts.isPending) return <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>;
+  if (posts.isError)
     return (
-      <div className="space-y-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-24" />
-        ))}
+      <div className="p-4">
+        <ErrorState error={posts.error} fallback="Couldn't load posts." onRetry={() => posts.refetch()} />
       </div>
     );
-  if (posts.isError)
-    return <ErrorState error={posts.error} fallback="Couldn't load posts." onRetry={() => posts.refetch()} />;
   if (posts.data.items.length === 0)
-    return <EmptyState glyph="◌" title="No posts yet" body="Updates land here when they post." />;
+    return (
+      <div className="p-4">
+        <EmptyState glyph="◌" title="No posts yet" body="Updates land here when they post." />
+      </div>
+    );
   return (
-    <ul className="space-y-3">
+    <ul>
       {posts.data.items.map((post) => {
         const cta = post.deepLink ? resolveDeepLink(post.deepLink) : null;
         return (
-          <li key={post.id} className="ws-card p-4">
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-grey-100">{post.text}</p>
-            <div className="mt-2 flex items-center gap-4 text-xs text-grey-500">
-              <span className="flex items-center gap-1">
-                <IconHeart className="h-3.5 w-3.5" filled={post.likedByMe} /> {formatCount(post.likeCount)}
+          <li key={post.id} className="ws-row px-4 py-3">
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-normal text-body">{post.text}</p>
+            <div className="mt-2 flex items-center gap-5 text-[13px] text-meta">
+              <span className="tnum flex items-center gap-1.5">
+                <IconHeart className="h-4 w-4" filled={post.likedByMe} /> {formatCount(post.likeCount)}
               </span>
-              <span className="flex items-center gap-1">
-                <IconComment className="h-3.5 w-3.5" /> {formatCount(post.commentCount)}
+              <span className="tnum flex items-center gap-1.5">
+                <IconComment className="h-4 w-4" /> {formatCount(post.commentCount)}
               </span>
               <span>{relativeTime(post.createdAt)}</span>
               {cta && (
@@ -85,26 +102,27 @@ function PostsTab({ username }: { username: string }) {
 
 function StreamsTab({ username }: { username: string }) {
   const streams = useProfileStreams(username);
-  if (streams.isPending)
+  if (streams.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
+  if (streams.isError)
     return (
-      <div className="space-y-3">
-        {[0, 1].map((i) => (
-          <Skeleton key={i} className="h-16" />
-        ))}
+      <div className="p-4">
+        <ErrorState error={streams.error} fallback="Couldn't load streams." onRetry={() => streams.refetch()} />
       </div>
     );
-  if (streams.isError)
-    return <ErrorState error={streams.error} fallback="Couldn't load streams." onRetry={() => streams.refetch()} />;
   if (streams.data.items.length === 0)
-    return <EmptyState glyph="◉" title="No streams" body="Hosted sessions show up here." />;
+    return (
+      <div className="p-4">
+        <EmptyState glyph="◉" title="No streams" body="Hosted sessions show up here." />
+      </div>
+    );
   return (
-    <ul className="space-y-3">
+    <ul>
       {streams.data.items.map((stream) => (
         <li key={stream.id}>
-          <Link href={`/live/${stream.id}`} className="ws-card flex items-center gap-3 p-4 transition-colors hover:bg-white/8">
+          <Link href={`/live/${stream.id}`} className="ws-row flex items-center gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{stream.title}</p>
-              <p className="mt-0.5 flex items-center gap-2 text-xs text-grey-500">
+              <p className="truncate text-[15px] font-bold text-heading">{stream.title}</p>
+              <p className="mt-0.5 flex items-center gap-2 text-[13px] text-meta">
                 {stream.status === "live" ? (
                   <LiveBadge className="px-2 py-0 text-[9px]" />
                 ) : (
@@ -124,37 +142,36 @@ function StreamsTab({ username }: { username: string }) {
 
 function ActivitiesTab({ username }: { username: string }) {
   const activities = useProfileActivities(username);
-  if (activities.isPending)
-    return (
-      <div className="space-y-3">
-        {[0, 1].map((i) => (
-          <Skeleton key={i} className="h-16" />
-        ))}
-      </div>
-    );
+  if (activities.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
   if (activities.isError)
     return (
-      <ErrorState error={activities.error} fallback="Couldn't load activities." onRetry={() => activities.refetch()} />
+      <div className="p-4">
+        <ErrorState error={activities.error} fallback="Couldn't load activities." onRetry={() => activities.refetch()} />
+      </div>
     );
   if (activities.data.items.length === 0)
-    return <EmptyState glyph="◇" title="No activities" body="Scheduled games, streams and events show here." />;
+    return (
+      <div className="p-4">
+        <EmptyState glyph="◇" title="No activities" body="Scheduled games, streams and events show here." />
+      </div>
+    );
   return (
-    <ul className="space-y-3">
+    <ul>
       {activities.data.items.map((activity) => {
         const cta = activity.deepLink ? resolveDeepLink(activity.deepLink) : null;
         return (
-          <li key={activity.id} className="ws-card flex items-center gap-4 p-4">
-            <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center text-grey-300">
+          <li key={activity.id} className="ws-row flex items-center gap-3 px-4 py-3">
+            <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body">
               <IconCalendar className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{activity.title}</p>
-              <p className="text-xs text-grey-500">
+              <p className="truncate text-[15px] font-bold text-heading">{activity.title}</p>
+              <p className="text-[13px] text-meta">
                 {activity.type} · {formatDateTime(activity.startsAt)}
               </p>
             </div>
             {cta && (
-              <Link href={cta.href} className="shrink-0 text-xs font-semibold text-accent hover:underline">
+              <Link href={cta.href} className="shrink-0 text-[13px] font-semibold text-accent hover:underline">
                 {cta.label} →
               </Link>
             )}
@@ -172,74 +189,107 @@ export function ProfilePage({ username }: { username: string }) {
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
   const isMe = Boolean(profile.data && me.data && profile.data.id === me.data.id);
+  useMarketView("profile_viewed", { surface: "profile", entityType: "profile", entityId: profile.data?.id }, Boolean(profile.data));
 
   if (profile.isPending) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 px-4 py-6 lg:px-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-20 w-20 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-3 w-24" />
-          </div>
+      <>
+        <ColumnHeader title="Profile" back />
+        <div className="ws-skeleton h-40 rounded-none" />
+        <div className="space-y-3 px-4 pt-3">
+          <Skeleton className="-mt-16 h-28 w-28 rounded-full border-4 border-black" />
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-12 w-full" />
         </div>
-        <Skeleton className="h-16 w-full" />
-      </div>
+      </>
     );
   }
   if (profile.isError) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6 lg:px-6">
-        <ErrorState error={profile.error} fallback="Couldn't load this profile." onRetry={() => profile.refetch()} />
-      </div>
+      <>
+        <ColumnHeader title="Profile" back />
+        <div className="p-4">
+          <ErrorState error={profile.error} fallback="Couldn't load this profile." onRetry={() => profile.refetch()} />
+        </div>
+      </>
     );
   }
 
   const data = profile.data;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-6 lg:px-6">
-      <header className="flex flex-wrap items-center gap-4">
-        <Avatar name={data.displayName} src={data.avatarUrl} size={80} />
-        <div className="min-w-0 flex-1">
+    <>
+      {/* X's profile header: a back arrow with the identity beside it, then a
+          banner the avatar hangs off. The banner has no upload yet, so it is
+          the same seeded gradient the rest of the square uses for artwork. */}
+      <ColumnHeader
+        title={data.displayName}
+        subtitle={`${formatCount(data.followerCount)} followers`}
+        back
+      />
+
+      <GradientThumb seed={data.username} className="h-36 w-full sm:h-44" />
+
+      <div className="px-4 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="-mt-14 rounded-full border-4 border-black sm:-mt-16">
+            <Avatar name={data.displayName} src={data.avatarUrl} size={112} />
+          </div>
+          <div className="flex items-center gap-2 pt-3">
+            {isMe ? (
+              <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+                Edit profile
+              </Button>
+            ) : (
+              <>
+                <SafetyActions profile={data} />
+                <FollowButton profile={data} />
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3">
           <h1 className="ws-display flex items-center gap-2 text-xl">
             {data.displayName}
             <VerifiedBadge verification={data.verification} className="h-5 w-5" />
             <RoleChip role={data.role} />
           </h1>
-          <p className="text-sm text-grey-500">@{data.username}</p>
-          <p className="tnum mt-1 text-xs text-grey-400">
-            <span className="font-semibold text-white">{formatCount(data.followerCount)}</span> followers ·{" "}
-            <span className="font-semibold text-white">{formatCount(data.followingCount)}</span> following
-          </p>
+          <p className="text-[15px] text-meta">@{data.username}</p>
         </div>
-        {isMe ? (
-          <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
-            Edit profile
-          </Button>
-        ) : (
-          <FollowButton profile={data} />
-        )}
-      </header>
 
-      {data.bio && <p className="text-sm leading-relaxed text-grey-300">{data.bio}</p>}
+        {data.bio && <p className="mt-3 text-[15px] leading-normal text-body">{data.bio}</p>}
 
-      {isMe && <CreatorCard role={data.role} />}
-      {isMe && <VerificationCard />}
+        <p className="tnum mt-3 flex gap-4 text-[15px] text-meta">
+          <span>
+            <span className="font-bold text-heading">{formatCount(data.followingCount)}</span> Following
+          </span>
+          <span>
+            <span className="font-bold text-heading">{formatCount(data.followerCount)}</span> Followers
+          </span>
+        </p>
+      </div>
 
-      <div className="ws-inset flex gap-1 p-1">
-        {(["posts", "streams", "activities"] as const).map((value) => (
-          <button
-            key={value}
-            onClick={() => setTab(value)}
-            className={cn(
-              "flex-1 rounded-full py-2 text-sm font-semibold capitalize transition-colors",
-              tab === value ? "bg-accent text-ink" : "text-grey-400 hover:text-white"
-            )}
-          >
-            {value}
-          </button>
-        ))}
+      {/* Own-profile business: creator application and verification live above
+          the tabs, where they read as account state rather than content. */}
+      {isMe && (
+        <div className="ws-hair space-y-3 border-t px-4 py-4">
+          <CreatorCard role={data.role} />
+          <VerificationCard />
+        </div>
+      )}
+
+      <div className="ws-hair sticky top-0 z-20 border-b bg-black/72 backdrop-blur-md">
+        <ColumnTabs
+          tabs={[
+            { value: "posts" as Tab, label: "Posts" },
+            { value: "streams" as Tab, label: "Streams" },
+            { value: "activities" as Tab, label: "Activities" },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
       </div>
 
       {tab === "posts" && <PostsTab username={username} />}
@@ -247,6 +297,6 @@ export function ProfilePage({ username }: { username: string }) {
       {tab === "activities" && <ActivitiesTab username={username} />}
 
       {isMe && <EditProfileSheet me={data} open={editOpen} onClose={() => setEditOpen(false)} />}
-    </div>
+    </>
   );
 }

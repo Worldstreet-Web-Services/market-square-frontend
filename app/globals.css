@@ -14,6 +14,8 @@
 
   /* Ark brand is monochrome: no purple, no gold. The accent is silver. */
   --color-accent: #d4d4d8;
+  /* Featured/spotlight marker. Semantic like up/down — never decoration. */
+  --color-featured: #f5a524;
   /* Gain and loss stay semantic (functional, not brand color). */
   --color-up: #7ce7b0;
   --color-down: #f6a5a5;
@@ -222,8 +224,21 @@ body {
 .ws-reaction {
   position: absolute;
   pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.38));
   animation: ws-reaction-float var(--rd, 2.4s) ease-out forwards;
   will-change: transform, opacity;
+}
+
+@keyframes ws-gift-burst {
+  0% { opacity: 0; transform: translateY(24px) scale(0.82); }
+  14% { opacity: 1; transform: translateY(0) scale(1.05); }
+  22% { transform: translateY(0) scale(1); }
+  82% { opacity: 1; transform: translateY(-8px) scale(1); }
+  100% { opacity: 0; transform: translateY(-28px) scale(0.96); }
+}
+
+.ws-gift-burst {
+  animation: ws-gift-burst 3.2s ease-out forwards;
 }
 
 /* Double-tap heart burst on snap-feed items. */
@@ -293,8 +308,187 @@ body {
   .ws-heart-burst {
     animation: ws-heart-burst 0.5s ease-out forwards;
   }
+  .ws-gift-burst {
+    animation-duration: 1.6s;
+  }
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Column layout system (X-style three-column shell)
+
+   The square reads as one continuous timeline, not a stack of floating cards:
+   depth comes from hairline dividers and hover tints on pure black. `ws-card`
+   survives for genuinely detached objects (sheets, tiles, rail modules); rows
+   inside a column use `ws-row`.
+--------------------------------------------------------------------------- */
+
+/* The vertical rules that frame the centre column and split the rail off. */
+@utility ws-hair {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* A timeline row: full-bleed to the column edge, divided by a hairline,
+   lifting a touch under the pointer. */
+@utility ws-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background-color 0.15s ease;
+}
+.ws-row:hover {
+  background-color: rgba(255, 255, 255, 0.028);
+}
+
+/* Sticky column header: the tab strip, page titles, the rail search. Dark
+   enough that timeline content scrolling under it stays unreadable. */
+@utility ws-head {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Right-rail module: a soft slab, no inset highlight — quieter than ws-card
+   so the timeline stays the loudest thing on the page. */
+@utility ws-rail {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Rows inside a rail module get their own hover, keyed lighter than ws-row. */
+@utility ws-rail-row {
+  transition: background-color 0.15s ease;
+}
+.ws-rail-row:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Pill input: rail search and any single-line filter field. */
+@utility ws-field {
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.ws-field:focus-within {
+  background: #000;
+  border-color: rgba(212, 212, 216, 0.55);
+}
+
+/* Sidebar nav item: icon + label, pill hover, no fill until hovered. */
+@utility ws-nav {
+  border-radius: 9999px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.ws-nav:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Timeline action button. The halo grows behind the icon on hover rather
+   than the icon changing size — the row stays still. */
+@utility ws-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: color 0.15s ease;
+}
+.ws-action::before {
+  content: "";
+  position: absolute;
+  left: -0.5rem;
+  top: 50%;
+  height: 2rem;
+  width: 2rem;
+  translate: 0 -50%;
+  border-radius: 9999px;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+}
+.ws-action:hover::before {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------------------------------------------------------------------------
+   Stories (Instagram pattern, Ark palette)
+
+   Instagram signals "unseen" with a saturated gradient ring and "seen" with a
+   flat grey one. Ark is monochrome, so the gradient runs silver → white →
+   silver instead of pink → orange. The black gap between ring and avatar is
+   what makes it read as a ring rather than a border.
+--------------------------------------------------------------------------- */
+
+@utility ws-story-ring {
+  padding: 2.5px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 210deg,
+    #ffffff 0deg,
+    #d4d4d8 110deg,
+    #71717a 200deg,
+    #ffffff 300deg,
+    #ffffff 360deg
+  );
+}
+
+/* Seen: the ring stays, drained to a single dim grey. */
+@utility ws-story-seen {
+  background: none;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+/* The black gap. Sits between the ring and the avatar image. */
+@utility ws-story-gap {
+  border-radius: 9999px;
+  background: #000;
+  padding: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Home (Market Square design)
+
+   The home timeline is card-based rather than divider-based: each post is a
+   detached slab on the page ground, so `ws-post` replaces `ws-row` here. The
+   column surfaces elsewhere keep their dividers.
+--------------------------------------------------------------------------- */
+
+@utility ws-post {
+  border-radius: 18px;
+  background: #111113;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.15s ease;
+}
+.ws-post:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+/* Rail module on the home page: same slab, tighter radius. */
+@utility ws-panel {
+  border-radius: 14px;
+  background: #111113;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Featured/spotlight treatment. The amber is the one hue in the product and
+   it is semantic — it marks "featured", never decoration. Everything else
+   stays on the silver ramp. */
+@utility ws-featured {
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(245, 165, 36, 0.14), rgba(245, 165, 36, 0.03) 60%), #111113;
+  border: 1px solid rgba(245, 165, 36, 0.3);
+}
+
+/* Inline comment affordance inside a post's action row. */
+@utility ws-comment-field {
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.ws-comment-field:focus-within {
+  background: #000;
+  border-color: rgba(212, 212, 216, 0.5);
 }

@@ -21,6 +21,9 @@ export const StoreItemSchema = z.object({
   actionKind: z.enum(["open", "download", "purchase"]).catch("open"),
   actionUrl: z.string().optional().default(""),
   installCount: z.number().optional().default(0),
+  ownerTeam: z.string().optional().default("WorldStreet"),
+  availability: z.string().optional().default("Available"),
+  supportPolicy: z.string().optional().default("Support is available through WorldStreet.") ,
   createdAt: z.string().optional().default(""),
 });
 

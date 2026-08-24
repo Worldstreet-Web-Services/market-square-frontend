@@ -16,6 +16,7 @@ import {
   type Stream,
   type StreamCategory,
 } from "@/features/streams/lib/types";
+import { MARKET_FLAGS } from "@/lib/market-config";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-grey-600";
@@ -94,7 +95,7 @@ function StreamInfoCard({
               ))}
             </select>
             <input value={ticket} onChange={(e) => setTicket(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="Ticket KASH" inputMode="decimal" className={inputClass} aria-label="Ticket price" />
-            <input value={vip} onChange={(e) => setVip(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="VIP KASH" inputMode="decimal" className={inputClass} aria-label="VIP price" />
+            {MARKET_FLAGS.vipAccess && <input value={vip} onChange={(e) => setVip(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="VIP KASH" inputMode="decimal" className={inputClass} aria-label="VIP price" />}
           </div>
           {update.isError && <InlineError error={update.error} fallback="Couldn't save changes." />}
           <div className="flex gap-2">
@@ -103,7 +104,7 @@ function StreamInfoCard({
               loading={update.isPending}
               onClick={() =>
                 update.mutate(
-                  { title: title.trim() || undefined, category, ticketPriceKash: ticket, vipPriceKash: vip },
+                  { title: title.trim() || undefined, category, ticketPriceKash: ticket, vipPriceKash: MARKET_FLAGS.vipAccess ? vip : undefined },
                   { onSuccess: () => setEditing(false) }
                 )
               }

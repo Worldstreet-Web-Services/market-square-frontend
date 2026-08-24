@@ -5,68 +5,74 @@ import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
-import { IconCalendar, IconEye, IconPlay } from "@/components/ui/icons";
+import { IconEye, IconPlay } from "@/components/ui/icons";
 import type { Stream } from "@/features/streams/lib/types";
+import { MARKET_FLAGS } from "@/lib/market-config";
 
 export function streamPriceLabel(stream: Pick<Stream, "ticketPriceKash" | "vipPriceKash">): string {
   if (stream.ticketPriceKash) return formatKash(stream.ticketPriceKash);
-  if (stream.vipPriceKash) return `Free · VIP ${formatKash(stream.vipPriceKash)}`;
+  if (MARKET_FLAGS.vipAccess && stream.vipPriceKash) return `Free · VIP ${formatKash(stream.vipPriceKash)}`;
   return "Free";
 }
 
+// List row for the Live column: thumbnail left, everything else stacked
+// beside it, so a full section scans in one vertical pass.
 export function StreamCard({ stream }: { stream: Stream }) {
+  const viewers = stream.viewerCount || stream.peakViewers;
   return (
     <TransitionLink
       href={`/live/${stream.id}`}
-      className="ws-card ws-press block overflow-hidden transition-colors hover:bg-white/8"
+      className="ws-row flex items-start gap-3 px-4 py-3"
     >
       <GradientThumb
         seed={stream.id}
-        className="h-36 w-full"
+        className="aspect-[16/10] w-32 shrink-0 rounded-xl sm:w-36"
         style={{ viewTransitionName: `stream-${stream.id}` }}
       >
-        <div className="absolute left-3 top-3">
-          {stream.status === "live" ? (
-            <LiveBadge />
-          ) : stream.status === "ended" ? (
-            <Pill>{stream.replayUrl ? "Replay" : "Ended"}</Pill>
-          ) : (
-            <Pill>
-              <IconCalendar className="h-3 w-3" />
-              {stream.scheduledAt ? formatDateTime(stream.scheduledAt) : "Scheduled"}
-            </Pill>
-          )}
-        </div>
-        <div className="absolute bottom-3 right-3">
-          <Pill tone="accent">{streamPriceLabel(stream)}</Pill>
-        </div>
+        {stream.status === "live" && (
+          <span className="absolute left-1.5 top-1.5">
+            <LiveBadge className="px-2 py-0 text-[9px]" />
+          </span>
+        )}
         {(stream.status === "live" || stream.replayUrl) && (
           <span className="absolute inset-0 flex items-center justify-center">
-            <span className="ws-glass flex h-11 w-11 items-center justify-center rounded-full">
-              <IconPlay className="ml-0.5 h-5 w-5 text-white" />
+            <span className="ws-glass flex h-9 w-9 items-center justify-center rounded-full">
+              <IconPlay className="ml-0.5 h-4 w-4 text-white" />
             </span>
           </span>
         )}
       </GradientThumb>
-      <div className="flex items-center gap-3 p-4">
-        {stream.owner && <Avatar name={stream.owner.displayName} src={stream.owner.avatarUrl} size={34} />}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{stream.title}</p>
-          <p className="flex items-center gap-1.5 truncate text-xs text-grey-500">
-            {stream.owner && (
-              <>
-                <span>{stream.owner.displayName}</span>
-                <VerifiedBadge verification={stream.owner.verification} className="h-3.5 w-3.5" />
-              </>
-            )}
-            {stream.category && <span>· {stream.category}</span>}
-            {stream.status === "live" && (stream.viewerCount > 0 || stream.peakViewers > 0) && (
-              <span className="flex items-center gap-1">
-                · <IconEye className="h-3.5 w-3.5" /> {formatCount(stream.viewerCount || stream.peakViewers)}
-              </span>
-            )}
-          </p>
-        </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-[15px] font-bold leading-snug text-heading">{stream.title}</p>
+
+        <p className="mt-1 flex items-center gap-1.5 truncate text-[13px] text-meta">
+          {stream.owner && (
+            <>
+              <Avatar name={stream.owner.displayName} src={stream.owner.avatarUrl} size={18} />
+              <span className="truncate">{stream.owner.displayName}</span>
+              <VerifiedBadge verification={stream.owner.verification} className="h-3.5 w-3.5" />
+            </>
+          )}
+          {stream.category && (
+            <span className="shrink-0">{stream.owner ? `· ${stream.category}` : stream.category}</span>
+          )}
+        </p>
+
+        <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] text-meta">
+          <Pill tone="accent" className="px-2 py-0 text-[10px]">
+            {streamPriceLabel(stream)}
+          </Pill>
+          {stream.status === "live" && viewers > 0 && (
+            <span className="tnum flex items-center gap-1">
+              <IconEye className="h-3.5 w-3.5" /> {formatCount(viewers)} watching
+            </span>
+          )}
+          {stream.status === "scheduled" && stream.scheduledAt && (
+            <span>{formatDateTime(stream.scheduledAt)}</span>
+          )}
+          {stream.status === "ended" && <span>{stream.replayUrl ? "Replay available" : "Ended"}</span>}
+        </p>
       </div>
     </TransitionLink>
   );

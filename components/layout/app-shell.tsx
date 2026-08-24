@@ -8,11 +8,18 @@ import { useMe } from "@/hooks/use-me";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { ClaimUsernameGate } from "@/features/profile";
 import { Avatar } from "@/components/ui/avatar";
+import { RightRail } from "@/components/layout/right-rail";
 import {
+  IconBell,
   IconCalendar,
   IconCamera,
+  IconDots,
   IconHome,
   IconLive,
+  IconMore,
+  IconPlus,
+  IconSearch,
+  IconShield,
   IconSpark,
   IconStore,
   IconTicket,
@@ -22,21 +29,41 @@ import {
 interface NavItem {
   href: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; filled?: boolean }>;
   authed?: boolean;
+  operator?: boolean;
+  /** Folded into the "More" menu below xl, where vertical room runs out. */
+  secondary?: boolean;
 }
 
-// Desktop icon rail: everything; mobile tab bar: the consumer five with the
-// elevated Go Live button in the middle.
-const RAIL: NavItem[] = [
+// One ordered list drives the sidebar at every breakpoint. Primary items are
+// always visible; secondary ones collapse into More on shorter rails.
+const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
+  { href: "/discover", label: "Explore", icon: IconSearch },
+  { href: "/notifications", label: "Notifications", icon: IconBell, authed: true },
   { href: "/live", label: "Live", icon: IconLive },
-  { href: "/store", label: "Store", icon: IconStore },
-  { href: "/spotlight", label: "Spotlight", icon: IconSpark },
-  { href: "/schedule", label: "Schedule", icon: IconCalendar, authed: true },
   { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
+  { href: "/store", label: "Store", icon: IconStore },
+  { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
+  { href: "/schedule", label: "Schedule", icon: IconCalendar, authed: true, secondary: true },
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
+  { href: "/operations", label: "Operations", icon: IconShield, authed: true, operator: true, secondary: true },
 ];
+
+// Surfaces that need the full width: grids and dashboards drown inside a
+// 600px reading column, so they drop the right rail and spread instead.
+// Everything list-shaped stays in the column — including the Studio index and
+// Schedule, whose rows read worse stretched across 1000px. Their detail views
+// (the cockpit) are a different matter, hence the separate prefix list.
+const WIDE_EXACT = ["/store", "/operations"];
+const WIDE_PREFIX = ["/store/", "/operations/", "/studio/"];
+
+function isWide(pathname: string): boolean {
+  return (
+    WIDE_EXACT.includes(pathname) || WIDE_PREFIX.some((prefix) => pathname.startsWith(prefix))
+  );
+}
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
@@ -61,60 +88,237 @@ function OnAirPill({ streamId, compact }: { streamId: string | null; compact?: b
   );
 }
 
-function RailProfile() {
-  const { ready, authenticated, login } = useAuth();
-  const me = useMe();
-  const pathname = usePathname();
-
-  if (!ready) return <div className="ws-skeleton h-10 w-10 rounded-full" />;
-  if (!authenticated) {
-    return (
-      <button
-        onClick={login}
-        aria-label="Sign in"
-        title="Sign in"
-        className="ws-press flex h-10 w-10 items-center justify-center rounded-full bg-accent text-ink"
-      >
-        <IconUser className="h-5 w-5" />
-      </button>
-    );
-  }
-  const href = me.data ? `/u/${me.data.username}` : "/auth";
-  const active = me.data ? isActive(pathname, `/u/${me.data.username}`) : false;
+/** Sidebar row: icon at every width, label only once the rail is expanded. */
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const Icon = item.icon;
   return (
     <Link
-      href={href}
-      aria-label="My profile"
-      title={me.data?.displayName ?? "My profile"}
+      href={item.href}
+      aria-label={item.label}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "ws-press rounded-full",
-        active && "ring-2 ring-accent ring-offset-2 ring-offset-black"
+        "ws-nav group flex items-center gap-4 p-3 xl:pr-6",
+        active ? "text-heading" : "text-body"
       )}
     >
-      <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={36} />
+      <span className="relative shrink-0">
+        <Icon className="h-6 w-6" filled={active} />
+      </span>
+      <span
+        className={cn(
+          "hidden text-xl xl:block",
+          active ? "ws-display font-bold" : "font-medium"
+        )}
+      >
+        {item.label}
+      </span>
+      {/* Icon-rail tooltip, since the label is hidden below xl. */}
+      <span className="ws-overlay pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block xl:!hidden">
+        {item.label}
+      </span>
     </Link>
   );
 }
 
-function MobileProfileTab() {
-  const { ready, authenticated } = useAuth();
+function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="group relative xl:hidden">
+      <button
+        aria-label="More"
+        className="ws-nav flex w-full items-center gap-4 p-3 text-body"
+      >
+        <IconMore className="h-6 w-6 shrink-0" />
+      </button>
+      <div className="ws-glass absolute bottom-0 left-full z-50 ml-2 hidden w-52 rounded-2xl p-1.5 group-focus-within:block group-hover:block">
+        {items.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-white/10",
+              isActive(pathname, item.href) ? "text-heading" : "text-body"
+            )}
+          >
+            <item.icon className="h-5 w-5" />
+            {item.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Bottom-of-rail account chip: avatar, identity, overflow dots (X pattern). */
+function AccountChip() {
+  const { ready, authenticated, login, logout } = useAuth();
+  const me = useMe();
+
+  if (!ready) return <div className="ws-skeleton mx-2 h-12 rounded-full" />;
+
+  if (!authenticated) {
+    return (
+      <button
+        onClick={login}
+        className="ws-press flex w-full items-center justify-center gap-2 rounded-full bg-accent p-3 font-bold text-ink xl:px-6"
+        aria-label="Sign in"
+      >
+        <IconUser className="h-5 w-5 xl:hidden" />
+        <span className="hidden xl:block">Sign in</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="group relative">
+      <Link
+        href={me.data ? `/u/${me.data.username}` : "/auth"}
+        className="flex w-full items-center gap-3 rounded-full p-2 transition-colors hover:bg-white/8"
+      >
+        <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={40} />
+        <span className="hidden min-w-0 flex-1 xl:block">
+          <span className="block truncate text-sm font-bold text-heading">
+            {me.data?.displayName ?? "You"}
+          </span>
+          <span className="block truncate text-sm text-meta">
+            @{me.data?.username ?? "…"}
+          </span>
+        </span>
+        <IconDots className="hidden h-4 w-4 shrink-0 text-meta xl:block" />
+      </Link>
+      <div className="ws-glass absolute bottom-full left-0 z-50 mb-2 hidden w-56 rounded-2xl p-1.5 group-focus-within:block group-hover:block">
+        <Link
+          href={me.data ? `/u/${me.data.username}` : "/auth"}
+          className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+        >
+          View profile
+        </Link>
+        <button
+          onClick={() => logout()}
+          className="block w-full rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
+        >
+          Log out @{me.data?.username ?? ""}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ pathname }: { pathname: string }) {
+  const { authenticated } = useAuth();
+  const me = useMe();
+  const broadcast = useBroadcastStatus();
+
+  const visible = NAV.filter(
+    (item) =>
+      (!item.authed || authenticated) &&
+      (!item.operator || me.data?.role === "worldstreet")
+  );
+
+  return (
+    <aside className="sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center px-1 py-1 md:flex xl:w-[268px] xl:items-stretch xl:px-2">
+      <Link
+        href="/"
+        aria-label="Market Square home"
+        title="Market Square"
+        className="ws-press mt-1 mb-1 flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-white/8 xl:ml-1"
+      >
+        <span className="ws-display flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-lg text-ink">
+          M
+        </span>
+      </Link>
+
+      <nav className="flex flex-col gap-0.5" aria-label="Primary">
+        {visible
+          .filter((item) => !item.secondary)
+          .map((item) => (
+            <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+          ))}
+        {/* Expanded rail shows everything; the icon rail folds the rest away. */}
+        <div className="hidden flex-col gap-0.5 xl:flex">
+          {visible
+            .filter((item) => item.secondary)
+            .map((item) => (
+              <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+            ))}
+        </div>
+        <MoreMenu items={visible.filter((item) => item.secondary)} pathname={pathname} />
+      </nav>
+
+      {/* Post is the primary act; going live is the one Market Square adds
+          next to it, so it sits directly underneath as the quiet twin. */}
+      <div className="mt-4 flex flex-col items-center gap-2 xl:items-stretch xl:px-1">
+        <Link
+          href="/?compose=1"
+          className="ws-press flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white xl:h-13 xl:text-[17px]"
+          aria-label="Post"
+        >
+          <IconPlus className="h-6 w-6 xl:hidden" />
+          <span className="hidden xl:block">Post</span>
+        </Link>
+        <Link
+          href="/studio"
+          className="ws-press flex h-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 xl:h-13"
+          aria-label="Go live"
+        >
+          <IconCamera className="h-5 w-5" />
+          <span className="hidden xl:block">Go live</span>
+        </Link>
+      </div>
+
+      <div className="mt-auto w-full pb-2">
+        {broadcast.live && (
+          <div className="mb-2 flex justify-center xl:justify-start xl:pl-2">
+            <OnAirPill streamId={broadcast.streamId} compact />
+          </div>
+        )}
+        <AccountChip />
+      </div>
+    </aside>
+  );
+}
+
+function MobileBar({ pathname }: { pathname: string }) {
+  const { authenticated } = useAuth();
   const router = useRouter();
   const me = useMe();
-  const pathname = usePathname();
-  const active = me.data ? isActive(pathname, `/u/${me.data.username}`) : false;
-  const href = !ready || !authenticated ? "/auth" : me.data ? `/u/${me.data.username}` : "/auth";
+
+  // Five slots, profile included — six icons crowd a 390px bar. Tickets and
+  // Store stay one tap away through Explore and the profile menu.
+  const tabs = NAV.filter(
+    (item) => !item.secondary && item.href !== "/studio" && (!item.authed || authenticated)
+  ).slice(0, 4);
+
   return (
-    <button
-      onClick={() => router.push(href)}
-      aria-label="Profile"
-      className={cn(
-        "ws-press flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-full",
-        active ? "text-heading" : "text-meta"
-      )}
+    <nav
+      className="ws-head fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-b-0 border-t md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      aria-label="Primary"
     >
-      <IconUser className="h-5 w-5" />
-      <span className="text-[9px] font-semibold">You</span>
-    </button>
+      {tabs.map((item) => {
+        const active = isActive(pathname, item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-label={item.label}
+            className={cn(
+              "ws-press flex flex-1 items-center justify-center py-3",
+              active ? "text-heading" : "text-meta"
+            )}
+          >
+            <item.icon className="h-6 w-6" filled={active} />
+          </Link>
+        );
+      })}
+      <button
+        onClick={() => router.push(me.data ? `/u/${me.data.username}` : "/auth")}
+        aria-label="Profile"
+        className="ws-press flex flex-1 items-center justify-center py-3 text-meta"
+      >
+        <IconUser className="h-6 w-6" />
+      </button>
+    </nav>
   );
 }
 
@@ -124,126 +328,66 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const broadcast = useBroadcastStatus();
 
   // The stream room owns its whole viewport; the shell stays out of the way
-  // there (no tab bar over the player, no top bar).
+  // there (no rails over the player, no bars).
   const inRoom = /^\/live\/[^/]+$/.test(pathname);
+  const wide = isWide(pathname);
 
-  const mobileTabs: Array<NavItem> = [
-    { href: "/", label: "Home", icon: IconHome },
-    { href: "/live", label: "Live", icon: IconLive },
-  ];
-  const mobileTabsRight: Array<NavItem> = [{ href: "/store", label: "Store", icon: IconStore }];
+  if (inRoom) {
+    return (
+      <>
+        <main className="min-h-dvh">{children}</main>
+        <ClaimUsernameGate />
+      </>
+    );
+  }
 
   return (
-    <div className="flex min-h-dvh w-full">
-      {/* Desktop: slim glass-free icon rail. Depth from surface, not a box. */}
-      <aside className="sticky top-0 z-40 hidden h-dvh w-[68px] shrink-0 flex-col items-center gap-1 border-r border-white/8 py-5 md:flex">
-        <Link
-          href="/"
-          className="ws-display ws-press mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-base text-ink"
-          aria-label="Market Square home"
-          title="Market Square"
-        >
-          M
+    <div className="mx-auto flex w-full max-w-[1280px] justify-center">
+      <Sidebar pathname={pathname} />
+
+      {/* Mobile top strip: wordmark plus the two things worth reaching from
+          anywhere — what's live, and search. */}
+      <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between px-4 md:hidden">
+        <Link href="/" className="ws-display text-base">
+          Market <span className="text-accent">Square</span>
         </Link>
-        {RAIL.filter((item) => !item.authed || authenticated).map((item) => {
-          const active = isActive(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-label={item.label}
-              className={cn(
-                "ws-press group relative flex h-11 w-11 items-center justify-center rounded-full transition-colors",
-                active ? "bg-white/10 text-accent" : "text-meta hover:bg-white/5 hover:text-body"
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              {/* tooltip */}
-              <span className="ws-overlay pointer-events-none absolute left-full ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block group-focus-visible:block">
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-        <div className="mt-auto flex flex-col items-center gap-3">
+        <div className="flex items-center gap-3">
           {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
-          <RailProfile />
-        </div>
-      </aside>
-
-      {/* Mobile top wordmark strip (hidden in the stream room). */}
-      {!inRoom && (
-        <div className="fixed inset-x-0 top-0 z-40 flex h-11 items-center justify-between px-4 md:hidden">
-          <Link href="/" className="ws-display relative text-base">
-            Market <span className="text-accent">Square</span>
+          <Link href="/discover" className="text-meta" aria-label="Explore">
+            <IconSearch className="h-5 w-5" />
           </Link>
-          <div className="flex items-center gap-3">
-            {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
-            <Link href="/spotlight" className="text-meta" aria-label="Spotlight">
-              <IconSpark className="h-5 w-5" />
+          {authenticated && (
+            <Link href="/notifications" className="text-meta" aria-label="Notifications">
+              <IconBell className="h-5 w-5" />
             </Link>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      <main className={cn("min-w-0 flex-1", !inRoom && "pt-11 pb-24 md:pt-0 md:pb-0")}>
+      <main
+        className={cn(
+          "ws-hair min-h-dvh min-w-0 flex-1 border-x pt-12 pb-16 md:pt-0 md:pb-0",
+          // Home carries the design's wider timeline; the other column
+          // surfaces stay at the narrower reading width.
+          !wide && (pathname === "/" ? "md:max-w-[720px]" : "md:max-w-[600px]")
+        )}
+      >
         {children}
       </main>
 
-      {/* Mobile: floating glass pill tab bar with the elevated Go Live core. */}
-      {!inRoom && (
-        <nav
-          className="fixed inset-x-4 z-40 md:hidden"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
-          aria-label="Primary"
-        >
-          <div className="ws-glass flex items-center justify-around rounded-full px-3 py-1.5">
-            {mobileTabs.map((item) => {
-              const active = isActive(pathname, item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-label={item.label}
-                  className={cn(
-                    "ws-press flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-full",
-                    active ? "text-heading" : "text-meta"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span className="text-[9px] font-semibold">{item.label}</span>
-                </Link>
-              );
-            })}
-            {/* Go Live: elevated silver circle. */}
-            <Link
-              href="/studio"
-              aria-label="Go live"
-              className="ws-press -mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-ink shadow-[0_4px_24px_rgba(212,212,216,0.35)]"
-            >
-              <IconCamera className="h-6 w-6" />
-            </Link>
-            {mobileTabsRight.map((item) => {
-              const active = isActive(pathname, item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-label={item.label}
-                  className={cn(
-                    "ws-press flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-full",
-                    active ? "text-heading" : "text-meta"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span className="text-[9px] font-semibold">{item.label}</span>
-                </Link>
-              );
-            })}
-            <MobileProfileTab />
-          </div>
-        </nav>
-      )}
+      {!wide && <RightRail />}
+
+      {/* Mobile compose: a floating silver core, the one elevated control. */}
+      <Link
+        href="/?compose=1"
+        aria-label="Post"
+        className="ws-press fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-ink shadow-[0_4px_24px_rgba(212,212,216,0.3)] md:hidden"
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+      >
+        <IconPlus className="h-6 w-6" />
+      </Link>
+
+      <MobileBar pathname={pathname} />
 
       {/* First-load claim-username prompt for freshly created profiles. */}
       <ClaimUsernameGate />

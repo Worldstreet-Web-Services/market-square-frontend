@@ -26,6 +26,7 @@ export function VerificationCard() {
   const current = mine.data.current;
   const pending = current === "pending" || mine.data.latestRequest?.status === "pending";
   const verified = current === "earned" || current === "paid";
+  const ruleApproved = rule.data.status === "approved";
   const { minFollowers, minParticipationScore } = rule.data.eligibility;
 
   return (
@@ -36,7 +37,7 @@ export function VerificationCard() {
         {verified && <Pill tone="accent">Verified</Pill>}
         {pending && !verified && <Pill>Request pending</Pill>}
       </div>
-      {!verified && !pending && (
+      {!verified && !pending && ruleApproved && (
         <>
           <p className="text-sm text-grey-400">
             Earned verification needs at least {minFollowers} followers and a participation score of{" "}
@@ -46,6 +47,14 @@ export function VerificationCard() {
             Request verification
           </Button>
         </>
+      )}
+      {!verified && !pending && !ruleApproved && (
+        <div className="ws-inset px-4 py-3">
+          <p className="text-sm font-semibold text-white">Eligibility rules under review</p>
+          <p className="mt-1 text-xs leading-relaxed text-grey-500">
+            Verification thresholds, duration, revocation and appeal rules will appear here only after formal approval.
+          </p>
+        </div>
       )}
       {pending && !verified && (
         <p className="text-sm text-grey-400">

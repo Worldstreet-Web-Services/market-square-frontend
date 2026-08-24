@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RemoteTrack, Room } from "livekit-client";
 import { Spinner } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 
 type ViewerState = "connecting" | "live" | "reconnecting" | "waiting" | "failed";
 
@@ -24,6 +25,7 @@ export function LiveKitPlayer({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<ViewerState>("connecting");
+  const [videoCount, setVideoCount] = useState(0);
   const playingRef = useRef(onPlayingChange);
   useEffect(() => {
     playingRef.current = onPlayingChange;
@@ -43,8 +45,9 @@ export function LiveKitPlayer({
       const attach = (track: RemoteTrack) => {
         const element = track.attach();
         if (track.kind === Track.Kind.Video) {
-          element.className = "h-full w-full object-contain";
-          containerRef.current?.replaceChildren(element);
+          element.className = "h-full min-h-0 w-full min-w-0 object-cover";
+          containerRef.current?.appendChild(element);
+          setVideoCount(containerRef.current?.querySelectorAll("video").length ?? 1);
           setState("live");
           setPlaying(true);
         } else {
@@ -68,6 +71,7 @@ export function LiveKitPlayer({
         .on(RoomEvent.TrackSubscribed, (track) => attach(track))
         .on(RoomEvent.TrackUnsubscribed, (track) => {
           track.detach().forEach((element) => element.remove());
+          setVideoCount(containerRef.current?.querySelectorAll("video").length ?? 0);
           refreshState();
         })
         .on(RoomEvent.TrackMuted, refreshState)
@@ -110,7 +114,14 @@ export function LiveKitPlayer({
           : "relative aspect-video w-full overflow-hidden rounded-2xl bg-black"
       }
     >
-      <div ref={containerRef} className="absolute inset-0" />
+      <div
+        ref={containerRef}
+        className={cn(
+          "absolute inset-0 grid gap-0.5 bg-black",
+          videoCount <= 1 ? "grid-cols-1" : "grid-cols-2",
+          videoCount >= 3 && "grid-rows-2"
+        )}
+      />
       {state !== "live" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-center">
           {state === "connecting" && <Spinner className="h-8 w-8 text-grey-500" />}
