@@ -227,10 +227,12 @@ function Sidebar({ pathname }: { pathname: string }) {
         href="/"
         aria-label="Market Square home"
         title="Market Square"
-        className="ws-press mt-1 mb-1 flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-white/8 xl:ml-1"
+        className="ws-press mt-1 mb-1 flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-white/8 xl:ml-1 xl:w-auto xl:justify-start xl:px-3"
       >
-        {/* Icon rail: the mark only — the wordmark cannot survive 68px. */}
-        <LogoMark size={36} />
+        {/* The wordmark needs width, so the 68px rail wears the mark and the
+            expanded sidebar wears the wordmark. */}
+        <LogoMark size={36} className="xl:hidden" />
+        <Wordmark height={17} className="hidden xl:block" />
       </Link>
 
       <nav className="flex flex-col gap-0.5" aria-label="Primary">

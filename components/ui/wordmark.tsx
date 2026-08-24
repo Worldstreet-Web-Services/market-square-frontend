@@ -13,7 +13,13 @@ import { cn } from "@/lib/cn";
  *  - `LogoMark`  — the square monogram, for the 68px collapsed icon rail
  *                  where the wordmark would land about 5px tall.
  */
-const WORDMARK_SRC: string | null = null;
+// Web-sized from the 32768px master (browsers cap texture size well below
+// that, and decoding it would be pure waste): 1600x124 covers 3x DPR at the
+// largest on-screen use. White artwork on transparency, so it needs a dark
+// ground — every surface using it has one.
+const WORDMARK_SRC: string | null = "/market-square-wordmark.png";
+// No icon-only variant yet. The wordmark's hairline letterforms disappear at
+// 36px, so the collapsed rail keeps the solid monogram tile.
 const MARK_SRC: string | null = null;
 
 export function LogoMark({ size = 36, className }: { size?: number; className?: string }) {
