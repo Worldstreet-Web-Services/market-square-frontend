@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { cn } from "@/lib/cn";
 import { formatKashScore } from "@/features/profile/lib/score";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { Profile } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
-import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
@@ -42,9 +43,9 @@ export function SpotlightPage() {
         title="Spotlight"
         subtitle="The square's most active voices, ranked"
         action={
-          <span className="shrink-0 rounded-full border border-white/15 px-3.5 py-1 text-[13px] font-bold text-body">
+          <Pill tone="featured" className="shrink-0 px-3.5 py-1 text-[13px]">
             This week
-          </span>
+          </Pill>
         }
       />
 
@@ -83,7 +84,12 @@ export function SpotlightPage() {
                 <Link key={row.profile.id} href={`/u/${row.profile.username}`} className="flex flex-col items-center gap-2">
                   <div className="relative">
                     <Avatar name={row.profile.displayName} src={row.profile.avatarUrl} size={size} ring={position === 0} />
-                    <span className="ws-glass tnum absolute -bottom-1 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full text-xs font-bold">
+                    <span
+                      className={cn(
+                        "tnum absolute -bottom-1 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full text-xs font-bold",
+                        row.rank === 1 ? "bg-featured text-ink" : "ws-glass"
+                      )}
+                    >
                       {row.rank}
                     </span>
                   </div>
@@ -97,7 +103,14 @@ export function SpotlightPage() {
           <ul>
             {board.data.items.slice(3).map((row) => (
               <li key={row.profile.id} className="ws-row flex items-center gap-3 px-4 py-3">
-                <span className="tnum w-6 text-center text-[15px] font-bold text-meta">{row.rank}</span>
+                <span
+                  className={cn(
+                    "tnum w-6 text-center text-[15px] font-bold",
+                    row.rank <= 3 ? "text-featured" : "text-meta"
+                  )}
+                >
+                  {row.rank}
+                </span>
                 <Link href={`/u/${row.profile.username}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <Avatar name={row.profile.displayName} src={row.profile.avatarUrl} size={40} />
                   <div className="min-w-0">

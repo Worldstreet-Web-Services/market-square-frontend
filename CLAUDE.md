@@ -34,7 +34,7 @@ Market Square: the social, discovery, streaming and ARK Store surface of the Ark
 - Column order: section switcher + Schedule Stream/Create Post → stories strip → featured hero → lane tabs → card timeline. Home gets its own wider column (`md:max-w-[720px]`); everything else stays at 600px
 - Stories are **portrait cards** here (the design's shape), keeping the seen/unseen ring semantics and the Instagram viewer. The circular rail is gone
 - Post actions are comment / repost / like, an inline "Comment here" field, then share. There is **no bookmark endpoint** — do not add the icon until one exists
-- `--color-featured` (amber) is semantic: it marks featured/spotlight only (the hero eyebrow, `ws-featured`, category glyphs). Everything else stays on the silver ramp
+- `--color-featured` (amber) is semantic — **featured, premium, top-ranked, or coin value**, never decoration. In use: the home hero eyebrow and Citizen Spotlight, Spotlight's podium ranks and window chip, VIP ticket tiers, the paid Supporter badge, and every coin mark in the live room (Get Coins, gift prices, balance, the gift button). `Pill` carries a `featured` tone for it. Everything else stays on the silver ramp
 
 ## Layout (three-column shell)
 - `AppShell` centres a max-1280px frame: labelled sidebar (icon rail below `xl`), a 600px centre column, then `RightRail`. Routes in its `WIDE` list (store, operations, studio, schedule) drop the rail and spread; `/live/[id]` renders bare

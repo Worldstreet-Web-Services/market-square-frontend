@@ -20,7 +20,6 @@ import {
   IconPlus,
   IconSearch,
   IconShield,
-  IconSpark,
   IconStore,
   IconTicket,
   IconUser,
@@ -38,6 +37,10 @@ interface NavItem {
 
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
+//
+// Spotlight is deliberately absent: the right rail's Citizen Spotlight module
+// owns that surface and links into it, so a sidebar entry would be a second
+// door to the same room.
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
@@ -45,7 +48,6 @@ const NAV: NavItem[] = [
   { href: "/live", label: "Live", icon: IconLive },
   { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
   { href: "/store", label: "Store", icon: IconStore },
-  { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
   { href: "/schedule", label: "Schedule", icon: IconCalendar, authed: true, secondary: true },
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
   { href: "/operations", label: "Operations", icon: IconShield, authed: true, operator: true, secondary: true },

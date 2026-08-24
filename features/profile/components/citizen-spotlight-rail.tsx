@@ -8,7 +8,7 @@ import type { Profile } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
 import { VerifiedBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconSpark } from "@/components/ui/icons";
+import { IconChevronRight, IconSpark } from "@/components/ui/icons";
 import { useFollow, useSpotlight } from "@/features/profile/hooks/use-profile";
 
 function SpotlightFollow({ profile }: { profile: Profile }) {
@@ -54,13 +54,13 @@ export function CitizenSpotlightRail() {
 
   return (
     <section className="ws-featured p-3">
-      <div className="flex items-center gap-1.5">
+      <Link href="/spotlight" className="flex items-center gap-1.5">
         <IconSpark className="h-3.5 w-3.5 text-featured" />
-        <h2 className="text-[12px] font-bold text-heading">Citizen Spotlight</h2>
+        <h2 className="text-[12px] font-bold text-heading hover:underline">Citizen Spotlight</h2>
         <span className="rounded-full bg-featured/20 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-featured">
           Featured
         </span>
-      </div>
+      </Link>
       <p className="mt-1.5 text-[10px] leading-relaxed text-meta">
         High-performing and verified members making waves across Market Square.
       </p>
@@ -84,6 +84,13 @@ export function CitizenSpotlightRail() {
           </li>
         ))}
       </ul>
+
+      <Link
+        href="/spotlight"
+        className="mt-2.5 flex items-center gap-1 text-[10px] font-bold text-featured hover:underline"
+      >
+        See the full ranking <IconChevronRight className="h-2.5 w-2.5" />
+      </Link>
     </section>
   );
 }

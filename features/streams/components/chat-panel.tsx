@@ -43,13 +43,15 @@ function TopViewers({ messages }: { messages: ChatMessage[] }) {
         <div className="flex items-center gap-4">
           {leaders[0] && (
             <div className="flex shrink-0 items-center gap-2">
-              <span className="ws-display text-3xl leading-none text-accent">1</span>
+              <span className="ws-display text-3xl leading-none text-featured">1</span>
               <span className="text-center">
-                <Avatar
-                  name={leaders[0].author?.displayName ?? "Viewer"}
-                  src={leaders[0].author?.avatarUrl}
-                  size={46}
-                />
+                <span className="block rounded-full p-[2px] ring-2 ring-featured/60">
+                  <Avatar
+                    name={leaders[0].author?.displayName ?? "Viewer"}
+                    src={leaders[0].author?.avatarUrl}
+                    size={46}
+                  />
+                </span>
                 <span className="mt-1 block max-w-16 truncate text-[11px] text-body">
                   {leaders[0].author?.displayName}
                 </span>

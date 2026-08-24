@@ -316,7 +316,7 @@ function StreamNav({ stream }: { stream: Stream }) {
         </button>
       </nav>
       {MARKET_FLAGS.liveGifts && (
-        <button className="ws-press mt-6 flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-3 text-sm font-bold text-ink transition-colors hover:bg-white">
+        <button className="ws-press mt-6 flex items-center justify-center gap-2 rounded-lg bg-featured px-4 py-3 text-sm font-bold text-ink transition-colors hover:brightness-110">
           <IconCoin className="h-4 w-4" /> Get Coins
         </button>
       )}
@@ -713,7 +713,7 @@ export function StreamRoom({
                       {gift.name}
                     </span>
                     <span className="tnum mt-0.5 flex items-center gap-1 text-[11px] text-meta">
-                      <IconCoin className="h-3 w-3" />
+                      <IconCoin className="h-3 w-3 text-featured" />
                       {gift.priceKash}
                     </span>
                   </button>
@@ -731,12 +731,12 @@ export function StreamRoom({
             <div className="ws-hair flex items-center gap-3 border-t px-4 py-2 text-xs text-meta">
               <span className="flex items-center gap-1.5">
                 Coin balance:
-                <IconCoin className="h-3.5 w-3.5 text-accent" />
+                <IconCoin className="h-3.5 w-3.5 text-featured" />
                 <strong className="tnum text-heading">0</strong>
               </span>
               <button
                 onClick={() => gate(() => setGiftsOpen(true))}
-                className="ws-press rounded-md border border-accent/50 px-2 py-0.5 font-bold text-accent transition-colors hover:bg-accent/10"
+                className="ws-press rounded-md border border-featured/50 px-2 py-0.5 font-bold text-featured transition-colors hover:bg-featured/10"
               >
                 Get Coins
               </button>
@@ -774,7 +774,7 @@ export function StreamRoom({
             <button
               onClick={() => gate(() => setGiftsOpen(true))}
               aria-label="Send a live gift"
-              className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-accent text-ink transition-colors hover:bg-white"
+              className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-featured text-ink transition-colors hover:brightness-110"
             >
               <IconCoin className="h-5 w-5" />
             </button>

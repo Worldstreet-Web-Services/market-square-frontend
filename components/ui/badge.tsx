@@ -62,22 +62,24 @@ export function LiveBadge({ className }: { className?: string }) {
   );
 }
 
+// "featured" is the amber tone: promoted, premium or top-ranked. It is
+// semantic like up/down — never reach for it as decoration.
 export function Pill({
   children,
   tone = "neutral",
   className,
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "accent";
+  tone?: "neutral" | "accent" | "featured";
   className?: string;
 }) {
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
-        tone === "accent"
-          ? "bg-accent text-ink"
-          : "border border-white/15 bg-black/40 text-grey-200",
+        tone === "accent" && "bg-accent text-ink",
+        tone === "featured" && "border border-featured/40 bg-featured/15 text-featured",
+        tone === "neutral" && "border border-white/15 bg-black/40 text-grey-200",
         className
       )}
     >

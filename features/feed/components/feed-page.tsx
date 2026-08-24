@@ -21,17 +21,22 @@ import { useMarketView } from "@/lib/analytics";
 
 // The workspace switcher above the timeline. Only "Feeds" lives here; the
 // rest are the app's own surfaces, so they navigate rather than filter.
+//
+// Anything the right rail already surfaces is deliberately absent: Discover
+// is the rail's search field plus Explore Categories, so a tab for it would
+// be a third route to the same place.
 const SECTIONS = [
   { label: "Feeds", href: null },
-  { label: "Discover", href: "/discover" },
   { label: "Messages", href: "/notifications" },
   { label: "Notifications", href: "/notifications" },
   { label: "Activities", href: "/schedule" },
 ] as const;
 
+// Lanes filter the timeline. "live" is not among them on purpose — the rail's
+// Live now module and its Live Streams category already own that, and the
+// featured hero is drawn from the same lane.
 const LANES: Array<{ lane: Lane; label: string }> = [
   { lane: "for-you", label: "For You" },
-  { lane: "live", label: "Live Streaming" },
   { lane: "following", label: "Following" },
   { lane: "platform", label: "Trending" },
 ];

@@ -58,7 +58,10 @@ export function TicketsRail() {
                     {stream?.title ?? "Stream ticket"}
                   </span>
                   <span className="mt-0.5 block truncate text-xs text-meta">
-                    {ticket.tier === "vip" ? "VIP" : "Standard"} · {formatKash(ticket.priceKash)}
+                    <span className={ticket.tier === "vip" ? "font-bold text-featured" : undefined}>
+                      {ticket.tier === "vip" ? "VIP" : "Standard"}
+                    </span>{" "}
+                    · {formatKash(ticket.priceKash)}
                     {stream?.scheduledAt && !isLive ? ` · ${formatDateTime(stream.scheduledAt)}` : ""}
                   </span>
                 </span>

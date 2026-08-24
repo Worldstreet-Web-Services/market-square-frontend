@@ -65,10 +65,10 @@ export function VerificationCard() {
         <p className="text-sm text-grey-400">Your account carries the silver check everywhere on the square.</p>
       )}
       {rule.data.paid && (
-        <div className="ws-inset flex items-center justify-between px-4 py-3">
+        <div className="ws-featured flex items-center justify-between px-4 py-3">
           <div>
-            <p className="text-sm font-semibold">Supporter badge</p>
-            <p className="text-xs text-grey-500">{formatKash(rule.data.paid.priceKash)}</p>
+            <p className="text-sm font-semibold text-featured">Supporter badge</p>
+            <p className="tnum text-xs text-grey-400">{formatKash(rule.data.paid.priceKash)}</p>
           </div>
           {/* economics: "proposed" — not purchasable yet, rendered honestly. */}
           {rule.data.economics === "proposed" && <Pill>Coming soon</Pill>}

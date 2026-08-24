@@ -67,7 +67,10 @@ export function TicketWallet() {
               {ticket.stream?.title ?? "Stream"}
             </p>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-meta">
-              <Pill className="px-2 py-0 text-[10px]">
+              <Pill
+                tone={ticket.tier === "vip" ? "featured" : "neutral"}
+                className="px-2 py-0 text-[10px]"
+              >
                 {ticket.tier === "vip" ? "VIP" : "Standard"}
               </Pill>
               <span className="capitalize">{ticket.status}</span>
