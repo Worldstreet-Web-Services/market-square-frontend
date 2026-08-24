@@ -87,7 +87,7 @@ function publicProfile(p: FxProfile, viewerId: string | null) {
     username: p.username,
     displayName: p.displayName,
     bio: p.bio,
-    avatarUrl: null,
+    avatarUrl: p.avatarUrl ?? null,
     role: p.role,
     verification: p.verification,
     followerCount: p.followerCount,
@@ -102,17 +102,19 @@ function summary(p: FxProfile) {
     id: p.id,
     username: p.username,
     displayName: p.displayName,
-    avatarUrl: null,
+    avatarUrl: p.avatarUrl ?? null,
     role: p.role,
     verification: p.verification,
   };
 }
 
-// Backend Post — authorId, no likedByMe (client-side state).
+// Backend Post — likedByMe reflects the authed viewer on every read; a quoted
+// post is hydrated inline so the timeline can render it without a second call.
 function postDto(post: FxPost, viewerId: string | null = null) {
   const quoted = post.quotedPostId ? posts.find((item) => item.id === post.quotedPostId) : null;
   const quotedAuthor = quoted ? profileById(quoted.authorId) : null;
   return {
+    likedByMe: viewerId ? post.likedBy.has(viewerId) : false,
     id: post.id,
     authorId: post.authorId,
     kind: post.kind,
@@ -160,7 +162,7 @@ function streamDto(s: FxStream) {
     title: s.title,
     description: s.description,
     category: s.category,
-    thumbnailUrl: null,
+    thumbnailUrl: s.thumbnailUrl ?? null,
     status: s.status,
     scheduledAt: s.scheduledAt,
     startedAt: s.startedAt,
@@ -601,6 +603,7 @@ export function handleFixture(
       if (typeof body.displayName === "string" && body.displayName.trim())
         me.displayName = body.displayName.trim().slice(0, 50);
       if (typeof body.bio === "string") me.bio = body.bio.slice(0, 280);
+      if (typeof body.avatarUrl === "string") me.avatarUrl = body.avatarUrl || null;
       return ok(publicProfile(me, userId));
     }
     // GET /me/tickets → BARE ARRAY of Ticket & { stream }.
@@ -895,6 +898,7 @@ export function handleFixture(
         ticketPriceKash: ticketPrice,
         vipPriceKash: vipPrice,
         thumbnailHue: Math.floor(Math.random() * 360),
+        thumbnailUrl: typeof body.thumbnailUrl === "string" ? body.thumbnailUrl : null,
         scheduledAt:
           typeof body.scheduledAt === "string" ? body.scheduledAt : new Date().toISOString(),
         startedAt: null,
@@ -926,6 +930,7 @@ export function handleFixture(
       if (typeof body.ticketPriceKash === "string")
         stream.ticketPriceKash = body.ticketPriceKash || null;
       if (typeof body.vipPriceKash === "string") stream.vipPriceKash = body.vipPriceKash || null;
+      if (typeof body.thumbnailUrl === "string") stream.thumbnailUrl = body.thumbnailUrl || null;
       if (stream.ticketPriceKash || stream.vipPriceKash) stream.visibility = "ticketed";
       return ok(streamDto(stream));
     }

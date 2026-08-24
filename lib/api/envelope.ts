@@ -68,6 +68,10 @@ export function errorMessage(error: unknown, fallback: string): string {
   switch (err.code) {
     case "UNAUTHORIZED":
       return "Sign in to continue.";
+    case "SESSION_EXPIRED":
+      return "Session expired — sign in again.";
+    case "AUTH_NOT_READY":
+      return "Still connecting — try again in a moment.";
     case "FORBIDDEN":
       return "You don't have access to that.";
     case "NOT_FOUND":

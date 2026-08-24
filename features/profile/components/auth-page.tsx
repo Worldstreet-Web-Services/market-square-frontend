@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -11,7 +11,11 @@ export function AuthPage() {
   const { ready, authenticated, login, logout } = useAuth();
   const me = useMe();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const profile = me.data ?? null;
+  // Where an expired session should land the user again after signing in.
+  const rawReturnTo = searchParams.get("returnTo");
+  const returnTo = rawReturnTo?.startsWith("/") ? rawReturnTo : null;
 
   return (
     <div className="flex min-h-[80dvh] items-center justify-center px-6">
@@ -56,8 +60,8 @@ export function AuthPage() {
               )}
             </p>
             <div className="flex flex-col gap-2">
-              <Button className="w-full" onClick={() => router.push("/")}>
-                Go to the square
+              <Button className="w-full" onClick={() => router.push(returnTo ?? "/")}>
+                {returnTo ? "Continue where you left off" : "Go to the square"}
               </Button>
               {profile && (
                 <Button variant="secondary" className="w-full" onClick={() => router.push(`/u/${profile.username}`)}>

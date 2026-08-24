@@ -7,6 +7,7 @@ import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
 import { resolveDeepLink } from "@/lib/deeplink";
+import { isVideoUrl } from "@/lib/media";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
@@ -102,12 +103,12 @@ function CountAction({
         "ws-action text-[13px]",
         active
           ? tone === "down"
-            ? "text-down"
+            ? "text-like"
             : tone === "up"
               ? "text-up"
               : "text-heading"
           : "text-meta",
-        tone === "down" ? "hover:text-down" : tone === "up" ? "hover:text-up" : "hover:text-heading"
+        tone === "down" ? "hover:text-like" : tone === "up" ? "hover:text-up" : "hover:text-heading"
       )}
     >
       <span className="relative">{children}</span>
@@ -209,14 +210,25 @@ export function PostCard({ post }: { post: Post }) {
         <ReportMenu targetId={post.id} />
       </header>
 
-      {post.mediaUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
-        <img
-          src={post.mediaUrl}
-          alt=""
-          className="ws-hair mt-3 max-h-[420px] w-full rounded-2xl border object-cover"
-        />
-      )}
+      {/* mediaUrl carries both images and clips; the upload endpoint only
+          issues mp4/webm for video, so extension sniffing is enough. */}
+      {post.mediaUrl &&
+        (isVideoUrl(post.mediaUrl) ? (
+          <video
+            src={post.mediaUrl}
+            controls
+            playsInline
+            preload="metadata"
+            className="ws-hair mt-3 max-h-[420px] w-full rounded-2xl border"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+          <img
+            src={post.mediaUrl}
+            alt=""
+            className="ws-hair mt-3 max-h-[420px] w-full rounded-2xl border object-cover"
+          />
+        ))}
 
       <p className="mt-3 whitespace-pre-wrap break-words px-1 text-[13px] leading-relaxed text-body">
         {post.text}

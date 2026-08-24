@@ -5,8 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
+import { useLogout } from "@/hooks/use-logout";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { ClaimUsernameGate } from "@/features/profile";
+import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { RightRail } from "@/components/layout/right-rail";
 import {
@@ -153,7 +155,8 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
 
 /** Bottom-of-rail account chip: avatar, identity, overflow dots (X pattern). */
 function AccountChip() {
-  const { ready, authenticated, login, logout } = useAuth();
+  const { ready, authenticated, login } = useAuth();
+  const logout = useLogout();
   const me = useMe();
 
   if (!ready) return <div className="ws-skeleton mx-2 h-12 rounded-full" />;
@@ -196,7 +199,7 @@ function AccountChip() {
           View profile
         </Link>
         <button
-          onClick={() => logout()}
+          onClick={() => void logout()}
           className="block w-full rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
         >
           Log out @{me.data?.username ?? ""}
@@ -393,6 +396,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* First-load claim-username prompt for freshly created profiles. */}
       <ClaimUsernameGate />
+      {/* Session-expiry watchdog: logs out properly instead of half-stuck. */}
+      <SessionGuard />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, formatKash, relativeTime } from "@/lib/format";
 import { resolveDeepLink } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
@@ -80,7 +81,7 @@ function PostsTab({ username }: { username: string }) {
           <li key={post.id} className="ws-row px-4 py-3">
             <p className="whitespace-pre-wrap break-words text-[15px] leading-normal text-body">{post.text}</p>
             <div className="mt-2 flex items-center gap-5 text-[13px] text-meta">
-              <span className="tnum flex items-center gap-1.5">
+              <span className={cn("tnum flex items-center gap-1.5", post.likedByMe && "text-like")}>
                 <IconHeart className="h-4 w-4" filled={post.likedByMe} /> {formatCount(post.likeCount)}
               </span>
               <span className="tnum flex items-center gap-1.5">
