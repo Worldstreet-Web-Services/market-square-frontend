@@ -17,6 +17,7 @@ import {
   type Stream,
   type StreamCategory,
 } from "@/features/streams/lib/types";
+import { MARKET_FLAGS } from "@/lib/market-config";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-grey-600";
@@ -41,7 +42,7 @@ function MicMeter({ level }: { level: number }) {
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10" aria-label="Microphone level">
       <div
-        className="h-full rounded-full bg-accent transition-[width] duration-75"
+        className="h-full rounded-full bg-accent transition-[width] duration-75 motion-reduce:transition-none"
         style={{ width: `${Math.round(level * 100)}%` }}
       />
     </div>
@@ -96,7 +97,7 @@ function StreamInfoCard({
               ))}
             </select>
             <input value={ticket} onChange={(e) => setTicket(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="Ticket KASH" inputMode="decimal" className={inputClass} aria-label="Ticket price" />
-            <input value={vip} onChange={(e) => setVip(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="VIP KASH" inputMode="decimal" className={inputClass} aria-label="VIP price" />
+            {MARKET_FLAGS.vipAccess && <input value={vip} onChange={(e) => setVip(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="VIP KASH" inputMode="decimal" className={inputClass} aria-label="VIP price" />}
           </div>
           <UploadField value={cover} onChange={setCover} label="Cover" />
           {update.isError && <InlineError error={update.error} fallback="Couldn't save changes." />}
@@ -110,7 +111,8 @@ function StreamInfoCard({
                     title: title.trim() || undefined,
                     category,
                     ticketPriceKash: ticket,
-                    vipPriceKash: vip,
+                    // VIP pricing stays behind its governance flag.
+                    vipPriceKash: MARKET_FLAGS.vipAccess ? vip : undefined,
                     thumbnailUrl: cover ?? undefined,
                   },
                   { onSuccess: () => setEditing(false) }
@@ -162,8 +164,11 @@ export function GreenRoom({
 
   const goLive = () =>
     live.mutate(stream.id, {
-      onSuccess: (result) =>
-        onWentLive(result.ingest, { cameraId: devices.cameraId, micId: devices.micId }),
+      onSuccess: (result) => {
+        const chosen = { cameraId: devices.cameraId, micId: devices.micId };
+        devices.release();
+        onWentLive(result.ingest, chosen);
+      },
     });
 
   return (

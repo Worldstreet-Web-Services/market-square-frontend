@@ -15,8 +15,23 @@ export const DeepLinkSchema = z.object({
 
 // Backend roles: citizen | creator | ambassador | worldstreet.
 const RoleSchema = z.enum(["citizen", "creator", "ambassador", "worldstreet"]).catch("citizen");
-// Verification states include "pending" (request in review).
-const VerificationSchema = z.enum(["none", "pending", "earned", "paid"]).catch("none");
+/**
+ * Verification lifecycle.
+ *
+ * The platform GRANTS verification — nobody applies for it or buys in. Once
+ * granted it is kept current by a recurring KASH payment; letting that lapse
+ * pauses the badge without touching the underlying grant, so paying restores
+ * it instantly with no re-approval.
+ *
+ * The silver check renders on `verified` ONLY. `lapsed` is a verified account
+ * whose payment has run out, and it must not carry the check anywhere.
+ */
+const VerificationSchema = z.enum(["none", "pending", "verified", "lapsed"]).catch("none");
+// The organisation badge is assigned admin-only and is NOT derived from role —
+// product decides who carries one, so the two are independent signals that can
+// appear together. `catch(null)` keeps an unknown future value from failing the
+// parse, and the default keeps a backend without the field parsing cleanly.
+const OrgBadgeSchema = z.enum(["market", "ark"]).nullable().catch(null);
 
 const RawProfileSchema = z.object({
   id: z.string(),
@@ -26,9 +41,22 @@ const RawProfileSchema = z.object({
   avatarUrl: z.string().nullable().optional().default(null),
   role: RoleSchema,
   verification: VerificationSchema,
+  orgBadge: OrgBadgeSchema.optional().default(null),
+  // Set by the service on GET /me for operator accounts. Presentation only —
+  // every /admin route is enforced server-side, so hiding the UI is a courtesy
+  // to non-admins, never the access control.
+  isAdmin: z.boolean().optional().default(false),
   followerCount: z.number().optional().default(0),
   followingCount: z.number().optional().default(0),
-  isFollowing: z.boolean().optional().default(false),
+  // Deliberately NOT defaulted. `undefined` means "this payload does not
+  // carry the follow edge" — which is different from "you do not follow
+  // them", and today `GET /spotlight` omits it entirely. Defaulting to false
+  // erased that distinction and made every spotlight refetch stamp Follow
+  // back over a follow the viewer had just made. Read it through
+  // `useIsFollowing` (features/profile/lib/follow-state.ts), never raw, so an
+  // absent field falls back to the session's own intent instead of a lie.
+  isFollowing: z.boolean().optional(),
+  isBlocked: z.boolean().optional().default(false),
 });
 
 // "Member ·A1B2" beats "Someone": derived from the tail of the Privy DID so
@@ -54,3 +82,4 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export type DeepLink = z.infer<typeof DeepLinkSchema>;
 export type ProfileRole = z.infer<typeof RoleSchema>;
 export type VerificationState = z.infer<typeof VerificationSchema>;
+export type OrgBadge = z.infer<typeof OrgBadgeSchema>;

@@ -9,8 +9,11 @@ import {
   type StoreCategory,
 } from "@/features/store/lib/types";
 
-export async function fetchStoreItems(category?: StoreCategory) {
-  return StoreListSchema.parse(await msApi.get("/store/items", { category }));
+// `nextCursor` is the service's own paging token; the page used to throw it
+// away and slice the first response client-side, so "Load more" could never
+// reach anything past the first response.
+export async function fetchStoreItems(category?: StoreCategory, cursor?: string) {
+  return StoreListSchema.parse(await msApi.get("/store/items", { category, limit: 12, cursor }));
 }
 
 export async function fetchStoreItem(slug: string) {

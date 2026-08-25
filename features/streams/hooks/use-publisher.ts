@@ -1,17 +1,74 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LocalTrack, Room } from "livekit-client";
+import type { AudioCaptureOptions, LocalAudioTrack, LocalTrack, Room } from "livekit-client";
 import { setBroadcastLive } from "@/hooks/use-broadcast-status";
+// The taxonomy is pure and lives in lib/ so it can be pinned by tests —
+// lib/media-errors.test.ts owns the name → class table.
+import { captureErrorMessage as errorMessage, classifyCaptureError } from "@/lib/media-errors";
 import type { Ingest } from "@/features/streams/lib/types";
 
+// Speech capture profile for a talking host. These are stated explicitly
+// rather than left to the browser for three reasons:
+//   * `createLocalTracks()` is a standalone helper — unlike
+//     `room.localParticipant.setMicrophoneEnabled()`, it does NOT merge the
+//     SDK's `audioDefaults`, so `audio: true` publishes with whatever raw
+//     constraint set the UA picks. Toggling the mic off and on then produced a
+//     *differently processed* track than the one we went live with.
+//   * A guest speaker publishes from inside the stream room, where the host's
+//     audio is coming out of the same laptop's speakers. Without an explicit
+//     `echoCancellation`, that loop is re-broadcast to everyone as echo.
+//   * `channelCount: 1` is load-bearing: LiveKit disables Opus RED *and* DTX
+//     for tracks it detects as stereo (LocalParticipant.publishTrack →
+//     `if (isStereo) { opts.dtx ??= false; opts.red ??= false }`). RED is the
+//     redundant-encoding that hides packet loss, so a mic reporting two
+//     channels silently costs us our packet-loss protection.
+const SPEECH_CAPTURE: AudioCaptureOptions = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  voiceIsolation: true,
+  channelCount: 1,
+};
+
+/**
+ * A WebRTC connect that has not settled in this long is not going to. Without
+ * it the guest panel sat on "Connecting you to the stage…" forever, with no
+ * failure and no way out.
+ */
+const CONNECT_TIMEOUT_MS = 15_000;
+
+/**
+ * Capture failures are NOT all "permission denied".
+ *
+ * Every throw used to collapse into `denied`, so the panel told a guest whose
+ * camera was simply held by another tab to "allow camera access" — a prompt
+ * that will never appear, because permission was already granted. The browser
+ * distinguishes these cases by `err.name`; each one needs its own remedy.
+ */
 export type PublisherState =
   | "idle"
   | "connecting"
   | "publishing"
   | "reconnecting"
+  /** NotAllowedError / SecurityError — permission actually refused. */
   | "denied"
+  /** NotReadableError / TrackStartError — device held by another app or tab. */
+  | "device-busy"
+  /** NotFoundError / OverconstrainedError — nothing matches the constraints. */
+  | "device-missing"
+  /** Connect did not settle inside CONNECT_TIMEOUT_MS. */
+  | "timeout"
   | "failed";
+
+/** The subset of states that end the attempt and offer a retry. */
+export const PUBLISHER_FAILURES: readonly PublisherState[] = [
+  "denied",
+  "device-busy",
+  "device-missing",
+  "timeout",
+  "failed",
+];
 
 export type ConnectionQuality = "excellent" | "good" | "poor" | "unknown";
 
@@ -20,6 +77,18 @@ export interface PublisherControls {
   quality: ConnectionQuality;
   micOn: boolean;
   camOn: boolean;
+  /**
+   * True when the camera could not be acquired but the mic could, so we joined
+   * with audio alone rather than failing the whole join. `toggleCam` can still
+   * bring video up later if the device frees.
+   */
+  audioOnly: boolean;
+  /** The underlying message for `failed`; null for the classified states. */
+  error: string | null;
+  /** 0..1 smoothed level of the track we are actually publishing. */
+  micLevel: number;
+  /** Tears down and starts the connect again from scratch. */
+  retry: () => void;
   toggleMic: () => Promise<void>;
   toggleCam: () => Promise<void>;
   switchCamera: (deviceId: string) => Promise<void>;
@@ -51,6 +120,11 @@ export function usePublisher({
   const [quality, setQuality] = useState<ConnectionQuality>("unknown");
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [micLevel, setMicLevel] = useState(0);
+  const [audioOnly, setAudioOnly] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Bumping this re-runs the connect effect from scratch — the Retry control.
+  const [attempt, setAttempt] = useState(0);
 
   const url = ingest?.url ?? "";
   const token = ingest?.roomToken ?? "";
@@ -62,20 +136,103 @@ export function usePublisher({
     let cancelled = false;
     let room: Room | null = null;
     let tracks: LocalTrack[] = [];
+    let settled = false;
+
+    let meter: { stop: () => void } | null = null;
+
+    // The spin-forever guard. Cleared the moment the attempt settles either
+    // way; if it fires first, the panel gets a real failure and a Retry.
+    const timer = setTimeout(() => {
+      if (cancelled || settled) return;
+      settled = true;
+      setState("timeout");
+      void room?.disconnect();
+    }, CONNECT_TIMEOUT_MS);
+    const settle = (next: PublisherState, message: string | null = null) => {
+      if (cancelled || settled) return;
+      settled = true;
+      clearTimeout(timer);
+      setError(message);
+      setState(next);
+    };
 
     void import("livekit-client").then(
-      async ({ Room, RoomEvent, Track, ConnectionQuality: CQ, createLocalTracks }) => {
+      async ({
+        Room,
+        RoomEvent,
+        Track,
+        ConnectionQuality: CQ,
+        AudioPresets,
+        createLocalTracks,
+        createAudioAnalyser,
+      }) => {
         if (cancelled) return;
         setState("connecting");
         setQuality("unknown");
-        const instance = new Room();
+        const audioCapture: AudioCaptureOptions = preferredMic
+          ? { ...SPEECH_CAPTURE, deviceId: preferredMic }
+          : SPEECH_CAPTURE;
+        const instance = new Room({
+          // Mirrors the initial capture so a mic toggle (which re-creates the
+          // track through the SDK) republishes with the same processing and
+          // the same device instead of falling back to the system default.
+          audioCaptureDefaults: audioCapture,
+          publishDefaults: {
+            // 48 kbps mono Opus. Stated rather than inherited, and *not*
+            // dropped to AudioPresets.speech (24 kbps): the reported symptom
+            // is quality, not bandwidth, and RED already doubles the effective
+            // audio rate — ~96 kbps total is still ~5% of the 1.7 Mbps the
+            // 720p video track budgets, so there is nothing to buy by
+            // squeezing speech further.
+            audioPreset: AudioPresets.music,
+            // Explicit because the SDK only defaults these on for tracks it
+            // considers mono; pinning them means a mic that misreports its
+            // channel count cannot quietly turn off loss concealment.
+            red: true,
+            dtx: true,
+            forceStereo: false,
+          },
+        });
         room = instance;
         roomRef.current = instance;
 
+        const stopMeter = () => {
+          meter?.stop();
+          meter = null;
+          setMicLevel(0);
+        };
+        const startMeter = (track: LocalAudioTrack) => {
+          stopMeter();
+          const analyser = createAudioAnalyser(track);
+          const timer = setInterval(() => {
+            // calculateVolume() returns a 0..1 RMS; speech sits low in that
+            // range, so scale it the same way the green-room meter does.
+            setMicLevel(Math.min(1, analyser.calculateVolume() * 3));
+          }, 100);
+          meter = {
+            stop: () => {
+              clearInterval(timer);
+              void analyser.cleanup().catch(() => {});
+            },
+          };
+        };
+
         instance
+          .on(RoomEvent.LocalTrackPublished, (publication) => {
+            if (publication.kind === Track.Kind.Audio && publication.track) {
+              startMeter(publication.track as LocalAudioTrack);
+            }
+          })
+          .on(RoomEvent.LocalTrackUnpublished, (publication) => {
+            if (publication.kind === Track.Kind.Audio) stopMeter();
+          })
           .on(RoomEvent.Reconnecting, () => setState("reconnecting"))
           .on(RoomEvent.Reconnected, () => setState("publishing"))
-          .on(RoomEvent.Disconnected, () => setState("failed"))
+          // A drop after we were live is a real failure; a drop during the
+          // connect is already covered by the timeout/catch below.
+          .on(RoomEvent.Disconnected, () => {
+            if (settled) setState("failed");
+          })
           .on(RoomEvent.ConnectionQualityChanged, (q, participant) => {
             if (participant !== instance.localParticipant) return;
             setQuality(
@@ -89,18 +246,42 @@ export function usePublisher({
             );
           });
 
+        let joinedAudioOnly = false;
         try {
           tracks = await createLocalTracks({
-            audio: preferredMic ? { deviceId: preferredMic } : true,
+            audio: audioCapture,
             video: preferredCamera ? { deviceId: preferredCamera } : true,
           });
-        } catch {
-          if (!cancelled) setState("denied");
-          return;
+        } catch (cameraError) {
+          // The camera failed — but a guest usually cares about being HEARD.
+          // Before failing the whole join, try audio alone. This is the exact
+          // shape of the reported bug: two browser profiles on one laptop, the
+          // host holding the camera, the guest perfectly able to speak.
+          const cameraFailure = classifyCaptureError(cameraError);
+          try {
+            tracks = await createLocalTracks({ audio: audioCapture });
+            joinedAudioOnly = true;
+          } catch (audioError) {
+            // Both failed. Report on whichever error is more specific: if the
+            // mic failed for the same reason, that reason covers the device
+            // generally; otherwise the camera's classification is the story.
+            const audioFailure = classifyCaptureError(audioError);
+            settle(
+              audioFailure === "failed" ? cameraFailure : audioFailure,
+              audioFailure === "failed" && cameraFailure === "failed"
+                ? errorMessage(cameraError)
+                : null
+            );
+            return;
+          }
         }
         if (cancelled) {
           tracks.forEach((track) => track.stop());
           return;
+        }
+        if (joinedAudioOnly) {
+          setAudioOnly(true);
+          setCamOn(false);
         }
 
         try {
@@ -114,23 +295,28 @@ export function usePublisher({
             }
           }
           if (!cancelled) {
-            setState("publishing");
+            settle("publishing");
             setBroadcastLive(streamId);
           }
-        } catch {
-          if (!cancelled) setState("failed");
+        } catch (connectError) {
+          // LiveKit's ConnectionError used to be swallowed into the same silent
+          // state as everything else; surface its message instead.
+          settle("failed", errorMessage(connectError));
         }
       }
     );
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      meter?.stop();
+      setMicLevel(0);
       tracks.forEach((track) => track.stop());
       void room?.disconnect();
       roomRef.current = null;
       setBroadcastLive(null);
     };
-  }, [active, url, token, streamId, preferredCamera, preferredMic, previewRef]);
+  }, [active, url, token, streamId, preferredCamera, preferredMic, previewRef, attempt]);
 
   // Leave-guards while on air: tab close/reload asks first; in-app link
   // clicks (except new-tab links) require an explicit confirm.
@@ -167,13 +353,45 @@ export function usePublisher({
     setMicOn(next);
   }, [micOn]);
 
+  // Also the recovery path out of audio-only: `setCameraEnabled(true)` acquires
+  // the device on demand, so once the other tab releases it, this brings video
+  // up without rejoining. It can still fail (device busy again), so the throw
+  // is classified rather than left to reject an unhandled promise.
   const toggleCam = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
     const next = !camOn;
-    await room.localParticipant.setCameraEnabled(next);
-    setCamOn(next);
+    try {
+      await room.localParticipant.setCameraEnabled(next);
+      setCamOn(next);
+      if (next) {
+        setAudioOnly(false);
+        setError(null);
+      }
+    } catch (cameraError) {
+      const failure = classifyCaptureError(cameraError);
+      setCamOn(false);
+      setAudioOnly(true);
+      setError(
+        failure === "device-busy"
+          ? "Your camera is still in use by another app or browser tab."
+          : failure === "device-missing"
+            ? "No camera found."
+            : failure === "denied"
+              ? "Camera access is blocked in your browser settings."
+              : errorMessage(cameraError)
+      );
+    }
   }, [camOn]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setAudioOnly(false);
+    setCamOn(true);
+    setMicOn(true);
+    setState("idle");
+    setAttempt((n) => n + 1);
+  }, []);
 
   const switchCamera = useCallback(async (deviceId: string) => {
     await roomRef.current?.switchActiveDevice("videoinput", deviceId);
@@ -185,5 +403,18 @@ export function usePublisher({
 
   // Outside an active session the publisher is idle by definition.
   const effectiveState = active ? state : "idle";
-  return { state: effectiveState, quality, micOn, camOn, toggleMic, toggleCam, switchCamera, switchMic };
+  return {
+    state: effectiveState,
+    quality,
+    micOn,
+    camOn,
+    audioOnly: active && audioOnly,
+    error: active ? error : null,
+    micLevel: micOn ? micLevel : 0,
+    retry,
+    toggleMic,
+    toggleCam,
+    switchCamera,
+    switchMic,
+  };
 }

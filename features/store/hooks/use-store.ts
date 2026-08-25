@@ -1,8 +1,9 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { trackMarketEvent } from "@/lib/analytics";
 import {
   fetchMyOrders,
   fetchStoreItem,
@@ -12,9 +13,11 @@ import {
 import type { StoreCategory } from "@/features/store/lib/types";
 
 export function useStoreItems(category?: StoreCategory) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["ms", "store", category ?? "all"],
-    queryFn: () => fetchStoreItems(category),
+    queryFn: ({ pageParam }) => fetchStoreItems(category, pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
   });
 }
 
@@ -30,10 +33,18 @@ export function usePlaceOrder(slug: string) {
   return useMutation({
     mutationFn: () => placeOrder(slug),
     onSuccess: () => {
+      trackMarketEvent("purchase_completed", { surface: "store_detail", entityType: "store_item", entityId: slug });
+      trackMarketEvent("entitlement_issued", { surface: "store_detail", entityType: "store_item", entityId: slug });
+      toast.success("Order confirmed");
+    },
+    // onSettled: an order that errored on the way back may still have been
+    // recorded, and "Get — Free" must not keep offering an item already owned.
+    // The listing and the catalogue are sibling keys, not prefix and child, so
+    // both are named — as is /me/orders, which is what "Owned" reads from.
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["ms", "store-item", slug] });
       queryClient.invalidateQueries({ queryKey: ["ms", "store"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "my-orders"] });
-      toast.success("Order confirmed");
     },
   });
 }

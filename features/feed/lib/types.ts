@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
 
+export const MentionSchema = z.object({
+  type: z.enum(["profile", "group"]),
+  id: z.string(),
+  label: z.string(),
+  handle: z.string(),
+});
+
 // Backend Post: author id plus a hydrated ProfileSummary on feed items.
 // likedByMe comes from the backend on authed reads; the optimistic like
 // cache is an overlay on that truth, reconciled on every refetch.
@@ -10,13 +17,34 @@ export const PostSchema = z.object({
   kind: z.enum(["update", "story"]).catch("update"),
   text: z.string(),
   mediaUrl: z.string().nullable().optional().default(null),
+  // The backend now types its own media. Renderers prefer this over sniffing
+  // the URL's extension; `isVideoPost` falls back to the sniff when absent.
+  mediaKind: z.string().nullable().optional().default(null),
   thumbnailUrl: z.string().nullable().optional().default(null),
   deepLink: DeepLinkSchema.nullable().optional().default(null),
   storyExpiresAt: z.string().nullable().optional().default(null),
   createdAt: z.string(),
   likeCount: z.number(),
   commentCount: z.number(),
+  repostCount: z.number().optional().default(0),
+  repostedByMe: z.boolean().optional().default(false),
+  // The quoted original, hydrated one level deep only — a quote of a quote
+  // shows the inner card's text, never a third nested frame. When the original
+  // has been removed or expired the backend flags it rather than dropping the
+  // field, so the card can say so instead of silently losing context.
+  quotedPost: z.object({
+    id: z.string(),
+    text: z.string().optional().default(""),
+    mediaUrl: z.string().nullable().optional().default(null),
+    createdAt: z.string().optional().default(""),
+    unavailable: z.boolean().optional().default(false),
+    author: ProfileSchema.nullable().optional().default(null),
+  }).nullable().optional().default(null),
+  mentions: z.array(MentionSchema).optional().default([]),
   likedByMe: z.boolean().optional().default(false),
+  // Arkmarks. Defaults to false so a backend that has not shipped the field
+  // yet parses cleanly — the button reads "not saved" rather than throwing.
+  bookmarkedByMe: z.boolean().optional().default(false),
   author: ProfileSchema.nullable().optional().default(null),
 });
 
@@ -70,6 +98,9 @@ export const FeedItemSchema = z.object({
   id: z.string(),
   type: z.enum(["post", "stream", "activity", "platform_event"]),
   occurredAt: z.string(),
+  // Present when the item reaches the viewer through someone's repost: the
+  // original post, attributed to whoever passed it on.
+  repostedBy: ProfileSchema.nullable().optional().default(null),
   deepLink: DeepLinkSchema.nullable().optional().default(null),
   post: PostSchema.nullable().optional().default(null),
   stream: FeedStreamSchema.nullable().optional().default(null),
@@ -88,6 +119,12 @@ export const CommentsPageSchema = z.object({
 });
 
 export const LikeResultSchema = z.object({ liked: z.boolean(), likeCount: z.number() });
+// POST/DELETE /posts/:id/bookmark. The backend contract returns the resulting
+// state; older builds answer with an empty body, hence the optional field.
+export const BookmarkResultSchema = z.object({
+  bookmarked: z.boolean().optional(),
+});
+export const RepostResultSchema = z.object({ reposted: z.boolean(), repostCount: z.number() });
 
 // Backend report reasons are a fixed enum.
 export const ReportReasonSchema = z.enum(["spam", "abuse", "scam", "other"]);
@@ -98,4 +135,5 @@ export type FeedItem = z.infer<typeof FeedItemSchema>;
 export type FeedStream = z.infer<typeof FeedStreamSchema>;
 export type FeedPage = z.infer<typeof FeedPageSchema>;
 export type ReportReason = z.infer<typeof ReportReasonSchema>;
-export type Lane = "for-you" | "following" | "live" | "platform";
+export type Mention = z.infer<typeof MentionSchema>;
+export type Lane = "for-you" | "following" | "live" | "platform" | "reels" | "trending";

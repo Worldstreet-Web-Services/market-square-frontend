@@ -7,27 +7,49 @@ import { cn } from "@/lib/cn";
 import { errorCode } from "@/lib/api/envelope";
 import { formatCount, formatCountdown, formatDateTime } from "@/lib/format";
 import { useGate } from "@/hooks/use-gate";
+import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
+import { BrandLink } from "@/components/ui/wordmark";
 import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { Button, Spinner } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
+  IconCamera,
+  IconChevronDown,
   IconChevronLeft,
+  IconChevronUp,
+  IconCoin,
+  IconCollapseRight,
   IconComment,
   IconEye,
+  IconFullscreen,
   IconHeart,
+  IconHome,
   IconLink,
+  IconLive,
+  IconPause,
+  IconPlay,
+  IconPip,
+  IconRefresh,
+  IconShare,
+  IconTheater,
   IconTicket,
+  IconVolume,
 } from "@/components/ui/icons";
 import { ErrorState, InlineError } from "@/components/ui/states";
 import type { Profile } from "@/lib/api/schemas";
-import { useStream } from "@/features/streams/hooks/use-streams";
+import { useStream, useStreamList } from "@/features/streams/hooks/use-streams";
 import { useHeartbeat, usePlaybackToken } from "@/features/streams/hooks/use-playback";
-import { HlsPlayer } from "@/features/streams/components/hls-player";
+import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-player";
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
+import { GiftSheet, LIVE_GIFTS, type LiveGift } from "@/features/streams/components/gift-sheet";
+import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
+import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
 import { TicketSheet } from "@/features/streams/components/ticket-sheet";
 import { streamPriceLabel } from "@/features/streams/components/stream-card";
 import type { Stream } from "@/features/streams/lib/types";
+import { MARKET_FLAGS } from "@/lib/market-config";
 
 function Countdown({ target }: { target: string }) {
   const [now, setNow] = useState(() => Date.now());
@@ -43,16 +65,32 @@ function Countdown({ target }: { target: string }) {
   );
 }
 
+function LiveElapsed({ startedAt }: { startedAt: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - Date.parse(startedAt ?? new Date().toISOString())) / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const rest = seconds % 60;
+  return <span className="tnum">{hours}:{String(minutes).padStart(2, "0")}:{String(rest).padStart(2, "0")}</span>;
+}
+
 // The playing surface for live and replay states. Owns the playback token,
 // the ticket gate (403 ⇒ CTA), and the 15 s heartbeat. Full-bleed.
 function PlaybackSurface({
   stream,
   mode,
   onNeedTicket,
+  onQuality,
 }: {
   stream: Stream;
   mode: "live" | "replay";
   onNeedTicket: () => void;
+  /** Renditions reported by hls.js, so the control bar can offer a real pick. */
+  onQuality?: (api: QualityApi | null) => void;
 }) {
   const playback = usePlaybackToken(stream.id, true);
   const [playing, setPlaying] = useState(false);
@@ -92,11 +130,27 @@ function PlaybackSurface({
       <LiveKitPlayer url={playback.data.url} token={playback.data.token} onPlayingChange={setPlaying} fill />
     );
   }
-  return <HlsPlayer src={playback.data.url} onPlayingChange={setPlaying} fill />;
+  return (
+    <HlsPlayer
+      src={playback.data.url}
+      captionSrc={playback.data.captionUrl}
+      onPlayingChange={setPlaying}
+      onQuality={onQuality}
+      fill
+    />
+  );
 }
 
 // Non-live states rendered on the same immersive stage.
-function StageBody({ stream, onOpenTickets }: { stream: Stream; onOpenTickets: () => void }) {
+function StageBody({
+  stream,
+  onOpenTickets,
+  onQuality,
+}: {
+  stream: Stream;
+  onOpenTickets: () => void;
+  onQuality?: (api: QualityApi | null) => void;
+}) {
   const gate = useGate();
   const needsTicket =
     stream.visibility === "ticketed" &&
@@ -142,9 +196,13 @@ function StageBody({ stream, onOpenTickets }: { stream: Stream; onOpenTickets: (
         </div>
       );
     }
-    return <PlaybackSurface stream={stream} mode="replay" onNeedTicket={() => gate(onOpenTickets)} />;
+    return (
+      <PlaybackSurface stream={stream} mode="replay" onNeedTicket={() => gate(onOpenTickets)} onQuality={onQuality} />
+    );
   }
-  return <PlaybackSurface stream={stream} mode="live" onNeedTicket={() => gate(onOpenTickets)} />;
+  return (
+    <PlaybackSurface stream={stream} mode="live" onNeedTicket={() => gate(onOpenTickets)} onQuality={onQuality} />
+  );
 }
 
 interface Reaction {
@@ -153,10 +211,172 @@ interface Reaction {
   drift: number;
   rotate: number;
   duration: number;
+  color: string;
+  size: number;
+}
+
+interface GiftBurst {
+  id: number;
+  gift: LiveGift;
+  quantity: number;
 }
 
 const MAX_REACTIONS = 30;
+// TikTok floats saturated hearts; Ark is monochrome, so the drift varies the
+// silver ramp instead of the hue.
+const REACTION_COLORS = ["#ffffff", "#f4f4f4", "#d4d4d8", "#bfbfbf", "#9b9b9b"];
 let reactionSeq = 0;
+let giftSeq = 0;
+
+// One entry per destination. Two labels pointing at the same href ("Back" and
+// "Discover LIVE" both went to /live; "Go LIVE" and "Creator tools" both went
+// to /studio) read as four choices while offering two, so the duplicates are
+// gone. Nothing here is marked current: the current page is /live/:id, which
+// none of these is — this rail is the way *out* of the room.
+const STREAM_NAV = [
+  { href: "/", label: "Home", icon: IconHome },
+  { href: "/live", label: "Discover LIVE", icon: IconLive },
+  { href: "/tickets", label: "My tickets", icon: IconTicket },
+  { href: "/studio", label: "Go LIVE", icon: IconCamera },
+] as const;
+
+
+function SuggestedCreators({ currentId }: { currentId: string }) {
+  const live = useStreamList("live");
+  const others = (live.data?.items ?? []).filter((item) => item.id !== currentId).slice(0, 5);
+
+  return (
+    <div className="mt-5 border-t border-white/10 pt-5">
+      <div className="flex items-center justify-center gap-1 px-1 xl:justify-between">
+        <p className="hidden text-sm font-semibold text-grey-400 xl:block">Suggested LIVE creators</p>
+        <button
+          onClick={() => live.refetch()}
+          aria-label="Refresh suggestions"
+          title="Refresh suggestions"
+          className="rounded-full p-1 text-grey-500 transition-colors hover:bg-white/10 hover:text-body"
+        >
+          <IconRefresh className="h-4 w-4" />
+        </button>
+      </div>
+
+      {live.isPending && (
+        <div className="mt-3 space-y-3 px-1">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center justify-center gap-3 xl:justify-start">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+              <div className="hidden flex-1 space-y-1.5 xl:block">
+                <Skeleton className="h-2.5 w-24" />
+                <Skeleton className="h-2.5 w-14" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {live.isSuccess && others.length === 0 && (
+        <p className="mt-3 hidden px-1 text-[11px] text-grey-600 xl:block">
+          No other creators are live right now.
+        </p>
+      )}
+
+      <ul className="mt-2">
+        {others.map((item) => {
+          const name = item.owner?.displayName ?? item.title;
+          return (
+            <li key={item.id}>
+              <Link
+                href={`/live/${item.id}`}
+                // Below xl the row is the avatar alone, so the accessible name
+                // has to come from the link itself — the text is display:none.
+                aria-label={`${name} — live now`}
+                title={name}
+                className="flex items-center justify-center gap-3 rounded-lg px-1 py-2 transition-colors hover:bg-white/[0.07] xl:justify-start"
+              >
+                <span className="relative shrink-0">
+                  <Avatar name={name} seed={item.ownerId} src={item.owner?.avatarUrl} size={36} />
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-sm bg-accent px-1 text-[7px] font-bold text-ink">
+                    LIVE
+                  </span>
+                </span>
+                <span className="hidden min-w-0 flex-1 xl:block">
+                  <span className="block truncate text-sm font-semibold text-heading">{name}</span>
+                  <span className="block truncate text-[11px] text-meta">
+                    {item.owner ? `@${item.owner.username}` : item.category}
+                  </span>
+                </span>
+                <span className="tnum hidden shrink-0 text-[11px] text-meta xl:block">
+                  {formatCount(item.viewerCount || item.peakViewers)}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+
+      <Link
+        href="/live"
+        className="mt-2 flex items-center justify-center gap-1 px-1 py-1 text-[13px] font-semibold text-accent xl:justify-start"
+      >
+        <IconChevronDown className="h-3.5 w-3.5 shrink-0" />
+        <span className="hidden xl:inline">See all</span>
+      </Link>
+    </div>
+  );
+}
+
+// The way out of the room. Present from `lg` — the breakpoint where the room
+// stops being a full-bleed phone stage (which carries its own overlaid back
+// chevron) and becomes the desktop stack. It was `xl:flex`, which left the
+// whole 1024–1279px band with no rail, no back control and no wordmark: the
+// viewer was sealed in. Collapsed to a 72px icon rail below `xl` so the stage
+// keeps its width, labelled from `xl` — the same collapse the app shell's
+// sidebar uses, and the pattern Twitch/YouTube use on a watch page.
+function StreamNav({ stream }: { stream: Stream }) {
+  return (
+    <aside className="hidden h-dvh w-[72px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-black px-2 py-6 text-body lg:flex xl:w-[250px] xl:px-5 2xl:w-[304px]">
+      <BrandLink
+        variant="mark"
+        className="mb-8 flex items-center justify-center xl:hidden"
+        markSize={36}
+      />
+      <BrandLink
+        className="mb-8 hidden items-center gap-3 px-2 xl:flex"
+        markSize={40}
+        wordmarkHeight={20}
+      />
+      <nav className="space-y-1" aria-label="Leave this live room">
+        {STREAM_NAV.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-label={item.label}
+            title={item.label}
+            className="group relative flex items-center justify-center gap-4 rounded-lg px-3 py-3 text-[16px] font-semibold text-body transition-colors hover:bg-white/[0.07] xl:justify-start"
+          >
+            <item.icon className="h-6 w-6 shrink-0" />
+            <span className="hidden xl:inline">{item.label}</span>
+            {/* Collapsed rail: name the icon on hover, as the app shell does. */}
+            <span className="ws-overlay pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block xl:!hidden">
+              {item.label}
+            </span>
+          </Link>
+        ))}
+        {/* No "More" here: the entries above ARE the room's navigation, and a
+            menu with nothing behind it is worse than no menu. Coin purchase is
+            likewise absent — there is no coin ledger to buy into (see the
+            gifting note in StreamRoom). */}
+      </nav>
+
+      <SuggestedCreators currentId={stream.id} />
+      {/* Company / Program / Terms & Policies used to sit here as bare <p>
+          elements. There are no routes behind any of them, so they were three
+          dead controls dressed as links; the copyright is the only true line. */}
+      <div className="mt-auto hidden border-t border-white/10 px-1 pt-5 text-[12px] leading-6 text-grey-600 xl:block">
+        <p>© {new Date().getFullYear()} Market Square</p>
+      </div>
+    </aside>
+  );
+}
 
 export function StreamRoom({
   streamId,
@@ -167,32 +387,70 @@ export function StreamRoom({
   followSlot?: (owner: Profile) => React.ReactNode;
 }) {
   const stream = useStream(streamId, true);
+  const gate = useGate();
+  const me = useMe();
   const [ticketsOpen, setTicketsOpen] = useState(false);
+  const [giftsOpen, setGiftsOpen] = useState(false);
+  const [pulseOpen, setPulseOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [theater, setTheater] = useState(false);
   const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [giftBursts, setGiftBursts] = useState<GiftBurst[]>([]);
   const reactionTimers = useRef<number[]>([]);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [paused, setPaused] = useState(true);
+  const [quality, setQuality] = useState<QualityApi | null>(null);
+  const [qualityOpen, setQualityOpen] = useState(false);
 
   useEffect(() => {
     const timers = reactionTimers.current;
     return () => timers.forEach((t) => clearTimeout(t));
   }, []);
 
-  const spawnReaction = useCallback(() => {
+  // Ambient decoration only. There is no stream-like endpoint, so a tap floats
+  // a heart and changes nothing else — it must never move the displayed tally,
+  // which is the service's own count.
+  const spawnReaction = useCallback((burst = 1) => {
     setReactions((current) => {
-      if (current.length >= MAX_REACTIONS) return current;
-      const reaction: Reaction = {
+      const room = Math.max(0, MAX_REACTIONS - current.length);
+      const additions = Array.from({ length: Math.min(burst, room) }, (_, index): Reaction => ({
         id: reactionSeq++,
-        left: 12 + Math.random() * 30,
-        drift: -40 + Math.random() * 80,
-        rotate: -25 + Math.random() * 50,
-        duration: 2 + Math.random() * 1.2,
-      };
-      const timer = window.setTimeout(() => {
-        setReactions((list) => list.filter((r) => r.id !== reaction.id));
-      }, reaction.duration * 1000);
-      reactionTimers.current.push(timer);
-      return [...current, reaction];
+        left: 5 + Math.random() * 20,
+        drift: -54 + Math.random() * 108,
+        rotate: -28 + Math.random() * 56,
+        duration: 1.9 + Math.random() * 1.25 + index * 0.06,
+        color: REACTION_COLORS[Math.floor(Math.random() * REACTION_COLORS.length)],
+        size: 20 + Math.floor(Math.random() * 15),
+      }));
+      additions.forEach((reaction) => {
+        const timer = window.setTimeout(() => {
+          setReactions((list) => list.filter((item) => item.id !== reaction.id));
+          reactionTimers.current = reactionTimers.current.filter((id) => id !== timer);
+        }, reaction.duration * 1000);
+        reactionTimers.current.push(timer);
+      });
+      return [...current, ...additions];
     });
+  }, []);
+
+  const sendGift = useCallback((gift: LiveGift, quantity: number) => {
+    const burst = { id: giftSeq++, gift, quantity };
+    setGiftBursts((current) => [...current.slice(-2), burst]);
+    const timer = window.setTimeout(() => {
+      setGiftBursts((current) => current.filter((item) => item.id !== burst.id));
+      reactionTimers.current = reactionTimers.current.filter((id) => id !== timer);
+    }, 3200);
+    reactionTimers.current.push(timer);
+    // NO success toast, and no network call, because there is no gifting
+    // endpoint: the burst above is a local animation and nothing more. Telling
+    // the viewer a gift "was sent" would claim they spent money and that the
+    // creator was paid — neither is true.
+    //
+    // BEFORE FLIPPING `MARKET_FLAGS.liveGifts` ON, the backend must ship a
+    // coin ledger and a gift endpoint, and this callback must await it and
+    // report its real result. The flag gates the whole tray, the coin balance
+    // and the "Get Coins" chrome precisely so none of it can be reached first.
   }, []);
 
   const share = useCallback(() => {
@@ -204,6 +462,100 @@ export function StreamRoom({
       void navigator.clipboard.writeText(url).then(() => toast.success("Link copied"));
     }
   }, [stream.data?.title]);
+
+  const videoElement = useCallback(() => stageRef.current?.querySelector("video") ?? null, []);
+  // LiveKit puts remote audio on its own <audio> elements beside the <video>,
+  // so muting the video alone left the room audible. Every media element in
+  // the stage moves together.
+  const mediaElements = useCallback(
+    (): HTMLMediaElement[] =>
+      Array.from(stageRef.current?.querySelectorAll<HTMLMediaElement>("video, audio") ?? []),
+    []
+  );
+  const togglePlayback = useCallback(() => {
+    const video = videoElement();
+    if (!video) return;
+    if (video.paused) void video.play();
+    else video.pause();
+  }, [videoElement]);
+  const restartPlayback = useCallback(() => {
+    const video = videoElement();
+    if (!video) return;
+    if (Number.isFinite(video.duration)) video.currentTime = 0;
+    void video.play();
+  }, [videoElement]);
+  const toggleMute = useCallback(() => {
+    const elements = mediaElements();
+    if (elements.length === 0) return;
+    const next = !elements.some((element) => element.muted);
+    elements.forEach((element) => {
+      element.muted = next;
+    });
+    setMuted(next);
+  }, [mediaElements]);
+  // Transport state is the PLAYER's, not the button's: reflect it rather than
+  // hardcoding a pause glyph. The stage swaps its media elements when playback
+  // reconnects or a LiveKit track re-subscribes, so re-bind periodically and
+  // re-apply the viewer's mute choice to anything newly attached.
+  useEffect(() => {
+    let bound: HTMLMediaElement | null = null;
+    const sync = () => setPaused(Boolean(bound?.paused ?? true));
+    const rebind = () => {
+      const found = stageRef.current?.querySelector("video");
+      if (found !== bound) {
+        bound?.removeEventListener("play", sync);
+        bound?.removeEventListener("pause", sync);
+        bound = found ?? null;
+        bound?.addEventListener("play", sync);
+        bound?.addEventListener("pause", sync);
+        sync();
+      }
+      if (muted) {
+        stageRef.current?.querySelectorAll<HTMLMediaElement>("video, audio").forEach((element) => {
+          element.muted = true;
+        });
+      }
+    };
+    rebind();
+    const interval = window.setInterval(rebind, 1000);
+    return () => {
+      window.clearInterval(interval);
+      bound?.removeEventListener("play", sync);
+      bound?.removeEventListener("pause", sync);
+    };
+  }, [muted]);
+
+  const pictureInPicture = useCallback(() => {
+    const video = videoElement();
+    if (!video || !("requestPictureInPicture" in video)) return;
+    void video.requestPictureInPicture();
+  }, [videoElement]);
+  const fullscreen = useCallback(() => {
+    const node = stageRef.current;
+    if (!node) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void node.requestFullscreen();
+  }, []);
+  // Theater mode used to call `fullscreen` — the identical handler the
+  // Fullscreen button beside it calls, so the room shipped two differently
+  // labelled buttons doing one thing. It now means what it means everywhere
+  // else (Twitch, Kick): drop the surrounding chrome — the nav rail and the
+  // chat column — and leave the stage. It is a toggle, reversible from the
+  // same button or with Escape, so nothing becomes unreachable.
+  const toggleTheater = useCallback(() => {
+    setTheater((on) => {
+      if (!on) setChatOpen(false);
+      return !on;
+    });
+  }, []);
+  useEffect(() => {
+    if (!theater) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTheater(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [theater]);
 
   if (stream.isPending) {
     return (
@@ -222,88 +574,387 @@ export function StreamRoom({
 
   const data = stream.data;
   const owner = data.owner;
+  // Gifting is governance-gated: with it off the panel is absent entirely,
+  // and so is every piece of coin chrome that would imply it exists.
+  const giftsAvailable = data.status === "live" && MARKET_FLAGS.liveGifts;
+  // The service's own tally, never inflated by unsaved local taps.
+  const likeCount = data.likeCount;
+  const pulseCounts: PulseCounts = data.pulse;
 
   return (
     <div className="flex h-dvh w-full bg-black">
-      {/* Stage: full-bleed video with every control overlaid in safe-area. */}
+      {!theater && <StreamNav stream={data} />}
+
+      {/* Centre column. Below lg it is a full-bleed stage with everything
+          overlaid; from lg it becomes the reference's vertical stack:
+          header → player → handle → gift panel. */}
       <div
-        className="relative min-w-0 flex-1 overflow-hidden"
+        className="relative min-w-0 flex-1 overflow-hidden bg-black lg:flex lg:flex-col"
         style={{ viewTransitionName: `stream-${data.id}` }}
+        onDoubleClick={(event) => {
+          if ((event.target as HTMLElement).closest("button, a, input, textarea")) return;
+          spawnReaction(5);
+        }}
       >
-        <div className="absolute inset-0">
-          <StageBody stream={data} onOpenTickets={() => setTicketsOpen(true)} />
-        </div>
-
-        {/* Scrims: gradients, not blur, over video. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[120px] bg-gradient-to-b from-black/85 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/85 to-transparent" />
-
-        {/* Top overlay: back · host identity · viewers + LIVE. */}
-        <div
-          className="absolute inset-x-0 top-0 flex items-start gap-3 px-4 pb-2"
-          style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}
-        >
+        {/* ---- Header ------------------------------------------------- */}
+        <div className="absolute inset-x-0 top-0 z-20 flex items-start gap-3 px-4 pb-2 pt-3 lg:static lg:z-auto lg:h-[72px] lg:shrink-0 lg:items-center lg:border-b lg:border-white/10 lg:bg-panel lg:px-5 lg:py-0">
           <Link
             href="/live"
             aria-label="Back to Live"
-            className="ws-press mt-1 rounded-full bg-black/40 p-2 text-body"
+            /* Below lg this overlaid chevron IS the exit (the rail starts at
+               lg). In theater mode the rail is gone, so it comes back on
+               desktop too — the room never has zero ways out. */
+            className={cn(
+              "ws-press mt-1 rounded-full bg-black/40 p-2 text-body",
+              !theater && "lg:hidden"
+            )}
           >
             <IconChevronLeft className="h-5 w-5" />
           </Link>
+
+          {owner && (
+            <Link href={`/u/${owner.username}`} className="hidden shrink-0 lg:block">
+              <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={44} />
+            </Link>
+          )}
+
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              {owner && (
+              {owner ? (
                 <>
-                  <Link href={`/u/${owner.username}`} className="shrink-0">
-                    <Avatar name={owner.displayName} src={owner.avatarUrl} size={36} />
+                  <Link href={`/u/${owner.username}`} className="shrink-0 lg:hidden">
+                    <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={36} />
                   </Link>
                   <Link
                     href={`/u/${owner.username}`}
-                    className="ws-text-shadow flex min-w-0 items-center gap-1.5 text-sm font-semibold text-heading"
+                    className="ws-text-shadow flex min-w-0 items-baseline gap-1.5 lg:[text-shadow:none]"
                   >
-                    <span className="truncate">{owner.displayName}</span>
+                    <span className="truncate text-[17px] font-bold text-heading">{owner.displayName}</span>
                     <VerifiedBadge verification={owner.verification} />
+                    <span className="hidden truncate text-sm text-meta lg:inline">@{owner.username}</span>
                   </Link>
-                  {followSlot?.(owner)}
                 </>
+              ) : (
+                <span className="ws-text-shadow truncate text-[17px] font-bold text-heading lg:[text-shadow:none]">
+                  Market Live
+                </span>
               )}
             </div>
-            <p className="ws-text-shadow mt-1 line-clamp-1 text-xs text-body">{data.title}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 pt-1">
-            {data.status === "live" && (
-              <span className="ws-text-shadow flex items-center gap-1 text-xs text-body">
-                <IconEye className="h-4 w-4" />
-                <span className="tnum">{formatCount(data.viewerCount)}</span>
+            {/* Category then the live counters, as the reference stacks them. */}
+            <div className="ws-text-shadow mt-0.5 flex items-center gap-3 text-xs text-body lg:text-meta lg:[text-shadow:none]">
+              {data.category && (
+                <span className="hidden uppercase tracking-wide lg:inline">{data.category}</span>
+              )}
+              {data.status === "live" && (
+                <span className="flex items-center gap-1">
+                  <IconEye className="h-4 w-4" />
+                  <span className="tnum">{formatCount(data.viewerCount)}</span>
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <IconHeart className="h-4 w-4" filled />
+                <span className="tnum">{formatCount(likeCount)}</span>
               </span>
+              <span className="line-clamp-1">{data.title}</span>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 pt-1 lg:pt-0">
+            {/* Collapsing the chat column used to be a one-way door: the only
+                control lived inside the panel it hid, so on desktop chat could
+                never be brought back. The toggle belongs outside it. */}
+            <button
+              onClick={() => setChatOpen((v) => !v)}
+              aria-label={chatOpen ? "Hide chat" : "Show chat"}
+              aria-pressed={chatOpen}
+              className={cn(
+                "hidden h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-body transition-colors hover:bg-white/10 lg:flex",
+                chatOpen ? "bg-white/15" : "bg-white/5"
+              )}
+            >
+              <IconComment className="h-4 w-4" />
+            </button>
+            <button
+              onClick={share}
+              aria-label="Reshare live stream"
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-body transition-colors hover:bg-white/10 lg:flex"
+            >
+              <IconShare className="h-4 w-4" />
+            </button>
+            {/* The overflow menu and "Subscribe" both used to sit here doing
+                nothing. Subscribing to a host IS following them, which the
+                Follow control beside this already does, so it was a second
+                door with no room behind it. */}
+            {/* Follow is the filled, loudest control in the header. */}
+            {owner && followSlot?.(owner)}
+            {data.status === "live" && !data.myTicket && data.visibility === "ticketed" && (
+              <button
+                onClick={() => gate(() => setTicketsOpen(true))}
+                className="ws-press hidden rounded-lg bg-accent px-4 py-2 text-[13px] font-bold text-ink transition-colors hover:bg-white lg:block"
+              >
+                Get ticket · {streamPriceLabel(data)}
+              </button>
             )}
-            {data.status === "live" && <LiveBadge />}
             {data.status !== "live" && <Pill tone="accent">{streamPriceLabel(data)}</Pill>}
           </div>
         </div>
 
-        {/* Bottom-left: transparent chat overlay (mobile / overlay mode). */}
+        {/* ---- Player -------------------------------------------------- */}
+        <div className="absolute inset-0 lg:static lg:min-h-0 lg:flex-1">
+          <div className="relative h-full w-full bg-black">
+            <div className="h-full w-full bg-black lg:mx-auto lg:aspect-[9/16] lg:w-auto lg:border-x lg:border-white/10">
+              <div ref={stageRef} className="h-full w-full">
+                <StageBody
+                  stream={data}
+                  onOpenTickets={() => setTicketsOpen(true)}
+                  onQuality={setQuality}
+                />
+              </div>
+            </div>
+
+            {/* Scrims: gradients, not blur, over video. */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[120px] bg-gradient-to-b from-black/85 to-transparent lg:hidden" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/85 to-transparent lg:h-32" />
+
+            {/* Badges live inside the frame, not in the header. */}
+            {data.status === "live" && (
+              <span className="absolute left-4 top-3 z-10 hidden items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[11px] font-bold text-heading backdrop-blur-sm lg:flex">
+                <IconLive className="h-3.5 w-3.5 text-accent" />
+                LIVE creator
+              </span>
+            )}
+            <div className="absolute right-4 top-3 z-10 hidden items-center gap-2 lg:flex">
+              {data.status === "live" && (
+                <span className="tnum rounded-md bg-black/60 px-2 py-1 text-xs text-body backdrop-blur-sm">
+                  <LiveElapsed startedAt={data.startedAt} />
+                </span>
+              )}
+              {data.status === "live" && <LiveBadge />}
+            </div>
+
+            {/* Transport and window controls sit ON the frame, bottom edge. */}
+            <div className="absolute inset-x-0 bottom-0 z-10 hidden items-center px-5 pb-3 lg:flex">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={togglePlayback}
+                  aria-label={paused ? "Play" : "Pause"}
+                  className="rounded-lg p-2 text-heading transition-colors hover:bg-white/10"
+                >
+                  {paused ? <IconPlay className="h-5 w-5" /> : <IconPause className="h-5 w-5" />}
+                </button>
+                <button
+                  onClick={restartPlayback}
+                  aria-label="Restart playback"
+                  className="rounded-lg p-2 text-heading transition-colors hover:bg-white/10"
+                >
+                  <IconRefresh className="h-5 w-5" />
+                </button>
+                {data.status === "live" && (
+                  <>
+                    <span className="mx-1 h-5 w-px bg-white/15" aria-hidden />
+                    <button
+                      onClick={() => setPulseOpen((open) => !open)}
+                      aria-label="Open Market Pulse"
+                      aria-pressed={pulseOpen}
+                      className={cn(
+                        "rounded-lg px-2 py-1.5 text-sm font-black transition-colors",
+                        pulseOpen ? "bg-accent text-ink" : "text-heading hover:bg-white/10"
+                      )}
+                    >
+                      ↗
+                    </button>
+                    {me.data?.id !== data.ownerId && <GuestSpeakerControl stream={data} />}
+                  </>
+                )}
+              </div>
+              <div className="ml-auto flex items-center gap-1">
+                {/* Quality is offered only where it is real: hls.js reports
+                    the manifest's renditions, so the menu switches between
+                    them. A LiveKit room has no such ladder here, so the
+                    control is absent rather than inert. */}
+                {quality && quality.levels.length > 1 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setQualityOpen((open) => !open)}
+                      aria-label="Playback quality"
+                      aria-expanded={qualityOpen}
+                      className="rounded-lg px-2 py-1.5 text-[10px] font-bold tracking-wide text-body transition-colors hover:bg-white/10"
+                    >
+                      {quality.current === -1
+                        ? "AUTO"
+                        : `${quality.levels[quality.current]?.height ?? "—"}P`}
+                    </button>
+                    {qualityOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setQualityOpen(false)} />
+                        <div className="ws-glass absolute bottom-full right-0 z-20 mb-2 w-32 rounded-2xl p-1.5">
+                          <button
+                            onClick={() => {
+                              quality.setLevel(-1);
+                              setQualityOpen(false);
+                            }}
+                            className={cn(
+                              "block w-full rounded-xl px-3 py-2 text-left text-xs transition-colors hover:bg-white/10",
+                              quality.current === -1 ? "text-heading" : "text-body"
+                            )}
+                          >
+                            Auto
+                          </button>
+                          {quality.levels.map((level, index) => (
+                            <button
+                              key={`${level.height}-${index}`}
+                              onClick={() => {
+                                quality.setLevel(index);
+                                setQualityOpen(false);
+                              }}
+                              className={cn(
+                                "block w-full rounded-xl px-3 py-2 text-left text-xs transition-colors hover:bg-white/10",
+                                quality.current === index ? "text-heading" : "text-body"
+                              )}
+                            >
+                              {level.height}p
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={toggleTheater}
+                  aria-label={theater ? "Exit theater mode" : "Theater mode"}
+                  aria-pressed={theater}
+                  className={cn(
+                    "rounded-lg p-2 text-heading transition-colors hover:bg-white/10",
+                    theater && "bg-white/15"
+                  )}
+                >
+                  <IconTheater className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={pictureInPicture}
+                  aria-label="Picture in picture"
+                  className="rounded-lg p-2 text-heading transition-colors hover:bg-white/10"
+                >
+                  <IconPip className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={fullscreen}
+                  aria-label="Fullscreen"
+                  className="rounded-lg p-2 text-heading transition-colors hover:bg-white/10"
+                >
+                  <IconFullscreen className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={toggleMute}
+                  aria-label={muted ? "Unmute" : "Mute"}
+                  className="rounded-lg p-2 text-heading transition-colors hover:bg-white/10"
+                >
+                  <IconVolume className="h-5 w-5" muted={muted} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Host handle under the frame, as in the reference. */}
+        {owner && (
+          <Link
+            href={`/u/${owner.username}`}
+            className="hidden shrink-0 px-5 py-2 text-[13px] text-meta transition-colors hover:text-body lg:block"
+          >
+            {owner.username}
+          </Link>
+        )}
+
+        {/* ---- Gift panel: its own slab under the player -------------- */}
+        {giftsAvailable && (
+          <div className="mx-4 mb-4 hidden shrink-0 overflow-hidden rounded-2xl bg-raised lg:block">
+            <div className="flex items-stretch">
+              <div className="flex flex-1 items-center gap-1 overflow-x-auto px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {LIVE_GIFTS.map((gift) => (
+                  <button
+                    key={gift.id}
+                    onClick={() => gate(() => sendGift(gift, 1))}
+                    className="ws-press group flex h-[82px] w-24 shrink-0 flex-col items-center justify-center rounded-xl border border-transparent px-2 transition-colors hover:border-white/10 hover:bg-white/5"
+                  >
+                    <span className="text-[32px] leading-none transition-transform group-hover:-translate-y-1" aria-hidden>
+                      {gift.emoji}
+                    </span>
+                    <span className="mt-1.5 max-w-full truncate text-[12px] font-semibold text-body">
+                      {gift.name}
+                    </span>
+                    <span className="tnum mt-0.5 flex items-center gap-1 text-[11px] text-meta">
+                      <IconCoin className="h-3 w-3 text-coin" />
+                      {gift.priceKash}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => gate(() => setGiftsOpen(true))}
+                aria-label="View all gifts"
+                className="ws-press my-3 mr-3 flex w-10 shrink-0 items-center justify-center rounded-lg border border-white/15 text-body transition-colors hover:bg-white/10"
+              >
+                <IconChevronUp className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* The balance strip is gone: it read a hardcoded "0" from no
+                ledger, and "Get Coins" only reopened this same tray. */}
+          </div>
+        )}
+
+        {/* ---- Mobile-only overlays ------------------------------------ */}
         {chatOpen && (
           <div
-            className="absolute bottom-0 left-0 h-[42dvh] w-[min(340px,78vw)] px-3 lg:hidden"
+            className="absolute bottom-0 left-0 z-10 h-[42dvh] w-[min(340px,78vw)] px-3 lg:hidden"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
           >
             <ChatPanel stream={data} variant="overlay" />
           </div>
         )}
 
-        {/* Right edge: vertical action rail, 44px targets. */}
-        <div
-          className="absolute right-3 flex flex-col items-center gap-4"
-          style={{ bottom: "max(env(safe-area-inset-bottom), 16px)" }}
-        >
-          <button
-            onClick={spawnReaction}
-            aria-label="Send a heart"
-            className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading"
-          >
-            <IconHeart className="h-5 w-5" />
-          </button>
+        {/* The vertical action rail is the phone pattern; on desktop these
+            actions live in the header, the gift panel and the chat column. */}
+        <div className="absolute bottom-4 right-3 z-10 flex flex-col items-center gap-4 lg:hidden">
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={() => spawnReaction(1)}
+              aria-label={`Send a heart. ${likeCount} likes`}
+              className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading"
+            >
+              <IconHeart className="h-6 w-6 text-heading" filled />
+            </button>
+            <span className="tnum ws-text-shadow min-w-11 text-center text-[11px] font-bold text-white">
+              {formatCount(likeCount)}
+            </span>
+          </div>
+          {giftsAvailable && (
+            <button
+              onClick={() => gate(() => setGiftsOpen(true))}
+              aria-label="Send a live gift"
+              className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-coin text-ink transition-colors hover:brightness-110"
+            >
+              <IconCoin className="h-5 w-5" />
+            </button>
+          )}
+          {data.status === "live" && me.data?.id !== data.ownerId && (
+            <GuestSpeakerControl stream={data} />
+          )}
+          {data.status === "live" && (
+            <button
+              onClick={() => setPulseOpen((open) => !open)}
+              aria-label="Open Market Pulse"
+              aria-pressed={pulseOpen}
+              className={cn(
+                "ws-press flex h-11 w-11 items-center justify-center rounded-full text-lg font-black",
+                pulseOpen ? "bg-accent text-ink" : "bg-black/40 text-heading"
+              )}
+            >
+              ↗
+            </button>
+          )}
           <button
             onClick={() => setChatOpen((v) => !v)}
             aria-label={chatOpen ? "Hide chat" : "Show chat"}
@@ -333,48 +984,95 @@ export function StreamRoom({
           )}
         </div>
 
+        {pulseOpen && data.status === "live" && (
+          <div
+            className="absolute bottom-20 right-16 z-20 lg:bottom-24 lg:left-5 lg:right-auto"
+            style={{ marginBottom: "max(env(safe-area-inset-bottom), 16px)" }}
+          >
+            <MarketPulse counts={pulseCounts} />
+          </div>
+        )}
+
         {/* Floating tap reactions. */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden>
           {reactions.map((reaction) => (
             <span
               key={reaction.id}
-              className="ws-reaction bottom-24 text-accent"
+              className="ws-reaction bottom-24"
               style={{
                 right: `${reaction.left}%`,
+                color: reaction.color,
                 ["--rx" as string]: `${reaction.drift}px`,
                 ["--rr" as string]: `${reaction.rotate}deg`,
                 ["--rd" as string]: `${reaction.duration}s`,
               }}
             >
-              <IconHeart className="h-6 w-6" filled />
+              <span style={{ width: reaction.size, height: reaction.size }} className="block">
+                <IconHeart className="h-full w-full" filled />
+              </span>
             </span>
           ))}
+          <div className="absolute inset-x-0 top-[28%] flex flex-col items-center gap-3 px-4">
+            {giftBursts.map((burst) => (
+              <div
+                key={burst.id}
+                className="ws-gift-burst flex items-center gap-3 rounded-full border border-white/20 bg-black/65 py-2 pl-3 pr-5 shadow-2xl backdrop-blur-md"
+              >
+                <span className="text-4xl">{burst.gift.emoji}</span>
+                <span>
+                  <span className="block text-xs font-semibold text-grey-300">Gift sent</span>
+                  <span className="block text-sm font-bold text-white">
+                    {burst.gift.name} <span style={{ color: burst.gift.color }}>×{burst.quantity}</span>
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-
       {/* Desktop theater: collapsible 340px chat column on raised surface. */}
       <aside
         className={cn(
-          "hidden h-dvh shrink-0 flex-col border-l border-white/8 bg-panel transition-[width] duration-200 lg:flex",
-          chatOpen ? "w-[340px]" : "w-0 overflow-hidden border-l-0"
+          "hidden h-dvh shrink-0 flex-col border-l border-white/10 bg-panel text-body transition-[width] duration-200 lg:flex",
+          chatOpen ? "w-[360px] 2xl:w-[430px]" : "w-0 overflow-hidden border-l-0"
         )}
       >
         {chatOpen && (
-          <div className="flex h-full flex-col p-3">
-            <div className="mb-2 px-1">
-              <p className="ws-display line-clamp-1 text-sm">{data.title}</p>
-              {data.description && (
-                <p className="mt-0.5 line-clamp-2 text-xs text-meta">{data.description}</p>
-              )}
+          <div className="flex h-full flex-col">
+            <div className="ws-hair flex h-[72px] shrink-0 items-center gap-3 border-b px-4">
+              <button
+                onClick={() => setChatOpen(false)}
+                aria-label="Collapse chat"
+                className="ws-press rounded-lg p-2 text-body transition-colors hover:bg-white/10"
+              >
+                <IconCollapseRight className="h-5 w-5" />
+              </button>
+              <p className="ws-display flex-1 text-center text-base">LIVE chat</p>
+              <span className="flex items-center gap-1.5 text-xs text-meta">
+                <IconEye className="h-4 w-4" />
+                <span className="tnum">{formatCount(data.viewerCount)}</span>
+              </span>
             </div>
-            <div className="min-h-0 flex-1">
-              <ChatPanel stream={data} />
+            <div className="relative min-h-0 flex-1">
+              <ChatPanel stream={data} variant="theater" showTopViewers />
+              {data.status === "live" && (
+                <button
+                  onClick={() => spawnReaction(1)}
+                  aria-label={`Send a heart. ${likeCount} likes`}
+                  className="ws-press absolute bottom-[92px] right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-heading backdrop-blur-md transition-colors hover:bg-white/15"
+                >
+                  <IconHeart className="h-7 w-7" filled />
+                </button>
+              )}
             </div>
           </div>
         )}
       </aside>
 
       <TicketSheet stream={data} open={ticketsOpen} onClose={() => setTicketsOpen(false)} />
+      {MARKET_FLAGS.liveGifts && (
+        <GiftSheet open={giftsOpen} onClose={() => setGiftsOpen(false)} onSend={sendGift} />
+      )}
     </div>
   );
 }

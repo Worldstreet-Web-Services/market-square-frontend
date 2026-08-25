@@ -27,6 +27,7 @@ import {
   useUpdateStream,
 } from "@/features/streams/hooks/use-streams";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
+import { SpeakerRequestQueue } from "@/features/streams/components/guest-speaker-control";
 import {
   STREAM_CATEGORIES,
   type Ingest,
@@ -138,7 +139,7 @@ function ActivityPanel({ streamId }: { streamId: string }) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs text-body">
-              <span className="font-semibold text-heading">{event.actor?.displayName ?? "Someone"}</span>{" "}
+              <span className="font-semibold text-heading">{event.profile?.displayName ?? "Someone"}</span>{" "}
               {event.kind === "ticket_purchased"
                 ? "bought a ticket"
                 : event.kind === "follow"
@@ -196,6 +197,34 @@ function InfoDrawer({ stream }: { stream: Stream }) {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// Five bars driven by the level of the track we are actually publishing, so a
+// host can see at a glance that their voice is leaving the machine — the
+// failure this replaces is a live mic that looks fine and sends silence.
+function LiveMicLevel({ level, muted }: { level: number; muted: boolean }) {
+  const lit = muted ? 0 : Math.round(Math.min(1, level) * 5);
+  return (
+    <div
+      className="flex h-4 items-end gap-0.5"
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={5}
+      aria-valuenow={lit}
+      aria-label={muted ? "Microphone muted" : "Microphone level"}
+    >
+      {[0, 1, 2, 3, 4].map((index) => (
+        <span
+          key={index}
+          style={{ height: `${(index + 1) * 20}%` }}
+          className={cn(
+            "w-1 rounded-full transition-colors duration-75 motion-reduce:transition-none",
+            index < lit ? "bg-up" : "bg-white/15"
+          )}
+        />
+      ))}
     </div>
   );
 }
@@ -354,9 +383,10 @@ export function LiveCockpit({
                   <button
                     onClick={() => void publisher.toggleMic()}
                     aria-label={publisher.micOn ? "Mute mic" : "Unmute mic"}
-                    className={cn("ws-press flex h-11 w-11 items-center justify-center rounded-full", publisher.micOn ? "bg-black/40 text-heading" : "bg-down/80 text-ink")}
+                    className={cn("ws-press flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-full", publisher.micOn ? "bg-black/40 text-heading" : "bg-down/80 text-ink")}
                   >
                     <span className="text-[10px] font-bold">{publisher.micOn ? "MIC" : "MUTED"}</span>
+                    {publisher.micOn && <LiveMicLevel level={publisher.micLevel} muted={false} />}
                   </button>
                   <button
                     onClick={() => void publisher.toggleCam()}
@@ -388,6 +418,7 @@ export function LiveCockpit({
                 <Button variant={publisher.micOn ? "secondary" : "danger"} size="sm" onClick={() => void publisher.toggleMic()}>
                   {publisher.micOn ? "Mute mic" : "Unmute mic"}
                 </Button>
+                <LiveMicLevel level={publisher.micLevel} muted={!publisher.micOn} />
                 <Button variant={publisher.camOn ? "secondary" : "danger"} size="sm" onClick={() => void publisher.toggleCam()}>
                   {publisher.camOn ? "Camera off" : "Camera on"}
                 </Button>
@@ -424,6 +455,9 @@ export function LiveCockpit({
                 {value}
               </button>
             ))}
+          </div>
+          <div className="max-h-[34%] overflow-y-auto border-b border-white/8">
+            <SpeakerRequestQueue stream={stream} />
           </div>
           {rightTab === "activity" && (
             <div className="max-h-[40%] min-h-0 overflow-y-auto border-b border-white/8">

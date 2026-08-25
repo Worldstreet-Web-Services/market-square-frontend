@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyRequest } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
+import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
 
 // BFF proxy for Market Square. Verifies the Privy session server-side and
 // forwards the caller's Authorization to `${WSAPI_BASE_URL}/v1/market-square/*`.
@@ -15,18 +16,6 @@ const PRIVY_CONFIGURED = Boolean(
   process.env.NEXT_PUBLIC_PRIVY_APP_ID && process.env.PRIVY_APP_SECRET
 );
 
-// GET paths a signed-out visitor may read. Everything else requires a
-// verified session.
-function isPublicGet(path: string[]): boolean {
-  const head = path[0];
-  if (head === "feed" || head === "stories" || head === "spotlight") return true;
-  if (head === "streams") return true; // list, detail, chat reads
-  if (head === "store") return true;
-  if (head === "profiles") return true;
-  if (head === "activities") return true;
-  if (head === "verification" && path[1] === "rule") return true;
-  return false;
-}
 
 function unauthorized() {
   return NextResponse.json(
@@ -39,6 +28,49 @@ async function callerUserId(req: NextRequest): Promise<string | null> {
   if (!PRIVY_CONFIGURED) return FIXTURE_ME_ID;
   const claims = await verifyRequest(req);
   return claims?.userId ?? null;
+}
+
+
+async function searchMentionTargets(req: NextRequest) {
+  const query = req.nextUrl.searchParams.get("q")?.trim() ?? "";
+  if (!BASE) {
+    const result = handleFixture("GET", ["mentions", "search"], req.nextUrl.searchParams, undefined, await callerUserId(req));
+    return NextResponse.json(result.body, { status: result.status });
+  }
+  // There is no mentions endpoint: this rewrites onto /search and keeps the
+  // people. Results are discriminated by `kind` and carry the profile payload,
+  // so the handle comes off `profile.username` — never parsed out of a href.
+  const upstream = await fetch(
+    `${BASE}/search?q=${encodeURIComponent(query)}&type=people&limit=8`,
+    {
+      headers: {
+        accept: "application/json",
+        ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}),
+      },
+      cache: "no-store",
+    }
+  );
+  if (!upstream.ok) return new NextResponse(await upstream.text(), { status: upstream.status, headers: { "content-type": "application/json" } });
+  const envelope = (await upstream.json()) as {
+    data?: {
+      items?: Array<{
+        kind?: string;
+        id?: string;
+        profile?: { id?: string; username?: string | null; displayName?: string | null };
+      }>;
+    };
+  };
+  const people = (envelope.data?.items ?? [])
+    .filter((item) => item.kind === "profile" && item.profile?.username)
+    .slice(0, 8)
+    .map((item) => ({
+      type: "profile" as const,
+      id: item.profile?.id ?? item.id ?? "",
+      // A profile with no chosen display name still needs a label to pick.
+      label: item.profile?.displayName ?? item.profile?.username ?? "",
+      handle: item.profile?.username ?? "",
+    }));
+  return NextResponse.json({ success: true, data: { items: people } });
 }
 
 const FIXTURE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -94,7 +126,16 @@ async function serveFixture(req: NextRequest, path: string[], method: string) {
   }
   let body: unknown;
   if (method !== "GET" && method !== "DELETE") {
-    body = await req.json().catch(() => undefined);
+    if (req.headers.get("content-type")?.includes("multipart/form-data")) {
+      const form = await req.formData();
+      const file = form.get("file");
+      if (file instanceof File) {
+        const bytes = Buffer.from(await file.arrayBuffer());
+        body = { fileName: file.name, mediaType: file.type, size: file.size, dataUrl: `data:${file.type};base64,${bytes.toString("base64")}` };
+      }
+    } else {
+      body = await req.json().catch(() => undefined);
+    }
   }
   // The fixture identifies every verified (or demo) caller as the demo user.
   const userId = (await callerUserId(req)) ? FIXTURE_ME_ID : null;
@@ -166,6 +207,18 @@ async function forward(req: NextRequest, path: string[], method: string) {
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
   const method = req.method;
+
+  // Reject traversal BEFORE anything looks at the head, dispatches on it, or
+  // joins it into an upstream URL. Next decodes segments for us, so `%2e%2e`
+  // arrives here as `..` and is caught the same way.
+  if (!isSafePath(path)) {
+    return NextResponse.json(
+      { success: false, error: { code: "NOT_FOUND", message: "That wasn't found." } },
+      { status: 404 }
+    );
+  }
+
+  if (path[0] === "mentions" && path[1] === "search" && method === "GET") return searchMentionTargets(req);
   if (!BASE) return serveFixture(req, path, method);
   return forward(req, path, method);
 }

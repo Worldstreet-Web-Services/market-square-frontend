@@ -11,7 +11,9 @@ export interface FxProfile {
   displayName: string;
   bio: string;
   role: "citizen" | "creator" | "ambassador" | "worldstreet";
-  verification: "none" | "earned" | "paid";
+  verification: "none" | "pending" | "verified" | "lapsed";
+  // Assigned admin-only on the real service, never derived from role.
+  orgBadge?: "market" | "ark" | null;
   followerCount: number;
   followingCount: number;
 }
@@ -27,6 +29,10 @@ export interface FxPost {
   likeCount: number;
   commentCount: number;
   likedBy: Set<string>;
+  repostedBy?: Set<string>;
+  quotedPostId?: string | null;
+  repostOfId?: string | null;
+  mentions?: Array<{ type: "profile" | "group"; id: string; label: string; handle: string }>;
 }
 
 export interface FxComment {
@@ -140,7 +146,7 @@ export const profiles: FxProfile[] = [
     displayName: "Demo User",
     bio: "Exploring the square.",
     role: "creator",
-    verification: "earned",
+    verification: "verified",
     followerCount: 128,
     followingCount: 5,
   },
@@ -150,7 +156,8 @@ export const profiles: FxProfile[] = [
     displayName: "Amara Okafor",
     bio: "Markets analyst. Live desk every weekday. Charts, coffee, conviction.",
     role: "creator",
-    verification: "earned",
+    verification: "verified",
+    orgBadge: "ark",
     followerCount: 48_200,
     followingCount: 312,
   },
@@ -160,7 +167,7 @@ export const profiles: FxProfile[] = [
     displayName: "Kenji Sato",
     bio: "Chess IM. Blitz arenas and endgame clinics on Ark.",
     role: "creator",
-    verification: "earned",
+    verification: "lapsed",
     followerCount: 21_400,
     followingCount: 180,
   },
@@ -170,7 +177,7 @@ export const profiles: FxProfile[] = [
     displayName: "Zara Malik",
     bio: "RWA desk. Tokenized T-bills explained without the jargon.",
     role: "creator",
-    verification: "paid",
+    verification: "verified",
     followerCount: 12_900,
     followingCount: 96,
   },
@@ -180,7 +187,8 @@ export const profiles: FxProfile[] = [
     displayName: "WorldStreet",
     bio: "The official Ark platform account.",
     role: "worldstreet",
-    verification: "earned",
+    verification: "verified",
+    orgBadge: "market",
     followerCount: 210_000,
     followingCount: 12,
   },
@@ -190,7 +198,7 @@ export const profiles: FxProfile[] = [
     displayName: "Leo Ferreira",
     bio: "Poker nights and prediction markets. Not financial advice, ever.",
     role: "creator",
-    verification: "none",
+    verification: "pending",
     followerCount: 8_750,
     followingCount: 402,
   },
@@ -740,11 +748,47 @@ export const orders: FxOrder[] = [
   },
 ];
 
+// Advisory only: what the platform looks at when granting. There is no
+// purchase tier — verification is granted, then kept current by renewal.
 export const verificationRule = {
+  status: "approved" as const,
   eligibility: { minFollowers: 100, minParticipationScore: 50 },
-  paid: { priceKash: "25" },
-  economics: "proposed" as const,
+  economics: "granted-then-subscription" as const,
 };
+
+// Verification billing, per user. Only the owner ever sees these.
+export const VERIFICATION_PRICE_KASH = "25";
+export const VERIFICATION_PERIOD_DAYS = 30;
+export const VERIFICATION_TRIAL_DAYS = 30;
+
+const day = 24 * 60 * 60 * 1000;
+
+export interface FxVerificationBilling {
+  verifiedSince: string;
+  /** null while still inside the free trial. */
+  paidThrough: string | null;
+  trialEndsAt: string | null;
+}
+
+// Seeded so every lifecycle state is demoable: ME_ID sits mid-trial, and the
+// lapsed/pending/none cases live on the profiles below.
+export const verificationBilling = new Map<string, FxVerificationBilling>([
+  [ME_ID, {
+    verifiedSince: new Date(Date.now() - 12 * day).toISOString(),
+    paidThrough: null,
+    trialEndsAt: new Date(Date.now() + 18 * day).toISOString(),
+  }],
+  ["u_amara", {
+    verifiedSince: new Date(Date.now() - 400 * day).toISOString(),
+    paidThrough: new Date(Date.now() + 9 * day).toISOString(),
+    trialEndsAt: null,
+  }],
+  ["u_kenji", {
+    verifiedSince: new Date(Date.now() - 220 * day).toISOString(),
+    paidThrough: new Date(Date.now() - 3 * day).toISOString(),
+    trialEndsAt: null,
+  }],
+]);
 
 export const verificationRequests: FxVerificationRequest[] = [];
 

@@ -4,14 +4,16 @@ import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, formatKash, relativeTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
-import { LiveBadge, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { LiveBadge, OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconCalendar, IconHeart, IconComment } from "@/components/ui/icons";
-import { Skeleton } from "@/components/ui/skeleton";
+import { GradientThumb } from "@/components/ui/gradient-thumb";
+import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
+import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import type { Profile } from "@/lib/api/schemas";
 import {
@@ -20,54 +22,113 @@ import {
   useProfileActivities,
   useProfilePosts,
   useProfileStreams,
+  useProfileSafety,
 } from "@/features/profile/hooks/use-profile";
+import { useIsFollowing } from "@/features/profile/lib/follow-state";
 import { EditProfileSheet } from "@/features/profile/components/edit-profile-sheet";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import { CreatorCard } from "@/features/profile/components/creator-card";
+import { useMarketView } from "@/lib/analytics";
 
 type Tab = "posts" | "streams" | "activities";
 
 function FollowButton({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
   const gate = useGate();
+  const isFollowing = useIsFollowing(profile);
   return (
     <Button
-      variant={profile.isFollowing ? "secondary" : "primary"}
+      variant={isFollowing ? "secondary" : "primary"}
       size="sm"
-      onClick={() => gate(() => follow.mutate(!profile.isFollowing))}
+      aria-pressed={isFollowing}
+      onClick={() => gate(() => follow.mutate(!isFollowing))}
     >
-      {profile.isFollowing ? "Following" : "Follow"}
+      {isFollowing ? "Following" : "Follow"}
     </Button>
   );
 }
 
-function PostsTab({ username }: { username: string }) {
+function SafetyActions({ profile }: { profile: Profile }) {
+  const safety = useProfileSafety(profile);
+  const gate = useGate();
+  return (
+    <div className="flex gap-2">
+      <Button variant="ghost" size="sm" onClick={() => gate(() => safety.report.mutate())}>Report</Button>
+      {/* Once the service has answered "no such route", the danger-styled
+          button stops offering an action it cannot perform. */}
+      <Button
+        variant={profile.isBlocked ? "secondary" : "danger"}
+        size="sm"
+        disabled={safety.blockUnavailable || safety.block.isPending}
+        title={safety.blockUnavailable ? "Blocking isn't available yet" : undefined}
+        onClick={() => gate(() => safety.block.mutate(!profile.isBlocked))}
+      >
+        {profile.isBlocked ? "Unblock" : "Block"}
+      </Button>
+    </div>
+  );
+}
+
+/** The action under an empty profile tab — own profile only. */
+function TabCta({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="ws-press inline-flex rounded-full border border-white/20 px-4 py-1.5 text-[13px] font-bold text-body transition-colors hover:bg-white/10"
+    >
+      {label}
+    </Link>
+  );
+}
+
+function PostsTab({
+  username,
+  isMe,
+  composeSlot,
+}: {
+  username: string;
+  isMe: boolean;
+  /** Composed from outside — profile never imports the feed slice. */
+  composeSlot?: React.ReactNode;
+}) {
   const posts = useProfilePosts(username);
-  if (posts.isPending)
+  if (posts.isPending) return <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>;
+  if (posts.isError)
     return (
-      <div className="space-y-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-24" />
-        ))}
+      <div className="p-4">
+        <ErrorState error={posts.error} fallback="Couldn't load posts." onRetry={() => posts.refetch()} />
       </div>
     );
-  if (posts.isError)
-    return <ErrorState error={posts.error} fallback="Couldn't load posts." onRetry={() => posts.refetch()} />;
   if (posts.data.items.length === 0)
-    return <EmptyState glyph="◌" title="No posts yet" body="Updates land here when they post." />;
+    return (
+      <div className="p-4">
+        <EmptyState
+          glyph="◌"
+          title={isMe ? "You haven't posted yet" : "No posts yet"}
+          body={
+            isMe
+              ? "Your updates show up here and in your followers' feeds."
+              : "When they post, it shows up here."
+          }
+          // Opens the composer in place when the shell supplies it; the
+          // link is the signed-out/unslotted fallback and still works.
+          action={isMe ? (composeSlot ?? <TabCta href="/?compose=1" label="Create a post" />) : undefined}
+        />
+      </div>
+    );
   return (
-    <ul className="space-y-3">
+    <ul>
       {posts.data.items.map((post) => {
-        const cta = post.deepLink ? resolveDeepLink(post.deepLink) : null;
+        const cta = resolveCta(post.deepLink);
         return (
-          <li key={post.id} className="ws-card p-4">
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-grey-100">{post.text}</p>
-            <div className="mt-2 flex items-center gap-4 text-xs text-grey-500">
-              <span className={cn("flex items-center gap-1", post.likedByMe && "text-like")}>
-                <IconHeart className="h-3.5 w-3.5" filled={post.likedByMe} /> {formatCount(post.likeCount)}
+          <li key={post.id} className="ws-row px-4 py-3">
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-normal text-body">{post.text}</p>
+            <div className="mt-2 flex items-center gap-5 text-[13px] text-meta">
+              <span className={cn("tnum flex items-center gap-1.5", post.likedByMe && "text-like")}>
+                <IconHeart className="h-4 w-4" filled={post.likedByMe} /> {formatCount(post.likeCount)}
               </span>
-              <span className="flex items-center gap-1">
-                <IconComment className="h-3.5 w-3.5" /> {formatCount(post.commentCount)}
+              <span className="tnum flex items-center gap-1.5">
+                <IconComment className="h-4 w-4" /> {formatCount(post.commentCount)}
               </span>
               <span>{relativeTime(post.createdAt)}</span>
               {cta && (
@@ -83,28 +144,38 @@ function PostsTab({ username }: { username: string }) {
   );
 }
 
-function StreamsTab({ username }: { username: string }) {
+function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
   const streams = useProfileStreams(username);
-  if (streams.isPending)
+  if (streams.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
+  if (streams.isError)
     return (
-      <div className="space-y-3">
-        {[0, 1].map((i) => (
-          <Skeleton key={i} className="h-16" />
-        ))}
+      <div className="p-4">
+        <ErrorState error={streams.error} fallback="Couldn't load streams." onRetry={() => streams.refetch()} />
       </div>
     );
-  if (streams.isError)
-    return <ErrorState error={streams.error} fallback="Couldn't load streams." onRetry={() => streams.refetch()} />;
   if (streams.data.items.length === 0)
-    return <EmptyState glyph="◉" title="No streams" body="Hosted sessions show up here." />;
+    return (
+      <div className="p-4">
+        <EmptyState
+          glyph="◉"
+          title={isMe ? "You haven't streamed yet" : "No streams yet"}
+          body={
+            isMe
+              ? "Sessions you host show up here once you've gone live."
+              : "Sessions they host will show up here."
+          }
+          action={isMe ? <TabCta href="/studio" label="Go live" /> : undefined}
+        />
+      </div>
+    );
   return (
-    <ul className="space-y-3">
+    <ul>
       {streams.data.items.map((stream) => (
         <li key={stream.id}>
-          <Link href={`/live/${stream.id}`} className="ws-card flex items-center gap-3 p-4 transition-colors hover:bg-white/8">
+          <Link href={`/live/${stream.id}`} className="ws-row flex items-center gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{stream.title}</p>
-              <p className="mt-0.5 flex items-center gap-2 text-xs text-grey-500">
+              <p className="truncate text-[15px] font-bold text-heading">{stream.title}</p>
+              <p className="mt-0.5 flex items-center gap-2 text-[13px] text-meta">
                 {stream.status === "live" ? (
                   <LiveBadge className="px-2 py-0 text-[9px]" />
                 ) : (
@@ -122,39 +193,47 @@ function StreamsTab({ username }: { username: string }) {
   );
 }
 
-function ActivitiesTab({ username }: { username: string }) {
+function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) {
   const activities = useProfileActivities(username);
-  if (activities.isPending)
-    return (
-      <div className="space-y-3">
-        {[0, 1].map((i) => (
-          <Skeleton key={i} className="h-16" />
-        ))}
-      </div>
-    );
+  if (activities.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
   if (activities.isError)
     return (
-      <ErrorState error={activities.error} fallback="Couldn't load activities." onRetry={() => activities.refetch()} />
+      <div className="p-4">
+        <ErrorState error={activities.error} fallback="Couldn't load activities." onRetry={() => activities.refetch()} />
+      </div>
     );
   if (activities.data.items.length === 0)
-    return <EmptyState glyph="◇" title="No activities" body="Scheduled games, streams and events show here." />;
+    return (
+      <div className="p-4">
+        <EmptyState
+          glyph="◇"
+          title={isMe ? "Nothing scheduled" : "No activities yet"}
+          body={
+            isMe
+              ? "Schedule a stream or an event and it appears here for your followers."
+              : "Scheduled games, streams and events show here."
+          }
+          action={isMe ? <TabCta href="/schedule" label="Schedule one" /> : undefined}
+        />
+      </div>
+    );
   return (
-    <ul className="space-y-3">
+    <ul>
       {activities.data.items.map((activity) => {
-        const cta = activity.deepLink ? resolveDeepLink(activity.deepLink) : null;
+        const cta = resolveCta(activity.deepLink);
         return (
-          <li key={activity.id} className="ws-card flex items-center gap-4 p-4">
-            <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center text-grey-300">
+          <li key={activity.id} className="ws-row flex items-center gap-3 px-4 py-3">
+            <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body">
               <IconCalendar className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{activity.title}</p>
-              <p className="text-xs text-grey-500">
+              <p className="truncate text-[15px] font-bold text-heading">{activity.title}</p>
+              <p className="text-[13px] text-meta">
                 {activity.type} · {formatDateTime(activity.startsAt)}
               </p>
             </div>
             {cta && (
-              <Link href={cta.href} className="shrink-0 text-xs font-semibold text-accent hover:underline">
+              <Link href={cta.href} className="shrink-0 text-[13px] font-semibold text-accent hover:underline">
                 {cta.label} →
               </Link>
             )}
@@ -165,88 +244,133 @@ function ActivitiesTab({ username }: { username: string }) {
   );
 }
 
-export function ProfilePage({ username }: { username: string }) {
+export function ProfilePage({
+  username,
+  messageSlot,
+  composeSlot,
+}: {
+  username: string;
+  /** Composed from outside — profile never imports the messages slice. */
+  messageSlot?: (profile: Profile) => React.ReactNode;
+  /** Composed from outside — profile never imports the feed slice. */
+  composeSlot?: React.ReactNode;
+}) {
   const profile = useProfile(username);
   const me = useMe();
   const [tab, setTab] = useState<Tab>("posts");
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
   const isMe = Boolean(profile.data && me.data && profile.data.id === me.data.id);
+  useMarketView("profile_viewed", { surface: "profile", entityType: "profile", entityId: profile.data?.id }, Boolean(profile.data));
 
   if (profile.isPending) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 px-4 py-6 lg:px-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-20 w-20 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-3 w-24" />
-          </div>
+      <>
+        <ColumnHeader title="Profile" back />
+        <div className="ws-skeleton h-40 rounded-none" />
+        <div className="space-y-3 px-4 pt-3">
+          <Skeleton className="-mt-16 h-28 w-28 rounded-full border-4 border-black" />
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-12 w-full" />
         </div>
-        <Skeleton className="h-16 w-full" />
-      </div>
+      </>
     );
   }
   if (profile.isError) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6 lg:px-6">
-        <ErrorState error={profile.error} fallback="Couldn't load this profile." onRetry={() => profile.refetch()} />
-      </div>
+      <>
+        <ColumnHeader title="Profile" back />
+        <div className="p-4">
+          <ErrorState error={profile.error} fallback="Couldn't load this profile." onRetry={() => profile.refetch()} />
+        </div>
+      </>
     );
   }
 
   const data = profile.data;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-6 lg:px-6">
-      <header className="flex flex-wrap items-center gap-4">
-        <Avatar name={data.displayName} src={data.avatarUrl} size={80} />
-        <div className="min-w-0 flex-1">
+    <>
+      {/* X's profile header: a back arrow with the identity beside it, then a
+          banner the avatar hangs off. The banner has no upload yet, so it is
+          the same seeded gradient the rest of the square uses for artwork. */}
+      <ColumnHeader
+        title={data.displayName}
+        subtitle={`${formatCount(data.followerCount)} followers`}
+        back
+      />
+
+      <GradientThumb seed={data.username} className="h-36 w-full sm:h-44" />
+
+      <div className="px-4 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="-mt-14 rounded-full border-4 border-black sm:-mt-16">
+            <Avatar name={data.displayName} seed={data.id} src={data.avatarUrl} size={112} />
+          </div>
+          <div className="flex items-center gap-2 pt-3">
+            {isMe ? (
+              <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+                Edit profile
+              </Button>
+            ) : (
+              <>
+                <SafetyActions profile={data} />
+                {messageSlot?.(data)}
+                <FollowButton profile={data} />
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3">
           <h1 className="ws-display flex items-center gap-2 text-xl">
             {data.displayName}
             <VerifiedBadge verification={data.verification} className="h-5 w-5" />
+            <OrgBadgeChip orgBadge={data.orgBadge} />
             <RoleChip role={data.role} />
           </h1>
-          <p className="text-sm text-grey-500">@{data.username}</p>
-          <p className="tnum mt-1 text-xs text-grey-400">
-            <span className="font-semibold text-white">{formatCount(data.followerCount)}</span> followers ·{" "}
-            <span className="font-semibold text-white">{formatCount(data.followingCount)}</span> following
-          </p>
+          <p className="text-[15px] text-meta">@{data.username}</p>
         </div>
-        {isMe ? (
-          <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
-            Edit profile
-          </Button>
-        ) : (
-          <FollowButton profile={data} />
-        )}
-      </header>
 
-      {data.bio && <p className="text-sm leading-relaxed text-grey-300">{data.bio}</p>}
+        {data.bio && <p className="mt-3 text-[15px] leading-normal text-body">{data.bio}</p>}
 
-      {isMe && <CreatorCard role={data.role} />}
-      {isMe && <VerificationCard />}
-
-      <div className="ws-inset flex gap-1 p-1">
-        {(["posts", "streams", "activities"] as const).map((value) => (
-          <button
-            key={value}
-            onClick={() => setTab(value)}
-            className={cn(
-              "flex-1 rounded-full py-2 text-sm font-semibold capitalize transition-colors",
-              tab === value ? "bg-accent text-ink" : "text-grey-400 hover:text-white"
-            )}
-          >
-            {value}
-          </button>
-        ))}
+        <p className="tnum mt-3 flex gap-4 text-[15px] text-meta">
+          <span>
+            <span className="font-bold text-heading">{formatCount(data.followingCount)}</span> Following
+          </span>
+          <span>
+            <span className="font-bold text-heading">{formatCount(data.followerCount)}</span> Followers
+          </span>
+        </p>
       </div>
 
-      {tab === "posts" && <PostsTab username={username} />}
-      {tab === "streams" && <StreamsTab username={username} />}
-      {tab === "activities" && <ActivitiesTab username={username} />}
+      {/* Own-profile business: creator application and verification live above
+          the tabs, where they read as account state rather than content. */}
+      {isMe && (
+        <div className="ws-hair space-y-3 border-t px-4 py-4">
+          <CreatorCard role={data.role} />
+          <VerificationCard />
+        </div>
+      )}
+
+      <div className="ws-hair sticky top-0 z-20 border-b bg-black/72 backdrop-blur-md">
+        <ColumnTabs
+          tabs={[
+            { value: "posts" as Tab, label: "Posts" },
+            { value: "streams" as Tab, label: "Streams" },
+            { value: "activities" as Tab, label: "Activities" },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </div>
+
+      {tab === "posts" && <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} />}
+      {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
+      {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}
 
       {isMe && <EditProfileSheet me={data} open={editOpen} onClose={() => setEditOpen(false)} />}
-    </div>
+    </>
   );
 }

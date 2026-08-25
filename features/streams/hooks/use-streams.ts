@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/envelope";
+import { trackMarketEvent } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import {
@@ -12,6 +13,7 @@ import {
   fetchStreamEvents,
   fetchStreamStats,
   updateStream,
+  updateActivity,
   createActivity,
   createStream,
   endStream,
@@ -22,8 +24,26 @@ import {
   goLive,
   purchaseTicket,
   quoteTicket,
+  requestToSpeak,
+  fetchMySpeakerRequest,
+  fetchSpeakerRequests,
+  resolveSpeakerRequest,
 } from "@/features/streams/lib/api";
 import type { Stream, TicketTier } from "@/features/streams/lib/types";
+
+/**
+ * A stream's lifecycle moves more than the stream list.
+ *
+ * Going live, ending, editing or creating one changes the Live lane of the
+ * home feed and the Featured Arena hero (both read `["ms","feed"]`), the
+ * studio's own list and the public rails (`["ms","streams"]` covers every
+ * section and the owner-filtered view). Only invalidating the stream list was
+ * why a creator's own home feed still showed them offline after going live.
+ */
+function invalidateStreamSurfaces(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
+  queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
+}
 
 // "replay" is a UI-layer concept: the backend only knows live | scheduled |
 // ended, so replays are ended streams with a replayUrl.
@@ -65,9 +85,15 @@ export function usePurchaseTicket(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (tier: TicketTier) => purchaseTicket(streamId, tier),
-    onSuccess: () => {
+    onSuccess: (ticket) => {
+      trackMarketEvent("ticket_purchased", { surface: "ticket_checkout", entityType: "stream", entityId: streamId, accessType: ticket.tier });
+      trackMarketEvent("entitlement_issued", { surface: "ticket_checkout", entityType: "ticket", entityId: ticket.id });
+      // ["ms","stream", id] is a PREFIX of the playback-token key, so this one
+      // call also drops the cached 403 that was gating the player — without it
+      // the buyer stayed locked out of a stream they had just paid for.
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId] });
       queryClient.invalidateQueries({ queryKey: ["ms", "my-tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
       toast.success("Ticket confirmed — enjoy the stream.");
     },
   });
@@ -109,7 +135,7 @@ export function useCreateStream() {
   return useMutation({
     mutationFn: createStream,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
+      invalidateStreamSurfaces(queryClient);
       toast.success("Stream created");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't create the stream.")),
@@ -122,7 +148,7 @@ export function useGoLive() {
     mutationFn: goLive,
     onSuccess: ({ stream }) => {
       queryClient.setQueryData<Stream>(["ms", "stream", stream.id], stream);
-      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
+      invalidateStreamSurfaces(queryClient);
       toast.success("You're live");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't go live.")),
@@ -135,7 +161,10 @@ export function useEndStream() {
     mutationFn: endStream,
     onSuccess: (stream) => {
       queryClient.setQueryData(["ms", "stream", stream.id], stream);
-      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
+      // The playback token and chat live under this prefix and are both dead
+      // once the broadcast stops.
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", stream.id] });
+      invalidateStreamSurfaces(queryClient);
       toast.success("Stream ended");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't end the stream.")),
@@ -168,8 +197,11 @@ export function useCreateActivity() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createActivity,
-    onSuccess: () => {
+    onSuccess: (activity) => {
+      trackMarketEvent("activity_scheduled", { surface: "schedule", entityType: "activity", entityId: activity.id });
       queryClient.invalidateQueries({ queryKey: ["ms", "activities"] });
+      // Activities are rendered as feed items and in the Featured Arena.
+      queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
       toast.success("Activity scheduled");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't schedule that.")),
@@ -182,9 +214,23 @@ export function useCancelActivity() {
     mutationFn: cancelActivity,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ms", "activities"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
       toast.success("Activity cancelled");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't cancel that.")),
+  });
+}
+
+export function useUpdateActivity(activityId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: { title?: string; startsAt?: string }) => updateActivity(activityId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "activities"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
+      toast.success("Activity updated");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't update that activity.")),
   });
 }
 
@@ -198,7 +244,7 @@ export function useUpdateStream(streamId: string) {
       queryClient.setQueryData(["ms", "stream", streamId], (old: Stream | undefined) =>
         old ? { ...old, ...stream, myTicket: old.myTicket, viewerCount: old.viewerCount } : stream
       );
-      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
+      invalidateStreamSurfaces(queryClient);
       toast.success("Stream updated");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't save changes.")),
@@ -249,5 +295,54 @@ export function useBanFromChat(streamId: string) {
       toast.success("Banned from chat");
     },
     onError: (error) => toast.error(errorMessage(error, "Moderation isn't available yet.")),
+  });
+}
+
+export function useMySpeakerRequest(streamId: string, enabled: boolean) {
+  const { ready, authenticated } = useAuth();
+  return useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-request", "me"],
+    queryFn: () => fetchMySpeakerRequest(streamId),
+    enabled: enabled && ready && authenticated,
+    retry: false,
+    refetchInterval: enabled ? 3_000 : false,
+  });
+}
+
+export function useRequestToSpeak(streamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => requestToSpeak(streamId),
+    onSuccess: (request) => {
+      queryClient.setQueryData(["ms", "stream", streamId, "speaker-request", "me"], request);
+      // The host's queue is a different query; without this the request only
+      // appeared on their next 3 s poll.
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+      toast.success("Request sent to the host");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't request to speak.")),
+  });
+}
+
+export function useSpeakerRequests(streamId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-requests"],
+    queryFn: () => fetchSpeakerRequests(streamId),
+    enabled,
+    retry: false,
+    refetchInterval: enabled ? 3_000 : false,
+  });
+}
+
+export function useResolveSpeakerRequest(streamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, action }: { requestId: string; action: "approve" | "decline" | "remove" | "leave" }) =>
+      resolveSpeakerRequest(streamId, requestId, action),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't update the speaker.")),
   });
 }

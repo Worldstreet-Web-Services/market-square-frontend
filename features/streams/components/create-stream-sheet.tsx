@@ -8,6 +8,7 @@ import { InlineError } from "@/components/ui/states";
 import { UploadField } from "@/components/ui/upload-field";
 import { useCreateStream } from "@/features/streams/hooks/use-streams";
 import { STREAM_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
+import { MARKET_FLAGS } from "@/lib/market-config";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-grey-600";
@@ -56,7 +57,7 @@ export function CreateStreamSheet({
 
   const submit = () => {
     if (!draft.title.trim()) return;
-    const ticketed = Boolean(draft.ticketPriceKash.trim() || draft.vipPriceKash.trim());
+    const ticketed = Boolean(draft.ticketPriceKash.trim() || (MARKET_FLAGS.vipAccess && draft.vipPriceKash.trim()));
     create.mutate(
       {
         title: draft.title.trim(),
@@ -64,7 +65,7 @@ export function CreateStreamSheet({
         thumbnailUrl: draft.thumbnailUrl.trim() || undefined,
         visibility: ticketed ? "ticketed" : "public",
         ticketPriceKash: draft.ticketPriceKash.trim() || undefined,
-        vipPriceKash: draft.vipPriceKash.trim() || undefined,
+        vipPriceKash: MARKET_FLAGS.vipAccess ? draft.vipPriceKash.trim() || undefined : undefined,
       },
       {
         onSuccess: (stream: Stream) => {
@@ -108,7 +109,7 @@ export function CreateStreamSheet({
             ))}
           </select>
         </label>
-        <div className="grid grid-cols-2 gap-4">
+        <div className={MARKET_FLAGS.vipAccess ? "grid grid-cols-2 gap-4" : "grid grid-cols-1 gap-4"}>
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold text-grey-400">Ticket (KASH)</span>
             <input
@@ -119,7 +120,7 @@ export function CreateStreamSheet({
               className={inputClass}
             />
           </label>
-          <label className="block">
+          {MARKET_FLAGS.vipAccess && <label className="block">
             <span className="mb-1.5 block text-xs font-semibold text-grey-400">VIP (KASH)</span>
             <input
               value={draft.vipPriceKash}
@@ -128,7 +129,7 @@ export function CreateStreamSheet({
               placeholder="—"
               className={inputClass}
             />
-          </label>
+          </label>}
         </div>
         {create.isError && <InlineError error={create.error} fallback="Couldn't create the stream." />}
         <Button size="lg" className="w-full" disabled={!draft.title.trim()} loading={create.isPending} onClick={submit}>

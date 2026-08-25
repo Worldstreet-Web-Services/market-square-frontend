@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { RemoteTrack, Room } from "livekit-client";
 import { Spinner } from "@/components/ui/button";
+import { IconVolume } from "@/components/ui/icons";
+import { cn } from "@/lib/cn";
 
 type ViewerState = "connecting" | "live" | "reconnecting" | "waiting" | "failed";
 
@@ -23,7 +25,10 @@ export function LiveKitPlayer({
   fill?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const roomRef = useRef<Room | null>(null);
   const [state, setState] = useState<ViewerState>("connecting");
+  const [videoCount, setVideoCount] = useState(0);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const playingRef = useRef(onPlayingChange);
   useEffect(() => {
     playingRef.current = onPlayingChange;
@@ -32,6 +37,7 @@ export function LiveKitPlayer({
   useEffect(() => {
     let room: Room | null = null;
     let cancelled = false;
+    const container = containerRef.current;
 
     const setPlaying = (playing: boolean) => playingRef.current?.(playing);
 
@@ -39,17 +45,32 @@ export function LiveKitPlayer({
       if (cancelled) return;
       const instance = new Room({ adaptiveStream: true });
       room = instance;
+      roomRef.current = instance;
 
       const attach = (track: RemoteTrack) => {
+        // `track.attach()` with no argument mints a *new* element every call
+        // and appends it to the track's own attachedElements list. LiveKit
+        // re-emits TrackSubscribed for already-subscribed tracks after a
+        // reconnect or a server-side migration, so attaching blind leaves two
+        // <audio> elements decoding the same stream a few ms apart — which is
+        // audible as doubling/flanging, not as a clean duplicate. Detaching
+        // first guarantees exactly one element per track.
+        track.detach().forEach((stale) => stale.remove());
         const element = track.attach();
+        element.autoplay = true;
         if (track.kind === Track.Kind.Video) {
-          element.className = "h-full w-full object-contain";
-          containerRef.current?.replaceChildren(element);
+          element.className = "h-full min-h-0 w-full min-w-0 object-cover";
+          (element as HTMLVideoElement).playsInline = true;
+          containerRef.current?.appendChild(element);
+          setVideoCount(containerRef.current?.querySelectorAll("video").length ?? 1);
           setState("live");
           setPlaying(true);
         } else {
-          // Audio elements stay out of layout.
+          // Audio elements stay out of layout, but must never be muted or
+          // attenuated — the mute affordance belongs to the page, not here.
           element.style.display = "none";
+          element.muted = false;
+          element.volume = 1;
           containerRef.current?.appendChild(element);
         }
       };
@@ -68,7 +89,15 @@ export function LiveKitPlayer({
         .on(RoomEvent.TrackSubscribed, (track) => attach(track))
         .on(RoomEvent.TrackUnsubscribed, (track) => {
           track.detach().forEach((element) => element.remove());
+          setVideoCount(containerRef.current?.querySelectorAll("video").length ?? 0);
           refreshState();
+        })
+        // Browsers block unmuted autoplay until the tab has been interacted
+        // with. LiveKit reports that optimistically and only tells us after
+        // the fact, so surface a real unmute control instead of leaving the
+        // viewer watching a silent stream.
+        .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+          setAudioBlocked(!instance.canPlaybackAudio);
         })
         .on(RoomEvent.TrackMuted, refreshState)
         .on(RoomEvent.TrackUnmuted, refreshState)
@@ -90,6 +119,7 @@ export function LiveKitPlayer({
           return;
         }
         refreshState();
+        setAudioBlocked(!instance.canPlaybackAudio);
       } catch {
         if (!cancelled) setState("failed");
       }
@@ -98,9 +128,22 @@ export function LiveKitPlayer({
     return () => {
       cancelled = true;
       setPlaying(false);
+      // Drop every media element we minted before tearing the room down, so a
+      // remount cannot inherit an orphaned element still holding a decoder.
+      container?.querySelectorAll("video, audio").forEach((element) => element.remove());
+      roomRef.current = null;
       void room?.disconnect();
     };
   }, [url, token]);
+
+  // Must run inside a real click handler — that is what lifts the autoplay
+  // block for the rest of the session.
+  const startAudio = () => {
+    void roomRef.current
+      ?.startAudio()
+      .then(() => setAudioBlocked(false))
+      .catch(() => {});
+  };
 
   return (
     <div
@@ -110,7 +153,23 @@ export function LiveKitPlayer({
           : "relative aspect-video w-full overflow-hidden rounded-2xl bg-black"
       }
     >
-      <div ref={containerRef} className="absolute inset-0" />
+      <div
+        ref={containerRef}
+        className={cn(
+          "absolute inset-0 grid gap-0.5 bg-black",
+          videoCount <= 1 ? "grid-cols-1" : "grid-cols-2",
+          videoCount >= 3 && "grid-rows-2"
+        )}
+      />
+      {audioBlocked && (
+        <button
+          onClick={startAudio}
+          className="ws-glass absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold text-heading"
+        >
+          <IconVolume className="h-4 w-4" />
+          Tap for sound
+        </button>
+      )}
       {state !== "live" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-center">
           {state === "connecting" && <Spinner className="h-8 w-8 text-grey-500" />}

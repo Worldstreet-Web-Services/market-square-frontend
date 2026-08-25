@@ -21,6 +21,8 @@ Copy `.env.example` to `.env.local` and fill in what you have:
 | `NEXT_PUBLIC_PRIVY_APP_ID` | Privy app id (client). Unset ⇒ demo auth: a signed-in demo session is assumed. |
 | `PRIVY_APP_SECRET` | Privy app secret (server). Required with the app id for server-side token verification. |
 | `NEXT_PUBLIC_ARK_APP_URL` | Optional. Base URL for Ark-app deep links (`listing`, `market`, `game`). Defaults to `https://app.worldstreet.com`. |
+| `NEXT_PUBLIC_MS_VIP_ACCESS_ENABLED` | Governance flag. Enables VIP ticket selection only after access rules are approved. Defaults off. |
+| `NEXT_PUBLIC_MS_LIVE_GIFTS_ENABLED` | Governance flag. Enables live KASH gifts only after ledger and settlement approval. Defaults off. |
 
 ## Fixture mode
 

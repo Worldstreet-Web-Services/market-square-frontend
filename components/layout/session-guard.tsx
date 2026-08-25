@@ -39,12 +39,16 @@ export function SessionGuard() {
 
     const expire = () => {
       if (handled.current) return;
-      handled.current = true;
-      queryClient.removeQueries({ queryKey: ["ms", "me"] });
-      toast.error("Session expired — sign in again.");
+      // Declining the live-broadcast prompt ABORTS this expiry: the guard must
+      // stay armed so the next one still fires. Marking it handled up front
+      // disarmed it permanently the first time a streamer said "no", and the
+      // session then sat expired forever with no further prompt.
       if (broadcast.live && !window.confirm("You're live — leaving stops your broadcast.")) {
         return; // stay on the cockpit; the user chose to keep streaming
       }
+      handled.current = true;
+      queryClient.removeQueries({ queryKey: ["ms", "me"] });
+      toast.error("Session expired — sign in again.");
       if (pathname !== "/auth") {
         router.push(`/auth?returnTo=${encodeURIComponent(pathname)}`);
       }

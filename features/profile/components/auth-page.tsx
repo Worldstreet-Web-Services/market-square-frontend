@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { Button, Spinner } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
+import { Wordmark } from "@/components/ui/wordmark";
 
 export function AuthPage() {
   const { ready, authenticated, login, logout } = useAuth();
@@ -18,13 +19,16 @@ export function AuthPage() {
   const returnTo = rawReturnTo?.startsWith("/") ? rawReturnTo : null;
 
   return (
-    <div className="flex min-h-[70dvh] items-center justify-center px-4">
-      <div className="ws-card w-full max-w-md space-y-6 p-8 text-center">
+    <div className="flex min-h-[80dvh] items-center justify-center px-6">
+      <div className="w-full max-w-sm space-y-7 text-center">
         <div>
-          <h1 className="ws-display text-3xl tracking-tight">
-            Market <span className="text-accent">Square</span>
+          {/* The wordmark is the identity here — the monogram alongside it
+              would be the same name twice. */}
+          <h1 className="flex justify-center">
+            <Wordmark height={30} />
+            <span className="sr-only">Market Square</span>
           </h1>
-          <p className="mt-2 text-sm text-grey-400">
+          <p className="mt-2 text-[15px] leading-normal text-meta">
             The social square of the Ark platform. Streams, the ARK Store, creators and community — one account.
           </p>
         </div>
@@ -40,7 +44,7 @@ export function AuthPage() {
             <Button size="lg" className="w-full" onClick={login}>
               Continue with Privy
             </Button>
-            <p className="text-xs text-grey-600">Google, Twitter, or email — one tap, no seed phrases.</p>
+            <p className="text-[13px] text-meta">Google, Twitter, or email — one tap, no seed phrases.</p>
           </>
         )}
 

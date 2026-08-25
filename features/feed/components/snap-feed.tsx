@@ -5,10 +5,11 @@ import { isVideoUrl } from "@/lib/media";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, relativeTime } from "@/lib/format";
-import { resolveDeepLink } from "@/lib/deeplink";
+import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
 import { useAuth } from "@/hooks/use-auth";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useQueryParam } from "@/hooks/use-query-param";
 import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
@@ -18,15 +19,18 @@ import { IconComment, IconHeart, IconPlay, IconPlus } from "@/components/ui/icon
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useFeed, useLikePost } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
+import { StoriesRail } from "@/features/feed/components/stories-row";
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { pricePillLabel } from "@/features/feed/components/feed-cards";
 import type { FeedItem, Lane, Post } from "@/features/feed/lib/types";
 
-const LANES: Array<{ lane: Lane; label: string }> = [
-  { lane: "for-you", label: "For you" },
+// The mobile frame's lane set and wording — "Live Streams" carries a live
+// count badge, which is a real tally off the stream list, never a placeholder.
+const LANES: Array<{ lane: Lane; label: string; counted?: boolean }> = [
+  { lane: "for-you", label: "For You" },
   { lane: "following", label: "Following" },
-  { lane: "live", label: "Live" },
-  { lane: "platform", label: "Platform" },
+  { lane: "live", label: "Live Streams", counted: true },
+  { lane: "trending", label: "Trending" },
 ];
 
 const DOUBLE_TAP_MS = 300;
@@ -55,7 +59,7 @@ function PostSlide({ post }: { post: Post }) {
     }
   };
 
-  const cta = post.deepLink ? resolveDeepLink(post.deepLink) : null;
+  const cta = resolveCta(post.deepLink);
   const author = post.author;
 
   return (
@@ -103,7 +107,7 @@ function PostSlide({ post }: { post: Post }) {
         <div className="min-w-0">
           {author && (
             <Link href={`/u/${author.username}`} className="pointer-events-auto flex items-center gap-2">
-              <Avatar name={author.displayName} src={author.avatarUrl} size={36} />
+              <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={36} />
               <span className="ws-text-shadow flex items-center gap-1.5 text-sm font-semibold text-heading">
                 {author.displayName}
                 <VerifiedBadge verification={author.verification} />
@@ -182,7 +186,7 @@ function SlideFor({ item }: { item: FeedItem }) {
 
   if (item.type === "activity" && item.activity) {
     const activity = item.activity;
-    const cta = activity.deepLink ? resolveDeepLink(activity.deepLink) : null;
+    const cta = resolveCta(activity.deepLink);
     return (
       <section className="ws-snap-item relative flex h-dvh w-full flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="ws-meta">{activity.type} · {formatDateTime(activity.startsAt)}</p>
@@ -198,7 +202,7 @@ function SlideFor({ item }: { item: FeedItem }) {
 
   if (item.type === "platform_event" && item.platformEvent) {
     const event = item.platformEvent;
-    const cta = item.deepLink ? resolveDeepLink(item.deepLink) : null;
+    const cta = resolveCta(item.deepLink);
     return (
       <section className="ws-snap-item relative flex h-dvh w-full flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="ws-meta text-accent">WorldStreet</p>
@@ -216,10 +220,25 @@ function SlideFor({ item }: { item: FeedItem }) {
 }
 
 // Mobile Home: one item per viewport, mandatory snap, TikTok-grammar rails.
-export function SnapFeed() {
+export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
   const [lane, setLane] = useState<Lane>("for-you");
   const { authenticated } = useAuth();
   const [composerOpen, setComposerOpen] = useState(false);
+  // "Your Story" and the sidebar Post action both navigate to /?compose=…;
+  // on mobile this component IS home, so it has to honour the parameter or
+  // those entries land on an unchanged timeline.
+  const compose = useQueryParam("compose");
+  const composeStory = compose === "story";
+  const composeOpen = composerOpen || compose === "1" || composeStory;
+
+  // Closing has to drop the parameter as well, or the sheet reopens from the
+  // URL on the very next render and cannot be dismissed at all.
+  const closeComposer = () => {
+    setComposerOpen(false);
+    if (compose !== null) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  };
   const feed = useFeed(lane);
   const sentinel = useInfiniteScroll(
     () => feed.fetchNextPage(),
@@ -229,22 +248,35 @@ export function SnapFeed() {
 
   return (
     <div className="relative">
-      {/* floating lane pills over the feed */}
-      <div className="fixed inset-x-0 top-11 z-30 flex justify-center px-4">
-        <div className="ws-glass flex gap-1 rounded-full p-1">
-          {LANES.map(({ lane: value, label }) => (
+      {/* The mobile frame's lane bar: one 20px-radius slab at 92% near-black
+          with an 18% hairline, the active lane simply brighter. */}
+      <div className="fixed inset-x-0 top-11 z-30 px-[5px]">
+        <div className="flex items-center justify-between rounded-[20px] border border-white/[0.18] bg-[#0a0a0a]/92 px-2 py-[3px] backdrop-blur-sm">
+          {LANES.map(({ lane: value, label, counted }) => (
             <button
               key={value}
               onClick={() => setLane(value)}
+              aria-current={lane === value ? "true" : undefined}
               className={cn(
-                "ws-press rounded-full px-3 py-1 text-xs font-semibold",
-                lane === value ? "bg-accent text-ink" : "text-body"
+                "ws-press flex items-center gap-1.5 rounded-full px-2.5 py-2 text-[12px] leading-5",
+                lane === value ? "text-white" : "text-white/50"
               )}
             >
               {label}
+              {counted && liveCount > 0 && (
+                <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E7000B] px-1.5 text-[12px] leading-5 text-white">
+                  {liveCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Circular story rail, the mobile frame's shape (the desktop column
+          uses portrait cards instead). */}
+      <div className="fixed inset-x-0 top-[92px] z-30 px-[5px]">
+        <StoriesRail />
       </div>
 
       <div className="ws-snap-feed h-dvh snap-y snap-mandatory overflow-y-auto">
@@ -284,8 +316,12 @@ export function SnapFeed() {
           <IconPlus className="h-5 w-5" />
         </button>
       )}
-      <Sheet open={composerOpen} onClose={() => setComposerOpen(false)} title="New post">
-        <Composer />
+      <Sheet
+        open={composeOpen}
+        onClose={closeComposer}
+        title={composeStory ? "New story" : "New post"}
+      >
+        <Composer asStory={composeStory} onDone={closeComposer} />
       </Sheet>
     </div>
   );

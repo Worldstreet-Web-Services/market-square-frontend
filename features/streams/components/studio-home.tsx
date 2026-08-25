@@ -7,7 +7,8 @@ import { formatDateTime } from "@/lib/format";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconCamera } from "@/components/ui/icons";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ColumnHeader } from "@/components/layout/column-header";
+import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useMyStreams } from "@/features/streams/hooks/use-streams";
 import { streamPriceLabel } from "@/features/streams/components/stream-card";
@@ -21,11 +22,11 @@ function StreamRow({ stream }: { stream: Stream }) {
     <li>
       <Link
         href={`/studio/${stream.id}`}
-        className="ws-card ws-press flex items-center gap-4 p-4 transition-colors hover:bg-white/8"
+        className="ws-row flex items-center gap-4 px-4 py-3 lg:px-6"
       >
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-heading">{stream.title}</p>
-          <p className="mt-0.5 flex items-center gap-2 text-xs text-grey-500">
+          <p className="truncate text-[15px] font-bold text-heading">{stream.title}</p>
+          <p className="mt-0.5 flex items-center gap-2 text-[13px] text-meta">
             {stream.status === "live" ? (
               <LiveBadge className="px-2 py-0 text-[9px]" />
             ) : (
@@ -35,7 +36,7 @@ function StreamRow({ stream }: { stream: Stream }) {
             <span>· {streamPriceLabel(stream)}</span>
           </p>
         </div>
-        <span className="shrink-0 text-xs font-semibold text-accent">
+        <span className="shrink-0 text-[13px] font-semibold text-accent">
           {state === "cockpit" ? "Open cockpit →" : state === "green room" ? "Green room →" : "Summary →"}
         </span>
       </Link>
@@ -74,37 +75,37 @@ export function StudioHome() {
   const past = items.filter((s) => s.status === "ended" || s.status === "cancelled");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="ws-display text-2xl">Studio</h1>
-          <p className="mt-1 text-sm text-grey-500">Your streams, your room, your audience.</p>
-        </div>
-        <Button size="lg" onClick={() => setCreateOpen(true)}>
-          <IconCamera className="h-5 w-5" /> Go Live
-        </Button>
-      </div>
+    <>
+      <ColumnHeader
+        title="Studio"
+        subtitle="Your streams, your room, your audience"
+        action={
+          <Button onClick={() => setCreateOpen(true)}>
+            <IconCamera className="h-5 w-5" /> Go Live
+          </Button>
+        }
+      />
 
       <section>
-        <h2 className="ws-display mb-3 text-lg">Up next & live</h2>
-        {mine.isPending && (
-          <div className="space-y-3">
-            {[0, 1].map((i) => (
-              <Skeleton key={i} className="h-18" />
-            ))}
+        <h2 className="ws-hair border-b px-4 py-3 text-[17px] font-bold text-heading lg:px-6">
+          Up next &amp; live
+        </h2>
+        {mine.isPending && [0, 1].map((i) => <RowSkeleton key={i} />)}
+        {mine.isError && (
+          <div className="p-4">
+            <ErrorState error={mine.error} fallback="Couldn't load your streams." onRetry={() => mine.refetch()} />
           </div>
         )}
-        {mine.isError && (
-          <ErrorState error={mine.error} fallback="Couldn't load your streams." onRetry={() => mine.refetch()} />
-        )}
         {mine.isSuccess && active.length === 0 && (
-          <EmptyState
-            glyph="◉"
-            title="Nothing scheduled"
-            body="Hit Go Live — you'll check your camera in the green room before anyone sees you."
-          />
+          <div className="p-4">
+            <EmptyState
+              glyph="◉"
+              title="Nothing scheduled"
+              body="Hit Go Live — you'll check your camera in the green room before anyone sees you."
+            />
+          </div>
         )}
-        <ul className="space-y-3">
+        <ul>
           {active.map((stream) => (
             <StreamRow key={stream.id} stream={stream} />
           ))}
@@ -113,8 +114,10 @@ export function StudioHome() {
 
       {(mine.isPending || past.length > 0) && (
         <section>
-          <h2 className="ws-display mb-3 text-lg">Past streams</h2>
-          <ul className="space-y-3">
+          <h2 className="ws-hair border-b px-4 py-3 text-[17px] font-bold text-heading lg:px-6">
+            Past streams
+          </h2>
+          <ul>
             {past.map((stream) => (
               <StreamRow key={stream.id} stream={stream} />
             ))}
@@ -123,6 +126,6 @@ export function StudioHome() {
       )}
 
       <CreateStreamSheet open={createOpen} onClose={() => setCreateOpen(false)} />
-    </div>
+    </>
   );
 }

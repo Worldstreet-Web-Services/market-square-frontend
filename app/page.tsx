@@ -1,5 +1,5 @@
-import { FeedPage } from "@/features/feed";
+import { HomeScreen } from "@/components/layout/home-screen";
 
 export default function Page() {
-  return <FeedPage />;
+  return <HomeScreen />;
 }
