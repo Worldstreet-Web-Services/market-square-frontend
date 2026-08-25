@@ -1,15 +1,16 @@
 import { msApi } from "@/lib/api/service";
 import {
   ConversationPageSchema,
-  ConversationSchema,
+  ConversationRefSchema,
   MessagePageSchema,
   MessageSchema,
   ReadResultSchema,
 } from "@/features/messages/lib/types";
 
-/** Idempotent from either side — returns the existing thread when there is one. */
+/** Idempotent from either side — returns the existing thread when there is one.
+    Answers the bare `Conversation` record, not a `ConversationSummary`. */
 export async function openConversation(userId: string) {
-  return ConversationSchema.parse(await msApi.post("/conversations", { userId }));
+  return ConversationRefSchema.parse(await msApi.post("/conversations", { userId }));
 }
 
 export async function fetchConversations(cursor?: string) {

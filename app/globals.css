@@ -41,8 +41,13 @@
   --color-spotlight: #7e3beb;
   --color-spotlight-chip: #6829ce;
   --color-spotlight-chip-ink: #c27aff;
-  /* The sidebar's active-item dot. */
-  --color-nav-dot: #ffba00;
+  /* The sidebar's active-item glyph. It was gold (#ffba00), which the design
+     dropped along with the rest of the gold. It is NOT a third purple: it
+     aliases the create stop, the brighter end of the shared ramp, because the
+     dimmer --color-spotlight is only 3.7:1 on black while this is 5.8:1 — and a
+     4px glyph needs the contrast. Kept as its own name so the nav's role stays
+     legible at the call site; repoint it, never inline a new hex. */
+  --color-nav-dot: var(--color-create);
   /* Gain and loss stay semantic (functional, not brand color). */
   --color-up: #7ce7b0;
   --color-down: #f6a5a5;

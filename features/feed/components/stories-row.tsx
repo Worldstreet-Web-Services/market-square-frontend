@@ -19,6 +19,11 @@ const SEEN_KEY = "ms.stories.seen";
 
 /** One author's stories, oldest first — the unit Instagram opens on a tap. */
 interface StoryGroup {
+  /** The author's Privy DID. Seeded artwork hashes on this everywhere else in
+      the app, so dropping it here made the same person draw a different
+      illustration in the rail than in the feed or on their profile. Group and
+      seed on the id; the username is for links and labels only. */
+  id: string;
   username: string;
   displayName: string;
   avatarUrl: string | null;
@@ -88,10 +93,11 @@ function groupByAuthor(posts: Post[]): StoryGroup[] {
   for (const post of posts) {
     const author = post.author;
     if (!author) continue;
-    const existing = groups.get(author.username);
+    const existing = groups.get(author.id);
     if (existing) existing.stories.push(post);
     else
-      groups.set(author.username, {
+      groups.set(author.id, {
+        id: author.id,
         username: author.username,
         displayName: author.displayName,
         avatarUrl: author.avatarUrl,
@@ -121,14 +127,14 @@ function StoryCard({
     <span className={cn("ws-story-ring block !rounded-[18px]", seen && "ws-story-seen")}>
       <span className="ws-story-gap block !rounded-[17px]">
         <span className="relative block h-24 w-[100px] overflow-hidden rounded-[16.5px]">
-          <GradientThumb seed={group.username} className="absolute inset-0 h-full w-full" />
+          <GradientThumb seed={group.id} className="absolute inset-0 h-full w-full" />
           {cover && (
             // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
             <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
           )}
           <span className="absolute inset-0 bg-black/[0.27]" />
           <span className="absolute left-2 top-2">
-            <Avatar name={group.displayName} seed={group.username} src={group.avatarUrl} size={24} />
+            <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={24} />
           </span>
           <span className="sr-only">{group.username}</span>
         </span>
@@ -262,7 +268,7 @@ function StoryViewer({
 
         <div className="relative z-20 flex items-center gap-3 px-3 py-3">
           <Link href={`/u/${group.username}`} onClick={onClose}>
-            <Avatar name={group.displayName} seed={group.username} src={group.avatarUrl} size={32} />
+            <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={32} />
           </Link>
           <div className="min-w-0 flex-1">
             <Link
@@ -382,7 +388,7 @@ export function StoriesRail() {
           const allSeen = group.stories.every((story) => seen.has(story.id));
           return (
             <button
-              key={group.username}
+              key={group.id}
               onClick={() => setOpenAt(i)}
               aria-label={`Stories from ${group.displayName}`}
               className="ws-press flex w-[41px] shrink-0 flex-col items-center gap-1"
@@ -394,7 +400,7 @@ export function StoriesRail() {
                 )}
               >
                 <span className="ws-story-gap block !p-0">
-                  <Avatar name={group.displayName} seed={group.username} src={group.avatarUrl} size={38} />
+                  <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={38} />
                 </span>
               </span>
               <span className="w-full truncate text-center text-[8px] text-white/80">
@@ -460,7 +466,7 @@ export function StoriesRow() {
           const allSeen = group.stories.every((story) => seen.has(story.id));
           return (
             <button
-              key={group.username}
+              key={group.id}
               onClick={() => setOpenAt(i)}
               aria-label={`Stories from ${group.displayName}`}
               className="ws-press shrink-0"

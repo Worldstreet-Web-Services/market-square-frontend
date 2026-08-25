@@ -132,10 +132,15 @@ function Thread({
               key={message.id}
               className={cn("flex items-end gap-2", mine && "flex-row-reverse")}
             >
+              {/* The thread is 1:1 and the payload carries no `sender`, so the
+                  only other participant is the peer. Reading it from the
+                  conversation is what makes the bubble avatar match the same
+                  person everywhere else. */}
               {!mine && (
                 <Avatar
-                  name={message.sender?.displayName ?? "?"}
-                  seed={message.senderId} src={message.sender?.avatarUrl}
+                  name={conversation.peer?.displayName ?? "?"}
+                  seed={message.senderId || conversation.peer?.id}
+                  src={conversation.peer?.avatarUrl}
                   size={28}
                 />
               )}
@@ -145,8 +150,13 @@ function Thread({
                   mine ? "bg-accent text-ink" : "ws-inset text-body"
                 )}
               >
-                <p className="whitespace-pre-wrap break-words text-[15px] leading-normal">
-                  {message.text}
+                <p
+                  className={cn(
+                    "whitespace-pre-wrap break-words text-[15px] leading-normal",
+                    message.status === "removed" && "italic opacity-60"
+                  )}
+                >
+                  {message.status === "removed" ? "Message removed" : message.text}
                 </p>
                 <p
                   className={cn(
@@ -167,8 +177,25 @@ function Thread({
   );
 }
 
+/** The inbox preview line. `lastMessage` is a full message object, so the row
+    can say who sent it — "You: " when the viewer did, which is the standard
+    inbox affordance — and a removed message keeps its row without its body. */
+function Preview({ conversation, meId }: { conversation: Conversation; meId?: string }) {
+  const last = conversation.lastMessage;
+  if (!last) return <>No messages yet</>;
+  if (last.status === "removed") return <span className="italic">Message removed</span>;
+  const mine = Boolean(meId && last.senderId === meId);
+  return (
+    <>
+      {mine && <span className="text-body">You: </span>}
+      {last.text}
+    </>
+  );
+}
+
 function Inbox({ onOpen }: { onOpen: (conversation: Conversation) => void }) {
   const conversations = useConversations();
+  const me = useMe();
   const sentinel = useInfiniteScroll(
     () => conversations.fetchNextPage(),
     Boolean(conversations.hasNextPage && !conversations.isFetchingNextPage)
@@ -219,14 +246,18 @@ function Inbox({ onOpen }: { onOpen: (conversation: Conversation) => void }) {
               <span className="truncate text-[15px] font-bold text-heading">
                 {conversation.peer?.displayName ?? "Unknown"}
               </span>
-              {conversation.lastMessageAt && (
+              {/* The message's own timestamp is the truthful one — the
+                  conversation's lastMessageAt can lag it. */}
+              {(conversation.lastMessage?.createdAt ?? conversation.lastMessageAt) && (
                 <span className="shrink-0 text-[12px] text-meta">
-                  {relativeTime(conversation.lastMessageAt)}
+                  {relativeTime(
+                    conversation.lastMessage?.createdAt ?? conversation.lastMessageAt!
+                  )}
                 </span>
               )}
             </span>
             <span className="mt-0.5 block truncate text-[14px] text-meta">
-              {conversation.lastMessage ?? "No messages yet"}
+              <Preview conversation={conversation} meId={me.data?.id} />
             </span>
           </span>
           {conversation.unreadCount > 0 && (

@@ -225,20 +225,26 @@ function conversationDto(conversation: FxConversation, viewerId: string) {
   return {
     id: conversation.id,
     peer: peer ? summary(peer) : null,
-    lastMessage: last?.text ?? null,
+    // A full ConversationMessage, per the spec — NOT the bare text. The
+    // fixture used to flatten it to a string, which mirrored the frontend's
+    // wrong schema and hid the contract break until a user hit the real API.
+    lastMessage: last ? messageDto(last) : null,
     lastMessageAt: last?.createdAt ?? null,
     unreadCount: unreadIn(conversation, viewerId),
   };
 }
 
+// Exactly the spec's ConversationMessage. It used to hydrate a `sender` the
+// real service never sends, which let the thread render identity from a field
+// that is always absent in production — the fixture has to be as bare as the
+// contract or it hides the gap.
 function messageDto(message: FxMessage) {
-  const sender = profileById(message.senderId);
   return {
     id: message.id,
     conversationId: message.conversationId,
     senderId: message.senderId,
-    sender: sender ? summary(sender) : null,
     text: message.text,
+    status: "active",
     createdAt: message.createdAt,
   };
 }
