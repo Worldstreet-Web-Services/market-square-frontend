@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/cn";
 import { IconArrowLeft, IconX } from "@/components/ui/icons";
 
@@ -33,6 +33,13 @@ export function Sheet({
   action?: React.ReactNode;
   tabs?: React.ReactNode;
 }) {
+  // The CSS motion system honours prefers-reduced-motion, but these are
+  // JS-driven springs that CSS cannot reach. Under the setting the panel stops
+  // travelling and only cross-fades — the dialog still reads as arriving,
+  // without the slide.
+  const reduceMotion = useReducedMotion();
+  const panelOffset = reduceMotion ? 0 : 40;
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -60,10 +67,14 @@ export function Sheet({
             role="dialog"
             aria-modal
             aria-label={title}
-            initial={{ y: 40, opacity: 0 }}
+            initial={{ y: panelOffset, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }}
-            transition={{ type: "spring", damping: 28, stiffness: 340 }}
+            exit={{ y: panelOffset, opacity: 0 }}
+            transition={
+              reduceMotion
+                ? { duration: 0.12 }
+                : { type: "spring", damping: 28, stiffness: 340 }
+            }
             className={cn(
               "ws-glass relative z-10 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-sheet/95 sm:rounded-3xl",
               wide ? "sm:max-w-2xl" : "sm:max-w-md"

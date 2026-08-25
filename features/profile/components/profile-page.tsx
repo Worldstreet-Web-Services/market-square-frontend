@@ -81,7 +81,16 @@ function TabCta({ href, label }: { href: string; label: string }) {
   );
 }
 
-function PostsTab({ username, isMe }: { username: string; isMe: boolean }) {
+function PostsTab({
+  username,
+  isMe,
+  composeSlot,
+}: {
+  username: string;
+  isMe: boolean;
+  /** Composed from outside — profile never imports the feed slice. */
+  composeSlot?: React.ReactNode;
+}) {
   const posts = useProfilePosts(username);
   if (posts.isPending) return <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>;
   if (posts.isError)
@@ -101,7 +110,9 @@ function PostsTab({ username, isMe }: { username: string; isMe: boolean }) {
               ? "Your updates show up here and in your followers' feeds."
               : "When they post, it shows up here."
           }
-          action={isMe ? <TabCta href="/?compose=1" label="Create a post" /> : undefined}
+          // Opens the composer in place when the shell supplies it; the
+          // link is the signed-out/unslotted fallback and still works.
+          action={isMe ? (composeSlot ?? <TabCta href="/?compose=1" label="Create a post" />) : undefined}
         />
       </div>
     );
@@ -236,10 +247,13 @@ function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) 
 export function ProfilePage({
   username,
   messageSlot,
+  composeSlot,
 }: {
   username: string;
   /** Composed from outside — profile never imports the messages slice. */
   messageSlot?: (profile: Profile) => React.ReactNode;
+  /** Composed from outside — profile never imports the feed slice. */
+  composeSlot?: React.ReactNode;
 }) {
   const profile = useProfile(username);
   const me = useMe();
@@ -352,7 +366,7 @@ export function ProfilePage({
         />
       </div>
 
-      {tab === "posts" && <PostsTab username={username} isMe={isMe} />}
+      {tab === "posts" && <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} />}
       {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
       {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}
 

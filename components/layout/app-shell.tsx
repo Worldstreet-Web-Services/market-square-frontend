@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { allowsCompose } from "@/lib/compose-surfaces";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
@@ -14,6 +15,7 @@ import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark, Wordmark } from "@/components/ui/wordmark";
 import { RightRail } from "@/components/layout/right-rail";
+import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { Sheet } from "@/components/ui/sheet";
 import {
   IconBell,
@@ -77,6 +79,9 @@ function isWide(pathname: string): boolean {
     WIDE_EXACT.includes(pathname) || WIDE_PREFIX.some((prefix) => pathname.startsWith(prefix))
   );
 }
+
+// Which surfaces carry a compose control — the rules and their reasoning live
+// in lib/compose-surfaces.ts, where they are pinned by tests.
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
@@ -261,7 +266,14 @@ function AccountChip() {
   );
 }
 
-function Sidebar({ pathname }: { pathname: string }) {
+function Sidebar({
+  pathname,
+  onCompose,
+}: {
+  pathname: string;
+  /** Absent on surfaces that suppress composing — see allowsCompose. */
+  onCompose?: () => void;
+}) {
   const { authenticated } = useAuth();
   const me = useMe();
   const broadcast = useBroadcastStatus();
@@ -315,16 +327,21 @@ function Sidebar({ pathname }: { pathname: string }) {
       </nav>
 
       {/* Post is the primary act; going live is the one Market Square adds
-          next to it, so it sits directly underneath as the quiet twin. */}
+          next to it, so it sits directly underneath as the quiet twin.
+          It opens the composer in place — it used to link to `/?compose=1`,
+          which meant reaching for Post from anywhere threw the reader back to
+          home and lost their place. */}
       <div className="mt-4 flex flex-col items-center gap-2 xl:items-stretch xl:px-1">
-        <Link
-          href="/?compose=1"
-          className="ws-press flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white xl:h-13 xl:text-[17px]"
-          aria-label="Post"
-        >
-          <IconPlus className="h-6 w-6 xl:hidden" />
-          <span className="hidden xl:block">Post</span>
-        </Link>
+        {authenticated && onCompose && (
+          <button
+            onClick={onCompose}
+            className="ws-press flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white xl:h-13 xl:text-[17px]"
+            aria-label="Post"
+          >
+            <IconPlus className="h-6 w-6 xl:hidden" />
+            <span className="hidden xl:block">Post</span>
+          </button>
+        )}
         <Link
           href="/studio"
           className="ws-press flex h-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 xl:h-13"
@@ -555,6 +572,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { authenticated } = useAuth();
   const broadcast = useBroadcastStatus();
+  const [composeOpen, setComposeOpen] = useState(false);
+
+  // One piece of local state drives every compose entry point in the shell —
+  // sidebar Post, the desktop floating button and the mobile one. They all sit
+  // inside this component, so a prop is enough; no context store required.
+  const canCompose = authenticated && allowsCompose(pathname);
 
   // The stream room owns its whole viewport; the shell stays out of the way
   // there (no rails over the player, no bars).
@@ -572,7 +595,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] justify-center">
-      <Sidebar pathname={pathname} />
+      <Sidebar pathname={pathname} onCompose={canCompose ? () => setComposeOpen(true) : undefined} />
 
       {/* Mobile top strip: wordmark plus the two things worth reaching from
           anywhere — what's live, and search. */}
@@ -605,21 +628,50 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           >
             {children}
+
+            {/* The design's floating compose button (53×53, the silver ramp,
+                a + glyph) floating at the column's outer edge — in the file it
+                sits in the gutter between the column and the right rail. It
+                was owned by the feed page, so it existed on home only; it
+                belongs to the shell so every surface carries it.
+                `main` is `min-h-dvh`, so `sticky bottom-6` floats against the
+                viewport instead of stranding itself at the end of a short
+                page. */}
+            {canCompose && (
+              <div className="pointer-events-none sticky bottom-6 z-30 ml-auto hidden w-fit md:block">
+                <button
+                  onClick={() => setComposeOpen(true)}
+                  aria-label="Create post"
+                  className="ws-btn-silver ws-press pointer-events-auto flex h-[53px] w-[53px] items-center justify-center rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-opacity hover:opacity-90"
+                >
+                  <IconPlus className="h-7 w-7" />
+                </button>
+              </div>
+            )}
           </main>
 
           {!wide && <RightRail />}
         </div>
       </div>
 
-      {/* Mobile compose: a floating silver core, the one elevated control. */}
-      <Link
-        href="/?compose=1"
-        aria-label="Post"
-        className="ws-press fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-ink shadow-[0_4px_24px_rgba(212,212,216,0.3)] md:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
-      >
-        <IconPlus className="h-6 w-6" />
-      </Link>
+      {/* Mobile compose: a floating silver core, the one elevated control.
+          It opens the composer where you stand — it used to link to
+          `/?compose=1`, so posting from `/store` meant losing the page you
+          were on. The offset clears the bottom tab bar plus the home
+          indicator. The design's mobile frames do not draw a compose button at
+          all, so this placement is ours, not the file's. */}
+      {canCompose && (
+        <button
+          onClick={() => setComposeOpen(true)}
+          aria-label="Create post"
+          className="ws-press fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-ink shadow-[0_4px_24px_rgba(212,212,216,0.3)] md:hidden"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+        >
+          <IconPlus className="h-6 w-6" />
+        </button>
+      )}
+
+      <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
 
       <MobileBar pathname={pathname} />
 

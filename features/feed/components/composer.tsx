@@ -60,7 +60,12 @@ export function Composer({
   asStory?: boolean;
   /** The post being quoted, previewed above the field and sent as quotedPostId. */
   quoted?: Post | null;
-  onDone?: () => void;
+  /**
+   * Called once the post is live, with the created post — callers that are not
+   * a feed (the shell's global composer) need its id to link to `/p/:id`,
+   * since nothing on their surface will show the new post appearing.
+   */
+  onDone?: (created: Post) => void;
 }) {
   const me = useMe();
   const gate = useGate();
@@ -127,7 +132,7 @@ export function Composer({
           if (quoted && !created.quotedPost) {
             toast.error("Posted, but quoting isn't available yet — it went out as a plain post.");
           }
-          onDone?.();
+          onDone?.(created);
           setText("");
           setMediaFile(null);
           setPreviewUrl("");

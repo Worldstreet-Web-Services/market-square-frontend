@@ -278,16 +278,11 @@ export function FeedPage({
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
         )}
 
-        {/* Floating compose, pinned to the column's outer edge. */}
-        {authenticated && (
-          <button
-            onClick={() => setComposerOpen(true)}
-            aria-label="Create post"
-            className="ws-btn-silver ws-press sticky bottom-6 ml-auto flex h-[52px] w-[52px] items-center justify-center rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-opacity hover:opacity-90"
-          >
-            <IconPlus className="h-7 w-7" />
-          </button>
-        )}
+        {/* The floating compose button used to live here, which is why it
+            existed on home and nowhere else. AppShell owns it now and renders
+            it on every surface that allows composing — see allowsCompose. The
+            in-timeline composer below stays: the stories rail and the empty
+            states open it in place via `?compose=1` / `?compose=story`. */}
       </div>
     </>
   );
