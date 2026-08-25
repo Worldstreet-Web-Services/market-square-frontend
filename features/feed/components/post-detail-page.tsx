@@ -137,10 +137,10 @@ export function PostDetailPage({
         <article key={comment.id} className="ws-row flex gap-3 px-4 py-3">
           {comment.author ? (
             <Link href={`/u/${comment.author.username}`} className="shrink-0">
-              <Avatar name={comment.author.displayName} src={comment.author.avatarUrl} size={36} />
+              <Avatar name={comment.author.displayName} seed={comment.author.id} src={comment.author.avatarUrl} size={36} />
             </Link>
           ) : (
-            <Avatar name="?" size={36} />
+            <Avatar name="?" seed={comment.authorId} size={36} />
           )}
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-x-1.5 text-[14px]">

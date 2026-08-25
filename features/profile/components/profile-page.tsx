@@ -306,7 +306,7 @@ export function ProfilePage({
       <div className="px-4 pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="-mt-14 rounded-full border-4 border-black sm:-mt-16">
-            <Avatar name={data.displayName} src={data.avatarUrl} size={112} />
+            <Avatar name={data.displayName} seed={data.id} src={data.avatarUrl} size={112} />
           </div>
           <div className="flex items-center gap-2 pt-3">
             {isMe ? (

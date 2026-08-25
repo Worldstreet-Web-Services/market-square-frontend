@@ -201,7 +201,7 @@ export function Composer({
 
   return (
     <div className="ws-row flex gap-3 px-4 py-3">
-      <Avatar name={me.data?.displayName ?? "You"} src={me.data?.avatarUrl} size={40} />
+      <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={40} />
 
       <div className="min-w-0 flex-1">
         {kind === "story" && (
@@ -221,7 +221,7 @@ export function Composer({
             <div className="flex items-center gap-2">
               <Avatar
                 name={quoted.author?.displayName ?? "?"}
-                src={quoted.author?.avatarUrl}
+                seed={quoted.author?.id} src={quoted.author?.avatarUrl}
                 size={20}
               />
               <span className="truncate text-[13px] font-bold text-heading">

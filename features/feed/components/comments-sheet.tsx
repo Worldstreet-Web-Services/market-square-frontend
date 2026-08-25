@@ -63,7 +63,7 @@ export function CommentsSheet({
               <li key={comment.id} className="flex gap-3">
                 <Avatar
                   name={comment.author?.displayName ?? comment.authorId.slice(-4) ?? "?"}
-                  src={comment.author?.avatarUrl}
+                  seed={comment.authorId} src={comment.author?.avatarUrl}
                   size={32}
                 />
                 <div className="min-w-0">

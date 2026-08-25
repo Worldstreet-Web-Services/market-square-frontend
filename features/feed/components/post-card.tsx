@@ -150,7 +150,7 @@ function QuotedPost({ quoted }: { quoted: NonNullable<Post["quotedPost"]> }) {
       className="ws-inset mt-3 block px-3 py-2.5 transition-colors hover:bg-white/[0.04]"
     >
       <span className="flex items-center gap-2">
-        <Avatar name={author?.displayName ?? "?"} src={author?.avatarUrl} size={20} />
+        <Avatar name={author?.displayName ?? "?"} seed={author?.id} src={author?.avatarUrl} size={20} />
         <span className="truncate text-[13px] font-bold text-heading">
           {author?.displayName ?? "Unknown"}
         </span>
@@ -294,7 +294,7 @@ function InlineComment({ postId }: { postId: string }) {
 
   return (
     <div className="ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2">
-      <Avatar name={me.data?.displayName ?? "You"} src={me.data?.avatarUrl} size={24} />
+      <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
       <input
         value={text}
         onChange={(event) => setText(event.target.value.slice(0, 500))}
@@ -372,10 +372,10 @@ export function PostCard({
       <header className="flex items-center gap-2.5">
         {author ? (
           <TransitionLink href={`/u/${author.username}`} className="shrink-0">
-            <Avatar name={author.displayName} src={author.avatarUrl} size={39} />
+            <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={39} />
           </TransitionLink>
         ) : (
-          <Avatar name="?" size={39} />
+          <Avatar name="?" seed={post.authorId} size={39} />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-1.5">

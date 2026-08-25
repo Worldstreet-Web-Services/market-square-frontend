@@ -107,7 +107,7 @@ function PostSlide({ post }: { post: Post }) {
         <div className="min-w-0">
           {author && (
             <Link href={`/u/${author.username}`} className="pointer-events-auto flex items-center gap-2">
-              <Avatar name={author.displayName} src={author.avatarUrl} size={36} />
+              <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={36} />
               <span className="ws-text-shadow flex items-center gap-1.5 text-sm font-semibold text-heading">
                 {author.displayName}
                 <VerifiedBadge verification={author.verification} />

@@ -75,7 +75,7 @@ function Row({ item, onMarkRead }: { item: MarketNotification; onMarkRead: (id: 
         {GLYPHS[item.kind]}
       </span>
       {item.actor ? (
-        <Avatar name={item.actor.displayName} src={item.actor.avatarUrl} size={36} />
+        <Avatar name={item.actor.displayName} seed={item.actor.id} src={item.actor.avatarUrl} size={36} />
       ) : null}
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] leading-normal text-body">

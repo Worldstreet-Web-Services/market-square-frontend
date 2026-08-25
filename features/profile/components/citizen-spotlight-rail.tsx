@@ -83,7 +83,7 @@ export function CitizenSpotlightRail() {
               href={`/u/${row.profile.username}`}
               className="flex items-center gap-[9px] rounded-xl border border-white/10 bg-white/[0.03] p-2"
             >
-              <Avatar name={row.profile.displayName} src={row.profile.avatarUrl} size={38} />
+              <Avatar name={row.profile.displayName} seed={row.profile.id} src={row.profile.avatarUrl} size={38} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1 truncate text-[12px] font-bold leading-4 text-white">
                   <span className="truncate">{row.profile.displayName}</span>

@@ -128,7 +128,7 @@ function StoryCard({
           )}
           <span className="absolute inset-0 bg-black/[0.27]" />
           <span className="absolute left-2 top-2">
-            <Avatar name={group.displayName} src={group.avatarUrl} size={24} />
+            <Avatar name={group.displayName} seed={group.username} src={group.avatarUrl} size={24} />
           </span>
           <span className="sr-only">{group.username}</span>
         </span>
@@ -262,7 +262,7 @@ function StoryViewer({
 
         <div className="relative z-20 flex items-center gap-3 px-3 py-3">
           <Link href={`/u/${group.username}`} onClick={onClose}>
-            <Avatar name={group.displayName} src={group.avatarUrl} size={32} />
+            <Avatar name={group.displayName} seed={group.username} src={group.avatarUrl} size={32} />
           </Link>
           <div className="min-w-0 flex-1">
             <Link
@@ -369,7 +369,7 @@ export function StoriesRail() {
         >
           <span className="relative flex h-[41px] w-[41px] items-center justify-center rounded-full border border-white/20 bg-white/5">
             <span className="opacity-60">
-              <Avatar name={me.data?.displayName ?? "You"} src={me.data?.avatarUrl} size={33} />
+              <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={33} />
             </span>
             <span className="absolute -bottom-0.5 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-black">
               <IconPlus className="h-2.5 w-2.5 [&]:stroke-[3]" />
@@ -394,7 +394,7 @@ export function StoriesRail() {
                 )}
               >
                 <span className="ws-story-gap block !p-0">
-                  <Avatar name={group.displayName} src={group.avatarUrl} size={38} />
+                  <Avatar name={group.displayName} seed={group.username} src={group.avatarUrl} size={38} />
                 </span>
               </span>
               <span className="w-full truncate text-center text-[8px] text-white/80">
@@ -447,7 +447,7 @@ export function StoriesRow() {
         <Link href="/?compose=story" className="ws-press shrink-0" aria-label="Add to your story">
           <span className="ws-story-card relative flex h-24 w-[100px] flex-col items-center justify-center gap-1">
             <span className="relative">
-              <Avatar name={me.data?.displayName ?? "You"} src={me.data?.avatarUrl} size={48} />
+              <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={48} />
               <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-black bg-white text-black">
                 <IconPlus className="h-2.5 w-2.5 [&]:stroke-[3]" />
               </span>

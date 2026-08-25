@@ -49,7 +49,7 @@ function ResultRow({ result }: { result: DiscoveryResult }) {
       // Profile results link by USERNAME — the route is /u/[username], and
       // linking by id lands on a "not found".
       <Link href={`/u/${profile.username}`} className={ROW}>
-        <Avatar name={profile.displayName} src={profile.avatarUrl} size={44} />
+        <Avatar name={profile.displayName} seed={profile.id} src={profile.avatarUrl} size={44} />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-1.5">
             <span className="truncate text-[15px] font-bold text-heading">
@@ -75,7 +75,7 @@ function ResultRow({ result }: { result: DiscoveryResult }) {
       // A post result opens the POST, never its author — and never falls back
       // to the home timeline when the payload carries no author.
       <Link href={`/p/${post.id}`} className={ROW}>
-        <Avatar name={author?.displayName ?? "?"} src={author?.avatarUrl} size={44} />
+        <Avatar name={author?.displayName ?? "?"} seed={author?.id} src={author?.avatarUrl} size={44} />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-1.5">
             <span className="truncate text-[15px] font-bold text-heading">

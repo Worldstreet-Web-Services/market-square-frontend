@@ -24,6 +24,7 @@ import {
   IconEye,
   IconFullscreen,
   IconHeart,
+  IconHome,
   IconLink,
   IconLive,
   IconPause,
@@ -31,7 +32,6 @@ import {
   IconPip,
   IconRefresh,
   IconShare,
-  IconSpark,
   IconTheater,
   IconTicket,
   IconVolume,
@@ -228,13 +228,16 @@ const REACTION_COLORS = ["#ffffff", "#f4f4f4", "#d4d4d8", "#bfbfbf", "#9b9b9b"];
 let reactionSeq = 0;
 let giftSeq = 0;
 
-// Destinations repeat by design (Back and Discover both leave to /live), so
-// the label is the identity here, not the href.
+// One entry per destination. Two labels pointing at the same href ("Back" and
+// "Discover LIVE" both went to /live; "Go LIVE" and "Creator tools" both went
+// to /studio) read as four choices while offering two, so the duplicates are
+// gone. Nothing here is marked current: the current page is /live/:id, which
+// none of these is — this rail is the way *out* of the room.
 const STREAM_NAV = [
-  { href: "/live", label: "Back", icon: IconChevronLeft },
-  { href: "/live", label: "Discover LIVE", icon: IconLive, current: true },
+  { href: "/", label: "Home", icon: IconHome },
+  { href: "/live", label: "Discover LIVE", icon: IconLive },
+  { href: "/tickets", label: "My tickets", icon: IconTicket },
   { href: "/studio", label: "Go LIVE", icon: IconCamera },
-  { href: "/studio", label: "Creator tools", icon: IconSpark },
 ] as const;
 
 
@@ -244,11 +247,12 @@ function SuggestedCreators({ currentId }: { currentId: string }) {
 
   return (
     <div className="mt-5 border-t border-white/10 pt-5">
-      <div className="flex items-center justify-between px-1">
-        <p className="text-sm font-semibold text-grey-400">Suggested LIVE creators</p>
+      <div className="flex items-center justify-center gap-1 px-1 xl:justify-between">
+        <p className="hidden text-sm font-semibold text-grey-400 xl:block">Suggested LIVE creators</p>
         <button
           onClick={() => live.refetch()}
           aria-label="Refresh suggestions"
+          title="Refresh suggestions"
           className="rounded-full p-1 text-grey-500 transition-colors hover:bg-white/10 hover:text-body"
         >
           <IconRefresh className="h-4 w-4" />
@@ -258,9 +262,9 @@ function SuggestedCreators({ currentId }: { currentId: string }) {
       {live.isPending && (
         <div className="mt-3 space-y-3 px-1">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="flex items-center gap-3">
-              <Skeleton className="h-9 w-9 rounded-full" />
-              <div className="flex-1 space-y-1.5">
+            <div key={i} className="flex items-center justify-center gap-3 xl:justify-start">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+              <div className="hidden flex-1 space-y-1.5 xl:block">
                 <Skeleton className="h-2.5 w-24" />
                 <Skeleton className="h-2.5 w-14" />
               </div>
@@ -270,76 +274,105 @@ function SuggestedCreators({ currentId }: { currentId: string }) {
       )}
 
       {live.isSuccess && others.length === 0 && (
-        <p className="mt-3 px-1 text-[11px] text-grey-600">No other creators are live right now.</p>
+        <p className="mt-3 hidden px-1 text-[11px] text-grey-600 xl:block">
+          No other creators are live right now.
+        </p>
       )}
 
       <ul className="mt-2">
-        {others.map((item) => (
-          <li key={item.id}>
-            <Link
-              href={`/live/${item.id}`}
-              className="flex items-center gap-3 rounded-lg px-1 py-2 transition-colors hover:bg-white/[0.07]"
-            >
-              <span className="relative shrink-0">
-                <Avatar name={item.owner?.displayName ?? item.title} src={item.owner?.avatarUrl} size={36} />
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-sm bg-accent px-1 text-[7px] font-bold text-ink">
-                  LIVE
+        {others.map((item) => {
+          const name = item.owner?.displayName ?? item.title;
+          return (
+            <li key={item.id}>
+              <Link
+                href={`/live/${item.id}`}
+                // Below xl the row is the avatar alone, so the accessible name
+                // has to come from the link itself — the text is display:none.
+                aria-label={`${name} — live now`}
+                title={name}
+                className="flex items-center justify-center gap-3 rounded-lg px-1 py-2 transition-colors hover:bg-white/[0.07] xl:justify-start"
+              >
+                <span className="relative shrink-0">
+                  <Avatar name={name} seed={item.ownerId} src={item.owner?.avatarUrl} size={36} />
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-sm bg-accent px-1 text-[7px] font-bold text-ink">
+                    LIVE
+                  </span>
                 </span>
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-heading">
-                  {item.owner?.displayName ?? item.title}
+                <span className="hidden min-w-0 flex-1 xl:block">
+                  <span className="block truncate text-sm font-semibold text-heading">{name}</span>
+                  <span className="block truncate text-[11px] text-meta">
+                    {item.owner ? `@${item.owner.username}` : item.category}
+                  </span>
                 </span>
-                <span className="block truncate text-[11px] text-meta">
-                  {item.owner ? `@${item.owner.username}` : item.category}
+                <span className="tnum hidden shrink-0 text-[11px] text-meta xl:block">
+                  {formatCount(item.viewerCount || item.peakViewers)}
                 </span>
-              </span>
-              <span className="tnum shrink-0 text-[11px] text-meta">
-                {formatCount(item.viewerCount || item.peakViewers)}
-              </span>
-            </Link>
-          </li>
-        ))}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
 
-      <Link href="/live" className="mt-2 flex items-center gap-1 px-1 py-1 text-[13px] font-semibold text-accent">
-        <IconChevronDown className="h-3.5 w-3.5" /> See all
+      <Link
+        href="/live"
+        className="mt-2 flex items-center justify-center gap-1 px-1 py-1 text-[13px] font-semibold text-accent xl:justify-start"
+      >
+        <IconChevronDown className="h-3.5 w-3.5 shrink-0" />
+        <span className="hidden xl:inline">See all</span>
       </Link>
     </div>
   );
 }
 
+// The way out of the room. Present from `lg` — the breakpoint where the room
+// stops being a full-bleed phone stage (which carries its own overlaid back
+// chevron) and becomes the desktop stack. It was `xl:flex`, which left the
+// whole 1024–1279px band with no rail, no back control and no wordmark: the
+// viewer was sealed in. Collapsed to a 72px icon rail below `xl` so the stage
+// keeps its width, labelled from `xl` — the same collapse the app shell's
+// sidebar uses, and the pattern Twitch/YouTube use on a watch page.
 function StreamNav({ stream }: { stream: Stream }) {
   return (
-    <aside className="hidden h-dvh w-[250px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-black px-5 py-6 text-body xl:flex 2xl:w-[304px]">
-      <BrandLink className="mb-8 flex items-center gap-3 px-2" markSize={40} wordmarkHeight={20} />
-      <nav className="space-y-1" aria-label="Streaming navigation">
+    <aside className="hidden h-dvh w-[72px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-black px-2 py-6 text-body lg:flex xl:w-[250px] xl:px-5 2xl:w-[304px]">
+      <BrandLink
+        variant="mark"
+        className="mb-8 flex items-center justify-center xl:hidden"
+        markSize={36}
+      />
+      <BrandLink
+        className="mb-8 hidden items-center gap-3 px-2 xl:flex"
+        markSize={40}
+        wordmarkHeight={20}
+      />
+      <nav className="space-y-1" aria-label="Leave this live room">
         {STREAM_NAV.map((item) => (
           <Link
-            key={item.label}
+            key={item.href}
             href={item.href}
-            aria-current={"current" in item && item.current ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-4 rounded-lg px-3 py-3 text-[16px] font-semibold transition-colors hover:bg-white/[0.07]",
-              "current" in item && item.current ? "bg-white/[0.08] text-heading" : "text-body"
-            )}
+            aria-label={item.label}
+            title={item.label}
+            className="group relative flex items-center justify-center gap-4 rounded-lg px-3 py-3 text-[16px] font-semibold text-body transition-colors hover:bg-white/[0.07] xl:justify-start"
           >
-            <item.icon className="h-6 w-6" />
-            {item.label}
+            <item.icon className="h-6 w-6 shrink-0" />
+            <span className="hidden xl:inline">{item.label}</span>
+            {/* Collapsed rail: name the icon on hover, as the app shell does. */}
+            <span className="ws-overlay pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block xl:!hidden">
+              {item.label}
+            </span>
           </Link>
         ))}
-        {/* No "More" here: the four entries above ARE the room's navigation,
-            and a menu with nothing behind it is worse than no menu. Coin
-            purchase is likewise absent — there is no coin ledger to buy into
-            (see the gifting note in StreamRoom). */}
+        {/* No "More" here: the entries above ARE the room's navigation, and a
+            menu with nothing behind it is worse than no menu. Coin purchase is
+            likewise absent — there is no coin ledger to buy into (see the
+            gifting note in StreamRoom). */}
       </nav>
 
       <SuggestedCreators currentId={stream.id} />
-      <div className="mt-auto border-t border-white/10 px-1 pt-5 text-[12px] leading-6 text-grey-600">
-        <p>Company</p>
-        <p>Program</p>
-        <p>Terms &amp; Policies</p>
-        <p className="mt-2">© {new Date().getFullYear()} Market Square</p>
+      {/* Company / Program / Terms & Policies used to sit here as bare <p>
+          elements. There are no routes behind any of them, so they were three
+          dead controls dressed as links; the copyright is the only true line. */}
+      <div className="mt-auto hidden border-t border-white/10 px-1 pt-5 text-[12px] leading-6 text-grey-600 xl:block">
+        <p>© {new Date().getFullYear()} Market Square</p>
       </div>
     </aside>
   );
@@ -360,6 +393,7 @@ export function StreamRoom({
   const [giftsOpen, setGiftsOpen] = useState(false);
   const [pulseOpen, setPulseOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [theater, setTheater] = useState(false);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [giftBursts, setGiftBursts] = useState<GiftBurst[]>([]);
   const reactionTimers = useRef<number[]>([]);
@@ -502,6 +536,26 @@ export function StreamRoom({
     if (document.fullscreenElement) void document.exitFullscreen();
     else void node.requestFullscreen();
   }, []);
+  // Theater mode used to call `fullscreen` — the identical handler the
+  // Fullscreen button beside it calls, so the room shipped two differently
+  // labelled buttons doing one thing. It now means what it means everywhere
+  // else (Twitch, Kick): drop the surrounding chrome — the nav rail and the
+  // chat column — and leave the stage. It is a toggle, reversible from the
+  // same button or with Escape, so nothing becomes unreachable.
+  const toggleTheater = useCallback(() => {
+    setTheater((on) => {
+      if (!on) setChatOpen(false);
+      return !on;
+    });
+  }, []);
+  useEffect(() => {
+    if (!theater) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTheater(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [theater]);
 
   if (stream.isPending) {
     return (
@@ -529,7 +583,7 @@ export function StreamRoom({
 
   return (
     <div className="flex h-dvh w-full bg-black">
-      <StreamNav stream={data} />
+      {!theater && <StreamNav stream={data} />}
 
       {/* Centre column. Below lg it is a full-bleed stage with everything
           overlaid; from lg it becomes the reference's vertical stack:
@@ -547,14 +601,20 @@ export function StreamRoom({
           <Link
             href="/live"
             aria-label="Back to Live"
-            className="ws-press mt-1 rounded-full bg-black/40 p-2 text-body lg:hidden"
+            /* Below lg this overlaid chevron IS the exit (the rail starts at
+               lg). In theater mode the rail is gone, so it comes back on
+               desktop too — the room never has zero ways out. */
+            className={cn(
+              "ws-press mt-1 rounded-full bg-black/40 p-2 text-body",
+              !theater && "lg:hidden"
+            )}
           >
             <IconChevronLeft className="h-5 w-5" />
           </Link>
 
           {owner && (
             <Link href={`/u/${owner.username}`} className="hidden shrink-0 lg:block">
-              <Avatar name={owner.displayName} src={owner.avatarUrl} size={44} />
+              <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={44} />
             </Link>
           )}
 
@@ -563,7 +623,7 @@ export function StreamRoom({
               {owner ? (
                 <>
                   <Link href={`/u/${owner.username}`} className="shrink-0 lg:hidden">
-                    <Avatar name={owner.displayName} src={owner.avatarUrl} size={36} />
+                    <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={36} />
                   </Link>
                   <Link
                     href={`/u/${owner.username}`}
@@ -600,6 +660,20 @@ export function StreamRoom({
           </div>
 
           <div className="flex shrink-0 items-center gap-2 pt-1 lg:pt-0">
+            {/* Collapsing the chat column used to be a one-way door: the only
+                control lived inside the panel it hid, so on desktop chat could
+                never be brought back. The toggle belongs outside it. */}
+            <button
+              onClick={() => setChatOpen((v) => !v)}
+              aria-label={chatOpen ? "Hide chat" : "Show chat"}
+              aria-pressed={chatOpen}
+              className={cn(
+                "hidden h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-body transition-colors hover:bg-white/10 lg:flex",
+                chatOpen ? "bg-white/15" : "bg-white/5"
+              )}
+            >
+              <IconComment className="h-4 w-4" />
+            </button>
             <button
               onClick={share}
               aria-label="Reshare live stream"
@@ -747,9 +821,13 @@ export function StreamRoom({
                   </div>
                 )}
                 <button
-                  onClick={fullscreen}
-                  aria-label="Theater mode"
-                  className="rounded-lg p-2 text-heading transition-colors hover:bg-white/10"
+                  onClick={toggleTheater}
+                  aria-label={theater ? "Exit theater mode" : "Theater mode"}
+                  aria-pressed={theater}
+                  className={cn(
+                    "rounded-lg p-2 text-heading transition-colors hover:bg-white/10",
+                    theater && "bg-white/15"
+                  )}
                 >
                   <IconTheater className="h-5 w-5" />
                 </button>

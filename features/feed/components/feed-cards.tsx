@@ -41,7 +41,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
       <header className="flex items-center gap-2.5 px-1">
         {owner ? (
           <TransitionLink href={`/u/${owner.username}`} className="shrink-0">
-            <Avatar name={owner.displayName} src={owner.avatarUrl} size={36} />
+            <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={36} />
           </TransitionLink>
         ) : (
           <span className="ws-inset flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-accent">

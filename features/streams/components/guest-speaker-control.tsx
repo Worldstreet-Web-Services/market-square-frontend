@@ -116,7 +116,7 @@ export function SpeakerRequestQueue({ stream }: { stream: Stream }) {
       </div>
       {pending.map((item) => (
         <div key={item.id} className="ws-inset flex items-center gap-2 p-2">
-          <Avatar name={item.user?.displayName ?? "Viewer"} src={item.user?.avatarUrl} size={32} />
+          <Avatar name={item.user?.displayName ?? "Viewer"} seed={item.userId} src={item.user?.avatarUrl} size={32} />
           <span className="min-w-0 flex-1 truncate text-xs text-heading">{item.user?.displayName ?? "Viewer"}</span>
           <Button size="sm" onClick={() => resolve.mutate({ requestId: item.id, action: "approve" })}>Accept</Button>
           <Button size="sm" variant="ghost" onClick={() => resolve.mutate({ requestId: item.id, action: "decline" })}>Decline</Button>

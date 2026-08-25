@@ -87,7 +87,7 @@ export function SpotlightPage() {
               return (
                 <Link key={row.profile.id} href={`/u/${row.profile.username}`} className="flex flex-col items-center gap-2">
                   <div className="relative">
-                    <Avatar name={row.profile.displayName} src={row.profile.avatarUrl} size={size} ring={position === 0} />
+                    <Avatar name={row.profile.displayName} seed={row.profile.id} src={row.profile.avatarUrl} size={size} ring={position === 0} />
                     <span
                       className={cn(
                         "tnum absolute -bottom-1 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full text-xs font-bold",
@@ -116,7 +116,7 @@ export function SpotlightPage() {
                   {row.rank}
                 </span>
                 <Link href={`/u/${row.profile.username}`} className="flex min-w-0 flex-1 items-center gap-3">
-                  <Avatar name={row.profile.displayName} src={row.profile.avatarUrl} size={40} />
+                  <Avatar name={row.profile.displayName} seed={row.profile.id} src={row.profile.avatarUrl} size={40} />
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 truncate text-[15px] font-bold text-heading">
                       {row.profile.displayName}

@@ -49,7 +49,7 @@ export function StreamCard({ stream }: { stream: Stream }) {
         <p className="mt-1 flex items-center gap-1.5 truncate text-[13px] text-meta">
           {stream.owner && (
             <>
-              <Avatar name={stream.owner.displayName} src={stream.owner.avatarUrl} size={18} />
+              <Avatar name={stream.owner.displayName} seed={stream.owner.id} src={stream.owner.avatarUrl} size={18} />
               <span className="truncate">{stream.owner.displayName}</span>
               <VerifiedBadge verification={stream.owner.verification} className="h-3.5 w-3.5" />
             </>

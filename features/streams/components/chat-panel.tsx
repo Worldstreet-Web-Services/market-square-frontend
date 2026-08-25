@@ -48,7 +48,7 @@ function TopViewers({ messages }: { messages: ChatMessage[] }) {
                 <span className="block rounded-full p-[2px] ring-2 ring-featured/60">
                   <Avatar
                     name={leaders[0].author?.displayName ?? "Viewer"}
-                    src={leaders[0].author?.avatarUrl}
+                    seed={leaders[0].authorId} src={leaders[0].author?.avatarUrl}
                     size={46}
                   />
                 </span>
@@ -67,7 +67,7 @@ function TopViewers({ messages }: { messages: ChatMessage[] }) {
                 </span>
                 <Avatar
                   name={message.author?.displayName ?? "Viewer"}
-                  src={message.author?.avatarUrl}
+                  seed={message.authorId} src={message.author?.avatarUrl}
                   size={26}
                 />
                 <span className="min-w-0 truncate text-[12px] text-body">
@@ -167,7 +167,7 @@ export function ChatPanel({
           >
             <Avatar
               name={message.author?.displayName ?? message.authorId.slice(-4) ?? "?"}
-              src={message.author?.avatarUrl}
+              seed={message.authorId} src={message.author?.avatarUrl}
               size={32}
               className="mt-0.5"
             />

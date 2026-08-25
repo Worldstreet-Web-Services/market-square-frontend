@@ -82,7 +82,7 @@ export function TicketSheet({ stream, open, onClose }: { stream: Stream; open: b
     <Sheet open={open} onClose={close} title="Register">
       <div className="space-y-5">
         <div className="flex items-start gap-3">
-          {stream.owner && <Avatar name={stream.owner.displayName} src={stream.owner.avatarUrl} size={44} />}
+          {stream.owner && <Avatar name={stream.owner.displayName} seed={stream.owner.id} src={stream.owner.avatarUrl} size={44} />}
           <div className="min-w-0">
             <p className="ws-display text-base text-white">{stream.title}</p>
             <p className="mt-1 text-xs text-grey-500">

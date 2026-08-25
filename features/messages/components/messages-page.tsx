@@ -135,7 +135,7 @@ function Thread({
               {!mine && (
                 <Avatar
                   name={message.sender?.displayName ?? "?"}
-                  src={message.sender?.avatarUrl}
+                  seed={message.senderId} src={message.sender?.avatarUrl}
                   size={28}
                 />
               )}
@@ -211,7 +211,7 @@ function Inbox({ onOpen }: { onOpen: (conversation: Conversation) => void }) {
         >
           <Avatar
             name={conversation.peer?.displayName ?? "?"}
-            src={conversation.peer?.avatarUrl}
+            seed={conversation.peer?.id} src={conversation.peer?.avatarUrl}
             size={40}
           />
           <span className="min-w-0 flex-1">

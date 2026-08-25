@@ -237,7 +237,7 @@ function AccountChip() {
         href={me.data ? `/u/${me.data.username}` : "/auth"}
         className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 transition-colors hover:bg-white/8"
       >
-        <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={34} />
+        <Avatar name={me.data?.displayName ?? "Me"} seed={me.data?.id} src={me.data?.avatarUrl} size={34} />
         <span className="hidden min-w-0 flex-1 xl:block">
           <span className="block truncate text-[12px] font-bold leading-4 text-white">
             {me.data?.displayName ?? "You"}
@@ -450,7 +450,7 @@ function MobileMenu({
             onClick={onClose}
             className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:bg-white/8"
           >
-            <Avatar name={me.data?.displayName ?? "Me"} src={me.data?.avatarUrl} size={40} />
+            <Avatar name={me.data?.displayName ?? "Me"} seed={me.data?.id} src={me.data?.avatarUrl} size={40} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-bold text-heading">
                 {me.data?.displayName ?? "You"}

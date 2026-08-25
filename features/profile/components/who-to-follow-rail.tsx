@@ -81,7 +81,7 @@ export function WhoToFollowRail() {
             >
               <Avatar
                 name={row.profile.displayName}
-                src={row.profile.avatarUrl}
+                seed={row.profile.id} src={row.profile.avatarUrl}
                 size={40}
               />
               <span className="min-w-0 flex-1">
