@@ -202,6 +202,10 @@ export function useCreateActivity() {
       queryClient.invalidateQueries({ queryKey: ["ms", "activities"] });
       // Activities are rendered as feed items and in the Featured Arena.
       queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
+      // ...and in /live's Upcoming tab, which reads the stream list alongside
+      // the activity list. Without this the newly scheduled item sat behind a
+      // stale cache until that query happened to refetch.
+      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
       toast.success("Activity scheduled");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't schedule that.")),

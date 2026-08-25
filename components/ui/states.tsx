@@ -1,7 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { errorMessage } from "@/lib/api/envelope";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { errorCode, errorMessage } from "@/lib/api/envelope";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
 // Designed empty state: a quiet mark, a line of copy, an optional way forward.
@@ -41,6 +44,11 @@ export function ErrorState({
   onRetry?: () => void;
   className?: string;
 }) {
+  // Being signed out is not an error. Retrying a 401 just repeats it, so every
+  // error surface in the app turns into the sign-in invitation instead — one
+  // change rather than thirty-three call sites, and no gated read can leave a
+  // signed-out visitor at a dead end.
+  if (isAuthError(error)) return <SignInPrompt className={className} />;
   return (
     <div className={cn("ws-inset flex flex-col items-center gap-3 px-6 py-10 text-center", className)}>
       <p className="text-sm text-down">{errorMessage(error, fallback)}</p>
@@ -55,5 +63,82 @@ export function ErrorState({
 
 // Inline error next to the action that caused it — never a raw code.
 export function InlineError({ error, fallback, className }: { error: unknown; fallback: string; className?: string }) {
+  // Inline space is too tight for the full prompt, so this stays one line —
+  // but it must read as an invitation rather than a fault.
+  if (isAuthError(error)) {
+    return <SignInInline className={className} />;
+  }
   return <p className={cn("text-xs text-down", className)}>{errorMessage(error, fallback)}</p>;
+}
+
+/** One-line sign-in invitation, for spaces too tight for SignInPrompt. */
+export function SignInInline({ className }: { className?: string }) {
+  const { login } = useAuth();
+  return (
+    <p className={cn("text-xs text-grey-400", className)}>
+      <button onClick={login} className="font-bold text-accent underline-offset-2 hover:underline">
+        Sign in
+      </button>{" "}
+      to continue.
+    </p>
+  );
+}
+
+/**
+ * The one "sign in to continue" affordance.
+ *
+ * A signed-out visitor browsing public content must never be shown an ERROR
+ * caused solely by not being logged in. Hitting a gated action — joining a
+ * ticketed stream, asking to speak, chatting, liking, following, buying — is
+ * an invitation to sign in, not a failure, and it has to leave them exactly
+ * where they were.
+ *
+ * `login()` opens Privy in place, so the reader keeps their scroll position
+ * and the page they were on; the `/auth` link is the fallback for when the
+ * modal cannot open, and carries returnTo so that path lands back here too.
+ */
+export function SignInPrompt({
+  title = "Sign in to continue",
+  body,
+  className,
+}: {
+  title?: string;
+  /** Say what signing in unlocks HERE — generic copy teaches nothing. */
+  body?: string;
+  className?: string;
+}) {
+  const { login } = useAuth();
+  const pathname = usePathname();
+
+  return (
+    <div
+      className={cn(
+        "ws-inset flex flex-col items-center gap-3 px-6 py-8 text-center",
+        className
+      )}
+    >
+      <p className="ws-display text-base text-grey-200">{title}</p>
+      {body && <p className="max-w-sm text-sm text-grey-500">{body}</p>}
+      <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+        <button
+          onClick={login}
+          className="ws-btn-silver ws-press rounded-full px-5 py-2 text-[13px] font-bold"
+        >
+          Sign in
+        </button>
+        <Link
+          href={`/auth?returnTo=${encodeURIComponent(pathname)}`}
+          className="ws-press rounded-full border border-white/20 px-4 py-2 text-[13px] font-bold text-body transition-colors hover:bg-white/10"
+        >
+          More options
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/** True when this failure is only "you are not signed in". */
+export function isAuthError(error: unknown): boolean {
+  const code = errorCode(error);
+  return code === "UNAUTHORIZED" || code === "SESSION_EXPIRED" || code === "AUTH_NOT_READY";
 }

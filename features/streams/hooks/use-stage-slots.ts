@@ -1,0 +1,120 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import type { RemoteTrackPublication, Room } from "livekit-client";
+import { buildStage, type StageRoom, type StageSlot } from "@/features/streams/lib/stage";
+
+/**
+ * The room's publishers, kept fresh.
+ *
+ * Two things here are the actual bug fix, and both are about NOT trusting
+ * events to carry the whole world:
+ *
+ *   * **The first pass enumerates.** `room.remoteParticipants` is walked on
+ *     mount and on every recompute, so a track that was published before this
+ *     component subscribed is attached like any other. The old renderer only
+ *     ever reacted to `TrackSubscribed`, so everything that already existed —
+ *     which is *everything*, for anyone who joins an in-progress stage — was
+ *     invisible.
+ *
+ *   * **Events only invalidate.** Every handler does the same thing: bump a
+ *     version and rebuild from the room. That makes the event list a
+ *     completeness question rather than a correctness one, and removes the
+ *     class of bug where one handler updates state a slightly different way.
+ *
+ * `ParticipantPermissionsChanged` is in the list because it is the ONLY signal
+ * for a promotion: an approved guest is already in the room, so
+ * `ParticipantConnected` will never fire for them again.
+ */
+export function useStageSlots(room: Room | null, hostIdentity: string): StageSlot[] {
+  const [slots, setSlots] = useState<StageSlot[]>([]);
+
+  const recompute = useCallback(() => {
+    const current = room;
+    if (!current) return;
+    // autoSubscribe normally handles this; asking explicitly costs nothing and
+    // covers a publication that arrived while we were not yet subscribed.
+    for (const participant of current.remoteParticipants.values()) {
+      for (const publication of participant.trackPublications.values()) {
+        const remote = publication as RemoteTrackPublication;
+        if (remote.setSubscribed && !remote.isSubscribed) {
+          try {
+            remote.setSubscribed(true);
+          } catch {
+            // A publication we may not subscribe to is not an error here.
+          }
+        }
+      }
+    }
+    const next = buildStage(current as unknown as StageRoom, hostIdentity);
+    setSlots((previous) => (sameStage(previous, next) ? previous : next));
+  }, [room, hostIdentity]);
+
+  useEffect(() => {
+    if (!room) return;
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
+    void import("livekit-client").then(({ RoomEvent }) => {
+      if (cancelled) return;
+      const events = [
+        RoomEvent.ParticipantConnected,
+        RoomEvent.ParticipantDisconnected,
+        // The promotion signal. Without it an approved guest never appears,
+        // because they were already in the room when they were approved.
+        RoomEvent.ParticipantPermissionsChanged,
+        RoomEvent.TrackPublished,
+        RoomEvent.TrackUnpublished,
+        RoomEvent.TrackSubscribed,
+        RoomEvent.TrackUnsubscribed,
+        RoomEvent.TrackMuted,
+        RoomEvent.TrackUnmuted,
+        RoomEvent.LocalTrackPublished,
+        RoomEvent.LocalTrackUnpublished,
+        RoomEvent.ActiveSpeakersChanged,
+        RoomEvent.ConnectionQualityChanged,
+        RoomEvent.Connected,
+        RoomEvent.Reconnected,
+        RoomEvent.ParticipantNameChanged,
+      ] as const;
+      for (const event of events) room.on(event, recompute);
+      unsubscribe = () => {
+        for (const event of events) room.off(event, recompute);
+      };
+      // Enumerate whatever is already there, before any event fires.
+      recompute();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [room, recompute]);
+
+  // Derived, not stored: with no room there is no stage, and clearing state
+  // from an effect would only add a render to say the same thing.
+  return room ? slots : EMPTY;
+}
+
+const EMPTY: StageSlot[] = [];
+
+/** Cheap structural equality so an event storm does not rerender the stage. */
+function sameStage(a: readonly StageSlot[], b: readonly StageSlot[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((slot, index) => {
+    const other = b[index];
+    return (
+      slot.identity === other.identity &&
+      slot.role === other.role &&
+      slot.state === other.state &&
+      slot.isSpeaking === other.isSpeaking &&
+      slot.isMuted === other.isMuted &&
+      slot.cameraOff === other.cameraOff &&
+      slot.connectionQuality === other.connectionQuality &&
+      slot.videoTrack?.trackSid === other.videoTrack?.trackSid &&
+      slot.audioTrack?.trackSid === other.audioTrack?.trackSid &&
+      slot.videoTrack?.track === other.videoTrack?.track &&
+      slot.audioTrack?.track === other.audioTrack?.track
+    );
+  });
+}

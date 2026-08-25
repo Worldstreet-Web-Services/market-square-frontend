@@ -36,7 +36,7 @@ import {
   IconTicket,
   IconVolume,
 } from "@/components/ui/icons";
-import { ErrorState, InlineError } from "@/components/ui/states";
+import { ErrorState, InlineError, SignInPrompt, isAuthError } from "@/components/ui/states";
 import type { Profile } from "@/lib/api/schemas";
 import { useStream, useStreamList } from "@/features/streams/hooks/use-streams";
 import { useHeartbeat, usePlaybackToken } from "@/features/streams/hooks/use-playback";
@@ -104,6 +104,21 @@ function PlaybackSurface({
     );
   }
   if (playback.isError) {
+    // Not signed in is an invitation, not a failure. This used to fall through
+    // to the generic error panel with a "Try again" button, which retried the
+    // same 401 forever — a dead end for every signed-out visitor who opened a
+    // stream.
+    if (isAuthError(playback.error)) {
+      return (
+        <div className="flex h-full w-full items-center justify-center px-6">
+          <SignInPrompt
+            title="Sign in to watch"
+            body="Live streams are for signed-in citizens. You'll come straight back here."
+            className="border-0 bg-transparent"
+          />
+        </div>
+      );
+    }
     if (errorCode(playback.error) === "FORBIDDEN") {
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -127,7 +142,7 @@ function PlaybackSurface({
   // ws/wss URLs are LiveKit rooms; http(s) URLs are HLS manifests.
   if (/^wss?:/i.test(playback.data.url)) {
     return (
-      <LiveKitPlayer streamId={stream.id} url={playback.data.url} token={playback.data.token} onPlayingChange={setPlaying} fill />
+      <LiveKitPlayer streamId={stream.id} hostIdentity={stream.ownerId} url={playback.data.url} token={playback.data.token} onPlayingChange={setPlaying} fill />
     );
   }
   return (
