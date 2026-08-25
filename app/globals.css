@@ -58,6 +58,13 @@
      on cards, profile and the snap feed — and so it can never drift into
      --color-featured again. */
   --color-like: #e84a4a;
+  /* Broadcasting-now red, read off the design's stories strip: the LIVE pill
+     is solid #ff0b0b and the tile ring is the same red at 40%. This is the
+     STRIP's live marker only — the live identity everywhere else in the app is
+     still the black pill with a pulsing silver dot (LiveBadge), which the
+     design keeps. Distinct from --color-like: a liked heart is not a
+     broadcast, and the two must be able to move independently. */
+  --color-live: #ff0b0b;
   /* Dark text on light (silver/white) buttons. */
   --color-ink: #0a0a0a;
   --color-panel: #0a0a0a;
@@ -477,6 +484,14 @@ body {
 @utility ws-story-seen {
   background: none;
   background-color: rgba(255, 255, 255, 0.16);
+}
+
+/* A live broadcast in the stories strip. The design draws the red directly on
+   the tile edge with no black gap — unlike the seen/unseen story ring — so this
+   is a ring (box-shadow, no layout cost) rather than a padded wrapper. Live is
+   never "seen": it is live or it is not in the strip at all. */
+@utility ws-story-live {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-live) 40%, transparent);
 }
 
 /* The black gap. Sits between the ring and the avatar image. */

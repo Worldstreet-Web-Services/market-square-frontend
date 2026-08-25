@@ -11,8 +11,8 @@ import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "@/components/ui/icons";
 import { useMe } from "@/hooks/use-me";
-import { useStories } from "@/features/feed/hooks/use-feed";
-import type { Post } from "@/features/feed/lib/types";
+import { useFeed, useStories } from "@/features/feed/hooks/use-feed";
+import type { FeedItem, Post } from "@/features/feed/lib/types";
 
 const STORY_MS = 5000;
 const SEEN_KEY = "ms.stories.seen";
@@ -28,6 +28,55 @@ interface StoryGroup {
   displayName: string;
   avatarUrl: string | null;
   stories: Post[];
+}
+
+/**
+ * A live broadcast in the strip.
+ *
+ * Live is a different object from a story: it opens the room, never the
+ * 5-second viewer, and it has no seen/unseen state — it is live or it is not
+ * in the strip at all. Keeping it in its own type is what stops the two from
+ * being handled interchangeably.
+ */
+interface LiveEntry {
+  /** Stream id — the room to open. */
+  id: string;
+  /** Host's Privy DID; artwork seeds on this like everywhere else. */
+  hostId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  title: string;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * Live entries out of the `live` feed lane.
+ *
+ * The lane also carries scheduled activities and streams that have not started,
+ * so the status filter is load-bearing: scheduled is NOT live, and inventing a
+ * LIVE marker for one would be a lie the design never asked for. Deduped by
+ * stream id because a lane page can repeat a stream across cursors.
+ */
+function toLiveEntries(items: FeedItem[]): LiveEntry[] {
+  const seenIds = new Set<string>();
+  const live: LiveEntry[] = [];
+  for (const item of items) {
+    const stream = item.stream;
+    if (!stream || stream.status !== "live") continue;
+    if (seenIds.has(stream.id)) continue;
+    seenIds.add(stream.id);
+    live.push({
+      id: stream.id,
+      // `owner` is not always hydrated on list payloads, so the seed falls back
+      // to ownerId — still the DID, so the illustration stays consistent.
+      hostId: stream.owner?.id ?? stream.ownerId,
+      displayName: stream.owner?.displayName ?? stream.title,
+      avatarUrl: stream.owner?.avatarUrl ?? null,
+      title: stream.title,
+      thumbnailUrl: stream.thumbnailUrl,
+    });
+  }
+  return live;
 }
 
 // Seen state has no backend field, so it lives per-browser, read through an
@@ -109,6 +158,73 @@ function groupByAuthor(posts: Post[]): StoryGroup[] {
     group.stories.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
   return [...groups.values()];
+}
+
+/**
+ * Where a live tile goes.
+ *
+ * A host tapping their own broadcast wants the control surface, not a seat in
+ * their own audience — so their tile points at the studio. "Your Story" is left
+ * alone either way: it is the compose affordance, and turning it into a live
+ * tile would delete the only way to post a story.
+ */
+function liveHref(entry: LiveEntry, meId?: string): string {
+  return entry.hostId && entry.hostId === meId
+    ? `/studio/${entry.id}`
+    : `/live/${entry.id}?source=home:stories`;
+}
+
+/**
+ * Urgency ordering for the strip: unseen stories before seen ones.
+ *
+ * Live entries lead the whole rail and are ordered ahead of this — they are a
+ * separate list, so they can never be reshuffled into the story sequence the
+ * viewer plays through.
+ */
+function unseenFirst(groups: StoryGroup[], seen: ReadonlySet<string>): StoryGroup[] {
+  const isSeen = (group: StoryGroup) => group.stories.every((story) => seen.has(story.id));
+  return [...groups].sort((a, b) => Number(isSeen(a)) - Number(isSeen(b)));
+}
+
+/** The strip's LIVE marker: the design's solid #ff0b0b pill, white bold label,
+    centred on the tile's bottom edge and overhanging it by a pixel. */
+function LivePill({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "pointer-events-none absolute left-1/2 flex h-3 -translate-x-1/2 items-center justify-center rounded-full bg-live px-2 text-[8px] font-bold leading-3 text-white",
+        className
+      )}
+    >
+      Live
+    </span>
+  );
+}
+
+/**
+ * Portrait live tile — the desktop strip's broadcast entry.
+ *
+ * Same 100×96 footprint as a story card so the row stays on one rhythm, but the
+ * silver ring/black-gap sandwich is replaced by the design's red ring drawn
+ * straight on the tile edge, and it renders as a link into the room.
+ */
+function LiveCard({ entry }: { entry: LiveEntry }) {
+  return (
+    <span className="relative block p-[4.5px]">
+      <span className="ws-story-live relative block h-24 w-[100px] overflow-hidden rounded-[16.5px]">
+        <GradientThumb seed={entry.id} className="absolute inset-0 h-full w-full" />
+        {entry.thumbnailUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- host-supplied media host is unknown
+          <img src={entry.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        )}
+        <span className="absolute inset-0 bg-black/[0.27]" />
+        <span className="absolute left-2 top-2">
+          <Avatar name={entry.displayName} seed={entry.hostId} src={entry.avatarUrl} size={24} />
+        </span>
+      </span>
+      <LivePill className="bottom-[3px]" />
+    </span>
+  );
 }
 
 /** Portrait story card. Unseen carries the bright gradient edge; seen drains
@@ -359,9 +475,17 @@ function StoryViewer({
 export function StoriesRail() {
   const me = useMe();
   const stories = useStories();
+  const live = useFeed("live");
   const [openAt, setOpenAt] = useState<number | null>(null);
   const seen = useSyncExternalStore(subscribeSeen, getSeenSnapshot, getSeenServerSnapshot);
-  const groups = useMemo(() => groupByAuthor(stories.data?.items ?? []), [stories.data]);
+  const liveEntries = useMemo(
+    () => toLiveEntries(live.data?.pages.flatMap((page) => page.items) ?? []),
+    [live.data]
+  );
+  const groups = useMemo(
+    () => unseenFirst(groupByAuthor(stories.data?.items ?? []), seen),
+    [stories.data, seen]
+  );
 
   if (stories.isPending) return <div className="h-[74px]" />;
 
@@ -383,6 +507,28 @@ export function StoriesRail() {
           </span>
           <span className="w-full truncate text-center text-[8px] text-white/60">Your Story</span>
         </Link>
+
+        {/* Same ordering rule as desktop: live leads. The design never drew a
+            live entry in the circular variant, so the treatment is carried over
+            from the card strip — red ring, red pill — sized to the 41px ring. */}
+        {liveEntries.map((entry) => (
+          <Link
+            key={entry.id}
+            href={liveHref(entry, me.data?.id)}
+            aria-label={`${entry.displayName} is live: ${entry.title}`}
+            className="ws-press flex w-[41px] shrink-0 flex-col items-center gap-1"
+          >
+            <span className="relative block">
+              <span className="ws-story-live block rounded-full">
+                <Avatar name={entry.displayName} seed={entry.hostId} src={entry.avatarUrl} size={41} />
+              </span>
+              <LivePill className="-bottom-1" />
+            </span>
+            <span className="w-full truncate text-center text-[8px] text-white/80">
+              {entry.displayName.split(" ")[0]}
+            </span>
+          </Link>
+        ))}
 
         {groups.map((group, i) => {
           const allSeen = group.stories.every((story) => seen.has(story.id));
@@ -428,10 +574,21 @@ export function StoriesRail() {
 export function StoriesRow() {
   const me = useMe();
   const stories = useStories();
+  // The `live` lane, not `GET /streams?status=live`: Home already fetches this
+  // exact query for the featured hero, so the strip costs no extra request, and
+  // it keeps the rail inside the feed slice instead of reaching into streams.
+  const live = useFeed("live");
   const [openAt, setOpenAt] = useState<number | null>(null);
   const seen = useSyncExternalStore(subscribeSeen, getSeenSnapshot, getSeenServerSnapshot);
 
-  const groups = useMemo(() => groupByAuthor(stories.data?.items ?? []), [stories.data]);
+  const liveEntries = useMemo(
+    () => toLiveEntries(live.data?.pages.flatMap((page) => page.items) ?? []),
+    [live.data]
+  );
+  const groups = useMemo(
+    () => unseenFirst(groupByAuthor(stories.data?.items ?? []), seen),
+    [stories.data, seen]
+  );
 
   if (stories.isPending) {
     return (
@@ -461,6 +618,20 @@ export function StoriesRow() {
             <span className="text-[8px] font-bold text-white/40">Your Story</span>
           </span>
         </Link>
+
+        {/* Live leads the rail — the highest-urgency thing on the square, and
+            the one entry that expires while you look at it. A tap opens the
+            room, never the story viewer. */}
+        {liveEntries.map((entry) => (
+          <Link
+            key={entry.id}
+            href={liveHref(entry, me.data?.id)}
+            aria-label={`${entry.displayName} is live: ${entry.title}`}
+            className="ws-press shrink-0"
+          >
+            <LiveCard entry={entry} />
+          </Link>
+        ))}
 
         {groups.map((group, i) => {
           const allSeen = group.stories.every((story) => seen.has(story.id));
