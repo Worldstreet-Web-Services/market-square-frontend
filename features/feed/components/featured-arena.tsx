@@ -98,13 +98,17 @@ export function FeaturedArena() {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 rounded-full bg-[linear-gradient(180deg,#D4D4D8,#3C3C3C)] py-2.5 pl-4 pr-2.5">
-          <Link href={slide.href} className="ws-press flex items-center gap-1.5">
-            <IconMsPlay className="h-[18px] w-[18px] text-grey-700" />
+        {/* The CTA moved off the silver ramp onto the purple one. The label group
+            sits left, the price chip right; the gap is the design's 68px floor,
+            and justify-between lets a longer label ("Reserve a seat") grow the
+            pill rather than clip it. */}
+        <div className="ws-btn-arena flex h-10 min-w-[250px] shrink-0 items-center justify-between gap-[68px] rounded-full px-[15px]">
+          <Link href={slide.href} className="ws-press flex h-5 items-center gap-1.5">
+            <IconMsPlay className="h-[18.03px] w-[18.03px] p-px text-white" />
             <span className="text-[14px] font-bold leading-5 text-white">{slide.action}</span>
           </Link>
           {slide.price && (
-            <span className="tnum rounded-full bg-black/20 px-3.5 py-0.5 text-[12px] font-bold text-white">
+            <span className="tnum shrink-0 rounded-full bg-black/20 px-3.5 py-0.5 text-[12px] font-bold leading-4 text-white">
               {slide.price}
             </span>
           )}

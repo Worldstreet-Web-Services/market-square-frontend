@@ -558,6 +558,26 @@ body {
   color: #ffffff;
 }
 
+/* The featured hero's "Join Live Arena" CTA. This is the surface that proves
+   --color-spotlight and --color-create are two stops of ONE purple ramp rather
+   than unrelated hues: the design's gradient runs from the spotlight purple
+   into the create violet. Reuse those tokens — never introduce a third purple.
+   The export layers an opaque gradient over a flat #9F65FD fill at z-index 0
+   with `isolation: isolate`; the overlay is fully opaque, so one element with
+   the gradient background renders identically and is what we ship. */
+@utility ws-btn-arena {
+  background: linear-gradient(
+    131.93deg,
+    var(--color-spotlight) -10.87%,
+    var(--color-spotlight) 43.15%,
+    var(--color-create) 109.17%
+  );
+  color: #ffffff;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
 /* The silver call to action: the active section tab, Follow, the floating
    compose button. Same geometry, the silver ramp instead of amber. */
 @utility ws-btn-silver {
