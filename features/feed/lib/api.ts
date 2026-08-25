@@ -23,10 +23,15 @@ export async function fetchFeed(lane: Lane, cursor?: string) {
   return FeedPageSchema.parse(await msApi.get("/feed", { lane, limit: 30, cursor }));
 }
 
-// GET /stories returns FeedItems (scope=following: authors the viewer
-// follows); the row only needs the posts inside them.
+// GET /stories returns FeedItems; the row only needs the posts inside them.
+//
+// scope=all, NOT following. On an account that follows nobody, `following`
+// returns only the viewer's own stories, so the rail looked broken to every new
+// user. `all` is server-ranked — own, then followed, then everyone, each
+// newest-first — and that ORDER IS AUTHORITATIVE: the rail renders it as given
+// and must not re-sort it (see the note on ordering in stories-row).
 export async function fetchStories(): Promise<{ items: Post[] }> {
-  const page = FeedPageSchema.parse(await msApi.get("/stories", { scope: "following", limit: 30 }));
+  const page = FeedPageSchema.parse(await msApi.get("/stories", { scope: "all", limit: 30 }));
   return { items: page.items.flatMap((item) => (item.post ? [item.post] : [])) };
 }
 

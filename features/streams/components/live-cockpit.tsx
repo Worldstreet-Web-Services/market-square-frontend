@@ -139,7 +139,7 @@ function ActivityPanel({ streamId }: { streamId: string }) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs text-body">
-              <span className="font-semibold text-heading">{event.actor?.displayName ?? "Someone"}</span>{" "}
+              <span className="font-semibold text-heading">{event.profile?.displayName ?? "Someone"}</span>{" "}
               {event.kind === "ticket_purchased"
                 ? "bought a ticket"
                 : event.kind === "follow"

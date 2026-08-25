@@ -46,7 +46,10 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
         <span className="mt-0.5 text-[8px] font-bold">JOIN</span>
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Join this LIVE">
-        {!mine.data || ["declined", "left", "removed"].includes(mine.data.status) ? (
+        {/* The spec's terminal states are denied/withdrawn/removed. This read
+            "declined"/"left" — names the backend never sends — so a viewer who
+            had been denied or had stepped down could never ask again. */}
+        {!mine.data || ["denied", "withdrawn", "removed"].includes(mine.data.status) ? (
           <div className="space-y-4 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/8">
               <IconCamera className="h-7 w-7 text-accent" />
@@ -116,8 +119,8 @@ export function SpeakerRequestQueue({ stream }: { stream: Stream }) {
       </div>
       {pending.map((item) => (
         <div key={item.id} className="ws-inset flex items-center gap-2 p-2">
-          <Avatar name={item.user?.displayName ?? "Viewer"} seed={item.userId} src={item.user?.avatarUrl} size={32} />
-          <span className="min-w-0 flex-1 truncate text-xs text-heading">{item.user?.displayName ?? "Viewer"}</span>
+          <Avatar name={item.profile?.displayName ?? "Viewer"} seed={item.userId} src={item.profile?.avatarUrl} size={32} />
+          <span className="min-w-0 flex-1 truncate text-xs text-heading">{item.profile?.displayName ?? "Viewer"}</span>
           <Button size="sm" onClick={() => resolve.mutate({ requestId: item.id, action: "approve" })}>Accept</Button>
           <Button size="sm" variant="ghost" onClick={() => resolve.mutate({ requestId: item.id, action: "decline" })}>Decline</Button>
         </div>
@@ -125,7 +128,7 @@ export function SpeakerRequestQueue({ stream }: { stream: Stream }) {
       {active.map((item) => (
         <div key={item.id} className="flex items-center gap-2 rounded-xl bg-white/5 p-2">
           <span className="h-2 w-2 rounded-full bg-up" />
-          <span className="min-w-0 flex-1 truncate text-xs text-grey-300">{item.user?.displayName ?? "Guest"} is on stage</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-grey-300">{item.profile?.displayName ?? "Guest"} is on stage</span>
           <button className="text-[11px] text-down" onClick={() => resolve.mutate({ requestId: item.id, action: "remove" })}>Remove</button>
         </div>
       ))}

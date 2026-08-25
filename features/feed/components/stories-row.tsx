@@ -15,6 +15,12 @@ import { useFeed, useStories } from "@/features/feed/hooks/use-feed";
 import type { FeedItem, Post } from "@/features/feed/lib/types";
 
 const STORY_MS = 5000;
+
+/** Stories carry raw author media, so the kind is sniffed from the URL — the
+    same test the viewer used inline before it needed two layers of it. */
+function isStoryVideo(url: string): boolean {
+  return url.startsWith("data:video/") || /\.(mp4|webm|mov)(?:$|[?#])/i.test(url);
+}
 const SEEN_KEY = "ms.stories.seen";
 
 /** One author's stories, oldest first — the unit Instagram opens on a tap. */
@@ -174,17 +180,24 @@ function liveHref(entry: LiveEntry, meId?: string): string {
     : `/live/${entry.id}?source=home:stories`;
 }
 
-/**
- * Urgency ordering for the strip: unseen stories before seen ones.
+/*
+ * ORDERING — the server ranks stories, the client does not re-sort them.
  *
- * Live entries lead the whole rail and are ordered ahead of this — they are a
- * separate list, so they can never be reshuffled into the story sequence the
- * viewer plays through.
+ * `GET /stories?scope=all` returns a deliberate ranking: the viewer's own
+ * stories, then people they follow, then everyone else, each band newest-first.
+ * An earlier version sorted unseen-before-seen across the whole list, which
+ * flattened those bands — a stranger's unseen story would jump ahead of a
+ * friend's unseen story, which is worse relevance, not better.
+ *
+ * Sorting unseen-first *within* each band is not possible either: the payload
+ * carries no band marker, so the boundaries cannot be reconstructed client-side
+ * without guessing. So the rail defers to the server order entirely. Seen state
+ * still drives the RING (silver vs drained), it just no longer moves tiles —
+ * which also stops the rail reshuffling under the viewer as they watch.
+ *
+ * Live entries are exempt: they lead the rail, from a separate list, so they
+ * are never mixed into the story sequence the viewer plays through.
  */
-function unseenFirst(groups: StoryGroup[], seen: ReadonlySet<string>): StoryGroup[] {
-  const isSeen = (group: StoryGroup) => group.stories.every((story) => seen.has(story.id));
-  return [...groups].sort((a, b) => Number(isSeen(a)) - Number(isSeen(b)));
-}
 
 /** The strip's LIVE marker: the design's solid #ff0b0b pill, white bold label,
     centred on the tile's bottom edge and overhanging it by a pixel. */
@@ -420,13 +433,53 @@ function StoryViewer({
           onPointerLeave={() => setPaused(false)}
         />
 
+        {/* Media is CONTAINED, never cropped: the frame is 9:16 but a story can
+            be any ratio, and `object-cover` sliced the ends off every landscape
+            photo. The letterbox is filled by a blurred, over-scaled copy of the
+            same frame — the Instagram/WhatsApp treatment — so the card still
+            reads full-bleed without losing content. The copy is decorative and
+            hidden from assistive tech; both layers stay under the tap zones
+            (z-10) and the progress/header chrome (z-20). */}
         {story.mediaUrl && (
-          story.mediaUrl.startsWith("data:video/") || /\.(mp4|webm|mov)(?:$|[?#])/i.test(story.mediaUrl) ? (
-            <video src={story.mediaUrl} autoPlay muted playsInline loop className="absolute inset-0 h-full w-full object-cover" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
-            <img src={story.mediaUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          )
+          <div className="absolute inset-0 overflow-hidden">
+            {isStoryVideo(story.mediaUrl) ? (
+              <>
+                <video
+                  src={story.mediaUrl}
+                  autoPlay
+                  muted
+                  playsInline
+                  loop
+                  aria-hidden
+                  className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl saturate-150"
+                />
+                <video
+                  src={story.mediaUrl}
+                  autoPlay
+                  muted
+                  playsInline
+                  loop
+                  className="relative h-full w-full object-contain"
+                />
+              </>
+            ) : (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+                <img
+                  src={story.mediaUrl}
+                  alt=""
+                  aria-hidden
+                  className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl saturate-150"
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+                <img
+                  src={story.mediaUrl}
+                  alt=""
+                  className="relative h-full w-full object-contain"
+                />
+              </>
+            )}
+          </div>
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/65" />
 
@@ -483,8 +536,8 @@ export function StoriesRail() {
     [live.data]
   );
   const groups = useMemo(
-    () => unseenFirst(groupByAuthor(stories.data?.items ?? []), seen),
-    [stories.data, seen]
+    () => groupByAuthor(stories.data?.items ?? []),
+    [stories.data]
   );
 
   if (stories.isPending) return <div className="h-[74px]" />;
@@ -586,8 +639,8 @@ export function StoriesRow() {
     [live.data]
   );
   const groups = useMemo(
-    () => unseenFirst(groupByAuthor(stories.data?.items ?? []), seen),
-    [stories.data, seen]
+    () => groupByAuthor(stories.data?.items ?? []),
+    [stories.data]
   );
 
   if (stories.isPending) {

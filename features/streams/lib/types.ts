@@ -10,6 +10,8 @@ export type StreamCategory = (typeof STREAM_CATEGORIES)[number];
 export const TicketSchema = z.object({
   id: z.string(),
   streamId: z.string().optional().default(""),
+  buyerId: z.string().optional().default(""),
+  railRef: z.string().nullable().optional().default(null),
   tier: z.enum(["standard", "vip"]).catch("standard"),
   priceKash: z.string(),
   currency: z.string().optional().default("KASH"),
@@ -78,11 +80,16 @@ export const HeartbeatSchema = z.object({
 
 // RTMP fields are null on deployments without an RTMP gateway; roomToken +
 // url always allow browser publishing via LiveKit.
+// Every one of the four is nullable in the spec, `url` and `roomToken`
+// included — declaring those two as plain strings meant an explicit null threw
+// instead of degrading, which is exactly the case the comment above describes.
 export const IngestSchema = z.object({
   rtmpUrl: z.string().nullable().optional().default(null),
   streamKey: z.string().nullable().optional().default(null),
-  roomToken: z.string().optional().default(""),
-  url: z.string().optional().default(""),
+  // Collapsed to "" rather than left nullable so callers keep a plain string
+  // and an absent gateway reads as "no ingest", which is what they already test.
+  roomToken: z.preprocess((v) => v ?? "", z.string()),
+  url: z.preprocess((v) => v ?? "", z.string()),
 });
 
 export const GoLiveSchema = z.object({
@@ -90,11 +97,15 @@ export const GoLiveSchema = z.object({
   ingest: IngestSchema.nullable().optional().default(null),
 });
 
-// StreamMessage carries only authorId; no hydrated author.
+// `StreamMessage` in the spec, which does hydrate `author` and also carries
+// `streamId` and a moderation `status` we were dropping — the same removed-
+// message field the DM slice was missing.
 export const ChatMessageSchema = z.object({
   id: z.string(),
+  streamId: z.string().optional().default(""),
   authorId: z.string().optional().default(""),
   text: z.string(),
+  status: z.string().optional().default("active"),
   createdAt: z.string(),
   author: ProfileSchema.nullable().optional().default(null),
 });
@@ -144,10 +155,13 @@ export const StreamStatsSchema = z.object({
   kashEarned: z.string().nullable().optional().default(null),
 });
 
+// `HostStreamEvent` in the spec. The hydrated profile is `profile`, not
+// `actor` — the cockpit's activity feed said "Someone" for every event because
+// of it. The spec's kinds are ticket_purchased and follow only.
 export const StreamEventSchema = z.object({
   id: z.string(),
-  kind: z.enum(["ticket_purchased", "follow", "viewer_joined"]).catch("viewer_joined"),
-  actor: ProfileSchema.nullable().optional().default(null),
+  kind: z.enum(["ticket_purchased", "follow"]).catch("follow"),
+  profile: ProfileSchema.nullable().optional().default(null),
   amountKash: z.string().nullable().optional().default(null),
   occurredAt: z.string(),
 });
@@ -157,14 +171,31 @@ export const StreamEventsSchema = z.object({
   nextCursor: z.string().nullable().optional().default(null),
 });
 
+/**
+ * `SpeakerRequest` in the served spec.
+ *
+ * Three fields were wrong at once and each broke something different:
+ * `requestedAt` does not exist (it is `createdAt`), so every request-to-join
+ * threw; the status enum was missing `denied`/`withdrawn` with no `.catch()`,
+ * so those two states threw as well; and the hydrated profile arrives as
+ * `profile`, not `user`, so the host's queue rendered "Viewer" for everyone.
+ *
+ * `joinUrl` / `joinToken` are NOT in the spec — kept optional so nothing
+ * regresses, but see the note in guest-speaker-control: the publish grant the
+ * spec actually offers is `POST /streams/:id/playback-token`.
+ */
 export const SpeakerRequestSchema = z.object({
   id: z.string(),
-  streamId: z.string(),
+  streamId: z.string().optional().default(""),
   userId: z.string(),
-  user: ProfileSchema.nullable().optional().default(null),
-  status: z.enum(["pending", "approved", "declined", "left", "removed"]),
-  requestedAt: z.string(),
+  // The list endpoint hydrates this as `profile` on top of the base schema.
+  profile: ProfileSchema.nullable().optional().default(null),
+  status: z
+    .enum(["pending", "approved", "denied", "withdrawn", "removed"])
+    .catch("pending"),
+  createdAt: z.string().optional().default(""),
   resolvedAt: z.string().nullable().optional().default(null),
+  resolvedBy: z.string().nullable().optional().default(null),
   joinUrl: z.string().nullable().optional().default(null),
   joinToken: z.string().nullable().optional().default(null),
 });
