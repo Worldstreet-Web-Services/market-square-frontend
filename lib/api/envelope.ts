@@ -82,6 +82,30 @@ export function errorMessage(error: unknown, fallback: string): string {
       return "KASH payment failed — check your balance.";
     case "CONFLICT":
       return "That's already taken.";
+    // Storage or another upstream dependency failed. The user cannot act on
+    // "Internal server error", and it reads as though THEY broke something —
+    // say what is actually true and that it is known.
+    case "PROVIDER_ERROR":
+    case "STORAGE_ERROR":
+      return "Uploads are temporarily unavailable — this is being fixed.";
+    // The bytes never reached storage: CORS, a dropped connection, or a
+    // cancelled transfer. Distinct from an API failure.
+    // These are raised by the uploader itself with a message that already
+    // names the file's real size or the specific failure, so keep it and fall
+    // back to the generic wording only when there is none.
+    case "UPLOAD_BLOCKED":
+      return (
+        err.message ||
+        "The upload was blocked before it finished — check your connection and try again."
+      );
+    case "PRESIGN_EXPIRED":
+      return err.message || "The upload link expired — try again.";
+    case "STORAGE_REJECTED":
+      return err.message || "Storage refused that file — try again.";
+    case "PAYLOAD_TOO_LARGE":
+      return err.message || "That file is too large to send this way.";
+    case "VALIDATION":
+      return err.message || fallback;
     case "SERVICE_UNAVAILABLE":
       return "Market Square is unreachable right now.";
     default:

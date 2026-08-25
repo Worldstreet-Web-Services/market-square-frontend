@@ -119,7 +119,11 @@ async function serveFixtureUpload(req: NextRequest) {
 }
 
 async function serveFixture(req: NextRequest, path: string[], method: string) {
-  if (path[0] === "uploads" && method === "POST") {
+  // Only the multipart upload itself. `/uploads/presign` and
+  // `/uploads/complete` must fall through to a real 404 here: fixture mode has
+  // no storage to sign for, and the client reads that 404 as "presign is not
+  // available, use the proxy" — answering 422 instead would strand it.
+  if (path[0] === "uploads" && path.length === 1 && method === "POST") {
     const userId = await callerUserId(req);
     if (!userId) return unauthorized();
     return serveFixtureUpload(req);
