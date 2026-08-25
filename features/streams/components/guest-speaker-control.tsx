@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { IconCamera, IconUser } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
-import { usePublisher } from "@/features/streams/hooks/use-publisher";
+import { PUBLISHER_FAILURES, usePublisher } from "@/features/streams/hooks/use-publisher";
 import {
   useMySpeakerRequest,
   useRequestToSpeak,
@@ -34,6 +34,24 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
   });
 
   const statusLabel = approved ? "On stage" : mine.data?.status === "pending" ? "Requested" : "Join live";
+
+  // One message and one remedy per failure class. These used to be a single
+  // "Allow camera and microphone access", which was actively misleading for
+  // every case except a real permission refusal — the reported bug was a busy
+  // device, where no permission prompt will ever appear.
+  const failed = PUBLISHER_FAILURES.includes(publisher.state);
+  const stageMessage =
+    publisher.state === "denied"
+      ? "Allow camera and microphone access to join."
+      : publisher.state === "device-busy"
+        ? "Your camera or microphone is in use by another app or browser tab. Close it and try again."
+        : publisher.state === "device-missing"
+          ? "No camera or microphone found. Connect one, or check another app is not holding it, then try again."
+          : publisher.state === "timeout"
+            ? "Couldn't reach the stage in time. Check your connection and try again."
+            : publisher.state === "failed"
+              ? (publisher.error ?? "Couldn't connect you to the stage.")
+              : "Connecting you to the stage…";
 
   return (
     <>
@@ -72,15 +90,27 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
           <div className="space-y-3">
             <div ref={previewRef} className="aspect-video overflow-hidden rounded-2xl bg-black">
               {publisher.state !== "publishing" && (
-                <div className="flex h-full items-center justify-center text-xs text-grey-400">
-                  {!ingest
-                    ? "Approved — waiting for the stage connection…"
-                    : publisher.state === "denied"
-                      ? "Allow camera and microphone access to join."
-                      : "Connecting you to the stage…"}
+                <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-grey-400">
+                  <p>{!ingest ? "Approved — waiting for the stage connection…" : stageMessage}</p>
+                  {/* Every terminal state gets a way out. Without this the panel
+                      was a dead end: no failure, no retry, just a spinner. */}
+                  {failed && (
+                    <Button size="sm" variant="secondary" onClick={publisher.retry}>
+                      Retry
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
+            {/* Audio-only is a SUCCESS, not a failure — say what happened and
+                leave the camera toggle live so it can come up later. */}
+            {publisher.audioOnly && publisher.state === "publishing" && (
+              <p className="rounded-xl bg-white/5 px-3 py-2 text-center text-xs text-grey-300">
+                Joined with microphone only — camera unavailable.
+                {publisher.error ? ` ${publisher.error}` : ""} You can turn the
+                camera on once it is free.
+              </p>
+            )}
             <p className="text-center text-sm font-semibold text-heading">{statusLabel}</p>
             <div className="grid grid-cols-2 gap-2">
               <Button variant={publisher.micOn ? "secondary" : "danger"} onClick={() => void publisher.toggleMic()}>
@@ -125,13 +155,27 @@ export function SpeakerRequestQueue({ stream }: { stream: Stream }) {
           <Button size="sm" variant="ghost" onClick={() => resolve.mutate({ requestId: item.id, action: "decline" })}>Decline</Button>
         </div>
       ))}
+      {/* "is on stage" asserted something we cannot observe. `approved` is a
+          decision the host made; whether the guest's browser actually got its
+          camera and connected is not in this payload, and a guest whose device
+          is busy can sit at "approved" forever while the host sees a confident
+          green dot. Until real presence is wired (see note below), say only
+          what is true — and warn the host that silence may be the guest's end. */}
       {active.map((item) => (
         <div key={item.id} className="flex items-center gap-2 rounded-xl bg-white/5 p-2">
-          <span className="h-2 w-2 rounded-full bg-up" />
-          <span className="min-w-0 flex-1 truncate text-xs text-grey-300">{item.profile?.displayName ?? "Guest"} is on stage</span>
+          <span className="h-2 w-2 rounded-full bg-accent" />
+          <span className="min-w-0 flex-1 truncate text-xs text-grey-300">
+            {item.profile?.displayName ?? "Guest"} · approved
+          </span>
           <button className="text-[11px] text-down" onClick={() => resolve.mutate({ requestId: item.id, action: "remove" })}>Remove</button>
         </div>
       ))}
+      {active.length > 0 && (
+        <p className="text-[11px] leading-4 text-grey-600">
+          Approved guests may still be connecting. If you cannot hear someone,
+          their camera or microphone may be blocked or in use by another app.
+        </p>
+      )}
       {!requests.isPending && pending.length === 0 && active.length === 0 && (
         <p className="py-2 text-center text-xs text-grey-600">No guest requests yet.</p>
       )}
