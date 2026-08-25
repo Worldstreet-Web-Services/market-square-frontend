@@ -47,7 +47,7 @@ export function SpotlightPage() {
         title="Spotlight"
         subtitle="The square's most active voices, ranked"
         action={
-          <Pill tone="featured" className="shrink-0 px-3.5 py-1 text-[13px]">
+          <Pill tone="spotlight" className="shrink-0 px-3.5 py-1 text-[13px]">
             This week
           </Pill>
         }
@@ -91,7 +91,9 @@ export function SpotlightPage() {
                     <span
                       className={cn(
                         "tnum absolute -bottom-1 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full text-xs font-bold",
-                        row.rank === 1 ? "bg-featured text-ink" : "ws-glass"
+                        // The Spotlight surface moved off amber onto its own
+                        // purple; the podium follows the rail card.
+                        row.rank === 1 ? "bg-spotlight text-white" : "ws-glass"
                       )}
                     >
                       {row.rank}
@@ -110,7 +112,9 @@ export function SpotlightPage() {
                 <span
                   className={cn(
                     "tnum w-6 text-center text-[15px] font-bold",
-                    row.rank <= 3 ? "text-featured" : "text-meta"
+                    // --color-spotlight itself is only 3.7:1 on black, so the
+                    // rank numeral takes the lighter chip ink (7.5:1).
+                    row.rank <= 3 ? "text-spotlight-chip-ink" : "text-meta"
                   )}
                 >
                   {row.rank}

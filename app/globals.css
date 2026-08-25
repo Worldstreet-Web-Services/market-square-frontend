@@ -30,6 +30,17 @@
      the CTA can never drag the liked heart or Citizen Spotlight with it. */
   --color-create: #9f65fd;
   --color-create-deep: #5b05e6;
+  /* Citizen Spotlight's purple. The design repainted the Spotlight surface off
+     the amber featured ramp onto its own purple — a DIFFERENT hue from
+     --color-create with a different meaning. Create's violet is "the primary
+     action"; spotlight purple is "this citizen is featured". They must never be
+     consolidated into one token: repainting the CTA must not drag the Spotlight
+     card with it, and vice versa. Values are the design's own export:
+     the card wash and hairline are --color-spotlight, the FEATURED chip is
+     --color-spotlight-chip with --color-spotlight-chip-ink lettering. */
+  --color-spotlight: #7e3beb;
+  --color-spotlight-chip: #6829ce;
+  --color-spotlight-chip-ink: #c27aff;
   /* The sidebar's active-item dot. */
   --color-nav-dot: #ffba00;
   /* Gain and loss stay semantic (functional, not brand color). */
@@ -504,14 +515,38 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* Featured/spotlight treatment. The amber is the one hue in the product and
-   it is semantic — it marks "featured", never decoration. The wash is the
-   design's own vertical gradient: amber at the crown, falling to the panel
-   ground by two thirds. */
+/* Amber featured treatment. Semantic — it marks "featured", never decoration.
+   The wash is the design's own vertical gradient: amber at the crown, falling
+   to the panel ground by two thirds. Citizen Spotlight used to wear this and
+   no longer does (see ws-spotlight); it still dresses the verification card. */
 @utility ws-featured {
   border-radius: 22px;
   background: linear-gradient(178deg, var(--color-featured-deep) 0%, #0f0f0f 67%);
   border: 0.5px solid var(--color-featured);
+}
+
+/* Citizen Spotlight's surface. Same 22px geometry as ws-featured, the design's
+   own purple wash and hairline instead of the amber one, plus the export's
+   two-layer drop shadow. Its own utility, on its own tokens — recolouring
+   either the amber ramp or the Create violet can never reach it. */
+@utility ws-spotlight {
+  border-radius: 22px;
+  background: linear-gradient(177.68deg, var(--color-spotlight) -41.98%, #0f0f0f 43.59%);
+  border: 0.5px solid var(--color-spotlight);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+/* The Spotlight row's "Follow" button (not yet following): a solid white pill
+   with black bold lettering and the export's soft lift. Its "Following" twin is
+   a different size, fill, weight and border — see the component. */
+@utility ws-btn-follow {
+  background: #ffffff;
+  color: #000000;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 1px 2px -1px rgba(0, 0, 0, 0.1);
 }
 
 /* The violet call to action: Create Post and every twin of it. The design

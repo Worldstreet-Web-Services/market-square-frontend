@@ -114,15 +114,17 @@ export function LiveBadge({ className }: { className?: string }) {
   );
 }
 
-// "featured" is the amber tone: promoted, premium or top-ranked. It is
-// semantic like up/down — never reach for it as decoration.
+// "featured" is the amber tone: promoted, premium or top-ranked. "spotlight" is
+// the Citizen Spotlight purple, which the design split off the amber ramp — it
+// belongs to the Spotlight surface alone. Both are semantic like up/down —
+// never reach for either as decoration.
 export function Pill({
   children,
   tone = "neutral",
   className,
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "accent" | "featured";
+  tone?: "neutral" | "accent" | "featured" | "spotlight";
   className?: string;
 }) {
   return (
@@ -131,6 +133,8 @@ export function Pill({
         "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
         tone === "accent" && "bg-accent text-ink",
         tone === "featured" && "border border-featured/40 bg-featured/15 text-featured",
+        tone === "spotlight" &&
+          "border border-spotlight/50 bg-spotlight-chip/30 text-spotlight-chip-ink",
         tone === "neutral" && "border border-white/15 bg-black/40 text-grey-200",
         className
       )}
