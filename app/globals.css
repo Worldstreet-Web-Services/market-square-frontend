@@ -567,6 +567,41 @@ body {
    carried this as amber-on-black until the 2026-08-25 revision repainted it
    violet with a white label. It is its own ramp, not the featured one — see
    --color-create. */
+/* The floating create-post button.
+   Its gradient is NOT ws-btn-create's: the design gives this control its own
+   angle and stops — 250.02deg, #7E3BEB at 22.39% and #C27AFF at 84.87% —
+   which are the --color-spotlight and --color-spotlight-chip-ink stops of the
+   existing purple ramp, so no new purple is introduced. Reproduced exactly
+   rather than rounded, because the angle is what puts the light stop under
+   the glyph.
+
+   Geometry comes from the same node: a 71x71 transparent hit frame with a
+   52.79px visual circle inside it (9.10256px of padding on every side). The
+   hit area is deliberately larger than the circle — that is what makes it
+   comfortable on a phone — so never collapse the two. */
+
+/* The floating create button's distance from the bottom edge.
+   Desktop mirrors the design's own inset. Mobile has to clear the fixed tab
+   bar (a 69px row plus the home indicator), so the two are stated together
+   here rather than as magic numbers in the component. */
+:root {
+  --ws-fab-bottom: calc(env(safe-area-inset-bottom, 0px) + 81px);
+}
+@media (min-width: 768px) {
+  :root {
+    --ws-fab-bottom: 33px;
+  }
+}
+
+@utility ws-btn-fab {
+  background: linear-gradient(
+    250.02deg,
+    var(--color-spotlight) 22.39%,
+    var(--color-spotlight-chip-ink) 84.87%
+  );
+  color: #ffffff;
+}
+
 @utility ws-btn-create {
   background: linear-gradient(155deg, var(--color-create) 0%, var(--color-create-deep) 100%);
   color: #ffffff;

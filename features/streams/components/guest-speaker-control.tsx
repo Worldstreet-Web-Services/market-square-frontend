@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { IconCamera, IconUser } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
-import { PUBLISHER_FAILURES, usePublisher } from "@/features/streams/hooks/use-publisher";
+import { STAGE_FAILURES, useStage } from "@/features/streams/hooks/use-stage";
 import {
   useMySpeakerRequest,
   useRequestToSpeak,
   useResolveSpeakerRequest,
   useSpeakerRequests,
 } from "@/features/streams/hooks/use-streams";
-import type { Ingest, Stream } from "@/features/streams/lib/types";
+import type { Stream } from "@/features/streams/lib/types";
 
 export function GuestSpeakerControl({ stream }: { stream: Stream }) {
   const gate = useGate();
@@ -23,15 +23,12 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
   const resolve = useResolveSpeakerRequest(stream.id);
   const previewRef = useRef<HTMLDivElement | null>(null);
   const approved = mine.data?.status === "approved";
-  const ingest: Ingest | null = approved && mine.data?.joinUrl && mine.data.joinToken
-    ? { url: mine.data.joinUrl, roomToken: mine.data.joinToken, rtmpUrl: null, streamKey: null }
-    : null;
-  const publisher = usePublisher({
-    ingest,
-    enabled: approved,
-    streamId: `${stream.id}:guest`,
-    previewRef,
-  });
+  // No second connection: an approved guest is upgraded on the room they are
+  // already watching from. `joinUrl`/`joinToken` are deliberately unused — a
+  // speaker token carries the same LiveKit identity as the playback token, so
+  // connecting with it evicts the viewer and starts the reconnect loop that
+  // killed the page on mobile.
+  const publisher = useStage({ streamId: stream.id, approved, previewRef });
 
   const statusLabel = approved ? "On stage" : mine.data?.status === "pending" ? "Requested" : "Join live";
 
@@ -39,19 +36,21 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
   // "Allow camera and microphone access", which was actively misleading for
   // every case except a real permission refusal — the reported bug was a busy
   // device, where no permission prompt will ever appear.
-  const failed = PUBLISHER_FAILURES.includes(publisher.state);
+  const failed = STAGE_FAILURES.includes(publisher.state);
   const stageMessage =
-    publisher.state === "denied"
+    publisher.state === "not-permitted"
+      ? (publisher.error ?? "The host hasn't finished bringing you on stage yet.")
+      : publisher.state === "waiting-for-room"
+        ? "Connecting to the stream…"
+        : publisher.state === "denied"
       ? "Allow camera and microphone access to join."
-      : publisher.state === "device-busy"
-        ? "Your camera or microphone is in use by another app or browser tab. Close it and try again."
-        : publisher.state === "device-missing"
-          ? "No camera or microphone found. Connect one, or check another app is not holding it, then try again."
-          : publisher.state === "timeout"
-            ? "Couldn't reach the stage in time. Check your connection and try again."
+        : publisher.state === "device-busy"
+          ? "Your camera or microphone is in use by another app or browser tab. Close it and try again."
+          : publisher.state === "device-missing"
+            ? "No camera or microphone found. Connect one, or check another app is not holding it, then try again."
             : publisher.state === "failed"
-              ? (publisher.error ?? "Couldn't connect you to the stage.")
-              : "Connecting you to the stage…";
+              ? (publisher.error ?? "Couldn't put you on stage.")
+              : "Putting you on stage…";
 
   return (
     <>
@@ -89,9 +88,9 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
         ) : (
           <div className="space-y-3">
             <div ref={previewRef} className="aspect-video overflow-hidden rounded-2xl bg-black">
-              {publisher.state !== "publishing" && (
+              {publisher.state !== "live" && (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-grey-400">
-                  <p>{!ingest ? "Approved — waiting for the stage connection…" : stageMessage}</p>
+                  <p>{stageMessage}</p>
                   {/* Every terminal state gets a way out. Without this the panel
                       was a dead end: no failure, no retry, just a spinner. */}
                   {failed && (
@@ -104,7 +103,7 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
             </div>
             {/* Audio-only is a SUCCESS, not a failure — say what happened and
                 leave the camera toggle live so it can come up later. */}
-            {publisher.audioOnly && publisher.state === "publishing" && (
+            {publisher.audioOnly && publisher.state === "live" && (
               <p className="rounded-xl bg-white/5 px-3 py-2 text-center text-xs text-grey-300">
                 Joined with microphone only — camera unavailable.
                 {publisher.error ? ` ${publisher.error}` : ""} You can turn the

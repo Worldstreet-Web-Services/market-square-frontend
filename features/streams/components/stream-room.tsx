@@ -127,7 +127,7 @@ function PlaybackSurface({
   // ws/wss URLs are LiveKit rooms; http(s) URLs are HLS manifests.
   if (/^wss?:/i.test(playback.data.url)) {
     return (
-      <LiveKitPlayer url={playback.data.url} token={playback.data.token} onPlayingChange={setPlaying} fill />
+      <LiveKitPlayer streamId={stream.id} url={playback.data.url} token={playback.data.token} onPlayingChange={setPlaying} fill />
     );
   }
   return (
