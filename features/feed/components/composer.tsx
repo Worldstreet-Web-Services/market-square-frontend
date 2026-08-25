@@ -8,6 +8,7 @@ import type { DeepLink } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
 import { IconClock, IconImage, IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import { ACCEPT_MEDIA, validateUpload } from "@/lib/api/upload";
 import { useCreatePost, useMentionSearch, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
 import type { Mention, Post } from "@/features/feed/lib/types";
 
@@ -184,12 +185,13 @@ export function Composer({
 
   const chooseMedia = (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-      toast.error("Choose an image or video file.");
-      return;
-    }
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error("Media must be 50 MB or smaller.");
+    // One validator for the whole app. This used to carry its own rules — a
+    // "50 MB" cap that matched neither the 10 MB image nor the 100 MB video
+    // limit — so the composer rejected files the service would have taken and
+    // accepted files it would not.
+    const invalid = validateUpload(file, "media");
+    if (invalid) {
+      toast.error(invalid);
       return;
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -274,7 +276,10 @@ export function Composer({
         <input
           ref={fileInput}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+          // Derived from the allowlist so the picker can never offer a type
+          // we reject — it used to include video/quicktime, which guaranteed
+          // a failure after the user had already chosen a file.
+          accept={ACCEPT_MEDIA}
           className="sr-only"
           onChange={(event) => chooseMedia(event.target.files?.[0])}
         />

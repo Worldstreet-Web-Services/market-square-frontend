@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/api/envelope";
-import { uploadFile, validateUpload } from "@/lib/api/upload";
+import { ACCEPT_IMAGE, uploadFile, validateUpload } from "@/lib/api/upload";
 import { IconCamera, IconX } from "@/components/ui/icons";
 
 // Image upload field for avatars and covers: pick → local preview → eager
@@ -44,7 +44,7 @@ export function UploadField({
     setPreview(objectUrl);
     setProgress(0);
     try {
-      const result = await uploadFile(file, setProgress);
+      const result = await uploadFile(file, setProgress, "image");
       onChange(result.url);
     } catch (uploadError) {
       setError(errorMessage(uploadError, "Upload failed."));
@@ -106,7 +106,7 @@ export function UploadField({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept={ACCEPT_IMAGE}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
