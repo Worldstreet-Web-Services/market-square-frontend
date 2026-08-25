@@ -180,9 +180,12 @@ export const StreamEventsSchema = z.object({
  * so those two states threw as well; and the hydrated profile arrives as
  * `profile`, not `user`, so the host's queue rendered "Viewer" for everyone.
  *
- * `joinUrl` / `joinToken` are NOT in the spec — kept optional so nothing
- * regresses, but see the note in guest-speaker-control: the publish grant the
- * spec actually offers is `POST /streams/:id/playback-token`.
+ * `joinUrl` / `joinToken` / `expiresAt` ARE in the spec, but only while the
+ * request is approved — the service omits them in every other state, which is
+ * what makes the publish gate in guest-speaker-control safe. They stay
+ * optional here for exactly that reason, not because they are absent.
+ * `POST /streams/:id/speaker-token` re-mints the pair when it expires;
+ * `playback-token` is subscribe-only and cannot be used to broadcast.
  */
 export const SpeakerRequestSchema = z.object({
   id: z.string(),

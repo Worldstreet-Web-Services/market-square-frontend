@@ -41,7 +41,7 @@ function SpotlightFollow({ profile }: { profile: Profile }) {
   );
 }
 
-// The rail's featured module. The design repainted it off the amber ramp onto
+// The rail's promoted module. The design repainted it off the amber ramp onto
 // its own purple (--color-spotlight); nothing else in the rail carries that
 // hue, so the card still reads as promoted without shouting.
 export function CitizenSpotlightRail() {

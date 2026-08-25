@@ -71,7 +71,7 @@ function Row({ item, onMarkRead }: { item: MarketNotification; onMarkRead: (id: 
 
   const body = (
     <>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center text-xl text-featured">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center text-xl text-create">
         {GLYPHS[item.kind]}
       </span>
       {item.actor ? (
@@ -102,7 +102,7 @@ function Row({ item, onMarkRead }: { item: MarketNotification; onMarkRead: (id: 
           title="Mark as read"
           className="ws-press shrink-0 rounded-full p-1.5 transition-colors hover:bg-white/10"
         >
-          <span className="block h-2 w-2 rounded-full bg-featured" />
+          <span className="block h-2 w-2 rounded-full bg-create" />
         </button>
       )}
     </>

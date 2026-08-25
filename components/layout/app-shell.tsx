@@ -140,7 +140,7 @@ function NavLink({
       <span className={cn("relative shrink-0", active && "text-nav-dot")}>
         <Icon className="h-4 w-4" filled={active} />
         {badge > 0 && (
-          <span className="tnum absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-featured px-1 text-[9px] font-bold text-ink">
+          <span className="tnum absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-spotlight px-1 text-[9px] font-bold text-white">
             {badge > 99 ? "99+" : badge}
           </span>
         )}

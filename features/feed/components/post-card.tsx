@@ -200,7 +200,7 @@ function GlyphAction({
       disabled={disabled}
       className={cn(
         "flex h-6 w-6 shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-        active ? "text-featured" : "text-body hover:text-heading"
+        active ? "text-create" : "text-body hover:text-heading"
       )}
     >
       {children}

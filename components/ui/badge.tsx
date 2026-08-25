@@ -114,17 +114,18 @@ export function LiveBadge({ className }: { className?: string }) {
   );
 }
 
-// "featured" is the amber tone: promoted, premium or top-ranked. "spotlight" is
-// the Citizen Spotlight purple, which the design split off the amber ramp — it
-// belongs to the Spotlight surface alone. Both are semantic like up/down —
-// never reach for either as decoration.
+// "premium" marks promoted / paid / top-ranked (VIP tiers, the paused
+// verification badge); "spotlight" belongs to the Citizen Spotlight surface
+// alone. Both now sit on the purple ramp — "premium" was the amber tone until
+// the gold sweep, and its ink is the ramp's LIGHT stop because the label is
+// small text on a dark ground. Semantic like up/down — never decoration.
 export function Pill({
   children,
   tone = "neutral",
   className,
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "accent" | "featured" | "spotlight";
+  tone?: "neutral" | "accent" | "premium" | "spotlight";
   className?: string;
 }) {
   return (
@@ -132,7 +133,7 @@ export function Pill({
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
         tone === "accent" && "bg-accent text-ink",
-        tone === "featured" && "border border-featured/40 bg-featured/15 text-featured",
+        tone === "premium" && "border border-create/40 bg-create/15 text-create",
         tone === "spotlight" &&
           "border border-spotlight/50 bg-spotlight-chip/30 text-spotlight-chip-ink",
         tone === "neutral" && "border border-white/15 bg-black/40 text-grey-200",

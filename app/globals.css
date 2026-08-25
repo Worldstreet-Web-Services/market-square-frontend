@@ -12,35 +12,31 @@
   --font-sans: var(--font-body);
   --font-serif: var(--font-body);
 
-  /* Ark brand is monochrome: no purple, no gold. The accent is silver. */
+  /* Ark brand is monochrome. The accent is silver; the one chromatic family is
+     the purple ramp below. Gold survives ONLY as --color-coin (money). */
   --color-accent: #d4d4d8;
-  /* Featured/spotlight marker. Semantic like up/down — never decoration.
-     The three amber stops are lifted verbatim from the design: the button
-     gradient runs --color-featured → --color-featured-deep, Citizen
-     Spotlight's heading is --color-featured-hi and its chip label
-     --color-featured-chip. */
-  --color-featured: #e8b74a;
-  --color-featured-deep: #cda243;
-  --color-featured-hi: #ffb900;
-  --color-featured-chip: #ffd230;
   /* Create Post's violet ramp. The 2026-08-25 design revision repainted this
-     one control from the amber featured ramp to a violet gradient with a
-     white label; everything else amber stayed amber. It is the CTA hue and
-     nothing else — it is deliberately NOT --color-featured, so recolouring
-     the CTA can never drag the liked heart or Citizen Spotlight with it. */
+     control from the amber ramp to a violet gradient with a white label.
+     #9f65fd is the LIGHT stop: 5.77:1 on black, so it is the one to reach for
+     when purple has to carry TEXT or a small glyph on a dark ground. */
   --color-create: #9f65fd;
   --color-create-deep: #5b05e6;
-  /* Citizen Spotlight's purple. The design repainted the Spotlight surface off
-     the amber featured ramp onto its own purple — a DIFFERENT hue from
-     --color-create with a different meaning. Create's violet is "the primary
-     action"; spotlight purple is "this citizen is featured". They must never be
-     consolidated into one token: repainting the CTA must not drag the Spotlight
-     card with it, and vice versa. Values are the design's own export:
-     the card wash and hairline are --color-spotlight, the FEATURED chip is
-     --color-spotlight-chip with --color-spotlight-chip-ink lettering. */
+  /* Citizen Spotlight's purple — the DARK stop of the same ramp, not a rival
+     hue (ws-btn-arena runs a gradient straight from one into the other).
+     #7e3beb is only 3.71:1 on black, so it is NOT safe for small text on a dark
+     ground; it is the stop for FILLS, where white sits on it at 5.66:1. That
+     split — light stop for ink, dark stop for fills — is the whole rule. */
   --color-spotlight: #7e3beb;
   --color-spotlight-chip: #6829ce;
   --color-spotlight-chip-ink: #c27aff;
+  /* The last gold in the product, and it means exactly one thing: MONEY. The
+     coin glyph and the gift action that spends coins, nothing else. Every other
+     amber surface — unread badges, notification glyphs, VIP tiers, admin pills,
+     the verification wash, the chat podium — moved to the purple ramp. It is
+     deliberately NOT called "featured": "featured" invited reuse as decoration,
+     which is how gold spread across eight files in the first place. If a
+     surface is not currency, it does not get this token. */
+  --color-coin: #e8b74a;
   /* The sidebar's active-item glyph. It was gold (#ffba00), which the design
      dropped along with the rest of the gold. It is NOT a third purple: it
      aliases the create stop, the brighter end of the shared ramp, because the
@@ -51,12 +47,10 @@
   /* Gain and loss stay semantic (functional, not brand color). */
   --color-up: #7ce7b0;
   --color-down: #f6a5a5;
-  /* The one deliberate color exception to silver-only: the liked heart.
-     Semantic state, universal affordance — not chrome.
-     The 2026-08-25 design revision moved the liked heart back OFF the amber
-     featured accent to its own red. One token, so the heart reads identically
-     on cards, profile and the snap feed — and so it can never drift into
-     --color-featured again. */
+  /* The liked heart. Semantic state, universal affordance — not chrome.
+     The 2026-08-25 design revision moved it off the amber accent to its own
+     red. One token, so the heart reads identically on cards, profile and the
+     snap feed — and so it can never drift back onto another accent. */
   --color-like: #e84a4a;
   /* Broadcasting-now red, read off the design's stories strip: the LIVE pill
      is solid #ff0b0b and the tile ring is the same red at 40%. This is the
@@ -535,14 +529,14 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* Amber featured treatment. Semantic — it marks "featured", never decoration.
-   The wash is the design's own vertical gradient: amber at the crown, falling
-   to the panel ground by two thirds. Citizen Spotlight used to wear this and
-   no longer does (see ws-spotlight); it still dresses the verification card. */
-@utility ws-featured {
+/* The premium wash — the verification card's shell. Same geometry it always
+   had; the amber crown is now the purple ramp's dark stop, matching the
+   Spotlight card it sits beside in the rail. Renamed from ws-featured so no
+   "featured" vocabulary survives to invite gold back. */
+@utility ws-premium {
   border-radius: 22px;
-  background: linear-gradient(178deg, var(--color-featured-deep) 0%, #0f0f0f 67%);
-  border: 0.5px solid var(--color-featured);
+  background: linear-gradient(178deg, var(--color-spotlight) 0%, #0f0f0f 67%);
+  border: 0.5px solid var(--color-spotlight);
 }
 
 /* Citizen Spotlight's surface. Same 22px geometry as ws-featured, the design's

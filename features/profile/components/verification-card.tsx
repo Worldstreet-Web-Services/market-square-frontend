@@ -58,9 +58,9 @@ function RenewAction({
   );
 }
 
-function Shell({ children, tone }: { children: React.ReactNode; tone?: "featured" }) {
+function Shell({ children, tone }: { children: React.ReactNode; tone?: "premium" }) {
   return (
-    <div className={tone === "featured" ? "ws-featured space-y-3 p-5" : "ws-card space-y-3 p-5"}>
+    <div className={tone === "premium" ? "ws-premium space-y-3 p-5" : "ws-card space-y-3 p-5"}>
       {children}
     </div>
   );
@@ -92,10 +92,10 @@ export function VerificationCard() {
   // ---- lapsed: paused, not punished. The grant is intact. ----
   if (status === "lapsed") {
     return (
-      <Shell tone="featured">
+      <Shell tone="premium">
         <div className="flex items-center gap-2">
           <h2 className="ws-display text-base">Your badge is paused</h2>
-          <Pill tone="featured">Paused</Pill>
+          <Pill tone="premium">Paused</Pill>
         </div>
         <p className="text-sm text-grey-400">
           Your verification is still yours — the check is just hidden while the subscription is

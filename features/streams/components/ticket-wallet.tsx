@@ -68,7 +68,7 @@ export function TicketWallet() {
             </p>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-meta">
               <Pill
-                tone={ticket.tier === "vip" ? "featured" : "neutral"}
+                tone={ticket.tier === "vip" ? "premium" : "neutral"}
                 className="px-2 py-0 text-[10px]"
               >
                 {ticket.tier === "vip" ? "VIP" : "Standard"}

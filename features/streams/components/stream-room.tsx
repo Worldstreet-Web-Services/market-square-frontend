@@ -885,7 +885,7 @@ export function StreamRoom({
                       {gift.name}
                     </span>
                     <span className="tnum mt-0.5 flex items-center gap-1 text-[11px] text-meta">
-                      <IconCoin className="h-3 w-3 text-featured" />
+                      <IconCoin className="h-3 w-3 text-coin" />
                       {gift.priceKash}
                     </span>
                   </button>
@@ -934,7 +934,7 @@ export function StreamRoom({
             <button
               onClick={() => gate(() => setGiftsOpen(true))}
               aria-label="Send a live gift"
-              className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-featured text-ink transition-colors hover:brightness-110"
+              className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-coin text-ink transition-colors hover:brightness-110"
             >
               <IconCoin className="h-5 w-5" />
             </button>

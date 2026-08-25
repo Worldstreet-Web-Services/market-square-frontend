@@ -28,7 +28,7 @@ export function Panel({
       <header className="ws-hair flex items-center gap-2 border-b px-4 py-3">
         <h2 className="ws-display text-[15px]">{title}</h2>
         {count !== undefined && count > 0 && (
-          <span className="tnum rounded-full bg-featured px-2 py-0.5 text-[11px] font-bold text-ink">
+          <span className="tnum rounded-full bg-spotlight px-2 py-0.5 text-[11px] font-bold text-white">
             {count}
           </span>
         )}
@@ -244,7 +244,7 @@ export function BadgePicker({
             className={cn(
               "ws-press rounded-full border px-2 py-0.5 text-[10px] font-bold transition-colors disabled:cursor-default",
               active
-                ? "border-featured/50 bg-featured/15 text-featured"
+                ? "border-create/50 bg-create/15 text-create"
                 : "border-white/15 text-meta hover:bg-white/10 hover:text-body"
             )}
           >

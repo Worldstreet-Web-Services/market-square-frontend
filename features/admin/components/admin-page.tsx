@@ -155,7 +155,7 @@ export function AdminPage() {
                   <span
                     className={cn(
                       "tnum rounded-full px-1.5 text-[10px]",
-                      tab === entry.value ? "bg-ink/15 text-ink" : "bg-featured text-ink"
+                      tab === entry.value ? "bg-ink/15 text-ink" : "bg-spotlight text-white"
                     )}
                   >
                     {badge}

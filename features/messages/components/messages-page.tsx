@@ -261,7 +261,7 @@ function Inbox({ onOpen }: { onOpen: (conversation: Conversation) => void }) {
             </span>
           </span>
           {conversation.unreadCount > 0 && (
-            <span className="tnum flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-featured px-1.5 text-[11px] font-bold text-ink">
+            <span className="tnum flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-spotlight px-1.5 text-[11px] font-bold text-white">
               {conversation.unreadCount}
             </span>
           )}

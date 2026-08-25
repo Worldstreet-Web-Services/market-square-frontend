@@ -58,7 +58,7 @@ export function TicketsRail() {
                     {stream?.title ?? "Stream ticket"}
                   </span>
                   <span className="mt-0.5 block truncate text-xs text-meta">
-                    <span className={ticket.tier === "vip" ? "font-bold text-featured" : undefined}>
+                    <span className={ticket.tier === "vip" ? "font-bold text-create" : undefined}>
                       {ticket.tier === "vip" ? "VIP" : "Standard"}
                     </span>{" "}
                     · {formatKash(ticket.priceKash)}
