@@ -10,23 +10,30 @@ import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronRight, IconSpark } from "@/components/ui/icons";
 import { useFollow, useSpotlight } from "@/features/profile/hooks/use-profile";
+import { useIsFollowing } from "@/features/profile/lib/follow-state";
 
 function SpotlightFollow({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
   const gate = useGate();
+  // `GET /spotlight` does not return `isFollowing` yet, so the rendered state
+  // comes from `useIsFollowing`: the server's answer when it sends one, this
+  // session's own intent when it does not. Reading `profile.isFollowing` raw
+  // here is what made the button snap back to "Follow" after every refetch.
+  const isFollowing = useIsFollowing(profile);
   return (
     <button
+      aria-pressed={isFollowing}
       onClick={(event) => {
         event.preventDefault();
-        gate(() => follow.mutate(!profile.isFollowing));
+        gate(() => follow.mutate(!isFollowing));
       }}
       className={
-        profile.isFollowing
+        isFollowing
           ? "ws-press shrink-0 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[12px] text-white/90"
           : "ws-btn-silver ws-press shrink-0 rounded-full px-3 py-1 text-[12px] font-bold transition-opacity hover:opacity-90"
       }
     >
-      {profile.isFollowing ? "Following" : "Follow"}
+      {isFollowing ? "Following" : "Follow"}
     </button>
   );
 }

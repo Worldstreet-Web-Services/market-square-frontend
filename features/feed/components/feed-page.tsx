@@ -183,7 +183,7 @@ export function FeedPage({
             </Link>
             <button
               onClick={() => setComposerOpen(true)}
-              className="ws-btn-featured ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
+              className="ws-btn-create ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
             >
               <IconPlus className="h-4 w-4" />
               Create Post

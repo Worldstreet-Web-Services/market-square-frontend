@@ -13,19 +13,23 @@ import { ColumnHeader } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useFollow, useSpotlight } from "@/features/profile/hooks/use-profile";
+import { useIsFollowing } from "@/features/profile/lib/follow-state";
 
 function InlineFollow({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
   const gate = useGate();
   const me = useMe();
+  // Hooks must run before the early return, so read the state up here.
+  const isFollowing = useIsFollowing(profile);
   if (me.data?.id === profile.id) return null;
   return (
     <Button
-      variant={profile.isFollowing ? "secondary" : "primary"}
+      variant={isFollowing ? "secondary" : "primary"}
       size="sm"
-      onClick={() => gate(() => follow.mutate(!profile.isFollowing))}
+      aria-pressed={isFollowing}
+      onClick={() => gate(() => follow.mutate(!isFollowing))}
     >
-      {profile.isFollowing ? "Following" : "Follow"}
+      {isFollowing ? "Following" : "Follow"}
     </Button>
   );
 }

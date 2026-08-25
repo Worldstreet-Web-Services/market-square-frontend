@@ -9,23 +9,26 @@ import { VerifiedBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronRight } from "@/components/ui/icons";
 import { useFollow, useSpotlight } from "@/features/profile/hooks/use-profile";
+import { useIsFollowing } from "@/features/profile/lib/follow-state";
 
 function RailFollow({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
   const gate = useGate();
+  const isFollowing = useIsFollowing(profile);
   return (
     <button
+      aria-pressed={isFollowing}
       onClick={(event) => {
         event.preventDefault();
-        gate(() => follow.mutate(!profile.isFollowing));
+        gate(() => follow.mutate(!isFollowing));
       }}
       className={
-        profile.isFollowing
+        isFollowing
           ? "ws-press shrink-0 rounded-full border border-white/20 px-4 py-1.5 text-sm font-bold text-body"
           : "ws-press shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-white"
       }
     >
-      {profile.isFollowing ? "Following" : "Follow"}
+      {isFollowing ? "Following" : "Follow"}
     </button>
   );
 }
@@ -57,6 +60,10 @@ export function WhoToFollowRail() {
     );
   }
 
+  // Membership is filtered on the SERVER's answer only, never on the session
+  // intent the button renders from: following someone should flip their
+  // button, not make the row vanish from under the cursor. The row leaves the
+  // list on the next payload that reports the edge.
   const suggestions = (board.data?.items ?? [])
     .filter((row) => row.profile.id !== me.data?.id && !row.profile.isFollowing)
     .slice(0, 3);

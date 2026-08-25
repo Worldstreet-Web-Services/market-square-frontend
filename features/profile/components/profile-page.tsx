@@ -24,6 +24,7 @@ import {
   useProfileStreams,
   useProfileSafety,
 } from "@/features/profile/hooks/use-profile";
+import { useIsFollowing } from "@/features/profile/lib/follow-state";
 import { EditProfileSheet } from "@/features/profile/components/edit-profile-sheet";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import { CreatorCard } from "@/features/profile/components/creator-card";
@@ -34,13 +35,15 @@ type Tab = "posts" | "streams" | "activities";
 function FollowButton({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
   const gate = useGate();
+  const isFollowing = useIsFollowing(profile);
   return (
     <Button
-      variant={profile.isFollowing ? "secondary" : "primary"}
+      variant={isFollowing ? "secondary" : "primary"}
       size="sm"
-      onClick={() => gate(() => follow.mutate(!profile.isFollowing))}
+      aria-pressed={isFollowing}
+      onClick={() => gate(() => follow.mutate(!isFollowing))}
     >
-      {profile.isFollowing ? "Following" : "Follow"}
+      {isFollowing ? "Following" : "Follow"}
     </Button>
   );
 }

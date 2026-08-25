@@ -458,13 +458,15 @@ export function PostCard({
             }
             onQuote={() => gate(() => onQuote?.(post))}
           />
-          {/* Liked is amber in the design, not red — the same semantic amber
-              that marks featured and premium elsewhere. */}
+          {/* Liked is red (--color-like, #e84a4a). It was amber until the
+              2026-08-25 design revision moved it off the featured accent —
+              all four liked cards in the file changed together. Amber now
+              means featured/premium only, and the heart is not that. */}
           <CountAction
             label={post.likedByMe ? "Unlike" : "Like"}
             count={post.likeCount}
             active={post.likedByMe}
-            activeClass="text-featured"
+            activeClass="text-like"
             onClick={() => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }))}
           >
             <IconMsLike className="h-[18px] w-[18px]" filled={post.likedByMe} />

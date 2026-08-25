@@ -41,8 +41,14 @@ export function VerifiedBadge({
  * can sit side by side. When `orgBadge` is null nothing renders — there is no
  * fallback to invent one from role or verification.
  *
- * Chip geometry is the design's: a 21px-radius capsule at 4% white with a 19%
- * hairline, wrapping the brand glyph at 7px tall.
+ * Chip geometry is the design's: a 21px-radius capsule at 4% white, wrapping
+ * the brand glyph at 7px tall.
+ *
+ * The border is where the two badges now part company. The 2026-08-25 design
+ * revision gave the MARKET chip a solid #008CFF 1px border; ARK was checked
+ * separately against the file and kept its 19% white hairline, so this is a
+ * per-badge value and not a shared token. The fill stays 4% white on both —
+ * the blue is the ring, not a filled background.
  */
 export function OrgBadgeChip({
   orgBadge,
@@ -57,7 +63,8 @@ export function OrgBadgeChip({
     <span
       title={orgBadge === "market" ? "Market" : "Ark"}
       className={cn(
-        "inline-flex shrink-0 items-center rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-1 py-[2.5px]",
+        "inline-flex shrink-0 items-center rounded-[21px] border bg-white/[0.04] px-1 py-[2.5px]",
+        orgBadge === "market" ? "border-[#008CFF]" : "border-white/[0.19]",
         className
       )}
     >

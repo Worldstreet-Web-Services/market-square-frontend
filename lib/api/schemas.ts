@@ -48,7 +48,14 @@ const RawProfileSchema = z.object({
   isAdmin: z.boolean().optional().default(false),
   followerCount: z.number().optional().default(0),
   followingCount: z.number().optional().default(0),
-  isFollowing: z.boolean().optional().default(false),
+  // Deliberately NOT defaulted. `undefined` means "this payload does not
+  // carry the follow edge" — which is different from "you do not follow
+  // them", and today `GET /spotlight` omits it entirely. Defaulting to false
+  // erased that distinction and made every spotlight refetch stamp Follow
+  // back over a follow the viewer had just made. Read it through
+  // `useIsFollowing` (features/profile/lib/follow-state.ts), never raw, so an
+  // absent field falls back to the session's own intent instead of a lie.
+  isFollowing: z.boolean().optional(),
   isBlocked: z.boolean().optional().default(false),
 });
 

@@ -27,6 +27,11 @@ import {
   reportTarget,
 } from "@/features/feed/lib/api";
 import type { FeedPage, Lane, Mention, Post } from "@/features/feed/lib/types";
+import {
+  invalidatePostLists,
+  patchPostEverywhere,
+  reconcilePost,
+} from "@/features/feed/lib/cache";
 
 export function useFeed(lane: Lane) {
   return useInfiniteQuery({
@@ -66,33 +71,60 @@ export function useCreatePost() {
       mentions?: Mention[];
     }) => createPost(input),
     onSuccess: (post) => {
-      // Optimistic prepend into every cached lane, then refetch for truth.
-      queryClient.setQueriesData<InfiniteData<FeedPage>>(
-        { queryKey: ["ms", "feed"] },
-        (data) => {
-          if (!data || post.kind !== "update") return data;
-          const first = data.pages[0];
-          if (!first) return data;
-          const item = {
-            id: `local_${post.id}`,
-            type: "post" as const,
-            occurredAt: post.createdAt,
-            repostedBy: null,
-            deepLink: post.deepLink,
-            post,
-            stream: null,
-            activity: null,
-            platformEvent: null,
-          };
-          return {
-            ...data,
-            pages: [{ ...first, items: [item, ...first.items] }, ...data.pages.slice(1)],
-          };
-        }
-      );
-      queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
-      if (post.kind === "story") queryClient.invalidateQueries({ queryKey: ["ms", "stories"] });
+      // Two halves, and both are needed. The prepend puts the post on screen
+      // instantly; the invalidation below reconciles it with the server, which
+      // may reshape it (hydrated author, resolved deep link, moderation).
+      // Relying on either one alone is what left readers reaching for reload.
+      if (post.kind === "update") {
+        queryClient.setQueriesData<InfiniteData<FeedPage>>(
+          { queryKey: ["ms", "feed"] },
+          (data) => {
+            if (!data) return data;
+            const first = data.pages[0];
+            if (!first) return data;
+            // Already reconciled by a refetch that beat us here.
+            if (first.items.some((item) => item.post?.id === post.id)) return data;
+            const item = {
+              id: `local_${post.id}`,
+              type: "post" as const,
+              occurredAt: post.createdAt,
+              repostedBy: null,
+              deepLink: post.deepLink,
+              post,
+              stream: null,
+              activity: null,
+              platformEvent: null,
+            };
+            return {
+              ...data,
+              pages: [{ ...first, items: [item, ...first.items] }, ...data.pages.slice(1)],
+            };
+          }
+        );
+        // The author's own Posts tab renders from its own cache and used to
+        // keep the pre-post list until it was remounted.
+        queryClient.setQueriesData<{ items: Post[]; nextCursor?: string | null }>(
+          { queryKey: ["ms", "profile-posts"] },
+          (data) =>
+            data && !data.items.some((item) => item.id === post.id)
+              ? { ...data, items: [post, ...data.items] }
+              : data
+        );
+      }
+      // Freshly published, so it can be read back on its permalink at once.
+      queryClient.setQueryData<Post>(["ms", "post", post.id], post);
       toast.success(post.kind === "story" ? "Story posted" : "Posted to the square");
+    },
+    // onSettled, not onSuccess: a request that errored may still have landed
+    // server-side, so the lists reconcile either way.
+    onSettled: (post, _error, input) => {
+      invalidatePostLists(queryClient);
+      if (input.kind === "story" || post?.kind === "story") {
+        void queryClient.invalidateQueries({ queryKey: ["ms", "stories"] });
+      }
+      // A quote is a new post pointing at an existing one; refresh the
+      // original so any server-side counter it keeps comes back current.
+      if (input.quotedPostId) reconcilePost(queryClient, input.quotedPostId);
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't post right now.")),
   });
@@ -100,15 +132,14 @@ export function useCreatePost() {
 
 export function useRepostPost() {
   const queryClient = useQueryClient();
-  const patchCaches = (postId: string, reposted: boolean) => {
-    const patch = (post: Post): Post => post.id === postId
-      ? { ...post, repostedByMe: reposted, repostCount: Math.max(0, post.repostCount + (reposted ? 1 : -1)) }
-      : post;
-    queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ["ms", "feed"] }, (data) => data ? ({
-      ...data,
-      pages: data.pages.map((page) => ({ ...page, items: page.items.map((item) => item.post ? { ...item, post: patch(item.post) } : item) })),
-    }) : data);
-  };
+  // Every cache the post lives in, not just the timeline: the same card is
+  // rendered on a profile tab, in Arkmarks and on its permalink.
+  const patchCaches = (postId: string, reposted: boolean) =>
+    patchPostEverywhere(queryClient, postId, (post) => ({
+      ...post,
+      repostedByMe: reposted,
+      repostCount: Math.max(0, post.repostCount + (reposted ? 1 : -1)),
+    }));
   return useMutation({
     mutationFn: ({ postId, repost }: { postId: string; repost: boolean }) => repostPost(postId, repost),
     onMutate: ({ postId, repost }) => patchCaches(postId, repost),
@@ -117,9 +148,12 @@ export function useRepostPost() {
       toast.error(errorMessage(error, "Couldn't update the repost."));
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
+      // A repost inserts a NEW attributed row into followers' timelines, so
+      // the lists genuinely have to refetch rather than just go stale.
+      invalidatePostLists(queryClient);
       toast.success(result.reposted ? "Reposted to your followers" : "Repost removed");
     },
+    onSettled: (_result, _error, { postId }) => reconcilePost(queryClient, postId),
   });
 }
 
@@ -139,34 +173,24 @@ export function useMentionSearch(query: string, enabled: boolean) {
   });
 }
 
-// Optimistic like: flip counts in every cached feed page immediately, roll
-// back on failure.
+/**
+ * Optimistic like.
+ *
+ * The flip lands in every cache the post appears in — timeline, Arkmarks, the
+ * author's profile tab, the permalink — so navigating between surfaces after
+ * a tap shows one consistent state instead of whichever version that surface
+ * happened to have cached. `reconcilePost` then lines the count back up with
+ * the server without refetching the world on every tap.
+ */
 export function useLikePost() {
   const queryClient = useQueryClient();
 
-  const applyLike = (postId: string, liked: boolean) => {
-    const patch = (post: Post): Post =>
-      post.id === postId
-        ? { ...post, likedByMe: liked, likeCount: Math.max(0, post.likeCount + (liked ? 1 : -1)) }
-        : post;
-    queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ["ms", "feed"] }, (data) =>
-      data
-        ? {
-            ...data,
-            pages: data.pages.map((page) => ({
-              ...page,
-              items: page.items.map((item) =>
-                item.post ? { ...item, post: patch(item.post) } : item
-              ),
-            })),
-          }
-        : data
-    );
-    queryClient.setQueriesData<{ items: Post[]; nextCursor?: string | null }>(
-      { queryKey: ["ms", "profile-posts"] },
-      (data) => (data ? { ...data, items: data.items.map(patch) } : data)
-    );
-  };
+  const applyLike = (postId: string, liked: boolean) =>
+    patchPostEverywhere(queryClient, postId, (post) => ({
+      ...post,
+      likedByMe: liked,
+      likeCount: Math.max(0, post.likeCount + (liked ? 1 : -1)),
+    }));
 
   return useMutation({
     mutationFn: ({ postId, like }: { postId: string; like: boolean }) => likePost(postId, like),
@@ -177,6 +201,7 @@ export function useLikePost() {
       applyLike(postId, !like);
       toast.error(errorMessage(error, "Couldn't update your like."));
     },
+    onSettled: (_result, _error, { postId }) => reconcilePost(queryClient, postId),
   });
 }
 
@@ -193,23 +218,11 @@ export function useBookmarkPost() {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
 
-  const applyBookmark = (postId: string, bookmarked: boolean) => {
-    const patch = (post: Post): Post =>
-      post.id === postId ? { ...post, bookmarkedByMe: bookmarked } : post;
-    queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ["ms", "feed"] }, (data) =>
-      data
-        ? {
-            ...data,
-            pages: data.pages.map((page) => ({
-              ...page,
-              items: page.items.map((item) =>
-                item.post ? { ...item, post: patch(item.post) } : item
-              ),
-            })),
-          }
-        : data
-    );
-  };
+  const applyBookmark = (postId: string, bookmarked: boolean) =>
+    patchPostEverywhere(queryClient, postId, (post) => ({
+      ...post,
+      bookmarkedByMe: bookmarked,
+    }));
 
   const mutation = useMutation({
     mutationFn: ({ postId, bookmark }: { postId: string; bookmark: boolean }) =>
@@ -224,9 +237,11 @@ export function useBookmarkPost() {
       toast.error(errorMessage(error, "Couldn't update your Arkmark."));
     },
     onSuccess: (_result, { bookmark }) => {
+      // The Arkmarks list gains or loses a row, so it refetches for real.
       queryClient.invalidateQueries({ queryKey: ["ms", "bookmarks"] });
       toast.success(bookmark ? "Saved to Arkmarks" : "Removed from Arkmarks");
     },
+    onSettled: (_result, _error, { postId }) => reconcilePost(queryClient, postId),
   });
 
   return { ...mutation, unavailable };
@@ -256,11 +271,24 @@ export function useAddComment(postId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (text: string) => addComment(postId, text),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ms", "comments", postId] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
+    // The reply is visible at once and the tally moves with it, on every
+    // surface that draws this post rather than only the one being looked at.
+    onMutate: () =>
+      patchPostEverywhere(queryClient, postId, (post) => ({
+        ...post,
+        commentCount: post.commentCount + 1,
+      })),
+    onError: (error) => {
+      patchPostEverywhere(queryClient, postId, (post) => ({
+        ...post,
+        commentCount: Math.max(0, post.commentCount - 1),
+      }));
+      toast.error(errorMessage(error, "Couldn't add your comment."));
     },
-    onError: (error) => toast.error(errorMessage(error, "Couldn't add your comment.")),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "comments", postId] });
+      reconcilePost(queryClient, postId);
+    },
   });
 }
 

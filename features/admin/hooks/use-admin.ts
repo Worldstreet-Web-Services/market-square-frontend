@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
+import { invalidateContentSurfaces, invalidateIdentitySurfaces } from "@/lib/api/invalidate";
 import { useMe } from "@/hooks/use-me";
 import type { OrgBadge } from "@/lib/api/schemas";
 import {
@@ -144,11 +145,16 @@ export function useResolveRoleApplication() {
     },
     onSuccess: (_result, { approve }) => {
       toast.success(approve ? "Application approved" : "Application rejected");
-      client.invalidateQueries({ queryKey: ["ms", "admin"] });
     },
-    onError: (error) => {
-      toast.error(errorMessage(error, "Couldn't resolve that application."));
-      client.invalidateQueries({ queryKey: key });
+    onError: (error) => toast.error(errorMessage(error, "Couldn't resolve that application.")),
+    // onSettled, not onSuccess: a failure must also put the optimistically
+    // removed row back and re-sync the surfaces, or the console shows the
+    // operator a queue that no longer matches the service.
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "admin"] });
+      // Approving grants the creator role, and a role chip is copied into
+      // every author row — not read from the profile query.
+      invalidateIdentitySurfaces(client);
     },
   });
 }
@@ -164,11 +170,12 @@ export function useResolveVerificationRequest() {
     },
     onSuccess: (_result, { approve }) => {
       toast.success(approve ? "Verification approved" : "Verification rejected");
-      client.invalidateQueries({ queryKey: ["ms", "admin"] });
     },
-    onError: (error) => {
-      toast.error(errorMessage(error, "Couldn't resolve that request."));
-      client.invalidateQueries({ queryKey: key });
+    onError: (error) => toast.error(errorMessage(error, "Couldn't resolve that request.")),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "admin"] });
+      // The silver check rides on every author row.
+      invalidateIdentitySurfaces(client);
     },
   });
 }
@@ -178,12 +185,13 @@ export function useSetProfileVerification() {
   return useMutation({
     mutationFn: ({ profileId, verified }: { profileId: string; verified: boolean }) =>
       setProfileVerification(profileId, verified),
-    onSuccess: (_profile, { verified }) => {
-      toast.success(verified ? "Verified" : "Verification removed");
-      client.invalidateQueries({ queryKey: ["ms", "admin"] });
-      client.invalidateQueries({ queryKey: ["ms", "profile"] });
-    },
+    onSuccess: (_profile, { verified }) =>
+      toast.success(verified ? "Verified" : "Verification removed"),
     onError: (error) => toast.error(errorMessage(error, "Couldn't update verification.")),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "admin"] });
+      invalidateIdentitySurfaces(client);
+    },
   });
 }
 
@@ -192,12 +200,13 @@ export function useSetProfileOrgBadge() {
   return useMutation({
     mutationFn: ({ profileId, badge }: { profileId: string; badge: OrgBadge }) =>
       setProfileOrgBadge(profileId, badge),
-    onSuccess: (_profile, { badge }) => {
-      toast.success(badge ? `${badge === "market" ? "MARKET" : "ARK"} badge assigned` : "Badge cleared");
-      client.invalidateQueries({ queryKey: ["ms", "admin"] });
-      client.invalidateQueries({ queryKey: ["ms", "profile"] });
-    },
+    onSuccess: (_profile, { badge }) =>
+      toast.success(badge ? `${badge === "market" ? "MARKET" : "ARK"} badge assigned` : "Badge cleared"),
     onError: (error) => toast.error(errorMessage(error, "Couldn't update the badge.")),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "admin"] });
+      invalidateIdentitySurfaces(client);
+    },
   });
 }
 
@@ -213,13 +222,14 @@ export function useResolveReport() {
         (data) => dropRow(data, id)
       );
     },
-    onSuccess: (_result, { action }) => {
-      toast.success(action === "remove" ? "Content removed" : "Report dismissed");
+    onSuccess: (_result, { action }) =>
+      toast.success(action === "remove" ? "Content removed" : "Report dismissed"),
+    onError: (error) => toast.error(errorMessage(error, "Couldn't resolve that report.")),
+    onSettled: (_result, _error, { action }) => {
       client.invalidateQueries({ queryKey: ["ms", "admin"] });
-    },
-    onError: (error) => {
-      toast.error(errorMessage(error, "Couldn't resolve that report."));
-      client.invalidateQueries({ queryKey: key });
+      // Dismissing changes nothing a reader can see; removing deletes a post
+      // that the timeline and anyone's Arkmarks are still holding a copy of.
+      if (action === "remove") invalidateContentSurfaces(client);
     },
   });
 }

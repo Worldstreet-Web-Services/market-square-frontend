@@ -23,16 +23,25 @@
   --color-featured-deep: #cda243;
   --color-featured-hi: #ffb900;
   --color-featured-chip: #ffd230;
+  /* Create Post's violet ramp. The 2026-08-25 design revision repainted this
+     one control from the amber featured ramp to a violet gradient with a
+     white label; everything else amber stayed amber. It is the CTA hue and
+     nothing else — it is deliberately NOT --color-featured, so recolouring
+     the CTA can never drag the liked heart or Citizen Spotlight with it. */
+  --color-create: #9f65fd;
+  --color-create-deep: #5b05e6;
   /* The sidebar's active-item dot. */
   --color-nav-dot: #ffba00;
   /* Gain and loss stay semantic (functional, not brand color). */
   --color-up: #7ce7b0;
   --color-down: #f6a5a5;
   /* The one deliberate color exception to silver-only: the liked heart.
-     Semantic state, universal affordance — not chrome. */
-  /* Liked state — the design specifies amber, matching the featured accent.
-     One token so the heart reads identically on cards, profile and snap feed. */
-  --color-like: #e8b74a;
+     Semantic state, universal affordance — not chrome.
+     The 2026-08-25 design revision moved the liked heart back OFF the amber
+     featured accent to its own red. One token, so the heart reads identically
+     on cards, profile and the snap feed — and so it can never drift into
+     --color-featured again. */
+  --color-like: #e84a4a;
   /* Dark text on light (silver/white) buttons. */
   --color-ink: #0a0a0a;
   --color-panel: #0a0a0a;
@@ -505,10 +514,13 @@ body {
   border: 0.5px solid var(--color-featured);
 }
 
-/* The amber call to action: Create Post and every twin of it. */
-@utility ws-btn-featured {
-  background: linear-gradient(155deg, var(--color-featured) 0%, var(--color-featured-deep) 100%);
-  color: #0f0f0f;
+/* The violet call to action: Create Post and every twin of it. The design
+   carried this as amber-on-black until the 2026-08-25 revision repainted it
+   violet with a white label. It is its own ramp, not the featured one — see
+   --color-create. */
+@utility ws-btn-create {
+  background: linear-gradient(155deg, var(--color-create) 0%, var(--color-create-deep) 100%);
+  color: #ffffff;
 }
 
 /* The silver call to action: the active section tab, Follow, the floating
