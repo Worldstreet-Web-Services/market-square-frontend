@@ -7,6 +7,7 @@ import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 // lib/media-errors.test.ts owns the name → class table.
 import { captureErrorMessage as errorMessage, classifyCaptureError } from "@/lib/media-errors";
 import type { Ingest } from "@/features/streams/lib/types";
+import { registerRoom, unregisterRoom } from "@/features/streams/lib/live-room";
 
 // Speech capture profile for a talking host. These are stated explicitly
 // rather than left to the browser for three reasons:
@@ -195,6 +196,19 @@ export function usePublisher({
         });
         room = instance;
         roomRef.current = instance;
+        // The host cockpit is the only other thing that opens a Room. Claiming
+        // the slot means a page that somehow renders both the cockpit and the
+        // viewer for one stream fails loudly here instead of silently putting
+        // two participants on one identity — the eviction loop this registry
+        // exists to prevent.
+        try {
+          registerRoom(streamId, instance);
+        } catch (duplicate) {
+          settle("failed", errorMessage(duplicate));
+          room = null;
+          roomRef.current = null;
+          return;
+        }
 
         const stopMeter = () => {
           meter?.stop();
@@ -312,6 +326,7 @@ export function usePublisher({
       meter?.stop();
       setMicLevel(0);
       tracks.forEach((track) => track.stop());
+      if (room) unregisterRoom(streamId, room);
       void room?.disconnect();
       roomRef.current = null;
       setBroadcastLive(null);

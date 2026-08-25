@@ -7,7 +7,6 @@ import { cn } from "@/lib/cn";
 import { formatCount, formatDateTime, relativeTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
-import { useAuth } from "@/hooks/use-auth";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useQueryParam } from "@/hooks/use-query-param";
 import { Avatar } from "@/components/ui/avatar";
@@ -15,7 +14,7 @@ import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { Sheet } from "@/components/ui/sheet";
-import { IconComment, IconHeart, IconPlay, IconPlus } from "@/components/ui/icons";
+import { IconComment, IconHeart, IconPlay } from "@/components/ui/icons";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useFeed, useLikePost } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
@@ -222,7 +221,6 @@ function SlideFor({ item }: { item: FeedItem }) {
 // Mobile Home: one item per viewport, mandatory snap, TikTok-grammar rails.
 export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
   const [lane, setLane] = useState<Lane>("for-you");
-  const { authenticated } = useAuth();
   const [composerOpen, setComposerOpen] = useState(false);
   // "Your Story" and the sidebar Post action both navigate to /?compose=…;
   // on mobile this component IS home, so it has to honour the parameter or
@@ -306,16 +304,9 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
         )}
       </div>
 
-      {/* compose */}
-      {authenticated && (
-        <button
-          onClick={() => setComposerOpen(true)}
-          aria-label="New post"
-          className="ws-press ws-glass fixed right-4 top-24 z-30 flex h-11 w-11 items-center justify-center rounded-full text-heading"
-        >
-          <IconPlus className="h-5 w-5" />
-        </button>
-      )}
+      {/* No compose button here: AppShell owns the single fixed one. This
+          screen used to draw its own at top-right, which is why the control
+          appeared in two places at once on mobile home. */}
       <Sheet
         open={composeOpen}
         onClose={closeComposer}

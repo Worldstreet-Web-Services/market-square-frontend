@@ -5,19 +5,34 @@ import type { RemoteTrack, Room } from "livekit-client";
 import { Spinner } from "@/components/ui/button";
 import { IconVolume } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import { registerRoom, unregisterRoom } from "@/features/streams/lib/live-room";
 
-type ViewerState = "connecting" | "live" | "reconnecting" | "waiting" | "failed";
+type ViewerState =
+  | "connecting"
+  | "live"
+  | "reconnecting"
+  | "waiting"
+  | "failed"
+  /**
+   * The server evicted us because another connection joined with our identity.
+   * Reconnecting would just evict that one back, so this state is terminal by
+   * design and says what actually happened.
+   */
+  | "duplicate";
 
 // Subscriber-side LiveKit playback: connects with the playback token and
 // attaches whatever the host publishes. The SDK owns reconnection; this
 // component only narrates it. Imported lazily so HLS-only sessions never load
 // the SDK.
 export function LiveKitPlayer({
+  streamId,
   url,
   token,
   onPlayingChange,
   fill = false,
 }: {
+  /** Claims this stream's single Room slot — see lib/live-room.ts. */
+  streamId: string;
   url: string;
   token: string;
   onPlayingChange?: (playing: boolean) => void;
@@ -41,11 +56,21 @@ export function LiveKitPlayer({
 
     const setPlaying = (playing: boolean) => playingRef.current?.(playing);
 
-    void import("livekit-client").then(async ({ Room, RoomEvent, Track }) => {
+    void import("livekit-client").then(async ({ Room, RoomEvent, Track, DisconnectReason }) => {
       if (cancelled) return;
       const instance = new Room({ adaptiveStream: true });
       room = instance;
       roomRef.current = instance;
+      // Claim the slot BEFORE connecting: if something else already holds it,
+      // we must not put a second participant on this identity.
+      try {
+        registerRoom(streamId, instance);
+      } catch {
+        setState("duplicate");
+        room = null;
+        roomRef.current = null;
+        return;
+      }
 
       const attach = (track: RemoteTrack) => {
         // `track.attach()` with no argument mints a *new* element every call
@@ -106,9 +131,13 @@ export function LiveKitPlayer({
           setPlaying(false);
         })
         .on(RoomEvent.Reconnected, refreshState)
-        .on(RoomEvent.Disconnected, () => {
-          setState("failed");
+        // DisconnectReason.DUPLICATE_IDENTITY means someone connected as us.
+        // The SDK does not retry this, and neither should we — an automatic
+        // reconnect here is precisely the loop that killed the mobile
+        // renderer. Name it instead.
+        .on(RoomEvent.Disconnected, (reason) => {
           setPlaying(false);
+          setState(reason === DisconnectReason.DUPLICATE_IDENTITY ? "duplicate" : "failed");
         })
         .on(RoomEvent.ParticipantDisconnected, refreshState);
 
@@ -132,9 +161,10 @@ export function LiveKitPlayer({
       // remount cannot inherit an orphaned element still holding a decoder.
       container?.querySelectorAll("video, audio").forEach((element) => element.remove());
       roomRef.current = null;
+      if (room) unregisterRoom(streamId, room);
       void room?.disconnect();
     };
-  }, [url, token]);
+  }, [streamId, url, token]);
 
   // Must run inside a real click handler — that is what lifts the autoplay
   // block for the rest of the session.
@@ -186,6 +216,15 @@ export function LiveKitPlayer({
             <>
               <p className="text-sm text-down">Couldn&apos;t connect to the stream.</p>
               <p className="text-xs text-grey-500">Refresh to try again.</p>
+            </>
+          )}
+          {state === "duplicate" && (
+            <>
+              <p className="text-sm text-down">This stream is open somewhere else.</p>
+              <p className="max-w-xs text-xs text-grey-500">
+                You can only watch from one tab or device at a time. Close the other
+                one and refresh.
+              </p>
             </>
           )}
         </div>

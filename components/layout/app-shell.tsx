@@ -15,6 +15,7 @@ import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark, Wordmark } from "@/components/ui/wordmark";
 import { RightRail } from "@/components/layout/right-rail";
+import { CreateFab } from "@/components/layout/create-fab";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { Sheet } from "@/components/ui/sheet";
 import {
@@ -628,26 +629,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           >
             {children}
-
-            {/* The design's floating compose button (53×53, the silver ramp,
-                a + glyph) floating at the column's outer edge — in the file it
-                sits in the gutter between the column and the right rail. It
-                was owned by the feed page, so it existed on home only; it
-                belongs to the shell so every surface carries it.
-                `main` is `min-h-dvh`, so `sticky bottom-6` floats against the
-                viewport instead of stranding itself at the end of a short
-                page. */}
-            {canCompose && (
-              <div className="pointer-events-none sticky bottom-6 z-30 ml-auto hidden w-fit md:block">
-                <button
-                  onClick={() => setComposeOpen(true)}
-                  aria-label="Create post"
-                  className="ws-btn-silver ws-press pointer-events-auto flex h-[53px] w-[53px] items-center justify-center rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-opacity hover:opacity-90"
-                >
-                  <IconPlus className="h-7 w-7" />
-                </button>
-              </div>
-            )}
           </main>
 
           {!wide && <RightRail />}
@@ -660,16 +641,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           were on. The offset clears the bottom tab bar plus the home
           indicator. The design's mobile frames do not draw a compose button at
           all, so this placement is ours, not the file's. */}
-      {canCompose && (
-        <button
-          onClick={() => setComposeOpen(true)}
-          aria-label="Create post"
-          className="ws-press fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-ink shadow-[0_4px_24px_rgba(212,212,216,0.3)] md:hidden"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
-        >
-          <IconPlus className="h-6 w-6" />
-        </button>
-      )}
+
+      {/* The one create button. Fixed, mounted here rather than in any route,
+          so it holds the same viewport corner on every surface. */}
+      {canCompose && <CreateFab onClick={() => setComposeOpen(true)} />}
 
       <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
 
