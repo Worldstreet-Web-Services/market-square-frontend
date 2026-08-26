@@ -67,9 +67,9 @@ interface NavItem {
 /**
  * Where the rest of WorldStreet lives.
  *
- * PLACEHOLDER: this is a stand-in origin so the door is visible while the real
- * one is confirmed — point `NEXT_PUBLIC_WORLDSTREET_URL` at the deployed app
- * and the entry follows without a code change.
+ * The confirmed public origin. `NEXT_PUBLIC_WORLDSTREET_URL` still overrides
+ * it, so a staging build can point the entry somewhere else without a code
+ * change.
  *
  * Deliberately NOT `NEXT_PUBLIC_ARK_APP_URL`: that variable is the base for
  * every deep-link CTA (listings, markets, casino games), and `lib/deeplink.ts`
@@ -77,7 +77,7 @@ interface NavItem {
  * host that answers nothing. Setting it to a placeholder to get one nav link
  * would quietly turn all of them into placeholder links too.
  */
-const WORLDSTREET_URL = process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreet.com";
+const WORLDSTREET_URL = process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreetgold.com";
 
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
