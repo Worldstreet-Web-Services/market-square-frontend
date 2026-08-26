@@ -21,6 +21,7 @@ import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { Sheet } from "@/components/ui/sheet";
 import {
   IconBell,
+  IconBookmark,
   IconCalendar,
   IconCamera,
   IconDots,
@@ -92,6 +93,9 @@ const NAV: NavItem[] = [
   { href: "/notifications", label: "Notifications", icon: IconBell, authed: true },
   { href: "/live", label: "Live", icon: IconLive },
   { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
+  // Arkmarks had a route and a save button on every post, and no way in: the
+  // only path to something you saved was typing the URL.
+  { href: "/arkmarks", label: "Arkmarks", icon: IconBookmark, authed: true, secondary: true },
   // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },

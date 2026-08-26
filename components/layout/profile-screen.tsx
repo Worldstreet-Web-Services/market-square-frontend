@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProfilePage } from "@/features/profile";
+import { PostCard } from "@/features/feed";
 import { useOpenConversation } from "@/features/messages";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,10 @@ export function ProfileScreen({ username }: { username: string }) {
       username={username}
       messageSlot={(profile) => <MessageButton profile={profile} />}
       composeSlot={<ComposeCta />}
+      // The same card the timeline and Explore render. The profile used to
+      // draw its own stripped row, whose heart was a <span> with no handler,
+      // so a like from a profile silently did nothing.
+      postSlot={(post) => <PostCard post={post} />}
     />
   );
 }

@@ -1,21 +1,17 @@
 import { z } from "zod";
-import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
+import { DeepLinkSchema, PostSchema, ProfileSchema } from "@/lib/api/schemas";
 
 // The profile page's own compact view of the backend payloads. Kept local so
 // this slice never reaches into feed or streams.
 
 // GET /profiles/:username/posts returns FeedItems whose `post` embeds a
 // hydrated author summary.
-const ProfilePostSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  createdAt: z.string(),
-  likeCount: z.number(),
-  commentCount: z.number(),
-  likedByMe: z.boolean().optional().default(false),
-  deepLink: DeepLinkSchema.nullable().optional().default(null),
-  author: ProfileSchema.nullable().optional().default(null),
-});
+//
+// It parses the SHARED post shape, not a local subset. The compact copy that
+// used to live here dropped the media, the arkmark, the repost and the quote,
+// so a post read differently on a profile than anywhere else and could not be
+// rendered by the real card. The backend returns the whole post either way.
+const ProfilePostSchema = PostSchema;
 
 const ProfileFeedItemSchema = z.object({
   id: z.string(),
