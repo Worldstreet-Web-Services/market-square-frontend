@@ -34,6 +34,10 @@ import {
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { SpeakerRequestQueue } from "@/features/streams/components/guest-speaker-control";
 import {
+  GuestRequestsButton,
+  GuestRequestsSheet,
+} from "@/features/streams/components/mobile-guest-requests";
+import {
   STREAM_CATEGORIES,
   type Ingest,
   type Stream,
@@ -311,6 +315,7 @@ export function LiveCockpit({
 
   const end = useEndStream();
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [guestsOpen, setGuestsOpen] = useState(false);
   const [rightTab, setRightTab] = useState<"chat" | "activity">("chat");
   const [mobileChat, setMobileChat] = useState(true);
   const removeMessage = useDeleteChatMessage(stream.id);
@@ -472,6 +477,12 @@ export function LiveCockpit({
               <button onClick={share} aria-label="Share" className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading">
                 <IconLink className="h-5 w-5" />
               </button>
+              {/* The host's only path to accepting a guest on a phone. It sits
+                  in the same rail as mic/camera/chat because that is where the
+                  host's thumb already is while broadcasting, and it opens a
+                  sheet rather than navigating — leaving the cockpit would tear
+                  down the publisher and end the stream. */}
+              <GuestRequestsButton stream={stream} onOpen={() => setGuestsOpen(true)} />
               <button
                 onClick={() => setMobileChat((v) => !v)}
                 aria-pressed={mobileChat}
@@ -542,6 +553,15 @@ export function LiveCockpit({
           </div>
         </div>
       </div>
+
+      {/* Guests: rendered at the ROOT, not inside the mobile rail, so it
+          survives a viewport change mid-decision. Opening it never navigates —
+          leaving /studio/:id would unmount usePublisher and drop the stream. */}
+      <GuestRequestsSheet
+        stream={stream}
+        open={guestsOpen}
+        onClose={() => setGuestsOpen(false)}
+      />
 
       {/* End confirm */}
       <Sheet open={confirmEnd} onClose={() => setConfirmEnd(false)} title="End stream?">
