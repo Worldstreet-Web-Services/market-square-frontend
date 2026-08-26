@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { MediaFrame } from "@/components/ui/media-frame";
 
 /**
  * A clip in the timeline.
@@ -59,7 +60,11 @@ export function InlineVideo({
   }, [reduced]);
 
   return (
-    <div className={cn("relative overflow-hidden", className)}>
+    // Contained, never cropped: a landscape clip in a fixed-height card lost
+    // its sides to `object-cover`. MediaFrame fills the letterbox with the
+    // clip's own poster rather than a black bar — and when the ratios already
+    // match, the ambient layer is never seen.
+    <MediaFrame backdrop={poster} className={cn("relative", className)}>
       <video
         ref={ref}
         src={src}
@@ -69,7 +74,7 @@ export function InlineVideo({
         playsInline
         preload="metadata"
         controls={reduced}
-        className="h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-contain"
       />
       {!reduced && (
         <button
@@ -83,6 +88,6 @@ export function InlineVideo({
           </span>
         </button>
       )}
-    </div>
+    </MediaFrame>
   );
 }
