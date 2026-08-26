@@ -24,6 +24,7 @@ import {
   IconCalendar,
   IconCamera,
   IconDots,
+  IconExternal,
   IconHome,
   IconLive,
   IconMail,
@@ -53,7 +54,30 @@ interface NavItem {
    * must never break a deep link into the surface it points at.
    */
   flag?: keyof typeof MARKET_FLAGS;
+  /**
+   * An absolute URL to another product rather than a route in this app.
+   *
+   * External entries never take the active state (no pathname can match an
+   * absolute URL) and never appear in the mobile bar, whose four slots belong
+   * to the surfaces people move between constantly.
+   */
+  external?: boolean;
 }
+
+/**
+ * Where the rest of WorldStreet lives.
+ *
+ * PLACEHOLDER: this is a stand-in origin so the door is visible while the real
+ * one is confirmed — point `NEXT_PUBLIC_WORLDSTREET_URL` at the deployed app
+ * and the entry follows without a code change.
+ *
+ * Deliberately NOT `NEXT_PUBLIC_ARK_APP_URL`: that variable is the base for
+ * every deep-link CTA (listings, markets, casino games), and `lib/deeplink.ts`
+ * keeps those CTAs INERT while it is unset precisely so nobody is sent to a
+ * host that answers nothing. Setting it to a placeholder to get one nav link
+ * would quietly turn all of them into placeholder links too.
+ */
+const WORLDSTREET_URL = process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreet.com";
 
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
@@ -75,6 +99,9 @@ const NAV: NavItem[] = [
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
   { href: "/admin", label: "Admin", icon: IconShield, authed: true, admin: true, secondary: true },
   { href: "/operations", label: "Operations", icon: IconShield, authed: true, operator: true, secondary: true },
+  // The way back to the rest of the platform. Market Square is one surface of
+  // WorldStreet, and without this the two products have no door between them.
+  { href: WORLDSTREET_URL, label: "WorldStreet", icon: IconExternal, external: true, secondary: true },
 ];
 
 // Surfaces that need the full width: grids and dashboards drown inside a
@@ -118,6 +145,8 @@ function isWide(pathname: string): boolean {
 // in lib/compose-surfaces.ts, where they are pinned by tests.
 
 function isActive(pathname: string, href: string): boolean {
+  // An absolute URL is another product, never the current route.
+  if (/^https?:\/\//i.test(href)) return false;
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -162,7 +191,14 @@ function NavLink({
   return (
     <Link
       href={item.href}
-      aria-label={badge > 0 ? `${item.label}, ${badge} unread` : item.label}
+      {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      aria-label={
+        item.external
+          ? `${item.label} (opens in a new tab)`
+          : badge > 0
+            ? `${item.label}, ${badge} unread`
+            : item.label
+      }
       aria-current={active ? "page" : undefined}
       // Geometry is the design's and is identical in both states — only the
       // tint, border and glyph colour change, so the row never shifts when it
@@ -242,6 +278,7 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
               <Link
                 key={item.href}
                 href={item.href}
+                {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                 onClick={() => setOpen(false)}
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-white/10",
@@ -517,6 +554,7 @@ function MobileMenu({
             <Link
               key={item.href}
               href={item.href}
+              {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               onClick={onClose}
               aria-current={isActive(pathname, item.href) ? "page" : undefined}
               className={cn(
