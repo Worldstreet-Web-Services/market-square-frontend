@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/icons";
 import { usePublisher } from "@/features/streams/hooks/use-publisher";
 import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
-import { LiveStage } from "@/features/streams/components/live-stage";
+import { LiveStage, type TileFitReport } from "@/features/streams/components/live-stage";
 import {
   useBanFromChat,
   useDeleteChatMessage,
@@ -233,6 +233,30 @@ function LiveMicLevel({ level, muted }: { level: number; muted: boolean }) {
   );
 }
 
+/**
+ * How our own video is reaching viewers, in one quiet line.
+ *
+ * Only says something when there IS something to say: a letterboxed source, or
+ * a crop deep enough to matter. Silence means the framing viewers see is the
+ * framing the host is looking at.
+ */
+function describeFraming(reports: readonly TileFitReport[]): string | null {
+  const screen = reports.find((report) => report.isScreenShare);
+  if (screen && screen.fit === "contain") {
+    return "Your screen is being shown letterboxed — viewers see all of it.";
+  }
+  const camera = reports.find((report) => !report.isScreenShare);
+  if (camera?.fit === "contain") {
+    return "Your camera is wider than the stage — viewers see it letterboxed.";
+  }
+  // `cover` inside the crop budget is deliberate framing, not a problem worth a
+  // line of chrome. Only name a crop once it is visibly eating the frame.
+  if (camera && camera.loss >= 0.1) {
+    return `Viewers see a cropped view — about ${Math.round(camera.loss * 100)}% of your frame is off-screen.`;
+  }
+  return null;
+}
+
 // State 2 — the live cockpit.
 export function LiveCockpit({
   stream,
@@ -278,6 +302,12 @@ export function LiveCockpit({
     resolve.mutate({ requestId: request.id, action: "remove" });
   };
 
+  // What viewers are actually seeing of OUR video. A host framing a shot has no
+  // other way to learn that the stage is letterboxing their screen share, or
+  // that the edges of a wide camera are being cut off for everyone else.
+  const [fits, setFits] = useState<TileFitReport[]>([]);
+  const framingHint = describeFraming(fits);
+
   const end = useEndStream();
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [rightTab, setRightTab] = useState<"chat" | "activity">("chat");
@@ -321,7 +351,14 @@ export function LiveCockpit({
             onRemoveGuest={removeGuest}
             removing={resolve.isPending}
             emptyState={<Spinner className="h-6 w-6 text-grey-500" />}
+            onLocalFit={setFits}
           />
+          {/* Information, not an error: no icon, no colour, no action. */}
+          {framingHint && (
+            <p className="pointer-events-none absolute inset-x-0 top-2 z-10 mx-auto w-fit max-w-[90%] truncate rounded-full bg-black/55 px-3 py-1 text-[11px] text-[#8B8F96]">
+              {framingHint}
+            </p>
+          )}
           {publisher.state === "denied" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/85 px-6 text-center">
               <IconCamera className="h-6 w-6 text-grey-400" />

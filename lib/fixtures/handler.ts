@@ -306,11 +306,14 @@ function postDto(post: FxPost, viewerId: string | null = null) {
     text: post.text,
     mediaUrl: post.mediaUrl,
     // The service types its own media; renderers prefer this over sniffing.
-    mediaKind: post.mediaUrl
-      ? /\.(mp4|webm)(\?|#|$)/i.test(post.mediaUrl)
-        ? "video"
-        : "image"
-      : null,
+    mediaKind:
+      post.mediaKind ??
+      (post.mediaUrl
+        ? /\.(mp4|webm)(\?|#|$)/i.test(post.mediaUrl)
+          ? "video"
+          : "image"
+        : null),
+    topics: post.topics ?? [],
     thumbnailUrl: null,
     deepLink: post.deepLink,
     storyExpiresAt:
@@ -502,9 +505,18 @@ interface FeedEntry {
   platformEvent?: unknown;
 }
 
-function feedEntries(lane: string, viewerId: string | null): FeedEntry[] {
+/**
+ * `?topics=a,b` narrows a lane to posts carrying any of those keys, matching
+ * the service. An EMPTY list is "no filter" — never "match nothing".
+ */
+function matchesTopics(post: FxPost, topics: string[]): boolean {
+  if (topics.length === 0) return true;
+  return (post.topics ?? []).some((key) => topics.includes(key));
+}
+
+function feedEntries(lane: string, viewerId: string | null, topics: string[] = []): FeedEntry[] {
   const followed = viewerId ? myFollows(viewerId) : new Set<string>();
-  const updates = posts.filter((p) => p.kind === "update");
+  const updates = posts.filter((p) => p.kind === "update" && matchesTopics(p, topics));
 
   const streamEntry = (s: FxStream): FeedEntry => ({
     id: `fi_${s.id}`,
@@ -751,6 +763,10 @@ export function handleFixture(
     const query = (search.get("q") ?? "").trim().toLowerCase();
     const type = search.get("type") ?? "all";
     if (!query) return ok({ items: [], nextCursor: null });
+    const topicKeys = (search.get("topics") ?? "")
+      .split(",")
+      .map((key) => key.trim())
+      .filter(Boolean);
 
     const hit = (...values: Array<string | null | undefined>) =>
       values.some((value) => value?.toLowerCase().includes(query));
@@ -761,25 +777,29 @@ export function handleFixture(
       ...(wants("people")
         ? profiles
             .filter((x) => hit(x.displayName, x.username, x.bio, x.role))
-            .map((x) => ({ kind: "profile", id: x.id, profile: summary(x) }))
+            // The follow edge, and ONLY for a signed-in viewer. Omitted rather
+            // than false when there is nobody to have an opinion: `undefined`
+            // means "this payload does not carry the edge", which is what
+            // `useIsFollowing` needs to avoid stamping "Follow" over a follow
+            // the viewer just made.
+            .map((x) => ({
+              kind: "profile",
+              id: x.id,
+              profile: {
+                ...summary(x),
+                ...(userId ? { isFollowing: myFollows(userId).has(x.id) } : {}),
+              },
+            }))
         : []),
       ...(wants("posts")
         ? posts
             .filter((x) => x.kind === "update" && hit(x.text, profileById(x.authorId)?.displayName))
-            .map((x) => {
-              const author = profileById(x.authorId);
-              return {
-                kind: "post",
-                id: x.id,
-                post: {
-                  id: x.id,
-                  text: x.text,
-                  mediaUrl: x.mediaUrl,
-                  createdAt: x.createdAt,
-                  author: author ? summary(author) : null,
-                },
-              };
-            })
+            // The service returns the WHOLE post here, tallies included — a
+            // video result opens the immersive viewer straight from the search
+            // payload, so a narrowed fixture would leave the slide with no
+            // counts and no media kind.
+            .filter((x) => matchesTopics(x, topicKeys))
+            .map((x) => ({ kind: "post", id: x.id, post: postDto(x, userId) }))
         : []),
       ...(wants("streams")
         ? streams
@@ -824,7 +844,24 @@ export function handleFixture(
       search.get("cursor"),
       Math.min(Number(search.get("limit")) || 30, 30)
     );
-    return ok({ items: page, nextCursor });
+    return ok({
+      items: page,
+      nextCursor,
+      // The service reports what the topic filter did and did NOT apply to.
+      // PEOPLE are never topic-filtered — a person is not filed under a topic —
+      // so they are excluded rather than returned empty, and the UI says so
+      // instead of letting a reader conclude there are no such creators.
+      // Absent entirely when no filter was applied: null is "the question did
+      // not arise", not "nothing was excluded".
+      topicFilter:
+        topicKeys.length > 0
+          ? {
+              topics: topicKeys,
+              appliedTo: ["posts", "streams", "products"],
+              excluded: ["people"],
+            }
+          : null,
+    });
   }
 
   // ---- versioned product analytics ----
@@ -1180,7 +1217,15 @@ export function handleFixture(
   if (p[0] === "feed" && method === "GET") {
     const lane = search.get("lane") ?? "for-you";
     const limit = Math.min(Number.parseInt(search.get("limit") ?? "30", 10) || 30, 50);
-    const { page, nextCursor } = paginate(feedEntries(lane, userId), search.get("cursor"), limit);
+    const topics = (search.get("topics") ?? "")
+      .split(",")
+      .map((key) => key.trim())
+      .filter(Boolean);
+    const { page, nextCursor } = paginate(
+      feedEntries(lane, userId, topics),
+      search.get("cursor"),
+      limit
+    );
     return ok({ items: page, nextCursor });
   }
 

@@ -1,27 +1,24 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { isVideoUrl } from "@/lib/media";
+import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { formatCount, formatDateTime, relativeTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
-import { useGate } from "@/hooks/use-gate";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useQueryParam } from "@/hooks/use-query-param";
-import { Avatar } from "@/components/ui/avatar";
-import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
+import { LiveBadge, Pill } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { Sheet } from "@/components/ui/sheet";
-import { IconComment, IconHeart, IconPlay } from "@/components/ui/icons";
+import { IconPlay } from "@/components/ui/icons";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { useFeed, useLikePost } from "@/features/feed/hooks/use-feed";
+import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRail } from "@/features/feed/components/stories-row";
-import { CommentsSheet } from "@/features/feed/components/comments-sheet";
+import { PostSlide } from "@/features/feed/components/post-slide";
 import { pricePillLabel } from "@/features/feed/components/feed-cards";
-import type { FeedItem, Lane, Post } from "@/features/feed/lib/types";
+import type { FeedItem, Lane } from "@/features/feed/lib/types";
 
 // The mobile frame's lane set and wording — "Live Streams" carries a live
 // count badge, which is a real tally off the stream list, never a placeholder.
@@ -31,125 +28,6 @@ const LANES: Array<{ lane: Lane; label: string; counted?: boolean }> = [
   { lane: "live", label: "Live Streams", counted: true },
   { lane: "trending", label: "Trending" },
 ];
-
-const DOUBLE_TAP_MS = 300;
-
-function PostSlide({ post }: { post: Post }) {
-  const like = useLikePost();
-  const gate = useGate();
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [burst, setBurst] = useState(0);
-  const [muted, setMuted] = useState(true);
-  const lastTap = useRef(0);
-  const hasVideo = Boolean(post.mediaUrl && isVideoUrl(post.mediaUrl));
-
-  const doLike = () => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }));
-
-  const onTap = () => {
-    const now = Date.now();
-    if (now - lastTap.current < DOUBLE_TAP_MS) {
-      lastTap.current = 0;
-      setBurst((n) => n + 1);
-      if (!post.likedByMe) gate(() => like.mutate({ postId: post.id, like: true }));
-    } else {
-      lastTap.current = now;
-      // Sound only on an explicit tap — never autoplayed.
-      if (hasVideo) setMuted((v) => !v);
-    }
-  };
-
-  const cta = resolveCta(post.deepLink);
-  const author = post.author;
-
-  return (
-    <section className="ws-snap-item relative flex h-dvh w-full flex-col justify-center overflow-hidden">
-      {/* content stage: media fills the slide; text posts stay typographic. */}
-      {post.mediaUrl &&
-        (hasVideo ? (
-          <video
-            src={post.mediaUrl}
-            muted={muted}
-            autoPlay
-            loop
-            playsInline
-            preload="metadata"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- author-supplied media
-          <img src={post.mediaUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        ))}
-      <button className="absolute inset-0 cursor-default" onClick={onTap} aria-label="Post" />
-      {hasVideo && muted && (
-        <span className="ws-glass pointer-events-none absolute left-4 top-14 rounded-full px-2.5 py-1 text-[10px] font-semibold text-body">
-          Tap for sound
-        </span>
-      )}
-      <div className={cn("pointer-events-none px-6 pb-40", post.mediaUrl && "ws-text-shadow")}>
-        <p className="ws-display text-2xl leading-snug">{post.text}</p>
-      </div>
-
-      {/* double-tap heart burst */}
-      {burst > 0 && (
-        <span
-          key={burst}
-          className="ws-heart-burst pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-like"
-          aria-hidden
-        >
-          <IconHeart className="h-24 w-24" filled />
-        </span>
-      )}
-
-      {/* bottom scrim: author + caption meta */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/85 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 pb-28">
-        <div className="min-w-0">
-          {author && (
-            <Link href={`/u/${author.username}`} className="pointer-events-auto flex items-center gap-2">
-              <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={36} />
-              <span className="ws-text-shadow flex items-center gap-1.5 text-sm font-semibold text-heading">
-                {author.displayName}
-                <VerifiedBadge verification={author.verification} />
-              </span>
-              <span className="ws-text-shadow text-xs text-meta">{relativeTime(post.createdAt)}</span>
-            </Link>
-          )}
-          {cta && (
-            <Link
-              href={cta.href}
-              target={cta.external ? "_blank" : undefined}
-              rel={cta.external ? "noreferrer" : undefined}
-              className="ws-press pointer-events-auto mt-3 inline-flex h-9 items-center rounded-full bg-accent px-4 text-sm font-semibold text-ink"
-            >
-              {cta.label}
-            </Link>
-          )}
-        </div>
-        {/* right action rail */}
-        <div className="pointer-events-auto flex flex-col items-center gap-4 pb-1">
-          <button onClick={doLike} aria-label={post.likedByMe ? "Unlike" : "Like"} className="ws-press flex flex-col items-center gap-0.5">
-            <span
-              className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-full bg-black/40",
-                post.likedByMe ? "text-like" : "text-heading"
-              )}
-            >
-              <IconHeart className="h-5 w-5" filled={post.likedByMe} />
-            </span>
-            <span className="tnum ws-text-shadow text-xs text-body">{formatCount(post.likeCount)}</span>
-          </button>
-          <button onClick={() => setCommentsOpen(true)} aria-label="Comments" className="ws-press flex flex-col items-center gap-0.5">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading">
-              <IconComment className="h-5 w-5" />
-            </span>
-            <span className="tnum ws-text-shadow text-xs text-body">{formatCount(post.commentCount)}</span>
-          </button>
-        </div>
-      </div>
-      <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />
-    </section>
-  );
-}
 
 function SlideFor({ item }: { item: FeedItem }) {
   if (item.type === "post" && item.post) return <PostSlide post={item.post} />;

@@ -98,10 +98,10 @@ export function FeaturedArena() {
           )}
         </div>
 
-        {/* The CTA moved off the silver ramp onto the purple one. The label group
-            sits left, the price chip right; the gap is the design's 68px floor,
-            and justify-between lets a longer label ("Reserve a seat") grow the
-            pill rather than clip it. */}
+        {/* The CTA wears the arena green (revised off the purple ramp
+            2026-08-26). The label group sits left, the price chip right; the
+            gap is the design's 68px floor, and justify-between lets a longer
+            label ("Reserve a seat") grow the pill rather than clip it. */}
         <div className="ws-btn-arena flex h-10 min-w-[250px] shrink-0 items-center justify-between gap-[68px] rounded-full px-[15px]">
           <Link href={slide.href} className="ws-press flex h-5 items-center gap-1.5">
             <IconMsPlay className="h-[18.03px] w-[18.03px] p-px text-white" />

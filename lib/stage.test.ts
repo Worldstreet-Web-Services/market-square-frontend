@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CROP_BUDGET,
   buildStage,
+  chooseFit,
+  cropLoss,
   remoteAudioSlots,
   type StageParticipant,
   type StagePublication,
@@ -336,5 +339,155 @@ describe("the stream room keeps Ark broadcasts watch-only", () => {
     // The header CTA is lg:block, so the mobile rail needs its own.
     assert.match(room, /Join the match in Ark/);
     assert.match(room, /aria-label="Join the match in Ark"/);
+  });
+});
+
+/**
+ * Fit selection.
+ *
+ * The reported bug: a host shares a wide source and viewers get its middle
+ * third, because every tile filled its box. The decision is a pure function of
+ * (source kind, intrinsic aspect, tile aspect) precisely so it can be argued
+ * about here rather than inspected in a rendered DOM.
+ */
+const ASPECT = {
+  ultrawide: 21 / 9, // 2.333
+  desktop: 16 / 10, // 1.6 — a typical shared screen
+  wide: 16 / 9, // 1.778
+  classic: 4 / 3, // 1.333
+  square: 1,
+  portrait: 9 / 16, // 0.5625 — the mobile stage
+};
+
+describe("chooseFit", () => {
+  const fit = (isScreenShare: boolean, sourceAspect: number | null, tileAspect: number | null) =>
+    chooseFit({ isScreenShare, sourceAspect, tileAspect });
+
+  it("never crops a screen share, whatever the tile shape", () => {
+    for (const tile of Object.values(ASPECT)) {
+      for (const source of Object.values(ASPECT)) {
+        assert.equal(fit(true, source, tile), "contain", `screen ${source} in ${tile}`);
+      }
+    }
+  });
+
+  it("letterboxes a screen share even when it matches the tile exactly", () => {
+    // Deliberate: `contain` at a matching aspect produces no bars anyway, and
+    // making it conditional is how the rule quietly acquires an exception.
+    assert.equal(fit(true, ASPECT.wide, ASPECT.wide), "contain");
+  });
+
+  it("fills when a camera's aspect matches its tile", () => {
+    assert.equal(fit(false, ASPECT.wide, ASPECT.wide), "cover");
+    assert.equal(fit(false, ASPECT.portrait, ASPECT.portrait), "cover");
+    assert.equal(fit(false, ASPECT.square, ASPECT.square), "cover");
+  });
+
+  it("fills through a near-match, where the crop is only margin", () => {
+    // 16:9 in 16:10 → ratio 1.11, ~10% lost: inside the title-safe convention.
+    assert.equal(fit(false, ASPECT.wide, ASPECT.desktop), "cover");
+    // 3:2 in 16:9 → ratio 1.19, ~16%: still under budget.
+    assert.equal(fit(false, 3 / 2, ASPECT.wide), "cover");
+  });
+
+  it("letterboxes once the crop starts eating the subject", () => {
+    // 4:3 in 16:9 → 25% gone.
+    assert.equal(fit(false, ASPECT.classic, ASPECT.wide), "contain");
+    // The headline case: a 16:9 camera in a 9:16 phone slot → 68% gone.
+    assert.equal(fit(false, ASPECT.wide, ASPECT.portrait), "contain");
+    // An ultrawide camera in a 16:9 tile → 24% gone.
+    assert.equal(fit(false, ASPECT.ultrawide, ASPECT.wide), "contain");
+  });
+
+  it("is symmetric — a portrait source in a wide tile is cropped just as badly", () => {
+    assert.equal(fit(false, ASPECT.portrait, ASPECT.wide), "contain");
+    assert.equal(
+      fit(false, ASPECT.wide, ASPECT.portrait),
+      fit(false, ASPECT.portrait, ASPECT.wide)
+    );
+  });
+
+  it("sits exactly on the documented budget", () => {
+    assert.equal(CROP_BUDGET, 1.2);
+    // At the budget, fill; a hair over it, letterbox.
+    assert.equal(fit(false, CROP_BUDGET, 1), "cover");
+    assert.equal(fit(false, CROP_BUDGET + 0.001, 1), "contain");
+  });
+
+  it("fills while the geometry is still unknown, so bars never flash in", () => {
+    assert.equal(fit(false, null, ASPECT.wide), "cover");
+    assert.equal(fit(false, ASPECT.wide, null), "cover");
+    assert.equal(fit(false, null, null), "cover");
+    // Degenerate measurements are 'unknown', not a divide-by-zero.
+    assert.equal(fit(false, 0, ASPECT.wide), "cover");
+    assert.equal(fit(false, ASPECT.wide, -1), "cover");
+    // …but an unmeasured screen share is still never cropped.
+    assert.equal(fit(true, null, null), "contain");
+  });
+
+  it("depends on nothing but its three inputs", () => {
+    const once = fit(false, ASPECT.classic, ASPECT.portrait);
+    for (let i = 0; i < 5; i += 1) {
+      assert.equal(fit(false, ASPECT.classic, ASPECT.portrait), once);
+    }
+  });
+});
+
+describe("cropLoss", () => {
+  it("reports the fraction of the frame cover would discard", () => {
+    assert.equal(cropLoss(ASPECT.wide, ASPECT.wide), 0);
+    assert.ok(Math.abs(cropLoss(ASPECT.classic, ASPECT.wide) - 0.25) < 0.001);
+    // The mobile case the host most needs warning about.
+    assert.ok(cropLoss(ASPECT.wide, ASPECT.portrait) > 0.66);
+  });
+
+  it("is zero when nothing has been measured, so no hint is invented", () => {
+    assert.equal(cropLoss(null, ASPECT.wide), 0);
+    assert.equal(cropLoss(ASPECT.wide, null), 0);
+    assert.equal(cropLoss(0, 0), 0);
+  });
+
+  it("agrees with chooseFit at the boundary", () => {
+    // Anything chooseFit fills has lost at most 1 - 1/CROP_BUDGET of the frame.
+    const ceiling = 1 - 1 / CROP_BUDGET;
+    for (const source of Object.values(ASPECT)) {
+      for (const tile of Object.values(ASPECT)) {
+        if (chooseFit({ isScreenShare: false, sourceAspect: source, tileAspect: tile }) === "cover") {
+          assert.ok(cropLoss(source, tile) <= ceiling + 1e-9, `${source} in ${tile}`);
+        }
+      }
+    }
+  });
+});
+
+describe("fit, by construction", () => {
+  it("delegates the decision instead of hardcoding object-fit per tile kind", () => {
+    // The bug was a policy baked into a className: screens contain, cameras
+    // cover, regardless of shape. Both must now come from chooseFit.
+    assert.match(stageView, /chooseFit\(\{ isScreenShare: isScreen, sourceAspect, tileAspect \}\)/);
+    assert.doesNotMatch(stageView, /isScreen \? "object-contain" : "object-cover"/);
+    assert.doesNotMatch(stageView, /object-cover/);
+    // Applied to the live element, so a source that changes shape mid-call does
+    // not force a detach/re-attach (which black-flashes the tile).
+    assert.match(stageView, /video\.style\.objectFit = fit;/);
+  });
+
+  it("measures both aspects rather than assuming either", () => {
+    assert.match(stageView, /new ResizeObserver/);
+    assert.match(stageView, /addEventListener\("loadedmetadata", readAspect\)/);
+    // Screen shares renegotiate when the host switches window; cameras flip on
+    // rotation. Metadata alone would pin the first shape forever.
+    assert.match(stageView, /addEventListener\("resize", readAspect\)/);
+  });
+
+  it("letterboxes onto the stage ground, not a lighter panel", () => {
+    assert.match(stageView, /fit === "contain" && "bg-\[#0A0A0B\]"/);
+  });
+
+  it("tells the host what viewers are actually seeing", () => {
+    assert.match(cockpit, /onLocalFit=\{setFits\}/);
+    assert.match(cockpit, /function describeFraming/);
+    assert.match(cockpit, /letterboxed/);
+    assert.match(cockpit, /cropped view/);
   });
 });

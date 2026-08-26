@@ -263,3 +263,67 @@ export function buildStageLayout(slots: readonly StageSlot[]): StageLayout {
     screenSharing: true,
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * How a tile fits its box
+ * ------------------------------------------------------------------ */
+
+export type TileFit = "cover" | "contain";
+
+/**
+ * The crop budget: how far a source's aspect may differ from its tile before we
+ * stop filling the box and letterbox instead.
+ *
+ * `cover` scales the source until the box is full, so the fraction of the frame
+ * that survives along the overflowing axis is exactly `min(a, b) / max(a, b)`
+ * of the two aspects. At a ratio of 1.2 that is ~17% of the frame lost, ~8% off
+ * each edge — which is the region broadcast framing already treats as
+ * disposable (the title-safe convention reserves the outer ~10%, action-safe
+ * ~5%, precisely because nothing load-bearing is meant to live there).
+ *
+ * Above 1.2 the crop stops eating margin and starts eating subject:
+ *   * 4:3 camera in a 16:9 tile  → 1.33 → 25% gone
+ *   * 16:9 camera in a 9:16 tile → 3.16 → 68% gone — two thirds of the picture
+ *   * 21:9 ultrawide in 16:9     → 1.31 → 24% gone
+ * while the cases that genuinely look better filled stay under it:
+ *   * 16:9 in 16:10 → 1.11 → 10%
+ *   * 3:2 in 16:9   → 1.19 → 16%
+ *
+ * So 1.2 is the line between "trimming margin" and "discarding content".
+ */
+export const CROP_BUDGET = 1.2;
+
+/**
+ * Pure: given what is being published and the shape of the box, fill or letterbox.
+ *
+ * Deliberately takes numbers rather than a DOM node, because the decision is
+ * the part worth pinning — the reported bug (a screen share sliced down to its
+ * middle third) was a policy mistake, not a rendering one.
+ */
+export function chooseFit({
+  isScreenShare,
+  sourceAspect,
+  tileAspect,
+}: {
+  isScreenShare: boolean;
+  /** intrinsic videoWidth / videoHeight; null until metadata loads. */
+  sourceAspect: number | null;
+  /** The tile's own width / height; null before it has been measured. */
+  tileAspect: number | null;
+}): TileFit {
+  // A screen share is never cropped. Slicing the edges off a shared screen
+  // removes the toolbars, line numbers and margins where the answer usually is,
+  // and the viewer has no way to know anything is missing.
+  if (isScreenShare) return "contain";
+  // Unknown geometry: fill. Bars that appear and then vanish once metadata
+  // lands read as a glitch; a crop that resolves into a fit does not.
+  if (!sourceAspect || !tileAspect || sourceAspect <= 0 || tileAspect <= 0) return "cover";
+  const ratio = Math.max(sourceAspect, tileAspect) / Math.min(sourceAspect, tileAspect);
+  return ratio > CROP_BUDGET ? "contain" : "cover";
+}
+
+/** How much of the source `cover` would discard, 0..1. For the host's hint. */
+export function cropLoss(sourceAspect: number | null, tileAspect: number | null): number {
+  if (!sourceAspect || !tileAspect || sourceAspect <= 0 || tileAspect <= 0) return 0;
+  return 1 - Math.min(sourceAspect, tileAspect) / Math.max(sourceAspect, tileAspect);
+}

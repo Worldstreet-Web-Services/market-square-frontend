@@ -1,0 +1,85 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  EXPLORE_TABS,
+  exploreTabBrowses,
+  exploreTabIsPeople,
+  exploreTabSearchType,
+  exploreTabShowsVideos,
+  exploreTabTopics,
+  parseExploreTab,
+} from "./explore-tabs.ts";
+
+test("the row is exactly the designed chip set, in order", () => {
+  // `Add +` is not in here on purpose: it opens the topic picker rather than
+  // selecting anything, so it is not a tab.
+  assert.deepEqual(EXPLORE_TABS, [
+    "for-you",
+    "people",
+    "posts",
+    "shows",
+    "streams",
+    "products",
+  ]);
+});
+
+test("For you and Shows search EVERYTHING, never a result kind", () => {
+  // Mapping these to a type would drop three quarters of the matches.
+  assert.equal(exploreTabSearchType("for-you"), "all");
+  assert.equal(exploreTabSearchType("shows"), "all");
+});
+
+test("the result-kind chips map straight to the service's own types", () => {
+  assert.equal(exploreTabSearchType("people"), "people");
+  assert.equal(exploreTabSearchType("posts"), "posts");
+  assert.equal(exploreTabSearchType("streams"), "streams");
+  assert.equal(exploreTabSearchType("products"), "products");
+});
+
+test("Shows is a TOPIC, not a search type", () => {
+  // `shows` is in the backend's own vocabulary from GET /topics, so the chip
+  // filters by it rather than inventing a fifth search type.
+  assert.deepEqual(exploreTabTopics("shows", []), ["shows"]);
+  // ...and it overrides the viewer's interests rather than adding to them.
+  assert.deepEqual(exploreTabTopics("shows", ["gaming", "arts"]), ["shows"]);
+});
+
+test("every other chip inherits the viewer's interests, and none means NO filter", () => {
+  assert.deepEqual(exploreTabTopics("for-you", ["gaming"]), ["gaming"]);
+  assert.deepEqual(exploreTabTopics("people", ["gaming"]), ["gaming"]);
+  assert.deepEqual(exploreTabTopics("for-you", []), []);
+});
+
+test("every chip with a listing behind it browses without a query", () => {
+  // A discovery surface must be populated on arrival, not a prompt to go and
+  // find something first.
+  assert.equal(exploreTabBrowses("for-you"), true);
+  assert.equal(exploreTabBrowses("shows"), true);
+  assert.equal(exploreTabBrowses("streams"), true);
+  assert.equal(exploreTabBrowses("people"), true);
+  // No browse listing is wired for these — they invite a search rather than
+  // rendering a blank grid.
+  assert.equal(exploreTabBrowses("posts"), false);
+  assert.equal(exploreTabBrowses("products"), false);
+});
+
+test("People renders the directory, not the card grid", () => {
+  // People are rows from their own paged route; every other browsing tab is
+  // the media/stream grid.
+  assert.equal(exploreTabIsPeople("people"), true);
+  assert.equal(exploreTabIsPeople("for-you"), false);
+  assert.equal(exploreTabIsPeople("streams"), false);
+});
+
+test("Streams browses live broadcasts only; the media tabs carry videos too", () => {
+  assert.equal(exploreTabShowsVideos("streams"), false);
+  assert.equal(exploreTabShowsVideos("for-you"), true);
+  assert.equal(exploreTabShowsVideos("shows"), true);
+});
+
+test("an unknown tab in the URL falls back rather than blanking the page", () => {
+  assert.equal(parseExploreTab(null), "for-you");
+  assert.equal(parseExploreTab(""), "for-you");
+  assert.equal(parseExploreTab("nonsense"), "for-you");
+  assert.equal(parseExploreTab("shows"), "shows");
+});

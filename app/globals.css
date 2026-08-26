@@ -29,6 +29,16 @@
   --color-spotlight: #7e3beb;
   --color-spotlight-chip: #6829ce;
   --color-spotlight-chip-ink: #c27aff;
+  /* The live-arena CTA, and ONLY that. Green here does not mean "positive" —
+     --color-up (#7ce7b0) already owns value deltas — it is the brand's arena
+     colour, revised off the purple ramp on 2026-08-26. Four stops because the
+     design paints a gradient, not a fill: --color-arena is the solid fallback,
+     the other three are the gradient. Do not reuse these for success states,
+     and do not add a fifth green. */
+  --color-arena: #34c759;
+  --color-arena-from: #23991b;
+  --color-arena-mid: #47eb3b;
+  --color-arena-to: #11700a;
   /* The last gold in the product, and it means exactly one thing: MONEY. The
      coin glyph and the gift action that spends coins, nothing else. Every other
      amber surface — unread badges, notification glyphs, VIP tiers, admin pills,
@@ -615,11 +625,13 @@ body {
    with `isolation: isolate`; the overlay is fully opaque, so one element with
    the gradient background renders identically and is what we ship. */
 @utility ws-btn-arena {
+  /* Solid first so the pill still reads if the gradient fails to paint. */
+  background: var(--color-arena);
   background: linear-gradient(
     131.93deg,
-    var(--color-spotlight) -10.87%,
-    var(--color-spotlight) 43.15%,
-    var(--color-create) 109.17%
+    var(--color-arena-from) -10.87%,
+    var(--color-arena-mid) 52.61%,
+    var(--color-arena-to) 109.17%
   );
   color: #ffffff;
   box-shadow:

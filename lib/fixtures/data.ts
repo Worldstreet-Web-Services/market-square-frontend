@@ -24,6 +24,10 @@ export interface FxPost {
   kind: "update" | "story";
   text: string;
   mediaUrl: string | null;
+  /** The backend types its own media; renderers prefer this over sniffing. */
+  mediaKind?: "image" | "video" | null;
+  /** Topic keys, so `?topics=` filters the fixture feed as the service does. */
+  topics?: string[];
   deepLink: { kind: string; ref: string } | null;
   createdAt: string;
   likeCount: number;
@@ -233,6 +237,14 @@ export const follows = new Map<string, Set<string>>([
 
 // Public HLS test stream so live playback genuinely plays in fixture mode.
 export const DEMO_HLS_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
+// Progressive MP4s for the Reels lane and Explore's immersive viewer. Demo
+// mode had no video post at all, so neither surface could be exercised
+// without a live backend carrying one.
+export const DEMO_CLIPS = [
+  "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+  "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+  "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+];
 
 export const streams: FxStream[] = [
   // ---- Ark casino broadcasts -------------------------------------------
@@ -462,6 +474,76 @@ export const streams: FxStream[] = [
 ];
 
 export const posts: FxPost[] = [
+  {
+    id: "p_shot_skyline",
+    authorId: "u_nina",
+    kind: "update",
+    text: "Lagos from the 40th floor. No filter.",
+    mediaUrl: "https://images.unsplash.com/photo-1449034446853-66c86144b0ad?w=800",
+    mediaKind: "image",
+    topics: ["pictures", "arts"],
+    deepLink: null,
+    createdAt: min(55),
+    likeCount: 512,
+    commentCount: 18,
+    likedBy: new Set(),
+  },
+  {
+    id: "p_shot_floor",
+    authorId: "u_kenji",
+    kind: "update",
+    text: "Trading floor at open.",
+    mediaUrl: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800",
+    mediaKind: "image",
+    topics: ["pictures", "trading"],
+    deepLink: null,
+    createdAt: min(140),
+    likeCount: 187,
+    commentCount: 5,
+    likedBy: new Set(),
+  },
+  {
+    id: "p_reel_desk",
+    authorId: "u_amara",
+    kind: "update",
+    text: "60 seconds on why the CPI print moved rates the way it did.",
+    mediaUrl: DEMO_CLIPS[0],
+    mediaKind: "video",
+    topics: ["trading"],
+    deepLink: null,
+    createdAt: min(25),
+    likeCount: 418,
+    commentCount: 12,
+    likedBy: new Set(),
+  },
+  {
+    id: "p_reel_build",
+    authorId: "u_kenji",
+    kind: "update",
+    text: "Shipping the new screener overlay — first look.",
+    mediaUrl: DEMO_CLIPS[1],
+    mediaKind: "video",
+    topics: ["gaming", "reels"],
+    deepLink: null,
+    createdAt: min(95),
+    likeCount: 226,
+    commentCount: 7,
+    likedBy: new Set(),
+  },
+  {
+    id: "p_reel_studio",
+    authorId: "u_zara",
+    kind: "update",
+    text: "Studio session. Sound on.",
+    mediaUrl: DEMO_CLIPS[2],
+    mediaKind: "video",
+    topics: ["arts", "shows"],
+    deepLink: null,
+    createdAt: min(210),
+    likeCount: 903,
+    commentCount: 31,
+    likedBy: new Set(),
+  },
   {
     id: "p_live_desk",
     authorId: "u_amara",

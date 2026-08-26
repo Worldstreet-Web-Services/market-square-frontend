@@ -4,9 +4,9 @@
  *
  * The BFF decides which GETs a signed-out visitor may read (`isPublicGet` in
  * lib/api/public-routes.ts). The BACKEND decides the same thing, in its
- * OpenAPI document: a GET is public exactly when its operation carries no
- * `security` requirement. When those two disagree, one of two things happens
- * and neither is visible in review:
+ * OpenAPI document — see `specAllowsAnonymous` below for the exact rule.
+ * When those two disagree, one of two things happens and neither is visible
+ * in review:
  *
  *   - backend public, BFF gated   → signed-out visitors get a 401 on content
  *                                   that was meant to be open. This has now
@@ -72,16 +72,36 @@ async function loadPredicate() {
  * disagree with each other — never to silence a real drift. Each entry needs a
  * reason and an owner, and should be deleted the moment the backend resolves
  * it. Anything not listed here still fails the check.
+ *
+ * EMPTY IS THE CORRECT STATE. `/spotlight` lived here while the spec claimed
+ * bearerAuth on a route the gateway served 200 unauthenticated; the backend
+ * reconciled the two on 2026-08-26 and the entry went with it. An allowance
+ * that outlives its bug stops being an allowance and becomes furniture.
  */
-const KNOWN_MISMATCHES = {
-  "/spotlight": {
-    reason:
-      "Spec marks it bearerAuth, but the gateway serves it 200 unauthenticated " +
-      "and the Citizen Spotlight rail renders on every page for signed-out " +
-      "visitors. Gating it here would regress a working public surface. " +
-      "Backend to reconcile its spec with its implementation (2026-08-26).",
-  },
-};
+const KNOWN_MISMATCHES = {};
+
+/**
+ * Does the spec let an ANONYMOUS caller make this request?
+ *
+ * `security` is a list of ALTERNATIVES, OR'd together — satisfying any one of
+ * them admits the request. An **empty object** is the alternative that
+ * requires nothing, so `[{}, { bearerAuth: [] }]` reads as "either sign in or
+ * do not": optional auth, i.e. public. That is exactly the shape of every
+ * public GET in Market Square, because a public read still forwards the
+ * caller's token when there is one so `likedByMe` keeps resolving.
+ *
+ * This was previously `!get.security || get.security.length === 0`, which
+ * treated any non-empty array as gated. The day the backend started spelling
+ * optional auth out properly, that predicate reported twelve false failures —
+ * including `/feed` and `/search` — and the check reads as broken exactly when
+ * it should read as green. An omitted `security` still inherits the document's
+ * root default, so that is honoured too rather than assumed public.
+ */
+function specAllowsAnonymous(operation, rootSecurity) {
+  const requirements = operation.security ?? rootSecurity;
+  if (!requirements || requirements.length === 0) return true;
+  return requirements.some((alternative) => Object.keys(alternative).length === 0);
+}
 
 /** Turn "/streams/{id}/chat" into the segment shape the predicate sees. */
 function segments(path) {
@@ -118,7 +138,7 @@ async function main() {
     const get = operations.get;
     if (!get) continue;
     checked += 1;
-    const specPublic = !get.security || get.security.length === 0;
+    const specPublic = specAllowsAnonymous(get, spec.security);
     const oursPublic = isPublicGet(segments(path));
     if (specPublic === oursPublic) continue;
     if (KNOWN_MISMATCHES[path]) {

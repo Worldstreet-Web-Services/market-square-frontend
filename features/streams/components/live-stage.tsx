@@ -9,8 +9,11 @@ import { cn } from "@/lib/cn";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
 import {
   buildStageLayout,
+  chooseFit,
+  cropLoss,
   remoteAudioSlots,
   type StageSlot,
+  type TileFit,
   type StageTile,
 } from "@/features/streams/lib/stage";
 
@@ -44,12 +47,23 @@ function layoutClass(count: number): string {
 /** Spec caps the stage at 6; beyond that tiles stop being faces. */
 const MAX_SLOTS = 6;
 
+/** What a tile decided about fit, reported up so the host can be told. */
+export interface TileFitReport {
+  key: string;
+  identity: string;
+  isScreenShare: boolean;
+  fit: TileFit;
+  /** Fraction of the frame `cover` would discard, 0..1. */
+  loss: number;
+}
+
 function MediaTile({
   tile,
   localTile,
   onRemove,
   removing,
   compact,
+  onFit,
 }: {
   tile: StageTile;
   localTile?: ReactNode;
@@ -57,9 +71,11 @@ function MediaTile({
   removing?: boolean;
   /** Strip tile: smaller chrome, no moderation control. */
   compact?: boolean;
+  onFit?: (report: TileFitReport | null) => void;
 }) {
   const slot = tile.slot;
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const track = tile.publication?.track as
     | { attach: () => HTMLMediaElement; detach: (el: HTMLMediaElement) => unknown }
     | undefined;
@@ -68,6 +84,24 @@ function MediaTile({
   // share has no such preview and must attach normally.
   const useOwnAttach = !(slot.isLocal && localTile && !isScreen);
   const hideVideo = !track || tile.publication?.isMuted === true;
+
+  // Both inputs to the fit decision are measurements, so they live in state and
+  // the decision itself stays a pure call into lib/stage.ts.
+  const [sourceAspect, setSourceAspect] = useState<number | null>(null);
+  const [tileAspect, setTileAspect] = useState<number | null>(null);
+  const fit = chooseFit({ isScreenShare: isScreen, sourceAspect, tileAspect });
+  const loss = cropLoss(sourceAspect, tileAspect);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setTileAspect(height > 0 ? width / height : null);
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!useOwnAttach || !track) return;
@@ -79,16 +113,25 @@ function MediaTile({
     element.muted = true; // Video elements never carry audio here — see the <audio> map.
     element.className = cn(
       "h-full w-full",
-      // A shared screen is landscape content that may land on a portrait
-      // stage. `object-cover` would crop the board out of frame, so screens
-      // letterbox and only cameras fill.
-      isScreen ? "object-contain" : "object-cover",
       // Mirroring is a self-view convention for FACES. A mirrored screen share
       // is unreadable — the text runs backwards.
       slot.isLocal && !isScreen && "[transform:scaleX(-1)]"
     );
+    // Intrinsic size is not known at attach time, and it CHANGES: a screen
+    // share renegotiates when the host switches window or resizes it, and a
+    // phone camera flips on rotation. `resize` is the event for both.
+    const readAspect = () => {
+      const { videoWidth, videoHeight } = element;
+      setSourceAspect(videoWidth > 0 && videoHeight > 0 ? videoWidth / videoHeight : null);
+    };
+    element.addEventListener("loadedmetadata", readAspect);
+    element.addEventListener("resize", readAspect);
+    readAspect();
     mount.replaceChildren(element);
     return () => {
+      element.removeEventListener("loadedmetadata", readAspect);
+      element.removeEventListener("resize", readAspect);
+      setSourceAspect(null);
       // Detach only OUR element: the same track may legitimately be attached
       // elsewhere (the guest's own preview sheet), and a bare detach() would
       // rip that one out too.
@@ -97,12 +140,34 @@ function MediaTile({
     };
   }, [track, useOwnAttach, slot.isLocal, isScreen]);
 
+  // object-fit is applied to the live element rather than baked into the
+  // className above, so a source that changes shape mid-call restyles instead
+  // of tearing the track down and re-attaching it (which black-flashes).
+  useEffect(() => {
+    const video = mountRef.current?.querySelector("video");
+    if (video instanceof HTMLVideoElement) video.style.objectFit = fit;
+  }, [fit, track]);
+
+  const report = useRef(onFit);
+  useEffect(() => {
+    report.current = onFit;
+  }, [onFit]);
+  useEffect(() => {
+    report.current?.(
+      hideVideo ? null : { key: tile.key, identity: slot.identity, isScreenShare: isScreen, fit, loss }
+    );
+  }, [hideVideo, fit, loss, tile.key, slot.identity, isScreen]);
+
+  // Letterbox bars are the stage GROUND, never the tile surface: bars have to
+  // read as absence, not as a lighter panel drawn around the video.
+  const box = cn("absolute inset-0", fit === "contain" && "bg-[#0A0A0B]", hideVideo && "hidden");
+
   return (
-    <div className={TILE}>
+    <div ref={frameRef} className={TILE}>
       {useOwnAttach ? (
-        <div ref={mountRef} className={cn("absolute inset-0", hideVideo && "hidden")} />
+        <div ref={mountRef} className={box} />
       ) : (
-        <div className={cn("absolute inset-0", hideVideo && "hidden")}>{localTile}</div>
+        <div className={box}>{localTile}</div>
       )}
 
       {/* Camera off, or approved and still bringing a device up. NEVER a black
@@ -193,6 +258,7 @@ export function LiveStage({
   className,
   emptyState,
   onStageChange,
+  onLocalFit,
 }: {
   room: Room | null;
   /** The stream's ownerId — LiveKit identities are user ids here. */
@@ -207,6 +273,11 @@ export function LiveStage({
   emptyState?: ReactNode;
   /** Fires whenever the slot list changes — lets a caller narrate the stage. */
   onStageChange?: (slots: StageSlot[]) => void;
+  /**
+   * How OUR OWN published video is being fitted on this stage. The host has no
+   * other way to learn that viewers are seeing bars, or missing the edges.
+   */
+  onLocalFit?: (reports: TileFitReport[]) => void;
 }) {
   const all = useStageSlots(room, hostIdentity);
   const slots = all.slice(0, MAX_SLOTS);
@@ -222,6 +293,37 @@ export function LiveStage({
   useEffect(() => {
     notify.current?.(all);
   }, [all]);
+
+  // Fit reports for our own tiles, keyed by tile so a screen and a camera can
+  // each report independently.
+  const [fits, setFits] = useState<Record<string, TileFitReport>>({});
+  const handleFit = useCallback((report: TileFitReport | null, key: string) => {
+    setFits((previous) => {
+      if (!report) {
+        if (!(key in previous)) return previous;
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      }
+      const existing = previous[key];
+      if (
+        existing &&
+        existing.fit === report.fit &&
+        existing.isScreenShare === report.isScreenShare &&
+        Math.abs(existing.loss - report.loss) < 0.01
+      ) {
+        return previous;
+      }
+      return { ...previous, [key]: report };
+    });
+  }, []);
+  const localFit = useRef(onLocalFit);
+  useEffect(() => {
+    localFit.current = onLocalFit;
+  }, [onLocalFit]);
+  useEffect(() => {
+    localFit.current?.(Object.values(fits));
+  }, [fits]);
 
   const [audioBlocked, setAudioBlocked] = useState(false);
   useEffect(() => {
@@ -277,6 +379,11 @@ export function LiveStage({
                 localTile={localTile}
                 onRemove={onRemoveGuest}
                 removing={removing}
+                onFit={
+                  tile.slot.isLocal
+                    ? (report) => handleFit(report, tile.key)
+                    : undefined
+                }
               />
             ))}
           </div>

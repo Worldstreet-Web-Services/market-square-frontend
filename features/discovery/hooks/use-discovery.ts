@@ -4,8 +4,10 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { useAuth } from "@/hooks/use-auth";
+import { sortTopicsByOrder } from "@/lib/topic-order";
 import {
   fetchCategories,
+  fetchPeople,
   fetchMyInterests,
   fetchTopics,
   saveMyInterests,
@@ -14,11 +16,13 @@ import {
 
 // A blank query returns nothing from the service, so the request is not even
 // sent — an empty result list is the correct resting state of the page.
-export function useDiscovery(query: string, type: string) {
+export function useDiscovery(query: string, type: string, topics: string[] = []) {
   const trimmed = query.trim();
+  // Sorted so the same selection always produces the same cache key.
+  const topicKey = [...topics].sort().join(",");
   return useInfiniteQuery({
-    queryKey: ["ms", "discovery", trimmed, type],
-    queryFn: ({ pageParam }) => searchMarket(trimmed, type, pageParam ?? undefined),
+    queryKey: ["ms", "discovery", trimmed, type, topicKey],
+    queryFn: ({ pageParam }) => searchMarket(trimmed, type, pageParam ?? undefined, topics),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: trimmed.length > 0,
@@ -44,7 +48,9 @@ export function useCategories() {
 export function useTopics() {
   return useQuery({
     queryKey: ["ms", "topics"],
-    queryFn: fetchTopics,
+    // Ordered by the backend's own `sortOrder`, EXPLICITLY — see the note in
+    // `lib/topic-order.ts` for why the served order is not trusted.
+    queryFn: async () => sortTopicsByOrder(await fetchTopics()),
     staleTime: 5 * 60_000,
     retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
   });
@@ -77,5 +83,33 @@ export function useSaveInterests() {
       toast.success("Interests saved");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't save your interests.")),
+  });
+}
+
+/**
+ * Explore's People tab.
+ *
+ * Populated on ARRIVAL — a discovery surface that opens as a prompt to go and
+ * find something is not a discovery surface. A query narrows this same list
+ * rather than switching to `/search`, so browsing and searching people share
+ * one cursor instead of two lists that page differently.
+ *
+ * A 404 means the directory route is not deployed yet, not that the request
+ * failed, so it is not retried and the tab says so quietly — the same handling
+ * `useTopics` uses. Public: signed-out visitors get the list too, and only the
+ * Follow action asks them to sign in.
+ */
+export function usePeople(query: string, enabled = true) {
+  const trimmed = query.trim();
+  return useInfiniteQuery({
+    queryKey: ["ms", "people", trimmed],
+    queryFn: ({ pageParam }) => fetchPeople({ query: trimmed, cursor: pageParam ?? undefined }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    // Only the People tab needs this; every other tab would be paying for a
+    // directory nobody is looking at.
+    enabled,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+    staleTime: 30_000,
   });
 }

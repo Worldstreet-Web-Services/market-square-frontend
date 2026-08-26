@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { isVideoPost } from "@/lib/media";
 import { formatCount } from "@/lib/format";
+import type { VideoItem } from "@/lib/video-context";
 import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
-import { IconChevronRight, IconEye, IconVolume } from "@/components/ui/icons";
+import { IconChevronRight, IconEye, IconPlay, IconVolume } from "@/components/ui/icons";
 import type { Stream } from "@/features/streams/lib/types";
 
 /**
@@ -16,8 +18,21 @@ import type { Stream } from "@/features/streams/lib/types";
  * grid rather than a fixed 719px row of four: the mock is a desktop frame, and
  * a phone cannot carry four 170px cards. Columns step 2 → 3 → 4 so a card
  * never falls below the width its avatar and meta row need.
+ *
+ * The grid carries three kinds of card and they lead three different places:
+ * a LIVE stream opens `/live/:id` (a room — chat, tickets, a stage), a
+ * recorded video opens the immersive viewer in place, and a picture opens its
+ * permalink. That split is the whole point: a broadcast is not a reel, and a
+ * still is not something you can scroll a player through.
  */
 const CARD_RADIUS = "11.0332px";
+
+export type ExploreItem =
+  | { kind: "stream"; stream: Stream }
+  | { kind: "media"; post: VideoItem };
+
+/** The View Transition name a card and its opened slide share. */
+export const videoMorphName = (postId: string) => `video-${postId}`;
 
 function CountPill({ stream }: { stream: Stream }) {
   // Live viewers ONLY. `peakViewers` is a historical high-water mark; printing
@@ -40,15 +55,23 @@ function CountPill({ stream }: { stream: Stream }) {
   );
 }
 
-function ExploreCard({ stream }: { stream: Stream }) {
+function CardFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="relative aspect-[170/165] w-full overflow-hidden"
+      style={{ borderRadius: CARD_RADIUS }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function StreamCard({ stream }: { stream: Stream }) {
   const owner = stream.owner;
 
   return (
     <Link href={`/live/${stream.id}`} className="group flex flex-col gap-[7.36px]">
-      <div
-        className="relative aspect-[170/165] w-full overflow-hidden"
-        style={{ borderRadius: CARD_RADIUS }}
-      >
+      <CardFrame>
         {/* A missing thumbnail gets the seeded gradient, never a blank tile. */}
         <GradientThumb seed={stream.id} className="absolute inset-0 h-full w-full">
           {stream.thumbnailUrl && (
@@ -64,12 +87,7 @@ function ExploreCard({ stream }: { stream: Stream }) {
         {/* Creator avatar, inset from the top-left as the design places it. */}
         {owner && (
           <span className="absolute left-[11px] top-[11px]">
-            <Avatar
-              name={owner.displayName}
-              seed={owner.id}
-              src={owner.avatarUrl}
-              size={36}
-            />
+            <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={36} />
           </span>
         )}
 
@@ -80,7 +98,7 @@ function ExploreCard({ stream }: { stream: Stream }) {
             <IconVolume className="h-3 w-3 text-white" />
           </span>
         )}
-      </div>
+      </CardFrame>
 
       <div className="flex h-6 items-center justify-between gap-2">
         {/* Never a fabricated name: with no hydrated owner the slot stays empty
@@ -94,22 +112,122 @@ function ExploreCard({ stream }: { stream: Stream }) {
   );
 }
 
+function MediaCard({
+  post,
+  onOpen,
+  /**
+   * The card holds the morph name whenever its video is NOT open, and the
+   * opened slide holds it while it is. That single rule gives the View
+   * Transition a clean hand-off in both directions — card → slide on open,
+   * slide → card on close — without any extra state, and without ever letting
+   * two elements share one name, which aborts the transition outright.
+   */
+  named,
+}: {
+  post: VideoItem;
+  onOpen: (post: VideoItem) => void;
+  named: boolean;
+}) {
+  const author = post.author;
+  const isVideo = isVideoPost(post);
+
+  const art = (
+    <>
+      <CardFrame>
+        <div
+          className="absolute inset-0"
+          style={named && isVideo ? { viewTransitionName: videoMorphName(post.id) } : undefined}
+        >
+          {/* A missing thumbnail gets the seeded gradient, never a blank tile.
+              A picture is its own artwork; a clip falls back to its poster. */}
+          <GradientThumb seed={post.id} className="absolute inset-0 h-full w-full">
+            {(post.thumbnailUrl ?? (isVideo ? null : post.mediaUrl)) && (
+              // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+              <img
+                src={post.thumbnailUrl ?? post.mediaUrl ?? ""}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
+          </GradientThumb>
+        </div>
+
+        {author && (
+          <span className="absolute left-[11px] top-[11px]">
+            <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={36} />
+          </span>
+        )}
+
+        {/* Only a clip reads as playable — a still must not promise a player. */}
+        {isVideo && (
+          <span className="absolute bottom-[11px] right-[11px] flex h-[21px] w-[21px] items-center justify-center rounded-full bg-white/[0.06] backdrop-blur-sm">
+            <IconPlay className="h-3 w-3 text-white" />
+          </span>
+        )}
+      </CardFrame>
+
+      <div className="flex h-6 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[11.0332px] font-bold leading-[15px] text-white">
+          {author?.displayName ?? ""}
+        </span>
+      </div>
+    </>
+  );
+
+  // A still has no scroll list to join, so it opens its permalink rather than
+  // a player that would have nothing to play.
+  if (!isVideo) {
+    return (
+      <Link href={`/p/${post.id}`} className="group flex flex-col gap-[7.36px]">
+        {art}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(post)}
+      // The close scrolls the grid back to this card, so it needs a handle.
+      data-explore-card={post.id}
+      className="group flex flex-col gap-[7.36px] text-left"
+      aria-label={post.text ? `Play video: ${post.text}` : "Play video"}
+    >
+      {art}
+    </button>
+  );
+}
+
 export function ExploreGrid({
-  streams,
+  items,
+  onOpenVideo,
+  openVideoId,
   onMore,
 }: {
-  streams: Stream[];
+  items: ExploreItem[];
+  onOpenVideo: (post: VideoItem) => void;
+  /** The video currently open in the viewer, if any — see `named` below. */
+  openVideoId?: string | null;
   /** Renders the More pill when there is another page to ask for. */
   onMore?: () => void;
 }) {
-  if (streams.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-[21px]">
       <div className="grid grid-cols-2 gap-x-[12.87px] gap-y-[21px] sm:grid-cols-3 lg:grid-cols-4">
-        {streams.map((stream) => (
-          <ExploreCard key={stream.id} stream={stream} />
-        ))}
+        {items.map((item) =>
+          item.kind === "stream" ? (
+            <StreamCard key={`stream-${item.stream.id}`} stream={item.stream} />
+          ) : (
+            <MediaCard
+              key={`media-${item.post.id}`}
+              post={item.post}
+              onOpen={onOpenVideo}
+              named={openVideoId !== item.post.id}
+            />
+          )
+        )}
       </div>
 
       {onMore && (
