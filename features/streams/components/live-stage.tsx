@@ -7,7 +7,15 @@ import { Spinner } from "@/components/ui/button";
 import { IconVolume, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
-import { remoteAudioSlots, type StageSlot } from "@/features/streams/lib/stage";
+import {
+  buildStageLayout,
+  chooseFit,
+  cropLoss,
+  remoteAudioSlots,
+  type StageSlot,
+  type TileFit,
+  type StageTile,
+} from "@/features/streams/lib/stage";
 
 /**
  * The stage: one tile per publisher, plus one hidden <audio> per remote audio
@@ -39,23 +47,61 @@ function layoutClass(count: number): string {
 /** Spec caps the stage at 6; beyond that tiles stop being faces. */
 const MAX_SLOTS = 6;
 
+/** What a tile decided about fit, reported up so the host can be told. */
+export interface TileFitReport {
+  key: string;
+  identity: string;
+  isScreenShare: boolean;
+  fit: TileFit;
+  /** Fraction of the frame `cover` would discard, 0..1. */
+  loss: number;
+}
+
 function MediaTile({
-  slot,
+  tile,
   localTile,
   onRemove,
   removing,
+  compact,
+  onFit,
 }: {
-  slot: StageSlot;
+  tile: StageTile;
   localTile?: ReactNode;
   onRemove?: (identity: string) => void;
   removing?: boolean;
+  /** Strip tile: smaller chrome, no moderation control. */
+  compact?: boolean;
+  onFit?: (report: TileFitReport | null) => void;
 }) {
+  const slot = tile.slot;
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const track = slot.videoTrack?.track as
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const track = tile.publication?.track as
     | { attach: () => HTMLMediaElement; detach: (el: HTMLMediaElement) => unknown }
     | undefined;
-  const useOwnAttach = !(slot.isLocal && localTile);
-  const hideVideo = slot.cameraOff || !track;
+  const isScreen = tile.kind === "screen";
+  // The caller's own preview stands in for our CAMERA only — a local screen
+  // share has no such preview and must attach normally.
+  const useOwnAttach = !(slot.isLocal && localTile && !isScreen);
+  const hideVideo = !track || tile.publication?.isMuted === true;
+
+  // Both inputs to the fit decision are measurements, so they live in state and
+  // the decision itself stays a pure call into lib/stage.ts.
+  const [sourceAspect, setSourceAspect] = useState<number | null>(null);
+  const [tileAspect, setTileAspect] = useState<number | null>(null);
+  const fit = chooseFit({ isScreenShare: isScreen, sourceAspect, tileAspect });
+  const loss = cropLoss(sourceAspect, tileAspect);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setTileAspect(height > 0 ? width / height : null);
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!useOwnAttach || !track) return;
@@ -66,34 +112,73 @@ function MediaTile({
     element.playsInline = true;
     element.muted = true; // Video elements never carry audio here — see the <audio> map.
     element.className = cn(
-      "h-full w-full object-cover",
-      slot.isLocal && "[transform:scaleX(-1)]"
+      "h-full w-full",
+      // Mirroring is a self-view convention for FACES. A mirrored screen share
+      // is unreadable — the text runs backwards.
+      slot.isLocal && !isScreen && "[transform:scaleX(-1)]"
     );
+    // Intrinsic size is not known at attach time, and it CHANGES: a screen
+    // share renegotiates when the host switches window or resizes it, and a
+    // phone camera flips on rotation. `resize` is the event for both.
+    const readAspect = () => {
+      const { videoWidth, videoHeight } = element;
+      setSourceAspect(videoWidth > 0 && videoHeight > 0 ? videoWidth / videoHeight : null);
+    };
+    element.addEventListener("loadedmetadata", readAspect);
+    element.addEventListener("resize", readAspect);
+    readAspect();
     mount.replaceChildren(element);
     return () => {
+      element.removeEventListener("loadedmetadata", readAspect);
+      element.removeEventListener("resize", readAspect);
+      setSourceAspect(null);
       // Detach only OUR element: the same track may legitimately be attached
       // elsewhere (the guest's own preview sheet), and a bare detach() would
       // rip that one out too.
       track.detach(element);
       element.remove();
     };
-  }, [track, useOwnAttach, slot.isLocal]);
+  }, [track, useOwnAttach, slot.isLocal, isScreen]);
+
+  // object-fit is applied to the live element rather than baked into the
+  // className above, so a source that changes shape mid-call restyles instead
+  // of tearing the track down and re-attaching it (which black-flashes).
+  useEffect(() => {
+    const video = mountRef.current?.querySelector("video");
+    if (video instanceof HTMLVideoElement) video.style.objectFit = fit;
+  }, [fit, track]);
+
+  const report = useRef(onFit);
+  useEffect(() => {
+    report.current = onFit;
+  }, [onFit]);
+  useEffect(() => {
+    report.current?.(
+      hideVideo ? null : { key: tile.key, identity: slot.identity, isScreenShare: isScreen, fit, loss }
+    );
+  }, [hideVideo, fit, loss, tile.key, slot.identity, isScreen]);
+
+  // Letterbox bars are the stage GROUND, never the tile surface: bars have to
+  // read as absence, not as a lighter panel drawn around the video.
+  const box = cn("absolute inset-0", fit === "contain" && "bg-[#0A0A0B]", hideVideo && "hidden");
 
   return (
-    <div className={TILE}>
+    <div ref={frameRef} className={TILE}>
       {useOwnAttach ? (
-        <div ref={mountRef} className={cn("absolute inset-0", hideVideo && "hidden")} />
+        <div ref={mountRef} className={box} />
       ) : (
-        <div className={cn("absolute inset-0", hideVideo && "hidden")}>{localTile}</div>
+        <div className={box}>{localTile}</div>
       )}
 
       {/* Camera off, or approved and still bringing a device up. NEVER a black
           rectangle — a black tile is indistinguishable from a broken one. */}
       {hideVideo && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center">
-          <Avatar name={slot.name} seed={slot.identity} size={56} />
-          <p className="max-w-full truncate text-xs font-semibold text-[#E8EAED]">{slot.name}</p>
-          {slot.state === "approved-pending" ? (
+          <Avatar name={slot.name} seed={slot.identity} size={compact ? 32 : 56} />
+          {!compact && (
+            <p className="max-w-full truncate text-xs font-semibold text-[#E8EAED]">{slot.name}</p>
+          )}
+          {compact ? null : slot.state === "approved-pending" ? (
             <span className="flex items-center gap-1.5 text-[11px] text-[#8B8F96]">
               <Spinner className="h-3 w-3" />
               joining the stage…
@@ -105,9 +190,9 @@ function MediaTile({
       )}
 
       <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-1.5">
-        <span className="max-w-[60%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-[#E8EAED]">
-          {slot.role === "host" ? "Host · " : ""}
-          {slot.name}
+        <span className="max-w-[70%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-[#E8EAED]">
+          {slot.role === "host" && !isScreen ? "Host · " : ""}
+          {tile.label}
         </span>
         {slot.isMuted && (
           <span
@@ -119,7 +204,7 @@ function MediaTile({
         )}
       </div>
 
-      {onRemove && slot.role === "guest" && (
+      {onRemove && !compact && !isScreen && slot.role === "guest" && (
         <button
           onClick={() => onRemove(slot.identity)}
           disabled={removing}
@@ -173,6 +258,7 @@ export function LiveStage({
   className,
   emptyState,
   onStageChange,
+  onLocalFit,
 }: {
   room: Room | null;
   /** The stream's ownerId — LiveKit identities are user ids here. */
@@ -187,10 +273,18 @@ export function LiveStage({
   emptyState?: ReactNode;
   /** Fires whenever the slot list changes — lets a caller narrate the stage. */
   onStageChange?: (slots: StageSlot[]) => void;
+  /**
+   * How OUR OWN published video is being fitted on this stage. The host has no
+   * other way to learn that viewers are seeing bars, or missing the edges.
+   */
+  onLocalFit?: (reports: TileFitReport[]) => void;
 }) {
   const all = useStageSlots(room, hostIdentity);
   const slots = all.slice(0, MAX_SLOTS);
   const audio = remoteAudioSlots(all);
+  // Screens take the stage; faces drop to a strip. With nobody sharing this is
+  // exactly the previous behaviour — cameras in the grid, no strip.
+  const { primary, secondary, screenSharing } = buildStageLayout(slots);
 
   const notify = useRef(onStageChange);
   useEffect(() => {
@@ -199,6 +293,37 @@ export function LiveStage({
   useEffect(() => {
     notify.current?.(all);
   }, [all]);
+
+  // Fit reports for our own tiles, keyed by tile so a screen and a camera can
+  // each report independently.
+  const [fits, setFits] = useState<Record<string, TileFitReport>>({});
+  const handleFit = useCallback((report: TileFitReport | null, key: string) => {
+    setFits((previous) => {
+      if (!report) {
+        if (!(key in previous)) return previous;
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      }
+      const existing = previous[key];
+      if (
+        existing &&
+        existing.fit === report.fit &&
+        existing.isScreenShare === report.isScreenShare &&
+        Math.abs(existing.loss - report.loss) < 0.01
+      ) {
+        return previous;
+      }
+      return { ...previous, [key]: report };
+    });
+  }, []);
+  const localFit = useRef(onLocalFit);
+  useEffect(() => {
+    localFit.current = onLocalFit;
+  }, [onLocalFit]);
+  useEffect(() => {
+    localFit.current?.(Object.values(fits));
+  }, [fits]);
 
   const [audioBlocked, setAudioBlocked] = useState(false);
   useEffect(() => {
@@ -233,16 +358,55 @@ export function LiveStage({
       {slots.length === 0 ? (
         <div className="flex h-full w-full items-center justify-center">{emptyState}</div>
       ) : (
-        <div className={cn("h-full w-full gap-0.5 p-0.5", layoutClass(slots.length))}>
-          {slots.map((slot) => (
-            <MediaTile
-              key={slot.identity}
-              slot={slot}
-              localTile={localTile}
-              onRemove={onRemoveGuest}
-              removing={removing}
-            />
-          ))}
+        <div
+          className={cn(
+            "flex h-full w-full gap-0.5 p-0.5",
+            // Faces sit under the screen on a portrait phone and beside it once
+            // there is width; without a share the strip is absent entirely.
+            screenSharing ? "flex-col lg:flex-row" : "flex-col"
+          )}
+        >
+          <div
+            className={cn(
+              "min-h-0 min-w-0 flex-1 gap-0.5",
+              layoutClass(primary.length)
+            )}
+          >
+            {primary.map((tile) => (
+              <MediaTile
+                key={tile.key}
+                tile={tile}
+                localTile={localTile}
+                onRemove={onRemoveGuest}
+                removing={removing}
+                onFit={
+                  tile.slot.isLocal
+                    ? (report) => handleFit(report, tile.key)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+
+          {/* The camera strip. Every participant keeps a face here while a
+              screen is up — including the person sharing it. */}
+          {secondary.length > 0 && (
+            <div
+              className={cn(
+                "flex shrink-0 gap-0.5 overflow-auto",
+                "h-[92px] w-full flex-row lg:h-full lg:w-[180px] lg:flex-col"
+              )}
+            >
+              {secondary.map((tile) => (
+                <div
+                  key={tile.key}
+                  className="aspect-video h-full shrink-0 lg:h-auto lg:w-full"
+                >
+                  <MediaTile tile={tile} localTile={localTile} compact />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

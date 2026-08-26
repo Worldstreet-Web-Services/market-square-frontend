@@ -83,3 +83,71 @@ export type DeepLink = z.infer<typeof DeepLinkSchema>;
 export type ProfileRole = z.infer<typeof RoleSchema>;
 export type VerificationState = z.infer<typeof VerificationSchema>;
 export type OrgBadge = z.infer<typeof OrgBadgeSchema>;
+
+
+/**
+ * Tickets and streams.
+ *
+ * These live here rather than in the streams slice because Explore renders
+ * stream cards too, and slices never import each other. A type-only import
+ * across that boundary is harmless at runtime, but keeping the shapes here
+ * removes the temptation for someone to later add a VALUE import along the
+ * same path. `StreamSchema` needs `TicketSchema`, so both moved together.
+ */
+export const TicketSchema = z.object({
+  id: z.string(),
+  streamId: z.string().optional().default(""),
+  buyerId: z.string().optional().default(""),
+  railRef: z.string().nullable().optional().default(null),
+  tier: z.enum(["standard", "vip"]).catch("standard"),
+  priceKash: z.string(),
+  currency: z.string().optional().default("KASH"),
+  status: z.enum(["pending", "confirmed", "failed", "refunded"]).catch("confirmed"),
+  createdAt: z.string().optional().default(""),
+  confirmedAt: z.string().nullable().optional().default(null),
+});
+
+export const StreamSchema = z.object({
+  id: z.string(),
+  ownerId: z.string(),
+  owner: ProfileSchema.nullable().optional().default(null),
+  title: z.string(),
+  description: z.string().nullable().optional().default(null),
+  category: z.string().optional().default("other"),
+  // Ark broadcasts a casino game to Market Square as a stream, and carries the
+  // way back into Ark here: { kind: "game", ref: "<game>:<id>" }. The service
+  // has always sent this field; the schema dropped it, so the link never
+  // reached the UI and those streams were dead ends.
+  deepLink: DeepLinkSchema.nullable().optional().default(null),
+  status: z.enum(["scheduled", "live", "ended", "cancelled"]).catch("scheduled"),
+  visibility: z.enum(["public", "ticketed"]).catch("public"),
+  ticketPriceKash: z.string().nullable().optional().default(null),
+  vipPriceKash: z.string().nullable().optional().default(null),
+  vipEarlyAccessMinutes: z.number().nullable().optional().default(null),
+  thumbnailUrl: z.string().nullable().optional().default(null),
+  scheduledAt: z.string().nullable().optional().default(null),
+  startedAt: z.string().nullable().optional().default(null),
+  endedAt: z.string().nullable().optional().default(null),
+  replayUrl: z.string().nullable().optional().default(null),
+  refundPolicy: z.string().optional().default("Refunds are available when the host cancels before the stream begins."),
+  replayPolicy: z.string().optional().default("Replay access follows the entitlement shown on your ticket."),
+  peakViewers: z.number().optional().default(0),
+  totalViewSeconds: z.number().optional().default(0),
+  createdAt: z.string().optional().default(""),
+  // StreamDetail addition, ABSENT on list rows — hence nullable, not 0.
+  // Defaulting to 0 made "no live count available" indistinguishable from
+  // "nobody is watching", and a discovery grid rendering a confident 0 (or
+  // worse, a historical peak) is stating something untrue.
+  viewerCount: z.number().nullable().optional().default(null),
+  // Aggregate live reactions. Optional until all gateway deployments expose it.
+  likeCount: z.number().optional().default(0),
+  pulse: z.object({
+    bullish: z.number().optional().default(0),
+    neutral: z.number().optional().default(0),
+    bearish: z.number().optional().default(0),
+  }).optional().default({ bullish: 0, neutral: 0, bearish: 0 }),
+  myTicket: TicketSchema.nullable().optional().default(null),
+});
+
+export type Ticket = z.infer<typeof TicketSchema>;
+export type Stream = z.infer<typeof StreamSchema>;

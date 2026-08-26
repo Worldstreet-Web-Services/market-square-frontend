@@ -1,9 +1,14 @@
 /**
  * Which Market Square GETs a signed-out visitor may read.
  *
- * SOURCE OF TRUTH: the backend's own OpenAPI document. A GET is public exactly
- * when its operation carries no `security` requirement in
- * `GET ${WSAPI_BASE_URL}/v1/market-square/openapi.json`.
+ * SOURCE OF TRUTH: the backend's own OpenAPI document. A GET is public when the spec lets an ANONYMOUS
+ * caller make it. `security` is a list of ALTERNATIVES OR'd together, and an
+ * EMPTY object is the alternative that requires nothing — so both a missing
+ * `security` and `[{}, { bearerAuth: [] }]` mean public. The second shape is
+ * "optional auth", which is what every public Market Square GET actually is:
+ * it skips our session check but still forwards a token when there is one.
+ * Only an array whose every alternative demands a scheme is secured.
+ * See `GET ${WSAPI_BASE_URL}/v1/market-square/openapi.json`.
  *
  * TO RE-DERIVE after backend routes land, run:
  *
@@ -11,7 +16,7 @@
  *     | jq -r '.paths | to_entries[]
  *              | .key as $p | .value | to_entries[]
  *              | select(.key == "get")
- *              | "\(if (.value.security // []) | length == 0
+ *              | "\(if (.value.security // [{}]) | (length == 0 or any(length == 0))
  *                    then "PUBLIC" else "SECURED" end)\t\($p)"' \
  *     | sort
  *
@@ -57,14 +62,20 @@ export function isPublicGet(path: string[]): boolean {
   if (head === "activities") return true;
   // The category index feeds the right rail, which renders signed out.
   if (head === "categories") return true;
-  // Every GET under /profiles is public: the profile itself, its posts,
-  // streams and activities, and both follow lists.
+  // Every GET under /profiles is public: the DIRECTORY collection itself, one
+  // profile, its posts, streams and activities, and both follow lists. The
+  // collection matters — Explore's People tab is a discovery surface and has
+  // to list for signed-out visitors, with the sign-in invitation only on the
+  // Follow action.
   if (head === "profiles") return true;
   // /store/items and /store/items/{slug}.
   if (head === "store") return true;
   if (head === "health" || head === "openapi.json") return true;
   // Search is public; an optional token only enriches viewer state.
   if (head === "search") return true;
+  // The topic vocabulary is public — the picker renders for signed-out
+  // visitors too, who choose first and are prompted to sign in to save.
+  if (head === "topics") return true;
 
   // /posts/{id} and /posts/{id}/comments only. Every other posts route (like,
   // repost, bookmark) is a write and never reaches this predicate.

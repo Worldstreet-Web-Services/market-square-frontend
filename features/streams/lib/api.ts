@@ -28,10 +28,20 @@ import {
 export async function fetchStreams(params: {
   status?: "live" | "scheduled" | "ended";
   category?: StreamCategory;
+  /** Topic keys from the viewer's picker; omitted when nothing is chosen. */
+  topics?: string[];
   cursor?: string;
   limit?: number;
 }) {
-  return StreamListSchema.parse(await msApi.get("/streams", params));
+  const { topics, ...rest } = params;
+  return StreamListSchema.parse(
+    await msApi.get("/streams", {
+      ...rest,
+      // Comma-joined, and omitted entirely when nothing is chosen — an empty
+      // `topics=` would read as "match no topics" rather than "no filter".
+      ...(topics && topics.length > 0 ? { topics: topics.join(",") } : {}),
+    })
+  );
 }
 
 export async function fetchStream(id: string) {

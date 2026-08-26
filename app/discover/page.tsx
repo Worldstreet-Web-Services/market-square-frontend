@@ -1,5 +1,5 @@
-import { DiscoveryPage } from "@/features/discovery";
+import { DiscoverScreen } from "@/components/layout/discover-screen";
 
 export default function Page() {
-  return <DiscoveryPage />;
+  return <DiscoverScreen />;
 }

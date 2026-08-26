@@ -10,6 +10,8 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
+import { isVideoPost } from "@/lib/media";
+import { videoListKey } from "@/lib/video-context";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   addComment,
@@ -40,6 +42,89 @@ export function useFeed(lane: Lane) {
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
+}
+
+/**
+ * The Explore grid's media list — and the immersive viewer's scroll list.
+ *
+ * ONE query serves both: the grid renders the loaded pages as cards and the
+ * viewer renders the video subset of the very same pages as slides, so opening
+ * a video continues the grid's pagination rather than starting a second one.
+ * That is why the key is derived from `videoListKey` and not from anything
+ * view-specific.
+ *
+ * LANE: `for-you`, not `reels`. Explore's resting grid must show what we have
+ * — pictures AND video — before the reader has chosen anything, and `reels` is
+ * video-only. There is no media lane and no `mediaKind` filter on `/feed`
+ * (the lane enum is fixed: for-you, following, live, platform, trending,
+ * reels), so the media are selected from the general lane HERE. That is a
+ * deliberate exception to "never filter a lane client-side", which exists to
+ * stop a lane TAB being faked: this is not a lane, it is a grid composed from
+ * one. The cost is real and handled by the caller — a page of 30 mixed items
+ * can yield very few media, so the screen keeps paging until the grid is worth
+ * showing. See the report: `?mediaKind=image,video` on /feed would make this
+ * exact rather than approximate.
+ *
+ * LIVE streams are deliberately not here: a live card goes to the live room,
+ * which is a different surface with chat, tickets and a stage.
+ */
+export function useMediaFeed(topics: string[], enabled = true) {
+  const key = videoListKey(topics);
+  return useInfiniteQuery({
+    queryKey: ["ms", "feed", "media", key],
+    queryFn: ({ pageParam }) => fetchFeed("for-you", pageParam ?? undefined, topics),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/**
+ * The posts carrying media inside feed pages, in order.
+ *
+ * `isVideoPost` reads the backend's `mediaKind` first and only sniffs the URL
+ * as a fallback — never the extension alone. An image is anything with a
+ * `mediaUrl` that is not a video.
+ */
+export function mediaPostsOf(pages: FeedPage[] | undefined): Post[] {
+  return (pages ?? []).flatMap((page) =>
+    page.items.flatMap((item) => (item.post?.mediaUrl ? [item.post] : []))
+  );
+}
+
+/** Just the clips — the immersive viewer scrolls through these only. */
+export function videoPostsOf(pages: FeedPage[] | undefined): Post[] {
+  return mediaPostsOf(pages).filter((post) => isVideoPost(post));
+}
+
+/**
+ * Explore's Posts tab — the general lane, populated on arrival.
+ *
+ * Same principle as the media grid: a discovery tab that opens empty and asks
+ * you to search first is not a discovery tab. Only the POST items are shown —
+ * the lane also carries streams, activities and platform events, which have
+ * their own tabs and surfaces.
+ *
+ * `/feed` takes no `q`, so a query on this tab falls through to `/search`
+ * rather than narrowing this list. See the report: `q` on `/feed` would let
+ * browse and search share one list and one cursor, as People does.
+ */
+export function useBrowsePosts(topics: string[], enabled = true) {
+  const key = videoListKey(topics);
+  return useInfiniteQuery({
+    queryKey: ["ms", "feed", "browse-posts", key],
+    queryFn: ({ pageParam }) => fetchFeed("for-you", pageParam ?? undefined, topics),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/** The posts inside feed pages, in order — text and media alike. */
+export function postsOf(pages: FeedPage[] | undefined): Post[] {
+  return (pages ?? []).flatMap((page) =>
+    page.items.flatMap((item) => (item.post ? [item.post] : []))
+  );
 }
 
 /** One post by id, for the permalink at /p/[id]. */

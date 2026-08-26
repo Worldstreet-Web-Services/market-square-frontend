@@ -7,52 +7,10 @@ import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
 export const STREAM_CATEGORIES = ["worldstreet", "music", "podcast", "gaming", "other"] as const;
 export type StreamCategory = (typeof STREAM_CATEGORIES)[number];
 
-export const TicketSchema = z.object({
-  id: z.string(),
-  streamId: z.string().optional().default(""),
-  buyerId: z.string().optional().default(""),
-  railRef: z.string().nullable().optional().default(null),
-  tier: z.enum(["standard", "vip"]).catch("standard"),
-  priceKash: z.string(),
-  currency: z.string().optional().default("KASH"),
-  status: z.enum(["pending", "confirmed", "failed", "refunded"]).catch("confirmed"),
-  createdAt: z.string().optional().default(""),
-  confirmedAt: z.string().nullable().optional().default(null),
-});
+import { StreamSchema, TicketSchema } from "@/lib/api/schemas";
+export { StreamSchema, TicketSchema };
+export type { Stream, Ticket } from "@/lib/api/schemas";
 
-export const StreamSchema = z.object({
-  id: z.string(),
-  ownerId: z.string(),
-  owner: ProfileSchema.nullable().optional().default(null),
-  title: z.string(),
-  description: z.string().nullable().optional().default(null),
-  category: z.string().optional().default("other"),
-  status: z.enum(["scheduled", "live", "ended", "cancelled"]).catch("scheduled"),
-  visibility: z.enum(["public", "ticketed"]).catch("public"),
-  ticketPriceKash: z.string().nullable().optional().default(null),
-  vipPriceKash: z.string().nullable().optional().default(null),
-  vipEarlyAccessMinutes: z.number().nullable().optional().default(null),
-  thumbnailUrl: z.string().nullable().optional().default(null),
-  scheduledAt: z.string().nullable().optional().default(null),
-  startedAt: z.string().nullable().optional().default(null),
-  endedAt: z.string().nullable().optional().default(null),
-  replayUrl: z.string().nullable().optional().default(null),
-  refundPolicy: z.string().optional().default("Refunds are available when the host cancels before the stream begins."),
-  replayPolicy: z.string().optional().default("Replay access follows the entitlement shown on your ticket."),
-  peakViewers: z.number().optional().default(0),
-  totalViewSeconds: z.number().optional().default(0),
-  createdAt: z.string().optional().default(""),
-  // StreamDetail additions; absent on list rows.
-  viewerCount: z.number().optional().default(0),
-  // Aggregate live reactions. Optional until all gateway deployments expose it.
-  likeCount: z.number().optional().default(0),
-  pulse: z.object({
-    bullish: z.number().optional().default(0),
-    neutral: z.number().optional().default(0),
-    bearish: z.number().optional().default(0),
-  }).optional().default({ bullish: 0, neutral: 0, bearish: 0 }),
-  myTicket: TicketSchema.nullable().optional().default(null),
-});
 
 export const StreamListSchema = z.object({
   items: z.array(StreamSchema),
@@ -211,8 +169,6 @@ export type StreamStats = z.infer<typeof StreamStatsSchema>;
 export type StreamEvent = z.infer<typeof StreamEventSchema>;
 export type SpeakerRequest = z.infer<typeof SpeakerRequestSchema>;
 
-export type Stream = z.infer<typeof StreamSchema>;
-export type Ticket = z.infer<typeof TicketSchema>;
 export type TicketQuote = z.infer<typeof QuoteSchema>;
 export type Playback = z.infer<typeof PlaybackSchema>;
 export type Ingest = z.infer<typeof IngestSchema>;

@@ -5,5 +5,8 @@ export { VerificationCard } from "./components/verification-card";
 export { ClaimUsernameGate } from "./components/claim-username-gate";
 export { CreatorCard } from "./components/creator-card";
 export { FollowPill } from "./components/follow-pill";
+// The one row for listing people. Composed into Explore's People results
+// through a route slot — slices never import each other.
+export { PersonRow } from "./components/person-row";
 export { WhoToFollowRail } from "./components/who-to-follow-rail";
 export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";

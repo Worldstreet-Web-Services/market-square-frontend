@@ -24,6 +24,8 @@ export interface FxPost {
   kind: "update" | "story";
   text: string;
   mediaUrl: string | null;
+  /** Topic keys, so `?topics=` filters the fixture feed as the service does. */
+  topics?: string[];
   deepLink: { kind: string; ref: string } | null;
   createdAt: string;
   likeCount: number;
@@ -60,6 +62,8 @@ export interface FxStream {
   endedAt: string | null;
   replayUrl: string | null;
   viewerCount: number;
+  /** Set on streams Ark broadcasts here; null on Market Square-native ones. */
+  deepLink?: { kind: string; ref: string } | null;
   ingest?: { rtmpUrl: string; streamKey: string };
 }
 
@@ -233,6 +237,124 @@ export const follows = new Map<string, Set<string>>([
 export const DEMO_HLS_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
 
 export const streams: FxStream[] = [
+  // ---- Ark casino broadcasts -------------------------------------------
+  // Created by Ark, not Market Square: each carries a `game` deep link back
+  // into the game itself. All four prefixes plus the legacy bare-id form.
+  {
+    id: "st_ark_chess",
+    ownerId: "u_kenji",
+    title: "Nakamura vs Carlsen — round 3",
+    description:
+      "Live board from the Ark casino. Full match and move list in Ark: https://ark.example/casino/chess/watch?match=match:2026:07",
+    category: "gaming",
+    status: "live",
+    visibility: "public",
+    ticketPriceKash: null,
+    vipPriceKash: null,
+    thumbnailHue: 268,
+    scheduledAt: null,
+    startedAt: min(18),
+    endedAt: null,
+    replayUrl: null,
+    viewerCount: 812,
+    // Colons INSIDE the id — the resolver must split on the first one only.
+    deepLink: { kind: "game", ref: "chess:match:2026:07" },
+  },
+  {
+    id: "st_ark_checkers",
+    ownerId: "u_zara",
+    title: "Checkers ladder — semi-final",
+    description: "Ark casino checkers, live commentary.",
+    category: "gaming",
+    status: "live",
+    visibility: "public",
+    ticketPriceKash: null,
+    vipPriceKash: null,
+    thumbnailHue: 190,
+    scheduledAt: null,
+    startedAt: min(6),
+    endedAt: null,
+    replayUrl: null,
+    viewerCount: 133,
+    deepLink: { kind: "game", ref: "checkers:ck-4471" },
+  },
+  // TWO creators broadcasting the SAME arkball draw. A draw is global, so
+  // both are legitimate, distinct broadcasts with their own owners — deduping
+  // live cards by deepLink.ref would wrongly collapse them into one.
+  {
+    id: "st_ark_arkball_a",
+    ownerId: "u_amara",
+    title: "Arkball draw 118 — my numbers",
+    description: "Watching the draw live.",
+    category: "gaming",
+    status: "live",
+    visibility: "public",
+    ticketPriceKash: null,
+    vipPriceKash: null,
+    thumbnailHue: 40,
+    scheduledAt: null,
+    startedAt: min(3),
+    endedAt: null,
+    replayUrl: null,
+    viewerCount: 402,
+    deepLink: { kind: "game", ref: "arkball:draw-118" },
+  },
+  {
+    id: "st_ark_arkball_b",
+    ownerId: "u_leo",
+    title: "Arkball 118 with the syndicate",
+    description: "Same draw, different table.",
+    category: "gaming",
+    status: "live",
+    visibility: "public",
+    ticketPriceKash: null,
+    vipPriceKash: null,
+    thumbnailHue: 44,
+    scheduledAt: null,
+    startedAt: min(2),
+    endedAt: null,
+    replayUrl: null,
+    viewerCount: 96,
+    deepLink: { kind: "game", ref: "arkball:draw-118" },
+  },
+  {
+    id: "st_ark_laststanding",
+    ownerId: "u_nina",
+    title: "Last Man Standing — round 5",
+    description: "Ark casino elimination round.",
+    category: "gaming",
+    status: "live",
+    visibility: "public",
+    ticketPriceKash: null,
+    vipPriceKash: null,
+    thumbnailHue: 350,
+    scheduledAt: null,
+    startedAt: min(11),
+    endedAt: null,
+    replayUrl: null,
+    viewerCount: 245,
+    deepLink: { kind: "game", ref: "last-standing:ls-88" },
+  },
+  {
+    // Legacy: chess shipped before the prefix existed, so the ref is a bare
+    // match id and must still resolve as chess.
+    id: "st_ark_legacy",
+    ownerId: "u_dre",
+    title: "Blitz arena (legacy broadcast)",
+    description: "An older Ark broadcast, before game prefixes.",
+    category: "gaming",
+    status: "live",
+    visibility: "public",
+    ticketPriceKash: null,
+    vipPriceKash: null,
+    thumbnailHue: 280,
+    scheduledAt: null,
+    startedAt: min(30),
+    endedAt: null,
+    replayUrl: null,
+    viewerCount: 58,
+    deepLink: { kind: "game", ref: "legacy-match-4417" },
+  },
   {
     id: "st_desk",
     ownerId: "u_amara",

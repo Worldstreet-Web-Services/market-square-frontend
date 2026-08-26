@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
-import { invalidateIdentitySurfaces } from "@/lib/api/invalidate";
+import { invalidateFollowSurfaces, invalidateIdentitySurfaces } from "@/lib/api/invalidate";
 import { trackMarketEvent } from "@/lib/analytics";
 import type { Profile } from "@/lib/api/schemas";
 import { useAuth } from "@/hooks/use-auth";
@@ -133,18 +133,9 @@ export function useFollow(profile: Profile) {
       clearFollowIntent(profile.id);
       toast.error(errorMessage(error, "Couldn't update follow."));
     },
-    onSettled: () => {
-      // The followed profile owns follower counts; MY profile owns the
-      // following count; the spotlight and who-to-follow rails both render
-      // from ["ms","spotlight"]; search results carry `isFollowing`; and the
-      // Following lane plus the stories rail change membership outright.
-      queryClient.invalidateQueries({ queryKey: ["ms", "profile", profile.username] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "feed", "following"] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "stories"] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "spotlight"] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "discovery"] });
-    },
+    // One shared list, in lib/api/invalidate.ts — every surface that grows a
+    // follow control needs the identical set, and a second copy drifts.
+    onSettled: () => invalidateFollowSurfaces(queryClient, profile.username),
     onSuccess: () => {
       trackMarketEvent("follow_created", { surface: "profile", entityType: "profile", entityId: profile.id });
     },

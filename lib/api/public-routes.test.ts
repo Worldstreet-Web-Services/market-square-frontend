@@ -3,10 +3,14 @@ import { describe, it } from "node:test";
 import { isPublicGet, isSafePath } from "./public-routes.ts";
 
 /**
- * SOURCE OF TRUTH for this table: the backend's OpenAPI document. A GET is
- * public exactly when its operation carries no `security` requirement in
- * `GET ${WSAPI_BASE_URL}/v1/market-square/openapi.json`; anything with
- * `bearerAuth` or `adminKey` is secured.
+ * SOURCE OF TRUTH for this table: the backend's OpenAPI document. A GET is public when the spec lets an ANONYMOUS
+ * caller make it. `security` is a list of ALTERNATIVES OR'd together, and an
+ * EMPTY object is the alternative that requires nothing — so both a missing
+ * `security` and `[{}, { bearerAuth: [] }]` mean public. The second shape is
+ * "optional auth", which is what every public Market Square GET actually is:
+ * it skips our session check but still forwards a token when there is one.
+ * Only an array whose every alternative demands a scheme is secured.
+ * See `GET ${WSAPI_BASE_URL}/v1/market-square/openapi.json`.
  *
  * TO RE-DERIVE when backend routes land:
  *
@@ -14,7 +18,7 @@ import { isPublicGet, isSafePath } from "./public-routes.ts";
  *     | jq -r '.paths | to_entries[]
  *              | .key as $p | .value | to_entries[]
  *              | select(.key == "get")
- *              | "\(if (.value.security // []) | length == 0
+ *              | "\(if (.value.security // [{}]) | (length == 0 or any(length == 0))
  *                    then "PUBLIC" else "SECURED" end)\t\($p)"' \
  *     | sort
  *
@@ -28,7 +32,7 @@ import { isPublicGet, isSafePath } from "./public-routes.ts";
  * never inspects id values.
  */
 
-// Every GET the service publishes with NO security requirement (22 of them).
+// Every GET the service publishes with NO security requirement (23 of them).
 const PUBLIC: string[][] = [
   ["activities"],
   ["categories"],
@@ -38,7 +42,14 @@ const PUBLIC: string[][] = [
   ["posts", "post_1"],
   ["posts", "post_1", "comments"],
   ["profiles", "adeey"],
+  // The DIRECTORY collection. Explore's People tab is a discovery surface and
+  // lists for signed-out visitors, with the sign-in invitation only on the
+  // Follow action. The route is not in the backend spec yet, so the live
+  // `check:public-routes` diff cannot catch it — which is precisely how
+  // `categories`, `search` and `topics` each reached production gated at 401.
+  ["profiles"],
   ["search"],
+  ["topics"],
   ["profiles", "adeey", "posts"],
   ["profiles", "adeey", "streams"],
   ["profiles", "adeey", "activities"],
@@ -66,6 +77,7 @@ const SECURED: string[][] = [
   ["me", "orders"],
   ["me", "tickets"],
   ["me", "unread"],
+  ["me", "interests"],
   ["me", "verification"],
   ["streams", "st_1", "events"],
   ["streams", "st_1", "stats"],

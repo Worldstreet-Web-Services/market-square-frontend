@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, Pill, VerifiedBadge } from "@/components/ui/badge";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { IconEye, IconPlay } from "@/components/ui/icons";
+import { gameLabel } from "@/lib/deeplink";
 import type { Stream } from "@/features/streams/lib/types";
 import { MARKET_FLAGS } from "@/lib/market-config";
 
@@ -18,7 +19,12 @@ export function streamPriceLabel(stream: Pick<Stream, "ticketPriceKash" | "vipPr
 // List row for the Live column: thumbnail left, everything else stacked
 // beside it, so a full section scans in one vertical pass.
 export function StreamCard({ stream }: { stream: Stream }) {
-  const viewers = stream.viewerCount || stream.peakViewers;
+  // Live viewers only. `peakViewers` is a historical high-water mark, so
+  // showing it as "watching" on a discovery surface is a lie — when there is
+  // no live count, the row says nothing.
+  const viewers = stream.status === "live" ? stream.viewerCount : null;
+  // Ark-created streams carry a game deep link; native ones do not.
+  const game = gameLabel(stream.deepLink);
   return (
     <TransitionLink
       href={`/live/${stream.id}`}
@@ -63,7 +69,15 @@ export function StreamCard({ stream }: { stream: Stream }) {
           <Pill tone="accent" className="px-2 py-0 text-[10px]">
             {streamPriceLabel(stream)}
           </Pill>
-          {stream.status === "live" && viewers > 0 && (
+          {/* Broadcast of an Ark casino game. The whole card is already a link
+              into the room, so this is a label rather than a nested anchor —
+              the actual route back into Ark lives in the room itself. */}
+          {game && (
+            <Pill tone="premium" className="px-2 py-0 text-[10px]">
+              {game}
+            </Pill>
+          )}
+          {viewers !== null && viewers > 0 && (
             <span className="tnum flex items-center gap-1">
               <IconEye className="h-3.5 w-3.5" /> {formatCount(viewers)} watching
             </span>

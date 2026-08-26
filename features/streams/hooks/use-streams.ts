@@ -47,12 +47,17 @@ function invalidateStreamSurfaces(queryClient: ReturnType<typeof useQueryClient>
 
 // "replay" is a UI-layer concept: the backend only knows live | scheduled |
 // ended, so replays are ended streams with a replayUrl.
-export function useStreamList(section: "live" | "scheduled" | "replay") {
+export function useStreamList(
+  section: "live" | "scheduled" | "replay",
+  topics: string[] = []
+) {
   const status = section === "replay" ? "ended" : section;
+  // Sorted so the same selection always produces the same cache key.
+  const key = [...topics].sort().join(",");
   return useQuery({
-    queryKey: ["ms", "streams", section],
+    queryKey: ["ms", "streams", section, key],
     queryFn: async () => {
-      const page = await fetchStreams({ status });
+      const page = await fetchStreams({ status, topics });
       if (section !== "replay") return page;
       return { ...page, items: page.items.filter((stream) => stream.replayUrl !== null) };
     },
