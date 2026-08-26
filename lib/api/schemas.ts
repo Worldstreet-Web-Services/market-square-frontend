@@ -84,7 +84,6 @@ export type ProfileRole = z.infer<typeof RoleSchema>;
 export type VerificationState = z.infer<typeof VerificationSchema>;
 export type OrgBadge = z.infer<typeof OrgBadgeSchema>;
 
-
 /**
  * Tickets and streams.
  *
@@ -196,7 +195,30 @@ export const PostSchema = z.object({
   // Arkmarks. Defaults to false so a backend that has not shipped the field
   // yet parses cleanly — the button reads "not saved" rather than throwing.
   bookmarkedByMe: z.boolean().optional().default(false),
+  // Tips received. Both default so a backend without the columns still parses;
+  // the card then simply shows no tally, which is honest.
+  tipCount: z.number().optional().default(0),
+  // Decimal string, KASH — never coerced to a number. Money that round-trips
+  // through a float stops matching the ledger it came from.
+  tipTotalKash: z.string().optional().default("0"),
   author: ProfileSchema.nullable().optional().default(null),
 });
+
+/**
+ * What the server says about tipping before we draw the control.
+ *
+ * `enabled` is false whenever the payment rail cannot move KASH between two
+ * users. We hide the button in that case rather than showing one that can only
+ * return an error — an affordance that never works is worse than no affordance.
+ */
+export const TipCapabilitySchema = z.object({
+  enabled: z.boolean(),
+  minKash: z.string(),
+  maxKash: z.string(),
+  verifiedAuthorsOnly: z.boolean(),
+});
+
+export type TipCapability = z.infer<typeof TipCapabilitySchema>;
+
 
 export type Post = z.infer<typeof PostSchema>;

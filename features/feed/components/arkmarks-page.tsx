@@ -23,8 +23,12 @@ import type { Profile } from "@/lib/api/schemas";
  */
 export function ArkmarksPage({
   followSlot,
+  tipSlot,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
+  /** Composed from outside the slice — the tip control lives in the tips
+   *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
+  tipSlot?: (post: Post) => React.ReactNode;
 }) {
   const { ready, authenticated, login } = useAuth();
   const bookmarks = useBookmarks();
@@ -98,7 +102,12 @@ export function ArkmarksPage({
 
             {items.map((item) => (
               <div key={item.id} className="ws-enter">
-                <FeedItemCard item={item} followSlot={followSlot} onQuote={setQuoting} />
+                <FeedItemCard
+                  item={item}
+                  followSlot={followSlot}
+                  tipSlot={tipSlot}
+                  onQuote={setQuoting}
+                />
               </div>
             ))}
 

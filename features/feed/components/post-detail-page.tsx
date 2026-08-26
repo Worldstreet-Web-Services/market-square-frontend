@@ -60,10 +60,14 @@ function CommentComposer({ postId }: { postId: string }) {
 export function PostDetailPage({
   postId,
   followSlot,
+  tipSlot,
 }: {
   postId: string;
   /** Composed from outside the slice — feed never imports profile. */
   followSlot?: (author: Profile) => React.ReactNode;
+  /** Composed from outside the slice — the tip control lives in the tips
+   *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
+  tipSlot?: (post: Post) => React.ReactNode;
 }) {
   const post = usePost(postId);
   const comments = useComments(postId, true);
@@ -107,7 +111,12 @@ export function PostDetailPage({
       />
 
       <div className="px-4 py-4">
-        <PostCard post={data} followSlot={followSlot} onQuote={(target) => setQuoting(target)} />
+        <PostCard
+          post={data}
+          followSlot={followSlot}
+          tipSlot={tipSlot}
+          onQuote={(target) => setQuoting(target)}
+        />
       </div>
 
       {quoting && (

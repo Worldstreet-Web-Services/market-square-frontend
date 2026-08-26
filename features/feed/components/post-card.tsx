@@ -325,6 +325,7 @@ export function PostCard({
   post,
   repostedBy,
   followSlot,
+  tipSlot,
   onQuote,
 }: {
   post: Post;
@@ -334,6 +335,9 @@ export function PostCard({
   repostedBy?: Profile | null;
   /** Composed from outside the slice — feed never imports profile. */
   followSlot?: (author: Profile) => React.ReactNode;
+  /** Composed from outside the slice — the tip control belongs to the tips
+   *  slice, and it takes the POST because a tip goes to `/posts/:id/tips`. */
+  tipSlot?: (post: Post) => React.ReactNode;
 }) {
   const like = useLikePost();
   const repost = useRepostPost();
@@ -402,7 +406,15 @@ export function PostCard({
             {relativeTime(post.createdAt)}
           </p>
         </div>
-        {author && followSlot?.(author)}
+        {/* The design's action row: 26px tall, 8px between the two controls,
+            tip first. The row exists even with one control in it so the
+            header's right edge does not shift when tipping goes quiet. */}
+        {author && (
+          <div className="flex h-[26px] shrink-0 items-center gap-2">
+            {tipSlot?.(post)}
+            {followSlot?.(author)}
+          </div>
+        )}
       </header>
 
       {/* The design rules the identity row off from the body. */}

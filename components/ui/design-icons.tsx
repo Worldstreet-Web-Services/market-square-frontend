@@ -69,3 +69,42 @@ export function IconMsPlay({ className }: IconProps) {
     </svg>
   );
 }
+
+/**
+ * HandDeposit — the tip glyph.
+ *
+ * The design set has no hand/deposit mark of its own, so this one is DRAWN
+ * rather than exported: an open palm under a coin dropping into it, on the same
+ * 24-unit grid and the same "one filled path, `fill="currentColor"`" shape as
+ * every other IconMs* above.
+ *
+ * It is `currentColor` even though the tip button specifies a fixed
+ * `#C27AFF`. The design measures a colour for one instance of a glyph; the
+ * FILE's rule (see its header) is that baked-in fills become currentColor so
+ * the call site owns the tone. Keeping that rule means the tip button paints
+ * `text-spotlight-chip-ink` — the token that IS `#C27AFF` — and the same glyph
+ * can appear on a black sheet header or a disabled control without a second
+ * copy of the path existing purely to hold a different fill.
+ */
+export function IconMsHandDeposit({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      {/* The deposit: a shaft and a chevron head, drawn as filled outlines on
+          the 1.5-unit stroke weight the rest of the set uses. */}
+      <path d="M11.25 3.75a.75.75 0 0 1 1.5 0v8a.75.75 0 0 1-1.5 0v-8Z" fill="currentColor" />
+      <path
+        d="M8.47 9.72a.75.75 0 0 1 1.06-1.06L12 11.13l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3Z"
+        fill="currentColor"
+      />
+      {/* The open hand, drawn as the CUP it makes rather than as a palm with
+          fingers: a 1.5-unit band between two concentric half-circles. Fingers
+          do not survive 16px — at the size this actually ships they turn into
+          three grey smudges — and the cup plus the arrow already says
+          "into someone's hand" without them. */}
+      <path
+        d="M3.75 15A8.25 8.25 0 0 0 20.25 15H18.75A6.75 6.75 0 0 1 5.25 15Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
