@@ -2,20 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/cn";
-import { formatCount, formatDateTime, formatKash, relativeTime } from "@/lib/format";
+import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IconCalendar, IconHeart, IconComment } from "@/components/ui/icons";
+import { IconCalendar } from "@/components/ui/icons";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import type { Profile } from "@/lib/api/schemas";
+import type { Post, Profile } from "@/lib/api/schemas";
 import {
   useFollow,
   useProfile,
@@ -85,11 +84,14 @@ function PostsTab({
   username,
   isMe,
   composeSlot,
+  postSlot,
 }: {
   username: string;
   isMe: boolean;
   /** Composed from outside — profile never imports the feed slice. */
   composeSlot?: React.ReactNode;
+  /** The feed slice's post card, composed in by the route. */
+  postSlot: (post: Post) => React.ReactNode;
 }) {
   const posts = useProfilePosts(username);
   if (posts.isPending) return <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>;
@@ -116,30 +118,16 @@ function PostsTab({
         />
       </div>
     );
+  // The real post card, composed in by the route: the profile slice cannot
+  // import the feed slice. This row used to be hand-rolled here, and its heart
+  // was a <span> with no handler, so liking a post from somebody's profile did
+  // nothing at all. It also dropped the media, the author, the arkmark and the
+  // repost, which is why a post read differently here than anywhere else.
   return (
     <ul>
-      {posts.data.items.map((post) => {
-        const cta = resolveCta(post.deepLink);
-        return (
-          <li key={post.id} className="ws-row px-4 py-3">
-            <p className="whitespace-pre-wrap break-words text-[15px] leading-normal text-body">{post.text}</p>
-            <div className="mt-2 flex items-center gap-5 text-[13px] text-meta">
-              <span className={cn("tnum flex items-center gap-1.5", post.likedByMe && "text-like")}>
-                <IconHeart className="h-4 w-4" filled={post.likedByMe} /> {formatCount(post.likeCount)}
-              </span>
-              <span className="tnum flex items-center gap-1.5">
-                <IconComment className="h-4 w-4" /> {formatCount(post.commentCount)}
-              </span>
-              <span>{relativeTime(post.createdAt)}</span>
-              {cta && (
-                <Link href={cta.href} className="ml-auto font-semibold text-accent hover:underline">
-                  {cta.label} →
-                </Link>
-              )}
-            </div>
-          </li>
-        );
-      })}
+      {posts.data.items.map((post) => (
+        <li key={post.id}>{postSlot(post)}</li>
+      ))}
     </ul>
   );
 }
@@ -248,12 +236,14 @@ export function ProfilePage({
   username,
   messageSlot,
   composeSlot,
+  postSlot,
 }: {
   username: string;
   /** Composed from outside — profile never imports the messages slice. */
   messageSlot?: (profile: Profile) => React.ReactNode;
   /** Composed from outside — profile never imports the feed slice. */
   composeSlot?: React.ReactNode;
+  postSlot: (post: Post) => React.ReactNode;
 }) {
   const profile = useProfile(username);
   const me = useMe();
@@ -366,7 +356,9 @@ export function ProfilePage({
         />
       </div>
 
-      {tab === "posts" && <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} />}
+      {tab === "posts" && (
+        <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
+      )}
       {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
       {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}
 

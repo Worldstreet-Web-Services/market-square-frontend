@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useQueryParam } from "@/hooks/use-query-param";
+import { reelItems, reelSlides } from "@/lib/reels";
 import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
@@ -122,11 +123,24 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
     }
   };
   const feed = useFeed(lane);
-  const sentinel = useInfiniteScroll(
-    () => feed.fetchNextPage(),
-    Boolean(feed.hasNextPage && !feed.isFetchingNextPage)
+
+  // Reels only, and endless. Both rules are pure and live in lib/reels.ts,
+  // where they are pinned by tests.
+  const items = useMemo(
+    () => reelItems(feed.data?.pages.flatMap((page) => page.items) ?? []),
+    [feed.data?.pages]
   );
-  const items = feed.data?.pages.flatMap((page) => page.items) ?? [];
+  const [cycle, setCycle] = useState(0);
+  const exhausted = feed.isSuccess && !feed.hasNextPage && items.length > 0;
+  const slides = useMemo(() => reelSlides(items, cycle, exhausted), [items, cycle, exhausted]);
+
+  // Paging while the server has more, looping once it does not. One sentinel
+  // for both, so the reader never sees a boundary between them.
+  const sentinel = useInfiniteScroll(
+    () => (feed.hasNextPage ? feed.fetchNextPage() : setCycle((pass) => pass + 1)),
+    Boolean((feed.hasNextPage && !feed.isFetchingNextPage) || exhausted)
+  );
+
 
   return (
     // The immersive feed is FULL-BLEED: it cancels the shell's mobile padding
@@ -181,11 +195,15 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
         )}
         {feed.isSuccess && items.length === 0 && (
           <div className="flex h-dvh items-center justify-center px-6">
-            <EmptyState glyph="◇" title="The square is quiet" body="Nothing here yet — explore Live or the Store." />
+            <EmptyState
+              glyph="◇"
+              title="No reels yet"
+              body="Photos and videos land here. Text posts live in Explore."
+            />
           </div>
         )}
-        {items.map((item) => (
-          <SlideFor key={item.id} item={item} />
+        {slides.map(({ item, key }) => (
+          <SlideFor key={key} item={item} />
         ))}
         <div ref={sentinel} />
         {feed.isFetchingNextPage && (
