@@ -9,6 +9,7 @@ import { relativeTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
+import { MediaFrame } from "@/components/ui/media-frame";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
@@ -167,12 +168,15 @@ function QuotedPost({ quoted }: { quoted: NonNullable<Post["quotedPost"]> }) {
         </span>
       )}
       {quoted.mediaUrl && !isVideoPost(quoted) && (
-        // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
-        <img
-          src={quoted.mediaUrl}
-          alt=""
-          className="mt-2 max-h-40 w-full rounded-lg object-cover"
-        />
+        <MediaFrame backdrop={quoted.mediaUrl} className="mt-2 h-40 w-full rounded-lg">
+          {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+          <img
+            src={quoted.mediaUrl}
+            alt=""
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-contain"
+          />
+        </MediaFrame>
       )}
     </Link>
   );
@@ -414,12 +418,20 @@ export function PostCard({
             className="mt-4 h-[420px] w-full rounded-xl"
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
-          <img
-            src={post.mediaUrl}
-            alt=""
-            className="mt-4 max-h-[420px] w-full rounded-xl object-cover"
-          />
+          // Same height as InlineVideo so the timeline keeps one rhythm, and
+          // contained so a tall photo is not cropped to fit it.
+          <MediaFrame
+            backdrop={post.mediaUrl}
+            className="mt-4 h-[420px] w-full rounded-xl"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+            <img
+              src={post.mediaUrl}
+              alt=""
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          </MediaFrame>
         ))}
 
       <p className="mt-3 whitespace-pre-wrap break-words text-[13.8px] leading-[23px] text-white/90">

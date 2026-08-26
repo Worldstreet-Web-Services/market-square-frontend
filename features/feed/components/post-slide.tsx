@@ -9,6 +9,7 @@ import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
 import { useGate } from "@/hooks/use-gate";
 import { Avatar } from "@/components/ui/avatar";
+import { MediaFrame } from "@/components/ui/media-frame";
 import { VerifiedBadge } from "@/components/ui/badge";
 import { IconComment, IconHeart } from "@/components/ui/icons";
 import { useLikePost } from "@/features/feed/hooks/use-feed";
@@ -105,23 +106,37 @@ export function PostSlide({
       style={viewTransitionName ? { viewTransitionName } : undefined}
     >
       {/* content stage: media fills the slide; text posts stay typographic. */}
-      {post.mediaUrl &&
-        (hasVideo ? (
-          <video
-            ref={videoRef}
-            src={post.mediaUrl}
-            poster={post.thumbnailUrl ?? undefined}
-            muted={muted}
-            loop
-            playsInline
-            preload="metadata"
-            controls={reduced}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- author-supplied media
-          <img src={post.mediaUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        ))}
+      {post.mediaUrl && (
+        // Contained, never cropped — see MediaFrame. A wide photo used to lose
+        // its sides to `object-cover`, which is how a scoreboard arrived as a
+        // single cropped digit and a caption lost its first and last words.
+        <MediaFrame
+          backdrop={hasVideo ? post.thumbnailUrl : post.mediaUrl}
+          className="absolute inset-0"
+        >
+          {hasVideo ? (
+            <video
+              ref={videoRef}
+              src={post.mediaUrl}
+              poster={post.thumbnailUrl ?? undefined}
+              muted={muted}
+              loop
+              playsInline
+              preload="metadata"
+              controls={reduced}
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- author-supplied media
+            <img
+              src={post.mediaUrl}
+              alt=""
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          )}
+        </MediaFrame>
+      )}
       {/* Reduced motion keeps the native controls usable, so no tap layer. */}
       {!reduced && (
         <button className="absolute inset-0 cursor-default" onClick={onTap} aria-label="Post" />
