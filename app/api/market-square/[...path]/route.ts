@@ -3,6 +3,7 @@ import { verifyRequest } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
 import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
 import { forwardToUpstream } from "@/lib/server/proxy";
+import { FALLBACK_LIMITS } from "@/lib/upload-rules";
 
 // BFF proxy for Market Square. Verifies the Privy session server-side and
 // forwards the caller's Authorization to `${WSAPI_BASE_URL}/v1/market-square/*`.
@@ -74,8 +75,11 @@ async function searchMentionTargets(req: NextRequest) {
   return NextResponse.json({ success: true, data: { items: people } });
 }
 
-const FIXTURE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-const FIXTURE_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+// Fixture mode has no backend to ask, so it answers from the SAME fallback
+// object the client falls back to — never a third hand-written copy of the
+// caps, which is how the 10 MB / 100 MB numbers ended up in three places.
+const FIXTURE_IMAGE_TYPES = new Set(FALLBACK_LIMITS.imageContentTypes);
+const FIXTURE_VIDEO_TYPES = new Set(FALLBACK_LIMITS.videoContentTypes);
 
 // Fixture upload: validates like the real endpoint and answers with an
 // offline-renderable placeholder (SVG data URI for images; a small public
@@ -97,9 +101,16 @@ async function serveFixtureUpload(req: NextRequest) {
       { status: 422 }
     );
   }
-  if ((isImage && file.size > 10 * 1024 * 1024) || (isVideo && file.size > 100 * 1024 * 1024)) {
+  const cap = isImage ? FALLBACK_LIMITS.maxImageBytes : FALLBACK_LIMITS.maxVideoBytes;
+  if (file.size > cap) {
     return NextResponse.json(
-      { success: false, error: { code: "VALIDATION_ERROR", message: "File is too large." } },
+      {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: `File is too large — the cap is ${cap} bytes and this one is ${file.size}.`,
+        },
+      },
       { status: 422 }
     );
   }
@@ -124,6 +135,12 @@ async function serveFixture(req: NextRequest, path: string[], method: string) {
   // `/uploads/complete` must fall through to a real 404 here: fixture mode has
   // no storage to sign for, and the client reads that 404 as "presign is not
   // available, use the proxy" — answering 422 instead would strand it.
+  // The upload contract. Fixture mode still has to answer it, or the client
+  // spends every offline session on its fallback path with no way to tell
+  // whether the wiring works.
+  if (path[0] === "uploads" && path[1] === "limits" && path.length === 2 && method === "GET") {
+    return NextResponse.json({ success: true, data: FALLBACK_LIMITS });
+  }
   if (path[0] === "uploads" && path.length === 1 && method === "POST") {
     const userId = await callerUserId(req);
     if (!userId) return unauthorized();

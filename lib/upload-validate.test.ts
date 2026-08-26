@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  MAX_IMAGE_BYTES,
-  MAX_VIDEO_BYTES,
+  FALLBACK_LIMITS,
   PROXY_MAX_BYTES,
   formatBytes,
+  formatDuration,
   shouldUploadDirect,
   uploadKind,
   validateUpload,
+  validateVideoDuration,
 } from "./upload-rules.ts";
 
 /**
@@ -45,14 +46,17 @@ describe("validateUpload accepts what the service accepts", () => {
     assert.equal(
       validateUpload(file("video/mp4", 7.5 * MB), "media"),
       null,
-      "7.5 MB is well under the 100 MB video cap; it must never be refused client-side"
+      "7.5 MB is well under the video cap; it must never be refused client-side"
     );
   });
 });
 
 describe("every rejection names the limit AND the real size", () => {
   it("says how big an oversized video actually is", () => {
-    const message = validateUpload(file("video/mp4", 140 * MB), "media");
+    // Explicit limits, so the assertion states the numbers rather than
+    // restating whatever the fallback happens to be today.
+    const limits = { ...FALLBACK_LIMITS, maxVideoBytes: 100 * MB };
+    const message = validateUpload(file("video/mp4", 140 * MB), "media", limits);
     assert.match(message ?? "", /100 MB/, "states the cap");
     assert.match(message ?? "", /140 MB/, "states the file's real size");
   });
@@ -60,7 +64,8 @@ describe("every rejection names the limit AND the real size", () => {
   it("calls a GIF a GIF rather than 'an image'", () => {
     // GIFs blow the image cap far more often than stills, so the message has
     // to be recognisable as being about the file the reader just picked.
-    const message = validateUpload(file("image/gif", 12 * MB), "media");
+    const limits = { ...FALLBACK_LIMITS, maxImageBytes: 10 * MB };
+    const message = validateUpload(file("image/gif", 12 * MB), "media", limits);
     assert.match(message ?? "", /GIFs/);
     assert.match(message ?? "", /10 MB/);
     assert.match(message ?? "", /12 MB/);
@@ -106,12 +111,12 @@ describe("the transport is chosen by SIZE, not by type", () => {
   });
 
   it("routes every acceptable video above the proxy cap direct", () => {
-    // Otherwise the 100 MB cap we advertise is a lie on Vercel.
-    for (const size of [5, 20, 60, 100]) {
+    // Otherwise the video cap we advertise is a lie on Vercel.
+    for (const size of [5, 20, 60, 100, 400]) {
       assert.equal(direct(size * MB), true, `${size} MB video`);
     }
-    assert.ok(MAX_VIDEO_BYTES > PROXY_MAX_BYTES);
-    assert.ok(MAX_IMAGE_BYTES > PROXY_MAX_BYTES);
+    assert.ok(FALLBACK_LIMITS.maxVideoBytes > PROXY_MAX_BYTES);
+    assert.ok(FALLBACK_LIMITS.maxImageBytes > PROXY_MAX_BYTES);
   });
 });
 
@@ -119,5 +124,60 @@ describe("uploadKind", () => {
   it("follows the allowlist, not the mime prefix", () => {
     assert.equal(uploadKind(file("video/mp4", 1)), "video");
     assert.equal(uploadKind(file("image/gif", 1)), "image");
+  });
+});
+
+/**
+ * The ADVISORY clip-length guard.
+ *
+ * The backend publishes `maxVideoSeconds` but enforces nothing — reading a
+ * duration means demuxing the file, and on the presign path it never sees the
+ * bytes. So this check is the only place the limit is applied, which makes two
+ * things matter more than usual: the message has to be actionable (it names
+ * the limit AND the clip's real length), and an unreadable duration must not
+ * become a rejection.
+ */
+describe("validateVideoDuration", () => {
+  const limits = { ...FALLBACK_LIMITS, maxVideoSeconds: 90 };
+
+  it("passes anything at or under the limit", () => {
+    for (const seconds of [1, 30, 89, 90]) {
+      assert.equal(validateVideoDuration(seconds, limits), null, `${seconds}s`);
+    }
+  });
+
+  it("names the limit AND the clip's actual length", () => {
+    const message = validateVideoDuration(154, limits);
+    assert.match(message ?? "", /1m 30s/, "states the limit");
+    assert.match(message ?? "", /2m 34s/, "states the clip's real length");
+    assert.match(message ?? "", /Trim it/, "says what to do next");
+  });
+
+  it("does NOT reject when the duration could not be read", () => {
+    // The browser refuses some containers, and metadata can never arrive. A
+    // failed probe is OUR problem — blocking the upload for it would leave the
+    // user with an error they cannot act on, and the byte cap still applies.
+    for (const unreadable of [null, Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+      assert.equal(validateVideoDuration(unreadable, limits), null, String(unreadable));
+    }
+  });
+
+  it("follows a limit the server changed", () => {
+    // The value is fetched, so a 30 s environment must tighten this check
+    // without a client deploy.
+    assert.match(
+      validateVideoDuration(45, { ...FALLBACK_LIMITS, maxVideoSeconds: 30 }) ?? "",
+      /30s/
+    );
+  });
+});
+
+describe("formatDuration reads the way a person would say it", () => {
+  it("uses seconds under a minute and minutes above", () => {
+    assert.equal(formatDuration(45), "45s");
+    assert.equal(formatDuration(60), "1m");
+    assert.equal(formatDuration(90), "1m 30s");
+    assert.equal(formatDuration(154), "2m 34s");
+    assert.equal(formatDuration(120), "2m");
   });
 });

@@ -95,5 +95,13 @@ export function isPublicGet(path: string[]): boolean {
 
   if (head === "verification" && second === "rule") return true;
 
+  // The upload contract (caps + content-type allowlist). Public upstream, and
+  // it has to be public here too: the composer's file picker and its size
+  // pre-check render for signed-out visitors, and a 401 would silently pin
+  // them to our compiled-in fallback numbers — the exact drift the endpoint
+  // exists to remove. Only this EXACT shape; every other /uploads route is a
+  // POST and never reaches this predicate.
+  if (head === "uploads" && second === "limits" && path.length === 2) return true;
+
   return false;
 }

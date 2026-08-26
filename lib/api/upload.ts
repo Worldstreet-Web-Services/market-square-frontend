@@ -11,6 +11,16 @@ import {
   uploadKind,
   validateUpload,
 } from "@/lib/upload-rules";
+import { ensureUploadLimits } from "@/lib/upload-limits";
+
+/**
+ * Warm the limits as soon as anything upload-related is loaded, so the first
+ * file pick does not wait on a network round trip to validate. Browser only —
+ * during SSR there is no user to validate for, and firing a same-origin fetch
+ * at our own BFF from the render server would be a request to nowhere useful.
+ * It is memoised and failure-tolerant, so this costs at most one small GET.
+ */
+if (typeof window !== "undefined") void ensureUploadLimits();
 
 export const UploadResultSchema = z.object({
   url: z.string(),
@@ -29,13 +39,22 @@ export {
   ACCEPT_MEDIA,
   IMAGE_TYPES,
   VIDEO_TYPES,
-  MAX_IMAGE_BYTES,
-  MAX_VIDEO_BYTES,
+  // The caps are no longer constants: the backend owns them and publishes them
+  // on GET /uploads/limits. `FALLBACK_LIMITS` is only what we use when that
+  // call fails; read `getUploadLimits()` for the live values.
+  FALLBACK_LIMITS,
   PROXY_MAX_BYTES,
+  acceptFor,
   formatBytes,
+  formatDuration,
+  getUploadLimits,
   uploadKind,
   validateUpload,
+  validateVideoDuration,
 } from "@/lib/upload-rules";
+export { readVideoDuration } from "@/lib/video-duration";
+export type { UploadLimits } from "@/lib/upload-rules";
+export { ensureUploadLimits } from "@/lib/upload-limits";
 
 // ---------------------------------------------------------------- presign
 
@@ -245,6 +264,10 @@ export async function uploadFile(
   onProgress?: (fraction: number) => void,
   accept: "image" | "media" = "media"
 ): Promise<UploadResult> {
+  // Belt and braces: call sites validate at PICK time (that is where the user
+  // gets an instant error), but this is the only door every upload goes
+  // through, so the limits are refreshed and the check repeated here too.
+  await ensureUploadLimits();
   const invalid = validateUpload(file, accept);
   if (invalid) throw apiError("VALIDATION", invalid, 422);
 

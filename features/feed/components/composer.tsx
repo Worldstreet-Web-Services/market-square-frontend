@@ -9,7 +9,14 @@ import { LinkTargetPicker } from "@/components/ui/link-target-picker";
 import { Avatar } from "@/components/ui/avatar";
 import { IconClock, IconImage, IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
-import { ACCEPT_MEDIA, validateUpload } from "@/lib/api/upload";
+import {
+  ACCEPT_MEDIA,
+  ensureUploadLimits,
+  readVideoDuration,
+  uploadKind,
+  validateUpload,
+  validateVideoDuration,
+} from "@/lib/api/upload";
 import { useCreatePost, useMentionSearch, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
 import type { Mention, Post } from "@/features/feed/lib/types";
 
@@ -180,16 +187,36 @@ export function Composer({
     });
   };
 
-  const chooseMedia = (file: File | undefined) => {
+  const chooseMedia = async (file: File | undefined) => {
     if (!file) return;
-    // One validator for the whole app. This used to carry its own rules — a
-    // "50 MB" cap that matched neither the 10 MB image nor the 100 MB video
-    // limit — so the composer rejected files the service would have taken and
-    // accepted files it would not.
+    // One validator for the whole app, against limits the BACKEND publishes.
+    // This used to carry its own rules — a "50 MB" cap matching neither the
+    // image nor the video limit — so the composer rejected files the service
+    // would have taken and accepted files it would not. Hard-coding the
+    // service's numbers instead only moved the drift; now they are fetched.
+    //
+    // Awaited BEFORE the check, and the check still runs before any byte is
+    // sent: the user gets an instant, specific error, and it is the right one.
+    // The call is memoised, so only the first pick of a session pays for it,
+    // and it falls back rather than failing.
+    await ensureUploadLimits();
     const invalid = validateUpload(file, "media");
     if (invalid) {
       toast.error(invalid);
       return;
+    }
+    // Clip length, checked here and nowhere else: the backend publishes
+    // `maxVideoSeconds` but does not enforce it, because reading a duration
+    // means demuxing the file and the presign path never sees the bytes. So
+    // this is a courtesy — it stops the user spending a phone upload on a clip
+    // the feed should not autoplay — not a control. An unreadable duration
+    // lets the file through; the byte cap is the limit that actually bites.
+    if (uploadKind(file) === "video") {
+      const tooLong = validateVideoDuration(await readVideoDuration(file));
+      if (tooLong) {
+        toast.error(tooLong);
+        return;
+      }
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setMediaFile(file);
@@ -278,7 +305,7 @@ export function Composer({
           // a failure after the user had already chosen a file.
           accept={ACCEPT_MEDIA}
           className="sr-only"
-          onChange={(event) => chooseMedia(event.target.files?.[0])}
+          onChange={(event) => void chooseMedia(event.target.files?.[0])}
         />
 
         {mediaFile && previewUrl && (
