@@ -717,7 +717,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               // than hand-matched numbers: pb-16 was 64px against a 69px tab
               // bar, so the last five pixels of every column surface sat
               // underneath it.
-              "ws-hair min-h-dvh min-w-0 flex-1 border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+              // overflow-x-clip is a BACKSTOP, not the fix: a single child with
+              // an intrinsic minimum wider than a phone (a fixed-width CTA, a
+              // row of shrink-0 groups) drags the whole page sideways, and the
+              // reader then has to scroll horizontally to reach the right edge
+              // of every other surface. Clip contains that blast radius to the
+              // offending row. Rails that are MEANT to scroll set their own
+              // overflow-x-auto and are unaffected, and anything that needs a
+              // horizontal scrollbar must still opt into one explicitly.
+              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
               // Home carries the design's wider timeline; the other column
               // surfaces stay at the narrower reading width.
               !wide && (pathname === "/" ? "md:max-w-[720px]" : "md:max-w-[600px]")
