@@ -43,7 +43,10 @@ function SlideFor({ item }: { item: FeedItem }) {
             {stream.status === "live" ? <LiveBadge /> : <Pill>{stream.scheduledAt ? formatDateTime(stream.scheduledAt) : "Scheduled"}</Pill>}
             <Pill tone="accent">{pricePillLabel(stream)}</Pill>
           </div>
-          <div className="absolute inset-x-0 bottom-28 px-5">
+          <div
+            className="absolute inset-x-0 px-5"
+            style={{ bottom: "calc(var(--ws-nav-h) + 16px)" }}
+          >
             <p className="ws-display ws-text-shadow text-2xl leading-snug">{stream.title}</p>
             {stream.owner && (
               <p className="ws-text-shadow mt-1 text-sm text-body">{stream.owner.displayName}</p>
@@ -123,7 +126,14 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
   const items = feed.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <div className="relative">
+    // The immersive feed is FULL-BLEED: it cancels the shell's mobile padding
+    // so a slide's `h-dvh` is the real viewport rather than the viewport minus
+    // the top strip. Without this every slide ran 48px past the bottom of the
+    // screen and its author row and action rail were pushed underneath the tab
+    // bar — the furniture was drawn, just off-screen. The chrome above still
+    // floats over the media (it is all `fixed`), which is the point of the
+    // grammar; only the measurement was wrong.
+    <div className="relative mt-[calc(-1*var(--ws-topbar-h))] mb-[calc(-1*var(--ws-nav-h))]">
       {/* The mobile frame's lane bar: one 20px-radius slab at 92% near-black
           with an 18% hairline, the active lane simply brighter. */}
       <div className="fixed inset-x-0 top-11 z-30 px-[5px]">
