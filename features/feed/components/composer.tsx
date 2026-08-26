@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
+import type { ComposePrefill } from "@/lib/compose-prefill";
 import type { DeepLink } from "@/lib/api/schemas";
 import { LinkTargetPicker } from "@/components/ui/link-target-picker";
 import { Avatar } from "@/components/ui/avatar";
@@ -56,11 +57,21 @@ export function Composer({
   autoFocus = false,
   asStory = false,
   quoted = null,
+  prefill,
   onDone,
 }: {
   autoFocus?: boolean;
   /** Open already in story mode — the stories rail's "Your story" entry. */
   asStory?: boolean;
+  /**
+   * A draft handed in from a cross-product share (`/?compose=1&link=…`).
+   *
+   * A PREFILL, never an auto-post: it seeds the initial state and then gets
+   * out of the way, so the sharer edits and publishes it themselves. It is
+   * validated in `lib/compose-prefill.ts` before it reaches here — this
+   * component must never receive a raw query parameter.
+   */
+  prefill?: ComposePrefill | null;
   /** The post being quoted, previewed above the field and sent as quotedPostId. */
   quoted?: Post | null;
   /**
@@ -76,13 +87,15 @@ export function Composer({
   const upload = useUploadPostMedia();
   const field = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
+  // Seeded once. Later renders must not clobber what the person has typed, so
+  // this is an initial value rather than an effect that syncs on every change.
+  const [text, setText] = useState(prefill?.text ?? "");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   // Attaching a link is a picker, not an id box — see LinkTargetPicker.
   const [linkOpen, setLinkOpen] = useState(false);
-  const [link, setLink] = useState<DeepLink | null>(null);
-  const [linkLabel, setLinkLabel] = useState<string | null>(null);
+  const [link, setLink] = useState<DeepLink | null>(prefill?.link ?? null);
+  const [linkLabel, setLinkLabel] = useState<string | null>(prefill?.label ?? null);
   const [kind, setKind] = useState<"update" | "story">(asStory && !quoted ? "story" : "update");
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);

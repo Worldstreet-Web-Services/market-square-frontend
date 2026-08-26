@@ -7,6 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useQueryParam } from "@/hooks/use-query-param";
+import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
@@ -107,6 +108,8 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
   // on mobile this component IS home, so it has to honour the parameter or
   // those entries land on an unchanged timeline.
   const compose = useQueryParam("compose");
+  // A share handed in from another Ark product — validated before it is used.
+  const prefill = useComposePrefill();
   const composeStory = compose === "story";
   const composeOpen = composerOpen || compose === "1" || composeStory;
 
@@ -200,7 +203,7 @@ export function SnapFeed({ liveCount = 0 }: { liveCount?: number }) {
         onClose={closeComposer}
         title={composeStory ? "New story" : "New post"}
       >
-        <Composer asStory={composeStory} onDone={closeComposer} />
+        <Composer asStory={composeStory} prefill={prefill} onDone={closeComposer} />
       </Sheet>
     </div>
   );
