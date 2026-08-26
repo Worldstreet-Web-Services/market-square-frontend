@@ -142,10 +142,14 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
 export function FeedItemCard({
   item,
   followSlot,
+  tipSlot,
   onQuote,
 }: {
   item: FeedItem;
   followSlot?: (author: Profile) => React.ReactNode;
+  /** Composed from outside the slice — the tip control lives in the tips
+   *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
+  tipSlot?: (post: Post) => React.ReactNode;
   onQuote?: (post: Post) => void;
 }) {
   if (item.type === "post" && item.post)
@@ -154,6 +158,7 @@ export function FeedItemCard({
         post={item.post}
         repostedBy={item.repostedBy}
         followSlot={followSlot}
+        tipSlot={tipSlot}
         onQuote={onQuote}
       />
     );

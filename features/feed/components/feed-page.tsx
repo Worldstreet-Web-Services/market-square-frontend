@@ -128,9 +128,13 @@ function PostSkeleton() {
 // Mobile Home stays the vertical snap feed; desktop is the card timeline.
 export function FeedPage({
   followSlot,
+  tipSlot,
   liveCount,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
+  /** Composed from outside the slice — the tip control lives in the tips
+   *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
+  tipSlot?: (post: Post) => React.ReactNode;
   /** Real count of live streams, for the mobile lane badge. */
   liveCount?: number;
 }) {
@@ -272,6 +276,7 @@ export function FeedPage({
               <FeedItemCard
                 item={item}
                 followSlot={followSlot}
+                tipSlot={tipSlot}
                 onQuote={(post) => {
                   setQuoting(post);
                   setComposerOpen(true);

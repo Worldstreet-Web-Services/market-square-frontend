@@ -132,6 +132,100 @@ function bookmarksFor(userId: string): Set<string> {
   return set;
 }
 
+// ---- tips ----
+//
+// `POST /posts/:id/tips` and `POST /profiles/:id/tips`, mirroring the contract
+// the service is being built to: `{ amountKash }` in, `{ tipId, amountKash,
+// recipient, status }` out, self-tip 400, unknown recipient 404, rate limited.
+//
+// The balance is kept in integer HUNDREDTHS of a KASH, and the request's
+// amount is converted to hundredths by reading its digits — no parseFloat
+// anywhere in the money path, even here. A fixture that did float arithmetic
+// would be the one place in the app where 0.1 + 0.2 could quietly become
+// 0.30000000000000004, and it would do it in the demo.
+let fixtureBalanceHundredths = 25_000; // 250 KASH — three 100s and then no more.
+
+/**
+ * "12.5" → 1250. Null for anything that is not a plain decimal, or that
+ * carries real precision finer than a hundredth.
+ *
+ * Trailing zeros are ACCEPTED ("5.500" is 550) because they are the same money
+ * — refusing them would make the fixture stricter than any ledger and would
+ * reject an amount the client is entitled to send. A non-zero third decimal is
+ * refused rather than rounded: silently dropping it would debit an amount
+ * nobody authorised. Pure string work throughout.
+ */
+function toHundredths(amount: string): number | null {
+  const match = /^(\d+)(?:\.(\d*))?$/.exec(amount.trim());
+  if (!match) return null;
+  const [, whole, frac = ""] = match;
+  if (/[1-9]/.test(frac.slice(2))) return null;
+  return Number.parseInt(whole + frac.slice(0, 2).padEnd(2, "0"), 10);
+}
+
+/** 1250 → "12.5". The inverse, so the response echoes a canonical amount the
+ *  client can render without re-deriving it. */
+function fromHundredths(value: number): string {
+  const whole = Math.trunc(value / 100);
+  const frac = String(value % 100).padStart(2, "0").replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : String(whole);
+}
+
+// Rate limit: the real service has one, so the fixture has one, or the flow is
+// only ever demoed on the happy path.
+const TIP_RATE_LIMIT = 5;
+const TIP_RATE_WINDOW_MS = 60_000;
+const tipTimes = new Map<string, number[]>();
+
+function tipRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const recent = (tipTimes.get(userId) ?? []).filter((t) => now - t < TIP_RATE_WINDOW_MS);
+  tipTimes.set(userId, recent);
+  if (recent.length >= TIP_RATE_LIMIT) return true;
+  recent.push(now);
+  return false;
+}
+
+/**
+ * One implementation for both routes — they differ only in how the recipient
+ * is found, which is the caller's job.
+ */
+function sendFixtureTip(
+  userId: string | null,
+  recipient: FxProfile | undefined,
+  rawAmount: unknown
+): FixtureResult {
+  const denied = requireAuth(userId);
+  if (denied) return denied;
+  // 404 with a SPECIFIC code. The bare NOT_FOUND is what a missing ROUTE
+  // answers, and the client reads that as "tipping is not deployed" and goes
+  // quiet everywhere — so an unknown recipient must never wear it.
+  if (!recipient) return fail(404, "RECIPIENT_NOT_FOUND", "That account can't receive tips.");
+  if (recipient.id === userId)
+    return fail(400, "SELF_TIP", "You can't tip yourself.");
+
+  const amountKash = typeof rawAmount === "string" ? rawAmount : "";
+  const hundredths = toHundredths(amountKash);
+  if (hundredths === null || hundredths <= 0)
+    return fail(422, "VALIDATION", "amountKash must be a positive decimal string.");
+
+  if (tipRateLimited(userId!))
+    return fail(429, "RATE_LIMITED", "Too many tips — try again shortly.");
+
+  if (hundredths > fixtureBalanceHundredths)
+    return fail(402, "INSUFFICIENT_FUNDS", "Not enough KASH.");
+
+  fixtureBalanceHundredths -= hundredths;
+  return ok({
+    tipId: nextId("tip"),
+    // The canonical amount, echoed from what was actually debited rather than
+    // from what was sent — the receipt is the ledger's word, not the client's.
+    amountKash: fromHundredths(hundredths),
+    recipient: summary(recipient),
+    status: "settled",
+  });
+}
+
 // ---- 1:1 messaging ----
 // A conversation is keyed by its sorted participant pair, so opening one is
 // idempotent from either side.
@@ -1296,6 +1390,16 @@ export function handleFixture(
       return ok(postDto(post, userId));
     }
 
+    // BEFORE the generic lookup, because that lookup answers a bare NOT_FOUND
+    // and the tip client reads a bare NOT_FOUND as "tipping is not deployed"
+    // and quiets the control on every post on screen. An unknown post has to
+    // carry its own code so it stays a message in one sheet.
+    if (p[2] === "tips" && method === "POST") {
+      const target = posts.find((x) => x.id === p[1]);
+      if (!target) return fail(404, "POST_NOT_FOUND", "That post can't receive tips.");
+      return sendFixtureTip(userId, profileById(target.authorId), body.amountKash);
+    }
+
     const post = posts.find((x) => x.id === p[1]);
     if (!post) return fail(404, "NOT_FOUND", "Post not found");
 
@@ -1992,6 +2096,14 @@ export function handleFixture(
       if (method === "DELETE") mine.delete(target.id);
       return ok({ blocked: mine.has(target.id) });
     }
+    if (p[2] === "tips" && method === "POST") {
+      return sendFixtureTip(
+        userId,
+        profiles.find((x) => x.id === p[1] || x.username === p[1]),
+        body.amountKash
+      );
+    }
+
     if (p[2] === "follow") {
       const denied = requireAuth(userId);
       if (denied) return denied;

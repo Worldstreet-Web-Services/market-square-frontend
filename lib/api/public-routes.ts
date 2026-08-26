@@ -95,6 +95,12 @@ export function isPublicGet(path: string[]): boolean {
 
   if (head === "verification" && second === "rule") return true;
 
+  // The tip capability probe, and only that exact shape. A signed-out reader
+  // has to see the same tip control a signed-in one does, so the sign-in
+  // prompt lands when they choose to pay rather than when they merely look.
+  // /me/tips/received is earnings and is NOT here — it needs a session.
+  if (head === "tips" && second === "capability" && path.length === 2) return true;
+
   // The upload contract (caps + content-type allowlist). Public upstream, and
   // it has to be public here too: the composer's file picker and its size
   // pre-check render for signed-out visitors, and a 401 would silently pin

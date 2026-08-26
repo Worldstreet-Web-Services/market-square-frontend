@@ -63,6 +63,9 @@ const PUBLIC: string[][] = [
   ["streams", "st_1"],
   ["streams", "st_1", "chat"],
   ["verification", "rule"],
+  // Whether tipping works at all, and the amount band. Read before drawing the
+  // control, by signed-out readers too.
+  ["tips", "capability"],
   // The upload contract. Public upstream so the composer can pre-validate a
   // file before sign-in; gating it here would silently pin signed-out users to
   // the client's fallback caps.
@@ -83,6 +86,8 @@ const SECURED: string[][] = [
   ["me", "unread"],
   ["me", "interests"],
   ["me", "verification"],
+  // Earnings. Never public, and never another user's.
+  ["me", "tips", "received"],
   ["streams", "st_1", "events"],
   ["streams", "st_1", "stats"],
 ];
@@ -179,6 +184,13 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["uploads", "complete"]), false);
       assert.equal(isPublicGet(["uploads", "limits", "extra"]), false);
       assert.equal(isPublicGet(["uploads", "did:privy:u1", "secret.png"]), false);
+    });
+
+    it("gates /tips to the capability probe only", () => {
+      assert.equal(isPublicGet(["tips", "capability"]), true);
+      assert.equal(isPublicGet(["tips"]), false);
+      assert.equal(isPublicGet(["tips", "capability", "extra"]), false);
+      assert.equal(isPublicGet(["tips", "received"]), false);
     });
 
     it("gates /verification unless it is the rule", () => {

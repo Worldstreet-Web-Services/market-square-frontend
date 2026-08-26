@@ -227,6 +227,18 @@ function collectCalls(root) {
  * route ships. Anything not listed here fails the check.
  */
 const PENDING_ROUTES = {
+  "post /posts/{}/tips": {
+    reason:
+      "Tipping is being built to an agreed contract (POST /posts/:id/tips and " +
+      "POST /profiles/:id/tips, { amountKash } in, { tipId, amountKash, " +
+      "recipient, status } out) while the UI ships against it. Until the spec " +
+      "documents them both routes answer 404, which the client reads as 'not " +
+      "deployed' and quiets the tip button everywhere (features/tips/lib/" +
+      "availability.ts). DELETE BOTH ENTRIES the day they appear in openapi.json.",
+  },
+  "post /profiles/{}/tips": {
+    reason: "Ships with post /posts/{}/tips — see above. Delete both together.",
+  },
   // EMPTY IS THE CORRECT STATE. `/profiles` lived here for the few hours
   // between the People tab being built and the directory route shipping; it
   // was deleted the moment the spec documented it. An entry that outlives its
