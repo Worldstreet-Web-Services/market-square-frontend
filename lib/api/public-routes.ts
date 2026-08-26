@@ -65,6 +65,9 @@ export function isPublicGet(path: string[]): boolean {
   if (head === "health" || head === "openapi.json") return true;
   // Search is public; an optional token only enriches viewer state.
   if (head === "search") return true;
+  // The topic vocabulary is public — the picker renders for signed-out
+  // visitors too, who choose first and are prompted to sign in to save.
+  if (head === "topics") return true;
 
   // /posts/{id} and /posts/{id}/comments only. Every other posts route (like,
   // repost, bookmark) is a write and never reaches this predicate.

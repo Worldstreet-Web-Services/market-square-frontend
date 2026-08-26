@@ -37,6 +37,7 @@ import {
   IconVolume,
 } from "@/components/ui/icons";
 import { ErrorState, InlineError, SignInPrompt, isAuthError } from "@/components/ui/states";
+import { isArkOriginated, resolveCta } from "@/lib/deeplink";
 import type { Profile } from "@/lib/api/schemas";
 import { useStream, useStreamList } from "@/features/streams/hooks/use-streams";
 import { useHeartbeat, usePlaybackToken } from "@/features/streams/hooks/use-playback";
@@ -167,6 +168,8 @@ function StageBody({
   onQuality?: (api: QualityApi | null) => void;
 }) {
   const gate = useGate();
+  // Ark game broadcast → the route back into Ark. Null for native streams and
+  // for any game prefix this build does not know.
   const needsTicket =
     stream.visibility === "ticketed" &&
     !stream.myTicket &&
@@ -319,9 +322,12 @@ function SuggestedCreators({ currentId }: { currentId: string }) {
                     {item.owner ? `@${item.owner.username}` : item.category}
                   </span>
                 </span>
-                <span className="tnum hidden shrink-0 text-[11px] text-meta xl:block">
-                  {formatCount(item.viewerCount || item.peakViewers)}
-                </span>
+                {/* Live count only; a peak here would age into a lie. */}
+                {(item.viewerCount ?? 0) > 0 && (
+                  <span className="tnum hidden shrink-0 text-[11px] text-meta xl:block">
+                    {formatCount(item.viewerCount ?? 0)}
+                  </span>
+                )}
               </Link>
             </li>
           );
@@ -588,6 +594,12 @@ export function StreamRoom({
   }
 
   const data = stream.data;
+  // Ark game broadcast → the route back into Ark. Null for a native stream,
+  // and for any game prefix this build does not know.
+  const gameCta = resolveCta(data.deepLink, `live:${data.id}`);
+  // An Ark-originated stream is a VIEWING surface here: the match lives in the
+  // app that owns it, and that is also where you join it.
+  const watchOnly = isArkOriginated(data.deepLink);
   const owner = data.owner;
   // Gifting is governance-gated: with it off the panel is absent entirely,
   // and so is every piece of coin chrome that would imply it exists.
@@ -663,7 +675,7 @@ export function StreamRoom({
               {data.status === "live" && (
                 <span className="flex items-center gap-1">
                   <IconEye className="h-4 w-4" />
-                  <span className="tnum">{formatCount(data.viewerCount)}</span>
+                  <span className="tnum">{formatCount(data.viewerCount ?? 0)}</span>
                 </span>
               )}
               <span className="flex items-center gap-1">
@@ -711,6 +723,21 @@ export function StreamRoom({
               </button>
             )}
             {data.status !== "live" && <Pill tone="accent">{streamPriceLabel(data)}</Pill>}
+            {/* Ark broadcasts casino games here, but the game itself lives in
+                Ark — this is the way back into it. Rendered only when the Ark
+                base URL is configured and the game prefix is one we know, so a
+                stream from a future game degrades to no button rather than a
+                link into nowhere. */}
+            {gameCta && (
+              <a
+                href={gameCta.href}
+                target="_blank"
+                rel="noreferrer"
+                className="ws-btn-create ws-press hidden rounded-lg px-4 py-2 text-[13px] font-bold transition-opacity hover:opacity-90 lg:block"
+              >
+                {watchOnly ? "Join the match in Ark" : gameCta.label}
+              </a>
+            )}
           </div>
         </div>
 
@@ -778,7 +805,12 @@ export function StreamRoom({
                     >
                       ↗
                     </button>
-                    {me.data?.id !== data.ownerId && <GuestSpeakerControl stream={data} />}
+                    {/* Watch-only: participation in an Ark broadcast happens
+                        in Ark, so the request is hidden rather than disabled —
+                        a greyed-out button just invites "why?". */}
+                    {!watchOnly && me.data?.id !== data.ownerId && (
+                      <GuestSpeakerControl stream={data} />
+                    )}
                   </>
                 )}
               </div>
@@ -954,8 +986,23 @@ export function StreamRoom({
               <IconCoin className="h-5 w-5" />
             </button>
           )}
-          {data.status === "live" && me.data?.id !== data.ownerId && (
+          {data.status === "live" && !watchOnly && me.data?.id !== data.ownerId && (
             <GuestSpeakerControl stream={data} />
+          )}
+          {/* The mobile rail's onward action for an Ark broadcast. The header
+              CTA is desktop-only, so without this a phone viewer would have no
+              way into the match at all. */}
+          {watchOnly && gameCta && (
+            <a
+              href={gameCta.href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Join the match in Ark"
+              className="ws-btn-create ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full"
+            >
+              <IconPlay className="h-5 w-5" />
+              <span className="text-[8px] font-bold leading-none">ARK</span>
+            </a>
           )}
           {data.status === "live" && (
             <button
@@ -1065,7 +1112,7 @@ export function StreamRoom({
               <p className="ws-display flex-1 text-center text-base">LIVE chat</p>
               <span className="flex items-center gap-1.5 text-xs text-meta">
                 <IconEye className="h-4 w-4" />
-                <span className="tnum">{formatCount(data.viewerCount)}</span>
+                <span className="tnum">{formatCount(data.viewerCount ?? 0)}</span>
               </span>
             </div>
             <div className="relative min-h-0 flex-1">

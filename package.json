@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test 'lib/**/*.test.ts'"
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test 'lib/**/*.test.ts'",
+    "check:public-routes": "node scripts/check-public-routes.mjs"
   },
   "dependencies": {
     "@privy-io/node": "^0.26.0",

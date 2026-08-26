@@ -93,3 +93,23 @@ export const CategorySchema = z.object({
 
 export const CategoryListSchema = z.array(CategorySchema);
 export type MarketCategory = z.infer<typeof CategorySchema>;
+
+/**
+ * GET /topics — the canonical vocabulary.
+ *
+ * The picker renders from this, never from a list in the component: adding a
+ * topic is then a backend change alone, with no frontend deploy.
+ */
+export const TopicSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+});
+
+export const TopicListSchema = z.array(TopicSchema);
+
+/** GET|PUT /me/interests */
+export const InterestsSchema = z.object({
+  topics: z.array(z.string()).optional().default([]),
+});
+
+export type Topic = z.infer<typeof TopicSchema>;

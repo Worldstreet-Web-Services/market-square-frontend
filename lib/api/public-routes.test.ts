@@ -28,7 +28,7 @@ import { isPublicGet, isSafePath } from "./public-routes.ts";
  * never inspects id values.
  */
 
-// Every GET the service publishes with NO security requirement (22 of them).
+// Every GET the service publishes with NO security requirement (23 of them).
 const PUBLIC: string[][] = [
   ["activities"],
   ["categories"],
@@ -39,6 +39,7 @@ const PUBLIC: string[][] = [
   ["posts", "post_1", "comments"],
   ["profiles", "adeey"],
   ["search"],
+  ["topics"],
   ["profiles", "adeey", "posts"],
   ["profiles", "adeey", "streams"],
   ["profiles", "adeey", "activities"],
@@ -66,6 +67,7 @@ const SECURED: string[][] = [
   ["me", "orders"],
   ["me", "tickets"],
   ["me", "unread"],
+  ["me", "interests"],
   ["me", "verification"],
   ["streams", "st_1", "events"],
   ["streams", "st_1", "stats"],

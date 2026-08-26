@@ -363,7 +363,7 @@ export function LiveCockpit({
         <SessionTimer startedAt={stream.startedAt} />
         <span className="flex items-center gap-1 text-sm text-body">
           <IconEye className="h-4 w-4" />
-          <span className="tnum">{formatCount(stream.viewerCount)}</span>
+          <span className="tnum">{formatCount((stream.viewerCount ?? 0))}</span>
         </span>
         <QualityDot quality={publisher.quality} state={mode === "browser" ? publisher.state : "publishing"} />
         <div className="ml-auto flex items-center gap-2">

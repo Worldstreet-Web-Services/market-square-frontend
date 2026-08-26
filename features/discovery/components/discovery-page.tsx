@@ -14,7 +14,10 @@ import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useQueryParam } from "@/hooks/use-query-param";
-import { useDiscovery } from "@/features/discovery/hooks/use-discovery";
+import { useDiscovery, useMyInterests } from "@/features/discovery/hooks/use-discovery";
+import { ExploreGrid } from "@/features/discovery/components/explore-grid";
+import { TopicPicker } from "@/components/ui/topic-picker";
+import type { Stream } from "@/features/streams/lib/types";
 import { SEARCH_FILTERS, type DiscoveryResult } from "@/features/discovery/lib/types";
 
 const FILTER_LABEL: Record<string, string> = {
@@ -137,7 +140,19 @@ const resultKey = (result: DiscoveryResult) => `${result.kind}-${result.id}`;
 
 // Explore: the search field IS the header, pinned, exactly as on X — the
 // filter chips ride underneath it and scroll sideways on narrow columns.
-export function DiscoveryPage() {
+export function DiscoveryPage({
+  /**
+   * The browse grid's streams, filtered by the viewer's topics. Composed from
+   * outside: the streams slice owns that query and slices never import each
+   * other, so the shell wires the two together.
+   */
+  browseStreams = [],
+  onTopicsChange,
+}: {
+  browseStreams?: Stream[];
+  /** Lets the composer refetch the grid when the picker saves. */
+  onTopicsChange?: (topics: string[]) => void;
+} = {}) {
   // The ?q= seed holds until the first keystroke, which hands the field over
   // to local state — no effect syncing two sources of truth.
   const seed = useQueryParam("q");
@@ -145,6 +160,11 @@ export function DiscoveryPage() {
   const query = typed ?? seed ?? "";
   const setQuery = setTyped;
   const [type, setType] = useState<string>("all");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // The viewer's saved topics drive the grid. Absent endpoints yield [], which
+  // means "no filter" rather than "match nothing".
+  const interests = useMyInterests();
+  const topics = interests.data?.topics ?? [];
   const deferredQuery = useDeferredValue(query);
   const search = useDiscovery(deferredQuery, type);
   const sentinel = useInfiniteScroll(
@@ -246,6 +266,21 @@ export function DiscoveryPage() {
         </div>
       )}
 
+      {/* Resting Explore: the topic picker's entry point and the browse grid.
+          A search replaces both with results. */}
+      {!hasQuery && !unavailable && (
+        <div className="space-y-4 px-4 pb-4">
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="ws-btn-create ws-press flex h-9 items-center gap-1.5 rounded-full px-4 text-[12px] font-bold"
+          >
+            {topics.length > 0 ? `${topics.length} topics` : "Choose topics"}
+            <span aria-hidden>+</span>
+          </button>
+          <ExploreGrid streams={browseStreams} />
+        </div>
+      )}
+
       {hasQuery && search.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
 
       {search.isError && !unavailable && (
@@ -285,6 +320,14 @@ export function DiscoveryPage() {
       {items.map((result) => (
         <ResultRow key={resultKey(result)} result={result} />
       ))}
+
+      <TopicPicker
+        open={pickerOpen}
+        onClose={() => {
+          setPickerOpen(false);
+          onTopicsChange?.(topics);
+        }}
+      />
 
       {/* Results page with the service's cursor — they used to stop dead at
           the first response's 30 matches. */}

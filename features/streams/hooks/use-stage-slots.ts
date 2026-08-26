@@ -111,9 +111,14 @@ function sameStage(a: readonly StageSlot[], b: readonly StageSlot[]): boolean {
       slot.isMuted === other.isMuted &&
       slot.cameraOff === other.cameraOff &&
       slot.connectionQuality === other.connectionQuality &&
-      slot.videoTrack?.trackSid === other.videoTrack?.trackSid &&
+      slot.cameraTrack?.trackSid === other.cameraTrack?.trackSid &&
+      slot.cameraTrack?.track === other.cameraTrack?.track &&
+      // Screen share is compared independently — a share starting or stopping
+      // must rebuild the stage even when the camera has not changed at all.
+      slot.screenTrack?.trackSid === other.screenTrack?.trackSid &&
+      slot.screenTrack?.track === other.screenTrack?.track &&
+      slot.screenTrack?.isMuted === other.screenTrack?.isMuted &&
       slot.audioTrack?.trackSid === other.audioTrack?.trackSid &&
-      slot.videoTrack?.track === other.videoTrack?.track &&
       slot.audioTrack?.track === other.audioTrack?.track
     );
   });

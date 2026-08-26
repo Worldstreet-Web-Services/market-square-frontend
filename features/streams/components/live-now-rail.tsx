@@ -70,10 +70,13 @@ export function LiveNowRail() {
                 </span>
                 <span className="mt-0.5 flex items-center gap-2 text-xs text-meta">
                   {stream.owner && <span className="truncate">{stream.owner.displayName}</span>}
-                  {(stream.viewerCount || stream.peakViewers) > 0 && (
+                  {/* Live viewers only — `peakViewers` is a historical high
+                      water mark, and printing it beside a LIVE badge states an
+                      audience that may have left hours ago. */}
+                  {(stream.viewerCount ?? 0) > 0 && (
                     <span className="tnum flex shrink-0 items-center gap-1">
                       <IconEye className="h-3 w-3" />
-                      {formatCount(stream.viewerCount || stream.peakViewers)}
+                      {formatCount(stream.viewerCount ?? 0)}
                     </span>
                   )}
                 </span>

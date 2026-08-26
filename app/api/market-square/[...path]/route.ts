@@ -190,4 +190,4 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   return forward(req, path, method);
 }
 
-export { handle as GET, handle as POST, handle as PATCH, handle as DELETE };
+export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle as DELETE };

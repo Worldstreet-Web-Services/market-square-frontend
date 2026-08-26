@@ -7,7 +7,12 @@ import { Spinner } from "@/components/ui/button";
 import { IconVolume, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
-import { remoteAudioSlots, type StageSlot } from "@/features/streams/lib/stage";
+import {
+  buildStageLayout,
+  remoteAudioSlots,
+  type StageSlot,
+  type StageTile,
+} from "@/features/streams/lib/stage";
 
 /**
  * The stage: one tile per publisher, plus one hidden <audio> per remote audio
@@ -40,22 +45,29 @@ function layoutClass(count: number): string {
 const MAX_SLOTS = 6;
 
 function MediaTile({
-  slot,
+  tile,
   localTile,
   onRemove,
   removing,
+  compact,
 }: {
-  slot: StageSlot;
+  tile: StageTile;
   localTile?: ReactNode;
   onRemove?: (identity: string) => void;
   removing?: boolean;
+  /** Strip tile: smaller chrome, no moderation control. */
+  compact?: boolean;
 }) {
+  const slot = tile.slot;
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const track = slot.videoTrack?.track as
+  const track = tile.publication?.track as
     | { attach: () => HTMLMediaElement; detach: (el: HTMLMediaElement) => unknown }
     | undefined;
-  const useOwnAttach = !(slot.isLocal && localTile);
-  const hideVideo = slot.cameraOff || !track;
+  const isScreen = tile.kind === "screen";
+  // The caller's own preview stands in for our CAMERA only — a local screen
+  // share has no such preview and must attach normally.
+  const useOwnAttach = !(slot.isLocal && localTile && !isScreen);
+  const hideVideo = !track || tile.publication?.isMuted === true;
 
   useEffect(() => {
     if (!useOwnAttach || !track) return;
@@ -66,8 +78,14 @@ function MediaTile({
     element.playsInline = true;
     element.muted = true; // Video elements never carry audio here — see the <audio> map.
     element.className = cn(
-      "h-full w-full object-cover",
-      slot.isLocal && "[transform:scaleX(-1)]"
+      "h-full w-full",
+      // A shared screen is landscape content that may land on a portrait
+      // stage. `object-cover` would crop the board out of frame, so screens
+      // letterbox and only cameras fill.
+      isScreen ? "object-contain" : "object-cover",
+      // Mirroring is a self-view convention for FACES. A mirrored screen share
+      // is unreadable — the text runs backwards.
+      slot.isLocal && !isScreen && "[transform:scaleX(-1)]"
     );
     mount.replaceChildren(element);
     return () => {
@@ -77,7 +95,7 @@ function MediaTile({
       track.detach(element);
       element.remove();
     };
-  }, [track, useOwnAttach, slot.isLocal]);
+  }, [track, useOwnAttach, slot.isLocal, isScreen]);
 
   return (
     <div className={TILE}>
@@ -91,9 +109,11 @@ function MediaTile({
           rectangle — a black tile is indistinguishable from a broken one. */}
       {hideVideo && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center">
-          <Avatar name={slot.name} seed={slot.identity} size={56} />
-          <p className="max-w-full truncate text-xs font-semibold text-[#E8EAED]">{slot.name}</p>
-          {slot.state === "approved-pending" ? (
+          <Avatar name={slot.name} seed={slot.identity} size={compact ? 32 : 56} />
+          {!compact && (
+            <p className="max-w-full truncate text-xs font-semibold text-[#E8EAED]">{slot.name}</p>
+          )}
+          {compact ? null : slot.state === "approved-pending" ? (
             <span className="flex items-center gap-1.5 text-[11px] text-[#8B8F96]">
               <Spinner className="h-3 w-3" />
               joining the stage…
@@ -105,9 +125,9 @@ function MediaTile({
       )}
 
       <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-1.5">
-        <span className="max-w-[60%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-[#E8EAED]">
-          {slot.role === "host" ? "Host · " : ""}
-          {slot.name}
+        <span className="max-w-[70%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-[#E8EAED]">
+          {slot.role === "host" && !isScreen ? "Host · " : ""}
+          {tile.label}
         </span>
         {slot.isMuted && (
           <span
@@ -119,7 +139,7 @@ function MediaTile({
         )}
       </div>
 
-      {onRemove && slot.role === "guest" && (
+      {onRemove && !compact && !isScreen && slot.role === "guest" && (
         <button
           onClick={() => onRemove(slot.identity)}
           disabled={removing}
@@ -191,6 +211,9 @@ export function LiveStage({
   const all = useStageSlots(room, hostIdentity);
   const slots = all.slice(0, MAX_SLOTS);
   const audio = remoteAudioSlots(all);
+  // Screens take the stage; faces drop to a strip. With nobody sharing this is
+  // exactly the previous behaviour — cameras in the grid, no strip.
+  const { primary, secondary, screenSharing } = buildStageLayout(slots);
 
   const notify = useRef(onStageChange);
   useEffect(() => {
@@ -233,16 +256,50 @@ export function LiveStage({
       {slots.length === 0 ? (
         <div className="flex h-full w-full items-center justify-center">{emptyState}</div>
       ) : (
-        <div className={cn("h-full w-full gap-0.5 p-0.5", layoutClass(slots.length))}>
-          {slots.map((slot) => (
-            <MediaTile
-              key={slot.identity}
-              slot={slot}
-              localTile={localTile}
-              onRemove={onRemoveGuest}
-              removing={removing}
-            />
-          ))}
+        <div
+          className={cn(
+            "flex h-full w-full gap-0.5 p-0.5",
+            // Faces sit under the screen on a portrait phone and beside it once
+            // there is width; without a share the strip is absent entirely.
+            screenSharing ? "flex-col lg:flex-row" : "flex-col"
+          )}
+        >
+          <div
+            className={cn(
+              "min-h-0 min-w-0 flex-1 gap-0.5",
+              layoutClass(primary.length)
+            )}
+          >
+            {primary.map((tile) => (
+              <MediaTile
+                key={tile.key}
+                tile={tile}
+                localTile={localTile}
+                onRemove={onRemoveGuest}
+                removing={removing}
+              />
+            ))}
+          </div>
+
+          {/* The camera strip. Every participant keeps a face here while a
+              screen is up — including the person sharing it. */}
+          {secondary.length > 0 && (
+            <div
+              className={cn(
+                "flex shrink-0 gap-0.5 overflow-auto",
+                "h-[92px] w-full flex-row lg:h-full lg:w-[180px] lg:flex-col"
+              )}
+            >
+              {secondary.map((tile) => (
+                <div
+                  key={tile.key}
+                  className="aspect-video h-full shrink-0 lg:h-auto lg:w-full"
+                >
+                  <MediaTile tile={tile} localTile={localTile} compact />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

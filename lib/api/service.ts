@@ -31,6 +31,7 @@ export interface ServiceClient {
   authedGet<T>(path: string, params?: QueryParams): Promise<T>;
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body?: unknown): Promise<T>;
+  put<T>(path: string, body?: unknown): Promise<T>;
   del<T>(path: string, body?: unknown): Promise<T>;
 }
 
@@ -50,6 +51,7 @@ function createServiceClient(basePath: string): ServiceClient {
     authedGet: <T>(path: string, params?: QueryParams) => authed<T>(url(path, params), {}),
     post: <T>(path: string, body?: unknown) => authed<T>(url(path), bodyInit("POST", body)),
     patch: <T>(path: string, body?: unknown) => authed<T>(url(path), bodyInit("PATCH", body)),
+    put: <T>(path: string, body?: unknown) => authed<T>(url(path), bodyInit("PUT", body)),
     del: <T>(path: string, body?: unknown) => authed<T>(url(path), bodyInit("DELETE", body)),
   };
 }

@@ -131,22 +131,39 @@ function NavLink({
       href={item.href}
       aria-label={badge > 0 ? `${item.label}, ${badge} unread` : item.label}
       aria-current={active ? "page" : undefined}
+      // Geometry is the design's and is identical in both states — only the
+      // tint, border and glyph colour change, so the row never shifts when it
+      // becomes current. 46px tall, 199px wide once the rail is labelled;
+      // below xl it collapses to the icon rail and sizes to its glyph.
       className={cn(
-        "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-colors",
+        "group relative box-border flex h-[46px] items-center gap-3 rounded-xl px-3.5 py-2.5 transition-colors xl:w-[199px]",
         active
-          ? "border border-white/15 bg-white/10 text-white"
+          ? // The tint, border and glyph are all one purple: --color-create.
+            // The design measured #AD46FF here, a third purple the system does
+            // not have — see the note in CLAUDE.md for why this renders from
+            // the existing token instead.
+            "border border-create/30 bg-create/[0.11] text-white shadow-[0px_1px_3px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]"
           : "border border-transparent text-body hover:bg-white/[0.06]"
       )}
     >
-      <span className={cn("relative shrink-0", active && "text-nav-dot")}>
-        <Icon className="h-4 w-4" filled={active} />
+      <span className={cn("relative shrink-0", active ? "text-create" : "text-grey-400")}>
+        <Icon className="h-6 w-6" filled={active} />
         {badge > 0 && (
           <span className="tnum absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-spotlight px-1 text-[9px] font-bold text-white">
             {badge > 99 ? "99+" : badge}
           </span>
         )}
       </span>
-      <span className="hidden text-[12px] font-bold xl:block">{item.label}</span>
+      {/* Roboto in the measurement, Geist here per CLAUDE.md — the weight,
+          size and line-height are the design's. */}
+      <span
+        className={cn(
+          "hidden flex-col text-[12px] font-bold leading-4 xl:flex",
+          active ? "text-white" : "text-body"
+        )}
+      >
+        {item.label}
+      </span>
       {/* Icon-rail tooltip, since the label is hidden below xl. */}
       <span className="ws-overlay pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block xl:!hidden">
         {item.label}

@@ -372,6 +372,8 @@ function postFeedItem(post: FxPost, viewerId: string | null = null) {
 // Backend Stream — list shape: no owner object, no live viewerCount.
 function streamDto(s: FxStream) {
   return {
+    // Ark broadcasts carry the route back into the game.
+    deepLink: s.deepLink ?? null,
     id: s.id,
     ownerId: s.ownerId,
     title: s.title,
@@ -596,6 +598,29 @@ interface FxCreatorApplication {
   status: "pending" | "approved" | "rejected";
   note: string | null;
   createdAt: string;
+}
+
+// The topic vocabulary, ordered as the design shows it.
+const FIXTURE_TOPICS = [
+  { key: "gaming", label: "Gaming" },
+  { key: "trading", label: "Trading" },
+  { key: "shows", label: "Shows" },
+  { key: "arts", label: "Arts" },
+  { key: "pictures", label: "Pictures" },
+  { key: "reels", label: "Reels" },
+  { key: "crypto", label: "Crypto" },
+];
+
+/** Chosen topics per viewer. */
+const interests = new Map<string, Set<string>>();
+
+function interestsFor(userId: string): Set<string> {
+  let set = interests.get(userId);
+  if (!set) {
+    set = new Set();
+    interests.set(userId, set);
+  }
+  return set;
 }
 
 // ---- operator console ----
@@ -876,6 +901,13 @@ export function handleFixture(
     }
   }
 
+  // ---- topics & interests ----
+  // The canonical topic vocabulary. The client renders from THIS, never from
+  // its own array, so adding a topic is a backend change alone.
+  if (p[0] === "topics" && method === "GET") {
+    return ok(FIXTURE_TOPICS);
+  }
+
   // ---- categories ----
   // A BARE ARRAY, like the real service. real-world-assets and
   // prediction-markets carry a null count on purpose: other services own that
@@ -968,6 +1000,20 @@ export function handleFixture(
       if (typeof body.avatarUrl === "string") me.avatarUrl = body.avatarUrl || null;
       return ok(publicProfile(me, userId));
     }
+    // GET|PUT /me/interests — the viewer's chosen topics.
+    if (p[1] === "interests" && method === "GET") {
+      return ok({ topics: [...interestsFor(userId!)] });
+    }
+    if (p[1] === "interests" && method === "PUT") {
+      const raw = Array.isArray(body.topics) ? (body.topics as unknown[]) : [];
+      const known = new Set(FIXTURE_TOPICS.map((t) => t.key));
+      // Unknown keys are dropped rather than stored: the vocabulary is the
+      // service's, and a stale client must not be able to widen it.
+      const topics = raw.filter((t): t is string => typeof t === "string" && known.has(t));
+      interests.set(userId!, new Set(topics));
+      return ok({ topics });
+    }
+
     // GET /me/unread → both nav badges in one call. Both counts are GLOBAL.
     if (p[1] === "unread" && method === "GET") {
       return ok({

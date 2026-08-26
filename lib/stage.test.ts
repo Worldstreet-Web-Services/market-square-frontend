@@ -111,7 +111,7 @@ describe("buildStage", () => {
     );
     assert.equal(stage.length, 2);
     assert.equal(stage[1].state, "approved-pending");
-    assert.equal(stage[1].videoTrack, null);
+    assert.equal(stage[1].cameraTrack, null);
     assert.equal(stage[1].audioTrack, null);
     assert.equal(stage[1].cameraOff, true);
   });
@@ -145,7 +145,7 @@ describe("buildStage", () => {
       HOST
     );
     assert.equal(stage.length, 2);
-    assert.equal(stage[1].videoTrack, null);
+    assert.equal(stage[1].cameraTrack, null);
     assert.equal(stage[1].audioTrack?.trackSid, "g-a");
     assert.equal(stage[1].isMuted, false);
     assert.equal(stage[1].cameraOff, true);
@@ -214,7 +214,7 @@ describe("buildStage", () => {
     );
     // Two audio elements are owed, even though only one participant has video.
     assert.equal(remoteAudioSlots(stage).length, 2);
-    assert.equal(stage.filter((slot) => slot.videoTrack).length, 1);
+    assert.equal(stage.filter((slot) => slot.cameraTrack).length, 1);
   });
 });
 
@@ -239,7 +239,11 @@ const cockpit = source("features/streams/components/live-cockpit.tsx");
 
 describe("the stage renderer, by construction", () => {
   it("maps over the slot list instead of picking one participant", () => {
-    assert.match(stageView, /slots\.map\(/, "tiles must be a map over every slot");
+    // The stage is now per-SOURCE, so it maps two tile lists (screens on the
+    // main stage, faces in the strip) rather than one list of participants.
+    // The rule is unchanged: map over a list, never resolve "the" participant.
+    assert.match(stageView, /primary\.map\(/, "the main stage must be a map");
+    assert.match(stageView, /secondary\.map\(/, "the camera strip must be a map");
     for (const antiPattern of [
       /remoteParticipants\[0\]/,
       /remoteParticipants\.values\(\)\)\[0\]/,
@@ -310,5 +314,27 @@ describe("the stage renderer, by construction", () => {
     assert.match(guestStage, /enableOnce\(\(\) => room\.localParticipant\.setCameraEnabled\(true\)\)/);
     // Exactly one retry — a loop here is how you get an eviction storm.
     assert.equal((guestStage.match(/await enable\(\);/g) ?? []).length, 2);
+  });
+});
+
+describe("the stream room keeps Ark broadcasts watch-only", () => {
+  const room = source("features/streams/components/stream-room.tsx");
+
+  it("gates BOTH speaker-request entry points on the same flag", () => {
+    // Desktop header and mobile rail. One of them keeping the control would
+    // put a dead end back on exactly one breakpoint.
+    const guarded = room.match(/!watchOnly && me\.data\?\.id !== data\.ownerId/g) ?? [];
+    assert.equal(guarded.length, 2, "both GuestSpeakerControl sites must be gated");
+  });
+
+  it("derives the flag from the deep link, not from a game list", () => {
+    assert.match(room, /const watchOnly = isArkOriginated\(data\.deepLink\)/);
+    assert.doesNotMatch(room, /"chess"|"arkball"|"last-standing"/, "no game names in the room");
+  });
+
+  it("offers the way into Ark on both breakpoints", () => {
+    // The header CTA is lg:block, so the mobile rail needs its own.
+    assert.match(room, /Join the match in Ark/);
+    assert.match(room, /aria-label="Join the match in Ark"/);
   });
 });
