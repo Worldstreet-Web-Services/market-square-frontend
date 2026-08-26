@@ -9,7 +9,6 @@ import { relativeTime } from "@/lib/format";
 import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
 import type { Profile } from "@/lib/api/schemas";
-import type { Post } from "@/features/feed/lib/types";
 import type { StoreItem } from "@/features/store/lib/types";
 
 /**
@@ -164,18 +163,17 @@ function ResultRow({
 function BrowseTab({
   tab,
   people,
-  posts,
+  postsSlot,
   products,
   renderPerson,
-  renderPost,
   renderProduct,
 }: {
   tab: ExploreTab;
   people: BrowseQuery<Profile>;
-  posts: BrowseQuery<Post>;
+  /** The reels surface, composed by the route. */
+  postsSlot: React.ReactNode;
   products: BrowseQuery<StoreItem>;
   renderPerson: (profile: Profile) => React.ReactNode;
-  renderPost: (post: Post) => React.ReactNode;
   renderProduct: (item: StoreItem) => React.ReactNode;
 }) {
   if (tab === "people") {
@@ -191,18 +189,10 @@ function BrowseTab({
     );
   }
 
-  if (tab === "posts") {
-    return (
-      <BrowseList
-        query={posts.query}
-        items={posts.items}
-        renderItem={renderPost}
-        emptyTitle="No posts yet"
-        emptyBody="The square is quiet — check back shortly."
-        errorFallback="Couldn't load posts."
-      />
-    );
-  }
+  // Posts is REELS: one video per screen, vertical snap, no ending. It owns
+  // its whole scroll container rather than rendering rows, so the route
+  // composes the surface in instead of a per-item renderer.
+  if (tab === "posts") return <>{postsSlot}</>;
 
   return (
     <div className="space-y-4 p-4">
@@ -242,14 +232,13 @@ export function DiscoveryPage({
   onTabChange,
   search,
   people,
-  posts,
+  postsSlot,
   products,
   gridItems,
   gridPending,
   onOpenVideo,
   openVideoId,
   renderPerson,
-  renderPost,
   renderProduct,
   renderLike,
 }: {
@@ -263,8 +252,8 @@ export function DiscoveryPage({
   search: ReturnType<typeof useDiscovery>;
   /** The People directory — its own paged route, narrowed by the query. */
   people: BrowseQuery<Profile>;
-  /** The Posts tab — the general feed lane. */
-  posts: BrowseQuery<Post>;
+  /** The Posts tab, which is the reels surface. */
+  postsSlot: React.ReactNode;
   /** The Products tab — the ARK Store's paged item list. */
   products: BrowseQuery<StoreItem>;
   gridItems: ExploreItem[];
@@ -273,7 +262,6 @@ export function DiscoveryPage({
   openVideoId: string | null;
   /** Row renderers, supplied by the screen from each owning slice. */
   renderPerson: (profile: Profile) => React.ReactNode;
-  renderPost: (post: Post) => React.ReactNode;
   renderProduct: (item: StoreItem) => React.ReactNode;
   /** The card like control, from the feed slice. */
   renderLike: (post: VideoItem) => React.ReactNode;
@@ -394,10 +382,9 @@ export function DiscoveryPage({
         <BrowseTab
           tab={tab}
           people={people}
-          posts={posts}
+          postsSlot={postsSlot}
           products={products}
           renderPerson={renderPerson}
-          renderPost={renderPost}
           renderProduct={renderProduct}
         />
       )}
