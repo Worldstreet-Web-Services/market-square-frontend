@@ -63,6 +63,10 @@ const PUBLIC: string[][] = [
   ["streams", "st_1"],
   ["streams", "st_1", "chat"],
   ["verification", "rule"],
+  // The upload contract. Public upstream so the composer can pre-validate a
+  // file before sign-in; gating it here would silently pin signed-out users to
+  // the client's fallback caps.
+  ["uploads", "limits"],
 ];
 
 // Every GET the service publishes BEHIND bearerAuth or adminKey (13 of them).
@@ -166,6 +170,17 @@ describe("isPublicGet", () => {
   });
 
   describe("prefix matches do not leak", () => {
+    it("opens exactly /uploads/limits and nothing else under /uploads", () => {
+      assert.equal(isPublicGet(["uploads", "limits"]), true);
+      // The upload routes themselves are authenticated POSTs; nothing under
+      // /uploads may be readable anonymously just because its head matches.
+      assert.equal(isPublicGet(["uploads"]), false);
+      assert.equal(isPublicGet(["uploads", "presign"]), false);
+      assert.equal(isPublicGet(["uploads", "complete"]), false);
+      assert.equal(isPublicGet(["uploads", "limits", "extra"]), false);
+      assert.equal(isPublicGet(["uploads", "did:privy:u1", "secret.png"]), false);
+    });
+
     it("gates /verification unless it is the rule", () => {
       assert.equal(isPublicGet(["verification", "rule"]), true);
       assert.equal(isPublicGet(["verification"]), false);

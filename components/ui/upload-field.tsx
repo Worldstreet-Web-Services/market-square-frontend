@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/api/envelope";
-import { ACCEPT_IMAGE, uploadFile, validateUpload } from "@/lib/api/upload";
+import { ACCEPT_IMAGE, ensureUploadLimits, uploadFile, validateUpload } from "@/lib/api/upload";
 import { IconCamera, IconX } from "@/components/ui/icons";
 
 // Image upload field for avatars and covers: pick → local preview → eager
@@ -35,6 +35,11 @@ export function UploadField({
 
   const pick = async (file: File) => {
     setError(null);
+    // Limits come from the backend (GET /uploads/limits), memoised per
+    // session, with the compiled-in fallback if it fails. Still checked before
+    // the upload starts, so the error is instant and names both the cap and
+    // this file's size.
+    await ensureUploadLimits();
     const invalid = validateUpload(file, "image");
     if (invalid) {
       setError(invalid);
