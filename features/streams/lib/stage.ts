@@ -135,7 +135,7 @@ function toSlot(participant: StageParticipant, role: "host" | "guest"): StageSlo
     identity: participant.identity,
     role,
     isLocal: participant.isLocal === true,
-    name: participant.name || participant.identity,
+    name: participantLabel(participant.name, participant.identity),
     cameraTrack: camera,
     screenTrack: screen,
     audioTrack: audio,
@@ -156,6 +156,25 @@ function toSlot(participant: StageParticipant, role: "host" | "guest"): StageSlo
  * here. The host tile is slot 0 and never moves, so a guest joining or leaving
  * can never reflow the host out from under the viewer.
  */
+/**
+ * What captions a tile.
+ *
+ * LiveKit carries an identity (our Privy DID, because permissions key off it)
+ * and an optional name. When the name is missing the raw DID was rendered, so a
+ * guest appeared as `did:privy:cmtad9ojl00m80dl2lkl4erib` — unreadable, and it
+ * leaks an account id to everyone watching. A short, stable stand-in is better
+ * on both counts: it tells two unnamed guests apart without publishing either
+ * one's identifier.
+ */
+export function participantLabel(name: string | undefined, identity: string): string {
+  const given = name?.trim();
+  if (given) return given;
+  // Approved speakers join as `<did>#speaker`, so drop the suffix first.
+  const base = identity.split("#")[0] ?? identity;
+  const tail = base.slice(-4).toUpperCase();
+  return base.startsWith("did:") ? `Guest ${tail}` : base;
+}
+
 export function buildStage(room: StageRoom, hostIdentity: string): StageSlot[] {
   const everyone: StageParticipant[] = [
     room.localParticipant,
