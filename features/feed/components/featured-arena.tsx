@@ -77,8 +77,12 @@ export function FeaturedArena() {
     <section aria-label="Featured on the square">
       {/* The design's hero: a 21px-radius slab washed left-to-right from 25% to
           72% black, ringed in mid grey, with the artwork inset on the left. */}
-      <div className="flex items-center gap-5 rounded-[21px] border border-[#999999] bg-[linear-gradient(90deg,rgba(0,0,0,0.25),rgba(0,0,0,0.72))] p-4">
-        <GradientThumb seed={slide.seed} className="h-[129px] w-[125px] shrink-0 rounded-xl" />
+      {/* Wraps on a phone. The row's parts are a 125px thumb, the copy, and a
+          CTA with a 250px floor: 447px before a single character of text, on a
+          360px screen. Rather than shrink the design, the CTA drops to its own
+          full-width line below and the desktop row is untouched from md up. */}
+      <div className="flex flex-wrap items-center gap-4 rounded-[21px] border border-[#999999] bg-[linear-gradient(90deg,rgba(0,0,0,0.25),rgba(0,0,0,0.72))] p-4 md:flex-nowrap md:gap-5">
+        <GradientThumb seed={slide.seed} className="h-[105px] w-[100px] shrink-0 rounded-xl md:h-[129px] md:w-[125px]" />
 
         <div className="min-w-0 flex-1">
           <p className="truncate bg-[linear-gradient(135deg,#3C3C3C,#7A7A7A_45%,#5A5A5A)] bg-clip-text text-[10px] font-bold uppercase tracking-[0.025em] text-transparent">
@@ -102,7 +106,7 @@ export function FeaturedArena() {
             2026-08-26). The label group sits left, the price chip right; the
             gap is the design's 68px floor, and justify-between lets a longer
             label ("Reserve a seat") grow the pill rather than clip it. */}
-        <div className="ws-btn-arena flex h-10 min-w-[250px] shrink-0 items-center justify-between gap-[68px] rounded-full px-[15px]">
+        <div className="ws-btn-arena flex h-10 w-full shrink-0 items-center justify-between gap-4 rounded-full px-[15px] md:w-auto md:min-w-[250px] md:gap-[68px]">
           <Link href={slide.href} className="ws-press flex h-5 items-center gap-1.5">
             <IconMsPlay className="h-[18.03px] w-[18.03px] p-px text-white" />
             <span className="text-[14px] font-bold leading-5 text-white">{slide.action}</span>

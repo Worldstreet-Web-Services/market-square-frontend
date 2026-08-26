@@ -297,7 +297,10 @@ function InlineComment({ postId }: { postId: string }) {
   };
 
   return (
-    <div className="ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2">
+    // Hidden on a phone: it cannot shrink below its avatar and padding, and
+    // the row has no room for it there. The comment tally opens the full sheet,
+    // so nothing is unreachable.
+    <div className="ws-comment-field hidden h-10 min-w-0 flex-1 items-center gap-2 px-2 md:flex">
       <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
       <input
         value={text}
@@ -466,8 +469,11 @@ export function PostCard({
 
       {/* Action row. The design groups it as: a tallies pill, the inline reply
           pill, then share / Arkmark / more standing free at the end. */}
-      <div className="mt-5 flex items-center gap-6">
-        <div className="ws-action-pill flex h-10 shrink-0 items-center gap-[17px] px-2">
+      {/* Tighter on a phone. Both end groups are shrink-0, so at the design's
+          spacing the row could not fit a 360px screen and pushed the page
+          wider than the viewport. The spacing is the design's from md up. */}
+      <div className="mt-5 flex items-center gap-3 md:gap-6">
+        <div className="ws-action-pill flex h-10 shrink-0 items-center gap-3 px-2 md:gap-[17px]">
           <CountAction
             label="Comments"
             count={post.commentCount}
@@ -499,7 +505,7 @@ export function PostCard({
 
         <InlineComment postId={post.id} />
 
-        <div className="flex shrink-0 items-center gap-[17px]">
+        <div className="flex shrink-0 items-center gap-3 md:gap-[17px]">
           <div className="flex items-center gap-3">
             <GlyphAction label="Share" onClick={share}>
               <IconMsShare className="h-5 w-5" />
