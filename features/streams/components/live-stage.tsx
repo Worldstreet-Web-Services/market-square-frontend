@@ -205,13 +205,21 @@ function MediaTile({
       </div>
 
       {onRemove && !compact && !isScreen && slot.role === "guest" && (
+        // Explicit control, NOT long-press. Long-press has no affordance —
+        // nothing tells a host it exists — and on a video tile it collides with
+        // the browser's own long-press menu. This button was already always
+        // rendered (hover only intensifies it), so it worked on touch; what it
+        // lacked was a usable target. The hit area is 44px on touch and the
+        // design's 28px from `lg` up, with the visual circle unchanged.
         <button
           onClick={() => onRemove(slot.identity)}
           disabled={removing}
           aria-label={`Remove ${slot.name} from stage`}
-          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-[#E5484D] transition-colors hover:bg-[#E5484D] hover:text-white disabled:opacity-50"
+          className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center disabled:opacity-50 lg:right-2 lg:top-2 lg:h-7 lg:w-7"
         >
-          <IconX className="h-3.5 w-3.5" />
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-[#E5484D] transition-colors hover:bg-[#E5484D] hover:text-white">
+            <IconX className="h-3.5 w-3.5" />
+          </span>
         </button>
       )}
     </div>
