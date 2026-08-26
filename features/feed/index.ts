@@ -14,6 +14,7 @@ export { useLikePost } from "./hooks/use-feed";
 // search results drive it without either slice importing the other.
 export { VideoViewer } from "./components/video-viewer";
 export { PostSlide } from "./components/post-slide";
+export { ReelsFeed } from "./components/reels-feed";
 // Explore composes this into its cards through a route slot.
 export { PostLikePill } from "./components/post-like-pill";
 export { useMediaFeed, mediaPostsOf, videoPostsOf } from "./hooks/use-feed";

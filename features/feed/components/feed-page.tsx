@@ -19,7 +19,6 @@ import { FeedItemCard } from "@/features/feed/components/feed-cards";
 import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
-import { SnapFeed } from "@/features/feed/components/snap-feed";
 import { useMarketView } from "@/lib/analytics";
 
 // The workspace switcher above the timeline, in the design's order. "Feeds"
@@ -129,14 +128,12 @@ function PostSkeleton() {
 export function FeedPage({
   followSlot,
   tipSlot,
-  liveCount,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
   /** Real count of live streams, for the mobile lane badge. */
-  liveCount?: number;
 }) {
   const compose = useQueryParam("compose");
   const prefill = useComposePrefill();
@@ -157,11 +154,12 @@ export function FeedPage({
 
   return (
     <>
-      <div className="md:hidden">
-        <SnapFeed liveCount={liveCount} />
-      </div>
-
-      <div className="relative hidden px-4 py-4 md:block lg:px-6">
+      {/* One timeline, every width. Mobile used to get a full-viewport snap
+          feed instead, which is why a text post arrived as a sentence floating
+          in a wall of black and why the phone never had the reading surface
+          the desktop did. Video moved to Explore's reels, where it is watched
+          rather than scrolled past. */}
+      <div className="relative px-4 py-4 lg:px-6">
         {/* Section switcher and the two creation actions share one long
             outlined pill — that enclosure is the design's, not decoration. */}
         <div className="ws-tabbar mb-4 flex items-center gap-3 p-1.5">
@@ -183,7 +181,10 @@ export function FeedPage({
             ))}
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          {/* Hidden on a phone: the shell's floating create button already
+              covers posting there, and these two would squeeze the section
+              pills into nothing. */}
+          <div className="hidden shrink-0 items-center gap-3 md:flex">
             <Link
               href="/schedule"
               className="ws-press flex shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/[0.18] px-4 py-2 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-[#979797]/25"

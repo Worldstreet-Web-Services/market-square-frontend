@@ -20,7 +20,7 @@ import { PersonRow } from "@/features/profile";
 import { useMe } from "@/hooks/use-me";
 import { excludeViewer } from "@/lib/people-directory";
 import { useMediaFeed, mediaPostsOf, videoPostsOf, VideoViewer } from "@/features/feed";
-import { useBrowsePosts, postsOf, PostCard, PostLikePill } from "@/features/feed";
+import { PostLikePill, ReelsFeed } from "@/features/feed";
 import { useStoreItems, StoreItemCard } from "@/features/store";
 
 /**
@@ -69,7 +69,9 @@ export function DiscoverScreen() {
   const live = useStreamList("live", topics);
   // `Streams` browses live broadcasts only — a stream tab that folded in
   // recorded clips would stop meaning "streams".
-  const media = useMediaFeed(topics, !hasQuery && exploreTabShowsVideos(tab));
+  // The Posts tab is reels, and reels are the recorded videos, so it feeds
+  // from the same media query the grid does.
+  const media = useMediaFeed(topics, !hasQuery && (exploreTabShowsVideos(tab) || tab === "posts"));
   const search = useDiscovery(deferredQuery, searchType, topics);
   // The People tab is its own paged directory, populated on arrival and
   // narrowed by the query — never a blank tab waiting to be searched.
@@ -78,7 +80,6 @@ export function DiscoverScreen() {
   const people = usePeople(tab === "people" ? deferredQuery : "", tab === "people");
   // `/feed` and `/store/items` take no `q`, so on those tabs a query falls
   // through to /search rather than narrowing this list. See the report.
-  const browsePosts = useBrowsePosts(topics, tab === "posts" && !hasQuery);
   const storeItems = useStoreItems(undefined, tab === "products" && !hasQuery);
 
   /**
@@ -218,7 +219,19 @@ export function DiscoverScreen() {
           query: people,
           items: directoryPeople,
         }}
-        posts={{ query: browsePosts, items: postsOf(browsePosts.data?.pages) }}
+        // Posts is the reels surface: video only, one per screen, no ending.
+        // It is the feed slice's, composed in here because discovery never
+        // imports it. The pager is the SAME media query the grid browses, so
+        // scrolling reels pages exactly as the grid would.
+        postsSlot={
+          <ReelsFeed
+            items={browseVideos}
+            isPending={media.isPending}
+            hasNextPage={Boolean(media.hasNextPage)}
+            isFetchingNextPage={media.isFetchingNextPage}
+            fetchNextPage={() => void media.fetchNextPage()}
+          />
+        }
         products={{
           query: storeItems,
           items: storeItems.data?.pages.flatMap((page) => page.items) ?? [],
@@ -228,7 +241,6 @@ export function DiscoverScreen() {
         onOpenVideo={open}
         openVideoId={openVideoId}
         renderPerson={(profile) => <PersonRow key={profile.id} profile={profile} />}
-        renderPost={(post) => <PostCard key={post.id} post={post} />}
         renderProduct={(item) => <StoreItemCard key={item.id} item={item} />}
         renderLike={(post) => <PostLikePill post={post} />}
       />

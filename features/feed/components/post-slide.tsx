@@ -20,9 +20,9 @@ const DOUBLE_TAP_MS = 300;
 /**
  * One full-viewport slide in a vertical snap feed.
  *
- * This is the single implementation of the pattern: mobile Home's `SnapFeed`
- * and Explore's immersive video viewer both render it, so a clip behaves
- * identically in both places rather than drifting into two players.
+ * This is the single implementation of the pattern: Explore's reels feed and
+ * its full-screen video viewer both render it, so a clip behaves identically in
+ * both places rather than drifting into two players.
  *
  * Playback grammar (the same one `InlineVideo` uses in the timeline): muted
  * autoplay once the slide is actually on screen, pause AND re-mute the moment
@@ -102,7 +102,11 @@ export function PostSlide({
 
   return (
     <section
-      className="ws-snap-item relative flex h-dvh w-full flex-col justify-center overflow-hidden"
+      // h-full, not h-dvh: the slide fills its SCROLL CONTAINER. That is the
+      // same thing in the full-screen viewer, and it is what lets the reels
+      // feed sit inside Explore's column on desktop without hanging off the
+      // bottom of the page.
+      className="ws-snap-item relative flex h-full w-full flex-col justify-center overflow-hidden"
       style={viewTransitionName ? { viewTransitionName } : undefined}
     >
       {/* content stage: media fills the slide; text posts stay typographic. */}

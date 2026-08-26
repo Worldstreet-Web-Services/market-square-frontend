@@ -3,7 +3,6 @@
 import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/feed";
 import { FollowPill } from "@/features/profile";
 import { TipButton } from "@/features/tips";
-import { useStreamList } from "@/features/streams";
 
 // Slices never import each other, so the follow control — which belongs to the
 // profile slice — is composed into the timeline here, the same way the stream
@@ -21,10 +20,7 @@ const tipSlot = (post: Post) => (
 );
 
 export function HomeScreen() {
-  // The mobile lane badge counts what is actually live — the streams slice
-  // owns that list, so the count is composed in here too.
-  const live = useStreamList("live");
-  return <FeedPage followSlot={followSlot} liveCount={live.data?.items.length} />;
+  return <FeedPage followSlot={followSlot} tipSlot={tipSlot} />;
 }
 
 export function ArkmarksScreen() {
