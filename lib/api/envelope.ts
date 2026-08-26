@@ -60,6 +60,27 @@ export function errorCode(error: unknown): string | null {
   return (error as GatewayApiError | null)?.code ?? null;
 }
 
+/**
+ * Field-level validation messages a user can act on.
+ *
+ * Keyed on the field name the service reports, because the wording of the
+ * underlying validator is not ours to depend on.
+ */
+const VALIDATION_COPY: Array<[RegExp, string]> = [
+  [/deepLink/i, "Choose what this is about before saving."],
+  [/startsAt/i, "Pick a valid date and time."],
+  [/title/i, "Add a title."],
+  [/\btext\b/i, "Write something first."],
+];
+
+function humaniseValidation(message: string | undefined): string | null {
+  if (!message) return null;
+  for (const [pattern, copy] of VALIDATION_COPY) {
+    if (pattern.test(message)) return copy;
+  }
+  return null;
+}
+
 // Human copy for an error near the action that caused it. Raw codes never
 // reach the screen.
 export function errorMessage(error: unknown, fallback: string): string {
@@ -105,7 +126,11 @@ export function errorMessage(error: unknown, fallback: string): string {
     case "PAYLOAD_TOO_LARGE":
       return err.message || "That file is too large to send this way.";
     case "VALIDATION":
-      return err.message || fallback;
+      // Zod's messages are written for developers — "deepLink: Invalid input:
+      // expected object, received undefined" tells a user nothing. Translate
+      // the ones a user can actually hit; anything else keeps the raw message,
+      // which is still better than a bare code.
+      return humaniseValidation(err.message) ?? err.message ?? fallback;
     case "SERVICE_UNAVAILABLE":
       return "Market Square is unreachable right now.";
     default:

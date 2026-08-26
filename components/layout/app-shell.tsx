@@ -299,10 +299,13 @@ function Sidebar({
         title="Market Square"
         className="ws-press mb-4 flex items-center justify-center border-b border-white/10 pb-4 xl:justify-start xl:px-2.5"
       >
-        {/* The wordmark needs width, so the icon rail wears the mark and the
-            expanded sidebar wears the wordmark. */}
-        <LogoMark size={32} className="xl:hidden" />
-        <Wordmark height={14} className="hidden xl:block" />
+        {/* The icon rail wears the mark alone; the expanded sidebar wears the
+            full lockup. Heights are set so the TYPE inside the lockup reads at
+            roughly the size the old type-only wordmark did — the lockup is
+            ~3.3:1 where that asset was ~12.8:1, so matching the old height
+            would have shrunk the type to about 9px. */}
+        <LogoMark size={28} className="xl:hidden" />
+        <Wordmark height={30} className="hidden xl:block" />
       </Link>
 
       <nav className="flex flex-col gap-1" aria-label="Primary">
@@ -601,7 +604,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile top strip: wordmark plus the two things worth reaching from
           anywhere — what's live, and search. */}
       <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between px-4 md:hidden">
-        <Wordmark height={16} />
+        <Wordmark height={26} />
         <div className="flex items-center gap-3">
           {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
           <Link href="/discover" className="text-meta" aria-label="Explore">

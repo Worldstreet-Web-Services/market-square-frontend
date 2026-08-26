@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import type { DeepLink } from "@/lib/api/schemas";
 import { LinkTargetPicker } from "@/components/ui/link-target-picker";
+import { buildCreateActivityBody } from "@/lib/activity-payload";
 import { formatDateTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useMe } from "@/hooks/use-me";
@@ -48,13 +49,9 @@ function CreateActivityForm() {
   const submit = () => {
     if (!ready) return;
     create.mutate(
-      {
-        type,
-        title: title.trim(),
-        startsAt: new Date(startsAt).toISOString(),
-        // Required — `ready` guarantees it is set before we get here.
-        deepLink: link!,
-      },
+      // The wire shape lives in lib/activity-payload.ts, pinned against the
+      // service's own validator by lib/activity-contract.test.ts.
+      buildCreateActivityBody({ type, title, localStartsAt: startsAt, deepLink: link }),
       {
         onSuccess: () => {
           setTitle("");
