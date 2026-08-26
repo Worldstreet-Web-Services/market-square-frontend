@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { allowsCompose } from "@/lib/compose-surfaces";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
@@ -45,6 +46,13 @@ interface NavItem {
   admin?: boolean;
   /** Folded into the "More" menu below xl, where vertical room runs out. */
   secondary?: boolean;
+  /**
+   * Hidden unless this `MARKET_FLAGS` capability is on.
+   *
+   * Promotion only — the ROUTE stays reachable either way. Hiding the entry
+   * must never break a deep link into the surface it points at.
+   */
+  flag?: keyof typeof MARKET_FLAGS;
 }
 
 // One ordered list drives the sidebar at every breakpoint. Primary items are
@@ -60,7 +68,9 @@ const NAV: NavItem[] = [
   { href: "/notifications", label: "Notifications", icon: IconBell, authed: true },
   { href: "/live", label: "Live", icon: IconLive },
   { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
-  { href: "/store", label: "Store", icon: IconStore },
+  // Reachable by URL, by deep link and from Explore's Products tab — just
+  // not promoted in the nav while `storeNav` is off.
+  { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
   { href: "/schedule", label: "Schedule", icon: IconCalendar, authed: true, secondary: true },
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
   { href: "/admin", label: "Admin", icon: IconShield, authed: true, admin: true, secondary: true },
@@ -72,6 +82,29 @@ const NAV: NavItem[] = [
 // Everything list-shaped stays in the column — including the Studio index and
 // Schedule, whose rows read worse stretched across 1000px. Their detail views
 // (the cockpit) are a different matter, hence the separate prefix list.
+/**
+ * Which nav entries this viewer may see.
+ *
+ * Sidebar, mobile bar and mobile drawer all read the same list, so the rule
+ * lives here once — three copies is how a flagged entry survives in one of
+ * them.
+ */
+function visibleNav(options: {
+  authenticated: boolean;
+  isAdmin: boolean;
+  isOperator: boolean;
+}): NavItem[] {
+  return NAV.filter(
+    (item) =>
+      (!item.authed || options.authenticated) &&
+      (!item.operator || options.isOperator) &&
+      // Presentation only. Every /admin route is enforced server-side, so a
+      // non-admin who types the URL still gets a refusal.
+      (!item.admin || options.isAdmin) &&
+      (!item.flag || MARKET_FLAGS[item.flag])
+  );
+}
+
 const WIDE_EXACT = ["/store", "/operations"];
 const WIDE_PREFIX = ["/store/", "/operations/", "/studio/"];
 
@@ -298,14 +331,11 @@ function Sidebar({
   // Both badges come from one global endpoint, never from a loaded page.
   const unread = useUnread();
 
-  const visible = NAV.filter(
-    (item) =>
-      (!item.authed || authenticated) &&
-      (!item.operator || me.data?.role === "worldstreet") &&
-      // Presentation only. Every /admin route is enforced server-side, so a
-      // non-admin who types the URL still gets a refusal.
-      (!item.admin || Boolean(me.data?.isAdmin))
-  );
+  const visible = visibleNav({
+    authenticated,
+    isAdmin: Boolean(me.data?.isAdmin),
+    isOperator: me.data?.role === "worldstreet",
+  });
 
   return (
     <aside className="ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center border-r bg-[#0f0f0f] px-3 py-5 md:flex xl:w-[224px] xl:items-stretch">
@@ -535,12 +565,11 @@ function MobileBar({ pathname }: { pathname: string }) {
 
   // Four tabs plus the drawer. Everything else the sidebar lists lives behind
   // that fifth slot rather than being unreachable.
-  const visible = NAV.filter(
-    (item) =>
-      (!item.authed || authenticated) &&
-      (!item.operator || me.data?.role === "worldstreet") &&
-      (!item.admin || Boolean(me.data?.isAdmin))
-  );
+  const visible = visibleNav({
+    authenticated,
+    isAdmin: Boolean(me.data?.isAdmin),
+    isOperator: me.data?.role === "worldstreet",
+  });
   const tabs = visible.filter((item) => !item.secondary && item.href !== "/studio").slice(0, 4);
 
   return (

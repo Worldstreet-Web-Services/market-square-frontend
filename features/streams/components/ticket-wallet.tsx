@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { formatKash, relativeTime } from "@/lib/format";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
@@ -82,7 +83,9 @@ export function TicketWallet() {
             <p className="tnum mt-1 truncate text-[11px] text-grey-600">
               Receipt {ticket.id} · Support SUP-{ticket.id.toUpperCase()}
             </p>
-            {ticket.stream && (
+            {/* A replay entitlement printed on a receipt for a recording that
+                will never exist is the worst place to leave the promise. */}
+            {MARKET_FLAGS.replays && ticket.stream && (
               <p className="mt-0.5 line-clamp-1 text-[11px] text-grey-600">{ticket.stream.replayPolicy}</p>
             )}
           </div>

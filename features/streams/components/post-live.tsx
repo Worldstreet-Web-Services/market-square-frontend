@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatCount, formatCountdown, formatKash } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { IconPlay } from "@/components/ui/icons";
 import { useStreamStats } from "@/features/streams/hooks/use-streams";
 import { CreateStreamSheet, type StreamDraft } from "@/features/streams/components/create-stream-sheet";
@@ -82,19 +83,37 @@ export function PostLive({ stream }: { stream: Stream }) {
         </div>
       )}
 
-      {stream.replayUrl && (
-        <Link
-          href={`/live/${stream.id}`}
-          className="ws-card ws-press flex items-center gap-3 p-4 transition-colors hover:bg-white/8"
-        >
-          <span className="ws-glass flex h-10 w-10 items-center justify-center rounded-full">
-            <IconPlay className="ml-0.5 h-5 w-5 text-white" />
+      {/* The host just finished streaming, so "where is my recording?" is the
+          first question they have. The card stays to answer it — but as a
+          statement, not a link: with `replays` off there is nothing to open,
+          and a tappable card that goes nowhere is worse than no card. */}
+      {!MARKET_FLAGS.replays ? (
+        <div className="ws-card flex items-center gap-3 p-4">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/6">
+            <IconPlay className="ml-0.5 h-5 w-5 text-grey-600" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-heading">Watch the replay</p>
-            <p className="text-xs text-grey-500">Available on your stream page</p>
+            <p className="text-sm font-semibold text-grey-400">Replay — coming soon</p>
+            <p className="text-xs text-grey-600">
+              Streams aren&apos;t recorded yet, so this one wasn&apos;t saved.
+            </p>
           </div>
-        </Link>
+        </div>
+      ) : (
+        stream.replayUrl && (
+          <Link
+            href={`/live/${stream.id}`}
+            className="ws-card ws-press flex items-center gap-3 p-4 transition-colors hover:bg-white/8"
+          >
+            <span className="ws-glass flex h-10 w-10 items-center justify-center rounded-full">
+              <IconPlay className="ml-0.5 h-5 w-5 text-white" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-heading">Watch the replay</p>
+              <p className="text-xs text-grey-500">Available on your stream page</p>
+            </div>
+          </Link>
+        )
       )}
 
       <div className="flex flex-wrap gap-3">

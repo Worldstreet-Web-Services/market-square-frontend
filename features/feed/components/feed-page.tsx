@@ -17,6 +17,7 @@ import { FeaturedArena } from "@/features/feed/components/featured-arena";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
 import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { SnapFeed } from "@/features/feed/components/snap-feed";
 import { useMarketView } from "@/lib/analytics";
 
@@ -85,7 +86,11 @@ const EMPTY_COPY: Record<Lane, LaneEmpty> = {
   platform: {
     title: "No platform news",
     body: "Official WorldStreet announcements appear here.",
-    cta: { label: "Browse the ARK Store", href: "/store" },
+    // Sending readers to the Store from a news lane was always a non-sequitur;
+    // with `storeNav` off it would also be the one place still promoting it.
+    ...(MARKET_FLAGS.storeNav
+      ? { cta: { label: "Browse the ARK Store", href: "/store" } }
+      : {}),
   },
 };
 

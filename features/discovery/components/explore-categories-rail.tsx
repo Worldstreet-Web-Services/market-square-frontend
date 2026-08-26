@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { formatCount } from "@/lib/format";
 import { arkAppConfigured, resolveDeepLink } from "@/lib/deeplink";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   IconCoin,
@@ -45,7 +46,14 @@ const DESTINATIONS: Record<string, Destination> = {
   "live-streams": { href: "/live", external: false, icon: IconLive },
   // Spotlight is the surface that actually ranks and returns creators.
   "creators-audio": { href: "/spotlight", external: false, icon: IconSpark },
-  "ark-store": { href: "/store", external: false, icon: IconStore },
+  // Promotion only. With `storeNav` off the category KEEPS its row — the
+  // API's label, order and count are authoritative and stay exactly as
+  // served — it simply loses its destination and renders inert, the same way
+  // the Ark-app categories do when that app is not configured. Hiding the row
+  // outright would edit the service's own list; hiding the link does not.
+  ...(MARKET_FLAGS.storeNav
+    ? { "ark-store": { href: "/store", external: false, icon: IconStore } }
+    : {}),
   // Other Ark products: resolved through the same deep-link table the feed
   // uses, so the base URL and the source attribution stay in one place.
   ...(arkAppConfigured()
