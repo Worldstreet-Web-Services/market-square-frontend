@@ -1,3 +1,5 @@
+import { cn } from "@/lib/cn";
+
 /**
  * A media box that shows the WHOLE frame and fills the rest with the frame.
  *
@@ -38,7 +40,15 @@ export function MediaFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`relative overflow-hidden bg-[#0b0b0c] ${className ?? ""}`}>
+    // `cn` (tailwind-merge), NOT a template string. The frame needs a
+    // positioned ancestor for its layers, but the slide passes
+    // `absolute inset-0` — and with both class names present Tailwind's own
+    // source order decides the winner, which puts `.relative` last. The frame
+    // then sat in flow with only absolutely-positioned children, collapsed to
+    // zero height, and the slide rendered black. tailwind-merge resolves the
+    // conflict by intent instead: the caller's position wins, and callers that
+    // pass none keep `relative`.
+    <div className={cn("relative overflow-hidden bg-[#0b0b0c]", className)}>
       {backdrop && (
         <>
           {/* Scaled past the edges so the blur has real pixels to sample there
