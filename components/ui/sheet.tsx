@@ -76,7 +76,7 @@ export function Sheet({
                 : { type: "spring", damping: 28, stiffness: 340 }
             }
             className={cn(
-              "ws-glass relative z-10 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-sheet/95 sm:rounded-3xl",
+              "ws-glass relative z-10 flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-sheet/95 sm:max-h-[88dvh] sm:rounded-3xl",
               wide ? "sm:max-w-2xl" : "sm:max-w-md"
             )}
           >
@@ -94,7 +94,9 @@ export function Sheet({
               </div>
               {tabs}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              {children}
+            </div>
           </motion.div>
         </motion.div>
       )}
