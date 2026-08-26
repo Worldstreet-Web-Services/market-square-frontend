@@ -206,6 +206,19 @@ function StageBody({
     );
   }
   if (stream.status === "ended") {
+    // Replays are not a capability yet — recording needs LiveKit egress and a
+    // storage target, and neither is provisioned, so `replayUrl` is null on
+    // every stream. The old copy said the replay was "processing", which
+    // promised something nobody was working on and invited the reader back to
+    // check. Say what is true instead, and never enter the replay player.
+    if (!MARKET_FLAGS.replays) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+          <p className="ws-display text-xl">This stream has ended</p>
+          <p className="text-sm text-meta">Replays aren&apos;t available yet.</p>
+        </div>
+      );
+    }
     if (!stream.replayUrl) {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">

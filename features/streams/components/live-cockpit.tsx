@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { formatCount, formatCountdown, formatKash, relativeTime } from "@/lib/format";
 import { LiveBadge } from "@/components/ui/badge";
 import { Button, Spinner } from "@/components/ui/button";
@@ -546,7 +547,9 @@ export function LiveCockpit({
       <Sheet open={confirmEnd} onClose={() => setConfirmEnd(false)} title="End stream?">
         <div className="space-y-4">
           <p className="text-sm text-grey-400">
-            Viewers will be disconnected. If a replay is available it will appear on your stream page.
+            {MARKET_FLAGS.replays
+              ? "Viewers will be disconnected. If a replay is available it will appear on your stream page."
+              : "Viewers will be disconnected. Streams aren't recorded yet, so this one won't be saved."}
           </p>
           <div className="flex gap-2">
             <Button

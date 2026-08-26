@@ -31,7 +31,17 @@ function calendarUrl(stream: Stream) {
 
 export function TicketSheet({ stream, open, onClose }: { stream: Stream; open: boolean; onClose: () => void }) {
   const tiers: Array<{ tier: TicketTier; price: string; label: string; description: string }> = [];
-  if (stream.ticketPriceKash) tiers.push({ tier: "standard", price: stream.ticketPriceKash, label: "General access", description: "Live access and replay when published" });
+  // Never SELL a replay that cannot be delivered. With `replays` off the tier
+  // buys live access and nothing else, so that is exactly what it says.
+  if (stream.ticketPriceKash)
+    tiers.push({
+      tier: "standard",
+      price: stream.ticketPriceKash,
+      label: "General access",
+      description: MARKET_FLAGS.replays
+        ? "Live access and replay when published"
+        : "Live access",
+    });
   if (MARKET_FLAGS.vipAccess && stream.vipPriceKash) tiers.push({ tier: "vip", price: stream.vipPriceKash, label: "VIP access", description: "Benefits configured by the host" });
 
   const [tier, setTier] = useState<TicketTier>(tiers[0]?.tier ?? "standard");
@@ -131,7 +141,15 @@ export function TicketSheet({ stream, open, onClose }: { stream: Stream; open: b
 
         <div className="space-y-1 rounded-2xl border border-white/8 p-3 text-[11px] leading-relaxed text-grey-500">
           <p><span className="font-semibold text-grey-300">Cancellation:</span> {stream.refundPolicy}</p>
-          <p><span className="font-semibold text-grey-300">Replay:</span> {stream.replayPolicy}</p>
+          {/* The service still returns a replay policy, but a policy for a
+              capability that does not exist reads as a promise. State the
+              actual position until recordings are real. */}
+          <p>
+            <span className="font-semibold text-grey-300">Replay:</span>{" "}
+            {MARKET_FLAGS.replays
+              ? stream.replayPolicy
+              : "Replays aren't available yet — this ticket is for the live stream."}
+          </p>
           <p><span className="font-semibold text-grey-300">Payment:</span> KASH is captured only when registration succeeds.</p>
         </div>
       </div>

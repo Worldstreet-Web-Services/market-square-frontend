@@ -1,4 +1,5 @@
 "use client";
+import { cn } from "@/lib/cn";
 
 import { useRouter } from "next/navigation";
 import { IconArrowLeft } from "@/components/ui/icons";
@@ -51,33 +52,54 @@ export function ColumnTabs<T extends string>({
   value,
   onChange,
 }: {
-  tabs: Array<{ value: T; label: string }>;
+  /**
+   * `disabled` keeps a tab VISIBLE but unusable — a capability that is coming
+   * rather than one that is missing. It renders with a "Soon" marker and is a
+   * real `disabled` button, so it cannot be clicked, cannot be tabbed to, and
+   * announces itself as unavailable. Never dim a tab that still fires.
+   */
+  tabs: Array<{ value: T; label: string; disabled?: boolean }>;
   value: T;
   onChange: (next: T) => void;
 }) {
   return (
     <div className="flex">
-      {tabs.map((tab) => (
-        <button
-          key={tab.value}
-          onClick={() => onChange(tab.value)}
-          aria-current={value === tab.value ? "true" : undefined}
-          className="relative flex flex-1 items-center justify-center py-3 transition-colors hover:bg-white/6"
-        >
-          <span
-            className={
-              value === tab.value
-                ? "text-[15px] font-bold text-heading"
-                : "text-[15px] font-medium text-meta"
-            }
+      {tabs.map((tab) => {
+        const active = value === tab.value;
+        return (
+          <button
+            key={tab.value}
+            onClick={() => !tab.disabled && onChange(tab.value)}
+            disabled={tab.disabled}
+            aria-current={active ? "true" : undefined}
+            className={cn(
+              "relative flex flex-1 items-center justify-center gap-1.5 py-3 transition-colors",
+              tab.disabled ? "cursor-not-allowed" : "hover:bg-white/6"
+            )}
           >
-            {tab.label}
-          </span>
-          {value === tab.value && (
-            <span className="absolute bottom-0 h-1 w-12 rounded-full bg-accent" />
-          )}
-        </button>
-      ))}
+            <span
+              className={cn(
+                "text-[15px]",
+                tab.disabled
+                  ? "font-medium text-grey-600"
+                  : active
+                    ? "font-bold text-heading"
+                    : "font-medium text-meta"
+              )}
+            >
+              {tab.label}
+            </span>
+            {tab.disabled && (
+              <span className="rounded-full border border-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-grey-600">
+                Soon
+              </span>
+            )}
+            {active && !tab.disabled && (
+              <span className="absolute bottom-0 h-1 w-12 rounded-full bg-accent" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -6,16 +6,21 @@ import { useAuth } from "@/hooks/use-auth";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { useActivities, useStreamList } from "@/features/streams/hooks/use-streams";
 import { StreamCard } from "@/features/streams/components/stream-card";
 import { ActivityRow } from "@/features/streams/components/upcoming-activity-row";
 
 type Section = "live" | "scheduled" | "replay";
 
-const TABS: Array<{ value: Section; label: string }> = [
+// The Replays tab stays VISIBLE while the capability is off — it explains
+// what the section will hold, which reads as a roadmap — but is disabled, so
+// there is never a control that looks tappable and does nothing. See
+// MARKET_FLAGS.replays for what has to be true upstream first.
+const TABS: Array<{ value: Section; label: string; disabled?: boolean }> = [
   { value: "live", label: "Live now" },
   { value: "scheduled", label: "Upcoming" },
-  { value: "replay", label: "Replays" },
+  { value: "replay", label: "Replays", disabled: !MARKET_FLAGS.replays },
 ];
 
 // Each empty section explains itself and offers the action that fills it.
@@ -38,6 +43,7 @@ const EMPTY: Record<Section, SectionEmpty> = {
     cta: { label: "Schedule a stream", href: "/schedule", authed: true },
   },
   replay: {
+    // Only reachable with the flag ON; with it off the tab cannot be selected.
     title: "No replays yet",
     body: "Ended streams with a replay saved land here.",
     cta: { label: "Find creators to follow", href: "/spotlight" },
@@ -81,7 +87,7 @@ export function LiveHub() {
 
   return (
     <>
-      <ColumnHeader title="Live" subtitle="Streams, sessions and replays on the square">
+      <ColumnHeader title="Live" subtitle="Streams and sessions on the square">
         <ColumnTabs tabs={TABS} value={section} onChange={setSection} />
       </ColumnHeader>
 

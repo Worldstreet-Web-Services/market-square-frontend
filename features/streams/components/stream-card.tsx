@@ -40,7 +40,9 @@ export function StreamCard({ stream }: { stream: Stream }) {
             <LiveBadge className="px-2 py-0 text-[9px]" />
           </span>
         )}
-        {(stream.status === "live" || stream.replayUrl) && (
+        {/* A play badge promises playback. Only live does that today: an
+            ended stream has no replay to open while `replays` is off. */}
+        {(stream.status === "live" || (MARKET_FLAGS.replays && stream.replayUrl)) && (
           <span className="absolute inset-0 flex items-center justify-center">
             <span className="ws-glass flex h-9 w-9 items-center justify-center rounded-full">
               <IconPlay className="ml-0.5 h-4 w-4 text-white" />
@@ -85,7 +87,11 @@ export function StreamCard({ stream }: { stream: Stream }) {
           {stream.status === "scheduled" && stream.scheduledAt && (
             <span>{formatDateTime(stream.scheduledAt)}</span>
           )}
-          {stream.status === "ended" && <span>{stream.replayUrl ? "Replay available" : "Ended"}</span>}
+          {stream.status === "ended" && (
+            <span>
+              {MARKET_FLAGS.replays && stream.replayUrl ? "Replay available" : "Ended"}
+            </span>
+          )}
         </p>
       </div>
     </TransitionLink>
