@@ -132,7 +132,10 @@ export function PostSlide({
         </span>
       )}
       {post.text && (
-        <div className={cn("pointer-events-none px-6 pb-40", post.mediaUrl && "ws-text-shadow")}>
+        <div
+          className={cn("pointer-events-none px-6", post.mediaUrl && "ws-text-shadow")}
+          style={{ paddingBottom: "calc(var(--ws-nav-h) + 96px)" }}
+        >
           <p className="ws-display text-2xl leading-snug">{post.text}</p>
         </div>
       )}
@@ -149,9 +152,18 @@ export function PostSlide({
       )}
 
       {/* bottom scrim: author + caption meta */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/85 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 pb-28">
-        <div className="min-w-0">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/85 to-transparent" />
+      {/* Author and actions are two SEPARATE blocks, because they clear two
+          different obstacles: the author row only has to sit above the tab
+          bar, while the action rail shares the right edge with the create
+          button and has to start above its hit frame. As one flex row with a
+          single `pb-28` the rail landed underneath the button, which hid the
+          comment control completely and clipped the like tally. */}
+      <div
+        className="absolute inset-x-0 flex items-end px-4"
+        style={{ bottom: "calc(var(--ws-nav-h) + 16px)" }}
+      >
+        <div className="min-w-0 flex-1 pr-20">
           {author && (
             <Link
               href={`/u/${author.username}`}
@@ -183,45 +195,49 @@ export function PostSlide({
             </Link>
           )}
         </div>
-        {/* right action rail */}
-        <div className="pointer-events-auto flex flex-col items-center gap-4 pb-1">
-          <button
-            onClick={doLike}
-            aria-label={post.likedByMe ? "Unlike" : "Like"}
-            className="ws-press flex flex-col items-center gap-0.5"
-          >
-            <span
-              className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-full bg-black/40",
-                post.likedByMe ? "text-like" : "text-heading"
-              )}
-            >
-              <IconHeart className="h-5 w-5" filled={post.likedByMe} />
-            </span>
-            {/* A payload without the tally renders no number rather than a
-                fabricated zero. */}
-            {post.likeCount !== undefined && (
-              <span className="tnum ws-text-shadow text-xs text-body">
-                {formatCount(post.likeCount)}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setCommentsOpen(true)}
-            aria-label="Comments"
-            className="ws-press flex flex-col items-center gap-0.5"
-          >
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading">
-              <IconComment className="h-5 w-5" />
-            </span>
-            {post.commentCount !== undefined && (
-              <span className="tnum ws-text-shadow text-xs text-body">
-                {formatCount(post.commentCount)}
-              </span>
-            )}
-          </button>
-        </div>
       </div>
+
+      {/* right action rail */}
+      <div
+        className="pointer-events-auto absolute right-4 flex flex-col items-center gap-4"
+        style={{ bottom: "var(--ws-fab-clearance)" }}
+      >
+        <button
+          onClick={doLike}
+          aria-label={post.likedByMe ? "Unlike" : "Like"}
+          className="ws-press flex flex-col items-center gap-0.5"
+        >
+          <span
+            className={cn(
+              "flex h-11 w-11 items-center justify-center rounded-full bg-black/40",
+              post.likedByMe ? "text-like" : "text-heading"
+            )}
+          >
+            <IconHeart className="h-5 w-5" filled={post.likedByMe} />
+          </span>
+          {/* A payload without the tally renders no number rather than a
+              fabricated zero. */}
+          {post.likeCount !== undefined && (
+            <span className="tnum ws-text-shadow text-xs text-body">
+              {formatCount(post.likeCount)}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setCommentsOpen(true)}
+          aria-label="Comments"
+          className="ws-press flex flex-col items-center gap-0.5"
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading">
+            <IconComment className="h-5 w-5" />
+          </span>
+          {post.commentCount !== undefined && (
+            <span className="tnum ws-text-shadow text-xs text-body">
+              {formatCount(post.commentCount)}
+            </span>
+          )}
+      </button>
+    </div>
       <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />
     </section>
   );

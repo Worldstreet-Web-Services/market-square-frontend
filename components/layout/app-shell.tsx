@@ -709,7 +709,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 justify-center">
           <main
             className={cn(
-              "ws-hair min-h-dvh min-w-0 flex-1 border-x pt-12 pb-16 md:pt-0 md:pb-0",
+              // Padding, not margin, and from the shared chrome vars rather
+              // than hand-matched numbers: pb-16 was 64px against a 69px tab
+              // bar, so the last five pixels of every column surface sat
+              // underneath it.
+              "ws-hair min-h-dvh min-w-0 flex-1 border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
               // Home carries the design's wider timeline; the other column
               // surfaces stay at the narrower reading width.
               !wide && (pathname === "/" ? "md:max-w-[720px]" : "md:max-w-[600px]")
