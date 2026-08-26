@@ -10,6 +10,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconCalendar, IconChevronDown, IconPlus } from "@/components/ui/icons";
 import { useQueryParam } from "@/hooks/use-query-param";
+import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
@@ -134,6 +135,7 @@ export function FeedPage({
   liveCount?: number;
 }) {
   const compose = useQueryParam("compose");
+  const prefill = useComposePrefill();
   const [lane, setLane] = useState<Lane>("for-you");
   const [composerOpen, setComposerOpen] = useState(false);
   // The post being quoted, if the composer was opened from a repost menu.
@@ -211,10 +213,16 @@ export function FeedPage({
             <Composer
               autoFocus
               asStory={compose === "story"}
+              prefill={prefill}
               quoted={quoting}
               onDone={() => {
                 setQuoting(null);
                 setComposerOpen(false);
+                // Drop the share parameters too, or reopening the composer
+                // re-seeds the draft that was just published.
+                if (compose !== null) {
+                  window.history.replaceState(null, "", window.location.pathname);
+                }
               }}
             />
           </div>
