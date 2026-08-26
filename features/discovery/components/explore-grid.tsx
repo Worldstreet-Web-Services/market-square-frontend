@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { cn } from "@/lib/cn";
+
 import { isVideoPost } from "@/lib/media";
 import { formatCount } from "@/lib/format";
 import type { VideoItem } from "@/lib/video-context";
@@ -34,22 +34,25 @@ export type ExploreItem =
 /** The View Transition name a card and its opened slide share. */
 export const videoMorphName = (postId: string) => `video-${postId}`;
 
-function CountPill({ stream }: { stream: Stream }) {
-  // Live viewers ONLY. `peakViewers` is a historical high-water mark; printing
-  // it here would present an old number as a current audience.
+/**
+ * A live stream's audience.
+ *
+ * NOT the design's red/grey pill — that is a LIKE control (confirmed by the
+ * designer) and lives on media cards, which are posts and can actually be
+ * liked. A stream has no like endpoint, so its card carries the one number it
+ * genuinely has: live viewers, with an eye glyph so the two pills can never be
+ * mistaken for each other.
+ *
+ * `viewerCount` ONLY. `peakViewers` is a historical high-water mark; printing
+ * it here would present an old number as a current audience.
+ */
+function ViewerPill({ stream }: { stream: Stream }) {
   const live = stream.status === "live" ? stream.viewerCount : null;
   if (live === null || live <= 0) return null;
 
   return (
     <span className="flex shrink-0 items-center gap-1 rounded-[5000px] bg-white/[0.09] px-2 py-1">
-      {/*
-        The design draws this glyph in #979797 on most cards and #E84A4A on
-        some. UNVERIFIED — the Figma node could not be fetched (persistent 429),
-        so rather than invent a rule this follows the only distinction the data
-        actually supports: a live stream's count is a live audience, so it is
-        red; anything else is grey. See the report — this needs confirming.
-      */}
-      <IconEye className={cn("h-4 w-4", stream.status === "live" ? "text-[#E84A4A]" : "text-[#979797]")} />
+      <IconEye className="h-4 w-4 text-grey-400" />
       <span className="tnum text-[12px] leading-4 text-white">{formatCount(live)}</span>
     </span>
   );
@@ -100,13 +103,13 @@ function StreamCard({ stream }: { stream: Stream }) {
         )}
       </CardFrame>
 
-      <div className="flex h-6 items-center justify-between gap-2">
+      <div className="flex h-6 items-center gap-[10px]">
         {/* Never a fabricated name: with no hydrated owner the slot stays empty
             rather than printing an id or a placeholder. */}
-        <span className="min-w-0 truncate text-[11.0332px] font-bold leading-[15px] text-white">
+        <span className="min-w-0 flex-1 truncate text-[11.0332px] font-bold leading-[15px] text-white">
           {owner?.displayName ?? ""}
         </span>
-        <CountPill stream={stream} />
+        <ViewerPill stream={stream} />
       </div>
     </Link>
   );
@@ -115,6 +118,7 @@ function StreamCard({ stream }: { stream: Stream }) {
 function MediaCard({
   post,
   onOpen,
+  renderLike,
   /**
    * The card holds the morph name whenever its video is NOT open, and the
    * opened slide holds it while it is. That single rule gives the View
@@ -127,6 +131,8 @@ function MediaCard({
   post: VideoItem;
   onOpen: (post: VideoItem) => void;
   named: boolean;
+  /** The like control, from the feed slice — slices never import each other. */
+  renderLike: (post: VideoItem) => React.ReactNode;
 }) {
   const author = post.author;
   const isVideo = isVideoPost(post);
@@ -166,10 +172,15 @@ function MediaCard({
         )}
       </CardFrame>
 
-      <div className="flex h-6 items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-[11.0332px] font-bold leading-[15px] text-white">
+      {/* Meta row: 24px tall, 10px gap. The name flex-grows and truncates;
+          the like pill takes its natural width and never shrinks. */}
+      <div className="flex h-6 items-center gap-[10px]">
+        {/* Never a fabricated name: with no hydrated author the slot stays
+            empty rather than printing an id or a placeholder. */}
+        <span className="min-w-0 flex-1 truncate text-[11.0332px] font-bold leading-[15px] text-white">
           {author?.displayName ?? ""}
         </span>
+        {renderLike(post)}
       </div>
     </>
   );
@@ -202,10 +213,13 @@ export function ExploreGrid({
   items,
   onOpenVideo,
   openVideoId,
+  renderLike,
   onMore,
 }: {
   items: ExploreItem[];
   onOpenVideo: (post: VideoItem) => void;
+  /** The like control, injected by the screen from the feed slice. */
+  renderLike: (post: VideoItem) => React.ReactNode;
   /** The video currently open in the viewer, if any — see `named` below. */
   openVideoId?: string | null;
   /** Renders the More pill when there is another page to ask for. */
@@ -225,6 +239,7 @@ export function ExploreGrid({
               post={item.post}
               onOpen={onOpenVideo}
               named={openVideoId !== item.post.id}
+              renderLike={renderLike}
             />
           )
         )}

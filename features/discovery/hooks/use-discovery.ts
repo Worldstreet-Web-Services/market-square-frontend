@@ -94,10 +94,8 @@ export function useSaveInterests() {
  * rather than switching to `/search`, so browsing and searching people share
  * one cursor instead of two lists that page differently.
  *
- * A 404 means the directory route is not deployed yet, not that the request
- * failed, so it is not retried and the tab says so quietly — the same handling
- * `useTopics` uses. Public: signed-out visitors get the list too, and only the
- * Follow action asks them to sign in.
+ * Public: signed-out visitors get the list too, and only the Follow action
+ * asks them to sign in.
  */
 export function usePeople(query: string, enabled = true) {
   const trimmed = query.trim();
@@ -109,7 +107,6 @@ export function usePeople(query: string, enabled = true) {
     // Only the People tab needs this; every other tab would be paying for a
     // directory nobody is looking at.
     enabled,
-    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
     staleTime: 30_000,
   });
 }

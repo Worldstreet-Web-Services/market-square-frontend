@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   EXPLORE_TABS,
-  exploreTabBrowses,
-  exploreTabIsPeople,
+  exploreTabIsRowList,
   exploreTabSearchType,
   exploreTabShowsVideos,
   exploreTabTopics,
@@ -50,25 +49,15 @@ test("every other chip inherits the viewer's interests, and none means NO filter
   assert.deepEqual(exploreTabTopics("for-you", []), []);
 });
 
-test("every chip with a listing behind it browses without a query", () => {
-  // A discovery surface must be populated on arrival, not a prompt to go and
-  // find something first.
-  assert.equal(exploreTabBrowses("for-you"), true);
-  assert.equal(exploreTabBrowses("shows"), true);
-  assert.equal(exploreTabBrowses("streams"), true);
-  assert.equal(exploreTabBrowses("people"), true);
-  // No browse listing is wired for these — they invite a search rather than
-  // rendering a blank grid.
-  assert.equal(exploreTabBrowses("posts"), false);
-  assert.equal(exploreTabBrowses("products"), false);
-});
-
-test("People renders the directory, not the card grid", () => {
-  // People are rows from their own paged route; every other browsing tab is
-  // the media/stream grid.
-  assert.equal(exploreTabIsPeople("people"), true);
-  assert.equal(exploreTabIsPeople("for-you"), false);
-  assert.equal(exploreTabIsPeople("streams"), false);
+test("row lists and the card grid are different surfaces", () => {
+  // People, Posts and Products are rows from their own paged routes; the rest
+  // are the media/stream grid.
+  assert.equal(exploreTabIsRowList("people"), true);
+  assert.equal(exploreTabIsRowList("posts"), true);
+  assert.equal(exploreTabIsRowList("products"), true);
+  assert.equal(exploreTabIsRowList("for-you"), false);
+  assert.equal(exploreTabIsRowList("shows"), false);
+  assert.equal(exploreTabIsRowList("streams"), false);
 });
 
 test("Streams browses live broadcasts only; the media tabs carry videos too", () => {

@@ -97,6 +97,36 @@ export function videoPostsOf(pages: FeedPage[] | undefined): Post[] {
   return mediaPostsOf(pages).filter((post) => isVideoPost(post));
 }
 
+/**
+ * Explore's Posts tab — the general lane, populated on arrival.
+ *
+ * Same principle as the media grid: a discovery tab that opens empty and asks
+ * you to search first is not a discovery tab. Only the POST items are shown —
+ * the lane also carries streams, activities and platform events, which have
+ * their own tabs and surfaces.
+ *
+ * `/feed` takes no `q`, so a query on this tab falls through to `/search`
+ * rather than narrowing this list. See the report: `q` on `/feed` would let
+ * browse and search share one list and one cursor, as People does.
+ */
+export function useBrowsePosts(topics: string[], enabled = true) {
+  const key = videoListKey(topics);
+  return useInfiniteQuery({
+    queryKey: ["ms", "feed", "browse-posts", key],
+    queryFn: ({ pageParam }) => fetchFeed("for-you", pageParam ?? undefined, topics),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+  });
+}
+
+/** The posts inside feed pages, in order — text and media alike. */
+export function postsOf(pages: FeedPage[] | undefined): Post[] {
+  return (pages ?? []).flatMap((page) =>
+    page.items.flatMap((item) => (item.post ? [item.post] : []))
+  );
+}
+
 /** One post by id, for the permalink at /p/[id]. */
 export function usePost(postId: string) {
   return useQuery({

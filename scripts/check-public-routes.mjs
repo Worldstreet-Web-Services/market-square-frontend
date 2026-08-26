@@ -31,9 +31,9 @@
  * offline and runs in CI; this catches drift the table has not been told
  * about yet. Keep both.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -111,6 +111,128 @@ function segments(path) {
     .map((segment) => (segment.startsWith("{") ? "id" : segment));
 }
 
+
+/* ---------------------------------------------------------------------------
+   PHANTOM ROUTES
+
+   The public/gated diff above can only judge routes the spec DOCUMENTS. A path
+   the frontend calls that the spec has never heard of is invisible to it — and
+   that is its own recurring failure: `search`, `quote`, `mentions` and
+   `operations` were all called from the client before they existed upstream,
+   each surfacing as a mystery 404 in somebody's console rather than as a
+   build-time error.
+
+   Every request in this app goes through `msApi.<method>("/path")`, so the
+   call sites are cheap to read without a bundler or a type checker: collect
+   them, normalise `${...}` interpolations and `{param}` placeholders to the
+   same `{}` token, and diff against the spec's documented method+path pairs.
+--------------------------------------------------------------------------- */
+
+/** `/streams/${id}/chat` and `/streams/{id}/chat` both become `/streams/{}/chat`. */
+function normalisePath(path) {
+  return path
+    .replace(/\$\{[^}]*\}/g, "{}")
+    .replace(/\{[^}]*\}/g, "{}")
+    .replace(/\?.*$/, "")
+    .replace(/\/+$/, "");
+}
+
+function sourceFiles(dir, found = []) {
+  for (const entry of readdirSync(dir)) {
+    if (entry === "node_modules" || entry.startsWith(".")) continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) sourceFiles(full, found);
+    else if (/\.tsx?$/.test(entry)) found.push(full);
+  }
+  return found;
+}
+
+// msApi.get("/x") | msApi.authedGet<T>(`/y/${id}`) | msApi.del<{a:b}>("/z")
+const CALL = /msApi\s*\.\s*(get|authedGet|post|put|patch|del)\s*(?:<[^>]*>)?\s*\(\s*([`"'])([^`"']+)\2/g;
+
+// The upload path does not go through `msApi` — it needs multipart and its own
+// progress handling, so it calls the BFF prefix directly. Reading only msApi
+// would leave those three routes unchecked, which is the same blind spot in
+// miniature.
+const RAW_CALL = /fetch\s*\(\s*([`"'])\/api\/market-square([^`"']+)\1/g;
+
+const METHOD_OF = {
+  get: "get",
+  authedGet: "get",
+  post: "post",
+  put: "put",
+  patch: "patch",
+  del: "delete",
+};
+
+/**
+ * Routes the BFF ANSWERS ITSELF instead of proxying upstream.
+ *
+ * These will never appear in the backend's spec, and that is correct rather
+ * than a gap — so flagging them would train everyone to ignore the check. Each
+ * entry says what the BFF does with it; a route that stops being handled
+ * locally must come off this list.
+ */
+const BFF_HANDLED = {
+  "get /mentions/search": {
+    reason:
+      "Answered by app/api/market-square/[...path]/route.ts, not proxied. " +
+      "There is no upstream mentions endpoint: the BFF rewrites onto " +
+      "/search?type=people and reshapes the result into mention targets. The " +
+      "request never reaches the service, so the spec has nothing to say.",
+  },
+};
+
+function collectCalls(root) {
+  const calls = new Map();
+  for (const dir of ["features", "lib", "hooks", "components", "app"]) {
+    let files;
+    try {
+      files = sourceFiles(join(root, dir));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      const source = readFileSync(file, "utf8");
+      for (const match of source.matchAll(CALL)) {
+        const method = METHOD_OF[match[1]];
+        const path = normalisePath(match[3]);
+        const key = `${method} ${path}`;
+        if (!calls.has(key)) calls.set(key, relative(root, file));
+      }
+      // Raw BFF-prefixed fetches. The method is not recoverable from the call
+      // site, so these are checked as "some operation exists at this path" —
+      // enough to catch a path that does not exist at all, which is the bug.
+      for (const match of source.matchAll(RAW_CALL)) {
+        const path = normalisePath(match[2]);
+        // A path assembled entirely from a variable — `${path}` — has no
+        // literal to check. Skipping it is honest: this is a static reader,
+        // and a wholly dynamic call site is outside what it can verify.
+        // `lib/api/upload.ts` is the only one today, and its three routes
+        // (/uploads, /uploads/presign, /uploads/complete) are documented
+        // upstream, so nothing is silently unchecked because of it.
+        if (path === "" || path === "{}") continue;
+        const key = `* ${path}`;
+        if (!calls.has(key)) calls.set(key, relative(root, file));
+      }
+    }
+  }
+  return calls;
+}
+
+/**
+ * Paths the frontend calls DELIBERATELY ahead of the backend.
+ *
+ * Same discipline as KNOWN_MISMATCHES: a reason, and deleted the moment the
+ * route ships. Anything not listed here fails the check.
+ */
+const PENDING_ROUTES = {
+  // EMPTY IS THE CORRECT STATE. `/profiles` lived here for the few hours
+  // between the People tab being built and the directory route shipping; it
+  // was deleted the moment the spec documented it. An entry that outlives its
+  // gap stops being an allowance and becomes furniture.
+};
+
 async function main() {
   let spec;
   try {
@@ -153,15 +275,68 @@ async function main() {
     console.warn(`! known mismatch, not failing: ${path}\n    ${KNOWN_MISMATCHES[path].reason}`);
   }
 
-  if (shouldBePublic.length === 0 && shouldBeGated.length === 0) {
+  // --- phantom routes: paths we call that the spec does not document ---
+  const documented = new Set();
+  for (const [path, operations] of Object.entries(spec.paths)) {
+    for (const method of Object.keys(operations)) {
+      documented.add(`${method.toLowerCase()} ${normalisePath(path)}`);
+    }
+  }
+
+  // Paths with any documented operation, for the method-less raw fetches.
+  const documentedPaths = new Set(
+    Object.keys(spec.paths).map((path) => normalisePath(path))
+  );
+
+  const phantom = [];
+  const pending = [];
+  const bffHandled = [];
+  for (const [call, file] of collectCalls(root)) {
+    if (call.startsWith("* ")) {
+      if (documentedPaths.has(call.slice(2))) continue;
+    } else if (documented.has(call)) {
+      continue;
+    }
+    // The BFF answers these locally, so the spec correctly has no opinion.
+    if (BFF_HANDLED[call]) {
+      bffHandled.push(call);
+      continue;
+    }
+    if (PENDING_ROUTES[call]) pending.push(call);
+    else phantom.push({ call, file });
+  }
+
+  for (const call of bffHandled) {
+    console.log(`· BFF-handled, not proxied: ${call}`);
+  }
+
+  for (const call of pending) {
+    console.warn(`! pending route, not failing: ${call}\n    ${PENDING_ROUTES[call].reason}`);
+  }
+
+  if (shouldBePublic.length === 0 && shouldBeGated.length === 0 && phantom.length === 0) {
+    const notes = [
+      acknowledged.length > 0 ? `${acknowledged.length} known mismatch` : null,
+      pending.length > 0 ? `${pending.length} pending route` : null,
+    ].filter(Boolean);
     console.log(
-      `✓ isPublicGet agrees with ${SPEC_URL} on all ${checked} GET operations` +
-        (acknowledged.length > 0 ? ` (${acknowledged.length} known mismatch acknowledged).` : ".")
+      `✓ isPublicGet agrees with ${SPEC_URL} on all ${checked} GET operations, ` +
+        `and every msApi call resolves to a documented route` +
+        (notes.length > 0 ? ` (${notes.join(", ")} acknowledged).` : ".")
     );
     return;
   }
 
-  console.error(`✗ isPublicGet disagrees with ${SPEC_URL}\n`);
+  console.error(`✗ the client and ${SPEC_URL} disagree\n`);
+
+  if (phantom.length > 0) {
+    console.error("  PHANTOM ROUTES — called by the frontend, absent from the spec");
+    console.error("  → these 404 at runtime; nothing else catches them.");
+    console.error("    Ship the route, fix the path, or add it to PENDING_ROUTES with a reason:");
+    for (const { call, file } of phantom) console.error(`      ? ${call}   (${file})`);
+    console.error("");
+  }
+
   if (shouldBePublic.length > 0) {
     console.error("  PUBLIC upstream, but GATED by our BFF");
     console.error("  → signed-out visitors get a 401 on content meant to be open.");

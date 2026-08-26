@@ -12,12 +12,14 @@ import {
 } from "@/features/store/lib/api";
 import type { StoreCategory } from "@/features/store/lib/types";
 
-export function useStoreItems(category?: StoreCategory) {
+export function useStoreItems(category?: StoreCategory, enabled = true) {
   return useInfiniteQuery({
     queryKey: ["ms", "store", category ?? "all"],
     queryFn: ({ pageParam }) => fetchStoreItems(category, pageParam ?? undefined),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+    // Explore's Products tab only runs this while it is the active tab.
+    enabled,
   });
 }
 

@@ -9,22 +9,35 @@ import { relativeTime } from "@/lib/format";
 import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
 import type { Profile } from "@/lib/api/schemas";
+import type { Post } from "@/features/feed/lib/types";
+import type { StoreItem } from "@/features/store/lib/types";
+
+/**
+ * A paged browse list, handed in by the screen.
+ *
+ * Explore reaches across four slices and none may import the others, so each
+ * tab's query and its row renderer both arrive from `discover-screen`.
+ */
+export interface BrowseQuery<T> {
+  query: React.ComponentProps<typeof BrowseList<T>>["query"];
+  items: T[];
+}
 import { Avatar } from "@/components/ui/avatar";
 import { Pill, VerifiedBadge } from "@/components/ui/badge";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { IconSearch } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
+import { BrowseList } from "@/components/ui/browse-list";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { useDiscovery, usePeople } from "@/features/discovery/hooks/use-discovery";
+import { useDiscovery } from "@/features/discovery/hooks/use-discovery";
 import { ExploreGrid, type ExploreItem } from "@/features/discovery/components/explore-grid";
 import { TopicPicker } from "@/components/ui/topic-picker";
 import type { DiscoveryResult } from "@/features/discovery/lib/types";
 import {
   EXPLORE_TABS,
   EXPLORE_TAB_LABEL,
-  exploreTabBrowses,
-  exploreTabIsPeople,
+  exploreTabIsRowList,
   type ExploreTab,
 } from "@/lib/explore-tabs";
 
@@ -141,73 +154,67 @@ function ResultRow({
 }
 
 /**
- * The People directory.
+ * A browsing tab that is not the card grid.
  *
- * Populated on arrival and paged with infinite scroll; the query narrows the
- * same list. Every row is the profile slice's `PersonRow` — one component
- * wherever people are listed — injected here because slices never import each
- * other.
- *
- * The route is not deployed yet (see `PeoplePageSchema`), so a 404 gets the
- * house "not deployed, not broken" treatment: an honest, quiet empty state
- * rather than a fabricated list stitched out of the spotlight or a wildcard
- * query. It lights up on its own the moment the backend ships it.
+ * People, Posts and Products are ROWS from their own paged routes, so the tab
+ * renders a different list entirely rather than a differently-filtered grid.
+ * All three share `BrowseList` — see its header for why the shell is
+ * abstracted and the queries deliberately are not.
  */
-function PeopleList({
+function BrowseTab({
+  tab,
   people,
+  posts,
+  products,
   renderPerson,
+  renderPost,
+  renderProduct,
 }: {
-  people: ReturnType<typeof usePeople>;
+  tab: ExploreTab;
+  people: BrowseQuery<Profile>;
+  posts: BrowseQuery<Post>;
+  products: BrowseQuery<StoreItem>;
   renderPerson: (profile: Profile) => React.ReactNode;
+  renderPost: (post: Post) => React.ReactNode;
+  renderProduct: (item: StoreItem) => React.ReactNode;
 }) {
-  const sentinel = useInfiniteScroll(
-    () => people.fetchNextPage(),
-    Boolean(people.hasNextPage && !people.isFetchingNextPage)
-  );
-  const unavailable = errorCode(people.error) === "NOT_FOUND";
-  const profiles = people.data?.pages.flatMap((page) => page.items) ?? [];
-
-  if (unavailable) {
+  if (tab === "people") {
     return (
-      <div className="p-4">
-        <EmptyState
-          glyph="◇"
-          title="The people directory isn't available yet"
-          body="This turns on by itself once the service ships it."
-        />
-      </div>
+      <BrowseList
+        query={people.query}
+        items={people.items}
+        renderItem={renderPerson}
+        emptyTitle="Nobody to show yet"
+        emptyBody="Check back shortly."
+        errorFallback="Couldn't load people."
+      />
+    );
+  }
+
+  if (tab === "posts") {
+    return (
+      <BrowseList
+        query={posts.query}
+        items={posts.items}
+        renderItem={renderPost}
+        emptyTitle="No posts yet"
+        emptyBody="The square is quiet — check back shortly."
+        errorFallback="Couldn't load posts."
+      />
     );
   }
 
   return (
-    <>
-      {people.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
-
-      {people.isError && (
-        <div className="p-4">
-          <ErrorState
-            error={people.error}
-            fallback="Couldn't load people."
-            onRetry={() => people.refetch()}
-          />
-        </div>
-      )}
-
-      {people.isSuccess && profiles.length === 0 && (
-        <div className="p-4">
-          <EmptyState glyph="◇" title="Nobody to show yet" body="Check back shortly." />
-        </div>
-      )}
-
-      {profiles.map((profile) => renderPerson(profile))}
-
-      <div ref={sentinel} />
-      {people.isFetchingNextPage && (
-        <div className="flex justify-center py-6">
-          <Spinner className="h-6 w-6 text-meta" />
-        </div>
-      )}
-    </>
+    <div className="space-y-4 p-4">
+      <BrowseList
+        query={products.query}
+        items={products.items}
+        renderItem={renderProduct}
+        emptyTitle="No products yet"
+        emptyBody="The ARK Store is still filling up."
+        errorFallback="Couldn't load products."
+      />
+    </div>
   );
 }
 
@@ -235,11 +242,16 @@ export function DiscoveryPage({
   onTabChange,
   search,
   people,
+  posts,
+  products,
   gridItems,
   gridPending,
   onOpenVideo,
   openVideoId,
   renderPerson,
+  renderPost,
+  renderProduct,
+  renderLike,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
@@ -250,13 +262,21 @@ export function DiscoveryPage({
   onTabChange: (tab: ExploreTab) => void;
   search: ReturnType<typeof useDiscovery>;
   /** The People directory — its own paged route, narrowed by the query. */
-  people: ReturnType<typeof usePeople>;
+  people: BrowseQuery<Profile>;
+  /** The Posts tab — the general feed lane. */
+  posts: BrowseQuery<Post>;
+  /** The Products tab — the ARK Store's paged item list. */
+  products: BrowseQuery<StoreItem>;
   gridItems: ExploreItem[];
   gridPending: boolean;
   onOpenVideo: (post: VideoItem) => void;
   openVideoId: string | null;
-  /** Renders one person; supplied by the screen, from the profile slice. */
+  /** Row renderers, supplied by the screen from each owning slice. */
   renderPerson: (profile: Profile) => React.ReactNode;
+  renderPost: (post: Post) => React.ReactNode;
+  renderProduct: (item: StoreItem) => React.ReactNode;
+  /** The card like control, from the feed slice. */
+  renderLike: (post: VideoItem) => React.ReactNode;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const sentinel = useInfiniteScroll(
@@ -268,7 +288,9 @@ export function DiscoveryPage({
   const unavailable = errorCode(search.error) === "NOT_FOUND";
   const items = search.data?.pages.flatMap((page) => page.items) ?? [];
   const hasQuery = deferredQuery.trim().length > 0;
-  const isPeople = exploreTabIsPeople(tab);
+  // People, Posts and Products are row lists from their own routes; every
+  // other browsing tab is the media/stream grid.
+  const isBrowseTab = exploreTabIsRowList(tab);
   // Every page reports the same filter, so the first one answers for all.
   const topicFilter = search.data?.pages[0]?.topicFilter ?? null;
   const excluded = topicFilter?.excluded ?? [];
@@ -352,7 +374,7 @@ export function DiscoveryPage({
 
       {/* Search has no endpoint on some deployments: the query 404s. That is a
           deployment gap, not a fault, so the page says so plainly. */}
-      {!isPeople && unavailable && (
+      {!isBrowseTab && unavailable && (
         <div className="p-4">
           <EmptyState
             glyph="⌕"
@@ -368,54 +390,51 @@ export function DiscoveryPage({
         narrows that SAME list rather than switching to /search — one list, one
         cursor, instead of two that page differently.
       */}
-      {isPeople && <PeopleList people={people} renderPerson={renderPerson} />}
+      {isBrowseTab && (
+        <BrowseTab
+          tab={tab}
+          people={people}
+          posts={posts}
+          products={products}
+          renderPerson={renderPerson}
+          renderPost={renderPost}
+          renderProduct={renderProduct}
+        />
+      )}
 
-      {/* Resting Explore: the card grid for the chips that browse. A search
-          replaces it with results. */}
-      {!isPeople && !hasQuery && !unavailable && (
+      {/* Resting Explore: the card grid. A search replaces it with results. */}
+      {!isBrowseTab && !hasQuery && !unavailable && (
         <div className="space-y-4 px-4 pb-4">
-          {/* Posts and Products have no browse listing wired — /search is the
-              only route that answers them today — so they invite a query
-              rather than rendering a blank grid pretending to be empty. */}
-          {!exploreTabBrowses(tab) ? (
+          {gridPending && (
+            <div className="flex justify-center py-10">
+              <Spinner className="h-6 w-6 text-meta" />
+            </div>
+          )}
+
+          <ExploreGrid
+            items={gridItems}
+            onOpenVideo={onOpenVideo}
+            openVideoId={openVideoId}
+            renderLike={renderLike}
+          />
+
+          {!gridPending && gridItems.length === 0 && (
             <EmptyState
-              glyph="⌕"
-              title={`Search to find ${EXPLORE_TAB_LABEL[tab].toLowerCase()}`}
-              body="Type above and this tab will narrow the results to it."
+              glyph="◇"
+              title="Nothing here yet"
+              body={
+                tab === "streams"
+                  ? "No live broadcasts right now."
+                  : "No live streams, pictures or videos under this selection right now."
+              }
             />
-          ) : (
-            <>
-              {gridPending && (
-                <div className="flex justify-center py-10">
-                  <Spinner className="h-6 w-6 text-meta" />
-                </div>
-              )}
-
-              <ExploreGrid
-                items={gridItems}
-                onOpenVideo={onOpenVideo}
-                openVideoId={openVideoId}
-              />
-
-              {!gridPending && gridItems.length === 0 && (
-                <EmptyState
-                  glyph="◇"
-                  title="Nothing here yet"
-                  body={
-                    tab === "streams"
-                      ? "No live broadcasts right now."
-                      : "No live streams, pictures or videos under this selection right now."
-                  }
-                />
-              )}
-            </>
           )}
         </div>
       )}
 
-      {!isPeople && hasQuery && search.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
+      {!isBrowseTab && hasQuery && search.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
 
-      {!isPeople && search.isError && !unavailable && (
+      {!isBrowseTab && search.isError && !unavailable && (
         <div className="p-4">
           <ErrorState
             error={search.error}
@@ -425,7 +444,7 @@ export function DiscoveryPage({
         </div>
       )}
 
-      {!isPeople && hasQuery && search.isSuccess && items.length === 0 && (
+      {!isBrowseTab && hasQuery && search.isSuccess && items.length === 0 && (
         <div className="p-4">
           <EmptyState
             glyph="⌕"
@@ -457,14 +476,14 @@ export function DiscoveryPage({
         Rendered only when a filter was actually applied and something really
         was excluded — never as standing furniture.
       */}
-      {!isPeople && hasQuery && excludedLabel && (
+      {!isBrowseTab && hasQuery && excludedLabel && (
         <p className="px-4 py-3 text-[13px] text-meta">
           Topic filters don&apos;t apply to {excludedLabel} — those results aren&apos;t
           narrowed by {topicFilter!.topics.join(", ")}.
         </p>
       )}
 
-      {!isPeople &&
+      {!isBrowseTab &&
         hasQuery &&
         items.map((result) => (
           <ResultRow

@@ -6,7 +6,6 @@ import { videoHref, type VideoItem } from "@/lib/video-context";
 import { isVideoPost } from "@/lib/media";
 import {
   exploreTabSearchType,
-  exploreTabIsPeople,
   exploreTabShowsVideos,
   exploreTabTopics,
   parseExploreTab,
@@ -18,7 +17,11 @@ import type { ExploreItem } from "@/features/discovery";
 import { videoMorphName } from "@/features/discovery";
 import { useStreamList } from "@/features/streams";
 import { PersonRow } from "@/features/profile";
+import { useMe } from "@/hooks/use-me";
+import { excludeViewer } from "@/lib/people-directory";
 import { useMediaFeed, mediaPostsOf, videoPostsOf, VideoViewer } from "@/features/feed";
+import { useBrowsePosts, postsOf, PostCard, PostLikePill } from "@/features/feed";
+import { useStoreItems, StoreItemCard } from "@/features/store";
 
 /**
  * Explore's cross-slice join.
@@ -70,8 +73,30 @@ export function DiscoverScreen() {
   const search = useDiscovery(deferredQuery, searchType, topics);
   // The People tab is its own paged directory, populated on arrival and
   // narrowed by the query — never a blank tab waiting to be searched.
-  const isPeople = exploreTabIsPeople(tab);
-  const people = usePeople(isPeople ? deferredQuery : "", isPeople);
+  // Each browsing tab pages its own endpoint, and only the active one runs —
+  // the others would be paying for a list nobody is looking at.
+  const people = usePeople(tab === "people" ? deferredQuery : "", tab === "people");
+  // `/feed` and `/store/items` take no `q`, so on those tabs a query falls
+  // through to /search rather than narrowing this list. See the report.
+  const browsePosts = useBrowsePosts(topics, tab === "posts" && !hasQuery);
+  const storeItems = useStoreItems(undefined, tab === "products" && !hasQuery);
+
+  /**
+   * The directory, minus the viewer — you are not someone you can discover.
+   *
+   * TEMPORARY: this belongs on the server (`GET /profiles` excluding the
+   * caller, requested). Filtering here costs a row per page that the cursor
+   * cannot top up. Delete this and `lib/people-directory.ts` together once the
+   * backend excludes you — see that module for why both layers must not
+   * survive. `PersonRow`'s own-row guard is NOT part of this and stays: it
+   * protects search results and followers lists, where you legitimately appear
+   * and still must not be offered a Follow button on yourself.
+   */
+  const me = useMe();
+  const directoryPeople = useMemo(
+    () => excludeViewer(people.data?.pages.flatMap((page) => page.items) ?? [], me.data?.id),
+    [people.data?.pages, me.data?.id]
+  );
 
   // The grid: LIVE first — it is the only thing on the square that expires
   // while you look at it — then the recorded videos.
@@ -189,12 +214,23 @@ export function DiscoverScreen() {
         tab={tab}
         onTabChange={setTab}
         search={search}
-        people={people}
+        people={{
+          query: people,
+          items: directoryPeople,
+        }}
+        posts={{ query: browsePosts, items: postsOf(browsePosts.data?.pages) }}
+        products={{
+          query: storeItems,
+          items: storeItems.data?.pages.flatMap((page) => page.items) ?? [],
+        }}
         gridItems={gridItems}
         gridPending={!hasQuery && (live.isPending || media.isPending)}
         onOpenVideo={open}
         openVideoId={openVideoId}
         renderPerson={(profile) => <PersonRow key={profile.id} profile={profile} />}
+        renderPost={(post) => <PostCard key={post.id} post={post} />}
+        renderProduct={(item) => <StoreItemCard key={item.id} item={item} />}
+        renderLike={(post) => <PostLikePill post={post} />}
       />
 
       {openVideoId && (

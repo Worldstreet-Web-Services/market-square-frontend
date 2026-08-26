@@ -18,9 +18,16 @@ import { useIsFollowing } from "@/features/profile/lib/follow-state";
  * styled again per surface, because a second variant is how two follow
  * controls with two different behaviours end up shipping.
  *
- * Geometry is the design's: 39px row, 38px avatar, the text block starting
- * 47px in (38 + 9 gap), name 700 12/16 and handle 400 11/16 at 50% white, and
- * a 60×24 white pill on the right.
+ * Geometry is the design's: 38px avatar, the text block starting 47px in
+ * (38 + 9 gap), name 700 12/16 and handle 400 11/16 at 50% white, and a 60×24
+ * white pill on the right.
+ *
+ * The spec's 39px is the CONTENT height, not the row height — at 39px a 38px
+ * avatar has half a pixel above and below it, so it touches both edges and the
+ * list reads as one solid block. The row therefore carries 12px of its own
+ * vertical padding (~62px total) and the divider spans the full width beneath
+ * it rather than hugging the content. A design gives you the content box; the
+ * whitespace around it is ours to get right.
  *
  * TYPE: the spec names Roboto; the app is Geist throughout, so this renders at
  * the specified weights and sizes in the house face rather than forking the
@@ -43,7 +50,7 @@ export function PersonRow({ profile }: { profile: Profile }) {
   const isMe = me.data?.id === profile.id;
 
   return (
-    <div className="ws-row flex h-[39px] items-center gap-[9px] px-4">
+    <div className="ws-row flex items-center gap-[9px] px-4 py-3">
       {/* The row links to the profile — except the button, which is why the
           link wraps the identity block rather than the whole row. */}
       <Link href={`/u/${profile.username}`} className="flex min-w-0 flex-1 items-center gap-[9px]">

@@ -306,13 +306,11 @@ function postDto(post: FxPost, viewerId: string | null = null) {
     text: post.text,
     mediaUrl: post.mediaUrl,
     // The service types its own media; renderers prefer this over sniffing.
-    mediaKind:
-      post.mediaKind ??
-      (post.mediaUrl
-        ? /\.(mp4|webm)(\?|#|$)/i.test(post.mediaUrl)
-          ? "video"
-          : "image"
-        : null),
+    mediaKind: post.mediaUrl
+      ? /\.(mp4|webm)(\?|#|$)/i.test(post.mediaUrl)
+        ? "video"
+        : "image"
+      : null,
     topics: post.topics ?? [],
     thumbnailUrl: null,
     deepLink: post.deepLink,

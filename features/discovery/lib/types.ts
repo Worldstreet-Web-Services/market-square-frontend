@@ -158,20 +158,17 @@ export type Topic = z.infer<typeof TopicSchema>;
 /**
  * GET /profiles — the people directory.
  *
- * PROVISIONAL CONTRACT, pending backend. Explore's People tab must be
- * populated on arrival, and nothing today can do that: `/search?type=people`
+ * Public with optional auth, `q` / `sort` / `cursor` / `limit`, `sort` being
+ * `followers | recent` and defaulting to followers. Explore's People tab is a
+ * discovery surface, so it must be populated on arrival and must list for
+ * signed-out visitors — nothing else could do that: `/search?type=people`
  * deliberately returns nothing for a blank `q`, `/spotlight` is a short ranked
- * leaderboard rather than a directory, and `/admin/profiles` — which has
- * exactly the right shape — is admin-only and so unusable for a signed-out
- * discovery surface.
- *
- * Until it ships, `GET /profiles` 404s and the tab says so quietly (the same
- * "not deployed, not broken" handling `useTopics` and the Arkmark control
- * use). It then lights up on its own with no frontend deploy.
+ * leaderboard rather than a directory, and `/admin/profiles` is admin-only.
  *
  * `q` narrows the SAME list rather than switching to `/search`, so browsing
- * and searching people share one list and one cursor instead of two that
- * page differently.
+ * and searching people share one list and one cursor instead of two that page
+ * differently. Sorting is the SERVER's: the client never re-sorts a paged
+ * list, since sorting one loaded page is not sorting the list.
  */
 export const PeoplePageSchema = z.object({
   items: z.array(ProfileSchema),

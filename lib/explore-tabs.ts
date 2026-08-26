@@ -70,29 +70,13 @@ export function exploreTabTopics(tab: ExploreTab, interests: string[]): string[]
 }
 
 /**
- * Does this chip list anything without a search query?
+ * Does this chip render a ROW LIST rather than the card grid?
  *
- * `For you`, `Shows` and `Streams` browse the media/stream grid, and `People`
- * browses the profile directory — all four list without a query, because a
- * discovery surface must be populated on arrival rather than asking the reader
- * to go and find something first.
- *
- * `Posts` and `Products` still have no browse listing wired, so with an empty
- * field they invite a search. They are not broken — `/search` is simply the
- * only route that answers them today.
+ * People, Posts and Products are rows from their own paged routes, so those
+ * tabs render a different list entirely — not a differently-filtered grid.
  */
-export function exploreTabBrowses(tab: ExploreTab): boolean {
-  return tab === "for-you" || tab === "shows" || tab === "streams" || tab === "people";
-}
-
-/**
- * Does this chip render the PEOPLE directory rather than the card grid?
- *
- * People are rows, not cards, and they come from their own paged route — so
- * the tab renders a different list entirely, not a differently-filtered grid.
- */
-export function exploreTabIsPeople(tab: ExploreTab): boolean {
-  return tab === "people";
+export function exploreTabIsRowList(tab: ExploreTab): boolean {
+  return tab === "people" || tab === "posts" || tab === "products";
 }
 
 /**
