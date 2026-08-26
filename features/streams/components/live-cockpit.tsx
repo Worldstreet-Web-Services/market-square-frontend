@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { formatCount, formatCountdown, formatKash, relativeTime } from "@/lib/format";
@@ -19,10 +19,14 @@ import {
   IconX,
 } from "@/components/ui/icons";
 import { usePublisher } from "@/features/streams/hooks/use-publisher";
+import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
+import { LiveStage } from "@/features/streams/components/live-stage";
 import {
   useBanFromChat,
   useDeleteChatMessage,
   useEndStream,
+  useResolveSpeakerRequest,
+  useSpeakerRequests,
   useStreamEvents,
   useUpdateStream,
 } from "@/features/streams/hooks/use-streams";
@@ -245,15 +249,35 @@ export function LiveCockpit({
   rejoining: boolean;
 }) {
   const [mode, setMode] = useState<"browser" | "obs">("browser");
-  const previewRef = useRef<HTMLDivElement | null>(null);
   const publisher = usePublisher({
     ingest,
     enabled: mode === "browser" && ingest !== null,
     streamId: stream.id,
     preferredCamera: devices?.cameraId || undefined,
     preferredMic: devices?.micId || undefined,
-    previewRef,
   });
+  // The host's own Room, read from the single-room registry that usePublisher
+  // registered it in. This is the whole reason the host could not see or hear an
+  // approved guest: usePublisher wires LocalTrackPublished and nothing else, so
+  // the cockpit rendered exactly one video element — its own preview — and never
+  // attached a single remote track, video or audio.
+  const room = useLiveRoom(stream.id);
+  const requests = useSpeakerRequests(stream.id, stream.status === "live");
+  const resolve = useResolveSpeakerRequest(stream.id);
+  // Remove-from-stage is the backend's resolve action; LiveKit drops the grant
+  // and unpublishes their tracks, and the stage loses the slot on the next
+  // ParticipantPermissionsChanged.
+  const removeGuest = (identity: string) => {
+    const request = requests.data?.items.find(
+      (item) => item.userId === identity && item.status === "approved"
+    );
+    if (!request) {
+      toast.error("Couldn't find that guest's request.");
+      return;
+    }
+    resolve.mutate({ requestId: request.id, action: "remove" });
+  };
+
   const end = useEndStream();
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [rightTab, setRightTab] = useState<"chat" | "activity">("chat");
@@ -287,7 +311,17 @@ export function LiveCockpit({
         <RejoinPanel onRejoin={onRejoin} rejoining={rejoining} />
       ) : (
         <>
-          <div ref={previewRef} className="absolute inset-0" />
+          {/* The stage renders EVERY publisher, host included — the host's own
+              camera is slot 0 of the same list, not a separate preview element
+              on a separate code path. */}
+          <LiveStage
+            className="absolute inset-0"
+            room={room}
+            hostIdentity={stream.ownerId}
+            onRemoveGuest={removeGuest}
+            removing={resolve.isPending}
+            emptyState={<Spinner className="h-6 w-6 text-grey-500" />}
+          />
           {publisher.state === "denied" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/85 px-6 text-center">
               <IconCamera className="h-6 w-6 text-grey-400" />

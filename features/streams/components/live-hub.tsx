@@ -6,8 +6,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { useStreamList } from "@/features/streams/hooks/use-streams";
+import { useActivities, useStreamList } from "@/features/streams/hooks/use-streams";
 import { StreamCard } from "@/features/streams/components/stream-card";
+import { ActivityRow } from "@/features/streams/components/upcoming-activity-row";
 
 type Section = "live" | "scheduled" | "replay";
 
@@ -49,7 +50,34 @@ export function LiveHub() {
   const [section, setSection] = useState<Section>("live");
   const { authenticated } = useAuth();
   const list = useStreamList(section);
+  // Upcoming is BOTH scheduled streams and scheduled activities. It used to
+  // read the stream list alone, so an activity — which is what the schedule
+  // form creates — could never show up here no matter how many were made.
+  const activityList = useActivities("scheduled");
   const items = list.data?.items ?? [];
+  const activities = section === "scheduled" ? (activityList.data?.items ?? []) : [];
+
+  // One chronological list, soonest first. A record with no start time sorts
+  // last rather than being dropped — the backend currently returns scheduled
+  // streams with a null scheduledAt, and hiding them would be worse than
+  // showing them without a time.
+  const upcoming = [
+    ...items.map((stream) => ({
+      key: `s:${stream.id}`,
+      at: stream.scheduledAt ? Date.parse(stream.scheduledAt) : Number.POSITIVE_INFINITY,
+      node: <StreamCard key={`s:${stream.id}`} stream={stream} />,
+    })),
+    ...activities.map((activity) => ({
+      key: `a:${activity.id}`,
+      at: activity.startsAt ? Date.parse(activity.startsAt) : Number.POSITIVE_INFINITY,
+      node: <ActivityRow key={`a:${activity.id}`} activity={activity} />,
+    })),
+  ].sort((a, b) => a.at - b.at);
+
+  const pending = list.isPending || (section === "scheduled" && activityList.isPending);
+  const failed = list.isError && (section !== "scheduled" || activityList.isError);
+  const isEmpty =
+    section === "scheduled" ? upcoming.length === 0 : items.length === 0;
 
   return (
     <>
@@ -57,15 +85,22 @@ export function LiveHub() {
         <ColumnTabs tabs={TABS} value={section} onChange={setSection} />
       </ColumnHeader>
 
-      {list.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
+      {pending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
 
-      {list.isError && (
+      {failed && (
         <div className="p-4">
-          <ErrorState error={list.error} fallback="Couldn't load streams." onRetry={() => list.refetch()} />
+          <ErrorState
+            error={list.error ?? activityList.error}
+            fallback="Couldn't load what's coming up."
+            onRetry={() => {
+              void list.refetch();
+              void activityList.refetch();
+            }}
+          />
         </div>
       )}
 
-      {list.isSuccess && items.length === 0 && (
+      {!pending && !failed && isEmpty && (
         <div className="p-4">
           <EmptyState
             glyph="◉"
@@ -85,9 +120,9 @@ export function LiveHub() {
         </div>
       )}
 
-      {items.map((stream) => (
-        <StreamCard key={stream.id} stream={stream} />
-      ))}
+      {section === "scheduled"
+        ? upcoming.map((entry) => entry.node)
+        : items.map((stream) => <StreamCard key={stream.id} stream={stream} />)}
     </>
   );
 }

@@ -42,6 +42,8 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
       ? (publisher.error ?? "The host hasn't finished bringing you on stage yet.")
       : publisher.state === "waiting-for-room"
         ? "Connecting to the stream…"
+        : publisher.state === "awaiting-grant"
+          ? "The host approved you — waiting for the stage to open your mic…"
         : publisher.state === "denied"
       ? "Allow camera and microphone access to join."
         : publisher.state === "device-busy"

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyRequest } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
 import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
+import { forwardToUpstream } from "@/lib/server/proxy";
 
 // BFF proxy for Market Square. Verifies the Privy session server-side and
 // forwards the caller's Authorization to `${WSAPI_BASE_URL}/v1/market-square/*`.
@@ -157,55 +158,17 @@ async function forward(req: NextRequest, path: string[], method: string) {
     if (!claims) return unauthorized();
   }
 
-  const url = `${BASE}/${joined}${req.nextUrl.search}`;
-  const headers: Record<string, string> = { accept: "application/json" };
-  const auth = req.headers.get("authorization");
-  if (auth) headers.authorization = auth;
-
-  // Multipart bodies (uploads) stream straight through — buffering them as
-  // text would corrupt binary payloads and blow memory on big videos. JSON
-  // bodies keep the simple text path.
-  const contentType = req.headers.get("content-type") ?? "";
-  let body: BodyInit | undefined;
-  let duplex: { duplex?: "half" } = {};
-  if (method !== "GET") {
-    if (contentType.startsWith("multipart/")) {
-      body = req.body ?? undefined;
-      headers["content-type"] = contentType;
-      duplex = { duplex: "half" };
-    } else {
-      const text = await req.text();
-      if (text) {
-        body = text;
-        headers["content-type"] = "application/json";
-      }
-    }
-  }
-
-  try {
-    const res = await fetch(url, {
-      method,
-      headers,
-      body,
-      cache: "no-store",
-      signal: AbortSignal.timeout(contentType.startsWith("multipart/") ? 120_000 : 15_000),
-      ...duplex,
-    });
-    const text = await res.text();
-    return new NextResponse(text, {
-      status: res.status,
-      headers: { "content-type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Market Square proxy failed:", joined, error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "SERVICE_UNAVAILABLE", message: "Market Square is unreachable." },
-      },
-      { status: 502 }
-    );
-  }
+  // The forward itself lives in lib/server/proxy.ts so it can be tested
+  // against a stub upstream; route files own no logic.
+  const result = await forwardToUpstream({
+    req,
+    url: `${BASE}/${joined}${req.nextUrl.search}`,
+    method,
+  });
+  return new NextResponse(result.body, {
+    status: result.status,
+    headers: { "content-type": result.contentType },
+  });
 }
 
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {

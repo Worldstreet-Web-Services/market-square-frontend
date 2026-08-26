@@ -23,6 +23,12 @@ export type StageState =
   | "idle"
   /** Approved, but the viewer connection is not up yet — nothing to upgrade. */
   | "waiting-for-room"
+  /**
+   * The host approved us, but LiveKit has not yet told this client that its
+   * publish grant landed. Publishing here is rejected by the server, so we wait
+   * for `ParticipantPermissionsChanged` instead of guessing.
+   */
+  | "awaiting-grant"
   | "starting"
   | "live"
   /** NotAllowedError / SecurityError — permission actually refused. */
@@ -53,6 +59,27 @@ export interface StageControls {
   retry: () => void;
   toggleMic: () => Promise<void>;
   toggleCam: () => Promise<void>;
+}
+
+/**
+ * Publish once, retrying a single time on a permission refusal.
+ *
+ * `setMicrophoneEnabled`/`setCameraEnabled` are already idempotent — enabling a
+ * source that is on resolves without republishing — so this is safe to re-enter.
+ * The one retry covers the signal blip when LiveKit Cloud reissues our token on
+ * `updateParticipant`: the grant is real, but the publish can land inside the
+ * reconnect window and be refused once.
+ */
+const GRANT_RETRY_MS = 1200;
+
+async function enableOnce(enable: () => Promise<unknown>): Promise<void> {
+  try {
+    await enable();
+  } catch (error) {
+    if (!isPermissionRefusal(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, GRANT_RETRY_MS));
+    await enable();
+  }
 }
 
 /** LiveKit refuses a publish without permission; that is a grant problem, not a device one. */
@@ -90,12 +117,54 @@ export function useStage({
   // every room notification and re-acquires the devices.
   const startedFor = useRef<string | null>(null);
 
+  /**
+   * Whether the SERVER says we may publish, read fresh off the participant.
+   *
+   * Never derived from `approved`. `approved` is the backend's speaker-request
+   * row — it says the host clicked Accept, not that this LiveKit connection has
+   * the grant. Publishing on the row is the documented anti-pattern: the SDK
+   * refuses the publish, the guest sees their own camera (a local track needs
+   * no permission), and nobody else ever receives them. That is precisely the
+   * reported symptom.
+   */
+  const [granted, setGranted] = useState(false);
+  // Derived, not stored: with no room there is no grant to speak of.
+  const canPublish = room ? granted : false;
+  useEffect(() => {
+    if (!room) return;
+    let cancelled = false;
+    let off: (() => void) | undefined;
+    void import("livekit-client").then(({ RoomEvent }) => {
+      if (cancelled) return;
+      // Re-read `permissions` off the participant on every notification rather
+      // than trusting the event payload or anything cached at join — LiveKit
+      // documents races where the cached role trails the grant.
+      const sync = () => setGranted(room.localParticipant.permissions?.canPublish === true);
+      room.on(RoomEvent.ParticipantPermissionsChanged, sync);
+      room.on(RoomEvent.Connected, sync);
+      room.on(RoomEvent.Reconnected, sync);
+      off = () => {
+        room.off(RoomEvent.ParticipantPermissionsChanged, sync);
+        room.off(RoomEvent.Connected, sync);
+        room.off(RoomEvent.Reconnected, sync);
+      };
+      sync();
+    });
+    return () => {
+      cancelled = true;
+      off?.();
+    };
+  }, [room]);
+
   useEffect(() => {
     if (!approved) {
       startedFor.current = null;
       return;
     }
     if (!room) return;
+    // The gate. LiveKit Cloud reissues the token on `updateParticipant`, so the
+    // grant can land a beat after the host's approve call returns.
+    if (!canPublish) return;
     const key = `${streamId}:${attempt}`;
     if (startedFor.current === key) return;
     startedFor.current = key;
@@ -108,7 +177,7 @@ export function useStage({
       // Mic first and separately: a guest cares most about being heard, and a
       // camera that is busy must not cost them the microphone too.
       try {
-        await room.localParticipant.setMicrophoneEnabled(true);
+        await enableOnce(() => room.localParticipant.setMicrophoneEnabled(true));
         if (cancelled) return;
         setMicOn(true);
       } catch (micError) {
@@ -124,7 +193,7 @@ export function useStage({
       }
 
       try {
-        await room.localParticipant.setCameraEnabled(true);
+        await enableOnce(() => room.localParticipant.setCameraEnabled(true));
         if (cancelled) return;
         setCamOn(true);
         setAudioOnly(false);
@@ -149,7 +218,7 @@ export function useStage({
     return () => {
       cancelled = true;
     };
-  }, [approved, room, streamId, attempt]);
+  }, [approved, room, streamId, attempt, canPublish]);
 
   // Mirror the local camera into the caller's preview box.
   useEffect(() => {
@@ -165,7 +234,10 @@ export function useStage({
     element.className = "h-full w-full object-cover [transform:scaleX(-1)]";
     previewRef.current?.replaceChildren(element);
     return () => {
-      track.detach().forEach((stale) => stale.remove());
+      // Detach only THIS element — the same local track is also attached to our
+      // tile on the stage, and a bare detach() would blank that too.
+      track.detach(element);
+      element.remove();
     };
   }, [room, camOn, previewRef, phase]);
 
@@ -230,7 +302,13 @@ export function useStage({
     setAttempt((n) => n + 1);
   }, []);
 
-  const state: StageState = !approved ? "idle" : room ? phase : "waiting-for-room";
+  const state: StageState = !approved
+    ? "idle"
+    : !room
+      ? "waiting-for-room"
+      : !canPublish && phase !== "live"
+        ? "awaiting-grant"
+        : phase;
 
   return { state, micOn, camOn, audioOnly, error, retry, toggleMic, toggleCam };
 }

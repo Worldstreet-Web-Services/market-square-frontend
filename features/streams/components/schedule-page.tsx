@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import type { DeepLink } from "@/lib/api/schemas";
+import { LinkTargetPicker } from "@/components/ui/link-target-picker";
+import { buildCreateActivityBody } from "@/lib/activity-payload";
 import { formatDateTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useMe } from "@/hooks/use-me";
@@ -31,24 +34,30 @@ function CreateActivityForm() {
   const [type, setType] = useState<Activity["type"]>("stream");
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
-  const [linkRef, setLinkRef] = useState("");
+  // Replaced a raw "Link ref (stream id, game id)" text box: nobody knows
+  // what a stream id is, and nothing in the product shows one.
+  const [link, setLink] = useState<DeepLink | null>(null);
+  const [linkLabel, setLinkLabel] = useState<string | null>(null);
+
+  // deepLink is REQUIRED by POST /activities (createActivityBodySchema:
+  // `deepLink: deepLinkSchema`, with no .optional()). The form used to label
+  // it optional and send undefined, which the service rejected with
+  // "deepLink: Invalid input: expected object, received undefined" — so every
+  // activity created without a link silently failed to persist.
+  const ready = Boolean(title.trim() && startsAt && link);
 
   const submit = () => {
-    if (!title.trim() || !startsAt) return;
+    if (!ready) return;
     create.mutate(
-      {
-        type,
-        title: title.trim(),
-        startsAt: new Date(startsAt).toISOString(),
-        deepLink: linkRef.trim()
-          ? { kind: type === "game" ? "game" : "stream", ref: linkRef.trim() }
-          : undefined,
-      },
+      // The wire shape lives in lib/activity-payload.ts, pinned against the
+      // service's own validator by lib/activity-contract.test.ts.
+      buildCreateActivityBody({ type, title, localStartsAt: startsAt, deepLink: link }),
       {
         onSuccess: () => {
           setTitle("");
           setStartsAt("");
-          setLinkRef("");
+          setLink(null);
+          setLinkLabel(null);
         },
       }
     );
@@ -86,15 +95,27 @@ function CreateActivityForm() {
           className="ws-inset w-full bg-transparent px-4 py-2.5 text-sm outline-none"
           aria-label="Starts at"
         />
-        <input
-          value={linkRef}
-          onChange={(e) => setLinkRef(e.target.value)}
-          placeholder="Link ref (stream id, game id — optional)"
-          className="ws-inset w-full bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-grey-600"
+      </div>
+      <div className="space-y-1.5">
+        <span className="block text-xs font-semibold text-grey-400">
+          What is this about? <span className="font-normal text-down">Required</span>
+        </span>
+        <LinkTargetPicker
+          value={link}
+          label={linkLabel}
+          onChange={(next, nextLabel) => {
+            setLink(next);
+            setLinkLabel(nextLabel);
+          }}
         />
       </div>
       {create.isError && <InlineError error={create.error} fallback="Couldn't schedule that." />}
-      <Button onClick={submit} disabled={!title.trim() || !startsAt} loading={create.isPending}>
+      {/* Say WHY the button is disabled — a dead control with no explanation
+          is how the missing link went unnoticed in the first place. */}
+      {title.trim() && startsAt && !link && (
+        <p className="text-xs text-grey-500">Choose what this activity is about to schedule it.</p>
+      )}
+      <Button onClick={submit} disabled={!ready} loading={create.isPending}>
         Schedule
       </Button>
     </div>

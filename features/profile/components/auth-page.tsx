@@ -25,7 +25,7 @@ export function AuthPage() {
           {/* The wordmark is the identity here — the monogram alongside it
               would be the same name twice. */}
           <h1 className="flex justify-center">
-            <Wordmark height={30} />
+            <Wordmark height={52} />
             <span className="sr-only">Market Square</span>
           </h1>
           <p className="mt-2 text-[15px] leading-normal text-meta">

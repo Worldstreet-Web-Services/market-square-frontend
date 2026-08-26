@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { DeepLink } from "@/lib/api/schemas";
+import { LinkTargetPicker } from "@/components/ui/link-target-picker";
 import { Avatar } from "@/components/ui/avatar";
 import { IconClock, IconImage, IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
@@ -13,12 +14,6 @@ import { useCreatePost, useMentionSearch, useUploadPostMedia } from "@/features/
 import type { Mention, Post } from "@/features/feed/lib/types";
 
 const MAX = 2000;
-
-const LINK_KINDS = [
-  { kind: "stream", label: "Stream", hint: "stream id" },
-  { kind: "store_item", label: "Store item", hint: "item slug" },
-  { kind: "external", label: "External", hint: "https://…" },
-];
 
 /** Circular ring that fills as the post approaches the limit (X's counter). */
 function CountRing({ used }: { used: number }) {
@@ -77,12 +72,13 @@ export function Composer({
   const [text, setText] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
-  const [linkKind, setLinkKind] = useState<string | null>(null);
-  const [linkRef, setLinkRef] = useState("");
+  // Attaching a link is a picker, not an id box — see LinkTargetPicker.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [link, setLink] = useState<DeepLink | null>(null);
+  const [linkLabel, setLinkLabel] = useState<string | null>(null);
   const [kind, setKind] = useState<"update" | "story">(asStory && !quoted ? "story" : "update");
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
-  const [linkMenuOpen, setLinkMenuOpen] = useState(false);
   // The picker used to insert "@handle" text and throw the Mention away, so
   // nobody was ever actually mentioned. POST /posts takes `mentions`, so the
   // chosen objects are kept and sent — filtered on submit to whoever is still
@@ -99,7 +95,7 @@ export function Composer({
   }, [previewUrl]);
 
   const deepLink: DeepLink | undefined =
-    linkKind && linkRef.trim() ? { kind: linkKind, ref: linkRef.trim() } : undefined;
+    link ?? undefined;
 
   const submit = () => {
     const body = text.trim();
@@ -137,8 +133,9 @@ export function Composer({
           setText("");
           setMediaFile(null);
           setPreviewUrl("");
-          setLinkKind(null);
-          setLinkRef("");
+          setLink(null);
+          setLinkLabel(null);
+          setLinkOpen(false);
           setMentionQuery("");
           setMentionRange(null);
           setPicked([]);
@@ -312,18 +309,17 @@ export function Composer({
           </div>
         )}
 
-        {linkKind && (
-          <div className="ws-field mb-2 flex items-center gap-2 px-4 py-2">
-            <IconLink className="h-4 w-4 shrink-0 text-meta" />
-            <input
-              value={linkRef}
-              onChange={(e) => setLinkRef(e.target.value)}
-              placeholder={LINK_KINDS.find((k) => k.kind === linkKind)?.hint}
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+        {(linkOpen || link) && (
+          <div className="mb-2">
+            <LinkTargetPicker
+              value={link}
+              label={linkLabel}
+              onChange={(next, nextLabel) => {
+                setLink(next);
+                setLinkLabel(nextLabel);
+                if (!next) setLinkOpen(false);
+              }}
             />
-            <button onClick={() => { setLinkKind(null); setLinkRef(""); }} aria-label="Remove link">
-              <IconX className="h-3.5 w-3.5 text-meta" />
-            </button>
           </div>
         )}
 
@@ -341,44 +337,22 @@ export function Composer({
           </button>
 
           {/* Deep links are the square's answer to a GIF picker: attach a
-              stream, a store item or an external URL. */}
-          {/* Hover-only menus are unreachable by tap and by keyboard, so the
-              trigger owns the open state. */}
+              stream, a store item or an external URL. The type is chosen
+              inside the picker, so this is a single toggle rather than a menu
+              of id-shaped options. */}
           <div className="relative">
             <button
-              onClick={() => setLinkMenuOpen((open) => !open)}
+              onClick={() => setLinkOpen((open) => !open)}
               aria-label="Attach a link"
-              aria-expanded={linkMenuOpen}
+              aria-pressed={linkOpen || link !== null}
               title="Attach a link"
               className={cn(
                 "rounded-full p-2 transition-colors hover:bg-white/10",
-                linkKind ? "text-heading" : "text-accent"
+                link ? "text-heading" : "text-accent"
               )}
             >
               <IconLink className="h-[18px] w-[18px]" />
             </button>
-            {linkMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setLinkMenuOpen(false)} />
-                <div className="ws-glass absolute left-0 top-full z-30 w-44 rounded-2xl p-1.5">
-                  {LINK_KINDS.map((k) => (
-                    <button
-                      key={k.kind}
-                      onClick={() => {
-                        setLinkKind(linkKind === k.kind ? null : k.kind);
-                        setLinkMenuOpen(false);
-                      }}
-                      className={cn(
-                        "block w-full rounded-xl px-3 py-2 text-left text-sm transition-colors hover:bg-white/10",
-                        linkKind === k.kind ? "text-heading" : "text-body"
-                      )}
-                    >
-                      {k.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
 
           <button

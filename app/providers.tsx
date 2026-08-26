@@ -21,8 +21,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         appearance: {
           theme: "#0c0c0e",
           accentColor: "#d4d4d8",
-          // The placeholder mark is gone; the login dialog wears the real one.
-          logo: "/market-square-wordmark.png",
+          // One brand asset everywhere, including the Privy dialog.
+          logo: "/logo.svg",
         },
       }}
     >

@@ -113,8 +113,14 @@ export function usePublisher({
   streamId: string;
   preferredCamera?: string;
   preferredMic?: string;
-  /** Caller-owned mount point for the mirrored local preview element. */
-  previewRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * Optional caller-owned mount point for the mirrored local preview.
+   * The live cockpit no longer passes one: its own tile is stage slot 0, and
+   * `LiveStage` attaches the local camera there alongside every guest. Handing
+   * the preview to the stage is what stops "the host's video" being a special
+   * case rendered by a different code path from everyone else's.
+   */
+  previewRef?: React.RefObject<HTMLDivElement | null>;
 }): PublisherControls {
   const roomRef = useRef<Room | null>(null);
   const [state, setState] = useState<PublisherState>("idle");
@@ -302,7 +308,7 @@ export function usePublisher({
           await instance.connect(url, token);
           for (const track of tracks) {
             await instance.localParticipant.publishTrack(track);
-            if (track.kind === Track.Kind.Video) {
+            if (track.kind === Track.Kind.Video && previewRef) {
               const element = track.attach();
               element.className = "h-full w-full object-cover [transform:scaleX(-1)]";
               previewRef.current?.replaceChildren(element);
