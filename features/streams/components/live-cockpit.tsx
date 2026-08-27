@@ -409,15 +409,13 @@ export function LiveCockpit({
           <span className="tnum">{formatCount((stream.viewerCount ?? 0))}</span>
         </span>
         <QualityDot quality={publisher.quality} state={mode === "browser" ? publisher.state : "publishing"} />
+        {/* No "view as audience" here. A host who opens their own room while
+            broadcasting joins it as a viewer: the stream plays back through
+            their speakers with their microphone live, which is a feedback loop,
+            and their own tab is counted in the viewer tally they are watching.
+            The cockpit already shows the composed stage, which is the thing
+            they actually wanted to check. */}
         <div className="ml-auto flex items-center gap-2">
-          <a
-            href={`/live/${stream.id}`}
-            target="_blank"
-            rel="noopener"
-            className="hidden text-xs font-semibold text-accent hover:underline sm:block"
-          >
-            View as audience ↗
-          </a>
           {/* End: spatially isolated, always confirmed. */}
           <button
             onClick={() => setConfirmEnd(true)}
