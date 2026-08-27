@@ -10,6 +10,7 @@ import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
+import { useRecordView } from "@/features/feed/hooks/use-record-view";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
@@ -24,6 +25,7 @@ import {
   IconMsShare,
 } from "@/components/ui/design-icons";
 import { formatCount } from "@/lib/format";
+import { IconEye } from "@/components/ui/icons";
 import {
   useAddComment,
   useBookmarkPost,
@@ -355,6 +357,8 @@ export function PostCard({
   // an inert button would announce a control to a screen reader that does
   // nothing when activated.
   const Tag = onOpenMedia ? "button" : "div";
+  // Recorded on dwell, not on mount: see useRecordView.
+  const viewRef = useRecordView(post.id);
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
   // Share the POST, not its author's profile — a reader following the link
@@ -373,7 +377,7 @@ export function PostCard({
   };
 
   return (
-    <article className="ws-post p-4">
+    <article ref={viewRef} className="ws-post p-4">
       {/* Repost attribution. The card still belongs to the original author —
           this line only says who passed it along. */}
       {repostedBy && (
@@ -550,6 +554,20 @@ export function PostCard({
         </div>
 
         <InlineComment postId={post.id} />
+
+        {/* Views sit with the tallies, not the actions: they are something that
+            happened to the post, not something you can do to it. Rendered only
+            when the payload carries one — a confident "0 views" on a service
+            that does not count them yet is a lie the reader cannot detect. */}
+        {post.viewCount !== undefined && (
+          <span
+            className="tnum flex shrink-0 items-center gap-1.5 text-[13px] text-white/50"
+            title={`${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`}
+          >
+            <IconEye className="h-[18px] w-[18px]" />
+            {formatCount(post.viewCount)}
+          </span>
+        )}
 
         <div className="flex shrink-0 items-center gap-3 md:gap-[17px]">
           <div className="flex items-center gap-3">
