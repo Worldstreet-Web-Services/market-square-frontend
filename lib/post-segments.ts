@@ -28,12 +28,15 @@ const CASHTAG = /(^|[^\w$])\$([A-Za-z][A-Za-z0-9]{1,9})(?![\w$])/g;
 /**
  * `#` then a letter then up to 49 letters, digits or underscores.
  *
+ * Two to fifty characters, matching the service's own rule exactly: a tag the
+ * client links but the service rejects is a link to an empty page.
+ *
  * Must start with a letter or `#1` and `#2026` become discussions. The leading
  * guard keeps a URL fragment (`example.com/page#section`) and an id
  * (`issue#42`) out. Same rule the service uses when it extracts them, so what
  * is rendered as a tag is what was actually indexed as one.
  */
-const HASHTAG = /(^|[^\w#])#([A-Za-z][A-Za-z0-9_]{0,49})(?![\w#])/g;
+const HASHTAG = /(^|[^\w#])#([A-Za-z][A-Za-z0-9_]{1,49})(?![\w#])/g;
 
 /**
  * A bare URL in the text.

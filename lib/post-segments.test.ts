@@ -125,3 +125,15 @@ describe("mixed text", () => {
     assert.deepEqual(parsePostText(""), []);
   });
 });
+
+describe("hashtag length matches the service", () => {
+  // The service accepts 2-50 characters. A single-letter tag linked here would
+  // be a link to a page the service refuses to answer.
+  it("does not link a one-letter tag", () => {
+    assert.deepEqual(kinds(parsePostText("in #a today")), ["text"]);
+  });
+
+  it("links a two-letter tag", () => {
+    assert.deepEqual(kinds(parsePostText("in #ai today")), ["text", "hashtag", "text"]);
+  });
+});
