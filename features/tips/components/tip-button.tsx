@@ -94,7 +94,12 @@ export function TipButton({ target }: { target: TipTarget }) {
           className={cn(
             "pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2",
             "whitespace-nowrap rounded-lg bg-spotlight px-2.5 py-1 text-xs font-semibold text-white shadow-lg",
-            "group-hover:block group-focus-within:block"
+            // Pointer devices only. On touch there is no hover, and
+            // `group-focus-within` fires on TAP — so the tooltip appeared
+            // exactly when the sheet did, leaving a stray "Give a tip" over
+            // the page. A tooltip explains a control you are pointing at; a
+            // finger has already pressed it.
+            "md:group-hover:block md:group-focus-within:block"
           )}
         >
           Give a tip

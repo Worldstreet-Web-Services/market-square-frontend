@@ -5,7 +5,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { IconMsHandDeposit } from "@/components/ui/design-icons";
-import { IconCoin } from "@/components/ui/icons";
+import { KashCoin } from "@/components/ui/kash-coin";
 import { cn } from "@/lib/cn";
 import { formatKash } from "@/lib/format";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
@@ -154,7 +154,7 @@ export function TipSheet({
                       : "border-white/15 bg-white/5 text-body hover:bg-white/10"
                   )}
                 >
-                  <IconCoin className="h-4 w-4 text-coin" />
+                  <KashCoin size={16} />
                   {preset}
                 </button>
               );
@@ -167,7 +167,7 @@ export function TipSheet({
                 and the focus-within treatment, and the input inside it is
                 bare. */}
             <label className="ws-field flex h-11 items-center gap-2 px-4">
-              <IconCoin className="h-4 w-4 shrink-0 text-coin" />
+              <KashCoin size={16} className="shrink-0" />
               <input
                 inputMode="decimal"
                 value={custom}

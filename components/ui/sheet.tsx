@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/cn";
 import { IconArrowLeft, IconX } from "@/components/ui/icons";
@@ -53,7 +54,30 @@ export function Sheet({
     };
   }, [open, onClose]);
 
-  return (
+  // A sheet is rendered wherever its trigger happens to live — inside a feed
+  // card, a stage tile, a row. `position: fixed` resolves against the nearest
+  // ancestor with a transform, filter or will-change, NOT the viewport, and
+  // `ws-enter` animates transform on every feed item. So an overlay opened
+  // from a post anchored itself to that post and floated mid-page instead of
+  // covering the screen.
+  //
+  // Portalling to the body takes the sheet out of that subtree entirely, which
+  // is the only fix that does not depend on knowing what every future caller
+  // is nested inside.
+  //
+  // Rendered only after mount: document.body does not exist during the server
+  // render, and reaching for it there throws.
+  // "Am I on the client", without a setState in an effect: the server snapshot
+  // is false and the client's is true, so React swaps it on hydration rather
+  // than re-rendering the tree a second time to find out.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -100,6 +124,7 @@ export function Sheet({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
