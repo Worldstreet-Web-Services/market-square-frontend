@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { TransitionLink } from "@/components/ui/transition-link";
@@ -10,6 +10,7 @@ import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { useRecordView } from "@/features/feed/hooks/use-record-view";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
@@ -285,38 +286,78 @@ function RepostMenu({
   );
 }
 
-/** The design's inline reply field — comment without leaving the timeline. */
-function InlineComment({ postId }: { postId: string }) {
+/**
+ * Reply without leaving the timeline.
+ *
+ * The point of it is the navigation step it removes: a short reply should not
+ * cost you your place in the feed. So it is deliberately NOT a second
+ * composer — no media, no length ambitions. Anything longer than a line wants
+ * the sheet, where the thread is readable.
+ */
+function InlineComment({ postId, onOpenThread }: { postId: string; onOpenThread: () => void }) {
   const add = useAddComment(postId);
   const gate = useGate();
   const me = useMe();
+  const field = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
+  const [sent, setSent] = useState(false);
 
   const submit = () => {
     const body = text.trim();
-    if (!body) return;
-    gate(() => add.mutate(body, { onSuccess: () => setText("") }));
+    // Guarded on isPending too: Enter held down, or a fast double tap on send,
+    // would otherwise post the same reply twice.
+    if (!body || add.isPending) return;
+    gate(() =>
+      add.mutate(body, {
+        onSuccess: () => {
+          setText("");
+          // Something has to happen. The reply lands in a thread the reader
+          // cannot see from here, so without this the field just empties and
+          // it is not obvious anything was posted. The tally moves at the same
+          // time (useAddComment patches it everywhere), so the confirmation
+          // and the count agree.
+          setSent(true);
+          window.setTimeout(() => setSent(false), 2400);
+        },
+      }),
+    );
+  };
+
+  const insert = (emoji: string) => {
+    setText((current) => (current + emoji).slice(0, 500));
+    field.current?.focus();
   };
 
   return (
-    // Hidden on a phone: it cannot shrink below its avatar and padding, and
-    // the row has no room for it there. The comment tally opens the full sheet,
-    // so nothing is unreachable.
-    <div className="ws-comment-field hidden h-10 min-w-0 flex-1 items-center gap-2 px-2 md:flex">
+    <div className="ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2">
       <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
-      <input
-        value={text}
-        onChange={(event) => setText(event.target.value.slice(0, 500))}
-        onKeyDown={(event) => event.key === "Enter" && submit()}
-        placeholder="Gist here..."
-        aria-label="Write a comment"
-        className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700"
-      />
-      {text.trim() && (
+      {sent ? (
+        // Says what happened AND offers the one thing a person wants next.
+        <button
+          type="button"
+          onClick={onOpenThread}
+          className="min-w-0 flex-1 truncate text-left text-[12px] text-grey-300"
+        >
+          Posted · <span className="font-semibold text-accent">See the thread</span>
+        </button>
+      ) : (
+        <input
+          ref={field}
+          value={text}
+          onChange={(event) => setText(event.target.value.slice(0, 500))}
+          onKeyDown={(event) => event.key === "Enter" && submit()}
+          placeholder="Gist here..."
+          aria-label="Write a reply"
+          disabled={add.isPending}
+          className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700 disabled:opacity-60"
+        />
+      )}
+      {!sent && <EmojiPicker onPick={insert} label="Add an emoji to your reply" />}
+      {!sent && text.trim() && (
         <button
           onClick={submit}
           disabled={add.isPending}
-          aria-label="Post comment"
+          aria-label="Post reply"
           className="shrink-0 rounded-full p-1 text-accent transition-colors hover:bg-white/10 disabled:opacity-40"
         >
           <IconSend className="h-3.5 w-3.5" />
@@ -522,7 +563,13 @@ export function PostCard({
       {/* Tighter on a phone. Both end groups are shrink-0, so at the design's
           spacing the row could not fit a 360px screen and pushed the page
           wider than the viewport. The spacing is the design's from md up. */}
-      <div className="mt-5 flex items-center gap-3 md:gap-6">
+      {/* The reply field takes its OWN ROW on a phone and sits inline from md
+          up. It used to be hidden below md, which fixed the overflow by
+          deleting the feature on mobile: it cannot shrink past its avatar and
+          padding, so on one row it made the action row wider than the screen.
+          Giving it a row of its own solves the geometry instead. */}
+      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+      <div className="flex items-center justify-between gap-3 md:contents">
         <div className="ws-action-pill flex h-10 shrink-0 items-center gap-3 px-2 md:gap-[17px]">
           <CountAction
             label="Comments"
@@ -553,7 +600,6 @@ export function PostCard({
           </CountAction>
         </div>
 
-        <InlineComment postId={post.id} />
 
         {/* Views sit with the tallies, not the actions: they are something that
             happened to the post, not something you can do to it. Rendered only
@@ -597,6 +643,12 @@ export function PostCard({
           </div>
           <ReportMenu targetId={post.id} />
         </div>
+      </div>
+
+        {/* Second in the DOM so a keyboard reaches the actions first, and
+            `md:contents` above flattens the mobile wrapper on desktop so this
+            still lands between the tallies and the glyphs. */}
+        <InlineComment postId={post.id} onOpenThread={() => setCommentsOpen(true)} />
       </div>
 
       <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />
