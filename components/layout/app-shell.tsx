@@ -428,10 +428,10 @@ function Sidebar({
           <button
             onClick={onCompose}
             className="ws-press flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white xl:h-13 xl:text-[17px]"
-            aria-label="Post"
+            aria-label="Post gist"
           >
             <IconPlus className="h-6 w-6 xl:hidden" />
-            <span className="hidden xl:block">Post</span>
+            <span className="hidden xl:block">Post gist</span>
           </button>
         )}
         <Link
