@@ -4,6 +4,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { arkAppConfigured, resolveDeepLink } from "@/lib/deeplink";
 import { parsePostText, type Segment } from "@/lib/post-segments";
+import { useTradeableSymbols } from "@/hooks/use-tradeable-symbols";
 import type { Mention } from "@/lib/api/schemas";
 
 /**
@@ -30,10 +31,15 @@ export function PostText({
   text: string;
   mentions?: Mention[];
   className?: string;
+  /** Override for tests and stories; normally fetched. */
   tradeable?: string[];
 }) {
+  // One shared, long-cached query rather than a prop threaded through every
+  // component that happens to render a post body.
+  const listed = useTradeableSymbols();
+  const symbols = tradeable ?? listed;
   if (!text) return null;
-  const segments = parsePostText(text, { mentions, tradeable });
+  const segments = parsePostText(text, { mentions, tradeable: symbols });
 
   return (
     <p className={cn("whitespace-pre-wrap break-words", className)}>
