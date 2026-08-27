@@ -26,12 +26,23 @@ export function ReelsFeed({
   isFetchingNextPage,
   fetchNextPage,
   isPending,
+  reservedSpace = "0px",
 }: {
   items: VideoItem[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
   isPending: boolean;
+  /**
+   * Chrome that sits ABOVE the feed and eats into the screen, as a CSS length.
+   *
+   * Explore mounts the reels directly under its search bar and needs none.
+   * Home mounts them under the lane switcher, and without accounting for it a
+   * "screenful" would be taller than what is left of the screen: every slide
+   * would sit part-scrolled, which is exactly how a reels feed stops feeling
+   * like one.
+   */
+  reservedSpace?: string;
 }) {
   /**
    * Reels do not end. While the server has pages we page normally, and once it
@@ -74,7 +85,7 @@ export function ReelsFeed({
       className="ws-snap-feed snap-y snap-mandatory overflow-y-auto"
       // The reels column is the height of what is left of the screen, so a
       // slide is one screenful wherever it is mounted.
-      style={{ height: "calc(100dvh - var(--ws-topbar-h) - var(--ws-nav-h))" }}
+      style={{ height: `calc(100dvh - var(--ws-topbar-h) - var(--ws-nav-h) - ${reservedSpace})` }}
     >
       {slides.map(({ item, key }) => (
         <PostSlide key={key} post={item} />

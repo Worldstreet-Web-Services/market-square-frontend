@@ -47,6 +47,7 @@ export function PostSlide({
   const gate = useGate();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [burst, setBurst] = useState(0);
+  const [captionOpen, setCaptionOpen] = useState(false);
   const [muted, setMuted] = useState(true);
   const [reduced, setReduced] = useState(false);
   const lastTap = useRef(0);
@@ -150,9 +151,15 @@ export function PostSlide({
           Tap for sound
         </span>
       )}
-      {post.text && (
+      {/* A TEXT-ONLY post has nothing to look at, so the words are the subject
+          and they sit centred at display size. A post WITH media is a reel, and
+          its caption belongs bottom-left under the identity: see the caption
+          block below. Centring a caption over a video puts it across the face
+          of the thing it describes, which is why this slide did not read like
+          a reel. */}
+      {post.text && !post.mediaUrl && (
         <div
-          className={cn("pointer-events-none px-6", post.mediaUrl && "ws-text-shadow")}
+          className="pointer-events-none px-6"
           style={{ paddingBottom: "calc(var(--ws-nav-h) + 96px)" }}
         >
           <p className="ws-display text-2xl leading-snug">{post.text}</p>
@@ -202,6 +209,42 @@ export function PostSlide({
                 {relativeTime(post.createdAt)}
               </span>
             </Link>
+          )}
+          {/* Caption. Two lines then "more", which is where TikTok and Reels
+              both land: long enough to carry a hook, short enough that the
+              video stays the subject. Expanding scrolls in place rather than
+              growing without limit, so a 2,000-character caption cannot push
+              the identity row off the screen.
+
+              It is a button, not a link: expanding must not navigate, and on a
+              slide where a single tap toggles sound the caption has to stop
+              that tap from reaching the tap layer underneath. */}
+          {post.text && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setCaptionOpen((open) => !open);
+              }}
+              aria-expanded={captionOpen}
+              className="pointer-events-auto mt-2 block w-full text-left"
+            >
+              <p
+                className={cn(
+                  "ws-text-shadow whitespace-pre-wrap break-words text-[13px] leading-[18px] text-white/95",
+                  captionOpen ? "max-h-[38dvh] overflow-y-auto" : "line-clamp-2"
+                )}
+              >
+                {post.text}
+              </p>
+              {/* Only offered when there is more to see. A "more" that reveals
+                  nothing teaches people to ignore it. */}
+              {post.text.length > 90 && (
+                <span className="ws-text-shadow mt-0.5 inline-block text-[13px] font-semibold text-white/60">
+                  {captionOpen ? "less" : "more"}
+                </span>
+              )}
+            </button>
           )}
           {cta && (
             <Link
