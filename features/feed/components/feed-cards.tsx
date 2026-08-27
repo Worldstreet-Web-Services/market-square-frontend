@@ -143,6 +143,7 @@ export function FeedItemCard({
   item,
   followSlot,
   tipSlot,
+  onOpenVideo,
   onQuote,
 }: {
   item: FeedItem;
@@ -150,6 +151,8 @@ export function FeedItemCard({
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
+  /** Promotes a video card into the full-screen viewer. */
+  onOpenVideo?: (post: Post) => void;
   onQuote?: (post: Post) => void;
 }) {
   if (item.type === "post" && item.post)
@@ -158,6 +161,7 @@ export function FeedItemCard({
         post={item.post}
         repostedBy={item.repostedBy}
         followSlot={followSlot}
+        onOpenVideo={onOpenVideo}
         tipSlot={tipSlot}
         onQuote={onQuote}
       />
