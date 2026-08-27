@@ -11,7 +11,7 @@ import { useGate } from "@/hooks/use-gate";
 import { Avatar } from "@/components/ui/avatar";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { VerifiedBadge } from "@/components/ui/badge";
-import { IconComment, IconHeart } from "@/components/ui/icons";
+import { IconComment, IconHeart, IconVolume } from "@/components/ui/icons";
 import { useLikePost } from "@/features/feed/hooks/use-feed";
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 
@@ -48,6 +48,10 @@ export function PostSlide({
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [burst, setBurst] = useState(0);
   const [captionOpen, setCaptionOpen] = useState(false);
+  // Playback position, read off the element itself. A timer would drift from
+  // the video the moment it buffers, and a scrubbed reel would then show a
+  // position it is not at.
+  const [progress, setProgress] = useState(0);
   const [muted, setMuted] = useState(true);
   const [reduced, setReduced] = useState(false);
   const lastTap = useRef(0);
@@ -82,6 +86,14 @@ export function PostSlide({
     observer.observe(video);
     return () => observer.disconnect();
   }, [reduced, post.id]);
+
+  // Seek by fraction. Clamped, and guarded on a duration: before metadata
+  // arrives `duration` is NaN and seeking would throw.
+  const seekTo = (fraction: number) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
+    video.currentTime = Math.min(Math.max(fraction, 0), 1) * video.duration;
+  };
 
   const doLike = () => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }));
 
@@ -129,6 +141,12 @@ export function PostSlide({
               playsInline
               preload="metadata"
               controls={reduced}
+              onTimeUpdate={(event) => {
+                const video = event.currentTarget;
+                if (Number.isFinite(video.duration) && video.duration > 0) {
+                  setProgress(video.currentTime / video.duration);
+                }
+              }}
               className="absolute inset-0 h-full w-full object-contain"
             />
           ) : (
@@ -146,10 +164,26 @@ export function PostSlide({
       {!reduced && (
         <button className="absolute inset-0 cursor-default" onClick={onTap} aria-label="Post" />
       )}
-      {hasVideo && muted && !reduced && (
-        <span className="ws-glass pointer-events-none absolute left-4 top-14 rounded-full px-2.5 py-1 text-[10px] font-semibold text-body">
-          Tap for sound
-        </span>
+      {/* Sound is a CONTROL, not a hint. "Tap for sound" told people the state
+          and then vanished, so a reader arriving mid-feed had no way to know
+          whether a silent clip was muted or simply quiet, and no way to mute
+          one that was loud. This stays put, shows the current state, and is
+          reachable without knowing that tapping the video does anything.
+
+          Top-left, clear of the viewer's own close button on the right. */}
+      {hasVideo && !reduced && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setMuted((value) => !value);
+          }}
+          aria-label={muted ? "Unmute" : "Mute"}
+          aria-pressed={!muted}
+          className="ws-glass ws-press absolute left-4 top-14 z-10 flex h-10 w-10 items-center justify-center rounded-full text-heading"
+        >
+          <IconVolume className="h-5 w-5" muted={muted} />
+        </button>
       )}
       {/* A TEXT-ONLY post has nothing to look at, so the words are the subject
           and they sit centred at display size. A post WITH media is a reel, and
@@ -300,6 +334,38 @@ export function PostSlide({
           )}
       </button>
     </div>
+      {/* Scrubber. A slim rail that sits under the furniture rather than a
+          control bar over the clip: a reel is watched, and a full player chrome
+          would compete with the thing it is playing. The hit area is 24px tall
+          while the rail is 3px, because a 3px target on a phone is unusable.
+
+          Range input rather than a div with pointer maths: it is draggable,
+          keyboard-operable and announced correctly for free, and none of that
+          is worth reimplementing badly. */}
+      {hasVideo && !reduced && (
+        <div
+          className="absolute inset-x-0 z-10 flex h-6 items-center px-4"
+          style={{ bottom: "var(--ws-nav-h)" }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="relative h-[3px] w-full rounded-full bg-white/25">
+            <div
+              className="h-full rounded-full bg-white"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(progress * 1000)}
+              onChange={(event) => seekTo(Number(event.target.value) / 1000)}
+              aria-label="Seek"
+              className="absolute inset-x-0 -top-3 h-6 w-full cursor-pointer opacity-0"
+            />
+          </div>
+        </div>
+      )}
+
       <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />
     </section>
   );
