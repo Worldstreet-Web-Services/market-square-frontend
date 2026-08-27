@@ -1,5 +1,7 @@
 "use client";
 
+import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
+import { useLiveReactions } from "@/features/streams/hooks/use-live-reactions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -442,9 +444,12 @@ export function StreamRoom({
     return () => timers.forEach((t) => clearTimeout(t));
   }, []);
 
-  // Ambient decoration only. There is no stream-like endpoint, so a tap floats
-  // a heart and changes nothing else — it must never move the displayed tally,
-  // which is the service's own count.
+  // Draws the hearts. `react` below is what SENDS them; this is called both by
+  // the local tap and by every reaction arriving from the room, so a heart
+  // looks identical whoever it came from.
+  //
+  // It must never move the displayed viewer tally, which is the service's own
+  // count and not a thing a tap may change.
   const spawnReaction = useCallback((burst = 1) => {
     setReactions((current) => {
       const room = Math.max(0, MAX_REACTIONS - current.length);
@@ -467,6 +472,24 @@ export function StreamRoom({
       return [...current, ...additions];
     });
   }, []);
+  /**
+   * Reactions now reach the whole room, over the room's own data channel.
+   *
+   * A tap draws locally at once so it never feels laggy, and the same burst
+   * goes out to everybody else. Receiving draws the identical animation, so
+   * the room fills up when it is busy — which is the entire point of reacting
+   * in a live room rather than liking a post.
+   */
+  const liveRoom = useLiveRoom(streamId);
+  const broadcastReaction = useLiveReactions(liveRoom, { onReceive: spawnReaction });
+  const react = useCallback(
+    (burst = 1) => {
+      spawnReaction(burst);
+      broadcastReaction(burst);
+    },
+    [spawnReaction, broadcastReaction],
+  );
+
 
   const sendGift = useCallback((gift: LiveGift, quantity: number) => {
     const burst = { id: giftSeq++, gift, quantity };
@@ -633,7 +656,7 @@ export function StreamRoom({
         style={{ viewTransitionName: `stream-${data.id}` }}
         onDoubleClick={(event) => {
           if ((event.target as HTMLElement).closest("button, a, input, textarea")) return;
-          spawnReaction(5);
+          react(5);
         }}
       >
         {/* ---- Header ------------------------------------------------- */}
@@ -645,11 +668,18 @@ export function StreamRoom({
                lg). In theater mode the rail is gone, so it comes back on
                desktop too — the room never has zero ways out. */
             className={cn(
-              "ws-press mt-1 rounded-full bg-black/40 p-2 text-body",
+              // It reads as a CONTROL now. A chevron at black/40 over black
+              // video is nearly invisible, which is why people said there was
+              // no way out of a live room: the exit was there and looked like
+              // part of the picture. Glass, a hairline and a label make it a
+              // button, and the label is what makes it unambiguous — a lone
+              // chevron over a video is as easily "previous" as "leave".
+              "ws-press mt-1 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/70 py-2 pl-2 pr-3 text-body backdrop-blur-sm transition-colors hover:bg-black/85 hover:text-white",
               !theater && "lg:hidden"
             )}
           >
             <IconChevronLeft className="h-5 w-5" />
+            <span className="text-xs font-semibold">Leave</span>
           </Link>
 
           {owner && (
@@ -980,7 +1010,7 @@ export function StreamRoom({
         <div className="absolute bottom-4 right-3 z-10 flex flex-col items-center gap-4 lg:hidden">
           <div className="flex flex-col items-center gap-1">
             <button
-              onClick={() => spawnReaction(1)}
+              onClick={() => react(1)}
               aria-label={`Send a heart. ${likeCount} likes`}
               className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading"
             >
@@ -1132,7 +1162,7 @@ export function StreamRoom({
               <ChatPanel stream={data} variant="theater" showTopViewers />
               {data.status === "live" && (
                 <button
-                  onClick={() => spawnReaction(1)}
+                  onClick={() => react(1)}
                   aria-label={`Send a heart. ${likeCount} likes`}
                   className="ws-press absolute bottom-[92px] right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-heading backdrop-blur-md transition-colors hover:bg-white/15"
                 >
