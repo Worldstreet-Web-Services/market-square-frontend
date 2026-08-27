@@ -329,7 +329,7 @@ export function PostCard({
   repostedBy,
   followSlot,
   tipSlot,
-  onOpenVideo,
+  onOpenMedia,
   onQuote,
 }: {
   post: Post;
@@ -342,8 +342,8 @@ export function PostCard({
   /** Composed from outside the slice — the tip control belongs to the tips
    *  slice, and it takes the POST because a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
-  /** Promotes a video card into the full-screen viewer. */
-  onOpenVideo?: (post: Post) => void;
+  /** Promotes a media card into the full-screen viewer. */
+  onOpenMedia?: (post: Post) => void;
 }) {
   const like = useLikePost();
   const repost = useRepostPost();
@@ -351,6 +351,10 @@ export function PostCard({
   const gate = useGate();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const author = post.author;
+  // A button when the media can expand, a plain div when it cannot. Rendering
+  // an inert button would announce a control to a screen reader that does
+  // nothing when activated.
+  const Tag = onOpenMedia ? "button" : "div";
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
   // Share the POST, not its author's profile — a reader following the link
@@ -437,13 +441,13 @@ export function PostCard({
           // to move, and that is what "it doesn't feel like a reel" was.
           // Without a handler it stays an inline player, which is what the
           // surfaces that have nowhere to promote to need.
-          onOpenVideo ? (
+          onOpenMedia ? (
             <button
               type="button"
-              onClick={() => onOpenVideo(post)}
+              onClick={() => onOpenMedia(post)}
               aria-label="Play full screen"
               className="ws-press mt-4 block h-[420px] w-full overflow-hidden rounded-xl"
-              style={{ viewTransitionName: `video-${post.id}` }}
+              style={{ viewTransitionName: `media-${post.id}` }}
             >
               <InlineVideo
                 src={post.mediaUrl}
@@ -459,20 +463,36 @@ export function PostCard({
             />
           )
         ) : (
-          // Same height as InlineVideo so the timeline keeps one rhythm, and
-          // contained so a tall photo is not cropped to fit it.
-          <MediaFrame
-            backdrop={post.mediaUrl}
-            className="mt-4 h-[420px] w-full rounded-xl"
+          // A photo expands too. It is contained in the card, so a tall shot
+          // is letterboxed there and a tap is the only way to see it at any
+          // size: leaving the clip tappable and the photo inert taught two
+          // different rules for the same gesture on the same surface.
+          <Tag
+            {...(onOpenMedia
+              ? {
+                  type: "button" as const,
+                  onClick: () => onOpenMedia(post),
+                  "aria-label": "View full screen",
+                }
+              : {})}
+            className={cn(
+              "mt-4 block h-[420px] w-full",
+              onOpenMedia && "ws-press cursor-pointer"
+            )}
+            style={{ viewTransitionName: `media-${post.id}` }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
-            <img
-              src={post.mediaUrl}
-              alt=""
-              decoding="async"
-              className="absolute inset-0 h-full w-full object-contain"
-            />
-          </MediaFrame>
+            {/* Same height as InlineVideo so the timeline keeps one rhythm,
+                and contained so a tall photo is not cropped to fit it. */}
+            <MediaFrame backdrop={post.mediaUrl} className="h-full w-full rounded-xl">
+              {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+              <img
+                src={post.mediaUrl}
+                alt=""
+                decoding="async"
+                className="absolute inset-0 h-full w-full object-contain"
+              />
+            </MediaFrame>
+          </Tag>
         ))}
 
       <p className="mt-3 whitespace-pre-wrap break-words text-[13.8px] leading-[23px] text-white/90">

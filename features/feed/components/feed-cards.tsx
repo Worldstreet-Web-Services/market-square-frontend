@@ -143,7 +143,7 @@ export function FeedItemCard({
   item,
   followSlot,
   tipSlot,
-  onOpenVideo,
+  onOpenMedia,
   onQuote,
 }: {
   item: FeedItem;
@@ -152,7 +152,7 @@ export function FeedItemCard({
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
   /** Promotes a video card into the full-screen viewer. */
-  onOpenVideo?: (post: Post) => void;
+  onOpenMedia?: (post: Post) => void;
   onQuote?: (post: Post) => void;
 }) {
   if (item.type === "post" && item.post)
@@ -161,7 +161,7 @@ export function FeedItemCard({
         post={item.post}
         repostedBy={item.repostedBy}
         followSlot={followSlot}
-        onOpenVideo={onOpenVideo}
+        onOpenMedia={onOpenMedia}
         tipSlot={tipSlot}
         onQuote={onQuote}
       />
