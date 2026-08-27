@@ -174,11 +174,28 @@ export function FeedPage({
       ),
     [items]
   );
+
+  /**
+   * What the full-screen viewer scrolls: every MEDIA post of the lane, photos
+   * included, in lane order.
+   *
+   * Clips only would strand a reader who expanded a photo on a single slide
+   * with nothing above or below it, and would skip past the photos of the lane
+   * they were reading. The Reels lane keeps `videoItems`, because reels are
+   * clips and a still frame in a reels feed is a dead screen.
+   */
+  const mediaItems = useMemo(
+    () =>
+      items.flatMap((item) =>
+        item.type === "post" && item.post?.mediaUrl ? [item.post as VideoItem] : []
+      ),
+    [items]
+  );
   const [openVideoId, setOpenVideoId] = useState<string | null>(null);
 
   // The card morphs into the player. Feature-detected, and skipped under
   // reduced motion, the same rule Explore's grid uses.
-  const openVideo = (post: Post) => {
+  const openMedia = (post: Post) => {
     const apply = () => setOpenVideoId(post.id);
     if (
       !document.startViewTransition ||
@@ -347,7 +364,7 @@ export function FeedPage({
               <FeedItemCard
                 item={item}
                 followSlot={followSlot}
-                onOpenVideo={openVideo}
+                onOpenMedia={openMedia}
                 tipSlot={tipSlot}
                 onQuote={(post) => {
                   setQuoting(post);
@@ -381,14 +398,14 @@ export function FeedPage({
           tap on a video card performs. */}
       {openVideoId && (
         <VideoViewer
-          items={videoItems}
+          items={mediaItems}
           activeId={openVideoId}
           onActiveChange={setOpenVideoId}
           onClose={() => setOpenVideoId(null)}
           hasNextPage={Boolean(feed.hasNextPage)}
           isFetchingNextPage={feed.isFetchingNextPage}
           fetchNextPage={() => void feed.fetchNextPage()}
-          morphNameFor={(videoId) => `video-${videoId}`}
+          morphNameFor={(mediaId) => `media-${mediaId}`}
         />
       )}
     </>

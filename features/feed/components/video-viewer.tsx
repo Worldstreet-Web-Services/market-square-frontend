@@ -171,6 +171,13 @@ export function VideoViewer({
           <div
             key={item.id}
             data-video-id={item.id}
+            // h-full is REQUIRED, not decoration. PostSlide sizes itself with
+            // h-full so it can fill a column in Explore's reels, and a
+            // percentage height against an auto-height parent computes to
+            // auto. Everything inside the slide is absolutely positioned, so
+            // the content height is 0 and every slide collapses: the viewer
+            // renders as a black screen with nothing but the close button.
+            className="h-full"
             ref={(node) => {
               if (node) slideRefs.current.set(item.id, node);
               else slideRefs.current.delete(item.id);
