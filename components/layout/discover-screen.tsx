@@ -16,7 +16,7 @@ import { DiscoveryPage, useDiscovery, useMyInterests, usePeople } from "@/featur
 import type { ExploreItem } from "@/features/discovery";
 import { videoMorphName } from "@/features/discovery";
 import { useStreamList } from "@/features/streams";
-import { PersonRow } from "@/features/profile";
+import { CitizenSpotlightRail, PersonRow } from "@/features/profile";
 import { useMe } from "@/hooks/use-me";
 import { excludeViewer } from "@/lib/people-directory";
 import { useMediaFeed, mediaPostsOf, videoPostsOf, VideoViewer } from "@/features/feed";
@@ -241,6 +241,7 @@ export function DiscoverScreen() {
         onOpenVideo={open}
         openVideoId={openVideoId}
         renderPerson={(profile) => <PersonRow key={profile.id} profile={profile} />}
+        spotlightSlot={<CitizenSpotlightRail />}
         renderProduct={(item) => <StoreItemCard key={item.id} item={item} />}
         renderLike={(post) => <PostLikePill post={post} />}
       />
