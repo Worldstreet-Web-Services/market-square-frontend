@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,6 +14,10 @@ import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
+import { ReelsFeed } from "@/features/feed/components/reels-feed";
+import { VideoViewer } from "@/features/feed/components/video-viewer";
+import { isVideoPost } from "@/lib/media";
+import type { VideoItem } from "@/lib/video-context";
 import { FeaturedArena } from "@/features/feed/components/featured-arena";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
 import type { Lane, Post } from "@/features/feed/lib/types";
@@ -148,7 +152,43 @@ export function FeedPage({
     Boolean(feed.hasNextPage && !feed.isFetchingNextPage)
   );
 
-  const items = feed.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = useMemo(
+    () => feed.data?.pages.flatMap((page) => page.items) ?? [],
+    [feed.data?.pages]
+  );
+
+  /**
+   * The clips in this lane, in lane order.
+   *
+   * The viewer scrolls THIS list, so swiping up inside it walks the timeline
+   * the reader was already in rather than some separate video feed. Paging is
+   * the lane's own pager, so a swipe past the loaded page fetches the next one
+   * exactly as scrolling the timeline would.
+   */
+  const videoItems = useMemo(
+    () =>
+      items.flatMap((item) =>
+        item.type === "post" && item.post && isVideoPost(item.post)
+          ? [item.post as VideoItem]
+          : []
+      ),
+    [items]
+  );
+  const [openVideoId, setOpenVideoId] = useState<string | null>(null);
+
+  // The card morphs into the player. Feature-detected, and skipped under
+  // reduced motion, the same rule Explore's grid uses.
+  const openVideo = (post: Post) => {
+    const apply = () => setOpenVideoId(post.id);
+    if (
+      !document.startViewTransition ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      apply();
+      return;
+    }
+    document.startViewTransition(apply);
+  };
   const showComposer = composerOpen || compose === "1" || compose === "story";
   useMarketView("feed_viewed", { surface: "market_square_home", source: lane });
 
@@ -259,6 +299,20 @@ export function FeedPage({
           </div>
         </div>
 
+        {/* The Reels lane IS reels: full-bleed, one clip per screen, endless.
+            Rendering it as timeline cards made a clip a thumbnail that happens
+            to move, which is exactly what did not feel like a reel. Every
+            other lane stays a timeline, where a tap promotes a clip instead. */}
+        {lane === "reels" ? (
+          <ReelsFeed
+            items={videoItems}
+            isPending={feed.isPending}
+            hasNextPage={Boolean(feed.hasNextPage)}
+            isFetchingNextPage={feed.isFetchingNextPage}
+            fetchNextPage={() => void feed.fetchNextPage()}
+          />
+        ) : (
+          <>
         <div className="space-y-4">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
@@ -277,6 +331,7 @@ export function FeedPage({
               <FeedItemCard
                 item={item}
                 followSlot={followSlot}
+                onOpenVideo={openVideo}
                 tipSlot={tipSlot}
                 onQuote={(post) => {
                   setQuoting(post);
@@ -296,6 +351,8 @@ export function FeedPage({
         {feed.isSuccess && !feed.hasNextPage && items.length > 0 && (
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
         )}
+        </>
+        )}
 
         {/* The floating compose button used to live here, which is why it
             existed on home and nowhere else. AppShell owns it now and renders
@@ -303,6 +360,21 @@ export function FeedPage({
             in-timeline composer below stays: the stories rail and the empty
             states open it in place via `?compose=1` / `?compose=story`. */}
       </div>
+
+      {/* Full screen, swipeable, paging the same lane. This is the promotion a
+          tap on a video card performs. */}
+      {openVideoId && (
+        <VideoViewer
+          items={videoItems}
+          activeId={openVideoId}
+          onActiveChange={setOpenVideoId}
+          onClose={() => setOpenVideoId(null)}
+          hasNextPage={Boolean(feed.hasNextPage)}
+          isFetchingNextPage={feed.isFetchingNextPage}
+          fetchNextPage={() => void feed.fetchNextPage()}
+          morphNameFor={(videoId) => `video-${videoId}`}
+        />
+      )}
     </>
   );
 }

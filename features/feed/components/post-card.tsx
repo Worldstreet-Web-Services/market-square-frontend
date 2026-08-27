@@ -329,6 +329,7 @@ export function PostCard({
   repostedBy,
   followSlot,
   tipSlot,
+  onOpenVideo,
   onQuote,
 }: {
   post: Post;
@@ -341,6 +342,8 @@ export function PostCard({
   /** Composed from outside the slice — the tip control belongs to the tips
    *  slice, and it takes the POST because a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
+  /** Promotes a video card into the full-screen viewer. */
+  onOpenVideo?: (post: Post) => void;
 }) {
   const like = useLikePost();
   const repost = useRepostPost();
@@ -427,11 +430,34 @@ export function PostCard({
           issues mp4/webm for video, so extension sniffing is enough. */}
       {post.mediaUrl &&
         (isVideoPost(post) ? (
-          <InlineVideo
-            src={post.mediaUrl}
-            poster={post.thumbnailUrl}
-            className="mt-4 h-[420px] w-full rounded-xl"
-          />
+          // A tap goes FULL SCREEN, the way it does in Reels and TikTok. The
+          // inline preview still autoplays muted so the timeline is alive, but
+          // the tap is a promotion into the immersive viewer rather than a
+          // mute toggle: a clip playing in a card is a thumbnail that happens
+          // to move, and that is what "it doesn't feel like a reel" was.
+          // Without a handler it stays an inline player, which is what the
+          // surfaces that have nowhere to promote to need.
+          onOpenVideo ? (
+            <button
+              type="button"
+              onClick={() => onOpenVideo(post)}
+              aria-label="Play full screen"
+              className="ws-press mt-4 block h-[420px] w-full overflow-hidden rounded-xl"
+              style={{ viewTransitionName: `video-${post.id}` }}
+            >
+              <InlineVideo
+                src={post.mediaUrl}
+                poster={post.thumbnailUrl}
+                className="pointer-events-none h-full w-full"
+              />
+            </button>
+          ) : (
+            <InlineVideo
+              src={post.mediaUrl}
+              poster={post.thumbnailUrl}
+              className="mt-4 h-[420px] w-full rounded-xl"
+            />
+          )
         ) : (
           // Same height as InlineVideo so the timeline keeps one rhythm, and
           // contained so a tall photo is not cropped to fit it.
