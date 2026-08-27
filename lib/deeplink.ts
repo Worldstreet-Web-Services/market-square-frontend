@@ -9,17 +9,14 @@ export interface DeepLink {
 /**
  * Where the OTHER Ark products live.
  *
- * There is no verified public origin for the Ark app today: the previous
- * default, `https://app.worldstreet.com`, resolves in DNS but serves nothing,
- * and the backend's own host (`worldstreetwebservices.com`) is the API
- * gateway, not a browser destination. Guessing between them would just move
- * the broken link, so the base is configuration: set `NEXT_PUBLIC_ARK_APP_URL`
- * to the deployed Ark app and every cross-product link lights up at once.
- *
- * With it unset, `arkAppConfigured()` is false and callers render those rows
- * inert rather than pointing a reader at a page that does not answer.
+ * This used to have no default on purpose: the old one resolved in DNS and
+ * served nothing, and a link into nothing is worse than no link. The origin is
+ * confirmed now, so cross-product links resolve instead of rendering inert.
+ * `NEXT_PUBLIC_ARK_APP_URL` still overrides it for a staging build.
  */
-const ARK_APP_BASE = (process.env.NEXT_PUBLIC_ARK_APP_URL ?? "").replace(/\/+$/, "");
+const ARK_APP_BASE = (
+  process.env.NEXT_PUBLIC_ARK_APP_URL ?? "https://worldstreetgold.com"
+).replace(/\/+$/, "");
 
 export function arkAppConfigured(): boolean {
   return ARK_APP_BASE.length > 0;
@@ -132,6 +129,44 @@ function resolveGame(ref: string): ResolvedLink {
   };
 }
 
+/**
+ * A trade's subject is a transaction, and Ark has no page for one: its own
+ * activity rows link to the block explorer, and `/activity` would be wrong
+ * here because it shows the READER's trades, not the sharer's. So a shared
+ * trade opens the same proof anyone can verify.
+ *
+ * Keyed on the Alchemy network ids the Ark activity rows already emit.
+ */
+const EXPLORERS: Record<string, string> = {
+  "base-mainnet": "https://basescan.org/tx/",
+  "eth-mainnet": "https://etherscan.io/tx/",
+  "arb-mainnet": "https://arbiscan.io/tx/",
+  "opt-mainnet": "https://optimistic.etherscan.io/tx/",
+  "polygon-mainnet": "https://polygonscan.com/tx/",
+  "bnb-mainnet": "https://bscscan.com/tx/",
+  "celo-mainnet": "https://celoscan.io/tx/",
+  "solana-mainnet": "https://solscan.io/tx/",
+};
+
+/** `<network>:<hash>`, split on the FIRST colon so a hash keeps its own. */
+function resolveTrade(ref: string): ResolvedLink {
+  const colon = ref.indexOf(":");
+  const network = colon === -1 ? "" : ref.slice(0, colon);
+  const hash = colon === -1 ? "" : ref.slice(colon + 1);
+  const explorer = EXPLORERS[network];
+  // An unknown chain is not guessed at. The card still reads; it just does not
+  // offer a button that would land nowhere.
+  if (!explorer || !hash) {
+    return { href: "", external: true, label: "View transaction", available: false };
+  }
+  return {
+    href: `${explorer}${encodeURIComponent(hash)}`,
+    external: true,
+    label: "View transaction",
+    available: true,
+  };
+}
+
 export function resolveDeepLink(link: DeepLink, source?: string): ResolvedLink {
   const internal = (href: string, label: string): ResolvedLink => ({
     href: source ? `${href}${href.includes("?") ? "&" : "?"}source=${encodeURIComponent(source)}` : href,
@@ -152,10 +187,19 @@ export function resolveDeepLink(link: DeepLink, source?: string): ResolvedLink {
       return internal(`/store/${link.ref}`, "Open");
     case "profile":
       return internal(`/u/${link.ref}`, "View profile");
+    // Ark serves these at /earn/listing/<slug> and /prediction/<id>. They used
+    // to point at /listings/ and /markets/, which Ark has never had, so every
+    // one of these links 404'd the moment an origin was configured.
     case "listing":
-      return ark("listings", "View listing");
+      return ark("earn/listing", "View listing");
     case "market":
-      return ark("markets", "Open market");
+      return ark("prediction", "Open market");
+    case "prediction":
+      return ark("prediction", "Open market");
+    case "activity":
+      return ark("activity", "Open in Ark");
+    case "trade":
+      return resolveTrade(link.ref);
     case "game":
       return resolveGame(link.ref);
     case "external":
