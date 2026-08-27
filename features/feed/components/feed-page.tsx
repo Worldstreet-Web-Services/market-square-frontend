@@ -201,8 +201,12 @@ export function FeedPage({
           rather than scrolled past. */}
       <div className="relative px-4 py-4 lg:px-6">
         {/* Section switcher and the two creation actions share one long
-            outlined pill — that enclosure is the design's, not decoration. */}
-        <div className="ws-tabbar mb-4 flex items-center gap-3 p-1.5">
+            outlined pill — that enclosure is the design's, not decoration.
+            Desktop only: on a phone every one of these sections is already a
+            tab in the bottom bar, so the row was a second copy of the same
+            navigation sitting above the stories, and one that ran off the
+            right edge because the pill cannot fit four labels at that width. */}
+        <div className="ws-tabbar mb-4 hidden items-center gap-3 p-1.5 md:flex">
           <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <span
               aria-current="page"
