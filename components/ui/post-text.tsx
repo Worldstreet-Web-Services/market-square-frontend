@@ -59,14 +59,13 @@ function SegmentView({ segment }: { segment: Segment }) {
       return <>{segment.value}</>;
 
     case "mention":
-      // Without an id there is no profile to open, so it stays text rather
-      // than becoming a link that 404s.
-      return segment.id ? (
+      // Always a link. The profile page handles a handle that resolves to
+      // nobody; refusing to link is the worse failure, because the feature
+      // then just looks broken.
+      return (
         <Link href={`/u/${segment.handle}`} className={TAPPABLE}>
           {segment.value}
         </Link>
-      ) : (
-        <>{segment.value}</>
       );
 
     case "hashtag":
