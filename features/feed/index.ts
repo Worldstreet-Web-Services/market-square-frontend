@@ -7,8 +7,10 @@ export { ArkmarksPage } from "./components/arkmarks-page";
 export { PostDetailPage } from "./components/post-detail-page";
 export { useBookmarkPost, useBookmarks } from "./hooks/use-feed";
 export { PostCard } from "./components/post-card";
+export { FeedItemCard } from "./components/feed-cards";
 export { FeaturedArena } from "./components/featured-arena";
 export { useLikePost } from "./hooks/use-feed";
+export { useDiscussion } from "./hooks/use-feed";
 // Explore's immersive video viewer. It is DATA-FREE by design — the caller
 // supplies the list and the pager — which is what lets discovery's grid and
 // search results drive it without either slice importing the other.
