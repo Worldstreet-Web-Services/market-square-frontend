@@ -308,7 +308,7 @@ function InlineComment({ postId }: { postId: string }) {
         value={text}
         onChange={(event) => setText(event.target.value.slice(0, 500))}
         onKeyDown={(event) => event.key === "Enter" && submit()}
-        placeholder="Comment here..."
+        placeholder="Gist here..."
         aria-label="Write a comment"
         className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700"
       />
