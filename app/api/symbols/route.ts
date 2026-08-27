@@ -12,10 +12,12 @@ import { NextResponse } from "next/server";
  * response shared by every reader instead of one request per visitor, and the
  * origin stays a server concern rather than something baked into the bundle.
  */
-const ARK = (process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreetgold.com").replace(
-  /\/+$/,
-  "",
-);
+// The Ark APP, not the marketing site: NEXT_PUBLIC_WORLDSTREET_URL points at
+// worldstreetgold.com, which serves the landing page and 404s every product
+// route. This is the same origin the deep links use.
+const ARK = (
+  process.env.NEXT_PUBLIC_ARK_APP_URL ?? "https://dashboard.worldstreetgold.com"
+).replace(/\/+$/, "");
 
 export const revalidate = 300;
 

@@ -72,10 +72,9 @@ export interface ParseOptions {
   /**
    * The mentions the SERVICE recorded on this post.
    *
-   * An `@handle` is only linked when it appears here. Text is not a claim: any
-   * author could type `@someone` and, without this check, every one of them
-   * would become a link to a profile that may not exist — or worse, to the
-   * wrong person's.
+   * Used to resolve a handle to a stable profile id where the service recorded
+   * one. NOT a gate: a handle typed by hand still links, because that is what
+   * people expect and a caption should not depend on having used a dropdown.
    */
   mentions?: Mention[];
 }
@@ -143,8 +142,16 @@ export function parsePostText(text: string, options: ParseOptions = {}): Segment
 
   for (const match of text.matchAll(MENTION)) {
     const [whole, lead = "", handle = ""] = match;
+    // Linked whether or not the service recorded it, which is what every
+    // social product does and what people expect: you type @someone and it
+    // becomes a link. Requiring the composer's picker meant a handle typed by
+    // hand stayed grey text, and nobody reads a caption thinking "I must
+    // select that from a dropdown for it to work".
+    //
+    // A handle that resolves to nobody lands on the profile page's own
+    // not-found state, which is a recoverable dead end. Refusing to link it at
+    // all is the worse failure: the feature simply appears broken.
     const known = byHandle.get(handle.toLowerCase());
-    if (!known) continue;
     const start = (match.index ?? 0) + lead.length;
     found.push({
       start,
@@ -153,7 +160,9 @@ export function parsePostText(text: string, options: ParseOptions = {}): Segment
         kind: "mention",
         value: `@${handle}`,
         handle,
-        id: known.type === "profile" ? known.id : null,
+        // The recorded id when we have one, so a display name change does not
+        // break the link; the handle alone otherwise.
+        id: known?.type === "profile" ? known.id : null,
       },
     });
   }

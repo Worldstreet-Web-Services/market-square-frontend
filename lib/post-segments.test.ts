@@ -93,12 +93,26 @@ describe("mentions", () => {
   });
 
   /**
-   * Text is not a claim. Any author can type @someone; without checking the
-   * recorded mentions, every one of them becomes a link to a profile that may
-   * not exist, or to the wrong person's.
+   * This asserted the opposite and was wrong in practice: a handle typed by
+   * hand stayed grey text, so the feature looked broken unless you happened to
+   * use the composer's dropdown. Nobody writes a caption thinking that.
+   *
+   * A handle that resolves to nobody lands on the profile page's not-found
+   * state, which is recoverable. Not linking at all is not.
    */
-  it("leaves an unrecorded handle as text", () => {
-    assert.deepEqual(kinds(parsePostText("hey @stranger")), ["text"]);
+  it("links a handle even when the service did not record it", () => {
+    const segments = parsePostText("hey @stranger");
+    assert.deepEqual(kinds(segments), ["text", "mention"]);
+    const found = segments.find((s) => s.kind === "mention");
+    assert.equal(found?.kind === "mention" && found.handle, "stranger");
+    // No recorded id, so the link is by handle alone.
+    assert.equal(found?.kind === "mention" && found.id, null);
+  });
+
+  it("prefers the recorded id when there is one, so a rename cannot break it", () => {
+    const segments = parsePostText("hey @prince", { mentions: [mention("prince", "did:1")] });
+    const found = segments.find((s) => s.kind === "mention");
+    assert.equal(found?.kind === "mention" && found.id, "did:1");
   });
 
   it("does not find a mention inside an email or a URL", () => {
