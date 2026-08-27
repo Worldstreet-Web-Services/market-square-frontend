@@ -247,15 +247,21 @@ export function FeedPage({
           </div>
         </div>
 
-        {authenticated && (
+        {/* Reels is a mode, not a filter. The story rail and the hero are
+            browsing furniture: left in place they push the first clip halfway
+            down the screen, which is the whole reason home's reels did not
+            feel like Explore's. */}
+        {authenticated && lane !== "reels" && (
           <div className="mb-4">
             <StoriesRow />
           </div>
         )}
 
-        <div className="mb-4">
-          <FeaturedArena />
-        </div>
+        {lane !== "reels" && (
+          <div className="mb-4">
+            <FeaturedArena />
+          </div>
+        )}
 
         {authenticated && showComposer && (
           <div className="ws-post mb-4">
@@ -308,13 +314,19 @@ export function FeedPage({
             to move, which is exactly what did not feel like a reel. Every
             other lane stays a timeline, where a tap promotes a clip instead. */}
         {lane === "reels" ? (
-          <ReelsFeed
-            items={videoItems}
-            isPending={feed.isPending}
-            hasNextPage={Boolean(feed.hasNextPage)}
-            isFetchingNextPage={feed.isFetchingNextPage}
-            fetchNextPage={() => void feed.fetchNextPage()}
-          />
+          // Edge to edge: the column's own padding is cancelled, because a
+          // reel with a 16px gutter either side is a video in a page, not a
+          // reel. The reserved space is the lane switcher above it.
+          <div className="-mx-4 lg:-mx-6">
+            <ReelsFeed
+              items={videoItems}
+              isPending={feed.isPending}
+              hasNextPage={Boolean(feed.hasNextPage)}
+              isFetchingNextPage={feed.isFetchingNextPage}
+              fetchNextPage={() => void feed.fetchNextPage()}
+              reservedSpace="var(--ws-home-reels-chrome)"
+            />
+          </div>
         ) : (
           <>
         <div className="space-y-4">

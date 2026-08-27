@@ -609,9 +609,16 @@ body {
      The immersive feed's action rail is the reason this exists — it was
      landing underneath the button, which hid the comment control outright. */
   --ws-fab-clearance: calc(env(safe-area-inset-bottom, 0px) + 164px);
+  /* What sits above home's reels lane and eats into the screen: the column's
+     top padding plus the lane switcher. Stated here because it differs by
+     breakpoint (desktop also shows the section pill, which is hidden on a
+     phone), and a slide that does not match what is left of the screen is a
+     reels feed that always sits part-scrolled. */
+  --ws-home-reels-chrome: 72px;
 }
 @media (min-width: 768px) {
   :root {
+    --ws-home-reels-chrome: 134px;
     --ws-topbar-h: 0px;
     --ws-nav-h: 0px;
     --ws-fab-bottom: 33px;
