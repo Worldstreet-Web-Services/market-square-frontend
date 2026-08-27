@@ -230,3 +230,5 @@ export type TipCapability = z.infer<typeof TipCapabilitySchema>;
 
 
 export type Post = z.infer<typeof PostSchema>;
+
+export type Mention = z.infer<typeof MentionSchema>;

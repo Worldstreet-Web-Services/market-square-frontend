@@ -10,6 +10,7 @@ import type { VideoItem } from "@/lib/video-context";
 import { useGate } from "@/hooks/use-gate";
 import { Avatar } from "@/components/ui/avatar";
 import { MediaFrame } from "@/components/ui/media-frame";
+import { PostText } from "@/components/ui/post-text";
 import { VerifiedBadge } from "@/components/ui/badge";
 import { IconComment, IconHeart, IconVolume } from "@/components/ui/icons";
 import { useLikePost } from "@/features/feed/hooks/use-feed";
@@ -267,14 +268,14 @@ export function PostSlide({
               aria-expanded={captionOpen}
               className="pointer-events-auto mt-2 block w-full text-left"
             >
-              <p
+              <PostText
+                text={post.text}
+                mentions={post.mentions}
                 className={cn(
-                  "ws-text-shadow whitespace-pre-wrap break-words text-[13px] leading-[18px] text-white/95",
+                  "ws-text-shadow text-[13px] leading-[18px] text-white/95",
                   captionOpen ? "max-h-[38dvh] overflow-y-auto" : "line-clamp-2"
                 )}
-              >
-                {post.text}
-              </p>
+              />
               {/* Only offered when there is more to see. A "more" that reveals
                   nothing teaches people to ignore it. */}
               {post.text.length > 90 && (

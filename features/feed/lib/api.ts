@@ -22,13 +22,20 @@ import {
 // `topics` filters the lane server-side (the same comma-joined parameter
 // /search and /streams take). It is omitted entirely when nothing is chosen —
 // an empty `topics=` would read as "match no topics" rather than "no filter".
-export async function fetchFeed(lane: Lane, cursor?: string, topics: string[] = []) {
+export async function fetchFeed(
+  lane: Lane,
+  cursor?: string,
+  topics: string[] = [],
+  /** One discussion. Replaces the lane rather than narrowing it. */
+  hashtag?: string
+) {
   return FeedPageSchema.parse(
     await msApi.get("/feed", {
       lane,
       limit: 30,
       cursor,
       ...(topics.length > 0 ? { topics: topics.join(",") } : {}),
+      ...(hashtag ? { hashtag } : {}),
     })
   );
 }

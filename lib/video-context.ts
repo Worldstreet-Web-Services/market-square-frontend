@@ -26,6 +26,13 @@ export interface VideoItem {
   mediaKind?: string | null;
   thumbnailUrl?: string | null;
   createdAt: string;
+  /**
+   * The mentions the service recorded, so a caption links the same handles the
+   * timeline card does. Optional: not every payload that satisfies this shape
+   * carries them, and a missing list renders the handle as text rather than
+   * guessing at a profile.
+   */
+  mentions?: { type: "profile" | "group"; id: string; label: string; handle: string }[];
   author?: Profile | null;
   /**
    * Tallies are optional because not every payload carries them. A missing

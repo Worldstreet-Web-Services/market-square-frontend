@@ -10,6 +10,7 @@ import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
+import { PostText } from "@/components/ui/post-text";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { useRecordView } from "@/features/feed/hooks/use-record-view";
 import { useGate } from "@/hooks/use-gate";
@@ -540,9 +541,11 @@ export function PostCard({
           </Tag>
         ))}
 
-      <p className="mt-3 whitespace-pre-wrap break-words text-[13.8px] leading-[23px] text-white/90">
-        {post.text}
-      </p>
+      <PostText
+        text={post.text}
+        mentions={post.mentions}
+        className="mt-3 text-[13.8px] leading-[23px] text-white/90"
+      />
 
       {post.quotedPost && <QuotedPost quoted={post.quotedPost} />}
 

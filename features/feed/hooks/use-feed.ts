@@ -45,6 +45,23 @@ export function useFeed(lane: Lane) {
 }
 
 /**
+ * One discussion.
+ *
+ * The tag is part of the query key, or two discussions share a cache and
+ * whichever opened first serves the other.
+ */
+export function useDiscussion(tag: string) {
+  return useInfiniteQuery({
+    queryKey: ["ms", "feed", "hashtag", tag],
+    queryFn: ({ pageParam }) =>
+      fetchFeed("for-you", pageParam ?? undefined, [], tag),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: tag.length > 0,
+  });
+}
+
+/**
  * The Explore grid's media list — and the immersive viewer's scroll list.
  *
  * ONE query serves both: the grid renders the loaded pages as cards and the
