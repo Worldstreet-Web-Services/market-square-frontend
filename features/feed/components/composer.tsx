@@ -98,6 +98,17 @@ export function Composer({
   const [linkLabel, setLinkLabel] = useState<string | null>(prefill?.label ?? null);
   const [kind, setKind] = useState<"update" | "story">(asStory && !quoted ? "story" : "update");
   const [mentionQuery, setMentionQuery] = useState("");
+  // Height follows the CONTENT, measured from the element rather than counted
+  // from newlines: a long unbroken line wraps into several visual rows that no
+  // character count can predict. Reset to auto first, or scrollHeight only
+  // ever reports the height it already has and the box can never shrink.
+  useEffect(() => {
+    const node = field.current;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = `${node.scrollHeight}px`;
+  }, [text]);
+
   const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
   // The picker used to insert "@handle" text and throw the Mention away, so
   // nobody was ever actually mentioned. POST /posts takes `mentions`, so the
@@ -276,6 +287,13 @@ export function Composer({
           </div>
         )}
 
+        {/* Grows with what is being written, then scrolls.
+            `rows` alone cannot do this: a fixed count is either too small for a
+            real thought or leaves a hole above the actions when the box is
+            empty. It opened at one row, which clipped the placeholder itself.
+            The cap keeps the send button on screen — a box that grows without
+            limit pushes Post below the fold exactly when somebody is ready to
+            press it, and on a phone that is the whole sheet. */}
         <textarea
           ref={field}
           value={text}
@@ -284,8 +302,9 @@ export function Composer({
             if (event.key === "Escape") setMentionRange(null);
           }}
           placeholder="What's happening on the square?"
-          rows={active ? 3 : 1}
-          className="w-full resize-none bg-transparent py-2 text-xl leading-snug text-heading outline-none placeholder:text-meta"
+          rows={1}
+          className="min-h-[7.5rem] w-full resize-none overflow-y-auto bg-transparent py-2 text-xl leading-snug text-heading outline-none placeholder:text-meta sm:min-h-[6rem]"
+          style={{ maxHeight: "38dvh" }}
         />
 
         {mentionRange && (
