@@ -177,6 +177,14 @@ export const PostSchema = z.object({
   likeCount: z.number(),
   commentCount: z.number(),
   repostCount: z.number().optional().default(0),
+  /**
+   * Distinct signed-in viewers. OPTIONAL with no default, because a
+   * deployment whose service predates views must render nothing rather than a
+   * confident "0 views" — "this payload has no view count" and "nobody has
+   * watched this" are different claims, and printing the second for the first
+   * is a lie the reader cannot detect.
+   */
+  viewCount: z.number().optional(),
   repostedByMe: z.boolean().optional().default(false),
   // The quoted original, hydrated one level deep only — a quote of a quote
   // shows the inner card's text, never a third nested frame. When the original

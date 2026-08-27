@@ -13,6 +13,7 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { VerifiedBadge } from "@/components/ui/badge";
 import { IconComment, IconHeart } from "@/components/ui/icons";
 import { useLikePost } from "@/features/feed/hooks/use-feed";
+import { useRecordView } from "@/features/feed/hooks/use-record-view";
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 
 const DOUBLE_TAP_MS = 300;
@@ -50,6 +51,8 @@ export function PostSlide({
   const [captionOpen, setCaptionOpen] = useState(false);
   const [muted, setMuted] = useState(true);
   const [reduced, setReduced] = useState(false);
+  // A reel fills the screen, so time on screen is a real watch.
+  const viewRef = useRecordView(post.id);
   const lastTap = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasVideo = isVideoPost(post);
@@ -103,6 +106,7 @@ export function PostSlide({
 
   return (
     <section
+      ref={viewRef}
       // h-full, not h-dvh: the slide fills its SCROLL CONTAINER. That is the
       // same thing in the full-screen viewer, and it is what lets the reels
       // feed sit inside Explore's column on desktop without hanging off the
