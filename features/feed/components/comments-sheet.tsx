@@ -91,7 +91,7 @@ export function CommentsSheet({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
             maxLength={500}
-            placeholder="Add a comment"
+            placeholder="Gist here..."
             className="min-w-0 flex-1 bg-transparent text-sm outline-none"
           />
           <button

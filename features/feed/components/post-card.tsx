@@ -12,10 +12,9 @@ import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { useRecordView } from "@/features/feed/hooks/use-record-view";
 import { useGate } from "@/hooks/use-gate";
-import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
-import { IconFlag, IconQuote, IconSend } from "@/components/ui/icons";
+import { IconFlag, IconQuote } from "@/components/ui/icons";
 import {
   IconMsBookmark,
   IconMsComment,
@@ -27,7 +26,6 @@ import {
 import { formatCount } from "@/lib/format";
 import { IconEye } from "@/components/ui/icons";
 import {
-  useAddComment,
   useBookmarkPost,
   useLikePost,
   useReport,
@@ -285,47 +283,6 @@ function RepostMenu({
   );
 }
 
-/** The design's inline reply field — comment without leaving the timeline. */
-function InlineComment({ postId }: { postId: string }) {
-  const add = useAddComment(postId);
-  const gate = useGate();
-  const me = useMe();
-  const [text, setText] = useState("");
-
-  const submit = () => {
-    const body = text.trim();
-    if (!body) return;
-    gate(() => add.mutate(body, { onSuccess: () => setText("") }));
-  };
-
-  return (
-    // Hidden on a phone: it cannot shrink below its avatar and padding, and
-    // the row has no room for it there. The comment tally opens the full sheet,
-    // so nothing is unreachable.
-    <div className="ws-comment-field hidden h-10 min-w-0 flex-1 items-center gap-2 px-2 md:flex">
-      <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
-      <input
-        value={text}
-        onChange={(event) => setText(event.target.value.slice(0, 500))}
-        onKeyDown={(event) => event.key === "Enter" && submit()}
-        placeholder="Gist here..."
-        aria-label="Write a comment"
-        className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700"
-      />
-      {text.trim() && (
-        <button
-          onClick={submit}
-          disabled={add.isPending}
-          aria-label="Post comment"
-          className="shrink-0 rounded-full p-1 text-accent transition-colors hover:bg-white/10 disabled:opacity-40"
-        >
-          <IconSend className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 export function PostCard({
   post,
   repostedBy,
@@ -522,7 +479,12 @@ export function PostCard({
       {/* Tighter on a phone. Both end groups are shrink-0, so at the design's
           spacing the row could not fit a 360px screen and pushed the page
           wider than the viewport. The spacing is the design's from md up. */}
-      <div className="mt-5 flex items-center gap-3 md:gap-6">
+      {/* The inline reply field is gone: commenting happens in the sheet, where
+          there is room to read the thread you are replying to. On the card it
+          was a second, worse composer that could not shrink past its own
+          avatar, and it was already hidden on mobile for exactly that reason.
+          justify-between replaces the flexible middle it used to occupy. */}
+      <div className="mt-5 flex items-center justify-between gap-3 md:gap-6">
         <div className="ws-action-pill flex h-10 shrink-0 items-center gap-3 px-2 md:gap-[17px]">
           <CountAction
             label="Comments"
@@ -552,8 +514,6 @@ export function PostCard({
             <IconMsLike className="h-[18px] w-[18px]" filled={post.likedByMe} />
           </CountAction>
         </div>
-
-        <InlineComment postId={post.id} />
 
         {/* Views sit with the tallies, not the actions: they are something that
             happened to the post, not something you can do to it. Rendered only
