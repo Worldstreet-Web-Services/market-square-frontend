@@ -34,8 +34,13 @@ function InlineFollow({ profile }: { profile: Profile }) {
   );
 }
 
+// Columns run 2nd, 1st, 3rd, which is what makes it read as a podium.
 const PODIUM_ORDER = [1, 0, 2];
-const PODIUM_SIZE = [88, 64, 64];
+// Sized by RANK, not by column. Indexing this by column is what made the
+// runner-up the biggest face on the page: column 0 got 88px, and column 0 is
+// second place. On a podium the winner is the largest thing on it, or the
+// ranking has to be read rather than seen.
+const PODIUM_SIZE_BY_RANK = [96, 76, 64];
 
 export function SpotlightPage() {
   const board = useSpotlight();
@@ -80,10 +85,10 @@ export function SpotlightPage() {
         <>
           {/* Podium — 2nd, 1st, 3rd */}
           <div className="ws-hair flex items-end justify-center gap-6 border-b py-6 sm:gap-10">
-            {PODIUM_ORDER.map((position, column) => {
+            {PODIUM_ORDER.map((position) => {
               const row = board.data.items[position];
               if (!row) return <div key={position} />;
-              const size = PODIUM_SIZE[column];
+              const size = PODIUM_SIZE_BY_RANK[position] ?? 64;
               return (
                 <Link key={row.profile.id} href={`/u/${row.profile.username}`} className="flex flex-col items-center gap-2">
                   <div className="relative">

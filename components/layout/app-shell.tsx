@@ -32,6 +32,7 @@ import {
   IconMore,
   IconPlus,
   IconSearch,
+  IconSpark,
   IconShield,
   IconStore,
   IconTicket,
@@ -83,9 +84,10 @@ const WORLDSTREET_URL = process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worl
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
 //
-// Spotlight is deliberately absent: the right rail's Citizen Spotlight module
-// owns that surface and links into it, so a sidebar entry would be a second
-// door to the same room.
+// Spotlight has a nav entry because the right rail, which used to be its only
+// door, is `hidden lg:block` — so below lg there was no way to reach it at all.
+// The "second door to the same room" argument only holds where the first door
+// exists, and on a phone it does not.
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
@@ -96,6 +98,7 @@ const NAV: NavItem[] = [
   // Arkmarks had a route and a save button on every post, and no way in: the
   // only path to something you saved was typing the URL.
   { href: "/arkmarks", label: "Arkmarks", icon: IconBookmark, authed: true, secondary: true },
+  { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
   // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
