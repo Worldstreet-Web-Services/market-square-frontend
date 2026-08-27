@@ -259,7 +259,7 @@ export function ProfilePage({
         <ColumnHeader title="Profile" back />
         <div className="ws-skeleton h-40 rounded-none" />
         <div className="space-y-3 px-4 pt-3">
-          <Skeleton className="-mt-16 h-28 w-28 rounded-full border-4 border-black" />
+          <Skeleton className="relative z-10 -mt-16 h-28 w-28 rounded-full border-4 border-black" />
           <Skeleton className="h-4 w-40" />
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-12 w-full" />
@@ -295,7 +295,12 @@ export function ProfilePage({
 
       <div className="px-4 pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="-mt-14 rounded-full border-4 border-black sm:-mt-16">
+          {/* `relative z-10` is what makes it VISIBLE, not decoration. The
+              cover above is `relative` (positioned), and within one stacking
+              context positioned elements paint above in-flow block boxes — so
+              an unpositioned avatar pulled up over the cover had its top half
+              painted over by it. */}
+          <div className="relative z-10 -mt-14 rounded-full border-4 border-black sm:-mt-16">
             <Avatar name={data.displayName} seed={data.id} src={data.avatarUrl} size={112} />
           </div>
           <div className="flex items-center gap-2 pt-3">
