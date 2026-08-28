@@ -9,12 +9,28 @@ import { resolveCta } from "@/lib/deeplink";
 import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "@/components/ui/icons";
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconPlus,
+  IconVolume,
+  IconX,
+} from "@/components/ui/icons";
 import { useMe } from "@/hooks/use-me";
 import { useFeed, useStories } from "@/features/feed/hooks/use-feed";
 import type { FeedItem, Post } from "@/features/feed/lib/types";
 
 const STORY_MS = 5000;
+
+/**
+ * How long a video story may hold the viewer.
+ *
+ * A story is a glance, and an author who uploads a ten-minute clip must not be
+ * able to freeze the set on it — but cutting every clip at the picture
+ * duration was why sound "did not work": you heard five seconds of a
+ * thirty-second video and the viewer moved on.
+ */
+const STORY_VIDEO_MAX_MS = 60_000;
 
 /** Stories carry raw author media, so the kind is sniffed from the URL — the
     same test the viewer used inline before it needed two layers of it. */
@@ -298,6 +314,28 @@ function StoryViewer({
   // where it stopped without re-arming the frame loop on every tick.
   const progressRef = useRef(0);
   const storyKeyRef = useRef(storyKey);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  /**
+   * Sound is OFF on open and stays wherever the viewer last put it.
+   *
+   * It cannot default to on: browsers only autoplay muted media, so an unmuted
+   * first frame is not "a story with sound", it is a story that never starts.
+   * Unmuting from the button is a user gesture, which is exactly what the
+   * autoplay policy asks for. Holding the choice across stories is the
+   * Instagram behaviour — nobody wants to re-enable sound on every clip.
+   */
+  const [soundOn, setSoundOn] = useState(false);
+  /**
+   * The clip's real length, tagged with the story it was measured from.
+   *
+   * Tagged rather than reset in an effect: a stale duration would otherwise
+   * time the NEXT story until its metadata arrived, and the key check makes
+   * that impossible without a second render.
+   */
+  const [measured, setMeasured] = useState<{ key: string; ms: number } | null>(null);
+  // A picture holds for the fixed beat; a clip holds for its own length,
+  // capped, and falls back to the picture beat until metadata arrives.
+  const durationMs = measured?.key === storyKey ? measured.ms : STORY_MS;
 
   // Advance within the author, then to the next author, then close — the
   // Instagram traversal.
@@ -332,12 +370,12 @@ function StoryViewer({
       storyKeyRef.current = storyKey;
       progressRef.current = 0;
     }
-    const elapsed = progressRef.current * STORY_MS;
+    const elapsed = progressRef.current * durationMs;
     let frame = 0;
     let start: number | null = null;
     const tick = (now: number) => {
       if (start === null) start = now;
-      const ratio = Math.min(1, (elapsed + (now - start)) / STORY_MS);
+      const ratio = Math.min(1, (elapsed + (now - start)) / durationMs);
       progressRef.current = ratio;
       setProgress(ratio);
       if (ratio >= 1) {
@@ -348,7 +386,17 @@ function StoryViewer({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [next, paused, storyKey]);
+  }, [durationMs, next, paused, storyKey]);
+
+  // Holding to pause has to stop the CLIP, not just the progress bar. It only
+  // stopped the bar, so a held story kept playing — and with sound on, kept
+  // talking — underneath a frozen segment.
+  useEffect(() => {
+    const node = videoRef.current;
+    if (!node) return;
+    if (paused) node.pause();
+    else void node.play().catch(() => {});
+  }, [paused, storyKey]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -409,6 +457,18 @@ function StoryViewer({
             </Link>
             <p className="ws-text-shadow text-xs text-white/70">{relativeTime(story.createdAt)}</p>
           </div>
+          {/* Shown only on a clip — a mute button over a photograph is a
+              control for something that cannot make a sound. */}
+          {story.mediaUrl && isStoryVideo(story.mediaUrl) && (
+            <button
+              onClick={() => setSoundOn((on) => !on)}
+              aria-label={soundOn ? "Mute story" : "Unmute story"}
+              aria-pressed={soundOn}
+              className="ws-press rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm"
+            >
+              <IconVolume className="h-5 w-5" muted={!soundOn} />
+            </button>
+          )}
           <button onClick={onClose} aria-label="Close stories" className="p-1.5 text-white">
             <IconX className="h-5 w-5" />
           </button>
@@ -444,6 +504,10 @@ function StoryViewer({
           <div className="absolute inset-0 overflow-hidden">
             {isStoryVideo(story.mediaUrl) ? (
               <>
+                {/* The backdrop copy is ALWAYS muted, whatever the sound
+                    setting: it is the same file decoded twice, so letting it
+                    carry audio would play every story over itself, slightly
+                    out of sync. */}
                 <video
                   src={story.mediaUrl}
                   autoPlay
@@ -454,11 +518,24 @@ function StoryViewer({
                   className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl saturate-150"
                 />
                 <video
+                  ref={videoRef}
                   src={story.mediaUrl}
                   autoPlay
-                  muted
+                  muted={!soundOn}
                   playsInline
-                  loop
+                  // NOT looped: the progress bar now runs for the clip's real
+                  // length, so a loop would restart the audio underneath a bar
+                  // that is about to advance.
+                  onLoadedMetadata={(event) => {
+                    const seconds = event.currentTarget.duration;
+                    // A stream with no known length reports Infinity or NaN;
+                    // timing a story off that would stall the set forever.
+                    if (!Number.isFinite(seconds) || seconds <= 0) return;
+                    setMeasured({
+                      key: storyKey,
+                      ms: Math.min(seconds * 1000, STORY_VIDEO_MAX_MS),
+                    });
+                  }}
                   className="relative h-full w-full object-contain"
                 />
               </>

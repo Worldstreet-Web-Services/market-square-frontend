@@ -384,13 +384,13 @@ export function Composer({
           </div>
         )}
 
-        <div className="ws-hair flex items-center gap-1 border-t pt-2.5">
+        <div className="ws-hair flex flex-nowrap items-center gap-1 border-t pt-2.5">
           <button
             onClick={() => fileInput.current?.click()}
             aria-label="Upload a picture or video from your device"
             title="Upload picture or video"
             className={cn(
-              "rounded-full p-2 transition-colors hover:bg-white/10",
+              "shrink-0 rounded-full p-2 transition-colors hover:bg-white/10",
               mediaFile ? "text-heading" : "text-accent"
             )}
           >
@@ -401,7 +401,7 @@ export function Composer({
               stream, a store item or an external URL. The type is chosen
               inside the picker, so this is a single toggle rather than a menu
               of id-shaped options. */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setLinkOpen((open) => !open)}
               aria-label="Attach a link"
@@ -414,27 +414,36 @@ export function Composer({
             >
               <IconLink className="h-[18px] w-[18px]" />
             </button>
+          </div>
 
-            {/* The `$` tool, as Ark's composer has. Inserts at the caret and
-                only ever offers coins the platform can actually trade, so a
-                chosen ticker always renders — a symbol typed from memory is
-                silently plain text when it is wrong. */}
-            <SymbolPicker
-              onPick={(fragment) => {
-                const node = field.current;
-                const at = node?.selectionStart ?? text.length;
-                const next = `${text.slice(0, at)}${fragment}${text.slice(at)}`;
-                updateText(next, at + fragment.length);
-                // Typing continues where the insert ended, not at the end.
-                const caret = at + fragment.length;
-                window.requestAnimationFrame(() => {
-                  node?.focus();
-                  node?.setSelectionRange(caret, caret);
-                });
-              }}
-            />
+          {/* The `$` and emoji tools are SIBLINGS of the other tools, not
+              children of the link button's wrapper. Nested inside it they
+              stacked vertically — that wrapper is a block box, so the row
+              rendered as three ragged lines instead of one strip of controls.
+              Each picker already owns the `relative` its popover anchors to,
+              so none of them needs a wrapper here.
 
-            <EmojiPicker onPick={(emoji) => {
+              The `$` tool matches Ark's composer: it inserts at the caret and
+              only ever offers coins the platform can actually trade, so a
+              chosen ticker always renders — a symbol typed from memory is
+              silently plain text when it is wrong. */}
+          <SymbolPicker
+            onPick={(fragment) => {
+              const node = field.current;
+              const at = node?.selectionStart ?? text.length;
+              const next = `${text.slice(0, at)}${fragment}${text.slice(at)}`;
+              updateText(next, at + fragment.length);
+              // Typing continues where the insert ended, not at the end.
+              const caret = at + fragment.length;
+              window.requestAnimationFrame(() => {
+                node?.focus();
+                node?.setSelectionRange(caret, caret);
+              });
+            }}
+          />
+
+          <EmojiPicker
+            onPick={(emoji) => {
               const node = field.current;
               const at = node?.selectionStart ?? text.length;
               const next = `${text.slice(0, at)}${emoji}${text.slice(at)}`;
@@ -444,8 +453,8 @@ export function Composer({
                 node?.focus();
                 node?.setSelectionRange(caret, caret);
               });
-            }} />
-          </div>
+            }}
+          />
 
           <button
             onClick={() => setKind(kind === "story" ? "update" : "story")}
@@ -453,7 +462,7 @@ export function Composer({
             title="Stories expire after 24 hours"
             aria-pressed={kind === "story"}
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-bold transition-colors hover:bg-white/10",
+              "flex shrink-0 items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-bold transition-colors hover:bg-white/10",
               kind === "story" ? "text-heading" : "text-accent"
             )}
           >
@@ -463,7 +472,7 @@ export function Composer({
             24h
           </button>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-3">
             {active && <CountRing used={text.length} />}
             <button
               onClick={submit}
