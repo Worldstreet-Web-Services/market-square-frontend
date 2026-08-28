@@ -240,6 +240,7 @@ export function DiscoveryPage({
   openVideoId,
   renderPerson,
   renderProduct,
+  spotlightSlot,
   renderLike,
 }: {
   query: string;
@@ -263,6 +264,12 @@ export function DiscoveryPage({
   /** Row renderers, supplied by the screen from each owning slice. */
   renderPerson: (profile: Profile) => React.ReactNode;
   renderProduct: (item: StoreItem) => React.ReactNode;
+  /**
+   * Citizen Spotlight, composed by the route. On desktop it lives in the right
+   * rail; that rail is `lg:block`, so below lg it had nowhere to be at all and
+   * the surface was unreachable without typing the URL.
+   */
+  spotlightSlot?: React.ReactNode;
   /** The card like control, from the feed slice. */
   renderLike: (post: VideoItem) => React.ReactNode;
 }) {
@@ -387,6 +394,14 @@ export function DiscoveryPage({
           renderPerson={renderPerson}
           renderProduct={renderProduct}
         />
+      )}
+
+      {/* Citizen Spotlight, on the surface people actually browse. It sits in
+          the right rail from lg up, and that rail does not exist below it —
+          so on a phone this is the only place it can be seen. Hidden at lg to
+          avoid showing it twice on one screen. */}
+      {!hasQuery && spotlightSlot && (
+        <div className="px-4 pb-4 lg:hidden">{spotlightSlot}</div>
       )}
 
       {/* Resting Explore: the card grid. A search replaces it with results. */}
