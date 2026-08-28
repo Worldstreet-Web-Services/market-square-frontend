@@ -13,9 +13,19 @@ export function ColumnHeader({
   back = false,
   action,
   children,
+  hideTitle = false,
 }: {
   title: string;
   subtitle?: string;
+  /**
+   * Drop the visible title row, keeping the tab strip alone.
+   *
+   * For surfaces the breadcrumb and the active nav item already name, where
+   * repeating the page title is a third label for the same thing. The heading
+   * stays in the accessibility tree — a screen reader still needs one h1 per
+   * page — it just stops taking vertical space that the content wants.
+   */
+  hideTitle?: boolean;
   /** Show the back arrow — for pushed detail views, not top-level tabs. */
   back?: boolean;
   action?: React.ReactNode;
@@ -25,22 +35,32 @@ export function ColumnHeader({
   const router = useRouter();
   return (
     <header className="ws-head sticky top-0 z-30">
-      <div className="flex items-center gap-5 px-4 py-2.5">
-        {back && (
-          <button
-            onClick={() => router.back()}
-            aria-label="Back"
-            className="ws-press -ml-2 rounded-full p-2 text-heading transition-colors hover:bg-white/10"
-          >
-            <IconArrowLeft className="h-5 w-5" />
-          </button>
-        )}
-        <div className="min-w-0 flex-1">
-          <h1 className="ws-display truncate text-xl">{title}</h1>
-          {subtitle && <p className="truncate text-[13px] text-meta">{subtitle}</p>}
+      {/* The heading stays in the accessibility tree whichever way this
+          renders — a page needs exactly one h1 whether or not it draws one. */}
+      {hideTitle && <h1 className="sr-only">{title}</h1>}
+
+      {/* With the title hidden this row exists only to carry a back arrow or
+          an action; with neither, it would be an empty band of padding. */}
+      {(!hideTitle || back || action) && (
+        <div className="flex items-center gap-5 px-4 py-2.5">
+          {back && (
+            <button
+              onClick={() => router.back()}
+              aria-label="Back"
+              className="ws-press -ml-2 rounded-full p-2 text-heading transition-colors hover:bg-white/10"
+            >
+              <IconArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          {!hideTitle && (
+            <div className="min-w-0 flex-1">
+              <h1 className="ws-display truncate text-xl">{title}</h1>
+              {subtitle && <p className="truncate text-[13px] text-meta">{subtitle}</p>}
+            </div>
+          )}
+          {action}
         </div>
-        {action}
-      </div>
+      )}
       {children}
     </header>
   );
