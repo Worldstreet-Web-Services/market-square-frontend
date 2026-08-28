@@ -316,15 +316,17 @@ function StoryViewer({
   const storyKeyRef = useRef(storyKey);
   const videoRef = useRef<HTMLVideoElement>(null);
   /**
-   * Sound is OFF on open and stays wherever the viewer last put it.
+   * Sound is ON on open and stays wherever the viewer last put it.
    *
-   * It cannot default to on: browsers only autoplay muted media, so an unmuted
-   * first frame is not "a story with sound", it is a story that never starts.
-   * Unmuting from the button is a user gesture, which is exactly what the
-   * autoplay policy asks for. Holding the choice across stories is the
-   * Instagram behaviour — nobody wants to re-enable sound on every clip.
+   * The viewer is only ever opened by tapping a story ring, and that click is
+   * the user gesture the autoplay policy asks for — so unmuted playback is
+   * normally allowed. "Normally" is not "always" — a browser with no media
+   * engagement for the origin can still refuse — which is why the play below
+   * catches the rejection and drops to muted rather than leaving the viewer
+   * on a frozen first frame. Holding the choice across stories is the
+   * Instagram behaviour — nobody wants to set sound on every clip.
    */
-  const [soundOn, setSoundOn] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
   /**
    * The clip's real length, tagged with the story it was measured from.
    *
@@ -394,9 +396,22 @@ function StoryViewer({
   useEffect(() => {
     const node = videoRef.current;
     if (!node) return;
-    if (paused) node.pause();
-    else void node.play().catch(() => {});
-  }, [paused, storyKey]);
+    if (paused) {
+      node.pause();
+      return;
+    }
+    let cancelled = false;
+    void node.play().catch(() => {
+      // The only rejection worth acting on is the autoplay policy refusing
+      // SOUND. Retry muted so the story runs; the button turns it back on.
+      if (cancelled || !soundOn) return;
+      setSoundOn(false);
+      void node.play().catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [paused, soundOn, storyKey]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

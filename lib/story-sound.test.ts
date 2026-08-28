@@ -25,10 +25,14 @@ describe("story video sound", () => {
     assert.ok(!decorative.includes("muted={"), "backdrop is never bound to the setting");
   });
 
-  // Sound cannot default to on: browsers only autoplay muted media, so an
-  // unmuted first frame is a story that never starts.
-  test("sound starts off so autoplay is not blocked", () => {
-    assert.match(source, /const \[soundOn, setSoundOn\] = useState\(false\)/);
+  // Sound defaults to ON — the viewer only opens from a tap, which is the
+  // gesture the autoplay policy asks for. The refusal path is what keeps that
+  // safe: a rejected play() drops to muted and plays, rather than leaving the
+  // story frozen on its first frame.
+  test("sound starts on, with a muted retry when autoplay refuses", () => {
+    assert.match(source, /const \[soundOn, setSoundOn\] = useState\(true\)/);
+    const play = source.slice(source.indexOf("if (cancelled || !soundOn) return;"));
+    assert.match(play, /setSoundOn\(false\);\s*void node\.play\(\)/);
   });
 
   // Cutting every clip at the picture duration is why sound "did not work" —
