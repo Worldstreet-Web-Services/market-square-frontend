@@ -15,15 +15,15 @@ Open http://localhost:3000. With no environment variables set the app runs fully
 
 Copy `.env.example` to `.env.local` and fill in what you have:
 
-| Variable | Purpose |
-| --- | --- |
-| `WSAPI_BASE_URL` | Platform gateway base URL. The BFF proxy forwards to `${WSAPI_BASE_URL}/v1/market-square/*`. **Unset ⇒ fixture mode.** |
-| `NEXT_PUBLIC_PRIVY_APP_ID` | Privy app id (client). Unset ⇒ demo auth: a signed-in demo session is assumed. |
-| `PRIVY_APP_SECRET` | Privy app secret (server). Required with the app id for server-side token verification. |
-| `NEXT_PUBLIC_ARK_APP_URL` | The deployed Ark app. Defaults to `https://www.tsionark.com`, verified rather than assumed (it serves `/dashboard`, `/activity` and `/api/square/symbols`, and its title is "Ark"). NOT `worldstreetgold.com`, which is the marketing site, and NOT `dashboard.worldstreetgold.com`, which is a Clerk app. Drives cross-product deep links and the `$TICKER` catalogue together. A `trade` link is unaffected — it resolves to a public block explorer. |
-| `NEXT_PUBLIC_WORLDSTREET_URL` | Optional. Destination for the `WorldStreet` navigation entry. Defaults to `https://worldstreetgold.com`. Separate from `NEXT_PUBLIC_ARK_APP_URL` so setting one does not silently activate the other's deep links. |
-| `NEXT_PUBLIC_MS_VIP_ACCESS_ENABLED` | Governance flag. Enables VIP ticket selection only after access rules are approved. Defaults off. |
-| `NEXT_PUBLIC_MS_LIVE_GIFTS_ENABLED` | Governance flag. Enables live KASH gifts only after ledger and settlement approval. Defaults off. |
+| Variable                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WSAPI_BASE_URL`                    | Platform gateway base URL. The BFF proxy forwards to `${WSAPI_BASE_URL}/v1/market-square/*`. **Unset ⇒ fixture mode.**                                                                                                                                                                                                                                                                                                                                  |
+| `NEXT_PUBLIC_PRIVY_APP_ID`          | Privy app id (client). Unset ⇒ demo auth: a signed-in demo session is assumed.                                                                                                                                                                                                                                                                                                                                                                          |
+| `PRIVY_APP_SECRET`                  | Privy app secret (server). Required with the app id for server-side token verification.                                                                                                                                                                                                                                                                                                                                                                 |
+| `NEXT_PUBLIC_ARK_APP_URL`           | The deployed Ark app. Defaults to `https://www.tsionark.com`, verified rather than assumed (it serves `/dashboard`, `/activity` and `/api/square/symbols`, and its title is "Ark"). NOT `worldstreetgold.com`, which is the marketing site, and NOT `dashboard.worldstreetgold.com`, which is a Clerk app. Drives cross-product deep links and the `$TICKER` catalogue together. A `trade` link is unaffected — it resolves to a public block explorer. |
+| `NEXT_PUBLIC_WORLDSTREET_URL`       | Optional. Destination for the `WorldStreet` navigation entry. Defaults to `https://worldstreetgold.com`. Separate from `NEXT_PUBLIC_ARK_APP_URL` so setting one does not silently activate the other's deep links.                                                                                                                                                                                                                                      |
+| `NEXT_PUBLIC_MS_VIP_ACCESS_ENABLED` | Governance flag. Enables VIP ticket selection only after access rules are approved. Defaults off.                                                                                                                                                                                                                                                                                                                                                       |
+| `NEXT_PUBLIC_MS_LIVE_GIFTS_ENABLED` | Governance flag. Enables live KASH gifts only after ledger and settlement approval. Defaults off.                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Fixture mode
 
@@ -33,15 +33,29 @@ When Privy is also unconfigured, every caller is treated as the demo user (`@dem
 
 ## Scripts
 
-| Script | What it does |
-| --- | --- |
-| `pnpm dev` | Dev server |
-| `pnpm build` | Production build |
-| `pnpm start` | Serve the production build |
-| `pnpm lint` | ESLint |
-| `pnpm typecheck` | `tsc --noEmit` |
+| Script           | What it does               |
+| ---------------- | -------------------------- |
+| `pnpm dev`       | Dev server                 |
+| `pnpm build`     | Production build           |
+| `pnpm start`     | Serve the production build |
+| `pnpm lint`      | ESLint                     |
+| `pnpm typecheck` | `tsc --noEmit`             |
 
 All three gates — `pnpm lint`, `pnpm typecheck`, `pnpm build` — must be green before merging.
+
+## Paying with KASH
+
+Adding a feature that costs money? Read **[`docs/PAYING_WITH_KASH.md`](docs/PAYING_WITH_KASH.md)** first.
+
+The short version: who receives the money decides the mechanism. Paying the
+**platform** (tickets, store items, verification) goes through the kash rail;
+paying a **person** (tips) is a transfer the user signs themselves — the
+backend cannot move one user's tokens to another. Either way the user signs an
+off-chain **permit** first, which is gasless for them.
+
+One thing worth knowing before you price anything: a rail debit **burns** the
+KASH, so in-app purchases are a supply sink rather than revenue. The doc
+explains why and what to change if that is not the intent.
 
 ## Architecture
 
