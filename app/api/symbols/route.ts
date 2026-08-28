@@ -20,14 +20,14 @@ const ARK = (process.env.NEXT_PUBLIC_ARK_APP_URL ?? "https://www.tsionark.com").
   "",
 );
 
-export const revalidate = 300;
+export const revalidate = 60;
 
 export async function GET() {
   // Unset means we do not know where Ark is, and guessing an origin produces
   // links that look fine and land on somebody else's 404.
   if (!ARK) {
     return NextResponse.json(
-      { symbols: [] },
+      { symbols: [], markets: [], asOf: null },
       { headers: { "Cache-Control": "public, s-maxage=300" } },
     );
   }
@@ -38,20 +38,24 @@ export async function GET() {
       signal: AbortSignal.timeout(4000),
     });
     if (!upstream.ok) throw new Error(String(upstream.status));
-    const body = (await upstream.json()) as { symbols?: unknown };
+    const body = (await upstream.json()) as { symbols?: unknown; markets?: unknown; asOf?: unknown };
     const symbols = Array.isArray(body.symbols)
       ? body.symbols.filter((value): value is string => typeof value === "string")
       : [];
+    // Forwarded, not dropped. This relayed only `symbols`, so Ark published
+    // thirteen priced markets and the square received none — the chips could
+    // never render however right the rest of the chain was.
+    const markets = Array.isArray(body.markets) ? body.markets : [];
     return NextResponse.json(
-      { symbols },
-      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600" } },
+      { symbols, markets, asOf: typeof body.asOf === "string" ? body.asOf : null },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" } },
     );
   } catch {
     // An empty list means "mark nothing up", which is the honest degradation:
     // a ticker renders as plain text rather than as a chip that leads nowhere.
     // Never an error — a catalogue being unreachable must not break a feed.
     return NextResponse.json(
-      { symbols: [] },
+      { symbols: [], markets: [], asOf: null },
       { headers: { "Cache-Control": "public, s-maxage=30" } },
     );
   }
