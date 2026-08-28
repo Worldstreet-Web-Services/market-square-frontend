@@ -27,6 +27,17 @@ describe("composer toolbar", () => {
   // Every tool holds its size so the Post button can never squeeze the strip
   // into a second line.
   test("the toolbar is a single non-wrapping row", () => {
-    assert.match(source, /flex flex-nowrap items-center gap-1 border-t/);
+    assert.match(source, /flex min-w-0 flex-nowrap items-center gap-0\.5 border-t/);
+  });
+
+  // Nothing shrinks, so the row's minimum width IS the sum of its parts — on a
+  // phone that pushed Post off the edge of a sheet that clips. The parts get
+  // smaller below `sm` instead: tighter gaps, tighter icon padding, and the
+  // "24h" label drops to its glyph.
+  test("the strip has a narrower phone size", () => {
+    assert.match(source, /gap-0\.5 border-t pt-2\.5 sm:gap-1/);
+    assert.match(source, /rounded-full p-1\.5 transition-colors hover:bg-white\/10 sm:p-2/);
+    assert.match(source, /<span className="hidden sm:inline">24h<\/span>/);
+    assert.match(source, /bg-accent px-4 .*sm:px-5/);
   });
 });
