@@ -19,6 +19,12 @@ export function LiveNowRail() {
   const soonItems = upcoming.data?.items ?? [];
   const pending = live.isPending || upcoming.isPending;
 
+  // Nothing live, nothing scheduled, nothing still loading: the module has no
+  // content, and the card it used to draw for that case is what shows up at
+  // the bottom of the rail as a bare pair of hairlines. A rail module with
+  // nothing to say renders nothing — the same call TicketsRail already makes.
+  if (!pending && liveItems.length === 0 && soonItems.length === 0) return null;
+
   return (
     <section className="ws-rail overflow-hidden">
       <div className="flex items-center justify-between px-4 pt-3 pb-2">
@@ -43,12 +49,6 @@ export function LiveNowRail() {
             </div>
           ))}
         </div>
-      )}
-
-      {!pending && liveItems.length === 0 && soonItems.length === 0 && (
-        <p className="px-4 pb-4 text-sm text-meta">
-          Nothing live right now. Streams appear here the second they start.
-        </p>
       )}
 
       <ul>
