@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useTrackNavHistory } from "@/lib/nav-history";
+import { type RailState, railFromDrag, railWidth, toggleRail } from "@/lib/sidebar-rail";
+import { useRailState } from "@/lib/sidebar-rail-store";
 import { allowsCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,6 +26,7 @@ import {
   IconBell,
   IconBookmark,
   IconCalendar,
+  IconChevronLeft,
   IconCamera,
   IconDots,
   IconExternal,
@@ -213,7 +216,7 @@ function NavLink({
       // becomes current. 46px tall, 199px wide once the rail is labelled;
       // below xl it collapses to the icon rail and sizes to its glyph.
       className={cn(
-        "group relative box-border flex h-[46px] items-center gap-3 rounded-xl px-3.5 py-2.5 transition-colors xl:w-[199px]",
+        "group relative box-border flex h-[46px] items-center gap-3 rounded-xl px-3.5 py-2.5 transition-colors",
         active
           ? // The tint, border and glyph are all one purple: --color-create.
             // The design measured #AD46FF here, a third purple the system does
@@ -235,14 +238,14 @@ function NavLink({
           size and line-height are the design's. */}
       <span
         className={cn(
-          "hidden flex-col text-[12px] font-bold leading-4 xl:flex",
+          "hidden min-w-0 flex-col truncate text-[12px] font-bold leading-4 group-data-[rail=full]/rail:flex",
           active ? "text-white" : "text-body"
         )}
       >
         {item.label}
       </span>
-      {/* Icon-rail tooltip, since the label is hidden below xl. */}
-      <span className="ws-overlay pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block xl:!hidden">
+      {/* Icon-rail tooltip: the only place the label lives while collapsed. */}
+      <span className="ws-overlay pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-lg px-2.5 py-1 text-xs text-body group-hover:block group-data-[rail=full]/rail:!hidden">
         {item.label}
       </span>
     </Link>
@@ -269,7 +272,7 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
   const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   return (
-    <div className="relative xl:hidden">
+    <div className="relative group-data-[rail=full]/rail:hidden">
       <button
         aria-label="More"
         aria-expanded={open}
@@ -316,11 +319,11 @@ function AccountChip() {
     return (
       <button
         onClick={login}
-        className="ws-press flex w-full items-center justify-center gap-2 rounded-full bg-accent p-3 font-bold text-ink xl:px-6"
+        className="ws-press flex w-full items-center justify-center gap-2 rounded-full bg-accent p-3 font-bold text-ink group-data-[rail=full]/rail:px-6"
         aria-label="Sign in"
       >
-        <IconUser className="h-5 w-5 xl:hidden" />
-        <span className="hidden xl:block">Sign in</span>
+        <IconUser className="h-5 w-5 group-data-[rail=full]/rail:hidden" />
+        <span className="hidden group-data-[rail=full]/rail:block">Sign in</span>
       </button>
     );
   }
@@ -334,7 +337,7 @@ function AccountChip() {
         className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 transition-colors hover:bg-white/8"
       >
         <Avatar name={me.data?.displayName ?? "Me"} seed={me.data?.id} src={me.data?.avatarUrl} size={34} />
-        <span className="hidden min-w-0 flex-1 xl:block">
+        <span className="hidden min-w-0 flex-1 group-data-[rail=full]/rail:block">
           <span className="block truncate text-[12px] font-bold leading-4 text-white">
             {me.data?.displayName ?? "You"}
           </span>
@@ -342,7 +345,7 @@ function AccountChip() {
             @{me.data?.username ?? "…"}
           </span>
         </span>
-        <IconDots className="hidden h-4 w-4 shrink-0 text-meta xl:block" />
+        <IconDots className="hidden h-4 w-4 shrink-0 text-meta group-data-[rail=full]/rail:block" />
       </Link>
       <div className="ws-glass absolute bottom-full left-0 z-50 mb-2 hidden w-56 rounded-2xl p-1.5 group-focus-within:block group-hover:block">
         <Link
@@ -362,6 +365,67 @@ function AccountChip() {
   );
 }
 
+
+/**
+ * The drag edge between the nav and the page.
+ *
+ * A `separator` with `tabIndex` rather than a bare div: resizing is a real
+ * control, and a control that only answers a mouse drag does not exist for
+ * anyone navigating by keyboard. Arrows resize, Enter collapses, and the
+ * double-click shortcut matches every other resizable pane.
+ */
+function RailHandle({
+  rail,
+  preview,
+  commit,
+}: {
+  rail: RailState;
+  preview: (next: RailState) => void;
+  commit: (next: RailState) => void;
+}) {
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    // The rail at the START of the drag: `railFromDrag` reads the remembered
+    // labelled width from it, which must not move while the pointer does.
+    const start = rail;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+
+    const move = (moved: PointerEvent) => preview(railFromDrag(moved.clientX, start));
+    const up = (ended: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      commit(railFromDrag(ended.clientX, start));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      aria-valuenow={railWidth(rail)}
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onDoubleClick={() => commit(toggleRail(rail))}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") commit(railFromDrag(railWidth(rail) - 16, rail));
+        else if (event.key === "ArrowRight") commit(railFromDrag(railWidth(rail) + 16, rail));
+        else if (event.key === "Enter" || event.key === " ") commit(toggleRail(rail));
+        else return;
+        event.preventDefault();
+      }}
+      // Inside the rail, not straddling its edge: the aside clips its own
+      // overflow, and a handle hanging past that edge is invisible to hit
+      // testing exactly where it looks grabbable.
+      className="group/handle absolute inset-y-0 right-0 z-50 hidden w-2.5 cursor-col-resize md:block"
+    >
+      <span className="absolute inset-y-0 right-0 w-[3px] rounded-full bg-transparent transition-colors group-hover/handle:bg-create/50 group-focus-visible/handle:bg-create" />
+    </div>
+  );
+}
+
 function Sidebar({
   pathname,
   onCompose,
@@ -376,6 +440,8 @@ function Sidebar({
   // Both badges come from one global endpoint, never from a loaded page.
   const unread = useUnread();
 
+  const { rail, preview, commit } = useRailState();
+
   const visible = visibleNav({
     authenticated,
     isAdmin: Boolean(me.data?.isAdmin),
@@ -388,24 +454,47 @@ function Sidebar({
     // account chip, View profile — was simply unreachable: clipped, with no
     // way to scroll to it. The scrollbar is hidden because a rail that shows
     // one looks broken next to the timeline's.
-    <aside className="ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-y-auto border-r bg-[#0f0f0f] px-3 py-5 [scrollbar-width:none] md:flex xl:w-[224px] xl:items-stretch [&::-webkit-scrollbar]:hidden">
+    //
+    // `data-rail` is what every label, glyph and pad inside reads to know
+    // which state it is in. It replaced a wall of `xl:` variants: a breakpoint
+    // decides the rail from the WINDOW, which is a guess about the reader —
+    // the same 1280px laptop can want the labels or want the room.
+    <aside
+      data-rail={rail.mode}
+      style={{ width: railWidth(rail) }}
+      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden border-r bg-[#0f0f0f] px-3 py-5 [scrollbar-width:none] md:flex data-[rail=full]:items-stretch [&::-webkit-scrollbar]:hidden"
+    >
+      <RailHandle rail={rail} preview={preview} commit={commit} />
       {/* The wordmark lockup sits over its own hairline. */}
       <Link
         href="/"
         aria-label="Market Square home"
         title="Market Square"
-        className="ws-press mb-4 flex items-center justify-center border-b border-white/10 pb-4 xl:justify-start xl:px-2.5"
+        className="ws-press mb-4 flex items-center justify-center border-b border-white/10 pb-4 group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:px-2.5"
       >
         {/* The icon rail wears the mark alone; the expanded sidebar wears the
             full lockup. Heights are set so the TYPE inside the lockup reads at
             roughly the size the old type-only wordmark did — the lockup is
             ~3.3:1 where that asset was ~12.8:1, so matching the old height
             would have shrunk the type to about 9px. */}
-        <LogoMark size={28} className="xl:hidden" />
-        <Wordmark height={30} className="hidden xl:block" />
+        <LogoMark size={28} className="group-data-[rail=full]/rail:hidden" />
+        <Wordmark height={30} className="hidden group-data-[rail=full]/rail:block" />
       </Link>
 
-      <nav className="flex flex-col gap-1" aria-label="Primary">
+      {/* The explicit control. The drag edge is discoverable only once you
+          know it is there; this says the rail collapses. */}
+      <button
+        onClick={() => commit(toggleRail(rail))}
+        aria-label={rail.mode === "icon" ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={rail.mode === "full"}
+        className="ws-press mb-2 flex h-8 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
+      >
+        <IconChevronLeft
+          className={cn("h-4 w-4 transition-transform", rail.mode === "icon" && "rotate-180")}
+        />
+      </button>
+
+      <nav className="flex w-full flex-col gap-1" aria-label="Primary">
         {visible
           .filter((item) => !item.secondary)
           .map((item) => (
@@ -417,7 +506,7 @@ function Sidebar({
             />
           ))}
         {/* Expanded rail shows everything; the icon rail folds the rest away. */}
-        <div className="hidden flex-col gap-1 xl:flex">
+        <div className="hidden flex-col gap-1 group-data-[rail=full]/rail:flex">
           {visible
             .filter((item) => item.secondary)
             .map((item) => (
@@ -432,30 +521,30 @@ function Sidebar({
           It opens the composer in place — it used to link to `/?compose=1`,
           which meant reaching for Post from anywhere threw the reader back to
           home and lost their place. */}
-      <div className="mt-4 flex flex-col items-center gap-2 xl:items-stretch xl:px-1">
+      <div className="mt-4 flex flex-col items-center gap-2 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-1">
         {authenticated && onCompose && (
           <button
             onClick={onCompose}
-            className="ws-press flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white xl:h-13 xl:text-[17px]"
+            className="ws-press flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:text-[17px]"
             aria-label="Post gist"
           >
-            <IconPlus className="h-6 w-6 xl:hidden" />
-            <span className="hidden xl:block">Post gist</span>
+            <IconPlus className="h-6 w-6 group-data-[rail=full]/rail:hidden" />
+            <span className="hidden group-data-[rail=full]/rail:block">Post gist</span>
           </button>
         )}
         <Link
           href="/studio"
-          className="ws-press flex h-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 xl:h-13"
+          className="ws-press flex h-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 group-data-[rail=full]/rail:h-13"
           aria-label="Go live"
         >
           <IconCamera className="h-5 w-5" />
-          <span className="hidden xl:block">Go live</span>
+          <span className="hidden group-data-[rail=full]/rail:block">Go live</span>
         </Link>
       </div>
 
       <div className="mt-auto w-full border-t border-white/10 pt-4">
         {broadcast.live && (
-          <div className="mb-2 flex justify-center xl:justify-start xl:pl-2">
+          <div className="mb-2 flex justify-center group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:pl-2">
             <OnAirPill streamId={broadcast.streamId} compact />
           </div>
         )}
@@ -696,7 +785,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] justify-center">
+    // Full width. The shell used to cap at 1600px, so a wider monitor drew the
+    // whole product in a 1600px band with the slack parked at the right edge —
+    // the app looked left-aligned on the screens with the most room to give.
+    // The cap is gone and the timeline takes the extra width from xl up.
+    <div className="flex w-full">
       <Sidebar pathname={pathname} onCompose={canCompose ? () => setComposeOpen(true) : undefined} />
 
       {/* Mobile top strip: wordmark plus the two things worth reaching from
@@ -744,7 +837,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
               // Home carries the design's wider timeline; the other column
               // surfaces stay at the narrower reading width.
-              !wide && (pathname === "/" ? "md:max-w-[720px]" : "md:max-w-[600px]")
+              // The reading caps hold while the sidebar and rail leave little
+              // to spare; from xl up the column takes whatever is left rather
+              // than sitting inside a band of dead space.
+              !wide &&
+                (pathname === "/"
+                  ? "md:max-w-[720px] xl:max-w-none"
+                  : "md:max-w-[600px] xl:max-w-none")
             )}
           >
             {children}
