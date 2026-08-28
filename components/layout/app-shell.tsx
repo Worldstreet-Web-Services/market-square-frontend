@@ -834,16 +834,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               // offending row. Rails that are MEANT to scroll set their own
               // overflow-x-auto and are unaffected, and anything that needs a
               // horizontal scrollbar must still opt into one explicitly.
-              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
-              // Home carries the design's wider timeline; the other column
-              // surfaces stay at the narrower reading width.
-              // The reading caps hold while the sidebar and rail leave little
-              // to spare; from xl up the column takes whatever is left rather
-              // than sitting inside a band of dead space.
-              !wide &&
-                (pathname === "/"
-                  ? "md:max-w-[720px] xl:max-w-none"
-                  : "md:max-w-[600px] xl:max-w-none")
+              //
+              // No max-width. The column had one (720px on home, 600px
+              // elsewhere) and the shell had another (1600px), so the layout
+              // stopped growing while the window kept going — 125px of dead
+              // black at 1440, 197px at 1512, 445px at 1920, always parked on
+              // the right, where it reads as the whole product shoved to one
+              // side. Every pane flexes to the window it is in instead.
+              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]"
             )}
           >
             {children}
