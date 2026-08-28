@@ -319,7 +319,7 @@ function AccountChip() {
     return (
       <button
         onClick={login}
-        className="ws-press flex w-full items-center justify-center gap-2 rounded-full bg-accent p-3 font-bold text-ink group-data-[rail=full]/rail:px-6"
+        className="ws-press flex h-12 w-12 items-center justify-center gap-2 self-center rounded-full bg-accent font-bold text-ink group-data-[rail=full]/rail:h-auto group-data-[rail=full]/rail:w-full group-data-[rail=full]/rail:p-3 group-data-[rail=full]/rail:px-6"
         aria-label="Sign in"
       >
         <IconUser className="h-5 w-5 group-data-[rail=full]/rail:hidden" />
@@ -536,7 +536,10 @@ function Sidebar({
         {authenticated && onCompose && (
           <button
             onClick={onCompose}
-            className="ws-press flex h-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:text-[17px]"
+            // Square while the rail is icons — the button has no label to give it
+            // width there, so a full-height pill came out 22px wide and read as
+            // a squashed sliver. It takes the rail's full width once labelled.
+            className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:w-full group-data-[rail=full]/rail:text-[17px]"
             aria-label="Post gist"
           >
             <IconPlus className="h-6 w-6 group-data-[rail=full]/rail:hidden" />
@@ -545,7 +548,7 @@ function Sidebar({
         )}
         <Link
           href="/studio"
-          className="ws-press flex h-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 group-data-[rail=full]/rail:h-13"
+          className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:w-full"
           aria-label="Go live"
         >
           <IconCamera className="h-5 w-5" />
