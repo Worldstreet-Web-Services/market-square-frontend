@@ -354,7 +354,11 @@ function InlineComment({ postId, onOpenThread }: { postId: string; onOpenThread:
           className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700 disabled:opacity-60"
         />
       )}
-      {!sent && <EmojiPicker onPick={insert} label="Add an emoji to your reply" />}
+      {!sent && (
+        // Right-aligned: this button sits at the end of the reply row, so a
+        // left-anchored panel would open off the edge of the card.
+        <EmojiPicker onPick={insert} label="Add an emoji to your reply" align="right" />
+      )}
       {!sent && text.trim() && (
         <button
           onClick={submit}
