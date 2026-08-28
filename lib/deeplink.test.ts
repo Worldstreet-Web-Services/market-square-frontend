@@ -89,3 +89,20 @@ describe("a shared trade opens the transaction, not the reader's own activity", 
     assert.equal(resolveCta({ kind: "trade", ref: "moon-mainnet:0xabc" }), null);
   });
 });
+
+describe("a ticker opens Ark's buy sheet", () => {
+  // It used to resolve as `market`, which routes to /prediction/<ref> — a
+  // prediction market, a different product. $ETH landed on /prediction/ETH,
+  // which does not exist and simply spins.
+  it("points at ?buy=SYMBOL on the dashboard, not a prediction market", () => {
+    const link = resolveDeepLink({ kind: "buy", ref: "eth" });
+    assert.ok(link.available);
+    assert.match(link.href, /\/dashboard\?buy=ETH$/);
+    assert.ok(!link.href.includes("/prediction/"));
+    assert.equal(link.external, true);
+  });
+
+  it("upper-cases and encodes the symbol", () => {
+    assert.match(resolveDeepLink({ kind: "buy", ref: "cbbtc" }).href, /buy=CBBTC$/);
+  });
+});
