@@ -718,7 +718,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           inside one flex-column beside the sidebar. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <Breadcrumb pathname={pathname} />
-        <div className="flex min-w-0 flex-1 justify-center">
+        {/* justify-START, not center. Centering the column+rail group inside
+            the leftover width of the 1600px shell split that slack in two and
+            left a dead band between the sidebar and the column — the column
+            read as floating away from the nav that selects it. Packed left,
+            the column sits against the sidebar and the slack collects once, at
+            the outer edge, where the shell's own mx-auto already balances it. */}
+        <div className="flex min-w-0 flex-1 justify-start">
           <main
             className={cn(
               // Padding, not margin, and from the shared chrome vars rather

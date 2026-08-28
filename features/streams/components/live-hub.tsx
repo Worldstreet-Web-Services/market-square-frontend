@@ -151,7 +151,10 @@ export function LiveHub() {
 
   return (
     <>
-      <ColumnHeader title="Live" subtitle="Streams and sessions on the square">
+      {/* Title hidden: the breadcrumb above reads "Ark Ecosystem / Live" and
+          the sidebar marks Live as the current section, so drawing it a third
+          time spends a band of vertical space to say nothing new. */}
+      <ColumnHeader title="Live" hideTitle>
         <ColumnTabs tabs={TABS} value={section} onChange={setSection} />
       </ColumnHeader>
 
