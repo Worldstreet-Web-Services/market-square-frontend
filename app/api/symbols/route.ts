@@ -15,7 +15,10 @@ import { NextResponse } from "next/server";
 // The Ark APP, not the marketing site: NEXT_PUBLIC_WORLDSTREET_URL points at
 // worldstreetgold.com, which serves the landing page and 404s every product
 // route. This is the same origin the deep links use.
-const ARK = (process.env.NEXT_PUBLIC_ARK_APP_URL ?? "").replace(/\/+$/, "");
+const ARK = (process.env.NEXT_PUBLIC_ARK_APP_URL ?? "https://www.tsionark.com").replace(
+  /\/+$/,
+  "",
+);
 
 export const revalidate = 300;
 

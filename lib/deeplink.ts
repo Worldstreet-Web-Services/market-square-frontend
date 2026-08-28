@@ -15,7 +15,7 @@ export interface DeepLink {
  * `NEXT_PUBLIC_ARK_APP_URL` still overrides it for a staging build.
  */
 const ARK_APP_BASE = (
-  process.env.NEXT_PUBLIC_ARK_APP_URL ?? ""
+  process.env.NEXT_PUBLIC_ARK_APP_URL ?? "https://www.tsionark.com"
 ).replace(/\/+$/, "");
 
 export function arkAppConfigured(): boolean {

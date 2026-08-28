@@ -11,13 +11,15 @@ test("a source is threaded onto internal destinations", () => {
   assert.equal(resolveDeepLink({ kind: "store_item", ref: "x" }, "home").href, "/store/x?source=home");
 });
 
-test("Ark product links stay inert until an origin is configured", () => {
-  // Guessed twice, wrong twice: worldstreetgold.com is the marketing site and
-  // dashboard.worldstreetgold.com is a Clerk app, while Ark runs on Privy. A
-  // guessed origin does not fail loudly — it produces links that look fine and
-  // land on somebody else's 404. Unset must therefore mean inert.
-  assert.equal(resolveDeepLink({ kind: "market", ref: "m1" }).available, false);
-  assert.equal(resolveCta({ kind: "listing", ref: "x" }), null);
+test("Ark product links resolve against the verified Ark origin", () => {
+  // www.tsionark.com, confirmed: it serves /dashboard, /activity and
+  // /api/square/symbols, and its title is "Ark". Two earlier guesses were
+  // wrong — worldstreetgold.com is the marketing site and
+  // dashboard.worldstreetgold.com is a Clerk app while Ark runs on Privy — and
+  // a wrong origin does not fail loudly, it lands on somebody else's 404.
+  const link = resolveDeepLink({ kind: "market", ref: "m1" });
+  assert.equal(link.available, true);
+  assert.match(link.href, /^https:\/\/www\.tsionark\.com\//);
   // A section with no ref is the section itself, never ".../listings/".
   assert.ok(!resolveDeepLink({ kind: "listing", ref: "" }).href.endsWith("/"));
 });
