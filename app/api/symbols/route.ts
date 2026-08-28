@@ -15,13 +15,22 @@ import { NextResponse } from "next/server";
 // The Ark APP, not the marketing site: NEXT_PUBLIC_WORLDSTREET_URL points at
 // worldstreetgold.com, which serves the landing page and 404s every product
 // route. This is the same origin the deep links use.
-const ARK = (
-  process.env.NEXT_PUBLIC_ARK_APP_URL ?? "https://dashboard.worldstreetgold.com"
-).replace(/\/+$/, "");
+const ARK = (process.env.NEXT_PUBLIC_ARK_APP_URL ?? "https://www.tsionark.com").replace(
+  /\/+$/,
+  "",
+);
 
 export const revalidate = 300;
 
 export async function GET() {
+  // Unset means we do not know where Ark is, and guessing an origin produces
+  // links that look fine and land on somebody else's 404.
+  if (!ARK) {
+    return NextResponse.json(
+      { symbols: [] },
+      { headers: { "Cache-Control": "public, s-maxage=300" } },
+    );
+  }
   try {
     const upstream = await fetch(`${ARK}/api/square/symbols`, {
       next: { revalidate },
