@@ -78,6 +78,9 @@ export function invalidateContentSurfaces(queryClient: QueryClient) {
  */
 const FOLLOW_SURFACES: string[][] = [
   ["ms", "me"],
+  // Explore's People tab pages `GET /profiles`, whose rows carry the follow
+  // edge. Left out of this list, the tab kept serving its pre-click answer.
+  ["ms", "people"],
   ["ms", "feed", "following"],
   ["ms", "stories"],
   ["ms", "spotlight"],
@@ -94,4 +97,75 @@ export function invalidateFollowSurfaces(queryClient: QueryClient, username: str
   for (const queryKey of FOLLOW_SURFACES) {
     queryClient.invalidateQueries({ queryKey });
   }
+}
+
+/**
+ * Stamp a follow the viewer just made onto the profiles already sitting in
+ * list caches.
+ *
+ * A list payload that CARRIES `isFollowing` beats the session intent by
+ * design — the server is the truth whenever it has an opinion. That is right
+ * on a refetch and wrong the instant a click lands: the cached page still
+ * holds the pre-click answer, so the button would keep saying "Follow" until
+ * the invalidated query came back. Rewriting the cached rows keeps the server
+ * authoritative while making its recorded answer current.
+ *
+ * Recursive because the same profile appears at different depths per surface —
+ * bare in `/profiles`, nested under `result.profile` in `/search`, under
+ * `stream.owner` and `post.author` elsewhere. Matching on id plus the presence
+ * of the field patches every one of them without a shape list to maintain.
+ */
+export function patchFollowInCaches(
+  queryClient: QueryClient,
+  profileId: string,
+  following: boolean
+) {
+  for (const queryKey of FOLLOW_LIST_CACHES) {
+    queryClient.setQueriesData({ queryKey }, (data: unknown) =>
+      patchFollowInData(data, profileId, following)
+    );
+  }
+}
+
+/** List caches that render follow controls from an embedded profile. */
+const FOLLOW_LIST_CACHES: string[][] = [
+  ["ms", "people"],
+  ["ms", "discovery"],
+  ["ms", "spotlight"],
+];
+
+/** Pure cache rewrite, exported for test. Returns `node` itself when nothing matched. */
+export function patchFollowInData(node: unknown, profileId: string, following: boolean): unknown {
+  if (Array.isArray(node)) {
+    let changed = false;
+    const next = node.map((item) => {
+      const patched = patchFollowInData(item, profileId, following);
+      if (patched !== item) changed = true;
+      return patched;
+    });
+    return changed ? next : node;
+  }
+  if (!node || typeof node !== "object") return node;
+
+  const record = node as Record<string, unknown>;
+  if (record.id === profileId && "isFollowing" in record) {
+    if (record.isFollowing === following) return node;
+    const followerCount = record.followerCount;
+    return {
+      ...record,
+      isFollowing: following,
+      ...(typeof followerCount === "number"
+        ? { followerCount: Math.max(0, followerCount + (following ? 1 : -1)) }
+        : {}),
+    };
+  }
+
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    const patched = patchFollowInData(value, profileId, following);
+    if (patched !== value) changed = true;
+    next[key] = patched;
+  }
+  return changed ? next : node;
 }

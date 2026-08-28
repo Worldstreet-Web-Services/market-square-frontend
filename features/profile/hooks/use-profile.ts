@@ -4,7 +4,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
-import { invalidateFollowSurfaces, invalidateIdentitySurfaces } from "@/lib/api/invalidate";
+import {
+  invalidateFollowSurfaces,
+  invalidateIdentitySurfaces,
+  patchFollowInCaches,
+} from "@/lib/api/invalidate";
 import { trackMarketEvent } from "@/lib/analytics";
 import type { Profile } from "@/lib/api/schemas";
 import { useAuth } from "@/hooks/use-auth";
@@ -111,6 +115,10 @@ export function useFollow(profile: Profile) {
 
   const apply = (following: boolean) => {
     setFollowIntent(profile.id, following);
+    // Lists that carry `isFollowing` outrank the intent, so their cached rows
+    // have to move too or the control sits on the stale server answer until
+    // the refetch lands.
+    patchFollowInCaches(queryClient, profile.id, following);
     queryClient.setQueryData<Profile>(["ms", "profile", profile.username], (old) =>
       old
         ? {
