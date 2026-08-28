@@ -382,7 +382,12 @@ function Sidebar({
   });
 
   return (
-    <aside className="ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center border-r bg-[#0f0f0f] px-3 py-5 md:flex xl:w-[224px] xl:items-stretch">
+    // Scrolls when it does not fit. It is h-dvh with no overflow handling, so
+    // on a short laptop screen everything below the fold — Go live, the
+    // account chip, View profile — was simply unreachable: clipped, with no
+    // way to scroll to it. The scrollbar is hidden because a rail that shows
+    // one looks broken next to the timeline's.
+    <aside className="ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-y-auto border-r bg-[#0f0f0f] px-3 py-5 [scrollbar-width:none] md:flex xl:w-[224px] xl:items-stretch [&::-webkit-scrollbar]:hidden">
       {/* The wordmark lockup sits over its own hairline. */}
       <Link
         href="/"

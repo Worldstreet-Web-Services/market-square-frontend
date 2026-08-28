@@ -473,8 +473,7 @@ export function PostCard({
         )}
       </header>
 
-      {/* The design rules the identity row off from the body. */}
-      <hr className="ws-post-rule mt-4 border-t" />
+
 
       {/* mediaUrl carries both images and clips; the upload endpoint only
           issues mp4/webm for video, so extension sniffing is enough. */}
