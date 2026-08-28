@@ -50,12 +50,6 @@ export function RightRail() {
         <ExploreCategoriesRail />
         <LiveNowRail />
         <TicketsRail />
-
-        <p className="px-2 text-[11px] leading-[17.9px] text-white/40">
-          © {new Date().getFullYear()} WorldStreet Ecosystem • Market Square v1.0
-          <br />
-          Non-custodial • Self-sovereign • Powered by Tsion
-        </p>
       </div>
     </aside>
   );
