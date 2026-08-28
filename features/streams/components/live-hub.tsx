@@ -6,12 +6,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { IconSearch } from "@/components/ui/icons";
+import { cn } from "@/lib/cn";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useActivities, useStreamList } from "@/features/streams/hooks/use-streams";
 import { StreamCard } from "@/features/streams/components/stream-card";
 import { LiveHero } from "@/features/streams/components/live-hero";
-import { LiveRail } from "@/features/streams/components/live-rail";
+import { LiveCta } from "@/features/streams/components/live-cta";
+import { LiveSection } from "@/features/streams/components/live-section";
+import { IconSearchLive } from "@/features/streams/components/live-icons";
 import { ActivityRow } from "@/features/streams/components/upcoming-activity-row";
 import type { Stream } from "@/features/streams/lib/types";
 
@@ -27,10 +29,10 @@ const TABS: Array<{ value: Section; label: string; disabled?: boolean }> = [
   { value: "replay", label: "Replays", disabled: !MARKET_FLAGS.replays },
 ];
 
-// Rail headings for the categories the service actually issues. The design
-// draws "Trading" and "Religion", which are examples of this same shape — the
-// labels come from the live catalogue rather than being hard-coded to a demo,
-// and a category with nothing in it never renders a heading.
+// Headings for the categories the service issues. The design draws "Trading"
+// and "Religion" as examples of this same shape; the labels come from what is
+// actually live rather than being hard-coded to the mock, so a category the
+// backend adds appears without a frontend release.
 const CATEGORY_LABELS: Record<string, string> = {
   worldstreet: "WorldStreet",
   music: "Music",
@@ -38,6 +40,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   gaming: "Gaming",
   other: "Everything else",
 };
+
+const label = (key: string) => CATEGORY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 
 // Each empty section explains itself and offers the action that fills it.
 // `authed` actions are hidden from signed-out readers rather than walling them.
@@ -66,14 +70,8 @@ const EMPTY: Record<Section, SectionEmpty> = {
   },
 };
 
-/**
- * Groups live rooms into rails, biggest category first.
- *
- * Ordering by size rather than alphabetically keeps the busiest part of the
- * square at the top, which is what somebody scanning for a room to enter is
- * looking for.
- */
-function railsFor(streams: Stream[]): Array<{ key: string; title: string; streams: Stream[] }> {
+/** Groups live rooms by category, busiest first — what a scan wants at the top. */
+function groupByCategory(streams: Stream[]): Array<{ key: string; streams: Stream[] }> {
   const grouped = new Map<string, Stream[]>();
   for (const stream of streams) {
     const key = stream.category || "other";
@@ -82,14 +80,7 @@ function railsFor(streams: Stream[]): Array<{ key: string; title: string; stream
     else grouped.set(key, [stream]);
   }
   return [...grouped.entries()]
-    .map(([key, group]) => ({
-      key,
-      // An unrecognised category still gets a rail under its own name rather
-      // than being swallowed into "other": the service can add categories
-      // without a frontend release.
-      title: CATEGORY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1),
-      streams: group,
-    }))
+    .map(([key, group]) => ({ key, streams: group }))
     .sort((a, b) => b.streams.length - a.streams.length);
 }
 
@@ -98,6 +89,7 @@ function railsFor(streams: Stream[]): Array<{ key: string; title: string; stream
 export function LiveHub() {
   const [section, setSection] = useState<Section>("live");
   const [query, setQuery] = useState("");
+  const [topic, setTopic] = useState<string | null>(null);
   const { authenticated } = useAuth();
   const list = useStreamList(section);
   // Upcoming is BOTH scheduled streams and scheduled activities. It used to
@@ -109,19 +101,29 @@ export function LiveHub() {
   const items = useMemo(() => list.data?.items ?? [], [list.data]);
   const activities = section === "scheduled" ? (activityList.data?.items ?? []) : [];
 
-  // Filtering happens over the loaded page, so the field narrows what is on
-  // screen instantly and never blanks the page waiting on a request. Title and
-  // handle both, because people search for a host as often as for a topic.
+  // Chips come from the categories that are actually live. The design's fixed
+  // list would ship chips that can only ever return nothing, and a chip that
+  // always lands on an empty page is worse than no chip.
+  const topics = useMemo(
+    () => groupByCategory(items).map((group) => group.key),
+    [items]
+  );
+
+  // Filtering happens over the loaded page, so both the field and the chips
+  // narrow what is on screen instantly and never blank the page on a request.
+  // Title and handle both, because people search for a host as often as for a
+  // topic.
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return items;
     return items.filter((stream) => {
+      if (topic && (stream.category || "other") !== topic) return false;
+      if (!needle) return true;
       const haystack = `${stream.title} ${stream.owner?.username ?? ""} ${stream.owner?.displayName ?? ""}`;
       return haystack.toLowerCase().includes(needle);
     });
-  }, [items, query]);
+  }, [items, query, topic]);
 
-  const rails = useMemo(() => railsFor(visible), [visible]);
+  const groups = useMemo(() => groupByCategory(visible), [visible]);
 
   // One chronological list, soonest first. A record with no start time sorts
   // last rather than being dropped — the backend currently returns scheduled
@@ -143,9 +145,8 @@ export function LiveHub() {
   const pending = list.isPending || (section === "scheduled" && activityList.isPending);
   const failed = list.isError && (section !== "scheduled" || activityList.isError);
   const isEmpty = section === "scheduled" ? upcoming.length === 0 : items.length === 0;
-  // A search that matches nothing is NOT the same as an empty square, and
-  // telling somebody "nobody is live" while three rooms are running would be
-  // simply wrong.
+  // A filter that matches nothing is NOT the same as an empty square, and
+  // telling somebody "nobody is live" while rooms are running would be wrong.
   const noMatches = section === "live" && !isEmpty && visible.length === 0;
 
   return (
@@ -155,19 +156,47 @@ export function LiveHub() {
       </ColumnHeader>
 
       {section === "live" && (
-        <div className="px-4 pb-4 pt-3 lg:px-6">
-          <label className="flex h-[52px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition-colors focus-within:border-white/25">
-            <IconSearch className="h-4 w-4 shrink-0 text-muted" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search live feeds..."
-              aria-label="Search live feeds"
-              className="min-w-0 flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-muted"
-            />
-          </label>
-        </div>
+        <>
+          {/* 709x52, fully rounded, hairline white-40 border, 16px/500
+              placeholder in #7a7a7a — the measured field. */}
+          <div className="px-4 pt-4 lg:px-6">
+            <label className="flex h-[52px] items-center gap-[11px] rounded-full border-[0.68px] border-white/40 px-3 transition-colors focus-within:border-white">
+              <IconSearchLive className="h-4 w-4 shrink-0 text-[#6d6d6d]" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search live feeds..."
+                aria-label="Search live feeds"
+                className="min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.112px] text-white outline-none placeholder:text-[#7a7a7a]"
+              />
+            </label>
+          </div>
+
+          {topics.length > 1 && (
+            <div className="flex gap-1 overflow-x-auto px-4 py-4 [scrollbar-width:none] lg:px-6 [&::-webkit-scrollbar]:hidden">
+              {[null, ...topics].map((value) => {
+                const selected = topic === value;
+                return (
+                  <button
+                    key={value ?? "for-you"}
+                    type="button"
+                    onClick={() => setTopic(value)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "ws-press flex h-[38px] shrink-0 items-center justify-center rounded-full px-[10px] text-[12px] font-bold leading-4 transition-colors",
+                      selected
+                        ? "bg-[linear-gradient(90deg,#ffffff_0%,#999999_100%)] text-[#0a0a0a]"
+                        : "text-white/40 hover:text-white/70"
+                    )}
+                  >
+                    {value === null ? "For you" : label(value)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {pending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
@@ -209,46 +238,38 @@ export function LiveHub() {
         <div className="p-4">
           <EmptyState
             glyph="◉"
-            title={`No live feeds match "${query.trim()}"`}
+            title="Nothing matches that yet"
             body="Try a host's handle, or clear the search to see everything that's live."
           />
         </div>
       )}
 
       {section === "live" && !pending && !failed && visible.length > 0 && (
-        <div className="space-y-8 pb-6">
+        <>
+          {/* The go-live prompt sits above the hero exactly as drawn. Signed-out
+              readers do not see it — "Go Live" that opens a login wall is bait. */}
+          {authenticated && <LiveCta />}
+
           <LiveHero streams={visible} />
 
-          {/* The go-live prompt sits between the hero and the rails: after the
-              proof that people are streaming, before the browse that would
-              carry somebody off the page. Signed-out readers do not see it —
-              "Stream now" that opens a login wall is a bait. */}
-          {authenticated && (
-            <div className="px-4 lg:px-6">
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4">
-                <p className="min-w-0 text-[14px] font-semibold leading-tight text-white">
-                  Build your audience live
-                </p>
-                <Link
-                  href="/studio"
-                  className="ws-press shrink-0 rounded-full bg-white px-4 py-1.5 text-[12px] font-bold text-black transition-opacity hover:opacity-90"
-                >
-                  Stream now
-                </Link>
-              </div>
-            </div>
-          )}
+          <LiveSection
+            title="Recommended live streams"
+            streams={visible}
+            viewAllHref="/explore?tab=live"
+          />
 
-          <LiveRail title="Recommended live streams" streams={visible} />
-
-          {/* A single category means the rail would repeat "Recommended" under
-              a different heading, so the per-category rails only appear once
-              there is more than one category live. */}
-          {rails.length > 1 &&
-            rails.map((rail) => (
-              <LiveRail key={rail.key} title={rail.title} streams={rail.streams} />
+          {/* Per-category sections only once there is more than one category
+              live — otherwise the section repeats "Recommended" verbatim. */}
+          {groups.length > 1 &&
+            groups.map((group) => (
+              <LiveSection
+                key={group.key}
+                title={label(group.key)}
+                streams={group.streams}
+                viewAllHref={`/explore?tab=live&topic=${encodeURIComponent(group.key)}`}
+              />
             ))}
-        </div>
+        </>
       )}
 
       {section === "scheduled" && upcoming.map((entry) => entry.node)}
