@@ -28,6 +28,7 @@ import { IconSearch } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { BrowseList } from "@/components/ui/browse-list";
+import { TrendingDiscussions } from "@/features/discovery/components/trending-discussions";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useDiscovery } from "@/features/discovery/hooks/use-discovery";
 import { ExploreGrid, type ExploreItem } from "@/features/discovery/components/explore-grid";
@@ -394,6 +395,15 @@ export function DiscoveryPage({
           renderPerson={renderPerson}
           renderProduct={renderProduct}
         />
+      )}
+
+      {/* The discussions worth joining, on the surface people browse. A tag was
+          only reachable from inside a post, so the only way into a
+          conversation was to already be reading somebody in it. */}
+      {!hasQuery && (
+        <div className="px-4 pb-4">
+          <TrendingDiscussions />
+        </div>
       )}
 
       {/* Citizen Spotlight, on the surface people actually browse. It sits in

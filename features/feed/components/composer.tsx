@@ -9,6 +9,8 @@ import type { DeepLink } from "@/lib/api/schemas";
 import { LinkTargetPicker } from "@/components/ui/link-target-picker";
 import { Avatar } from "@/components/ui/avatar";
 import { IconClock, IconImage, IconLink, IconX } from "@/components/ui/icons";
+import { SymbolPicker } from "@/components/ui/symbol-picker";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { cn } from "@/lib/cn";
 import {
   ACCEPT_MEDIA,
@@ -412,6 +414,37 @@ export function Composer({
             >
               <IconLink className="h-[18px] w-[18px]" />
             </button>
+
+            {/* The `$` tool, as Ark's composer has. Inserts at the caret and
+                only ever offers coins the platform can actually trade, so a
+                chosen ticker always renders — a symbol typed from memory is
+                silently plain text when it is wrong. */}
+            <SymbolPicker
+              onPick={(fragment) => {
+                const node = field.current;
+                const at = node?.selectionStart ?? text.length;
+                const next = `${text.slice(0, at)}${fragment}${text.slice(at)}`;
+                updateText(next, at + fragment.length);
+                // Typing continues where the insert ended, not at the end.
+                const caret = at + fragment.length;
+                window.requestAnimationFrame(() => {
+                  node?.focus();
+                  node?.setSelectionRange(caret, caret);
+                });
+              }}
+            />
+
+            <EmojiPicker onPick={(emoji) => {
+              const node = field.current;
+              const at = node?.selectionStart ?? text.length;
+              const next = `${text.slice(0, at)}${emoji}${text.slice(at)}`;
+              updateText(next, at + emoji.length);
+              const caret = at + emoji.length;
+              window.requestAnimationFrame(() => {
+                node?.focus();
+                node?.setSelectionRange(caret, caret);
+              });
+            }} />
           </div>
 
           <button

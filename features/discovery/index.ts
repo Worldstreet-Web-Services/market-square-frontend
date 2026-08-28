@@ -9,3 +9,4 @@ export {
   useTopics,
   useSaveInterests,
 } from "@/features/discovery/hooks/use-discovery";
+export { TrendingDiscussions } from "./components/trending-discussions";

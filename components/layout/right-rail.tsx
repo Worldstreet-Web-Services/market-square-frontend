@@ -5,7 +5,7 @@ import { useState } from "react";
 import { IconSearch } from "@/components/ui/icons";
 import { LiveNowRail, TicketsRail } from "@/features/streams";
 import { CitizenSpotlightRail } from "@/features/profile";
-import { ExploreCategoriesRail } from "@/features/discovery";
+import { ExploreCategoriesRail, TrendingDiscussions } from "@/features/discovery";
 
 function RailSearch() {
   const router = useRouter();
@@ -44,6 +44,9 @@ export function RightRail() {
       <div className="sticky top-0 flex max-h-dvh flex-col gap-4 overflow-y-auto py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <RailSearch />
         <CitizenSpotlightRail />
+        {/* Above the curated categories on purpose: a category is a shelf
+            somebody arranged, a discussion is what the room is doing now. */}
+        <TrendingDiscussions limit={5} />
         <ExploreCategoriesRail />
         <LiveNowRail />
         <TicketsRail />
