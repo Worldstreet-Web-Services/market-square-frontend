@@ -20,7 +20,7 @@ Copy `.env.example` to `.env.local` and fill in what you have:
 | `WSAPI_BASE_URL` | Platform gateway base URL. The BFF proxy forwards to `${WSAPI_BASE_URL}/v1/market-square/*`. **Unset ⇒ fixture mode.** |
 | `NEXT_PUBLIC_PRIVY_APP_ID` | Privy app id (client). Unset ⇒ demo auth: a signed-in demo session is assumed. |
 | `PRIVY_APP_SECRET` | Privy app secret (server). Required with the app id for server-side token verification. |
-| `NEXT_PUBLIC_ARK_APP_URL` | Optional. Base URL for Ark-app deep links (`listing`, `market`, `prediction`, `activity`, `game`). Defaults to `https://worldstreetgold.com`. A `trade` link resolves to the block explorer for its chain instead, since Ark has no page for a transaction. |
+| `NEXT_PUBLIC_ARK_APP_URL` | **The deployed Ark app's origin.** No default, on purpose: it has been guessed wrong twice (`worldstreetgold.com` is the marketing site; `dashboard.worldstreetgold.com` is a Clerk app, while Ark runs on Privy). Unset, cross-product CTAs render inert and `$TICKER` stays plain text. Set it and deep links, the ticker catalogue and the `$` markup all light up together. A `trade` link is unaffected — it resolves to a public block explorer. |
 | `NEXT_PUBLIC_WORLDSTREET_URL` | Optional. Destination for the `WorldStreet` navigation entry. Defaults to `https://worldstreetgold.com`. Separate from `NEXT_PUBLIC_ARK_APP_URL` so setting one does not silently activate the other's deep links. |
 | `NEXT_PUBLIC_MS_VIP_ACCESS_ENABLED` | Governance flag. Enables VIP ticket selection only after access rules are approved. Defaults off. |
 | `NEXT_PUBLIC_MS_LIVE_GIFTS_ENABLED` | Governance flag. Enables live KASH gifts only after ledger and settlement approval. Defaults off. |

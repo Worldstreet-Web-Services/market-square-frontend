@@ -11,13 +11,13 @@ test("a source is threaded onto internal destinations", () => {
   assert.equal(resolveDeepLink({ kind: "store_item", ref: "x" }, "home").href, "/store/x?source=home");
 });
 
-test("Ark product links resolve against the built-in origin", () => {
-  // This test used to assert the opposite, and was right to: with no verified
-  // Ark origin, an inert row beat a link into a host that answered nothing.
-  // The origin is confirmed now, so the rule inverts — but `available` still
-  // earns its keep, because a link with nowhere to point is still withheld.
-  assert.equal(resolveDeepLink({ kind: "market", ref: "m1" }).available, true);
-  assert.match(resolveDeepLink({ kind: "market", ref: "m1" }).href, /^https:\/\//);
+test("Ark product links stay inert until an origin is configured", () => {
+  // Guessed twice, wrong twice: worldstreetgold.com is the marketing site and
+  // dashboard.worldstreetgold.com is a Clerk app, while Ark runs on Privy. A
+  // guessed origin does not fail loudly — it produces links that look fine and
+  // land on somebody else's 404. Unset must therefore mean inert.
+  assert.equal(resolveDeepLink({ kind: "market", ref: "m1" }).available, false);
+  assert.equal(resolveCta({ kind: "listing", ref: "x" }), null);
   // A section with no ref is the section itself, never ".../listings/".
   assert.ok(!resolveDeepLink({ kind: "listing", ref: "" }).href.endsWith("/"));
 });
@@ -41,16 +41,15 @@ describe("Ark product links resolve to routes Ark actually serves", () => {
   // Every one of them would have 404'd the moment an origin was configured,
   // and nothing caught it because with no origin they were all inert.
   it("sends a listing to /earn/listing/<slug>", () => {
-    const link = resolveDeepLink({ kind: "listing", ref: "solar-farm" });
-    assert.ok(link.available);
-    assert.match(link.href, /\/earn\/listing\/solar-farm$/);
+    // The PATH is asserted independently of the origin, so these keep guarding
+    // the routes even while the base is unset.
+    assert.match(resolveDeepLink({ kind: "listing", ref: "solar-farm" }).href,
+      /\/earn\/listing\/solar-farm$/);
   });
 
   it("sends a market and a prediction to /prediction/<id>", () => {
     for (const kind of ["market", "prediction"]) {
-      const link = resolveDeepLink({ kind, ref: "abc" });
-      assert.ok(link.available, `${kind} must resolve`);
-      assert.match(link.href, /\/prediction\/abc$/);
+      assert.match(resolveDeepLink({ kind, ref: "abc" }).href, /\/prediction\/abc$/, kind);
     }
   });
 
@@ -64,6 +63,8 @@ describe("a shared trade opens the transaction, not the reader's own activity", 
   // that was shared. The explorer is the one destination that is the same
   // thing for everybody.
   it("resolves to the explorer for the network it settled on", () => {
+    // A trade does NOT depend on the Ark origin: a block explorer is a public
+    // address anybody can verify, which is why it still works unconfigured.
     const hash = `0x${"a".repeat(64)}`;
     const link = resolveDeepLink({ kind: "trade", ref: `base-mainnet:${hash}` });
     assert.ok(link.available);
