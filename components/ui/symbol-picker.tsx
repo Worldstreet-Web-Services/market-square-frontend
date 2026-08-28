@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { anchorAbove, type AnchorPosition } from "@/lib/anchored-popover";
 import { cn } from "@/lib/cn";
 import { useTradeableMarkets, useTradeableSymbols } from "@/hooks/use-tradeable-symbols";
 
@@ -17,11 +19,50 @@ import { useTradeableMarkets, useTradeableSymbols } from "@/hooks/use-tradeable-
  * always resolves. That is the same catalogue the renderer checks against, so
  * the tool cannot suggest something the post would then render as plain text.
  */
+/** One number for the panel's width, shared by the render and the maths. */
+const PANEL_W = 260;
+
 export function SymbolPicker({ onPick }: { onPick: (fragment: string) => void }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const root = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const field = useRef<HTMLInputElement>(null);
+  const [at, setAt] = useState<AnchorPosition | null>(null);
+
+  // Portalled and positioned in viewport coordinates, for the same reason as
+  // the emoji picker beside it: inside the compose sheet, which scrolls its
+  // body and hides its overflow, an absolutely positioned panel is sliced off
+  // at the toolbar and spills past the sheet's edge.
+  const place = useCallback(() => {
+    const node = trigger.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    setAt(
+      anchorAbove({
+        trigger: { left: rect.left, right: rect.right, top: rect.top },
+        width: Math.min(PANEL_W, window.innerWidth - 24),
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        align: "left",
+      })
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, place]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMove = () => place();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open, place]);
 
   const symbols = useTradeableSymbols();
   const markets = useTradeableMarkets();
@@ -41,7 +82,11 @@ export function SymbolPicker({ onPick }: { onPick: (fragment: string) => void })
   useEffect(() => {
     if (!open) return;
     const onPointer = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      // The panel is portalled, so an outside tap has to miss BOTH it and the
+      // trigger's wrapper.
+      const target = event.target as Node;
+      if (root.current?.contains(target) || panel.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -63,6 +108,7 @@ export function SymbolPicker({ onPick }: { onPick: (fragment: string) => void })
   return (
     <div ref={root} className="relative shrink-0">
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-label="Add a coin"
@@ -75,11 +121,15 @@ export function SymbolPicker({ onPick }: { onPick: (fragment: string) => void })
         $
       </button>
 
-      {open && (
+      {open &&
+        at &&
+        createPortal(
         <div
           role="dialog"
           aria-label="Add a coin"
-          className="ws-glass absolute bottom-full left-0 z-50 mb-2 w-[260px] rounded-2xl p-2"
+          ref={panel}
+          style={{ left: at.left, bottom: at.bottom, width: PANEL_W }}
+          className="ws-glass fixed z-[60] max-w-[calc(100vw-24px)] rounded-2xl p-2"
         >
           <input
             ref={field}
@@ -114,8 +164,9 @@ export function SymbolPicker({ onPick }: { onPick: (fragment: string) => void })
               ))
             )}
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { anchorAbove, type AnchorPosition } from "@/lib/anchored-popover";
 import { cn } from "@/lib/cn";
 
 /**
@@ -34,6 +36,9 @@ const GROUPS: Array<{ label: string; emoji: string[] }> = [
   },
 ];
 
+/** One number for the panel's width, shared by the render and the maths. */
+const PANEL_W = 264;
+
 export function EmojiPicker({
   onPick,
   label = "Add an emoji",
@@ -53,13 +58,63 @@ export function EmojiPicker({
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState<AnchorPosition | null>(null);
+
+  /**
+   * The panel is PORTALLED to the body and positioned in viewport
+   * coordinates. Positioned inside the trigger's wrapper it was at the mercy
+   * of every ancestor: the compose sheet scrolls its body and hides its
+   * overflow, so the grid came out sliced at the toolbar and spilling past the
+   * sheet's edge. A portal has no clipping ancestor to be sliced by.
+   */
+  const place = useCallback(() => {
+    const node = trigger.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    setAt(
+      anchorAbove({
+        trigger: { left: rect.left, right: rect.right, top: rect.top },
+        // Matches the panel's own width rule below, so the arithmetic and the
+        // render agree about how wide the thing being placed is.
+        width: Math.min(PANEL_W, window.innerWidth - 24),
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        align,
+      })
+    );
+  }, [align]);
+
+  // Before paint: a panel that positions in an effect is drawn once at the
+  // wrong place first, which reads as a flicker at the corner of the screen.
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, place]);
+
+  // A fixed panel does not travel with its trigger, so anything that moves the
+  // trigger has to move it too — or close it. Scroll and resize are the two.
+  useEffect(() => {
+    if (!open) return;
+    const onMove = () => place();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open, place]);
 
   // Close on an outside tap or Escape. Without both, a picker opened on a
   // phone has no way to dismiss it that does not also pick something.
   useEffect(() => {
     if (!open) return;
     const onPointer = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      // The panel is no longer inside `root` — it is portalled — so an
+      // outside tap has to miss BOTH or the first click on an emoji would
+      // close the picker it was aimed at.
+      const target = event.target as Node;
+      if (root.current?.contains(target) || panel.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -75,6 +130,7 @@ export function EmojiPicker({
   return (
     <div ref={root} className={cn("relative shrink-0", className)}>
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-label={label}
@@ -84,7 +140,9 @@ export function EmojiPicker({
         <span aria-hidden>☺</span>
       </button>
 
-      {open && (
+      {open &&
+        at &&
+        createPortal(
         // Opens UPWARD, because these fields sit at the bottom of a card or a
         // chat and a downward menu would open off the end of the surface. The
         // horizontal edge is the caller's call — see `align`.
@@ -97,11 +155,13 @@ export function EmojiPicker({
         <div
           role="dialog"
           aria-label={label}
+          ref={panel}
+          style={{ left: at.left, bottom: at.bottom, width: PANEL_W }}
           className={cn(
-            "ws-popover ws-popover-enter absolute bottom-full z-50 mb-2 w-[264px] max-w-[calc(100vw-24px)] rounded-2xl p-2",
+            "ws-popover ws-popover-enter fixed z-[60] max-w-[calc(100vw-24px)] rounded-2xl p-2",
             // Four groups is taller than a short viewport with a keyboard up.
             "max-h-[min(360px,58vh)] overflow-y-auto overscroll-contain",
-            align === "right" ? "right-0 origin-bottom-right" : "left-0 origin-bottom-left"
+            align === "right" ? "origin-bottom-right" : "origin-bottom-left"
           )}
         >
           {GROUPS.map((group) => (
@@ -126,8 +186,9 @@ export function EmojiPicker({
               </div>
             </div>
           ))}
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </div>
   );
 }
