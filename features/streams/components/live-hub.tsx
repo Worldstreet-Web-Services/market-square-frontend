@@ -177,7 +177,7 @@ export function LiveHub() {
           </div>
 
           {topics.length > 1 && (
-            <div className="flex gap-1 overflow-x-auto px-4 py-4 [scrollbar-width:none] lg:px-6 [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-1 overflow-x-auto px-4 pt-7 [scrollbar-width:none] lg:px-6 [&::-webkit-scrollbar]:hidden">
               {[null, ...topics].map((value) => {
                 const selected = topic === value;
                 return (
@@ -249,11 +249,16 @@ export function LiveHub() {
 
       {section === "live" && !pending && !failed && visible.length > 0 && (
         <>
-          {/* The go-live prompt sits above the hero exactly as drawn. Signed-out
-              readers do not see it — "Go Live" that opens a login wall is bait. */}
-          {authenticated && <LiveCta />}
+          {/* One gap owns the rhythm between the chrome, the banner and the
+              hero — the design spaces these ~28px apart, and per-block padding
+              collapsed to 11px whenever the chip row did not render. */}
+          <div className="space-y-7 pt-7">
+            {/* Signed-out readers do not see the prompt — "Go Live" that opens
+                a login wall is bait. */}
+            {authenticated && <LiveCta />}
 
-          <LiveHero streams={visible} />
+            <LiveHero streams={visible} />
+          </div>
 
           <LiveSection
             title="Recommended live streams"

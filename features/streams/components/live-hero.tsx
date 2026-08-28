@@ -51,7 +51,7 @@ export function LiveHero({ streams }: { streams: Stream[] }) {
   };
 
   return (
-    <section className="px-4 pb-4 lg:px-6">
+    <section className="px-4 lg:px-6">
       <div
         ref={track}
         onScroll={() => {

@@ -39,7 +39,7 @@ export function LiveSection({
   const hasMore = streams.length > shown.length;
 
   return (
-    <section className="border-t border-white/10 pt-4">
+    <section className="mt-7 border-t border-white/10 pt-4">
       <div className="flex h-[38px] items-center justify-between gap-4 px-4 lg:px-6">
         <h2 className="truncate text-[16px] font-semibold leading-none text-white">{title}</h2>
 
