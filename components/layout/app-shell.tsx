@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { useTrackNavHistory } from "@/lib/nav-history";
 import { allowsCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useAuth } from "@/hooks/use-auth";
@@ -670,6 +671,7 @@ function MobileBar({ pathname }: { pathname: string }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  useTrackNavHistory();
   const { authenticated } = useAuth();
   const broadcast = useBroadcastStatus();
   const [composeOpen, setComposeOpen] = useState(false);

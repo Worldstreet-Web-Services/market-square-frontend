@@ -3,6 +3,7 @@ import { cn } from "@/lib/cn";
 
 import { useRouter } from "next/navigation";
 import { IconArrowLeft } from "@/components/ui/icons";
+import { canGoBack } from "@/lib/nav-history";
 
 // Every column surface that is not the timeline gets this header: an optional
 // back arrow, the page title with a quiet subtitle under it, and room on the
@@ -11,6 +12,7 @@ export function ColumnHeader({
   title,
   subtitle,
   back = false,
+  backFallback = "/",
   action,
   children,
   hideTitle = false,
@@ -28,6 +30,8 @@ export function ColumnHeader({
   hideTitle?: boolean;
   /** Show the back arrow — for pushed detail views, not top-level tabs. */
   back?: boolean;
+  /** Where the back arrow lands when there is no in-app page behind this one. */
+  backFallback?: string;
   action?: React.ReactNode;
   /** A tab strip or filter row pinned under the title. */
   children?: React.ReactNode;
@@ -45,7 +49,10 @@ export function ColumnHeader({
         <div className="flex items-center gap-5 px-4 py-2.5">
           {back && (
             <button
-              onClick={() => router.back()}
+              // On a directly loaded page — a shared link, a new tab, a
+              // refresh — there is no in-app history to pop, and back() would
+              // do nothing or leave the app. Fall back to the timeline.
+              onClick={() => (canGoBack() ? router.back() : router.push(backFallback))}
               aria-label="Back"
               className="ws-press -ml-2 rounded-full p-2 text-heading transition-colors hover:bg-white/10"
             >
