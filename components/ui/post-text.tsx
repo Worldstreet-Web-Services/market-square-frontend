@@ -81,12 +81,20 @@ function SegmentView({ segment }: { segment: Segment }) {
       // every other cross-product link follows.
       const link = resolveDeepLink({ kind: "market", ref: segment.symbol });
       if (!arkAppConfigured() || !link.available) return <>{segment.value}</>;
+      // A CHIP, matching the treatment Ark gives a ticker. The same caption
+      // should not read as a chip on one surface and an underlined word on the
+      // other — that difference is exactly what makes two products feel like
+      // two products.
+      //
+      // No price here, unlike Ark's: Market Square has no price feed, and a
+      // chip that showed a stale or invented number would be worse than one
+      // that shows none.
       return (
         <a
           href={link.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-semibold text-accent hover:underline"
+          className="mx-[1px] rounded-md bg-white/8 px-1.5 py-[1px] text-[13px] font-semibold text-accent transition-colors hover:bg-white/14"
         >
           {segment.value}
         </a>
