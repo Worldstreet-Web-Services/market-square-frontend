@@ -384,13 +384,19 @@ export function Composer({
           </div>
         )}
 
-        <div className="ws-hair flex flex-nowrap items-center gap-1 border-t pt-2.5">
+        {/* One strip, on a 360px phone too. Every control here is `shrink-0`
+            — correct, since a squashed icon button is not a button — so the
+            row's minimum width is the sum of its parts, and the sheet clips
+            rather than scrolls: past that width the Post button simply left
+            the screen. The fix is to make the parts smaller on small screens
+            rather than to let them shrink or wrap. */}
+        <div className="ws-hair flex min-w-0 flex-nowrap items-center gap-0.5 border-t pt-2.5 sm:gap-1">
           <button
             onClick={() => fileInput.current?.click()}
             aria-label="Upload a picture or video from your device"
             title="Upload picture or video"
             className={cn(
-              "shrink-0 rounded-full p-2 transition-colors hover:bg-white/10",
+              "shrink-0 rounded-full p-1.5 transition-colors hover:bg-white/10 sm:p-2",
               mediaFile ? "text-heading" : "text-accent"
             )}
           >
@@ -408,7 +414,7 @@ export function Composer({
               aria-pressed={linkOpen || link !== null}
               title="Attach a link"
               className={cn(
-                "rounded-full p-2 transition-colors hover:bg-white/10",
+                "rounded-full p-1.5 transition-colors hover:bg-white/10 sm:p-2",
                 link ? "text-heading" : "text-accent"
               )}
             >
@@ -462,22 +468,24 @@ export function Composer({
             title="Stories expire after 24 hours"
             aria-pressed={kind === "story"}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-bold transition-colors hover:bg-white/10",
+              "flex shrink-0 items-center gap-1.5 rounded-full px-1.5 py-2 text-[11px] font-bold transition-colors hover:bg-white/10 sm:px-2",
               kind === "story" ? "text-heading" : "text-accent"
             )}
           >
             {/* This toggles update/story. It used to wear a poll glyph, which
                 promised a poll composer that does not exist. */}
             <IconClock className="h-[18px] w-[18px]" />
-            24h
+            {/* The glyph and the title carry the meaning where there is no
+                room for the label; the aria-label is unchanged either way. */}
+            <span className="hidden sm:inline">24h</span>
           </button>
 
-          <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
             {active && <CountRing used={text.length} />}
             <button
               onClick={submit}
               disabled={!active || create.isPending || upload.isPending}
-              className="ws-press h-9 rounded-full bg-accent px-5 text-[15px] font-bold text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="ws-press h-9 rounded-full bg-accent px-4 text-[15px] font-bold text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:px-5"
             >
               {upload.isPending ? "Uploading…" : create.isPending ? "Posting…" : "Post"}
             </button>
