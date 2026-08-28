@@ -50,8 +50,19 @@ export function PostText({
   );
 }
 
-/** Every tappable part shares one treatment, so they read as one family. */
-const TAPPABLE = "text-accent hover:underline";
+/**
+ * Every tappable part shares one treatment, so they read as one family.
+ *
+ * NOT `text-accent`. That token is #d4d4d8 — silver, within a hair of the
+ * body text it sits in, so a link, a tag and a handle all rendered as ordinary
+ * words. They were tappable the whole time and nothing said so, which is
+ * indistinguishable from not working.
+ *
+ * The brand's light purple stop instead: 7.09:1 on near-black, comfortably AA,
+ * and already the interactive purple used by the tip control. The dark stop
+ * (#7e3beb) manages only 3.50:1 and fails as body text.
+ */
+const TAPPABLE = "text-spotlight-chip-ink hover:underline";
 
 function SegmentView({ segment }: { segment: Segment }) {
   switch (segment.kind) {
@@ -98,7 +109,7 @@ function SegmentView({ segment }: { segment: Segment }) {
           href={link.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="mx-[1px] rounded-md bg-white/8 px-1.5 py-[1px] text-[13px] font-semibold text-accent transition-colors hover:bg-white/14"
+          className="mx-[1px] rounded-md bg-spotlight/20 px-1.5 py-[1px] text-[13px] font-semibold text-spotlight-chip-ink transition-colors hover:bg-spotlight/35"
         >
           {segment.value}
         </a>
