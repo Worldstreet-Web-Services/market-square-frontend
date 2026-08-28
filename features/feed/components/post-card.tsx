@@ -17,7 +17,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
-import { IconFlag, IconQuote, IconSend } from "@/components/ui/icons";
+import { IconFlag, IconFullscreen, IconQuote, IconSend } from "@/components/ui/icons";
 import {
   IconMsBookmark,
   IconMsComment,
@@ -487,19 +487,36 @@ export function PostCard({
           // Without a handler it stays an inline player, which is what the
           // surfaces that have nowhere to promote to need.
           onOpenMedia ? (
-            <button
-              type="button"
+            // A DIV, not a button. The player owns a real sound control, and a
+            // button inside a button is invalid markup — which is why the
+            // player had to be neutralised with `pointer-events-none`, and why
+            // "Tap for sound" expanded the video instead of unmuting it.
+            //
+            // Now the frame opens the video and the pill toggles sound, each
+            // with its own hit area. The keyboard gets an explicit control
+            // below rather than a clickable div it cannot reach.
+            <div
               onClick={() => onOpenMedia(post)}
-              aria-label="Play full screen"
-              className="ws-press mt-4 block h-[420px] w-full overflow-hidden rounded-xl"
+              className="ws-press relative mt-4 block h-[420px] w-full cursor-pointer overflow-hidden rounded-xl"
               style={{ viewTransitionName: `media-${post.id}` }}
             >
               <InlineVideo
                 src={post.mediaUrl}
                 poster={post.thumbnailUrl}
-                className="pointer-events-none h-full w-full"
+                className="h-full w-full"
               />
-            </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenMedia(post);
+                }}
+                aria-label="Play full screen"
+                className="ws-glass ws-press absolute bottom-3 right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-body transition-colors hover:text-white"
+              >
+                <IconFullscreen className="h-4 w-4" />
+              </button>
+            </div>
           ) : (
             <InlineVideo
               src={post.mediaUrl}

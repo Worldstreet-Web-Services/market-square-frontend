@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { IconVolume } from "@/components/ui/icons";
 import { MediaFrame } from "@/components/ui/media-frame";
 
 /**
@@ -76,16 +77,28 @@ export function InlineVideo({
         controls={reduced}
         className="absolute inset-0 h-full w-full object-contain"
       />
+      {/* The sound control is the PILL, not the whole surface.
+          It used to be `absolute inset-0`, which made every pixel of the video
+          a mute toggle. Once the card wrapped the player in a tap-to-expand
+          button that had to be neutralised with `pointer-events-none`, and the
+          sound control went with it: the pill still said "Tap for sound" and
+          did nothing, while the tap expanded the video instead.
+
+          A control the size of its own label leaves the rest of the frame free
+          for whatever the surface wants a tap to mean. */}
       {!reduced && (
         <button
-          onClick={() => setMuted((value) => !value)}
+          onClick={(event) => {
+            // The frame around it may open the video. Sound is not that.
+            event.stopPropagation();
+            setMuted((value) => !value);
+          }}
           aria-label={muted ? "Unmute video" : "Mute video"}
           aria-pressed={!muted}
-          className="absolute inset-0 flex items-end justify-start p-3"
+          className="ws-glass ws-press absolute bottom-3 left-3 z-10 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-semibold text-body transition-colors hover:text-white"
         >
-          <span className="ws-glass rounded-full px-2.5 py-1 text-[10px] font-semibold text-body">
-            {muted ? "Tap for sound" : "Sound on"}
-          </span>
+          <IconVolume className="h-3.5 w-3.5" muted={muted} />
+          {muted ? "Tap for sound" : "Sound on"}
         </button>
       )}
     </MediaFrame>
