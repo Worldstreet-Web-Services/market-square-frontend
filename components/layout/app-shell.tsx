@@ -462,7 +462,7 @@ function Sidebar({
     <aside
       data-rail={rail.mode}
       style={{ width: railWidth(rail) }}
-      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-y-auto overflow-x-hidden border-r bg-[#0f0f0f] px-3 py-5 [scrollbar-width:none] md:flex data-[rail=full]:items-stretch [&::-webkit-scrollbar]:hidden"
+      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-[#0f0f0f] px-3 py-5 md:flex data-[rail=full]:items-stretch"
     >
       <RailHandle rail={rail} preview={preview} commit={commit} />
       {/* The wordmark lockup sits over its own hairline. */}
@@ -470,7 +470,7 @@ function Sidebar({
         href="/"
         aria-label="Market Square home"
         title="Market Square"
-        className="ws-press mb-4 flex items-center justify-center border-b border-white/10 pb-4 group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:px-2.5"
+        className="ws-press mb-4 flex shrink-0 items-center justify-center border-b border-white/10 pb-4 group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:px-2.5"
       >
         {/* The icon rail wears the mark alone; the expanded sidebar wears the
             full lockup. Heights are set so the TYPE inside the lockup reads at
@@ -487,14 +487,25 @@ function Sidebar({
         onClick={() => commit(toggleRail(rail))}
         aria-label={rail.mode === "icon" ? "Expand sidebar" : "Collapse sidebar"}
         aria-expanded={rail.mode === "full"}
-        className="ws-press mb-2 flex h-8 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
+        className="ws-press mb-2 flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
       >
         <IconChevronLeft
           className={cn("h-4 w-4 transition-transform", rail.mode === "icon" && "rotate-180")}
         />
       </button>
 
-      <nav className="flex w-full flex-col gap-1" aria-label="Primary">
+      {/* The ONLY scrolling region. The whole rail used to scroll, which put
+          the account chip, Go live and Post on a conveyor belt: on a short
+          laptop screen the identity you are posting as slid off the bottom
+          with the nav. The chrome is pinned and the list of places moves
+          inside it — the shape every desktop app with a rail uses.
+          `min-h-0` because a flex child's default minimum is its CONTENT, so
+          without it the nav refuses to shrink and pushes the footer off the
+          bottom instead of scrolling. */}
+      <nav
+        className="flex w-full min-h-0 flex-1 flex-col gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="Primary"
+      >
         {visible
           .filter((item) => !item.secondary)
           .map((item) => (
@@ -521,7 +532,7 @@ function Sidebar({
           It opens the composer in place — it used to link to `/?compose=1`,
           which meant reaching for Post from anywhere threw the reader back to
           home and lost their place. */}
-      <div className="mt-4 flex flex-col items-center gap-2 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-1">
+      <div className="mt-4 flex shrink-0 flex-col items-center gap-2 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-1">
         {authenticated && onCompose && (
           <button
             onClick={onCompose}
@@ -542,7 +553,7 @@ function Sidebar({
         </Link>
       </div>
 
-      <div className="mt-auto w-full border-t border-white/10 pt-4">
+      <div className="mt-4 w-full shrink-0 border-t border-white/10 pt-4">
         {broadcast.live && (
           <div className="mb-2 flex justify-center group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:pl-2">
             <OnAirPill streamId={broadcast.streamId} compact />
