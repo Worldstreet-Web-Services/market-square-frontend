@@ -11,6 +11,7 @@ import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { PostText } from "@/components/ui/post-text";
+import { CoinChips } from "@/components/ui/coin-chips";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { useRecordView } from "@/features/feed/hooks/use-record-view";
 import { useGate } from "@/hooks/use-gate";
@@ -562,6 +563,8 @@ export function PostCard({
         mentions={post.mentions}
         className="mt-3 text-[13.8px] leading-[23px] text-white/90"
       />
+      {/* The coins the post names, with today's move — the row Ark draws. */}
+      <CoinChips text={post.text} />
 
       {post.quotedPost && <QuotedPost quoted={post.quotedPost} />}
 
