@@ -70,6 +70,22 @@ const EMPTY: Record<Section, SectionEmpty> = {
   },
 };
 
+/**
+ * Does this record match what was typed?
+ *
+ * Title and host both, because people search for a host as often as for a
+ * topic. An empty query matches everything rather than nothing.
+ */
+function matches(
+  record: { title: string; owner?: { username: string; displayName: string } | null },
+  needle: string
+): boolean {
+  if (!needle) return true;
+  const owner = record.owner;
+  const haystack = `${record.title} ${owner?.username ?? ""} ${owner?.displayName ?? ""}`;
+  return haystack.toLowerCase().includes(needle);
+}
+
 /** Groups live rooms by category, busiest first — what a scan wants at the top. */
 function groupByCategory(streams: Stream[]): Array<{ key: string; streams: Stream[] }> {
   const grouped = new Map<string, Stream[]>();
@@ -111,17 +127,13 @@ export function LiveHub() {
 
   // Filtering happens over the loaded page, so both the field and the chips
   // narrow what is on screen instantly and never blank the page on a request.
-  // Title and handle both, because people search for a host as often as for a
-  // topic.
+  const needle = query.trim().toLowerCase();
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     return items.filter((stream) => {
       if (topic && (stream.category || "other") !== topic) return false;
-      if (!needle) return true;
-      const haystack = `${stream.title} ${stream.owner?.username ?? ""} ${stream.owner?.displayName ?? ""}`;
-      return haystack.toLowerCase().includes(needle);
+      return matches(stream, needle);
     });
-  }, [items, query, topic]);
+  }, [items, needle, topic]);
 
   const groups = useMemo(() => groupByCategory(visible), [visible]);
 
@@ -130,12 +142,12 @@ export function LiveHub() {
   // streams with a null scheduledAt, and hiding them would be worse than
   // showing them without a time.
   const upcoming = [
-    ...items.map((stream) => ({
+    ...visible.map((stream) => ({
       key: `s:${stream.id}`,
       at: stream.scheduledAt ? Date.parse(stream.scheduledAt) : Number.POSITIVE_INFINITY,
       node: <StreamCard key={`s:${stream.id}`} stream={stream} />,
     })),
-    ...activities.map((activity) => ({
+    ...activities.filter((activity) => matches(activity, needle)).map((activity) => ({
       key: `a:${activity.id}`,
       at: activity.startsAt ? Date.parse(activity.startsAt) : Number.POSITIVE_INFINITY,
       node: <ActivityRow key={`a:${activity.id}`} activity={activity} />,
@@ -144,13 +156,38 @@ export function LiveHub() {
 
   const pending = list.isPending || (section === "scheduled" && activityList.isPending);
   const failed = list.isError && (section !== "scheduled" || activityList.isError);
-  const isEmpty = section === "scheduled" ? upcoming.length === 0 : items.length === 0;
+  const isEmpty =
+    section === "scheduled"
+      ? items.length === 0 && activities.length === 0
+      : items.length === 0;
   // A filter that matches nothing is NOT the same as an empty square, and
   // telling somebody "nobody is live" while rooms are running would be wrong.
-  const noMatches = section === "live" && !isEmpty && visible.length === 0;
+  const filteredAway =
+    section === "scheduled" ? upcoming.length === 0 : visible.length === 0;
+  const noMatches = !isEmpty && filteredAway;
 
   return (
     <>
+      {/* The field sits ABOVE the tabs, as drawn. It is rendered for every
+          section rather than only for Live — a control that vanishes when you
+          change tab makes the strip under it jump, and searching what is
+          scheduled is the same question asked of a different list. 709x52,
+          fully rounded, hairline white-40 border, 16px/500 placeholder in
+          #7a7a7a: the measured field. */}
+      <div className="px-4 pt-4 lg:px-6">
+        <label className="flex h-[52px] items-center gap-[11px] rounded-full border-[0.68px] border-white/40 px-3 transition-colors focus-within:border-white">
+          <IconSearchLive className="h-4 w-4 shrink-0 text-[#6d6d6d]" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search live feeds..."
+            aria-label="Search live feeds"
+            className="min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.112px] text-white outline-none placeholder:text-[#7a7a7a]"
+          />
+        </label>
+      </div>
+
       {/* Title hidden: the breadcrumb above reads "Ark Ecosystem / Live" and
           the sidebar marks Live as the current section, so drawing it a third
           time spends a band of vertical space to say nothing new. */}
@@ -158,48 +195,28 @@ export function LiveHub() {
         <ColumnTabs tabs={TABS} value={section} onChange={setSection} />
       </ColumnHeader>
 
-      {section === "live" && (
-        <>
-          {/* 709x52, fully rounded, hairline white-40 border, 16px/500
-              placeholder in #7a7a7a — the measured field. */}
-          <div className="px-4 pt-4 lg:px-6">
-            <label className="flex h-[52px] items-center gap-[11px] rounded-full border-[0.68px] border-white/40 px-3 transition-colors focus-within:border-white">
-              <IconSearchLive className="h-4 w-4 shrink-0 text-[#6d6d6d]" />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search live feeds..."
-                aria-label="Search live feeds"
-                className="min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.112px] text-white outline-none placeholder:text-[#7a7a7a]"
-              />
-            </label>
-          </div>
-
-          {topics.length > 1 && (
-            <div className="flex gap-1 overflow-x-auto px-4 pt-7 [scrollbar-width:none] lg:px-6 [&::-webkit-scrollbar]:hidden">
-              {[null, ...topics].map((value) => {
-                const selected = topic === value;
-                return (
-                  <button
-                    key={value ?? "for-you"}
-                    type="button"
-                    onClick={() => setTopic(value)}
-                    aria-pressed={selected}
-                    className={cn(
-                      "ws-press flex h-[38px] shrink-0 items-center justify-center rounded-full px-[10px] text-[12px] font-bold leading-4 transition-colors",
-                      selected
-                        ? "bg-[linear-gradient(90deg,#ffffff_0%,#999999_100%)] text-[#0a0a0a]"
-                        : "text-white/40 hover:text-white/70"
-                    )}
-                  >
-                    {value === null ? "For you" : label(value)}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </>
+      {topics.length > 1 && section === "live" && (
+        <div className="flex gap-1 overflow-x-auto px-4 pt-4 [scrollbar-width:none] lg:px-6 [&::-webkit-scrollbar]:hidden">
+          {[null, ...topics].map((value) => {
+            const selected = topic === value;
+            return (
+              <button
+                key={value ?? "for-you"}
+                type="button"
+                onClick={() => setTopic(value)}
+                aria-pressed={selected}
+                className={cn(
+                  "ws-press flex h-[38px] shrink-0 items-center justify-center rounded-full px-[10px] text-[12px] font-bold leading-4 transition-colors",
+                  selected
+                    ? "bg-[linear-gradient(90deg,#ffffff_0%,#999999_100%)] text-[#0a0a0a]"
+                    : "text-white/40 hover:text-white/70"
+                )}
+              >
+                {value === null ? "For you" : label(value)}
+              </button>
+            );
+          })}
+        </div>
       )}
 
       {pending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
@@ -282,7 +299,8 @@ export function LiveHub() {
 
       {section === "scheduled" && upcoming.map((entry) => entry.node)}
 
-      {section === "replay" && items.map((stream) => <StreamCard key={stream.id} stream={stream} />)}
+      {section === "replay" &&
+        visible.map((stream) => <StreamCard key={stream.id} stream={stream} />)}
     </>
   );
 }
