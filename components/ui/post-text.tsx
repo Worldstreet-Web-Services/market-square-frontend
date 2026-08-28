@@ -76,10 +76,14 @@ function SegmentView({ segment }: { segment: Segment }) {
       );
 
     case "cashtag": {
-      // Ark owns the trade screen. With no Ark origin configured there is
-      // nowhere to send anybody, so the ticker stays text — the same rule
-      // every other cross-product link follows.
-      const link = resolveDeepLink({ kind: "market", ref: segment.symbol });
+      // Ark owns the trade screen, so a ticker opens ARK'S BUY SHEET for that
+      // symbol. It used to resolve as `market`, which routes to
+      // /prediction/<ref> — a prediction market, an entirely different
+      // product. `$ETH` landed on /prediction/ETH, which does not exist.
+      //
+      // With no Ark origin configured there is nowhere to send anybody, so the
+      // ticker stays text: the same rule every cross-product link follows.
+      const link = resolveDeepLink({ kind: "buy", ref: segment.symbol });
       if (!arkAppConfigured() || !link.available) return <>{segment.value}</>;
       // A CHIP, matching the treatment Ark gives a ticker. The same caption
       // should not read as a chip on one surface and an underlined word on the

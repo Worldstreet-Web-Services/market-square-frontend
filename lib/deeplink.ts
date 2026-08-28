@@ -200,6 +200,16 @@ export function resolveDeepLink(link: DeepLink, source?: string): ResolvedLink {
       return ark("activity", "Open in Ark");
     case "trade":
       return resolveTrade(link.ref);
+    // A ticker. Ark opens its buy sheet from `?buy=SYMBOL` on the dashboard,
+    // which is where somebody tapping $ETH actually wants to end up — not on a
+    // page that merely mentions the coin.
+    case "buy":
+      return {
+        href: `${ARK_APP_BASE}/dashboard?buy=${encodeURIComponent(link.ref.toUpperCase())}`,
+        external: true,
+        label: `Buy ${link.ref.toUpperCase()}`,
+        available: arkAppConfigured(),
+      };
     case "game":
       return resolveGame(link.ref);
     case "external":
