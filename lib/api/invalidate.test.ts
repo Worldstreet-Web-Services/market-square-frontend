@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { QueryClient } from "@tanstack/react-query";
-import { invalidateContentSurfaces, invalidateIdentitySurfaces } from "./invalidate.ts";
+import {
+  invalidateContentSurfaces,
+  invalidateIdentitySurfaces,
+  patchFollowInData,
+} from "./invalidate.ts";
 
 /**
  * These lists are the fix for a whole class of stale-cache bug: identity
@@ -69,4 +73,34 @@ describe("invalidateContentSurfaces", () => {
       );
     });
   }
+});
+
+/**
+ * The bug: Explore's People rows carry `isFollowing`, which by design
+ * outranks the session intent — so a click that did not rewrite the cached
+ * row left the button reading "Follow".
+ */
+describe("patchFollowInData", () => {
+  it("flips a bare profile row and moves its follower count", () => {
+    const data = { pages: [{ items: [{ id: "a", isFollowing: false, followerCount: 3 }] }] };
+    const next = patchFollowInData(data, "a", true) as typeof data;
+    assert.deepEqual(next.pages[0]?.items[0], { id: "a", isFollowing: true, followerCount: 4 });
+  });
+
+  it("reaches a profile nested under a search result", () => {
+    const data = { items: [{ kind: "profile", id: "r1", profile: { id: "a", isFollowing: false } }] };
+    const next = patchFollowInData(data, "a", true) as typeof data;
+    assert.equal(next.items[0]?.profile.isFollowing, true);
+  });
+
+  it("leaves other people, and a row without the field, alone", () => {
+    const data = { items: [{ id: "b", isFollowing: false }, { id: "a", displayName: "A" }] };
+    assert.equal(patchFollowInData(data, "a", true), data);
+  });
+
+  it("never drives a follower count below zero", () => {
+    const data = { items: [{ id: "a", isFollowing: true, followerCount: 0 }] };
+    const next = patchFollowInData(data, "a", false) as typeof data;
+    assert.equal(next.items[0]?.followerCount, 0);
+  });
 });
