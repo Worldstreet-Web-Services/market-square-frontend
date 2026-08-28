@@ -113,6 +113,7 @@ export function PostDetailPage({
       <div className="px-4 py-4">
         <PostCard
           post={data}
+          full
           followSlot={followSlot}
           tipSlot={tipSlot}
           onQuote={(target) => setQuoting(target)}

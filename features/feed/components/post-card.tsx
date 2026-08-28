@@ -376,8 +376,17 @@ export function PostCard({
   tipSlot,
   onOpenMedia,
   onQuote,
+  full = false,
 }: {
   post: Post;
+  /**
+   * Show the caption whole, with no "Show more".
+   *
+   * The timeline clamps: one long post otherwise makes a card taller than the
+   * screen and pushes every other post out of view. A post's OWN page is the
+   * place that owes you the whole thing, so it sets this.
+   */
+  full?: boolean;
   /** Opens the composer with this post quoted. Omitted where there is no composer. */
   onQuote?: (post: Post) => void;
   /** Set when this post reached the timeline through someone's repost. */
@@ -562,6 +571,7 @@ export function PostCard({
         text={post.text}
         mentions={post.mentions}
         className="mt-3 text-[13.8px] leading-[23px] text-white/90"
+        clampLines={full ? undefined : 6}
       />
       {/* The coins the post names, with today's move — the row Ark draws. */}
       <CoinChips text={post.text} />
