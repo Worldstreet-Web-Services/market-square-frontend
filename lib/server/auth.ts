@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { NextRequest } from "next/server";
+import type { User } from "@privy-io/node";
 import { getPrivyClient, privyConfigured } from "@/lib/server/privy";
 
 export interface AccessClaims {
@@ -74,4 +75,118 @@ export async function verifyRequestDetailed(req: NextRequest): Promise<AuthResul
 export async function verifyRequest(req: NextRequest): Promise<AccessClaims | null> {
   const result = await verifyRequestDetailed(req);
   return result.ok ? result.claims : null;
+}
+
+/**
+ * The FULL Privy user behind a verified session — the linked accounts, and so
+ * the wallet the session actually owns.
+ *
+ * `verifyRequest` proves *who* is calling; this is what proves *what they own*,
+ * and the KASH proxy needs both. An access token carries a user id and nothing
+ * about wallets, so a route that must refuse "read someone else's balance" has
+ * to go and ask Privy which wallet belongs to this user. Trusting a wallet the
+ * BROWSER named would make the whole gate decorative.
+ *
+ * Two sources, in order. The identity token, when the client sent one, is a
+ * signed snapshot of the user and needs no round trip to Privy's API. Without
+ * it — or when it is stale, which happens right after a wallet is created — we
+ * fall back to fetching the verified user id. The fallback is what keeps a
+ * money-moving route working on a cold page load rather than telling a signed-in
+ * reader they own no wallet.
+ */
+const REQUEST_USER_CACHE_TTL_MS = 60_000;
+const REQUEST_USER_CACHE_MAX_ENTRIES = 1_000;
+
+interface CachedRequestUser {
+  user: User;
+  expiresAt: number;
+}
+
+/**
+ * A tiny per-instance cache, keyed on the SESSION rather than the user.
+ *
+ * Every wallet-scoped KASH call resolves the caller's wallet, and the balance
+ * poll alone is one call every few seconds per open tab. Without this, each of
+ * them is a round trip to Privy on the hot path of a serverless invocation we
+ * are billed for. Sixty seconds is well inside the window in which a user's
+ * linked wallets can change, and the key includes the session id so signing out
+ * and back in never reads a stale answer.
+ *
+ * Bounded and LRU-ish: entries are re-inserted on read so the eviction below
+ * drops the least recently used rather than the oldest created.
+ */
+const requestUserCache = new Map<string, CachedRequestUser>();
+/** In-flight loads, so a burst of concurrent polls makes ONE upstream call. */
+const requestUserLoads = new Map<string, Promise<User | null>>();
+
+function cachedRequestUser(key: string): User | null {
+  const cached = requestUserCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    requestUserCache.delete(key);
+    return null;
+  }
+  requestUserCache.delete(key);
+  requestUserCache.set(key, cached);
+  return cached.user;
+}
+
+function cacheRequestUser(key: string, user: User): void {
+  if (requestUserCache.size >= REQUEST_USER_CACHE_MAX_ENTRIES) {
+    const oldest = requestUserCache.keys().next().value;
+    if (oldest) requestUserCache.delete(oldest);
+  }
+  requestUserCache.set(key, { user, expiresAt: Date.now() + REQUEST_USER_CACHE_TTL_MS });
+}
+
+export async function getRequestUser(
+  req: NextRequest,
+  claims: AccessClaims | null = null
+): Promise<User | null> {
+  if (!privyConfigured()) return null;
+
+  const idToken =
+    req.headers.get("privy-id-token") ?? req.cookies.get("privy-id-token")?.value ?? null;
+
+  const load = async (): Promise<User | null> => {
+    if (idToken) {
+      try {
+        return await getPrivyClient().users().get({ id_token: idToken });
+      } catch {
+        // Stale or malformed. Fall through to the verified user id rather than
+        // failing: the id token is an optimisation, not the proof.
+      }
+    }
+    if (!claims) return null;
+    try {
+      return await getPrivyClient().users()._get(claims.userId);
+    } catch (error) {
+      // Worth saying out loud: every wallet-scoped route 403s from here, and
+      // nothing else in the system explains why.
+      console.error(
+        "[ms-auth] could not resolve the Privy user for a verified session:",
+        error instanceof Error ? error.message : String(error)
+      );
+      return null;
+    }
+  };
+
+  // Without claims there is no stable key to cache or coalesce under.
+  if (!claims) return load();
+
+  const key = `${claims.userId}:${claims.sessionId}`;
+  const cached = cachedRequestUser(key);
+  if (cached) return cached;
+
+  const pending = requestUserLoads.get(key);
+  if (pending) return pending;
+
+  const request = load()
+    .then((user) => {
+      if (user) cacheRequestUser(key, user);
+      return user;
+    })
+    .finally(() => requestUserLoads.delete(key));
+  requestUserLoads.set(key, request);
+  return request;
 }

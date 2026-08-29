@@ -27,6 +27,7 @@ import { LogoMark, Wordmark } from "@/components/ui/wordmark";
 import { RightRail } from "@/components/layout/right-rail";
 import { CreateFab } from "@/components/layout/create-fab";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
+import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import { Sheet } from "@/components/ui/sheet";
 import {
@@ -960,6 +961,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <>
         <main className="min-h-dvh">{children}</main>
         <ConnectionBanner />
+        {/* Mounted here too. The room renders bare, but a `$TICKER` is tappable
+            wherever a caption is, and a control that works everywhere except
+            one page is a control nobody trusts. It draws nothing until one is
+            tapped. */}
+        <TickerSheet />
         {/* No interest prompt here: the stream room owns the whole viewport,
             and a modal over a live broadcast is an interruption, not an
             onboarding. It waits until the reader leaves. */}
@@ -1081,6 +1087,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {canCompose && <CreateFab onClick={() => setComposeOpen(true)} />}
 
       <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
+
+      {/* The one ticker sheet for the whole app. A `$BTC` in a caption is
+          tappable on every surface that renders a post body, so the sheet is
+          mounted once here and opened in place through `lib/ticker-store.ts`
+          — the same arrangement the composer above uses, and for the same
+          reason: tapping a coin must never cost the reader their page. */}
+      <TickerSheet />
 
       <MobileBar
         pathname={pathname}

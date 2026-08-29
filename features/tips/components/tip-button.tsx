@@ -29,7 +29,14 @@ import type { TipTarget } from "@/features/tips/lib/types";
  * This is not a flag: it is a route that is missing today and will simply be
  * there tomorrow, with nothing for a user to read or do about it in between.
  */
-export function TipButton({ target }: { target: TipTarget }) {
+export function TipButton({
+  target,
+  balance,
+}: {
+  target: TipTarget;
+  /** Forwarded straight to the sheet — see `TipSheet` for why it is a slot. */
+  balance?: (amountKash: string | null) => React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   // Counts openings. It does two jobs: zero means the sheet has never been
   // opened and need not be in the tree at all, and the value keys the sheet so
@@ -117,6 +124,7 @@ export function TipButton({ target }: { target: TipTarget }) {
           open={open}
           onClose={() => setOpen(false)}
           target={target}
+          balance={balance}
         />
       )}
     </div>

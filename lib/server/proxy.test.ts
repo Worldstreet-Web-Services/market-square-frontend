@@ -300,3 +300,80 @@ describe("forwardToUpstream — honest errors", () => {
     assert.doesNotMatch(logged, /do-not-log-me/);
   });
 });
+
+/**
+ * REGRESSION: a broken CAPABILITY took down the whole app.
+ *
+ * The market-square service answers `SERVICE_UNAVAILABLE` when a single
+ * dependency is unconfigured — "LiveKit room creation failed" was one, and it
+ * came back 502 through the gateway. Every one of those counted towards the
+ * proxy's breaker, so a creator pressing "Go live" five times opened the
+ * circuit and every READ through that instance then answered 503 for the
+ * cooldown. The feed was healthy the entire time; the square just said it was
+ * unreachable.
+ */
+describe("the breaker learns from reads, not from writes", () => {
+  const boom = () =>
+    new Response(
+      JSON.stringify({
+        success: false,
+        error: { code: "SERVICE_UNAVAILABLE", message: "LiveKit room creation failed" },
+      }),
+      { status: 502, headers: { "content-type": "application/json" } }
+    );
+
+  it("a failing write never opens the circuit, however many times it fails", async () => {
+    const { resetUpstreamHealth, upstreamHealth } = await import("./upstream-health.ts");
+    resetUpstreamHealth();
+    const { fetchImpl } = stubUpstream(boom);
+    for (let i = 0; i < 10; i += 1) {
+      await forwardToUpstream({
+        req: new Request("http://x/go-live", { method: "POST", body: "{}" }),
+        url: "http://upstream.invalid/streams/1/go-live",
+        method: "POST",
+        fetchImpl,
+        logger: silent,
+      });
+    }
+    assert.equal(upstreamHealth().failures, 0, "a write must not feed the breaker");
+    assert.equal(upstreamHealth().openUntil, 0, "the circuit must still be closed");
+    resetUpstreamHealth();
+  });
+
+  it("a failing READ still opens it — the case it exists for is unchanged", async () => {
+    const { resetUpstreamHealth, upstreamHealth, FAILURE_THRESHOLD } = await import(
+      "./upstream-health.ts"
+    );
+    resetUpstreamHealth();
+    const { fetchImpl } = stubUpstream(boom);
+    for (let i = 0; i < FAILURE_THRESHOLD; i += 1) {
+      await forwardToUpstream({
+        req: new Request("http://x/feed"),
+        url: "http://upstream.invalid/feed",
+        method: "GET",
+        fetchImpl,
+        logger: silent,
+      });
+    }
+    assert.equal(upstreamHealth().failures, FAILURE_THRESHOLD);
+    assert.ok(upstreamHealth().openUntil > Date.now(), "a real outage must still shut it");
+    resetUpstreamHealth();
+  });
+
+  it("the upstream's own message survives, so a capability failure is not read as an outage", async () => {
+    const { resetUpstreamHealth } = await import("./upstream-health.ts");
+    resetUpstreamHealth();
+    const { fetchImpl } = stubUpstream(boom);
+    const result = await forwardToUpstream({
+      req: new Request("http://x/go-live", { method: "POST", body: "{}" }),
+      url: "http://upstream.invalid/streams/1/go-live",
+      method: "POST",
+      fetchImpl,
+      logger: silent,
+    });
+    // Passed through verbatim: the client renders this message rather than
+    // substituting a claim that the whole product is down.
+    assert.match(result.body, /LiveKit room creation failed/u);
+    resetUpstreamHealth();
+  });
+});
