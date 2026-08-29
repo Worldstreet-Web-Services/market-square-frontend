@@ -5,7 +5,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/api/envelope";
-import { isPayableAmount } from "@/lib/erc20";
+import { canAfford, isPayableAmount } from "@/lib/erc20";
 import { holdKey } from "@/lib/payment-hold";
 import {
   MIN_BUY_USD,
@@ -23,6 +23,7 @@ import {
 } from "@/lib/ticker";
 import { useTradeableMarkets } from "@/hooks/use-tradeable-symbols";
 import { useEmbeddedWallet } from "@/hooks/use-wallet";
+import { useUsdcBalance } from "@/hooks/use-usdc-balance";
 import {
   useBuyDestinations,
   useBuyToken,
@@ -74,6 +75,9 @@ export function BuySheet({
 }) {
   const markets = useTradeableMarkets();
   const { address: wallet } = useEmbeddedWallet();
+  // Only while the sheet is open: a balance read per ticker on screen would be
+  // an RPC call for every coin nobody tapped.
+  const balance = useUsdcBalance(open);
   const [amount, setAmount] = useState("25");
   const [phase, setPhase] = useState<TokenBuyPhase>("idle");
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -142,7 +146,12 @@ export function BuySheet({
   const estimate = estimateTokenAmount(amount, ticker.priceUsd);
   const busy = phase !== "idle" || buy.isPending;
   const tooSmall = belowMinimumBuy(amount);
-  const canSubmit = Boolean(wallet && route) && isPayableAmount(amount) && !tooSmall && !busy;
+  const affordable = canAfford(amount, balance.units);
+  // Known-empty is different from short: it is worth saying before they pick
+  // an amount at all, because no amount would work.
+  const noFunds = balance.units === 0n;
+  const canSubmit =
+    Boolean(wallet && route) && isPayableAmount(amount) && !tooSmall && affordable && !busy;
 
   // The provider is not configured here, or the symbol has no route we can
   // deliver. Different sentences, because they are different facts.
@@ -254,9 +263,20 @@ export function BuySheet({
           ) : (
             <>
               <div className="mt-5">
-                <label htmlFor="token-buy-amount" className="text-[13px] text-white/50">
-                  Spend
-                </label>
+                <div className="flex items-baseline justify-between gap-3">
+                  <label htmlFor="token-buy-amount" className="text-[13px] text-white/50">
+                    Spend
+                  </label>
+                  {/* What they can actually spend, before they choose. An
+                      unknown balance prints NOTHING rather than a zero: "we
+                      could not read it" and "you have none" look identical on
+                      screen and call for opposite reactions. */}
+                  {wallet && balance.formatted !== null && (
+                    <span className="tnum text-[12.5px] text-white/45">
+                      ${balance.formatted} available
+                    </span>
+                  )}
+                </div>
                 <div className="ws-field mt-1.5 flex h-12 items-center gap-2 px-4">
                   <span className="shrink-0 text-[15px] text-white/40">$</span>
                   <input
@@ -349,6 +369,22 @@ export function BuySheet({
               {tooSmall && (
                 <p className="mt-3 text-[12.5px] text-white/50">
                   The smallest order is ${MIN_BUY_USD}.
+                </p>
+              )}
+              {/* Nothing to spend at all — said plainly, and said before they
+                  pick an amount, because no amount would have worked. */}
+              {wallet && noFunds && (
+                <p className="mt-3 text-[12.5px] text-white/60">
+                  You&apos;ll need USDC on Base to buy. Add some to your wallet, then
+                  come back.
+                </p>
+              )}
+              {/* Short, rather than empty. Only when the amount itself is
+                  otherwise fine, so the reader is never given two reasons for
+                  one problem. */}
+              {wallet && !noFunds && !affordable && !tooSmall && balance.formatted !== null && (
+                <p className="mt-3 text-[12.5px] text-down">
+                  That&apos;s more than your ${balance.formatted}.
                 </p>
               )}
               {buy.isError && (

@@ -107,3 +107,59 @@ export function encodeErc20Transfer(to: string, amount: bigint): `0x${string}` {
   if (paddedAmount.length > 64) throw new Error("amount does not fit in uint256");
   return `0x${TRANSFER_SELECTOR}${paddedTo}${paddedAmount}`;
 }
+
+/** `balanceOf(address)` — the first four bytes of its keccak hash. */
+const BALANCE_OF_SELECTOR = "70a08231";
+
+/**
+ * Calldata for `balanceOf(owner)`.
+ *
+ * One `eth_call` is all it takes to know whether somebody can afford anything
+ * at all, and it is exact — the integer the token contract holds, not a
+ * figure a portfolio service assembled and rounded. That matters here because
+ * this number decides whether a buy button is offered.
+ */
+export function encodeErc20BalanceOf(owner: string): `0x${string}` {
+  const address = owner.trim().toLowerCase().replace(/^0x/u, "");
+  if (!/^[0-9a-f]{40}$/u.test(address)) throw new Error(`not an EVM address: ${owner}`);
+  return `0x${BALANCE_OF_SELECTOR}${address.padStart(64, "0")}`;
+}
+
+/**
+ * A 32-byte return word as a bigint.
+ *
+ * Null rather than zero for anything unreadable — an empty `0x` (which is what
+ * a call to a non-contract address returns), a short word, a non-hex body.
+ * Zero and "I could not read it" are opposite answers here: one means the
+ * reader genuinely has nothing, the other must never be allowed to say so.
+ */
+export function decodeUint256(hex: unknown): bigint | null {
+  if (typeof hex !== "string") return null;
+  const body = hex.trim().replace(/^0x/iu, "");
+  if (body.length === 0 || body.length > 64 || !/^[0-9a-fA-F]+$/u.test(body)) return null;
+  try {
+    return BigInt(`0x${body}`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Can this wallet afford this amount?
+ *
+ * TRUE whenever the balance is unknown, and that default is the whole point.
+ * A balance that has not loaded, or failed to load, is not a balance of zero:
+ * blocking a funded buyer behind a request that has not come back yet is a
+ * worse failure than letting a payment fail honestly at the wallet, and the
+ * chain is the only thing that can truly refuse a transfer. So this warns and
+ * gates on a KNOWN shortfall only.
+ *
+ * An unparseable amount is not an affordability question — the caller has
+ * already refused it as invalid, and answering "you cannot afford `abc`" puts
+ * the wrong error on screen.
+ */
+export function canAfford(amount: string, balanceUnits: bigint | null): boolean {
+  if (balanceUnits === null) return true;
+  if (!isPayableAmount(amount)) return true;
+  return usdcToBaseUnits(amount) <= balanceUnits;
+}

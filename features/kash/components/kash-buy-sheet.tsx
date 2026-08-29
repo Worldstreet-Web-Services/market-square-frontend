@@ -5,10 +5,11 @@ import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { KashCoin } from "@/components/ui/kash-coin";
 import { errorMessage } from "@/lib/api/envelope";
-import { isPayableAmount, usdcToBaseUnits } from "@/lib/erc20";
+import { canAfford, isPayableAmount, usdcToBaseUnits } from "@/lib/erc20";
 import { holdKey, newIntentId } from "@/lib/payment-hold";
 import { heldPayment } from "@/lib/payment-store";
 import { useEmbeddedWallet } from "@/hooks/use-wallet";
+import { useUsdcBalance } from "@/hooks/use-usdc-balance";
 import {
   useKashBuy,
   useKashDeskBuyQuote,
@@ -51,6 +52,14 @@ const PHASE_LABEL: Record<Exclude<BuyPhase, "idle">, string> = {
 
 export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { address: wallet } = useEmbeddedWallet();
+  /**
+   * What the reader can spend.
+   *
+   * Only meaningful when the engine is in a real-money mode: in `mock` no USDC
+   * moves, so a balance is not a constraint and showing one would invent a
+   * requirement that does not exist.
+   */
+  const balance = useUsdcBalance(open);
   const status = useKashStatus();
   const [amount, setAmount] = useState("10");
   const [phase, setPhase] = useState<BuyPhase>("idle");
@@ -110,11 +119,16 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
     usdcToBaseUnits(amount) >= usdcToBaseUnits(String(min)) &&
     usdcToBaseUnits(amount) <= usdcToBaseUnits(String(max));
 
+  // In mock mode nothing leaves the wallet, so the balance constrains nothing.
+  const spendsRealUsdc = status.data?.treasury.usdcMode === "ethers";
+  const knownBalance = spendsRealUsdc ? balance.units : null;
+  const affordable = canAfford(amount, knownBalance);
+  const noFunds = knownBalance === 0n;
   const busy = phase !== "idle" || buy.isPending;
   // Unreachable engine, no wallet, or a deliberate halt: there is nothing a
   // press could achieve.
   const unavailable = status.isError || !wallet || deskPaused;
-  const canSubmit = Boolean(wallet) && valid && !busy && !unavailable;
+  const canSubmit = Boolean(wallet) && valid && affordable && !busy && !unavailable;
 
   const shownKash = deskLive ? deskQuote.data?.kashOut : engineQuote.data?.kashReceived;
   const shownPrice = deskLive ? desk.data?.priceUsd : engineQuote.data?.kashPriceUsd;
@@ -182,12 +196,18 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
           ) : (
             <>
               <div>
-                <label
-                  htmlFor="kash-buy-amount"
-                  className="text-[13px] text-white/50"
-                >
-                  Amount in USDC
-                </label>
+                <div className="flex items-baseline justify-between gap-3">
+                  <label htmlFor="kash-buy-amount" className="text-[13px] text-white/50">
+                    Amount in USDC
+                  </label>
+                  {/* An unknown balance prints nothing at all — a zero there
+                      would be the interface inventing a shortfall. */}
+                  {wallet && spendsRealUsdc && balance.formatted !== null && (
+                    <span className="tnum text-[12.5px] text-white/45">
+                      ${balance.formatted} available
+                    </span>
+                  )}
+                </div>
                 <div className="ws-field mt-1.5 flex h-12 items-center gap-2 px-4">
                   <span className="shrink-0 text-[15px] text-white/40">$</span>
                   <input
@@ -262,6 +282,20 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
               {!valid && amount.trim() !== "" && (
                 <p className="mt-3 text-[12.5px] text-white/50">
                   Between ${min} and ${max.toLocaleString("en-US")}.
+                </p>
+              )}
+              {/* No funds at all, said before an amount is chosen: no amount
+                  would have worked, so the bounds hint below would be the
+                  wrong thing to read first. */}
+              {wallet && noFunds && (
+                <p className="mt-3 text-[12.5px] text-white/60">
+                  You&apos;ll need USDC on Base to buy KASH. Add some to your wallet,
+                  then come back.
+                </p>
+              )}
+              {wallet && !noFunds && !affordable && valid && balance.formatted !== null && (
+                <p className="mt-3 text-[12.5px] text-down">
+                  That&apos;s more than your ${balance.formatted}.
                 </p>
               )}
               {buy.isError && (

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  canAfford,
+  decodeUint256,
+  encodeErc20BalanceOf,
   encodeErc20Transfer,
   formatUsdc,
   fromBaseUnits,
@@ -99,5 +102,55 @@ test("zero is not a payable amount", () => {
 test("isPayableAmount answers rather than throwing, for a disabled button", () => {
   for (const bad of ["", "abc", "-1", "1.1234567", "1e6"]) {
     assert.equal(isPayableAmount(bad), false, bad);
+  }
+});
+
+test("the balanceOf calldata is the canonical encoding", () => {
+  assert.equal(
+    encodeErc20BalanceOf(RECIPIENT),
+    "0x70a08231000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  );
+  assert.equal(encodeErc20BalanceOf(RECIPIENT).length, 2 + 8 + 64);
+});
+
+test("a malformed owner throws rather than reading a padded nothing", () => {
+  for (const bad of ["", "0x", "nope", RECIPIENT.slice(0, -1)]) {
+    assert.throws(() => encodeErc20BalanceOf(bad), /not an EVM address/u, bad);
+  }
+});
+
+test("a returned word decodes exactly, past a float's range", () => {
+  assert.equal(decodeUint256(`0x${"0".repeat(58)}989680`), 10_000_000n);
+  assert.equal(decodeUint256(`0x${"0".repeat(64)}`), 0n);
+  assert.equal(decodeUint256(`0x${"f".repeat(64)}`), 2n ** 256n - 1n);
+});
+
+test("an unreadable word is NULL, never zero", () => {
+  // A call to a non-contract address returns bare "0x". Reading that as a
+  // zero balance would tell a funded reader they have nothing.
+  for (const bad of ["0x", "", "0xzz", "0x" + "0".repeat(65), null, undefined, 0, {}]) {
+    assert.equal(decodeUint256(bad), null, String(bad));
+  }
+});
+
+test("an UNKNOWN balance never blocks a buyer", () => {
+  // Blocking a funded buyer behind a request that has not come back is worse
+  // than letting the payment fail honestly at the wallet.
+  assert.equal(canAfford("10", null), true);
+  assert.equal(canAfford("1000000", null), true);
+});
+
+test("a KNOWN shortfall is the only thing that blocks", () => {
+  assert.equal(canAfford("10", 10_000_000n), true); // exactly enough
+  assert.equal(canAfford("10", 9_999_999n), false); // a hundredth of a cent short
+  assert.equal(canAfford("10", 0n), false);
+  assert.equal(canAfford("0.000001", 1n), true);
+});
+
+test("an invalid amount is not an affordability question", () => {
+  // The caller has already refused it as invalid; answering "you cannot
+  // afford abc" puts the wrong error on screen.
+  for (const bad of ["", "abc", "-1", "1.1234567"]) {
+    assert.equal(canAfford(bad, 0n), true, bad);
   }
 });
