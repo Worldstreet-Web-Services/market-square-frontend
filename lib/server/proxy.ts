@@ -189,7 +189,9 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
     });
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-    recordUpstreamFailure();
+    // Same rule as below: a transport failure on a read is the signal the
+    // breaker is for; on a write it is one person's action failing.
+    if (method === "GET" || method === "HEAD") recordUpstreamFailure();
     log.error(
       `[ms-proxy] ${method} ${route} upstream request failed (requestId=${requestId}, bytes=${body?.byteLength ?? 0}):`,
       errorLabel(error)
@@ -199,10 +201,32 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
       : fail(502, "SERVICE_UNAVAILABLE", "Market Square is unreachable.", { requestId });
   }
 
-  // A 5xx is the service being unwell; a 4xx is it working and saying no, so
-  // only the first kind counts towards shutting the circuit.
-  if (res.status >= 500) recordUpstreamFailure();
-  else recordUpstreamSuccess();
+  /**
+   * A 5xx is the service being unwell; a 4xx is it working and saying no. But
+   * WHICH REQUEST failed matters as much as how.
+   *
+   * The breaker exists to stop this instance burning billed memory waiting on
+   * a dead upstream, and what does that is POLLING — the feed, presence,
+   * unread, chat, all retrying on their own. A write is one deliberate act by
+   * one person, and letting it shut the circuit means a single broken
+   * CAPABILITY takes down every read in the app: a creator pressing "Go live"
+   * five times against a service whose LiveKit credentials were missing put
+   * the whole square behind "Market Square is unreachable" for everyone that
+   * instance served, while the feed itself was answering fine.
+   *
+   * So reads inform the breaker and writes do not. A genuine outage is
+   * indistinguishable to the polls, which see it within a second or two and
+   * open the circuit exactly as before; a capability that is merely
+   * misconfigured now fails only for the person who asked for it. Writes are
+   * still REFUSED while the circuit is open — that half is about not paying
+   * to wait on a corpse, and it stands.
+   */
+  const informsBreaker = method === "GET" || method === "HEAD";
+  if (res.status >= 500) {
+    if (informsBreaker) recordUpstreamFailure();
+  } else if (informsBreaker) {
+    recordUpstreamSuccess();
+  }
 
   const text = await res.text().catch(() => "");
   if (res.ok) return { status: res.status, body: text, contentType: JSON_CT };

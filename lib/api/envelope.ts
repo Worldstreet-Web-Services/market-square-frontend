@@ -132,7 +132,23 @@ export function errorMessage(error: unknown, fallback: string): string {
       // which is still better than a bare code.
       return humaniseValidation(err.message) ?? err.message ?? fallback;
     case "SERVICE_UNAVAILABLE":
-      return "Market Square is unreachable right now.";
+      /**
+       * KEEP the upstream's own message when it sent one.
+       *
+       * This used to answer "Market Square is unreachable right now."
+       * unconditionally, and that is a claim about the whole product. The
+       * service uses this code for a SINGLE CAPABILITY being unavailable too
+       * — "LiveKit room creation failed" is one, and going live returned it
+       * while the feed, messages and everything else were answering in under
+       * a second. Every creator who tried was told the square was down, and
+       * whoever they told read it as an outage.
+       *
+       * So the specific message wins and the generic line is only the
+       * fallback, which is the same rule four codes above already follow. The
+       * proxy's own transport failure carries "Market Square is unreachable."
+       * as its message, so a real outage still reads as one.
+       */
+      return err.message || "Market Square is unreachable right now.";
     default:
       return err.message || fallback;
   }
