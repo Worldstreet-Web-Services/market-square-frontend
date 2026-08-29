@@ -35,10 +35,26 @@ export function TipSheet({
   open,
   onClose,
   target,
+  balance,
 }: {
   open: boolean;
   onClose: () => void;
   target: TipTarget;
+  /**
+   * The reader's own KASH balance, rendered beside the amount they are
+   * choosing.
+   *
+   * A SLOT, not a hook call, because the balance belongs to the kash slice and
+   * slices never import each other (CLAUDE.md) — it is composed in at
+   * `components/layout/home-screen.tsx`, the same way `FollowPill` reaches the
+   * feed. It takes the chosen amount so the kash slice can say "that is more
+   * than you have" without this sheet ever holding a balance to compare
+   * against; `null` while the amount is half-typed and not yet a number.
+   *
+   * Optional so the sheet still renders where nothing supplies it — the tip
+   * flow does not depend on the balance existing.
+   */
+  balance?: (amountKash: string | null) => React.ReactNode;
 }) {
   const [stage, setStage] = useState<Stage>("amount");
   const [amount, setAmount] = useState<string>(DEFAULT_TIP_KASH);
@@ -208,7 +224,12 @@ export function TipSheet({
             with the grid visible down both sides of it.
           */}
           <div className="sticky bottom-0 -mx-5 mt-4 bg-sheet px-5 pb-1 pt-3">
-            <div>
+            {/* What they HAVE, above what they are about to spend. The sheet
+                used to ask people to price their gratitude without ever
+                telling them their balance, so the only way to find out you
+                could not afford a tip was to send it and read the failure. */}
+            {balance?.(parsed.ok ? parsed.amountKash : null)}
+            <div className="mt-2">
               <p className="mb-1.5 text-[13px] text-white/50">
                 Or another amount
               </p>
