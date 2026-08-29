@@ -39,16 +39,31 @@ const SOURCES = [
 ];
 
 describe("the create button is rendered once, fixed, in the shell", () => {
-  it("exists exactly once across every surface that used to draw one", () => {
-    const total = SOURCES.reduce(
-      (count, path) => count + (read(path).match(/aria-label="Create post"/g) ?? []).length,
-      0
-    );
-    assert.equal(
-      total,
-      1,
-      "a second copy is how the button drifted between pages — the shell owns the only one"
-    );
+  // Two, and only two, and both in the shell: the desktop circle in the corner
+  // and the phone's, which rides in the tab bar's row so it cannot land on top
+  // of the bar. They are mutually exclusive by breakpoint — see the test below
+  // — so a reader still only ever sees one.
+  it("is drawn only by the shell, never by a route", () => {
+    for (const path of SOURCES.filter((source) => !source.startsWith("components/layout/"))) {
+      assert.equal(
+        (read(path).match(/aria-label="Create post"/g) ?? []).length,
+        0,
+        `${path} drew its own compose control — that is how the button drifted between pages`
+      );
+    }
+    const inShell =
+      (stripComments(shell).match(/aria-label="Create post"/g) ?? []).length +
+      (fabCode.match(/aria-label="Create post"/g) ?? []).length;
+    assert.equal(inShell, 2, "one for the desktop corner, one for the phone's tab row");
+  });
+
+  it("shows exactly one of the two at any width", () => {
+    // Both are unconditional within their breakpoint, so overlap would be
+    // permanent rather than intermittent: the desktop circle is hidden below
+    // md, and the phone's bar is hidden from md up.
+    assert.match(fabCode, /\bhidden\b[^"]*\bmd:flex\b/, "the corner button is desktop-only");
+    const mobileBar = stripComments(shell).slice(stripComments(shell).indexOf("function MobileBar"));
+    assert.match(mobileBar.slice(0, 2000), /md:hidden/, "the phone's bar is mobile-only");
   });
 
   it("is position:fixed, never sticky or absolute", () => {

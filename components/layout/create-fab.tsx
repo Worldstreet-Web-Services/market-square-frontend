@@ -26,7 +26,10 @@ export function CreateFab({ onClick }: { onClick: () => void }) {
       // Bottom inset differs by breakpoint for one reason only: the mobile tab
       // bar. --ws-fab-bottom is defined in globals.css so the bar's height and
       // the button's clearance cannot drift apart.
-      className="fixed right-[10px] z-40 flex h-[71px] w-[71px] items-center justify-end p-[9.10256px]"
+      // `hidden md:flex`: the phone has its own create button, sitting IN the
+      // tab bar's row rather than on top of it. Two fixed circles in one corner
+      // is what this used to be.
+      className="fixed right-[10px] z-40 hidden h-[71px] w-[71px] items-center justify-end p-[9.10256px] md:flex"
       style={{ bottom: "var(--ws-fab-bottom)" }}
     >
       <button

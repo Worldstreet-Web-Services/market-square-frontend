@@ -5,7 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useTrackNavHistory } from "@/lib/nav-history";
-import { type RailState, railFromDrag, railWidth, toggleRail } from "@/lib/sidebar-rail";
+import {
+  type RailState,
+  railFromDrag,
+  railWidth,
+  toggleRail,
+} from "@/lib/sidebar-rail";
 import { useRailState } from "@/lib/sidebar-rail-store";
 import { allowsCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
@@ -83,7 +88,8 @@ interface NavItem {
  * host that answers nothing. Setting it to a placeholder to get one nav link
  * would quietly turn all of them into placeholder links too.
  */
-const WORLDSTREET_URL = process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreetgold.com";
+const WORLDSTREET_URL =
+  process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreetgold.com";
 
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
@@ -96,23 +102,60 @@ const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
   { href: "/messages", label: "Messages", icon: IconMail, authed: true },
-  { href: "/notifications", label: "Notifications", icon: IconBell, authed: true },
+  {
+    href: "/notifications",
+    label: "Notifications",
+    icon: IconBell,
+    authed: true,
+  },
   { href: "/live", label: "Live", icon: IconLive },
   { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
   // Arkmarks had a route and a save button on every post, and no way in: the
   // only path to something you saved was typing the URL.
-  { href: "/arkmarks", label: "Arkmarks", icon: IconBookmark, authed: true, secondary: true },
+  {
+    href: "/arkmarks",
+    label: "Arkmarks",
+    icon: IconBookmark,
+    authed: true,
+    secondary: true,
+  },
   { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
   // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
-  { href: "/schedule", label: "Schedule", icon: IconCalendar, authed: true, secondary: true },
+  {
+    href: "/schedule",
+    label: "Schedule",
+    icon: IconCalendar,
+    authed: true,
+    secondary: true,
+  },
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
-  { href: "/admin", label: "Admin", icon: IconShield, authed: true, admin: true, secondary: true },
-  { href: "/operations", label: "Operations", icon: IconShield, authed: true, operator: true, secondary: true },
+  {
+    href: "/admin",
+    label: "Admin",
+    icon: IconShield,
+    authed: true,
+    admin: true,
+    secondary: true,
+  },
+  {
+    href: "/operations",
+    label: "Operations",
+    icon: IconShield,
+    authed: true,
+    operator: true,
+    secondary: true,
+  },
   // The way back to the rest of the platform. Market Square is one surface of
   // WorldStreet, and without this the two products have no door between them.
-  { href: WORLDSTREET_URL, label: "WorldStreet", icon: IconExternal, external: true, secondary: true },
+  {
+    href: WORLDSTREET_URL,
+    label: "WorldStreet",
+    icon: IconExternal,
+    external: true,
+    secondary: true,
+  },
 ];
 
 // Surfaces that need the full width: grids and dashboards drown inside a
@@ -139,7 +182,7 @@ function visibleNav(options: {
       // Presentation only. Every /admin route is enforced server-side, so a
       // non-admin who types the URL still gets a refusal.
       (!item.admin || options.isAdmin) &&
-      (!item.flag || MARKET_FLAGS[item.flag])
+      (!item.flag || MARKET_FLAGS[item.flag]),
   );
 }
 
@@ -148,7 +191,8 @@ const WIDE_PREFIX = ["/store/", "/operations/", "/studio/"];
 
 function isWide(pathname: string): boolean {
   return (
-    WIDE_EXACT.includes(pathname) || WIDE_PREFIX.some((prefix) => pathname.startsWith(prefix))
+    WIDE_EXACT.includes(pathname) ||
+    WIDE_PREFIX.some((prefix) => pathname.startsWith(prefix))
   );
 }
 
@@ -162,7 +206,13 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function OnAirPill({ streamId, compact }: { streamId: string | null; compact?: boolean }) {
+function OnAirPill({
+  streamId,
+  compact,
+}: {
+  streamId: string | null;
+  compact?: boolean;
+}) {
   return (
     <Link
       href="/studio"
@@ -170,7 +220,7 @@ function OnAirPill({ streamId, compact }: { streamId: string | null; compact?: b
       title="You're live — back to the studio"
       className={cn(
         "ws-press flex items-center gap-1.5 rounded-full bg-accent font-bold uppercase tracking-wider text-ink",
-        compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px]"
+        compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px]",
       )}
       data-stream={streamId ?? undefined}
     >
@@ -202,7 +252,9 @@ function NavLink({
   return (
     <Link
       href={item.href}
-      {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      {...(item.external
+        ? { target: "_blank", rel: "noopener noreferrer" }
+        : {})}
       aria-label={
         item.external
           ? `${item.label} (opens in a new tab)`
@@ -223,10 +275,15 @@ function NavLink({
             // not have — see the note in CLAUDE.md for why this renders from
             // the existing token instead.
             "border border-create/30 bg-create/[0.11] text-white shadow-[0px_1px_3px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]"
-          : "border border-transparent text-body hover:bg-white/[0.06]"
+          : "border border-transparent text-body hover:bg-white/[0.06]",
       )}
     >
-      <span className={cn("relative shrink-0", active ? "text-create" : "text-grey-400")}>
+      <span
+        className={cn(
+          "relative shrink-0",
+          active ? "text-create" : "text-grey-400",
+        )}
+      >
         <Icon className="h-6 w-6" filled={active} />
         {badge > 0 && (
           <span className="tnum absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-spotlight px-1 text-[9px] font-bold text-white">
@@ -239,7 +296,7 @@ function NavLink({
       <span
         className={cn(
           "hidden min-w-0 flex-col truncate text-[12px] font-bold leading-4 group-data-[rail=full]/rail:flex",
-          active ? "text-white" : "text-body"
+          active ? "text-white" : "text-body",
         )}
       >
         {item.label}
@@ -255,7 +312,10 @@ function NavLink({
 // Which nav hrefs wear a badge, and which global count feeds each.
 const BADGE_FOR: Record<
   string,
-  ((counts: { messages: number; notifications: number } | undefined) => number) | undefined
+  | ((
+      counts: { messages: number; notifications: number } | undefined,
+    ) => number)
+  | undefined
 > = {
   "/notifications": (counts) => counts?.notifications ?? 0,
   "/messages": (counts) => counts?.messages ?? 0,
@@ -289,11 +349,13 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
               <Link
                 key={item.href}
                 href={item.href}
-                {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                {...(item.external
+                  ? { target: "_blank", rel: "noopener noreferrer" }
+                  : {})}
                 onClick={() => setOpen(false)}
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-white/10",
-                  isActive(pathname, item.href) ? "text-heading" : "text-body"
+                  isActive(pathname, item.href) ? "text-heading" : "text-body",
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -323,7 +385,9 @@ function AccountChip() {
         aria-label="Sign in"
       >
         <IconUser className="h-5 w-5 group-data-[rail=full]/rail:hidden" />
-        <span className="hidden group-data-[rail=full]/rail:block">Sign in</span>
+        <span className="hidden group-data-[rail=full]/rail:block">
+          Sign in
+        </span>
       </button>
     );
   }
@@ -336,7 +400,12 @@ function AccountChip() {
         href={me.data ? `/u/${me.data.username}` : "/auth"}
         className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 transition-colors hover:bg-white/8"
       >
-        <Avatar name={me.data?.displayName ?? "Me"} seed={me.data?.id} src={me.data?.avatarUrl} size={34} />
+        <Avatar
+          name={me.data?.displayName ?? "Me"}
+          seed={me.data?.id}
+          src={me.data?.avatarUrl}
+          size={34}
+        />
         <span className="hidden min-w-0 flex-1 group-data-[rail=full]/rail:block">
           <span className="block truncate text-[12px] font-bold leading-4 text-white">
             {me.data?.displayName ?? "You"}
@@ -365,7 +434,6 @@ function AccountChip() {
   );
 }
 
-
 /**
  * The drag edge between the nav and the page.
  *
@@ -390,7 +458,8 @@ function RailHandle({
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
 
-    const move = (moved: PointerEvent) => preview(railFromDrag(moved.clientX, start));
+    const move = (moved: PointerEvent) =>
+      preview(railFromDrag(moved.clientX, start));
     const up = (ended: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
@@ -410,9 +479,12 @@ function RailHandle({
       onPointerDown={onPointerDown}
       onDoubleClick={() => commit(toggleRail(rail))}
       onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") commit(railFromDrag(railWidth(rail) - 16, rail));
-        else if (event.key === "ArrowRight") commit(railFromDrag(railWidth(rail) + 16, rail));
-        else if (event.key === "Enter" || event.key === " ") commit(toggleRail(rail));
+        if (event.key === "ArrowLeft")
+          commit(railFromDrag(railWidth(rail) - 16, rail));
+        else if (event.key === "ArrowRight")
+          commit(railFromDrag(railWidth(rail) + 16, rail));
+        else if (event.key === "Enter" || event.key === " ")
+          commit(toggleRail(rail));
         else return;
         event.preventDefault();
       }}
@@ -478,19 +550,27 @@ function Sidebar({
             ~3.3:1 where that asset was ~12.8:1, so matching the old height
             would have shrunk the type to about 9px. */}
         <LogoMark size={28} className="group-data-[rail=full]/rail:hidden" />
-        <Wordmark height={30} className="hidden group-data-[rail=full]/rail:block" />
+        <Wordmark
+          height={30}
+          className="hidden group-data-[rail=full]/rail:block"
+        />
       </Link>
 
       {/* The explicit control. The drag edge is discoverable only once you
           know it is there; this says the rail collapses. */}
       <button
         onClick={() => commit(toggleRail(rail))}
-        aria-label={rail.mode === "icon" ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={
+          rail.mode === "icon" ? "Expand sidebar" : "Collapse sidebar"
+        }
         aria-expanded={rail.mode === "full"}
         className="ws-press mb-2 flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
       >
         <IconChevronLeft
-          className={cn("h-4 w-4 transition-transform", rail.mode === "icon" && "rotate-180")}
+          className={cn(
+            "h-4 w-4 transition-transform",
+            rail.mode === "icon" && "rotate-180",
+          )}
         />
       </button>
 
@@ -521,10 +601,17 @@ function Sidebar({
           {visible
             .filter((item) => item.secondary)
             .map((item) => (
-              <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+              <NavLink
+                key={item.href}
+                item={item}
+                active={isActive(pathname, item.href)}
+              />
             ))}
         </div>
-        <MoreMenu items={visible.filter((item) => item.secondary)} pathname={pathname} />
+        <MoreMenu
+          items={visible.filter((item) => item.secondary)}
+          pathname={pathname}
+        />
       </nav>
 
       {/* Post is the primary act; going live is the one Market Square adds
@@ -543,7 +630,9 @@ function Sidebar({
             aria-label="Post gist"
           >
             <IconPlus className="h-6 w-6 group-data-[rail=full]/rail:hidden" />
-            <span className="hidden group-data-[rail=full]/rail:block">Post gist</span>
+            <span className="hidden group-data-[rail=full]/rail:block">
+              Post gist
+            </span>
           </button>
         )}
         <Link
@@ -552,7 +641,9 @@ function Sidebar({
           aria-label="Go live"
         >
           <IconCamera className="h-5 w-5" />
-          <span className="hidden group-data-[rail=full]/rail:block">Go live</span>
+          <span className="hidden group-data-[rail=full]/rail:block">
+            Go live
+          </span>
         </Link>
       </div>
 
@@ -590,7 +681,8 @@ const CRUMB: Array<[RegExp, string]> = [
 ];
 
 function Breadcrumb({ pathname }: { pathname: string }) {
-  const leaf = CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Market Square";
+  const leaf =
+    CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Market Square";
   return (
     <div className="ws-hair hidden h-[69px] shrink-0 items-center border-b bg-[#0f0f0f] px-6 md:flex">
       <nav aria-label="Breadcrumb" className="text-[16px] text-[#979797]">
@@ -654,12 +746,19 @@ function MobileMenu({
             onClick={onClose}
             className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:bg-white/8"
           >
-            <Avatar name={me.data?.displayName ?? "Me"} seed={me.data?.id} src={me.data?.avatarUrl} size={40} />
+            <Avatar
+              name={me.data?.displayName ?? "Me"}
+              seed={me.data?.id}
+              src={me.data?.avatarUrl}
+              size={40}
+            />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-bold text-heading">
                 {me.data?.displayName ?? "You"}
               </span>
-              <span className="block truncate text-xs text-meta">@{me.data?.username ?? "…"}</span>
+              <span className="block truncate text-xs text-meta">
+                @{me.data?.username ?? "…"}
+              </span>
             </span>
             <span className="shrink-0 text-xs text-meta">View profile</span>
           </Link>
@@ -670,14 +769,16 @@ function MobileMenu({
             <Link
               key={item.href}
               href={item.href}
-              {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              {...(item.external
+                ? { target: "_blank", rel: "noopener noreferrer" }
+                : {})}
               onClick={onClose}
               aria-current={isActive(pathname, item.href) ? "page" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-2xl border px-3 py-3 text-sm font-semibold transition-colors",
                 isActive(pathname, item.href)
                   ? "border-white/15 bg-white/10 text-heading"
-                  : "border-white/10 text-body hover:bg-white/[0.06]"
+                  : "border-white/10 text-body hover:bg-white/[0.06]",
               )}
             >
               <item.icon className="h-5 w-5 shrink-0" />
@@ -712,63 +813,121 @@ function MobileMenu({
   );
 }
 
-function MobileBar({ pathname }: { pathname: string }) {
-  const { authenticated } = useAuth();
-  const me = useMe();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  // Four tabs plus the drawer. Everything else the sidebar lists lives behind
-  // that fifth slot rather than being unreachable.
-  const visible = visibleNav({
-    authenticated,
-    isAdmin: Boolean(me.data?.isAdmin),
-    isOperator: me.data?.role === "worldstreet",
-  });
-  const tabs = visible.filter((item) => !item.secondary && item.href !== "/studio").slice(0, 4);
+function MobileBar({
+  pathname,
+  items,
+  unread,
+  onCompose,
+}: {
+  pathname: string;
+  items: NavItem[];
+  unread: { messages: number; notifications: number } | undefined;
+  /** Absent where composing is suppressed — the bar then has no centre node. */
+  onCompose?: () => void;
+}) {
+  // Four tabs, and only four. Everything else the sidebar lists lives in the
+  // drawer behind the account avatar in the top strip — this bar used to carry
+  // a fifth "More" slot for the same drawer, which meant two doors to one room
+  // and one of them wearing a glyph that names nothing.
+  const tabs = items
+    .filter((item) => !item.secondary && item.href !== "/studio")
+    .slice(0, 4);
 
   return (
-    <nav
-      className="ws-head fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-b-0 border-t md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      aria-label="Primary"
+    /**
+     * A floating pill, not a full-width band.
+     *
+     * The band was a rectangle welded to the bottom edge carrying five stacked
+     * icon-and-label columns, which is a 2016 tab bar: it spends ~70px of a
+     * phone screen on labels for destinations the reader already knows, and it
+     * makes the compose button an intruder that has to float ON TOP of it.
+     *
+     * This is the shape the rest of the platform uses (`wsws-frontend`'s
+     * `MobileTabBar`) — a glass pill above the safe area, tabs reduced to their
+     * glyph, and only the CURRENT one wearing its name. One label instead of
+     * five says where you are more clearly than five did, and the space it
+     * saves is what lets the compose button sit BESIDE the bar rather than over
+     * it.
+     *
+     * `pointer-events-none` on the frame, `auto` on the bar: the frame spans
+     * the screen so the bar can be centred in it, and without that the strip of
+     * empty space either side would swallow taps meant for the feed.
+     */
+    <div
+      // The bar is centred on the SCREEN and the create button is taken out of
+      // the flow entirely, pinned to the right edge.
+      //
+      // Both alternatives put the bar off centre. Centred as a PAIR it drifted
+      // left by half the button, so navigation moved depending on whether the
+      // reader was allowed to post at all. As a three-column grid it drifted
+      // the other way once the middle column ran out of room — 3px at 360px,
+      // small but exactly the kind of thing that reads as sloppy. Absolute
+      // positioning is the only arrangement where the centre is the centre at
+      // every width.
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center px-3 md:hidden"
+      style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
     >
-      {tabs.map((item) => {
-        const active = isActive(pathname, item.href);
-        return (
-          // The mobile frame labels every tab under a 24px glyph and dims the
-          // inactive ones to #6D6D6D.
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5",
-              active ? "text-[#E6E6E6]" : "text-[#6D6D6D]"
-            )}
-          >
-            <item.icon className="h-6 w-6" filled={active} />
-            <span className={cn("text-[12px] leading-[14.8px]", active && "text-white")}>
-              {item.label}
-            </span>
-          </Link>
-        );
-      })}
-      <button
-        onClick={() => setMenuOpen(true)}
-        aria-label="More sections"
-        aria-expanded={menuOpen}
-        className="ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5 text-[#6D6D6D]"
+      <nav
+        aria-label="Primary"
+        className="ws-glass pointer-events-auto flex max-w-full items-center gap-1 rounded-full border border-white/12 p-1.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]"
       >
-        <IconMore className="h-6 w-6" />
-        <span className="text-[12px] leading-[14.8px]">More</span>
-      </button>
-      <MobileMenu
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        items={visible}
-        pathname={pathname}
-      />
-    </nav>
+        {tabs.map((item) => {
+          const active = isActive(pathname, item.href);
+          const badge = BADGE_FOR[item.href]?.(unread) ?? 0;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              aria-label={
+                badge > 0 ? `${item.label}, ${badge} unread` : item.label
+              }
+              className={cn(
+                "ws-press flex h-11 items-center gap-1.5 rounded-full transition-colors",
+                active
+                  ? "bg-white/[0.14] px-3.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
+                  : "w-11 justify-center text-white/50",
+              )}
+            >
+              <span className="relative shrink-0">
+                <item.icon className="h-[21px] w-[21px]" filled={active} />
+                {/* The count lives HERE and only here. It used to sit on a
+                    second bell in the top strip, which was the same
+                    destination without the number. */}
+                {badge > 0 && (
+                  <span className="tnum absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-spotlight px-1 text-[9px] font-bold text-white">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </span>
+              {active && (
+                <span className="whitespace-nowrap text-[12.5px] font-medium">
+                  {item.label}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Pinned to the right edge and OUT of the flow, so it cannot move the
+          bar. It used to be a fixed circle in the corner that landed on top of
+          the tab bar and the composer's own controls; sharing this row means
+          neither covers the other, and being absolute means the bar's centre
+          does not depend on whether this button is there. */}
+      {onCompose && (
+        <button
+          onClick={onCompose}
+          aria-label="Create post"
+          // Exactly the bar's outer height (44px row + 6px padding + 1px
+          // border, twice), so the two read as one row of controls rather than
+          // a bar with something smaller stuck beside it.
+          className="ws-btn-fab ws-press pointer-events-auto absolute right-3 grid size-[58px] shrink-0 place-items-center rounded-full text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]"
+        >
+          <IconPlus className="h-6 w-6" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -776,8 +935,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useTrackNavHistory();
   const { authenticated } = useAuth();
+  const me = useMe();
+  const unread = useUnread();
   const broadcast = useBroadcastStatus();
   const [composeOpen, setComposeOpen] = useState(false);
+  /**
+   * The mobile drawer, owned HERE because two surfaces open it: the account
+   * avatar in the top strip and the "More" tab at the bottom. Two copies of
+   * the state would mean two drawers, and the second one to open would sit
+   * over the first.
+   */
+  const [menuOpen, setMenuOpen] = useState(false);
+  // One nav list for both of them — computed once rather than by each.
+  const mobileNav = visibleNav({
+    authenticated,
+    isAdmin: Boolean(me.data?.isAdmin),
+    isOperator: me.data?.role === "worldstreet",
+  });
 
   // One piece of local state drives every compose entry point in the shell —
   // sidebar Post, the desktop floating button and the mobile one. They all sit
@@ -804,22 +978,54 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // the app looked left-aligned on the screens with the most room to give.
     // The cap is gone and the timeline takes the extra width from xl up.
     <div className="flex w-full">
-      <Sidebar pathname={pathname} onCompose={canCompose ? () => setComposeOpen(true) : undefined} />
+      <Sidebar
+        pathname={pathname}
+        onCompose={canCompose ? () => setComposeOpen(true) : undefined}
+      />
 
-      {/* Mobile top strip: wordmark plus the two things worth reaching from
-          anywhere — what's live, and search. */}
-      <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between px-4 md:hidden">
-        <Wordmark height={26} />
-        <div className="flex items-center gap-3">
-          {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
+      {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
+          and the two things worth reaching from anywhere on the right.
+          The avatar is the door to everything the sidebar holds on desktop —
+          it opens the same drawer the "More" tab does, so the account you are
+          posting as is both visible and the way in, which is the arrangement
+          every phone app in this category uses. */}
+      <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center px-4 md:hidden">
+        <button
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+          className="ws-press -ml-1 shrink-0 rounded-full p-1"
+        >
+          {authenticated ? (
+            <Avatar
+              name={me.data?.displayName ?? "Me"}
+              seed={me.data?.id}
+              src={me.data?.avatarUrl}
+              size={28}
+            />
+          ) : (
+            <IconUser className="h-6 w-6 text-meta" />
+          )}
+        </button>
+
+        {/* Absolutely centred, so the mark sits on the middle of the SCREEN
+            rather than the middle of whatever space the two sides leave —
+            those change with the live pill and the signed-in state. */}
+        <Wordmark
+          height={26}
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+        />
+
+        <div className="ml-auto flex items-center gap-3">
+          {broadcast.live && (
+            <OnAirPill streamId={broadcast.streamId} compact />
+          )}
+          {/* Search only. Notifications live in the bottom tab bar, where they
+              carry their unread badge — the bell here was the same
+              destination a second time, without the count. */}
           <Link href="/discover" className="text-meta" aria-label="Explore">
             <IconSearch className="h-5 w-5" />
           </Link>
-          {authenticated && (
-            <Link href="/notifications" className="text-meta" aria-label="Notifications">
-              <IconBell className="h-5 w-5" />
-            </Link>
-          )}
         </div>
       </div>
 
@@ -855,7 +1061,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               // black at 1440, 197px at 1512, 445px at 1920, always parked on
               // the right, where it reads as the whole product shoved to one
               // side. Every pane flexes to the window it is in instead.
-              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]"
+              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
             )}
           >
             {children}
@@ -874,11 +1080,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* The one create button. Fixed, mounted here rather than in any route,
           so it holds the same viewport corner on every surface. */}
+      {/* Desktop only: on a phone the create button rides in the tab bar's
+          row, where it cannot land on top of the bar or the composer. */}
       {canCompose && <CreateFab onClick={() => setComposeOpen(true)} />}
 
       <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
 
-      <MobileBar pathname={pathname} />
+      <MobileBar
+        pathname={pathname}
+        items={mobileNav}
+        unread={unread.data}
+        onCompose={canCompose ? () => setComposeOpen(true) : undefined}
+      />
+      <MobileMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={mobileNav}
+        pathname={pathname}
+      />
 
       {/* First-load claim-username prompt for freshly created profiles. */}
       <ClaimUsernameGate />
