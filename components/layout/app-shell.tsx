@@ -712,20 +712,11 @@ function MobileMenu({
   );
 }
 
-function MobileBar({
-  pathname,
-  items,
-  onOpenMenu,
-  menuOpen,
-}: {
-  pathname: string;
-  items: NavItem[];
-  /** The drawer is opened from two places now — see the note in AppShell. */
-  onOpenMenu: () => void;
-  menuOpen: boolean;
-}) {
-  // Four tabs plus the drawer. Everything else the sidebar lists lives behind
-  // that fifth slot rather than being unreachable.
+function MobileBar({ pathname, items }: { pathname: string; items: NavItem[] }) {
+  // Four tabs, and only four. Everything else the sidebar lists lives in the
+  // drawer behind the account avatar in the top strip — this bar used to carry
+  // a fifth "More" slot for the same drawer, which meant two doors to one room
+  // and one of them wearing a glyph that names nothing.
   const tabs = items.filter((item) => !item.secondary && item.href !== "/studio").slice(0, 4);
 
   return (
@@ -755,15 +746,6 @@ function MobileBar({
           </Link>
         );
       })}
-      <button
-        onClick={onOpenMenu}
-        aria-label="More sections"
-        aria-expanded={menuOpen}
-        className="ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5 text-[#6D6D6D]"
-      >
-        <IconMore className="h-6 w-6" />
-        <span className="text-[12px] leading-[14.8px]">More</span>
-      </button>
     </nav>
   );
 }
@@ -915,12 +897,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
 
-      <MobileBar
-        pathname={pathname}
-        items={mobileNav}
-        menuOpen={menuOpen}
-        onOpenMenu={() => setMenuOpen(true)}
-      />
+      <MobileBar pathname={pathname} items={mobileNav} />
       <MobileMenu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
