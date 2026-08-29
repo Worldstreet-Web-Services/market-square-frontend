@@ -200,12 +200,28 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
                   <label htmlFor="kash-buy-amount" className="text-[13px] text-white/50">
                     Amount in USDC
                   </label>
-                  {/* An unknown balance prints nothing at all — a zero there
-                      would be the interface inventing a shortfall. */}
+                  {/* Tappable, as wsws's is, so "spend what I have" is one
+                      press. Clamped to the engine's own maximum, because
+                      filling the field past a cap it will refuse turns a
+                      helpful shortcut into an error. An unknown balance prints
+                      nothing at all — a zero there would be the interface
+                      inventing a shortfall. */}
                   {wallet && spendsRealUsdc && balance.formatted !== null && (
-                    <span className="tnum text-[12.5px] text-white/45">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        const whole = balance.formatted as string;
+                        setAmount(
+                          usdcToBaseUnits(whole) > usdcToBaseUnits(String(max))
+                            ? String(max)
+                            : whole
+                        );
+                      }}
+                      className="tnum text-[12.5px] text-white/45 transition-colors hover:text-white disabled:opacity-40"
+                    >
                       ${balance.formatted} available
-                    </span>
+                    </button>
                   )}
                 </div>
                 <div className="ws-field mt-1.5 flex h-12 items-center gap-2 px-4">
@@ -293,11 +309,6 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
                   then come back.
                 </p>
               )}
-              {wallet && !noFunds && !affordable && valid && balance.formatted !== null && (
-                <p className="mt-3 text-[12.5px] text-down">
-                  That&apos;s more than your ${balance.formatted}.
-                </p>
-              )}
               {buy.isError && (
                 <p role="alert" className="mt-3 text-[13px] text-down">
                   {errorMessage(buy.error, "The purchase didn't complete.")}
@@ -317,13 +328,24 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
                 disabled={!canSubmit}
                 onClick={submit}
               >
-                {phase === "idle"
-                  ? buy.isError
-                    ? paymentHeld
-                      ? "Finish this purchase"
-                      : "Try again"
-                    : `Buy KASH for $${amount || "0"}`
-                  : PHASE_LABEL[phase]}
+                {/* The button carries the reason it will not work, as
+                    wsws's does. "Finish this purchase" outranks everything
+                    else: a held payment means their money has already moved,
+                    and that is the one thing they most need the control to
+                    say. */}
+                {phase !== "idle"
+                  ? PHASE_LABEL[phase]
+                  : paymentHeld
+                    ? "Finish this purchase"
+                    : !isPayableAmount(amount)
+                      ? "Enter an amount"
+                      : !valid
+                        ? `Between $${min} and $${max.toLocaleString("en-US")}`
+                        : !affordable
+                          ? "Not enough USDC"
+                          : buy.isError
+                            ? "Try again"
+                            : `Buy KASH for $${amount}`}
               </Button>
 
               {/* Wallet prompts are off (`showWalletUIs: false` in

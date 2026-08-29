@@ -267,14 +267,24 @@ export function BuySheet({
                   <label htmlFor="token-buy-amount" className="text-[13px] text-white/50">
                     Spend
                   </label>
-                  {/* What they can actually spend, before they choose. An
-                      unknown balance prints NOTHING rather than a zero: "we
-                      could not read it" and "you have none" look identical on
-                      screen and call for opposite reactions. */}
+                  {/* What they can actually spend, before they choose — and
+                      tappable, as wsws's does, so "spend what I have" is one
+                      press rather than a number to copy by hand. An unknown
+                      balance prints NOTHING rather than a zero: "we could not
+                      read it" and "you have none" look identical on screen and
+                      call for opposite reactions.
+
+                      `formatted` is floored to cents, so filling the field
+                      from it can never ask for more than the wallet holds. */}
                   {wallet && balance.formatted !== null && (
-                    <span className="tnum text-[12.5px] text-white/45">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setAmount(balance.formatted as string)}
+                      className="tnum text-[12.5px] text-white/45 transition-colors hover:text-white disabled:opacity-40"
+                    >
                       ${balance.formatted} available
-                    </span>
+                    </button>
                   )}
                 </div>
                 <div className="ws-field mt-1.5 flex h-12 items-center gap-2 px-4">
@@ -379,14 +389,6 @@ export function BuySheet({
                   come back.
                 </p>
               )}
-              {/* Short, rather than empty. Only when the amount itself is
-                  otherwise fine, so the reader is never given two reasons for
-                  one problem. */}
-              {wallet && !noFunds && !affordable && !tooSmall && balance.formatted !== null && (
-                <p className="mt-3 text-[12.5px] text-down">
-                  That&apos;s more than your ${balance.formatted}.
-                </p>
-              )}
               {buy.isError && (
                 <p role="alert" className="mt-3 text-[13px] text-down">
                   {errorMessage(buy.error, "That order didn't go through.")}
@@ -400,11 +402,22 @@ export function BuySheet({
                 disabled={!canSubmit}
                 onClick={submit}
               >
-                {phase === "idle"
-                  ? buy.isError
-                    ? "Try again"
-                    : `Buy ${displaySymbol(ticker.symbol)}`
-                  : PHASE_LABEL[phase]}
+                {/* The BUTTON says why it will not work, the way wsws's
+                    does. A disabled control beside a small grey line makes the
+                    reader hunt for the reason; carrying it in the label means
+                    the thing they are reaching for is the thing that explains
+                    itself. */}
+                {phase !== "idle"
+                  ? PHASE_LABEL[phase]
+                  : !isPayableAmount(amount)
+                    ? "Enter an amount"
+                    : tooSmall
+                      ? `Minimum $${MIN_BUY_USD}`
+                      : !affordable
+                        ? "Not enough USDC"
+                        : buy.isError
+                          ? "Try again"
+                          : `Buy ${displaySymbol(ticker.symbol)}`}
               </Button>
 
               {/* Wallet prompts are off (`showWalletUIs: false`), so this
