@@ -1,7 +1,8 @@
 "use client";
 
 import { parsePostText } from "@/lib/post-segments";
-import { resolveDeepLink, arkAppConfigured } from "@/lib/deeplink";
+import { arkAppConfigured } from "@/lib/deeplink";
+import { openTicker } from "@/lib/ticker-store";
 import { useTradeableMarkets, useTradeableSymbols } from "@/hooks/use-tradeable-symbols";
 
 /**
@@ -40,11 +41,19 @@ export function CoinChips({ text }: { text: string }) {
       {shown.map((market) => {
         const up = market.change24h >= 0;
         return (
-          <a
+          <button
             key={market.symbol}
-            href={resolveDeepLink({ kind: "buy", ref: market.symbol }).href}
-            target="_blank"
-            rel="noopener noreferrer"
+            type="button"
+            // The same destination the ticker in the text now has. A caption
+            // and the chip under it must not disagree about what tapping a
+            // coin does — that difference is what made one post read as two
+            // products.
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              openTicker(market.symbol);
+            }}
+            aria-label={`Buy ${market.symbol}`}
             className="ws-press inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 transition-colors hover:bg-white/8"
           >
             <span className="text-[12.5px] font-semibold text-white">{market.symbol}</span>
@@ -54,7 +63,7 @@ export function CoinChips({ text }: { text: string }) {
               {up ? "+" : "−"}
               {Math.abs(market.change24h).toFixed(2)}%
             </span>
-          </a>
+          </button>
         );
       })}
     </div>

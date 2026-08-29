@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { arkAppConfigured, resolveDeepLink } from "@/lib/deeplink";
+import { arkAppConfigured } from "@/lib/deeplink";
+import { openTicker } from "@/lib/ticker-store";
 import { parsePostText, type Segment } from "@/lib/post-segments";
 import { useTradeableSymbols } from "@/hooks/use-tradeable-symbols";
 import type { Mention } from "@/lib/api/schemas";
@@ -108,32 +109,42 @@ function SegmentView({ segment }: { segment: Segment }) {
       );
 
     case "cashtag": {
-      // Ark owns the trade screen, so a ticker opens ARK'S BUY SHEET for that
-      // symbol. It used to resolve as `market`, which routes to
-      // /prediction/<ref> — a prediction market, an entirely different
-      // product. `$ETH` landed on /prediction/ETH, which does not exist.
-      //
-      // With no Ark origin configured there is nowhere to send anybody, so the
-      // ticker stays text: the same rule every cross-product link follows.
-      const link = resolveDeepLink({ kind: "buy", ref: segment.symbol });
-      if (!arkAppConfigured() || !link.available) return <>{segment.value}</>;
-      // A CHIP, matching the treatment Ark gives a ticker. The same caption
-      // should not read as a chip on one surface and an underlined word on the
-      // other — that difference is exactly what makes two products feel like
-      // two products.
-      //
-      // No price here, unlike Ark's: Market Square has no price feed, and a
-      // chip that showed a stale or invented number would be worse than one
-      // that shows none.
+      /**
+       * A ticker opens the buy sheet HERE, in Market Square.
+       *
+       * It used to be an external link into Ark's dashboard: somebody reading
+       * a post tapped a coin and the app's answer was to close itself. Now the
+       * sheet opens in place — what the symbol is, what it costs, and the
+       * purchase itself, paid from the reader's own embedded wallet. Market
+       * Square and Ark share one Privy app, so it is the same wallet either
+       * way; the difference is that the reader keeps their page.
+       *
+       * The Ark origin still gates the chip, and deliberately so. That origin
+       * is what `/api/symbols` fetches the tradeable catalogue from, so with
+       * it unconfigured there is no catalogue, no price and nothing to open —
+       * the ticker stays plain text, exactly as before.
+       */
+      if (!arkAppConfigured()) return <>{segment.value}</>;
+      // A BUTTON, not a link: it opens a dialog rather than navigating, and a
+      // control that lies about what it does with a middle-click or a
+      // right-click "open in new tab" is worse than one that looks plainer.
+      // The visual treatment is unchanged, so a caption reads the same as it
+      // always did.
       return (
-        <a
-          href={link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mx-[1px] rounded-md bg-spotlight/20 px-1.5 py-[1px] text-[13px] font-semibold text-spotlight-chip-ink transition-colors hover:bg-spotlight/35"
+        <button
+          type="button"
+          onClick={(event) => {
+            // Post cards are links. Reading about a coin is not opening the
+            // post, and neither is buying one.
+            event.preventDefault();
+            event.stopPropagation();
+            openTicker(segment.symbol);
+          }}
+          aria-label={`Buy ${segment.symbol}`}
+          className="ws-press mx-[1px] rounded-md bg-spotlight/20 px-1.5 py-[1px] align-baseline text-[13px] font-semibold text-spotlight-chip-ink transition-colors hover:bg-spotlight/35"
         >
           {segment.value}
-        </a>
+        </button>
       );
     }
 
