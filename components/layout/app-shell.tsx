@@ -854,17 +854,19 @@ function MobileBar({
      * empty space either side would swallow taps meant for the feed.
      */
     <div
-      // A three-column grid, not a centred flex row: the bar holds the middle
-      // column so it sits on the middle of the SCREEN, and the create button
-      // takes the right column out to the edge. Centred as a pair, the bar
-      // drifted left by half the button whenever the button was there, so the
-      // navigation moved depending on whether you were allowed to post.
-      // Columns also mean the two can never overlap on a narrow phone, however
-      // long the active tab's label is.
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 md:hidden"
+      // The bar is centred on the SCREEN and the create button is taken out of
+      // the flow entirely, pinned to the right edge.
+      //
+      // Both alternatives put the bar off centre. Centred as a PAIR it drifted
+      // left by half the button, so navigation moved depending on whether the
+      // reader was allowed to post at all. As a three-column grid it drifted
+      // the other way once the middle column ran out of room — 3px at 360px,
+      // small but exactly the kind of thing that reads as sloppy. Absolute
+      // positioning is the only arrangement where the centre is the centre at
+      // every width.
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center px-3 md:hidden"
       style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
     >
-      <span aria-hidden />
       <nav
         aria-label="Primary"
         className="ws-glass pointer-events-auto flex max-w-full items-center gap-1 rounded-full border border-white/12 p-1.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]"
@@ -908,24 +910,23 @@ function MobileBar({
         })}
       </nav>
 
-      {/* Beside the bar, not over it. The create button used to be a fixed
-          circle in the corner that landed on top of the tab bar and the
-          composer's own controls — see the screenshots on the PR that moved
-          it. Sharing the row means neither can cover the other. */}
-      <span className="flex justify-end">
-        {onCompose && (
-          <button
-            onClick={onCompose}
-            aria-label="Create post"
-            // Exactly the bar's outer height (44px row + 6px padding + 1px
-            // border, twice), so the two read as one row of controls rather than
-            // a bar with something smaller stuck beside it.
-            className="ws-btn-fab ws-press pointer-events-auto grid size-[58px] shrink-0 place-items-center rounded-full text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]"
-          >
-            <IconPlus className="h-6 w-6" />
-          </button>
-        )}
-      </span>
+      {/* Pinned to the right edge and OUT of the flow, so it cannot move the
+          bar. It used to be a fixed circle in the corner that landed on top of
+          the tab bar and the composer's own controls; sharing this row means
+          neither covers the other, and being absolute means the bar's centre
+          does not depend on whether this button is there. */}
+      {onCompose && (
+        <button
+          onClick={onCompose}
+          aria-label="Create post"
+          // Exactly the bar's outer height (44px row + 6px padding + 1px
+          // border, twice), so the two read as one row of controls rather than
+          // a bar with something smaller stuck beside it.
+          className="ws-btn-fab ws-press pointer-events-auto absolute right-3 grid size-[58px] shrink-0 place-items-center rounded-full text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]"
+        >
+          <IconPlus className="h-6 w-6" />
+        </button>
+      )}
     </div>
   );
 }
