@@ -24,7 +24,25 @@ import {
 export async function apiFetch(
   path: string,
   init: RequestInit = {},
-  opts: { requireAuth?: boolean } = {}
+  opts: {
+    requireAuth?: boolean;
+    /**
+     * Does this request's health speak for Market Square?
+     *
+     * The breaker below is ONE breaker per tab, and its open state renders a
+     * banner reading "Can't reach Market Square right now". That is correct for
+     * `/api/market-square`, and wrong for every other upstream we proxy: the
+     * KASH engine and the routing provider are separate services with separate
+     * outages, and three 502s from a KASH balance poll must not tell forty
+     * queries — the feed, messages, notifications — that the square is down.
+     *
+     * So a non-Market-Square client passes `breaker: false`. It still fails
+     * honestly and its own surface goes quiet; it simply does not get a vote on
+     * whether the rest of the app stops asking. Defaults true so the main
+     * transport keeps exactly the behaviour it had.
+     */
+    breaker?: boolean;
+  } = {}
 ): Promise<Response> {
   if (DEMO_AUTH) return fetch(path, init);
 
@@ -60,7 +78,8 @@ export async function apiFetch(
    * informs the breaker.
    */
   const method = (init.method ?? "GET").toUpperCase();
-  const governed = method === "GET" || method === "HEAD";
+  const watched = opts.breaker !== false;
+  const governed = watched && (method === "GET" || method === "HEAD");
   if (governed && !circuitAllows()) {
     throw apiError("SERVICE_DOWN", "Can't reach Market Square right now.", 503);
   }
@@ -71,9 +90,10 @@ export async function apiFetch(
   } catch (error) {
     // Transport failure: no status, nothing to read. This is the clearest
     // signal the breaker gets, so it must not be swallowed.
-    recordCircuitFailure(undefined);
+    if (watched) recordCircuitFailure(undefined);
     throw error;
   }
+  if (!watched) return response;
   if (response.ok) recordCircuitSuccess();
   else recordCircuitFailure(response.status);
   return response;
