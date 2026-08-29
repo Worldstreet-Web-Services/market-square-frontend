@@ -47,7 +47,8 @@ import { useHeartbeat, usePlaybackToken } from "@/features/streams/hooks/use-pla
 import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-player";
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
-import { TipSheet, LIVE_GIFTS, type LiveGift } from "@/features/streams/components/tip-sheet";
+import { GiftSheet } from "@/features/streams/components/gift-sheet";
+import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
 import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
 import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
 import { TicketSheet } from "@/features/streams/components/ticket-sheet";
@@ -1187,7 +1188,7 @@ export function StreamRoom({
 
       <TicketSheet stream={data} open={ticketsOpen} onClose={() => setTicketsOpen(false)} />
       {MARKET_FLAGS.liveGifts && (
-        <TipSheet open={giftsOpen} onClose={() => setGiftsOpen(false)} onSend={sendGift} />
+        <GiftSheet open={giftsOpen} onClose={() => setGiftsOpen(false)} onSend={sendGift} />
       )}
     </div>
   );
