@@ -712,7 +712,18 @@ function MobileMenu({
   );
 }
 
-function MobileBar({ pathname, items }: { pathname: string; items: NavItem[] }) {
+function MobileBar({
+  pathname,
+  items,
+  unread,
+  onCompose,
+}: {
+  pathname: string;
+  items: NavItem[];
+  unread: { messages: number; notifications: number } | undefined;
+  /** Absent where composing is suppressed — the bar then has no centre node. */
+  onCompose?: () => void;
+}) {
   // Four tabs, and only four. Everything else the sidebar lists lives in the
   // drawer behind the account avatar in the top strip — this bar used to carry
   // a fifth "More" slot for the same drawer, which meant two doors to one room
@@ -720,33 +731,85 @@ function MobileBar({ pathname, items }: { pathname: string; items: NavItem[] }) 
   const tabs = items.filter((item) => !item.secondary && item.href !== "/studio").slice(0, 4);
 
   return (
-    <nav
-      className="ws-head fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-b-0 border-t md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      aria-label="Primary"
+    /**
+     * A floating pill, not a full-width band.
+     *
+     * The band was a rectangle welded to the bottom edge carrying five stacked
+     * icon-and-label columns, which is a 2016 tab bar: it spends ~70px of a
+     * phone screen on labels for destinations the reader already knows, and it
+     * makes the compose button an intruder that has to float ON TOP of it.
+     *
+     * This is the shape the rest of the platform uses (`wsws-frontend`'s
+     * `MobileTabBar`) — a glass pill above the safe area, tabs reduced to their
+     * glyph, and only the CURRENT one wearing its name. One label instead of
+     * five says where you are more clearly than five did, and the space it
+     * saves is what lets the compose button sit BESIDE the bar rather than over
+     * it.
+     *
+     * `pointer-events-none` on the frame, `auto` on the bar: the frame spans
+     * the screen so the bar can be centred in it, and without that the strip of
+     * empty space either side would swallow taps meant for the feed.
+     */
+    <div
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 px-4 md:hidden"
+      style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
     >
-      {tabs.map((item) => {
-        const active = isActive(pathname, item.href);
-        return (
-          // The mobile frame labels every tab under a 24px glyph and dims the
-          // inactive ones to #6D6D6D.
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5",
-              active ? "text-[#E6E6E6]" : "text-[#6D6D6D]"
-            )}
-          >
-            <item.icon className="h-6 w-6" filled={active} />
-            <span className={cn("text-[12px] leading-[14.8px]", active && "text-white")}>
-              {item.label}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
+      <nav
+        aria-label="Primary"
+        className="ws-glass pointer-events-auto flex max-w-full items-center gap-1 rounded-full border border-white/12 p-1.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]"
+      >
+        {tabs.map((item) => {
+          const active = isActive(pathname, item.href);
+          const badge = BADGE_FOR[item.href]?.(unread) ?? 0;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              aria-label={badge > 0 ? `${item.label}, ${badge} unread` : item.label}
+              className={cn(
+                "ws-press flex h-11 items-center gap-1.5 rounded-full transition-colors",
+                active
+                  ? "bg-white/[0.14] px-3.5 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]"
+                  : "w-11 justify-center text-white/50"
+              )}
+            >
+              <span className="relative shrink-0">
+                <item.icon className="h-[21px] w-[21px]" filled={active} />
+                {/* The count lives HERE and only here. It used to sit on a
+                    second bell in the top strip, which was the same
+                    destination without the number. */}
+                {badge > 0 && (
+                  <span className="tnum absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-spotlight px-1 text-[9px] font-bold text-white">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+              </span>
+              {active && (
+                <span className="whitespace-nowrap text-[12.5px] font-medium">{item.label}</span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Beside the bar, not over it. The create button used to be a fixed
+          circle in the corner that landed on top of the tab bar and the
+          composer's own controls — see the screenshots on the PR that moved
+          it. Sharing the row means neither can cover the other. */}
+      {onCompose && (
+        <button
+          onClick={onCompose}
+          aria-label="Create post"
+          // Exactly the bar's outer height (44px row + 6px padding + 1px
+          // border, twice), so the two read as one row of controls rather than
+          // a bar with something smaller stuck beside it.
+          className="ws-btn-fab ws-press pointer-events-auto grid size-[58px] shrink-0 place-items-center rounded-full text-white shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]"
+        >
+          <IconPlus className="h-6 w-6" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -755,6 +818,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useTrackNavHistory();
   const { authenticated } = useAuth();
   const me = useMe();
+  const unread = useUnread();
   const broadcast = useBroadcastStatus();
   const [composeOpen, setComposeOpen] = useState(false);
   /**
@@ -893,11 +957,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* The one create button. Fixed, mounted here rather than in any route,
           so it holds the same viewport corner on every surface. */}
+      {/* Desktop only: on a phone the create button rides in the tab bar's
+          row, where it cannot land on top of the bar or the composer. */}
       {canCompose && <CreateFab onClick={() => setComposeOpen(true)} />}
 
       <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
 
-      <MobileBar pathname={pathname} items={mobileNav} />
+      <MobileBar
+        pathname={pathname}
+        items={mobileNav}
+        unread={unread.data}
+        onCompose={canCompose ? () => setComposeOpen(true) : undefined}
+      />
       <MobileMenu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
