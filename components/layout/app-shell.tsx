@@ -712,19 +712,21 @@ function MobileMenu({
   );
 }
 
-function MobileBar({ pathname }: { pathname: string }) {
-  const { authenticated } = useAuth();
-  const me = useMe();
-  const [menuOpen, setMenuOpen] = useState(false);
-
+function MobileBar({
+  pathname,
+  items,
+  onOpenMenu,
+  menuOpen,
+}: {
+  pathname: string;
+  items: NavItem[];
+  /** The drawer is opened from two places now — see the note in AppShell. */
+  onOpenMenu: () => void;
+  menuOpen: boolean;
+}) {
   // Four tabs plus the drawer. Everything else the sidebar lists lives behind
   // that fifth slot rather than being unreachable.
-  const visible = visibleNav({
-    authenticated,
-    isAdmin: Boolean(me.data?.isAdmin),
-    isOperator: me.data?.role === "worldstreet",
-  });
-  const tabs = visible.filter((item) => !item.secondary && item.href !== "/studio").slice(0, 4);
+  const tabs = items.filter((item) => !item.secondary && item.href !== "/studio").slice(0, 4);
 
   return (
     <nav
@@ -754,7 +756,7 @@ function MobileBar({ pathname }: { pathname: string }) {
         );
       })}
       <button
-        onClick={() => setMenuOpen(true)}
+        onClick={onOpenMenu}
         aria-label="More sections"
         aria-expanded={menuOpen}
         className="ws-press flex flex-1 flex-col items-center gap-2.5 py-2.5 text-[#6D6D6D]"
@@ -762,12 +764,6 @@ function MobileBar({ pathname }: { pathname: string }) {
         <IconMore className="h-6 w-6" />
         <span className="text-[12px] leading-[14.8px]">More</span>
       </button>
-      <MobileMenu
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        items={visible}
-        pathname={pathname}
-      />
     </nav>
   );
 }
@@ -776,8 +772,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useTrackNavHistory();
   const { authenticated } = useAuth();
+  const me = useMe();
   const broadcast = useBroadcastStatus();
   const [composeOpen, setComposeOpen] = useState(false);
+  /**
+   * The mobile drawer, owned HERE because two surfaces open it: the account
+   * avatar in the top strip and the "More" tab at the bottom. Two copies of
+   * the state would mean two drawers, and the second one to open would sit
+   * over the first.
+   */
+  const [menuOpen, setMenuOpen] = useState(false);
+  // One nav list for both of them — computed once rather than by each.
+  const mobileNav = visibleNav({
+    authenticated,
+    isAdmin: Boolean(me.data?.isAdmin),
+    isOperator: me.data?.role === "worldstreet",
+  });
 
   // One piece of local state drives every compose entry point in the shell —
   // sidebar Post, the desktop floating button and the mobile one. They all sit
@@ -806,11 +816,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex w-full">
       <Sidebar pathname={pathname} onCompose={canCompose ? () => setComposeOpen(true) : undefined} />
 
-      {/* Mobile top strip: wordmark plus the two things worth reaching from
-          anywhere — what's live, and search. */}
-      <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between px-4 md:hidden">
-        <Wordmark height={26} />
-        <div className="flex items-center gap-3">
+      {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
+          and the two things worth reaching from anywhere on the right.
+          The avatar is the door to everything the sidebar holds on desktop —
+          it opens the same drawer the "More" tab does, so the account you are
+          posting as is both visible and the way in, which is the arrangement
+          every phone app in this category uses. */}
+      <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center px-4 md:hidden">
+        <button
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+          className="ws-press -ml-1 shrink-0 rounded-full p-1"
+        >
+          {authenticated ? (
+            <Avatar
+              name={me.data?.displayName ?? "Me"}
+              seed={me.data?.id}
+              src={me.data?.avatarUrl}
+              size={28}
+            />
+          ) : (
+            <IconUser className="h-6 w-6 text-meta" />
+          )}
+        </button>
+
+        {/* Absolutely centred, so the mark sits on the middle of the SCREEN
+            rather than the middle of whatever space the two sides leave —
+            those change with the live pill and the signed-in state. */}
+        <Wordmark
+          height={26}
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+        />
+
+        <div className="ml-auto flex items-center gap-3">
           {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
           <Link href="/discover" className="text-meta" aria-label="Explore">
             <IconSearch className="h-5 w-5" />
@@ -878,7 +917,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
 
-      <MobileBar pathname={pathname} />
+      <MobileBar
+        pathname={pathname}
+        items={mobileNav}
+        menuOpen={menuOpen}
+        onOpenMenu={() => setMenuOpen(true)}
+      />
+      <MobileMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={mobileNav}
+        pathname={pathname}
+      />
 
       {/* First-load claim-username prompt for freshly created profiles. */}
       <ClaimUsernameGate />
