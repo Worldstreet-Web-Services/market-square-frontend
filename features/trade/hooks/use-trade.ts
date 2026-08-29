@@ -153,7 +153,7 @@ export function useBuyToken() {
       holdPayment("token", wallet, { key, txHash, ref: quote.requestId });
 
       onPhase("confirming");
-      const outcome = await waitForReceipt(txHash);
+      const outcome = await waitForReceipt(txHash, BUY_ORIGIN.chainId);
       if (outcome === "reverted") {
         // Nothing moved, so there is nothing to resume and nothing to track.
         clearHeldPayment("token", wallet);

@@ -56,9 +56,13 @@ export interface BuyRoute {
 /**
  * The chains a bought token may land on.
  *
- * Every one of these is EVM and shares the reader's single embedded EVM
- * wallet, which is the whole criterion: the token has to arrive somewhere the
- * reader controls. Kept to the chains wsws also settles on, minus Solana.
+ * wsws's own vetted list, minus Solana. Every entry there was checked twice —
+ * an `eth_chainId` against the chain's RPC to confirm the id the catalogue
+ * reports, and a real Portfolio API call to confirm a holding on it can be
+ * read back — and shortening it here would silently drop coins that are
+ * perfectly deliverable. A bought token has to arrive somewhere the reader
+ * controls, and every one of these is EVM, so all of them arrive in the one
+ * embedded wallet.
  */
 const SUPPORTED_CHAINS = new Set([
   "base",
@@ -66,21 +70,49 @@ const SUPPORTED_CHAINS = new Set([
   "arbitrum",
   "optimism",
   "polygon",
+  "apechain",
+  "berachain",
   "bsc",
-  "avalanche",
-  "linea",
-  "scroll",
-  "zksync",
-  "blast",
+  "celo",
+  "gensyn",
+  "hyperevm",
+  "ink",
+  "monad",
+  "robinhood",
+  "shape",
+  "soneium",
   "unichain",
   "world-chain",
   "gnosis",
-  "celo",
-  "ink",
-  "soneium",
-  "berachain",
+  "linea",
+  "zksync",
+  "scroll",
+  "avalanche",
+  "blast",
   "zora",
+  "ronin",
+  "abstract",
+  "mythos",
 ]);
+
+/**
+ * Coins that are native to one ecosystem and appear elsewhere only as WRAPPED
+ * representations a buyer would misread.
+ *
+ * The live catalogue offers SOL twice: native SOL on Solana, and an ERC-20
+ * "SOL" on Base. Someone tapping $SOL means the first one. Selling them the
+ * second — a Base token that tracks SOL — under the same ticker is the kind of
+ * substitution that is only noticed later, in a wallet that does not hold what
+ * its owner thinks it holds. So SOL is pinned to its native chain, which this
+ * app cannot deliver to, and $SOL therefore offers nothing rather than the
+ * wrong thing.
+ *
+ * Legitimately multi-chain assets — ETH on its L2s, native USDC issuances —
+ * are deliberately absent: those really are the same asset.
+ */
+const CANONICAL_CHAIN: Record<string, number> = {
+  SOL: SOLANA_CHAIN_ID,
+};
 
 /**
  * Tickers whose market symbol is not the symbol the catalogue delivers.
@@ -131,7 +163,11 @@ export function isOfferable(route: BuyRoute): boolean {
   // and has nowhere to deliver.
   if (route.destinationChainId === SOLANA_CHAIN_ID) return false;
   if (!SUPPORTED_CHAINS.has(route.chainName.trim().toLowerCase())) return false;
-  return Number.isFinite(route.destinationChainId) && route.asset.trim().length > 0;
+  if (!Number.isFinite(route.destinationChainId) || !route.asset.trim()) return false;
+  // A coin pinned to its native chain is only itself there. Anywhere else it
+  // is a wrapper wearing the same ticker.
+  const canonical = CANONICAL_CHAIN[route.symbol.trim().toUpperCase()];
+  return canonical === undefined || route.destinationChainId === canonical;
 }
 
 /**
@@ -148,7 +184,13 @@ export function sortRoutes(routes: BuyRoute[]): BuyRoute[] {
   );
 }
 
-/** Every offerable route for a reader's symbol, best first. */
+/**
+ * Every offerable route for a reader's symbol, BEST FIRST.
+ *
+ * The head of this list is the route to pre-select, and a length of one means
+ * there is no chain choice worth putting in front of the reader — both fall
+ * out of the ordering rather than needing rules of their own.
+ */
 export function routesForSymbol(
   destinations: readonly BuyRoute[] | null | undefined,
   symbol: string
@@ -159,14 +201,6 @@ export function routesForSymbol(
       (route) => route.symbol.trim().toUpperCase() === want && isOfferable(route)
     )
   );
-}
-
-/** The route to pre-select, or null when the symbol cannot be delivered here. */
-export function defaultRouteForSymbol(
-  destinations: readonly BuyRoute[] | null | undefined,
-  symbol: string
-): BuyRoute | null {
-  return routesForSymbol(destinations, symbol)[0] ?? null;
 }
 
 /**

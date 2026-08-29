@@ -216,7 +216,7 @@ export function useKashBuy() {
           chainId: tx.chainId,
         });
         onPhase("confirming");
-        const outcome = await waitForReceipt(txHash);
+        const outcome = await waitForReceipt(txHash, tx.chainId);
         if (outcome === "reverted") throw new Error("The purchase transaction failed on-chain.");
         return {
           kashReceived: prepared.quote?.kashOut ?? null,
@@ -271,7 +271,7 @@ export function useKashBuy() {
           paymentTxHash = hash;
 
           onPhase("confirming");
-          const outcome = await waitForReceipt(hash);
+          const outcome = await waitForReceipt(hash, chainId);
           if (outcome === "reverted") {
             // Nothing moved, so nothing may be reused: a reverted transfer
             // must never be offered to the engine as a payment.

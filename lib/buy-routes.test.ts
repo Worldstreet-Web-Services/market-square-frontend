@@ -5,7 +5,6 @@ import {
   SOLANA_CHAIN_ID,
   belowMinimumBuy,
   catalogSymbol,
-  defaultRouteForSymbol,
   displayNetwork,
   displaySymbol,
   isOfferable,
@@ -65,7 +64,7 @@ test("SOLANA destinations are never offerable", () => {
   // has nowhere to deliver — Market Square holds no Solana wallet.
   assert.equal(isOfferable(solNative), false);
   assert.deepEqual(routesForSymbol([solNative], "SOL"), []);
-  assert.equal(defaultRouteForSymbol([solNative], "SOL"), null);
+  assert.equal(routesForSymbol([solNative], "SOL")[0], undefined);
 });
 
 test("a chain we cannot receive on is not offered", () => {
@@ -84,13 +83,13 @@ test("Base is preferred, then chains sort by name", () => {
     routes.map((r) => r.chainName),
     ["base", "arbitrum"]
   );
-  assert.equal(defaultRouteForSymbol([ethArbitrum, ethBase], "ETH")?.chainName, "base");
+  assert.equal(routesForSymbol([ethArbitrum, ethBase], "ETH")[0]?.chainName, "base");
 });
 
 test("an unknown symbol has no route rather than a wrong one", () => {
   assert.deepEqual(routesForSymbol([cbBTC, ethBase], "FOO"), []);
-  assert.equal(defaultRouteForSymbol(null, "BTC"), null);
-  assert.equal(defaultRouteForSymbol(undefined, "BTC"), null);
+  assert.deepEqual(routesForSymbol(null, "BTC"), []);
+  assert.deepEqual(routesForSymbol(undefined, "BTC"), []);
 });
 
 test("the minimum is compared in base units, never as a float", () => {
@@ -136,5 +135,46 @@ test("decimals fall back to 18 — a preview, never a payment", () => {
 test("a payload that is not a catalogue parses to nothing, not a throw", () => {
   for (const junk of [null, undefined, {}, "", 3, { destinations: "nope" }]) {
     assert.deepEqual(parseDestinations(junk), [], String(junk));
+  }
+});
+
+test("a WRAPPED coin is never sold under the native coin's ticker", () => {
+  // The live catalogue offers SOL twice: native SOL on Solana, and an ERC-20
+  // "SOL" on Base. Someone tapping $SOL means the first. Selling them the
+  // second under the same ticker is a substitution only noticed later, in a
+  // wallet that does not hold what its owner thinks it holds.
+  const wrappedSolOnBase: BuyRoute = {
+    destinationChainId: BASE_CHAIN_ID,
+    chainName: "base",
+    asset: "0x311935cd80b76769bf9f9b2fdbd1d1e0d5b0a3f0",
+    symbol: "SOL",
+    decimals: 9,
+    logoUrl: null,
+  };
+  assert.equal(isOfferable(wrappedSolOnBase), false);
+  assert.deepEqual(routesForSymbol([wrappedSolOnBase, solNative], "SOL"), []);
+});
+
+test("a legitimately multi-chain asset is not pinned", () => {
+  // ETH on an L2 really is ETH. The pin exists for wrappers, not for every
+  // coin that appears more than once.
+  assert.equal(isOfferable(ethArbitrum), true);
+  assert.equal(isOfferable(ethBase), true);
+});
+
+test("every chain wsws vets is offerable here too, except Solana", () => {
+  // Shortening the list silently drops coins that are perfectly deliverable —
+  // all of these are EVM and arrive in the one embedded wallet.
+  for (const chainName of [
+    "base", "ethereum", "arbitrum", "optimism", "polygon", "apechain", "berachain",
+    "bsc", "celo", "gensyn", "hyperevm", "ink", "monad", "robinhood", "shape",
+    "soneium", "unichain", "world-chain", "gnosis", "linea", "zksync", "scroll",
+    "avalanche", "blast", "zora", "ronin", "abstract", "mythos",
+  ]) {
+    assert.equal(
+      isOfferable({ ...ethArbitrum, symbol: "XYZ", chainName, destinationChainId: 999 }),
+      true,
+      chainName
+    );
   }
 });

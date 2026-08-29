@@ -10,9 +10,9 @@ import { holdKey } from "@/lib/payment-hold";
 import {
   MIN_BUY_USD,
   belowMinimumBuy,
-  defaultRouteForSymbol,
   displayNetwork,
   displaySymbol,
+  routesForSymbol,
 } from "@/lib/buy-routes";
 import { isSettled, orderProgress } from "@/lib/order-status";
 import {
@@ -93,10 +93,21 @@ export function BuySheet({
    * who never tapped one.
    */
   const destinations = useBuyDestinations(open);
-  const route = useMemo(
-    () => defaultRouteForSymbol(destinations.data, ticker?.symbol ?? ""),
+  const routes = useMemo(
+    () => routesForSymbol(destinations.data, ticker?.symbol ?? ""),
     [destinations.data, ticker?.symbol]
   );
+  /**
+   * Which chain the token is delivered on.
+   *
+   * Null means "whatever the list leads with", which is Base wherever Base is
+   * offered — so the common case needs no decision. The picker below only
+   * appears when there is a real choice to make: $ETH is deliverable to
+   * eighteen chains and $BTC to exactly one, and offering a one-item chooser
+   * is a question with a single answer.
+   */
+  const [chainId, setChainId] = useState<number | null>(null);
+  const route = routes.find((r) => r.destinationChainId === chainId) ?? routes[0] ?? null;
 
   const order = useOrderStatus(requestId);
   const progress = order.data
@@ -136,10 +147,10 @@ export function BuySheet({
   // The provider is not configured here, or the symbol has no route we can
   // deliver. Different sentences, because they are different facts.
   const providerAbsent = destinations.isError;
-  const noRoute = !providerAbsent && destinations.isSuccess && !route;
+  const noRoute = !providerAbsent && destinations.isSuccess && routes.length === 0;
 
   const submit = () => {
-    const key = holdKey(`token-buy:${ticker.symbol}`, amount);
+    const key = holdKey(`token-buy:${ticker.symbol}:${route?.destinationChainId}`, amount);
     if (!route || !key) return;
     buy.mutate(
       { route, usdcAmount: amount, holdKey: key, onPhase: setPhase },
@@ -290,6 +301,33 @@ export function BuySheet({
                   </span>{" "}
                   at today&apos;s price. The exact amount is quoted when you buy.
                 </p>
+              )}
+
+              {routes.length > 1 && (
+                <div className="mt-4">
+                  <p className="text-[13px] text-white/50">Deliver on</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {routes.map((option) => {
+                      const active = option.destinationChainId === route?.destinationChainId;
+                      return (
+                        <button
+                          key={option.destinationChainId}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setChainId(option.destinationChainId)}
+                          aria-pressed={active}
+                          className={`ws-press rounded-lg border px-2.5 py-1 text-[12px] font-semibold capitalize transition-colors disabled:opacity-40 ${
+                            active
+                              ? "border-spotlight-chip-ink bg-spotlight/30 text-spotlight-chip-ink"
+                              : "border-white/12 bg-white/5 text-white/60 hover:bg-white/10"
+                          }`}
+                        >
+                          {displayNetwork(option.symbol, option.chainName)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
 
               {route && (

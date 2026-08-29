@@ -30,24 +30,6 @@ export const MARKET_FLAGS = {
    * CTA. Turning it on is one switch, and nothing behind it needs to change.
    */
   storeNav: process.env.NEXT_PUBLIC_MS_STORE_NAV_ENABLED === "true",
-  /**
-   * Ask Privy to sponsor gas on the reader's own transactions.
-   *
-   * Every payment in this app is signed by the reader from their embedded
-   * wallet, and on Base that costs ETH they will not have: an embedded wallet
-   * funded with USDC alone cannot pay its own gas, so the send simply fails.
-   * wsws solves this with its own bundler and gas policy; Market Square uses
-   * Privy's built-in sponsorship instead, which is a setting on the Privy
-   * dashboard rather than anything in this repo.
-   *
-   * OFF because asking for sponsorship an app has not been granted is an
-   * ERROR, not a fallback — it would turn a working unsponsored send into a
-   * failing one. TO TURN ON: enable gas sponsorship for this app id on the
-   * Privy dashboard, confirm a real send goes through with it, and only then
-   * set `NEXT_PUBLIC_MS_SPONSORED_GAS_ENABLED=true`. The flag reveals the
-   * capability; it cannot create the policy.
-   */
-  sponsoredGas: process.env.NEXT_PUBLIC_MS_SPONSORED_GAS_ENABLED === "true",
   moneyLinkedGames: false,
   predictions: false,
   staking: false,
