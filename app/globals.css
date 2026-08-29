@@ -424,12 +424,15 @@ body {
   background-color: rgba(255, 255, 255, 0.028);
 }
 
-/* Sticky column header: the tab strip, page titles, the rail search. Dark
-   enough that timeline content scrolling under it stays unreadable. */
+/* Sticky column header: the tab strip, page titles, the rail search.
+   OPAQUE, not glass. It was 72% black over a 12px blur, which is "dark enough
+   that content scrolling under it stays unreadable" only in theory — in
+   practice a post's avatar and name read straight through the bar and drew on
+   top of the wordmark. Chrome that content passes UNDER has to hide it
+   outright; glass is for chrome that floats over content on purpose (ws-glass,
+   the tab bar pill). Solid also drops a compositing layer per header. */
 @utility ws-head {
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--color-ground);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -635,6 +638,10 @@ body {
      69px row, so the shell's 64px bottom padding left content five pixels
      under it on every column surface. */
   --ws-topbar-h: 48px;
+  /* The column header's height, measured and republished by ColumnHeader.
+     Declared here so anything reading it renders correctly before that
+     component has mounted, and after it unmounts. */
+  --ws-colhead-h: 0px;
   --ws-nav-h: calc(env(safe-area-inset-bottom, 0px) + 69px);
   --ws-fab-bottom: calc(env(safe-area-inset-bottom, 0px) + 81px);
   /* Clear of the create button entirely: its 71px hit frame sits on top of

@@ -313,7 +313,8 @@ export function DiscoveryPage({
 
   return (
     <>
-      <header className="ws-head sticky top-0 z-30">
+      {/* Clears the shell's fixed mobile top strip — see ColumnHeader. */}
+      <header className="ws-head sticky top-[var(--ws-topbar-h)] z-30">
         <div className="px-4 py-2.5">
           <label className="ws-field flex h-11 items-center gap-3 px-4">
             <IconSearch className="h-5 w-5 shrink-0 text-meta" />
