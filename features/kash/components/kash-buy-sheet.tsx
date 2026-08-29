@@ -292,13 +292,18 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
                   : PHASE_LABEL[phase]}
               </Button>
 
-              {/* Two sentences the reader is owed BEFORE they press it: that
-                  they will be asked to sign, and that this cannot be undone.
-                  Selling back is halted at the treasury today, so "sell it
-                  back later" would be a promise nothing can keep. */}
+              {/* Wallet prompts are off (`showWalletUIs: false` in
+                  app/providers.tsx), so THIS BUTTON IS THE CONFIRMATION —
+                  there is no second screen to change your mind on. The copy
+                  has to say that plainly rather than promise a prompt that
+                  will never appear, and it has to state what leaves and what
+                  arrives before the press rather than after it. Selling back
+                  is halted at the treasury today, so "sell it back later"
+                  would be a promise nothing here can keep. */}
               <p className="mt-3 text-center text-[12px] leading-[1.5] text-white/40">
-                You&apos;ll approve the payment in your wallet. USDC on Base leaves your
-                wallet and KASH arrives in it. Purchases can&apos;t be reversed.
+                Buying charges your wallet straight away — there&apos;s no second
+                confirmation. USDC on Base leaves your wallet and KASH arrives in it.
+                Purchases can&apos;t be reversed.
               </p>
             </>
           )}

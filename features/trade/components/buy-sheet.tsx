@@ -371,10 +371,15 @@ export function BuySheet({
                   : PHASE_LABEL[phase]}
               </Button>
 
+              {/* Wallet prompts are off (`showWalletUIs: false`), so this
+                  button is the confirmation and there is no second screen to
+                  stop on. Saying "you'll approve it in your wallet" would
+                  describe a prompt that never appears. */}
               <p className="mt-3 text-center text-[12px] leading-[1.5] text-white/40">
-                You&apos;ll approve one payment in your wallet. USDC on Base leaves your
-                wallet and {displaySymbol(ticker.symbol)} arrives in it. Orders can&apos;t
-                be cancelled once sent.
+                Buying charges your wallet straight away — there&apos;s no second
+                confirmation. USDC on Base leaves your wallet and{" "}
+                {displaySymbol(ticker.symbol)} arrives in it. Orders can&apos;t be
+                cancelled once sent.
               </p>
             </>
           )}
