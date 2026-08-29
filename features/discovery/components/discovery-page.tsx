@@ -242,6 +242,7 @@ export function DiscoveryPage({
   renderPerson,
   renderProduct,
   spotlightSlot,
+  promoSlot,
   railSlot,
   renderLike,
 }: {
@@ -273,9 +274,17 @@ export function DiscoveryPage({
    */
   spotlightSlot?: React.ReactNode;
   /**
+   * The ecosystem card, directly under the search field.
+   *
+   * It is an INVITATION, not a browse aid, and it is the one block here whose
+   * whole job is to be seen — so it takes the position a promo takes, at the
+   * top, rather than being buried under the results it is not part of.
+   */
+  promoSlot?: React.ReactNode;
+  /**
    * The rest of the rail's curated blocks, for the screens that have no rail.
-   * Same reasoning as `spotlightSlot`, and rendered under it in the same
-   * order the rail uses so the two surfaces do not disagree.
+   * Same reasoning as `spotlightSlot`, and rendered in the rail's own order so
+   * the two surfaces do not disagree.
    */
   railSlot?: React.ReactNode;
   /** The card like control, from the feed slice. */
@@ -374,6 +383,12 @@ export function DiscoveryPage({
           ))}
         </div>
       </header>
+
+      {/* Straight under the field: below lg there is no rail to hold this, and
+          a card nobody scrolls to is a card nobody sees. It stands down while
+          a query is running — the reader asked for something specific, and
+          answering with an advert is the oldest bad habit in search. */}
+      {!hasQuery && promoSlot && <div className="px-4 pt-3 lg:hidden">{promoSlot}</div>}
 
       {/* Search has no endpoint on some deployments: the query 404s. That is a
           deployment gap, not a fault, so the page says so plainly. */}

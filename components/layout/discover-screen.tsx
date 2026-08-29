@@ -249,12 +249,8 @@ export function DiscoverScreen() {
         openVideoId={openVideoId}
         renderPerson={(profile) => <PersonRow key={profile.id} profile={profile} />}
         spotlightSlot={<CitizenSpotlightRail />}
-        railSlot={
-          <>
-            <EcosystemPartnersRail />
-            <ExploreCategoriesRail />
-          </>
-        }
+        promoSlot={<EcosystemPartnersRail />}
+        railSlot={<ExploreCategoriesRail />}
         renderProduct={(item) => <StoreItemCard key={item.id} item={item} />}
         renderLike={(post) => <PostLikePill post={post} />}
       />
