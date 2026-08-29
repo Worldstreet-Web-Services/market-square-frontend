@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { errorCode } from "@/lib/api/envelope";
+import { retryDelay } from "@/lib/retry-delay";
 
 export function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -19,14 +20,17 @@ export function createQueryClient(): QueryClient {
         // Coming back from a dropped connection is the same situation as
         // coming back to the tab.
         refetchOnReconnect: true,
-        // Never retry a rate-limited or forbidden request; retry other
-        // transient failures twice.
         retry: (failureCount, error) => {
           const code = errorCode(error);
+          // Never retry a rate-limited or forbidden request.
           if (code === "RATE_LIMITED" || code === "FORBIDDEN" || code === "NOT_FOUND") return false;
+          // The breaker already said the backend is down. Retrying is asking
+          // the same question two more times and paying for both — the
+          // cooldown is what decides when to ask again.
+          if (code === "SERVICE_DOWN") return false;
           return failureCount < 2;
         },
-        retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+        retryDelay: (attempt) => retryDelay(attempt),
       },
     },
   });

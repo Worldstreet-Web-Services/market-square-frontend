@@ -242,6 +242,8 @@ export function DiscoveryPage({
   renderPerson,
   renderProduct,
   spotlightSlot,
+  promoSlot,
+  railSlot,
   renderLike,
 }: {
   query: string;
@@ -271,6 +273,20 @@ export function DiscoveryPage({
    * the surface was unreachable without typing the URL.
    */
   spotlightSlot?: React.ReactNode;
+  /**
+   * The ecosystem card, directly under the search field.
+   *
+   * It is an INVITATION, not a browse aid, and it is the one block here whose
+   * whole job is to be seen — so it takes the position a promo takes, at the
+   * top, rather than being buried under the results it is not part of.
+   */
+  promoSlot?: React.ReactNode;
+  /**
+   * The rest of the rail's curated blocks, for the screens that have no rail.
+   * Same reasoning as `spotlightSlot`, and rendered in the rail's own order so
+   * the two surfaces do not disagree.
+   */
+  railSlot?: React.ReactNode;
   /** The card like control, from the feed slice. */
   renderLike: (post: VideoItem) => React.ReactNode;
 }) {
@@ -368,6 +384,12 @@ export function DiscoveryPage({
         </div>
       </header>
 
+      {/* Straight under the field: below lg there is no rail to hold this, and
+          a card nobody scrolls to is a card nobody sees. It stands down while
+          a query is running — the reader asked for something specific, and
+          answering with an advert is the oldest bad habit in search. */}
+      {!hasQuery && promoSlot && <div className="px-4 pt-3 lg:hidden">{promoSlot}</div>}
+
       {/* Search has no endpoint on some deployments: the query 404s. That is a
           deployment gap, not a fault, so the page says so plainly. */}
       {!isBrowseTab && unavailable && (
@@ -412,6 +434,16 @@ export function DiscoveryPage({
           avoid showing it twice on one screen. */}
       {!hasQuery && spotlightSlot && (
         <div className="px-4 pb-4 lg:hidden">{spotlightSlot}</div>
+      )}
+
+      {/* The rail's other curated blocks — the ecosystem card and the category
+          index — for the same reason: below lg there is no rail, so a phone
+          could not reach either of them at all. They ride on Explore rather
+          than home because that is the browse surface, and they disappear the
+          moment a query is typed: a reader searching for something is not
+          browsing categories. */}
+      {!hasQuery && railSlot && (
+        <div className="space-y-4 px-4 pb-4 lg:hidden">{railSlot}</div>
       )}
 
       {/* Resting Explore: the card grid. A search replaces it with results. */}

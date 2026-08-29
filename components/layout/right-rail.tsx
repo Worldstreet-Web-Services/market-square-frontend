@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IconSearch } from "@/components/ui/icons";
+import { EcosystemPartnersRail } from "@/components/layout/ecosystem-partners-rail";
 import { LiveNowRail, TicketsRail } from "@/features/streams";
 import { CitizenSpotlightRail } from "@/features/profile";
 import { ExploreCategoriesRail, TrendingDiscussions } from "@/features/discovery";
@@ -44,6 +45,11 @@ export function RightRail() {
       <div className="sticky top-0 flex max-h-dvh flex-col gap-4 overflow-y-auto py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <RailSearch />
         <CitizenSpotlightRail />
+        {/* The products around the square, under the person of the moment and
+            above what the square itself is doing — it is an invitation, not
+            news, so it sits with the other curated blocks rather than over
+            the live ones. */}
+        <EcosystemPartnersRail />
         {/* Above the curated categories on purpose: a category is a shelf
             somebody arranged, a discussion is what the room is doing now. */}
         <TrendingDiscussions limit={5} />

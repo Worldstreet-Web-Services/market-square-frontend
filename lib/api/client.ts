@@ -4,6 +4,11 @@ import { getAccessToken } from "@privy-io/react-auth";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { apiError } from "@/lib/api/envelope";
 import { getAuthSnapshot, markSessionExpired, waitForAuthReady } from "@/lib/session";
+import {
+  circuitAllows,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+} from "@/lib/api/circuit-store";
 
 // Fetch wrapper for our BFF routes. Attaches the Privy access token so the
 // server can verify the caller and forward it upstream. In demo mode there is
@@ -41,5 +46,35 @@ export async function apiFetch(
   }
   const headers = new Headers(init.headers);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-  return fetch(path, { ...init, headers });
+
+  /**
+   * The breaker sits HERE, at the one transport every feature goes through,
+   * rather than in each hook. While it is open nothing leaves the tab: no
+   * network, and — because every path here is a BFF route — no serverless
+   * invocation either. That second part is the one that cost money during the
+   * outage; a request that never leaves is the only request that is free.
+   *
+   * Reads are what the breaker governs. A WRITE is the reader doing something
+   * deliberate, and refusing it in-process would mean a post that silently
+   * did not happen — those go out and fail honestly, and their failure still
+   * informs the breaker.
+   */
+  const method = (init.method ?? "GET").toUpperCase();
+  const governed = method === "GET" || method === "HEAD";
+  if (governed && !circuitAllows()) {
+    throw apiError("SERVICE_DOWN", "Can't reach Market Square right now.", 503);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(path, { ...init, headers });
+  } catch (error) {
+    // Transport failure: no status, nothing to read. This is the clearest
+    // signal the breaker gets, so it must not be swallowed.
+    recordCircuitFailure(undefined);
+    throw error;
+  }
+  if (response.ok) recordCircuitSuccess();
+  else recordCircuitFailure(response.status);
+  return response;
 }

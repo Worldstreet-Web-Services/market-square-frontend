@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { useCircuit } from "@/lib/api/circuit-store";
 
 // Designed empty state: a quiet mark, a line of copy, an optional way forward.
 export function EmptyState({
@@ -52,12 +53,28 @@ export function ErrorState({
   return (
     <div className={cn("ws-inset flex flex-col items-center gap-3 px-6 py-10 text-center", className)}>
       <p className="text-sm text-down">{errorMessage(error, fallback)}</p>
-      {onRetry && (
-        <Button variant="secondary" size="sm" onClick={onRetry}>
-          Try again
-        </Button>
-      )}
+      {onRetry && <RetryButton onRetry={onRetry} />}
     </div>
+  );
+}
+
+/**
+ * "Try again", except while the app already knows the backend is down.
+ *
+ * Thirty-odd surfaces render this button. During the outage each of them was
+ * an invitation to re-ask a question that had just been answered — and a
+ * reader who taps five of them has personally multiplied the load by five, at
+ * exactly the moment the service can least afford it. So while the circuit is
+ * open the button states what is actually happening and does nothing, and the
+ * connection banner — one of it, not thirty — owns forcing the retry.
+ */
+function RetryButton({ onRetry }: { onRetry: () => void }) {
+  const circuit = useCircuit();
+  const down = circuit.state !== "closed";
+  return (
+    <Button variant="secondary" size="sm" onClick={onRetry} disabled={down}>
+      {down ? "Reconnecting…" : "Try again"}
+    </Button>
   );
 }
 
@@ -69,6 +86,30 @@ export function InlineError({ error, fallback, className }: { error: unknown; fa
     return <SignInInline className={className} />;
   }
   return <p className={cn("text-xs text-down", className)}>{errorMessage(error, fallback)}</p>;
+}
+
+/**
+ * A rail module that could not load, said in one quiet line.
+ *
+ * These modules used to return `null` when their query failed, so during an
+ * outage the page did not look broken — it looked EMPTY, which is worse: the
+ * reader concludes there is nothing here rather than that we could not fetch
+ * it. This keeps the module's name on screen and admits the gap.
+ *
+ * Deliberately without a retry button. The connection banner owns retrying for
+ * the whole app; a button per module is how a frustrated reader turns an
+ * outage into a stampede, and it is also five buttons that all do the same
+ * thing.
+ */
+export function ModuleUnavailable({ title, className }: { title: string; className?: string }) {
+  return (
+    <section className={cn("ws-panel p-4", className)}>
+      <h2 className="mb-1 text-[14px] font-bold leading-5 text-white">{title}</h2>
+      <p className="text-[12px] leading-4 text-meta">
+        Couldn&apos;t load this — it&apos;ll come back on its own.
+      </p>
+    </section>
+  );
 }
 
 /** One-line sign-in invitation, for spaces too tight for SignInPrompt. */

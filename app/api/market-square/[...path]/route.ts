@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { verifyRequest } from "@/lib/server/auth";
+import { verifyRequest, verifyRequestDetailed } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
 import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
 import { forwardToUpstream } from "@/lib/server/proxy";
@@ -13,6 +13,18 @@ import { FALLBACK_LIMITS } from "@/lib/upload-rules";
 // lib/fixtures instead, so `pnpm dev` demos the full app standalone. When
 // Privy is also unconfigured the fixture treats every caller as the demo user.
 
+/**
+ * A ceiling on how long one invocation may live.
+ *
+ * Vercel bills provisioned memory until the last in-flight request finishes,
+ * so an unbounded handler waiting on a dead upstream is a bill with no
+ * product. The forward already times out well inside this; `maxDuration` is
+ * the backstop for everything that is not that fetch — and the reason it is
+ * not the default 60 is that nothing here legitimately takes a minute except
+ * an upload, which sets its own longer ceiling on the fetch itself.
+ */
+export const maxDuration = 30;
+
 const BASE = process.env.WSAPI_BASE_URL ? `${process.env.WSAPI_BASE_URL}/v1/market-square` : null;
 const PRIVY_CONFIGURED = Boolean(
   process.env.NEXT_PUBLIC_PRIVY_APP_ID && process.env.PRIVY_APP_SECRET
@@ -23,6 +35,24 @@ function unauthorized() {
   return NextResponse.json(
     { success: false, error: { code: "UNAUTHORIZED", message: "Sign in to continue." } },
     { status: 401 }
+  );
+}
+
+/**
+ * We could not verify the session — OUR fault, not theirs.
+ *
+ * 503, not 401, and a message that does not accuse the reader of being signed
+ * out. The client treats it as a service failure, so the connection banner
+ * speaks and the session is left alone: a 401 here would have logged out a
+ * perfectly good session over a missing environment variable.
+ */
+function authUnavailable() {
+  return NextResponse.json(
+    {
+      success: false,
+      error: { code: "AUTH_UNAVAILABLE", message: "Can't verify your session right now." },
+    },
+    { status: 503 }
   );
 }
 
@@ -171,8 +201,8 @@ async function forward(req: NextRequest, path: string[], method: string) {
   // Authed paths need a verified Privy session before anything is forwarded.
   const needsAuth = method !== "GET" || !isPublicGet(path);
   if (needsAuth) {
-    const claims = await verifyRequest(req);
-    if (!claims) return unauthorized();
+    const auth = await verifyRequestDetailed(req);
+    if (!auth.ok) return auth.reason === "unavailable" ? authUnavailable() : unauthorized();
   }
 
   // The forward itself lives in lib/server/proxy.ts so it can be tested
