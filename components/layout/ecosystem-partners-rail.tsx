@@ -137,8 +137,10 @@ export function EcosystemPartnersRail() {
             alt={slide.alt}
             width={96}
             height={96}
-            // The art is the same mark on both slides, so it is not swapped
-            // per render; only the second draws the wordmark over it.
+            // Each slide carries its own mark now that they lead to different
+            // products — the platform on one, LinkPay on the other. Neither is
+            // preloaded: the card sits below the fold on every surface that
+            // shows it.
             priority={false}
           />
 
