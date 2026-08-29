@@ -242,6 +242,7 @@ export function DiscoveryPage({
   renderPerson,
   renderProduct,
   spotlightSlot,
+  railSlot,
   renderLike,
 }: {
   query: string;
@@ -271,6 +272,12 @@ export function DiscoveryPage({
    * the surface was unreachable without typing the URL.
    */
   spotlightSlot?: React.ReactNode;
+  /**
+   * The rest of the rail's curated blocks, for the screens that have no rail.
+   * Same reasoning as `spotlightSlot`, and rendered under it in the same
+   * order the rail uses so the two surfaces do not disagree.
+   */
+  railSlot?: React.ReactNode;
   /** The card like control, from the feed slice. */
   renderLike: (post: VideoItem) => React.ReactNode;
 }) {
@@ -412,6 +419,16 @@ export function DiscoveryPage({
           avoid showing it twice on one screen. */}
       {!hasQuery && spotlightSlot && (
         <div className="px-4 pb-4 lg:hidden">{spotlightSlot}</div>
+      )}
+
+      {/* The rail's other curated blocks — the ecosystem card and the category
+          index — for the same reason: below lg there is no rail, so a phone
+          could not reach either of them at all. They ride on Explore rather
+          than home because that is the browse surface, and they disappear the
+          moment a query is typed: a reader searching for something is not
+          browsing categories. */}
+      {!hasQuery && railSlot && (
+        <div className="space-y-4 px-4 pb-4 lg:hidden">{railSlot}</div>
       )}
 
       {/* Resting Explore: the card grid. A search replaces it with results. */}

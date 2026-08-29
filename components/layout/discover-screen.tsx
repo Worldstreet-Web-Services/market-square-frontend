@@ -12,7 +12,14 @@ import {
   type ExploreTab,
 } from "@/lib/explore-tabs";
 import { useQueryParam } from "@/hooks/use-query-param";
-import { DiscoveryPage, useDiscovery, useMyInterests, usePeople } from "@/features/discovery";
+import { EcosystemPartnersRail } from "@/components/layout/ecosystem-partners-rail";
+import {
+  DiscoveryPage,
+  ExploreCategoriesRail,
+  useDiscovery,
+  useMyInterests,
+  usePeople,
+} from "@/features/discovery";
 import type { ExploreItem } from "@/features/discovery";
 import { videoMorphName } from "@/features/discovery";
 import { useStreamList } from "@/features/streams";
@@ -242,6 +249,12 @@ export function DiscoverScreen() {
         openVideoId={openVideoId}
         renderPerson={(profile) => <PersonRow key={profile.id} profile={profile} />}
         spotlightSlot={<CitizenSpotlightRail />}
+        railSlot={
+          <>
+            <EcosystemPartnersRail />
+            <ExploreCategoriesRail />
+          </>
+        }
         renderProduct={(item) => <StoreItemCard key={item.id} item={item} />}
         renderLike={(post) => <PostLikePill post={post} />}
       />
