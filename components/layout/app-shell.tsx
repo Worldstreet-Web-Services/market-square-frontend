@@ -851,14 +851,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="ml-auto flex items-center gap-3">
           {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
+          {/* Search only. Notifications live in the bottom tab bar, where they
+              carry their unread badge — the bell here was the same
+              destination a second time, without the count. */}
           <Link href="/discover" className="text-meta" aria-label="Explore">
             <IconSearch className="h-5 w-5" />
           </Link>
-          {authenticated && (
-            <Link href="/notifications" className="text-meta" aria-label="Notifications">
-              <IconBell className="h-5 w-5" />
-            </Link>
-          )}
         </div>
       </div>
 
