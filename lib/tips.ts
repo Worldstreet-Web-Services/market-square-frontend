@@ -15,11 +15,14 @@
 /**
  * The preset ladder.
  *
- * Deliberately the SAME ladder as the live-gift prices in
- * `features/streams/components/gift-sheet.tsx` (1 / 5 / 10 / 25 / 50 / 100).
- * Two different ladders for the two ways of handing someone KASH would teach
- * the reader that a "10" means something different in each place. If that
- * ladder ever moves, move this one with it.
+ * Deliberately a SUBSET of the live-gift prices in
+ * `features/streams/components/tip-sheet.tsx`: every rung here (1 / 5 / 10 /
+ * 25 / 50 / 100) is a price in that tray. Two different ladders for the two
+ * ways of handing someone KASH would teach the reader that a "10" means
+ * something different in each place. The tray grew to fourteen gifts when it
+ * was built to the design; these six stayed the presets because a tip is a
+ * quick gesture, not a catalogue. Keep this a subset — if a rung here stops
+ * existing over there, move it.
  */
 export const TIP_PRESETS_KASH = ["1", "5", "10", "25", "50", "100"] as const;
 
