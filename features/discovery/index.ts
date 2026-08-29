@@ -9,4 +9,5 @@ export {
   useTopics,
   useSaveInterests,
 } from "@/features/discovery/hooks/use-discovery";
+export { InterestGate } from "@/features/discovery/components/interest-gate";
 export { TrendingDiscussions } from "./components/trending-discussions";

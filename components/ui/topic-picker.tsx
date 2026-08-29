@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { errorCode } from "@/lib/api/envelope";
@@ -39,11 +39,20 @@ const TOPIC_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   crypto: IconCoin,
 };
 
+/**
+ * Below this the feed has too little to rank by for the choice to be felt, so
+ * the control says so — as ENCOURAGEMENT, never as a gate. A reader who picks
+ * one topic and continues is making a valid choice, and a first-run screen
+ * that refuses to let you past is a toll booth.
+ */
+const SUGGESTED = 3;
+
 export function TopicPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { authenticated } = useAuth();
   const topics = useTopics();
   const saved = useMyInterests();
   const save = useSaveInterests();
+  const panel = useRef<HTMLDivElement>(null);
   // null means "untouched" — the selection is then whatever is already saved.
   // Derived rather than copied into state by an effect, so a slow /me/interests
   // cannot land after the reader has started choosing and overwrite them.
@@ -60,6 +69,27 @@ export function TopicPicker({ open, onClose }: { open: boolean; onClose: () => v
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  /**
+   * Focus goes INTO the dialog, and comes back out where it started.
+   *
+   * This opens by itself on a new account's first visit, so for anyone
+   * navigating by keyboard or screen reader it appears with no announcement
+   * and no way in: focus stays behind it, on a page they can no longer see.
+   * The body also stops scrolling — a modal over a page that still scrolls
+   * underneath reads as broken on a phone.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    panel.current?.focus();
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflow;
+      previous?.focus?.();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const unavailable = errorCode(topics.error) === "NOT_FOUND";
@@ -68,54 +98,77 @@ export function TopicPicker({ open, onClose }: { open: boolean; onClose: () => v
   };
 
   return (
+    /**
+     * A bottom sheet on a phone, a card on a desktop.
+     *
+     * It was a fixed 373px card with 77px of empty space above its title,
+     * centred on every screen — which spends the most valuable screen in the
+     * product, the first one a new account ever sees, on margin. A sheet rises
+     * from the edge the thumb is already at, takes the width it is given, and
+     * puts the choices where they can be reached one-handed.
+     */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-[2px] sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
+        ref={panel}
         role="dialog"
         aria-modal="true"
-        aria-label="Choose what you'd like to watch"
+        aria-labelledby="topic-picker-title"
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
-        className="relative flex max-h-[90dvh] w-[373px] max-w-full flex-col overflow-hidden rounded-2xl bg-[#0F0F0F]"
-        style={{ minHeight: "min(497px, 90dvh)" }}
+        className="ws-popover-enter flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-[#0F0F0F] outline-none sm:max-h-[88dvh] sm:w-[420px] sm:rounded-3xl"
       >
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-2.5 top-2.5 flex h-[31px] w-[31px] items-center justify-center rounded-full bg-white/[0.04] text-white backdrop-blur-[3.4875px] transition-colors hover:bg-white/10"
-        >
-          <IconX className="h-[15.5px] w-[15.5px]" />
-        </button>
+        {/* The grab handle is the affordance that says "this is a sheet, it
+            closes downward"; it is decorative, and phone-only. */}
+        <div className="flex justify-center pt-2.5 sm:hidden" aria-hidden>
+          <span className="h-1 w-9 rounded-full bg-white/20" />
+        </div>
 
-        <h2
-          className="mx-auto mt-[77px] w-[266px] text-center text-white"
-          style={{ fontSize: "19.1138px", lineHeight: "25px", letterSpacing: "-0.012em", fontWeight: 600 }}
-        >
-          What would you like to watch on Market Square?
-        </h2>
+        <div className="flex items-start gap-3 px-5 pb-4 pt-4 sm:pt-6">
+          <div className="min-w-0 flex-1">
+            <h2
+              id="topic-picker-title"
+              className="ws-display text-[21px] leading-7 tracking-[-0.012em] text-white"
+            >
+              What do you want to see?
+            </h2>
+            {/* The reason, said once. A first-run screen that asks for
+                something without saying what it buys reads as a form. */}
+            <p className="mt-1.5 text-[13px] leading-[18px] text-meta">
+              Pick a few topics and the square ranks them higher in your feed. Nothing is hidden,
+              and you can change these any time from Explore.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="ws-press -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-white transition-colors hover:bg-white/10"
+          >
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
 
-        <div className="mt-[62px] flex flex-1 flex-col items-center overflow-y-auto px-4">
-          {topics.isPending && <Spinner className="h-6 w-6 text-meta" />}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-2">
+          {topics.isPending && (
+            <div className="flex justify-center py-10">
+              <Spinner className="h-6 w-6 text-meta" />
+            </div>
+          )}
 
           {unavailable && (
-            <p className="max-w-[289px] text-center text-[12px] text-grey-500">
-              Topics aren&apos;t available yet — this turns on by itself once the
-              service ships them.
+            <p className="py-8 text-center text-[12px] text-grey-500">
+              Topics aren&apos;t available yet — this turns on by itself once the service ships
+              them.
             </p>
           )}
 
           {topics.isSuccess && (
-            <div className="flex w-[289px] max-w-full flex-wrap gap-x-2 gap-y-3">
-              {/* The primary action, first in the flow as the design places it. */}
-              <button
-                onClick={() => setEdited(chosen)}
-                className="flex h-[38px] w-[101px] shrink-0 items-center justify-center rounded-full text-[12px] font-bold leading-4 text-[#F4F4F4]"
-                style={{ background: "linear-gradient(90deg, #9F65FD 0%, #5B05E6 100%)" }}
-              >
-                Add +
-              </button>
-
+            // A wrapping row of chips, not a fixed 289px column: the list is
+            // the backend's and grows, so the layout has to take a new topic
+            // without anyone editing a width here.
+            <div className="flex flex-wrap gap-2">
               {topics.data.map((topic) => {
                 const Icon = TOPIC_ICONS[topic.key] ?? IconSpark;
                 const selected = chosen.includes(topic.key);
@@ -125,9 +178,9 @@ export function TopicPicker({ open, onClose }: { open: boolean; onClose: () => v
                     onClick={() => toggle(topic.key)}
                     aria-pressed={selected}
                     className={cn(
-                      "flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-bold leading-4 transition-colors",
+                      "ws-press flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold leading-4 transition-colors",
                       // The spec only draws the resting state. Selected reuses
-                      // the Add chip's gradient — the same language, and
+                      // the create gradient — the same language, and
                       // unmistakable against a 10% white resting chip.
                       selected ? "text-white" : "bg-white/10 text-[#F4F4F4] hover:bg-white/[0.16]"
                     )}
@@ -150,15 +203,42 @@ export function TopicPicker({ open, onClose }: { open: boolean; onClose: () => v
           )}
         </div>
 
-        <div className="px-4 pb-5 pt-3">
+        {/* Pinned: the action stays reachable while the list scrolls, which is
+            the difference between a sheet and a page that happens to float. */}
+        <div
+          className="ws-hair shrink-0 border-t px-5 pt-3"
+          style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        >
           {authenticated ? (
-            <button
-              onClick={() => save.mutate(chosen, { onSuccess: onClose })}
-              disabled={save.isPending || !topics.isSuccess}
-              className="ws-btn-create ws-press flex h-11 w-full items-center justify-center rounded-full text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {save.isPending ? "Saving…" : chosen.length > 0 ? `Save ${chosen.length} topics` : "Save"}
-            </button>
+            <>
+              <button
+                onClick={() => save.mutate(chosen, { onSuccess: onClose })}
+                disabled={save.isPending || !topics.isSuccess}
+                className="ws-btn-create ws-press flex h-12 w-full items-center justify-center rounded-full text-[14px] font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {save.isPending
+                  ? "Saving…"
+                  : chosen.length > 0
+                    ? `Continue with ${chosen.length}`
+                    : "Continue"}
+              </button>
+              {/* Declining is a first-class choice, not a cancel. The X reads
+                  as "I opened this by mistake"; this reads as an answer, which
+                  is what it is — the prompt does not come back. */}
+              <button
+                onClick={onClose}
+                className="ws-press mt-2 h-9 w-full rounded-full text-[13px] font-semibold text-meta transition-colors hover:text-body"
+              >
+                Skip for now
+              </button>
+              <p className="mt-1 text-center text-[11px] leading-4 text-grey-600">
+                {chosen.length === 0
+                  ? `Pick ${SUGGESTED} or so to feel the difference.`
+                  : chosen.length < SUGGESTED
+                    ? `${SUGGESTED - chosen.length} more sharpens it further.`
+                    : "That is plenty — the feed will follow these."}
+              </p>
+            </>
           ) : (
             // Signed-out readers can still choose; saving is what needs an
             // account, so the prompt appears at the point it is required.
@@ -168,18 +248,6 @@ export function TopicPicker({ open, onClose }: { open: boolean; onClose: () => v
               className="border-0 bg-transparent px-0 py-2"
             />
           )}
-
-          {/*
-            The design puts a legal line here ("an account located in Nigeria…
-            Terms of Service… Privacy Policy") at 5.77px. Both are wrong for
-            this surface: choosing topics creates no account and establishes no
-            jurisdiction, so that copy belongs on signup, and 5.77px type is
-            unreadable. This says what the control actually does, at a legible
-            size. See the report for the flag.
-          */}
-          <p className="mt-3 text-center text-[10px] leading-[14px] text-[#B1B6BA]">
-            You can change these any time from Explore.
-          </p>
         </div>
       </div>
     </div>

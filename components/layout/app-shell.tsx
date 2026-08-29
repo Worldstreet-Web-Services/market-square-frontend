@@ -19,6 +19,7 @@ import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { ClaimUsernameGate } from "@/features/profile";
+import { InterestGate } from "@/features/discovery";
 import { useUnread } from "@/hooks/use-unread";
 import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
@@ -967,6 +968,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <>
         <main className="min-h-dvh">{children}</main>
+        {/* No interest prompt here: the stream room owns the whole viewport,
+            and a modal over a live broadcast is an interruption, not an
+            onboarding. It waits until the reader leaves. */}
         <ClaimUsernameGate />
       </>
     );
@@ -1101,6 +1105,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* First-load claim-username prompt for freshly created profiles. */}
       <ClaimUsernameGate />
+      {/* ...then, once the account has a name, what they want to see. Ordered,
+          not stacked — see the note in InterestGate. */}
+      <InterestGate />
       {/* Session-expiry watchdog: logs out properly instead of half-stuck. */}
       <SessionGuard />
     </div>
