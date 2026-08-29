@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { isStoryVideoMedia, storyCover } from "@/lib/story-cover";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -32,11 +33,6 @@ const STORY_MS = 5000;
  */
 const STORY_VIDEO_MAX_MS = 60_000;
 
-/** Stories carry raw author media, so the kind is sniffed from the URL — the
-    same test the viewer used inline before it needed two layers of it. */
-function isStoryVideo(url: string): boolean {
-  return url.startsWith("data:video/") || /\.(mp4|webm|mov)(?:$|[?#])/i.test(url);
-}
 const SEEN_KEY = "ms.stories.seen";
 
 /** One author's stories, oldest first — the unit Instagram opens on a tap. */
@@ -230,6 +226,54 @@ function LivePill({ className }: { className?: string }) {
   );
 }
 
+
+/**
+ * The artwork on a strip tile — and what happens when it will not load.
+ *
+ * A VIDEO cover renders as `<video>`, never `<img>`: the browser cannot decode
+ * a clip in an image element and paints its broken-image glyph instead, which
+ * is what made every video-first story in the rail look like a failed upload
+ * while it played perfectly when opened.
+ *
+ * `#t=0.1` asks for a frame a tenth of a second in. Without it Safari and iOS
+ * show an empty black box until the element is played, and many clips open on
+ * a black frame anyway — this is the difference between a real thumbnail and a
+ * dark rectangle.
+ *
+ * And when the media fails for any other reason — a dead CDN link, an expired
+ * signature — the element removes ITSELF rather than leaving the browser's
+ * broken glyph on screen. The seeded `GradientThumb` is already painted
+ * underneath, so what the reader sees is the author's own artwork rather than
+ * an error icon. A tile is decoration; it should never be the thing that looks
+ * broken.
+ */
+function TileMedia({ url, video }: { url: string; video: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  if (video) {
+    return (
+      <video
+        src={`${url}#t=0.1`}
+        muted
+        playsInline
+        preload="metadata"
+        aria-hidden
+        onError={() => setFailed(true)}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+    <img
+      src={url}
+      alt=""
+      onError={() => setFailed(true)}
+      className="absolute inset-0 h-full w-full object-cover"
+    />
+  );
+}
+
 /**
  * Portrait live tile — the desktop strip's broadcast entry.
  *
@@ -242,10 +286,7 @@ function LiveCard({ entry }: { entry: LiveEntry }) {
     <span className="relative block p-[4.5px]">
       <span className="ws-story-live relative block h-24 w-[100px] overflow-hidden rounded-[16.5px]">
         <GradientThumb seed={entry.id} className="absolute inset-0 h-full w-full" />
-        {entry.thumbnailUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- host-supplied media host is unknown
-          <img src={entry.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        )}
+        {entry.thumbnailUrl && <TileMedia url={entry.thumbnailUrl} video={false} />}
         <span className="absolute inset-0 bg-black/[0.27]" />
         <span className="absolute left-2 top-2">
           <Avatar name={entry.displayName} seed={entry.hostId} src={entry.avatarUrl} size={24} />
@@ -265,7 +306,11 @@ function StoryCard({
   group: StoryGroup;
   seen: boolean;
 }) {
-  const cover = group.stories.find((story) => story.mediaUrl)?.mediaUrl ?? null;
+  // Which frame to show, and whether it is a clip, is decided in
+  // `lib/story-cover.ts` — it prefers a still and trusts `mediaKind` over the
+  // file extension. Taking the first story with any media and assuming it was
+  // an image is what put clips into an <img> and broke the tile.
+  const cover = storyCover(group.stories);
   return (
     // Landscape-ish 100×96 tile in the design, cover art under a flat 27%
     // black scrim with the author's avatar pinned top-left.
@@ -273,10 +318,7 @@ function StoryCard({
       <span className="ws-story-gap block !rounded-[17px]">
         <span className="relative block h-24 w-[100px] overflow-hidden rounded-[16.5px]">
           <GradientThumb seed={group.id} className="absolute inset-0 h-full w-full" />
-          {cover && (
-            // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
-            <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          )}
+          {cover && <TileMedia url={cover.url} video={cover.video} />}
           <span className="absolute inset-0 bg-black/[0.27]" />
           <span className="absolute left-2 top-2">
             <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={24} />
@@ -474,7 +516,7 @@ function StoryViewer({
           </div>
           {/* Shown only on a clip — a mute button over a photograph is a
               control for something that cannot make a sound. */}
-          {story.mediaUrl && isStoryVideo(story.mediaUrl) && (
+          {story.mediaUrl && isStoryVideoMedia(story) && (
             <button
               onClick={() => setSoundOn((on) => !on)}
               aria-label={soundOn ? "Mute story" : "Unmute story"}
@@ -517,7 +559,7 @@ function StoryViewer({
             (z-10) and the progress/header chrome (z-20). */}
         {story.mediaUrl && (
           <div className="absolute inset-0 overflow-hidden">
-            {isStoryVideo(story.mediaUrl) ? (
+            {isStoryVideoMedia(story) ? (
               <>
                 {/* The backdrop copy is ALWAYS muted, whatever the sound
                     setting: it is the same file decoded twice, so letting it
