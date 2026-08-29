@@ -41,8 +41,28 @@ function sessionId() {
   return created;
 }
 
+/**
+ * Has the collector answered 404 yet?
+ *
+ * `POST /analytics/events` is not deployed on every environment the app runs
+ * against — the fixture BFF implements it, the live service does not (yet).
+ * Without this guard every feed view, profile view and store view fires
+ * another request at a route we have already been told is not there: a
+ * console full of red on a working app, which trains everyone to ignore the
+ * console.
+ *
+ * A 404 is the ONLY thing that stops us. A 500, a timeout or an offline tab
+ * are transient and the next event should still try — giving up on those
+ * would silently kill analytics for the rest of the session over one blip.
+ *
+ * Scoped to the page load, so a deploy that adds the route is picked up on
+ * the next visit without anyone clearing anything.
+ */
+let collectorMissing = false;
+
 export function trackMarketEvent(name: MarketEventName, input: MarketEventInput) {
   if (typeof window === "undefined") return;
+  if (collectorMissing) return;
   const payload = {
     version: 1,
     name,
@@ -56,7 +76,14 @@ export function trackMarketEvent(name: MarketEventName, input: MarketEventInput)
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     keepalive: true,
-  }).catch(() => {});
+  })
+    .then((response) => {
+      if (response.status === 404) collectorMissing = true;
+    })
+    // Analytics never gets to be the reason something breaks: a failed
+    // measurement is not a failed action, and the reader must never learn
+    // that we tried to count them.
+    .catch(() => {});
 }
 
 export function useMarketView(name: MarketEventName, input: MarketEventInput, ready = true) {

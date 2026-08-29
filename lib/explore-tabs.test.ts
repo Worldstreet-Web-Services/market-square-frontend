@@ -38,15 +38,19 @@ test("the result-kind chips map straight to the service's own types", () => {
 test("Shows is a TOPIC, not a search type", () => {
   // `shows` is in the backend's own vocabulary from GET /topics, so the chip
   // filters by it rather than inventing a fifth search type.
-  assert.deepEqual(exploreTabTopics("shows", []), ["shows"]);
-  // ...and it overrides the viewer's interests rather than adding to them.
-  assert.deepEqual(exploreTabTopics("shows", ["gaming", "arts"]), ["shows"]);
+  assert.deepEqual(exploreTabTopics("shows"), ["shows"]);
 });
 
-test("every other chip inherits the viewer's interests, and none means NO filter", () => {
-  assert.deepEqual(exploreTabTopics("for-you", ["gaming"]), ["gaming"]);
-  assert.deepEqual(exploreTabTopics("people", ["gaming"]), ["gaming"]);
-  assert.deepEqual(exploreTabTopics("for-you", []), []);
+test("no other chip filters by topic — interests boost, they do not filter", () => {
+  // `topics=` is a hard filter upstream, and the for-you ranker already
+  // applies saved interests as a +2_500 boost. Sending them here as well
+  // removed every post that did not carry one, so a viewer who chose
+  // interests at onboarding saw LESS of the square than one who chose none.
+  assert.deepEqual(exploreTabTopics("for-you"), []);
+  assert.deepEqual(exploreTabTopics("people"), []);
+  assert.deepEqual(exploreTabTopics("posts"), []);
+  assert.deepEqual(exploreTabTopics("streams"), []);
+  assert.deepEqual(exploreTabTopics("products"), []);
 });
 
 test("row lists and the card grid are different surfaces", () => {
