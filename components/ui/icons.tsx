@@ -478,3 +478,18 @@ export function IconQuote({ className }: IconProps) {
     </svg>
   );
 }
+
+// The design's own "export" glyph — a rounded box with an arrow leaving its
+// top-right corner. Kept apart from IconExternal, which is the house line icon
+// at 24px: this is the file's 12px mark, drawn from the exported paths, and it
+// takes `currentColor` so a caller can tint it (the ecosystem card's two
+// slides use different accents for the same control).
+export function IconExportArrow({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden className={className}>
+      <path d="M6.50021 5.875C6.40521 5.875 6.31021 5.83999 6.23521 5.765C6.09021 5.62 6.09021 5.38 6.23521 5.235L10.3352 1.135C10.4802 0.989995 10.7202 0.989995 10.8652 1.135C11.0102 1.28 11.0102 1.52 10.8652 1.665L6.76521 5.765C6.69021 5.83999 6.59521 5.875 6.50021 5.875Z" />
+      <path d="M11.0001 3.775C10.7951 3.775 10.6251 3.605 10.6251 3.4V1.375H8.6001C8.3951 1.375 8.2251 1.205 8.2251 1C8.2251 0.795 8.3951 0.625 8.6001 0.625H11.0001C11.2051 0.625 11.3751 0.795 11.3751 1V3.4C11.3751 3.605 11.2051 3.775 11.0001 3.775Z" />
+      <path d="M7.5 11.375H4.5C1.785 11.375 0.625 10.215 0.625 7.5V4.5C0.625 1.785 1.785 0.625 4.5 0.625H5.5C5.705 0.625 5.875 0.795 5.875 1C5.875 1.205 5.705 1.375 5.5 1.375H4.5C2.195 1.375 1.375 2.195 1.375 4.5V7.5C1.375 9.805 2.195 10.625 4.5 10.625H7.5C9.805 10.625 10.625 9.805 10.625 7.5V6.5C10.625 6.295 10.795 6.125 11 6.125C11.205 6.125 11.375 6.295 11.375 6.5V7.5C11.375 10.215 10.215 11.375 7.5 11.375Z" />
+    </svg>
+  );
+}
