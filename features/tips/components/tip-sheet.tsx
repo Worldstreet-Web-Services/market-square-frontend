@@ -6,14 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { IconMsHandDeposit } from "@/components/ui/design-icons";
 import { KashCoin } from "@/components/ui/kash-coin";
-import { cn } from "@/lib/cn";
+import { GiftGrid } from "@/components/ui/gift-grid";
+import { LIVE_GIFTS } from "@/lib/gifts";
 import { formatKash } from "@/lib/format";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import {
   DEFAULT_TIP_KASH,
-  TIP_PRESETS_KASH,
   acceptsTipKeystroke,
-  isSameTipAmount,
   parseTipAmount,
   tipAmountMessage,
 } from "@/lib/tips";
@@ -44,6 +43,16 @@ export function TipSheet({
   const [stage, setStage] = useState<Stage>("amount");
   const [amount, setAmount] = useState<string>(DEFAULT_TIP_KASH);
   const [custom, setCustom] = useState("");
+  /**
+   * Which gift is lit, kept apart from the amount itself.
+   *
+   * Two gifts could share a price one day, and a typed amount that happens to
+   * equal a gift's price is still a typed amount — deriving the selection from
+   * the number would light a tile the reader never chose.
+   */
+  const [selectedGift, setSelectedGift] = useState<string | null>(
+    LIVE_GIFTS.find((gift) => gift.priceKash === DEFAULT_TIP_KASH)?.id ?? null,
+  );
   const [receipt, setReceipt] = useState<Tip | null>(null);
   // A 200 whose `status` is "failed": the request succeeded, the payment did
   // not. Tracked separately from `send.isError` because TanStack has no reason
@@ -102,7 +111,7 @@ export function TipSheet({
           setReceipt(tip);
           setStage("sent");
         },
-      }
+      },
     );
   };
 
@@ -113,7 +122,7 @@ export function TipSheet({
       // back — a back arrow that dismisses the dialog is a different control
       // wearing the same glyph.
       onClose={stage === "confirm" ? () => setStage("amount") : onClose}
-      title={stage === "sent" ? "Tip sent" : "Give a tip"}
+      title={stage === "sent" ? "Tip sent" : "Tip your creator"}
       back={stage === "confirm"}
     >
       {/* Who is being tipped — on every step, because "confirm" with no name
@@ -127,77 +136,124 @@ export function TipSheet({
             size={40}
           />
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-bold text-white">{recipient.displayName}</p>
-            <p className="truncate text-[13px] text-white/50">@{recipient.username}</p>
+            <p className="truncate text-[15px] font-bold text-white">
+              {recipient.displayName}
+            </p>
+            <p className="truncate text-[13px] text-white/50">
+              @{recipient.username}
+            </p>
           </div>
         </div>
       )}
 
       {stage === "amount" && (
         <>
-          <div className="grid grid-cols-3 gap-2">
-            {TIP_PRESETS_KASH.map((preset) => {
-              const active = isSameTipAmount(preset, chosen);
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => {
-                    setAmount(preset);
-                    setCustom("");
-                  }}
-                  className={cn(
-                    "ws-press flex h-12 items-center justify-center gap-1.5 rounded-2xl border text-[15px] font-bold tnum transition-colors",
-                    active
-                      ? "border-spotlight-chip-ink bg-spotlight/35 text-white"
-                      : "border-white/15 bg-white/5 text-body hover:bg-white/10"
-                  )}
-                >
-                  <KashCoin size={16} />
-                  {preset}
-                </button>
-              );
-            })}
+          {/*
+            The amount is chosen by choosing a GIFT.
+            
+            It used to be six numbered chips — 1, 5, 10, 25, 50, 100 — which is
+            a form asking someone to price their own gratitude. The design
+            answers that with objects: a rose says something a "1" cannot, and
+            the number under it is the same information without the arithmetic.
+            The ladder is the same one either way, so nothing about what
+            arrives in the recipient's balance changed.
+
+            `selectedId` is null the moment a custom amount is typed, because
+            two things cannot both be the chosen amount and a grid still
+            showing a highlighted rose while the field reads 250 is a lie about
+            what pressing Continue will send.
+          */}
+          {/*
+            The grid scrolls; the amount field and Continue do not.
+
+            Fourteen gifts is five rows, and at the design's row rhythm that is
+            a sheet taller than a phone — so the commit button sat below the
+            fold and the sheet read as a page. A picker whose primary action
+            has to be scrolled to is a picker people abandon.
+
+            The cap is in `dvh` so it answers to the visible viewport rather
+            than a guess about the device, and it deliberately cuts a row in
+            half: a grid that ends flush at the fold looks finished, and nobody
+            scrolls a thing that looks finished.
+          */}
+          {/* Bounded, so the SHEET stays a sheet. Pinning the commit row
+              fixed the reach problem but not the size one: a 790px dialog is
+              a page with a shadow. Three rows visible, the fourth cut, is
+              enough to say "there are more" without turning the picker into
+              the screen. */}
+          <div className="max-h-[min(38dvh,300px)] overflow-y-auto overscroll-contain pr-0.5">
+            <GiftGrid
+              selectedId={selectedGift}
+              onSelect={(gift) => {
+                setSelectedGift(gift.id);
+                setAmount(gift.priceKash);
+                setCustom("");
+              }}
+            />
           </div>
 
-          <div className="mt-4">
-            <p className="mb-1.5 text-[13px] text-white/50">Or another amount</p>
-            {/* `ws-field` is the WRAPPER, per its definition — it owns the pill
+          {/*
+            The amount and the commit stick to the bottom; the gifts scroll
+            behind them.
+
+            Fourteen gifts is five rows, and at the design's rhythm that is
+            taller than a phone — so Continue sat below the fold and the sheet
+            read as a page. A picker whose primary action has to be scrolled to
+            is a picker people abandon. Pinning it also means the amount is
+            visible while the reader is still choosing, which is the one number
+            they are deciding about.
+
+            `-mx-5 px-5` because the sheet's own padding is on the scroll
+            container: without it the pinned block would be a floating island
+            with the grid visible down both sides of it.
+          */}
+          <div className="sticky bottom-0 -mx-5 mt-4 bg-sheet px-5 pb-1 pt-3">
+            <div>
+              <p className="mb-1.5 text-[13px] text-white/50">
+                Or another amount
+              </p>
+              {/* `ws-field` is the WRAPPER, per its definition — it owns the pill
                 and the focus-within treatment, and the input inside it is
                 bare. */}
-            <label className="ws-field flex h-11 items-center gap-2 px-4">
-              <KashCoin size={16} className="shrink-0" />
-              <input
-                inputMode="decimal"
-                value={custom}
-                placeholder="0"
-                onChange={(e) => {
-                  // Filtered per keystroke so an amount that could never be
-                  // sent cannot be typed — and half-typed ones still can.
-                  if (acceptsTipKeystroke(e.target.value)) setCustom(e.target.value);
-                }}
-                className="min-w-0 flex-1 bg-transparent tnum text-[15px] text-white outline-none placeholder:text-white/30"
-                aria-label="Tip amount in KASH"
-              />
-              <span className="shrink-0 text-[13px] text-white/40">KASH</span>
-            </label>
-          </div>
+              <label className="ws-field flex h-11 items-center gap-2 px-4">
+                <KashCoin size={16} className="shrink-0" />
+                <input
+                  inputMode="decimal"
+                  value={custom}
+                  placeholder="0"
+                  onChange={(e) => {
+                    setSelectedGift(null);
+                    // Filtered per keystroke so an amount that could never be
+                    // sent cannot be typed — and half-typed ones still can.
+                    if (acceptsTipKeystroke(e.target.value))
+                      setCustom(e.target.value);
+                  }}
+                  className="min-w-0 flex-1 bg-transparent tnum text-[15px] text-white outline-none placeholder:text-white/30"
+                  aria-label="Tip amount in KASH"
+                />
+                <span className="shrink-0 text-[13px] text-white/40">KASH</span>
+              </label>
+            </div>
 
-          {/* Silent until there is something to correct: an error under an
+            {/* Silent until there is something to correct: an error under an
               untouched field reads as the form being broken. */}
-          {!parsed.ok && parsed.reason !== "empty" && custom.trim() !== "" && (
-            <p className="mt-2 text-[13px] text-down">{tipAmountMessage(parsed.reason)}</p>
-          )}
+            {!parsed.ok &&
+              parsed.reason !== "empty" &&
+              custom.trim() !== "" && (
+                <p className="mt-2 text-[13px] text-down">
+                  {tipAmountMessage(parsed.reason)}
+                </p>
+              )}
 
-          <Button
-            className="mt-6 w-full"
-            size="lg"
-            disabled={!parsed.ok}
-            onClick={() => setStage("confirm")}
-          >
-            Continue
-          </Button>
+            <Button
+              className="mt-3 w-full"
+              size="lg"
+              disabled={!parsed.ok}
+              onClick={() => setStage("confirm")}
+            >
+              Continue
+            </Button>
+          </div>
         </>
       )}
 
@@ -205,9 +261,13 @@ export function TipSheet({
         <>
           <div className="ws-inset flex flex-col items-center gap-2 px-5 py-7">
             <IconMsHandDeposit className="h-7 w-7 text-spotlight-chip-ink" />
-            <p className="ws-display tnum text-3xl text-white">{formatKash(parsed.amountKash)}</p>
+            <p className="ws-display tnum text-3xl text-white">
+              {formatKash(parsed.amountKash)}
+            </p>
             <p className="text-center text-[13px] text-white/50">
-              {recipient ? `Goes to @${recipient.username}.` : "Goes to the author of this post."}{" "}
+              {recipient
+                ? `Goes to @${recipient.username}.`
+                : "Goes to the author of this post."}{" "}
               Tips cannot be reversed.
             </p>
           </div>
@@ -247,10 +307,14 @@ export function TipSheet({
       {stage === "sent" && receipt && (
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <IconMsHandDeposit className="h-9 w-9 text-spotlight-chip-ink" />
-          <p className="ws-display tnum text-3xl text-white">{formatKash(receipt.amountKash)}</p>
+          <p className="ws-display tnum text-3xl text-white">
+            {formatKash(receipt.amountKash)}
+          </p>
           <p className="text-[14px] text-body">
             {receipt.status === "settled" ? "Sent to " : "On its way to "}
-            <span className="font-bold text-white">@{receipt.recipient.username}</span>
+            <span className="font-bold text-white">
+              @{receipt.recipient.username}
+            </span>
           </p>
           {receipt.status === "pending" && (
             <p className="text-[12px] text-white/40">
@@ -258,7 +322,12 @@ export function TipSheet({
             </p>
           )}
           <p className="tnum text-[11px] text-white/30">{receipt.tipId}</p>
-          <Button className="mt-3 w-full" size="lg" variant="secondary" onClick={onClose}>
+          <Button
+            className="mt-3 w-full"
+            size="lg"
+            variant="secondary"
+            onClick={onClose}
+          >
             Done
           </Button>
         </div>

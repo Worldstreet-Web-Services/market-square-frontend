@@ -25,15 +25,22 @@ interface PartnerSlide {
   body: string;
   /** The file gives each slide its own CTA colour. */
   accent: string;
+  /** Where "Join now" goes — the product the slide is actually about. */
+  href: string;
   art: string;
   alt: string;
 }
+
+/** The platform itself, for the slide that is about the platform itself. */
+const WORLDSTREET_URL =
+  process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreetgold.com";
 
 const SLIDES: PartnerSlide[] = [
   {
     headline: { lead: "Welcome to\nthe New ", accent: "Economy" },
     body: "Build the life you want with all the tools you could ever need… all from one account.",
     accent: "#FFD230",
+    href: WORLDSTREET_URL,
     art: "/ecosystem/partner-slide-1.svg",
     alt: "WorldStreet",
   },
@@ -41,13 +48,15 @@ const SLIDES: PartnerSlide[] = [
     headline: { lead: "One Platform. Every Currency. Every Asset." },
     body: "Send, pay bills, and save together — all in one app.",
     accent: "#D4F84A",
+    // LinkPay — the slide's own copy is about sending, paying bills and
+    // saving together, which is that product rather than the platform as a
+    // whole. A carousel where every card leads to the same place is a banner
+    // with extra steps.
+    href: "https://linkpay-lemon.vercel.app/en",
     art: "/ecosystem/partner-slide-2.svg",
-    alt: "WorldStreet",
+    alt: "LinkPay",
   },
 ];
-
-/** Where "Join now" goes. The same product the sidebar's WorldStreet entry opens. */
-const JOIN_URL = process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreetgold.com";
 
 /** How long a slide holds before the next one. */
 const SLIDE_MS = 7000;
@@ -107,7 +116,7 @@ export function EcosystemPartnersRail() {
               control is empty — the shadow rectangle behind the label is what
               gives it its edge, and the label carries the colour. */}
           <a
-            href={JOIN_URL}
+            href={slide.href}
             target="_blank"
             rel="noopener noreferrer"
             className="ws-press flex w-fit items-center gap-2 rounded-full px-0 py-0 text-[12px] font-bold leading-4 transition-opacity hover:opacity-80"
@@ -128,8 +137,10 @@ export function EcosystemPartnersRail() {
             alt={slide.alt}
             width={96}
             height={96}
-            // The art is the same mark on both slides, so it is not swapped
-            // per render; only the second draws the wordmark over it.
+            // Each slide carries its own mark now that they lead to different
+            // products — the platform on one, LinkPay on the other. Neither is
+            // preloaded: the card sits below the fold on every surface that
+            // shows it.
             priority={false}
           />
 

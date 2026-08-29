@@ -36,7 +36,6 @@ import {
   IconChevronLeft,
   IconCamera,
   IconDots,
-  IconExternal,
   IconHome,
   IconLive,
   IconMail,
@@ -76,22 +75,6 @@ interface NavItem {
    */
   external?: boolean;
 }
-
-/**
- * Where the rest of WorldStreet lives.
- *
- * The confirmed public origin. `NEXT_PUBLIC_WORLDSTREET_URL` still overrides
- * it, so a staging build can point the entry somewhere else without a code
- * change.
- *
- * Deliberately NOT `NEXT_PUBLIC_ARK_APP_URL`: that variable is the base for
- * every deep-link CTA (listings, markets, casino games), and `lib/deeplink.ts`
- * keeps those CTAs INERT while it is unset precisely so nobody is sent to a
- * host that answers nothing. Setting it to a placeholder to get one nav link
- * would quietly turn all of them into placeholder links too.
- */
-const WORLDSTREET_URL =
-  process.env.NEXT_PUBLIC_WORLDSTREET_URL ?? "https://worldstreetgold.com";
 
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
@@ -147,15 +130,6 @@ const NAV: NavItem[] = [
     icon: IconShield,
     authed: true,
     operator: true,
-    secondary: true,
-  },
-  // The way back to the rest of the platform. Market Square is one surface of
-  // WorldStreet, and without this the two products have no door between them.
-  {
-    href: WORLDSTREET_URL,
-    label: "WorldStreet",
-    icon: IconExternal,
-    external: true,
     secondary: true,
   },
 ];
@@ -866,7 +840,23 @@ function MobileBar({
       // small but exactly the kind of thing that reads as sloppy. Absolute
       // positioning is the only arrangement where the centre is the centre at
       // every width.
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center px-3 md:hidden"
+      className={cn(
+        "pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-center justify-center px-3 md:hidden",
+        // The bar centres in the space it ACTUALLY has, not on the screen.
+        //
+        // Centred on the screen, the pill grows symmetrically as the active
+        // tab's label appears — and "Messages" is wide enough that its right
+        // edge reached the create button and touched it. Nudging the bar left
+        // by a fixed amount would fix the collision and break the centring the
+        // moment a shorter label was active.
+        //
+        // Reserving the button's own footprint (58px + its 12px inset) makes
+        // the collision structurally impossible at any label length, and the
+        // bar stays optically centred in the row that remains. With no create
+        // button there is nothing to reserve, so it centres on the screen
+        // exactly as before.
+        onCompose && "pr-[70px]",
+      )}
       style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
     >
       <nav

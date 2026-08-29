@@ -24,6 +24,16 @@ export function Sheet({
   action,
   /** A tab strip pinned under the header bar. */
   tabs,
+  /**
+   * Drop the header bar and let the caller draw its own.
+   *
+   * For the surfaces a design gives their own chrome — the tip sheet's grab
+   * handle, centred title and round close. The DIALOG behaviour is the part
+   * worth sharing (portal, backdrop, Escape, scroll lock, the reduced-motion
+   * entrance); reimplementing that per sheet is how one of them ends up
+   * without an Escape handler.
+   */
+  bare = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -33,6 +43,7 @@ export function Sheet({
   back?: boolean;
   action?: React.ReactNode;
   tabs?: React.ReactNode;
+  bare?: boolean;
 }) {
   // The CSS motion system honours prefers-reduced-motion, but these are
   // JS-driven springs that CSS cannot reach. Under the setting the panel stops
@@ -104,6 +115,7 @@ export function Sheet({
               wide ? "sm:max-w-2xl" : "sm:max-w-md"
             )}
           >
+            {!bare && (
             <div className="ws-hair shrink-0 border-b">
               <div className="flex items-center gap-4 px-4 py-3">
                 <button
@@ -118,7 +130,13 @@ export function Sheet({
               </div>
               {tabs}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            )}
+            <div
+              className={cn(
+                "min-h-0 flex-1 overflow-y-auto pb-[max(1.25rem,env(safe-area-inset-bottom))]",
+                bare ? "p-0" : "p-5"
+              )}
+            >
               {children}
             </div>
           </motion.div>

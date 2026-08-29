@@ -17,7 +17,6 @@ import {
   DiscoveryPage,
   ExploreCategoriesRail,
   useDiscovery,
-  useMyInterests,
   usePeople,
 } from "@/features/discovery";
 import type { ExploreItem } from "@/features/discovery";
@@ -64,13 +63,11 @@ export function DiscoverScreen() {
   const hasQuery = deferredQuery.trim().length > 0;
 
   // `Shows` is a topic from the backend's own vocabulary; every other chip
-  // inherits the viewer's saved interests. Neither means "no filter", never
-  // "match nothing".
-  const interests = useMyInterests();
-  const topics = useMemo(
-    () => exploreTabTopics(tab, interests.data?.topics ?? []),
-    [tab, interests.data?.topics]
-  );
+  // sends no topic filter at all. The viewer's saved interests are NOT fed in
+  // here — the for-you ranker already applies them upstream as a boost, and
+  // `topics=` is a hard filter, so passing them narrowed Explore instead of
+  // ordering it. See `exploreTabTopics`.
+  const topics = useMemo(() => exploreTabTopics(tab), [tab]);
   const searchType = exploreTabSearchType(tab);
 
   const live = useStreamList("live", topics);

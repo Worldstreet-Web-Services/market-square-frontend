@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
 import { useLiveReactions } from "@/features/streams/hooks/use-live-reactions";
@@ -46,7 +47,8 @@ import { useHeartbeat, usePlaybackToken } from "@/features/streams/hooks/use-pla
 import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-player";
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
-import { GiftSheet, LIVE_GIFTS, type LiveGift } from "@/features/streams/components/gift-sheet";
+import { GiftSheet } from "@/features/streams/components/gift-sheet";
+import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
 import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
 import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
 import { TicketSheet } from "@/features/streams/components/ticket-sheet";
@@ -968,8 +970,11 @@ export function StreamRoom({
                     onClick={() => gate(() => sendGift(gift, 1))}
                     className="ws-press group flex h-[82px] w-24 shrink-0 flex-col items-center justify-center rounded-xl border border-transparent px-2 transition-colors hover:border-white/10 hover:bg-white/5"
                   >
-                    <span className="text-[32px] leading-none transition-transform group-hover:-translate-y-1" aria-hidden>
-                      {gift.emoji}
+                    {/* The same artwork the tray shows — one catalogue, one
+                        look. This strip used to print the emoji that stood in
+                        for it. */}
+                    <span className="relative block h-8 w-8 transition-transform group-hover:-translate-y-1">
+                      <Image src={gift.art} alt="" fill sizes="32px" className="object-contain" />
                     </span>
                     <span className="mt-1.5 max-w-full truncate text-[12px] font-semibold text-body">
                       {gift.name}
@@ -1123,11 +1128,18 @@ export function StreamRoom({
                 key={burst.id}
                 className="ws-gift-burst flex items-center gap-3 rounded-full border border-white/20 bg-black/65 py-2 pl-3 pr-5 shadow-2xl backdrop-blur-md"
               >
-                <span className="text-4xl">{burst.gift.emoji}</span>
+                {/* The burst shows the gift that was actually sent, not a
+                    stand-in for it — same artwork as the tray. The quantity
+                    was tinted per-gift from a colour the catalogue carried
+                    only for that purpose; it reads as the accent now, which is
+                    the one the rest of the room uses for emphasis. */}
+                <span className="relative block h-9 w-9 shrink-0">
+                  <Image src={burst.gift.art} alt="" fill sizes="36px" className="object-contain" />
+                </span>
                 <span>
                   <span className="block text-xs font-semibold text-grey-300">Gift sent</span>
                   <span className="block text-sm font-bold text-white">
-                    {burst.gift.name} <span style={{ color: burst.gift.color }}>×{burst.quantity}</span>
+                    {burst.gift.name} <span className="text-accent">×{burst.quantity}</span>
                   </span>
                 </span>
               </div>

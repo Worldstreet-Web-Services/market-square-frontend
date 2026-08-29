@@ -61,12 +61,27 @@ export function exploreTabSearchType(tab: ExploreTab): string {
  *
  * `Shows` is a TOPIC, not a result kind — `shows` is in the backend's own
  * vocabulary from `GET /topics`, so the chip filters by it rather than
- * inventing a fifth search type the service does not have. Every other chip
- * inherits the viewer's saved interests; with none, the answer is `[]`, which
- * means "no filter" and never "match nothing".
+ * inventing a fifth search type the service does not have.
+ *
+ * EVERY OTHER CHIP FILTERS BY NOTHING, and the viewer's saved interests are
+ * deliberately not consulted here. `topics=` is a hard filter — the service
+ * documents it as "FILTERS to content carrying ANY of them" and says in the
+ * same breath that interests are "distinct ... they BOOST for-you ordering
+ * rather than filtering it". The for-you ranker already applies them, at
+ * +2_500 per match, explicitly as a boost so "an interested viewer still sees
+ * everything else, just lower".
+ *
+ * Passing them here turned that boost into a filter and applied it twice: a
+ * viewer who picked two interests at onboarding saw an Explore grid with every
+ * untagged post — and every post tagged anything else — removed outright,
+ * while a viewer who picked none saw the whole square. Discovery that narrows
+ * as you tell it more about yourself is backwards.
+ *
+ * A topic the reader picks by hand is a different thing and still filters;
+ * that selection arrives through the picker, not through this function.
  */
-export function exploreTabTopics(tab: ExploreTab, interests: string[]): string[] {
-  return tab === "shows" ? ["shows"] : interests;
+export function exploreTabTopics(tab: ExploreTab): string[] {
+  return tab === "shows" ? ["shows"] : [];
 }
 
 /**
