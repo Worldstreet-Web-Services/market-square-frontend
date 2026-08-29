@@ -15,6 +15,8 @@ import { cn } from "@/lib/cn";
 import {
   ACCEPT_MEDIA,
   ensureUploadLimits,
+  formatBytes,
+  getUploadLimits,
   readVideoDuration,
   uploadKind,
   validateUpload,
@@ -250,6 +252,26 @@ export function Composer({
   };
 
   const active = text.trim().length > 0 || mediaFile !== null;
+
+  /**
+   * The caps, shown BEFORE a file is chosen.
+   *
+   * They were only ever spoken as a rejection — pick a 40MB clip, wait, get
+   * told. Saying them up front costs one line and turns a refusal into a
+   * choice. Read from the published contract, never typed in here: the whole
+   * point of `/uploads/limits` is that these numbers have one owner, and a
+   * hint that drifts is worse than no hint.
+   */
+  const [limits, setLimits] = useState(getUploadLimits());
+  useEffect(() => {
+    let live = true;
+    void ensureUploadLimits().then((fetched) => {
+      if (live) setLimits(fetched);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   return (
     <div className="ws-row flex gap-3 px-4 py-3">
@@ -491,6 +513,16 @@ export function Composer({
             </button>
           </div>
         </div>
+
+        {/* Quiet, and only while composing: a permanent line of limits above an
+            empty box is noise, and the reader who has not reached for a file
+            does not need it yet. */}
+        {active && (
+          <p className="mt-2 text-[11px] leading-4 text-meta">
+            Photos up to {formatBytes(limits.maxImageBytes)} · video up to{" "}
+            {formatBytes(limits.maxVideoBytes)}, {limits.maxVideoSeconds}s
+          </p>
+        )}
       </div>
     </div>
   );
