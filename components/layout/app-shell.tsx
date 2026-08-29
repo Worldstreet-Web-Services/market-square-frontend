@@ -27,6 +27,7 @@ import { LogoMark, Wordmark } from "@/components/ui/wordmark";
 import { RightRail } from "@/components/layout/right-rail";
 import { CreateFab } from "@/components/layout/create-fab";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
+import { ConnectionBanner } from "@/components/layout/connection-banner";
 import { Sheet } from "@/components/ui/sheet";
 import {
   IconBell,
@@ -968,6 +969,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <>
         <main className="min-h-dvh">{children}</main>
+        <ConnectionBanner />
         {/* No interest prompt here: the stream room owns the whole viewport,
             and a modal over a live broadcast is an interruption, not an
             onboarding. It waits until the reader leaves. */}
@@ -1110,6 +1112,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <InterestGate />
       {/* Session-expiry watchdog: logs out properly instead of half-stuck. */}
       <SessionGuard />
+      {/* One sentence for the whole app when the backend is unreachable —
+          see the note in the component for why it is not forty. */}
+      <ConnectionBanner />
     </div>
   );
 }

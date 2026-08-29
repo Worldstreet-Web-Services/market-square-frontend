@@ -5,6 +5,7 @@ import { formatCount } from "@/lib/format";
 import { arkAppConfigured, resolveDeepLink } from "@/lib/deeplink";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ModuleUnavailable } from "@/components/ui/states";
 import {
   IconCoin,
   IconExternal,
@@ -80,9 +81,11 @@ const INERT_GLYPH: Record<string, React.ComponentType<{ className?: string }>> =
 export function ExploreCategoriesRail() {
   const categories = useCategories();
 
-  // A rail module that cannot load its own data says nothing rather than
-  // showing an error inside the timeline's margin.
-  if (categories.isError) return null;
+  // A module that cannot load says SO, rather than vanishing. Disappearing
+  // reads as "there is nothing here"; this reads as "we could not fetch it",
+  // which is the true statement and the one that does not make the reader
+  // wonder what they did.
+  if (categories.isError) return <ModuleUnavailable title="Explore Categories" />;
 
   return (
     <section className="ws-panel p-4">

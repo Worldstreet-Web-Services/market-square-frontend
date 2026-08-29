@@ -6,6 +6,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { Profile } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
+import { ModuleUnavailable } from "@/components/ui/states";
 import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronRight, IconSpark } from "@/components/ui/icons";
@@ -48,7 +49,8 @@ export function CitizenSpotlightRail() {
   const board = useSpotlight();
   const me = useMe();
 
-  if (board.isError) return null;
+  // Same reasoning as the category rail: admit the gap rather than vanish.
+  if (board.isError) return <ModuleUnavailable title="Citizen Spotlight" />;
   if (board.isPending) {
     return (
       <section className="ws-spotlight p-3">

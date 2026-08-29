@@ -307,6 +307,24 @@ export function useBanFromChat(streamId: string) {
   });
 }
 
+/**
+ * How often a live room asks about things that change on human timescales.
+ *
+ * Both of these polled every 3 seconds. Nobody raises a hand twenty times a
+ * minute, and nobody notices the difference between a 3-second and an
+ * 8-second answer to "has the host let me speak yet" — but the machine
+ * notices: at 3s each open room made 40 requests a minute per query, every one
+ * of them a serverless invocation, and during an outage each of those became
+ * a function sitting on a dead upstream. This is the single heaviest thing the
+ * app does when everything is WORKING, which is why it is tuned rather than
+ * only guarded.
+ *
+ * The real fix is the socket gateway that already exists for streams; this is
+ * the honest interim, and it is written down so the next person knows which
+ * one this is.
+ */
+const SPEAKER_POLL_MS = 8_000;
+
 export function useMySpeakerRequest(streamId: string, enabled: boolean) {
   const { ready, authenticated } = useAuth();
   return useQuery({
@@ -314,7 +332,7 @@ export function useMySpeakerRequest(streamId: string, enabled: boolean) {
     queryFn: () => fetchMySpeakerRequest(streamId),
     enabled: enabled && ready && authenticated,
     retry: false,
-    refetchInterval: enabled ? 3_000 : false,
+    refetchInterval: enabled ? SPEAKER_POLL_MS : false,
   });
 }
 
@@ -339,7 +357,7 @@ export function useSpeakerRequests(streamId: string, enabled: boolean) {
     queryFn: () => fetchSpeakerRequests(streamId),
     enabled,
     retry: false,
-    refetchInterval: enabled ? 3_000 : false,
+    refetchInterval: enabled ? SPEAKER_POLL_MS : false,
   });
 }
 

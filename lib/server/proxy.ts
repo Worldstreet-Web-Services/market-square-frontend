@@ -28,6 +28,13 @@
  * rather than shipping it on to become someone else's 500.
  */
 
+import {
+  recordUpstreamFailure,
+  recordUpstreamSuccess,
+  upstreamIsOpen,
+  upstreamTimeoutMs,
+} from "./upstream-health.ts";
+
 export interface ForwardResult {
   status: number;
   body: string;
@@ -164,6 +171,13 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
     }
   }
 
+  // The upstream has been failing consecutively and this instance has stopped
+  // asking. Answering here costs about a millisecond; asking would cost the
+  // full timeout in billed memory to arrive at the same answer.
+  if (upstreamIsOpen()) {
+    return fail(503, "SERVICE_UNAVAILABLE", "Market Square is unreachable.", { requestId });
+  }
+
   let res: Response;
   try {
     res = await doFetch(url, {
@@ -171,10 +185,11 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
       headers,
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(isMultipart ? 120_000 : 15_000),
+      signal: AbortSignal.timeout(upstreamTimeoutMs(method, isMultipart)),
     });
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    recordUpstreamFailure();
     log.error(
       `[ms-proxy] ${method} ${route} upstream request failed (requestId=${requestId}, bytes=${body?.byteLength ?? 0}):`,
       errorLabel(error)
@@ -183,6 +198,11 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
       ? fail(504, "UPSTREAM_TIMEOUT", "Market Square took too long to respond. Try again.", { requestId })
       : fail(502, "SERVICE_UNAVAILABLE", "Market Square is unreachable.", { requestId });
   }
+
+  // A 5xx is the service being unwell; a 4xx is it working and saying no, so
+  // only the first kind counts towards shutting the circuit.
+  if (res.status >= 500) recordUpstreamFailure();
+  else recordUpstreamSuccess();
 
   const text = await res.text().catch(() => "");
   if (res.ok) return { status: res.status, body: text, contentType: JSON_CT };

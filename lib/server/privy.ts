@@ -4,6 +4,11 @@ import { PrivyClient } from "@privy-io/node";
 
 let client: PrivyClient | null = null;
 
+/** Can this environment verify a session at all? */
+export function privyConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID && process.env.PRIVY_APP_SECRET);
+}
+
 export function getPrivyClient(): PrivyClient {
   if (client) return client;
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
