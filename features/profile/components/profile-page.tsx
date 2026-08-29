@@ -349,7 +349,12 @@ export function ProfilePage({
         </div>
       )}
 
-      <div className="ws-hair sticky top-0 z-20 border-b bg-black/72 backdrop-blur-md">
+      {/* Two stickies on one page: the header above pins first, so the tabs
+          have to pin BELOW it — the shell's fixed top strip plus the header's
+          own measured height. At `top-0` with a lower z-index they stuck
+          straight underneath both and vanished, so a scrolled profile had no
+          way left to switch tab. */}
+      <div className="ws-hair sticky top-[calc(var(--ws-topbar-h)_+_var(--ws-colhead-h))] z-20 border-b bg-ground">
         <ColumnTabs
           tabs={[
             { value: "posts" as Tab, label: "Posts" },

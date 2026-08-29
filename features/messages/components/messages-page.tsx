@@ -31,7 +31,7 @@ function Composer({ conversationId }: { conversationId: string }) {
   };
 
   return (
-    <div className="ws-hair sticky bottom-0 border-t bg-black/80 p-3 backdrop-blur">
+    <div className="ws-hair sticky bottom-0 border-t bg-ground p-3">
       <div className="ws-field flex items-end gap-2 px-3 py-2">
         <label className="sr-only" htmlFor="message-composer">
           Write a message

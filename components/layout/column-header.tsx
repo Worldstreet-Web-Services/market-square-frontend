@@ -1,6 +1,7 @@
 "use client";
 import { cn } from "@/lib/cn";
 
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { IconArrowLeft } from "@/components/ui/icons";
 import { canGoBack } from "@/lib/nav-history";
@@ -37,8 +38,36 @@ export function ColumnHeader({
   children?: React.ReactNode;
 }) {
   const router = useRouter();
+  const ref = useRef<HTMLElement>(null);
+
+  // The column header's height, published for whatever else on the page has to
+  // stick UNDER it — the profile's tab strip is the one caller. It cannot be a
+  // constant: the row is taller with a subtitle than without, and taller again
+  // with a tab strip in `children`. Reset on unmount so the next surface's
+  // header does not inherit this one's measurement.
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const publish = () =>
+      document.documentElement.style.setProperty("--ws-colhead-h", `${node.offsetHeight}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--ws-colhead-h");
+    };
+  }, []);
+
   return (
-    <header className="ws-head sticky top-0 z-30">
+    // `top-0` parked this behind the shell's mobile top strip, which is FIXED
+    // rather than in flow: `main`'s top padding pushes the header's RESTING
+    // place clear of the strip, but a sticky element pins to the viewport, so
+    // as soon as the page scrolled the title slid under the wordmark and the
+    // two drew on top of each other. `--ws-topbar-h` is that strip's height —
+    // 48px on a phone, 0 from md up, where the strip does not exist — so one
+    // offset is correct at both ends.
+    <header ref={ref} className="ws-head sticky top-[var(--ws-topbar-h)] z-30">
       {/* The heading stays in the accessibility tree whichever way this
           renders — a page needs exactly one h1 whether or not it draws one. */}
       {hideTitle && <h1 className="sr-only">{title}</h1>}
