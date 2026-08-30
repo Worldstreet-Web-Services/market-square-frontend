@@ -1,3 +1,4 @@
+import { MARKET_FLAGS } from "./market-config.ts";
 /**
  * The gift catalogue — one list, used by both places KASH changes hands.
  *
@@ -62,3 +63,19 @@ export const LIVE_GIFTS: LiveGift[] = [
   { id: "car", name: "Car", art: "/gifts/gift-07.png", priceKash: "25" }, //     $175
   { id: "kash", name: "KASH coin", art: "/gifts/gift-14.png", priceKash: "50" }, // $350
 ];
+
+/**
+ * Is the tray charging for gifts in this room?
+ *
+ * ONE rule, in one place, because it is asked in two: the room reads it to
+ * decide whether to draw prices, and the send path reads it to decide whether
+ * to take money. Two copies of that condition is how a tray ends up printing a
+ * price it never charges, or charging for a gift it showed as free.
+ *
+ * `MARKET_FLAGS.liveGifts` is the money half and stays the master switch, so a
+ * deployment whose service cannot settle a stream gift shows the free tray —
+ * the shared on-stream moment, with no payment language anywhere near it.
+ */
+export function giftsArePriced(status: string | null | undefined): boolean {
+  return status === "live" && MARKET_FLAGS.liveGifts;
+}

@@ -333,13 +333,20 @@ describe("the stage renderer, by construction", () => {
   });
 
   it("never prices a gift that nothing charges for", () => {
-    // There is no POST /streams/{id}/tips — the KASH tip rail is scoped to
-    // posts — so the live tray moves no money. Every priced surface stays
-    // behind MARKET_FLAGS.liveGifts, and the free tray must not print a
-    // total, a coin glyph, or the money-only gold token.
+    // `POST /streams/{id}/gifts` settles a real amount now, but only where the
+    // deployment can: `MARKET_FLAGS.liveGifts` remains the money switch, and a
+    // free tray must not print a total, a coin glyph, or the gold token.
+    //
+    // ONE rule, asked in two places — the room draws prices from it and the
+    // send path decides whether to take money from it. Two copies is how a
+    // tray prints a price it never charges, or charges for a gift it showed
+    // as free, so the shared helper is what is pinned here.
     const room = source("features/streams/components/stream-room.tsx");
-    assert.match(room, /const giftsAvailable = data\.status === "live";/);
-    assert.match(room, /const giftsPriced = giftsAvailable && MARKET_FLAGS\.liveGifts;/);
+    const gifts = source("lib/gifts.ts");
+    assert.match(gifts, /status === "live" && MARKET_FLAGS\.liveGifts/);
+    assert.match(room, /const giftsPriced = giftsArePriced\(data\.status\);/);
+    // The money leg is never taken on an unpriced tray.
+    assert.match(room, /if \(!giftsArePriced\(stream\.data\?\.status\)\) return;/);
     assert.match(room, /giftsPriced \? "bg-coin" : "bg-accent"/);
     assert.match(giftSheet, /showPrices=\{priced\}/);
     assert.match(giftSheet, /priced \? `Send \$\{selected\.name\} · \$\{formatKash\(total\)\}` : `Send \$\{selected\.name\}`/);

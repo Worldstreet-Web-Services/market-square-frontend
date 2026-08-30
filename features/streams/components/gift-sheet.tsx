@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { GiftGrid } from "@/components/ui/gift-grid";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
+import { multiplyKash } from "@/lib/kash-amount";
 import { formatKash } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { IconX } from "@/components/ui/icons";
@@ -63,7 +64,12 @@ export function GiftSheet({
   const [selectedId, setSelectedId] = useState(LIVE_GIFTS[0].id);
   const [quantity, setQuantity] = useState<number>(1);
   const selected = LIVE_GIFTS.find((gift) => gift.id === selectedId) ?? LIVE_GIFTS[0];
-  const total = String(Number(selected.priceKash) * quantity);
+  // Exact, never `Number(price) * quantity` — three Roses at 0.01 is 0.03, and
+  // the float answer is 0.030000000000000002, which the engine rejects for
+  // exceeding six places. The button must show the number that will be
+  // charged. Null falls back to the single price rather than printing a total
+  // this sheet cannot stand behind.
+  const total = multiplyKash(selected.priceKash, quantity) ?? selected.priceKash;
 
   return (
     <Sheet open={open} onClose={onClose} bare>

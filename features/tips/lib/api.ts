@@ -76,8 +76,20 @@ export async function sendTip(
   /** The gift chosen, if one was. A label the service records, never a price. */
   giftId: string | null = null,
 ): Promise<CreatedTip> {
-  const path = target.kind === "post" ? `/posts/${target.id}/tips` : `/profiles/${target.id}/tips`;
-  const raw = await msApi.post(path, giftId ? { amountKash, giftId } : { amountKash });
+  /**
+   * Each path written INLINE, never assembled into a variable.
+   *
+   * `pnpm check:public-routes` reads call sites statically, so a path built up
+   * in a local is invisible to it — which is exactly how a route that does not
+   * exist upstream reaches production as a mystery 404.
+   */
+  const body = giftId ? { amountKash, giftId } : { amountKash };
+  const raw =
+    target.kind === "post"
+      ? await msApi.post(`/posts/${target.id}/tips`, body)
+      : target.kind === "stream"
+        ? await msApi.post(`/streams/${target.id}/gifts`, body)
+        : await msApi.post(`/profiles/${target.id}/tips`, body);
   const parsed = TipResponseSchema.parse(raw);
   return { tip: adopt(raw, target), toWallet: parsed.toWallet ?? null };
 }
@@ -96,20 +108,26 @@ export async function reportTipTransfer(
   txHash: string,
 ): Promise<Tip> {
   /**
-   * Posts only, and the path is written INLINE.
+   * Posts and streams only, each path written INLINE.
    *
    * Two reasons. The service has no profile-tip route at all, so a profile
    * branch here would be a path that 404s dressed up as support for something.
    * And `pnpm check:public-routes` reads call sites statically: a path
    * assembled into a variable is invisible to it, which is exactly how a route
    * that does not exist upstream reaches production as a mystery 404. Written
-   * out, this one is checked like every other.
+   * out, these are checked like every other.
    */
-  if (target.kind !== "post") {
-    throw new Error("Only posts can be tipped.");
+  if (target.kind === "post") {
+    return adopt(
+      await msApi.post(`/posts/${target.id}/tips/${tipId}/transfer`, { txHash }),
+      target,
+    );
   }
-  return adopt(
-    await msApi.post(`/posts/${target.id}/tips/${tipId}/transfer`, { txHash }),
-    target,
-  );
+  if (target.kind === "stream") {
+    return adopt(
+      await msApi.post(`/streams/${target.id}/gifts/${tipId}/transfer`, { txHash }),
+      target,
+    );
+  }
+  throw new Error("Only posts and streams can be tipped.");
 }

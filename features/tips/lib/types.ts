@@ -47,4 +47,12 @@ export type Tip = z.infer<typeof TipSchema>;
 /** What is being tipped. The two routes differ only in the noun. */
 export type TipTarget =
   | { kind: "post"; id: string; recipient: import("@/lib/api/schemas").Profile | null }
-  | { kind: "profile"; id: string; recipient: import("@/lib/api/schemas").Profile | null };
+  | { kind: "profile"; id: string; recipient: import("@/lib/api/schemas").Profile | null }
+  /**
+   * A gift sent during a live stream — the host is the recipient.
+   *
+   * The same money movement as a post tip, settled down the same path, so it
+   * is a target rather than a second flow. Deliberately NOT the payment rail:
+   * a rail debit burns the tokens instead of paying the host.
+   */
+  | { kind: "stream"; id: string; recipient: import("@/lib/api/schemas").Profile | null };
