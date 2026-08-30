@@ -6,6 +6,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
 import { IconVolume, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import {
+  MAX_STAGE_SLOTS,
+  stageLayoutClass,
+  stageTileSpanClass,
+} from "@/lib/stage-layout";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
 import {
   buildStageLayout,
@@ -34,35 +39,6 @@ import {
 const TILE =
   "relative min-h-[104px] overflow-hidden rounded-[14px] border border-[#2A2A2E] bg-[#141416] md:rounded-2xl";
 
-function layoutClass(count: number): string {
-  if (count <= 1) return "grid grid-cols-1 grid-rows-1";
-  // Host + 1: vertical 50/50 on mobile (a conversation, never a PiP thumbnail),
-  // horizontal 50/50 on desktop.
-  if (count === 2) return "grid grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1";
-  // Three is TWO COLUMNS on a phone, not three stacked bands. Three full-width
-  // rows in a 9:16 stage gives every tile a ~3:1 letterbox — the shape a face
-  // fits worst — and drives each one toward the 104px floor. Two abreast with
-  // the third spanning underneath keeps all three close to square, which is
-  // the whole point of putting people on a stage. Desktop is wide enough for
-  // three across, so it keeps that (see the per-tile span below).
-  if (count === 3) return "grid grid-cols-2 auto-rows-fr md:grid-cols-3 md:grid-rows-1";
-  // Four is the 2x2 grid; five and six continue in the same two columns.
-  return "grid grid-cols-2 auto-rows-fr";
-}
-
-/**
- * A tile's column span, which only ever differs for the odd one out.
- *
- * At three, the last tile spans both phone columns so the row below is not a
- * half-empty grid with a hole in it. From `md` the grid is three across and
- * every tile is back to one column.
- */
-function tileSpanClass(count: number, index: number): string {
-  return count === 3 && index === 2 ? "col-span-2 md:col-span-1" : "";
-}
-
-/** Spec caps the stage at 6; beyond that tiles stop being faces. */
-const MAX_SLOTS = 6;
 
 /** What a tile decided about fit, reported up so the host can be told. */
 export interface TileFitReport {
@@ -320,7 +296,7 @@ export function LiveStage({
   onLocalFit?: (reports: TileFitReport[]) => void;
 }) {
   const all = useStageSlots(room, hostIdentity);
-  const slots = all.slice(0, MAX_SLOTS);
+  const slots = all.slice(0, MAX_STAGE_SLOTS);
   const audio = remoteAudioSlots(all);
   // Screens take the stage; faces drop to a strip. With nobody sharing this is
   // exactly the previous behaviour — cameras in the grid, no strip.
@@ -409,14 +385,14 @@ export function LiveStage({
           <div
             className={cn(
               "min-h-0 min-w-0 flex-1 gap-0.5",
-              layoutClass(primary.length)
+              stageLayoutClass(primary.length)
             )}
           >
             {primary.map((tile, index) => (
               <MediaTile
                 key={tile.key}
                 tile={tile}
-                className={tileSpanClass(primary.length, index)}
+                className={stageTileSpanClass(primary.length, index)}
                 localTile={localTile}
                 onRemove={onRemoveGuest}
                 removing={removing}
