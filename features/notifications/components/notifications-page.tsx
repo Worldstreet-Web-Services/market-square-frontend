@@ -26,6 +26,7 @@ const GLYPHS: Record<MarketNotification["kind"], string> = {
   repost: "⇄",
   bookmark: "▱",
   ticket_purchased: "▣",
+  tip_received: "◆",
   stream_live: "◉",
   verification_resolved: "✓",
   role_resolved: "○",
@@ -47,6 +48,11 @@ function describe(item: MarketNotification): string {
       return "saved your post to their Arkmarks";
     case "ticket_purchased":
       return "bought a ticket to your stream";
+    case "tip_received":
+      // What ARRIVED, not what it was worth. The notification payload carries
+      // no amount or gift, so this says the true general thing and the tips
+      // list (Earnings) carries the detail.
+      return "sent you a tip";
     case "stream_live":
       return "is live now";
     case "verification_resolved":
