@@ -237,6 +237,22 @@ const PENDING_ROUTES = {
       "client takes the rail path and never calls this at all. DELETE THIS " +
       "ENTRY once PR #146 is deployed and the route appears in openapi.json.",
   },
+  "post /streams/{}/gifts": {
+    reason:
+      "Gifting the host of a live stream — a tip addressed to a STREAM, " +
+      "settled down the same client-signed path as a post tip. Built on the " +
+      "service (apps/market-square, PR #148) and not yet DEPLOYED, so it is " +
+      "absent from the running spec. It is only ever called when the tray is " +
+      "priced (MARKET_FLAGS.liveGifts), which is off in every environment " +
+      "today — against production the gift stays the free on-stream moment " +
+      "and this is never called. DELETE THIS ENTRY once PR #148 is deployed.",
+  },
+  "post /streams/{}/gifts/{}/transfer": {
+    reason:
+      "The sender reports the KSH transfer they signed for a live gift. " +
+      "Ships with PR #148, same gate as the route above: unreachable while " +
+      "the tray is unpriced. DELETE THIS ENTRY once PR #148 is deployed.",
+  },
   "post /profiles/{}/tips": {
     reason:
       "Tipping a PROFILE directly is still not in the spec — only " +

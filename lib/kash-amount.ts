@@ -118,3 +118,35 @@ export function exceedsBalance(
   if (typeof amount !== "string" || typeof balance !== "string") return false;
   return compareKashAmounts(amount, balance) === 1;
 }
+
+/**
+ * `amount × count`, exactly, as a decimal string.
+ *
+ * The gift tray needs this: three Roses at `0.01` is one payment of `0.03`,
+ * and the amount the sender is charged has to be the amount they were shown.
+ * `String(Number("0.01") * 3)` answers `"0.030000000000000002"` — which the
+ * engine rejects outright for exceeding six places, and which would be the
+ * wrong number even if it did not.
+ *
+ * So the fraction is scaled to an integer, multiplied as a `BigInt`, and
+ * rendered back. `null` when the amount is not a KASH amount or the count is
+ * not a positive whole number — a caller that cannot compute a total must say
+ * so rather than charge a guess.
+ */
+export function multiplyKash(amount: string, count: number): string | null {
+  const parts = split(amount);
+  if (!parts || !Number.isSafeInteger(count) || count < 1) return null;
+
+  const scaled = BigInt(parts.int + parts.frac) * BigInt(count);
+  const digits = scaled.toString().padStart(parts.frac.length + 1, "0");
+  const cut = digits.length - parts.frac.length;
+  const int = digits.slice(0, cut);
+  // Trailing zeros carry no value and `0.030` is not how the rest of this
+  // codebase writes three hundredths.
+  const frac = digits.slice(cut).replace(/0+$/u, "");
+  const total = frac ? `${int}.${frac}` : int;
+
+  // A product that overflows six places is not payable, and rounding it here
+  // would charge a number nobody agreed to.
+  return isKashAmount(total) ? total : null;
+}

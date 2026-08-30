@@ -56,7 +56,9 @@ import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-pl
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { GiftSheet } from "@/features/streams/components/gift-sheet";
-import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
+import { LIVE_GIFTS, giftsArePriced, type LiveGift } from "@/lib/gifts";
+import { useSendTip } from "@/features/tips";
+import { multiplyKash } from "@/lib/kash-amount";
 import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
 import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
 import { TicketSheet } from "@/features/streams/components/ticket-sheet";
@@ -549,32 +551,63 @@ export function StreamRoom({
   );
 
 
+  const payGift = useSendTip();
+
+  /**
+   * Send a gift, and — where the service can settle one — actually pay for it.
+   *
+   * The burst is drawn and broadcast IMMEDIATELY and unconditionally, because
+   * the moment is what the room came for and it must not wait 25-45 seconds on
+   * a chain watcher. The money follows its own path: on a priced tray the
+   * viewer signs a transfer to the host, and if that fails the toast says so
+   * without ever retracting a gift the room has already seen.
+   *
+   * On a free tray this is exactly what it always was — the shared moment with
+   * no money leg, and no "you were charged" language anywhere near it.
+   */
   const sendGift = useCallback(
     (gift: LiveGift, quantity: number) => {
       const from = me.data?.displayName ?? "Someone";
       spawnGift(gift, quantity, from);
-      // The part that was missing. The burst used to be drawn locally and
-      // NOWHERE ELSE, so the host — the person the gift is for — never saw it.
-      // It goes over the same data channel as hearts now, reliably, so the
-      // whole room gets the moment.
       live.gift(gift.id, quantity, from);
 
-      // Still NO network call and no "you were charged" language, because
-      // there is still no stream gift endpoint. The spec has a working KASH
-      // tip rail — `GET /tips/capability` answers `enabled: true`, and
-      // `POST /posts/{id}/tips` settles a real amount — but it is scoped to
-      // POSTS. There is no `POST /streams/{id}/tips`, so a live gift cannot be
-      // charged to the sender or credited to the host today. Verified against
-      // the live openapi.json, not assumed.
-      //
-      // So a live gift is FREE and says so: it is the shared on-stream moment
-      // without the money leg. `MARKET_FLAGS.liveGifts` still gates every
-      // priced surface — KASH totals, the coin balance, "Get Coins" — so none
-      // of it can appear before the settlement exists. When the stream tip
-      // route ships, this callback awaits it and reports its real result, and
-      // the flag turns the prices on. Nothing else here changes.
+      if (!giftsArePriced(stream.data?.status)) return;
+
+      const host = stream.data?.owner ?? null;
+      if (!host) {
+        // No host profile means no wallet to pay: the gift stays the free
+        // moment rather than opening a payment that cannot land.
+        return;
+      }
+
+      const amountKash = multiplyKash(gift.priceKash, quantity);
+      if (!amountKash) {
+        // No exact total, no charge. Rounding here would bill an amount the
+        // sender was never shown.
+        toast.error("That quantity can't be priced exactly.");
+        return;
+      }
+      void payGift
+        .mutateAsync({
+          target: { kind: "stream", id: streamId, recipient: host },
+          amountKash,
+          giftId: gift.id,
+        })
+        .then(() => {
+          // "On its way", never "sent". The service holds the gift `pending`
+          // until the watcher sees the transfer on-chain, and saying it landed
+          // before that is the one claim this flow may not make.
+          toast.success(`${gift.name} on its way to ${host.displayName ?? host.username}`);
+        })
+        .catch((error: unknown) => {
+          toast.error(
+            error instanceof Error && error.message
+              ? error.message
+              : "The gift was shown, but the payment did not go through.",
+          );
+        });
     },
-    [live, spawnGift, me.data?.displayName],
+    [live, spawnGift, me.data?.displayName, stream.data?.status, stream.data?.owner, streamId, payGift],
   );
 
   const share = useCallback(() => {
@@ -722,7 +755,7 @@ export function StreamRoom({
    * was not ready, so the moment was withheld too.
    */
   const giftsAvailable = data.status === "live";
-  const giftsPriced = giftsAvailable && MARKET_FLAGS.liveGifts;
+  const giftsPriced = giftsArePriced(data.status);
   // The service's own tally, never inflated by unsaved local taps.
   const likeCount = data.likeCount;
   const pulseCounts: PulseCounts = data.pulse;
