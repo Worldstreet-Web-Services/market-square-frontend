@@ -239,6 +239,9 @@ const player = source("features/streams/components/livekit-player.tsx");
 const slotsHook = source("features/streams/hooks/use-stage-slots.ts");
 const guestStage = source("features/streams/hooks/use-stage.ts");
 const cockpit = source("features/streams/components/live-cockpit.tsx");
+const streamHooks = source("features/streams/hooks/use-streams.ts");
+const reactions = source("features/streams/hooks/use-live-reactions.ts");
+const giftSheet = source("features/streams/components/gift-sheet.tsx");
 
 describe("the stage renderer, by construction", () => {
   it("maps over the slot list instead of picking one participant", () => {
@@ -306,7 +309,52 @@ describe("the stage renderer, by construction", () => {
     assert.match(cockpit, /<LiveStage/);
     assert.match(cockpit, /hostIdentity=\{stream\.ownerId\}/);
     assert.match(cockpit, /onRemoveGuest=\{removeGuest\}/);
-    assert.match(cockpit, /action: "remove"/);
+    // The resolve itself moved into `useRemoveGuest` when the watch page grew
+    // the same control — one implementation, two surfaces. The action is
+    // pinned where it now lives, below.
+    assert.match(cockpit, /useRemoveGuest\(stream\.id/);
+  });
+
+  it("sends a gift to the whole room, not just the sender's own screen", () => {
+    // The bug: the burst was local state and nothing else, so the host — the
+    // person the gift is aimed at — never saw it. A gift only the giver can
+    // see is not a gift.
+    const room = source("features/streams/components/stream-room.tsx");
+    assert.match(room, /live\.gift\(gift\.id, quantity, from\)/);
+    assert.match(room, /onGift: receiveGift/);
+    // An id off the wire is resolved against our own catalogue; a peer must
+    // never be able to hand every screen in the room an arbitrary image.
+    assert.match(room, /LIVE_GIFTS\.find\(\(item\) => item\.id === giftId\)/);
+    assert.match(reactions, /topic: GIFT_TOPIC/);
+    // Reliable, unlike a heart: a dropped gift is the one thing that viewer
+    // did all stream.
+    assert.match(reactions, /\{ reliable: true, topic: GIFT_TOPIC \}/);
+  });
+
+  it("never prices a gift that nothing charges for", () => {
+    // There is no POST /streams/{id}/tips — the KASH tip rail is scoped to
+    // posts — so the live tray moves no money. Every priced surface stays
+    // behind MARKET_FLAGS.liveGifts, and the free tray must not print a
+    // total, a coin glyph, or the money-only gold token.
+    const room = source("features/streams/components/stream-room.tsx");
+    assert.match(room, /const giftsAvailable = data\.status === "live";/);
+    assert.match(room, /const giftsPriced = giftsAvailable && MARKET_FLAGS\.liveGifts;/);
+    assert.match(room, /giftsPriced \? "bg-coin" : "bg-accent"/);
+    assert.match(giftSheet, /showPrices=\{priced\}/);
+    assert.match(giftSheet, /priced \? `Send \$\{selected\.name\} · \$\{formatKash\(total\)\}` : `Send \$\{selected\.name\}`/);
+  });
+
+  it("removes a guest from ONE place, whichever surface the host is on", () => {
+    // Two copies of "find the approved request, resolve it with remove" is how
+    // the cockpit and the watch page quietly stop agreeing about moderation.
+    assert.match(streamHooks, /export function useRemoveGuest\(/);
+    assert.match(streamHooks, /item\.status === "approved"/);
+    assert.match(streamHooks, /action: "remove"/);
+    // The watch page only opens the request poll for the owner, so a viewer
+    // never pays for a capability they do not have.
+    const room = source("features/streams/components/stream-room.tsx");
+    assert.match(room, /useRemoveGuest\(stream\.id, isHost && stream\.status === "live"\)/);
+    assert.match(room, /onRemoveGuest=\{isHost \? guests\.remove : undefined\}/);
   });
 
   it("makes the guest publish only after the grant, idempotently, with one retry", () => {

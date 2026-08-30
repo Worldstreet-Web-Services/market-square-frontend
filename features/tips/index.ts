@@ -3,5 +3,5 @@
 // through the same route-slot pattern `FollowPill` uses.
 export { TipButton } from "./components/tip-button";
 export { TipSheet } from "./components/tip-sheet";
-export { useSendTip, useTippingUnavailable } from "./hooks/use-tips";
+export { useSendTip, useTipCapability, useTippingUnavailable } from "./hooks/use-tips";
 export type { Tip, TipTarget } from "./lib/types";

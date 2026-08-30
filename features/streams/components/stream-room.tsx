@@ -2,7 +2,10 @@
 import Image from "next/image";
 
 import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
-import { useLiveReactions } from "@/features/streams/hooks/use-live-reactions";
+import {
+  useLiveReactions,
+  type LiveGiftPacket,
+} from "@/features/streams/hooks/use-live-reactions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -22,6 +25,7 @@ import {
   IconChevronLeft,
   IconChevronUp,
   IconCoin,
+  IconSpark,
   IconCollapseRight,
   IconComment,
   IconEye,
@@ -42,7 +46,11 @@ import {
 import { ErrorState, InlineError, SignInPrompt, isAuthError } from "@/components/ui/states";
 import { isArkOriginated, resolveCta } from "@/lib/deeplink";
 import type { Profile } from "@/lib/api/schemas";
-import { useStream, useStreamList } from "@/features/streams/hooks/use-streams";
+import {
+  useRemoveGuest,
+  useStream,
+  useStreamList,
+} from "@/features/streams/hooks/use-streams";
 import { useHeartbeat, usePlaybackToken } from "@/features/streams/hooks/use-playback";
 import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-player";
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
@@ -100,6 +108,12 @@ function PlaybackSurface({
   const playback = usePlaybackToken(stream.id, true);
   const [playing, setPlaying] = useState(false);
   useHeartbeat(stream.id, mode, playing && playback.isSuccess);
+  // A host watching their own room can still moderate it. The speaker-request
+  // poll behind this only opens for the owner of a live stream, so a viewer
+  // never pays for a moderation capability they do not have.
+  const me = useMe();
+  const isHost = me.data?.id === stream.ownerId;
+  const guests = useRemoveGuest(stream.id, isHost && stream.status === "live");
 
   if (playback.isPending) {
     return (
@@ -147,7 +161,16 @@ function PlaybackSurface({
   // ws/wss URLs are LiveKit rooms; http(s) URLs are HLS manifests.
   if (/^wss?:/i.test(playback.data.url)) {
     return (
-      <LiveKitPlayer streamId={stream.id} hostIdentity={stream.ownerId} url={playback.data.url} token={playback.data.token} onPlayingChange={setPlaying} fill />
+      <LiveKitPlayer
+        streamId={stream.id}
+        hostIdentity={stream.ownerId}
+        url={playback.data.url}
+        token={playback.data.token}
+        onPlayingChange={setPlaying}
+        onRemoveGuest={isHost ? guests.remove : undefined}
+        removing={guests.removing}
+        fill
+      />
     );
   }
   return (
@@ -254,6 +277,8 @@ interface GiftBurst {
   id: number;
   gift: LiveGift;
   quantity: number;
+  /** Who sent it. A burst nobody can attribute is decoration, not an event. */
+  from: string;
 }
 
 const MAX_REACTIONS = 30;
@@ -483,34 +508,74 @@ export function StreamRoom({
    * in a live room rather than liking a post.
    */
   const liveRoom = useLiveRoom(streamId);
-  const broadcastReaction = useLiveReactions(liveRoom, { onReceive: spawnReaction });
-  const react = useCallback(
-    (burst = 1) => {
-      spawnReaction(burst);
-      broadcastReaction(burst);
-    },
-    [spawnReaction, broadcastReaction],
-  );
-
-
-  const sendGift = useCallback((gift: LiveGift, quantity: number) => {
-    const burst = { id: giftSeq++, gift, quantity };
+  /**
+   * Draw a gift burst — ours or somebody else's, through one path.
+   *
+   * `from` is what makes it a live-room event rather than decoration: TikTok's
+   * whole gift moment is "NAME sent a Phoenix", and a burst with no sender is
+   * an animation nobody can thank.
+   */
+  const spawnGift = useCallback((gift: LiveGift, quantity: number, from: string) => {
+    const burst = { id: giftSeq++, gift, quantity, from };
     setGiftBursts((current) => [...current.slice(-2), burst]);
     const timer = window.setTimeout(() => {
       setGiftBursts((current) => current.filter((item) => item.id !== burst.id));
       reactionTimers.current = reactionTimers.current.filter((id) => id !== timer);
     }, 3200);
     reactionTimers.current.push(timer);
-    // NO success toast, and no network call, because there is no gifting
-    // endpoint: the burst above is a local animation and nothing more. Telling
-    // the viewer a gift "was sent" would claim they spent money and that the
-    // creator was paid — neither is true.
-    //
-    // BEFORE FLIPPING `MARKET_FLAGS.liveGifts` ON, the backend must ship a
-    // coin ledger and a gift endpoint, and this callback must await it and
-    // report its real result. The flag gates the whole tray, the coin balance
-    // and the "Get Coins" chrome precisely so none of it can be reached first.
   }, []);
+
+  // An id off the wire is resolved against OUR catalogue — a gift this build
+  // does not know about draws nothing, rather than an empty frame.
+  const receiveGift = useCallback(
+    ({ giftId, quantity, from }: LiveGiftPacket) => {
+      const gift = LIVE_GIFTS.find((item) => item.id === giftId);
+      if (!gift) return;
+      spawnGift(gift, quantity, from);
+    },
+    [spawnGift],
+  );
+
+  const live = useLiveReactions(liveRoom, {
+    onReceive: spawnReaction,
+    onGift: receiveGift,
+  });
+  const react = useCallback(
+    (burst = 1) => {
+      spawnReaction(burst);
+      live.react(burst);
+    },
+    [spawnReaction, live],
+  );
+
+
+  const sendGift = useCallback(
+    (gift: LiveGift, quantity: number) => {
+      const from = me.data?.displayName ?? "Someone";
+      spawnGift(gift, quantity, from);
+      // The part that was missing. The burst used to be drawn locally and
+      // NOWHERE ELSE, so the host — the person the gift is for — never saw it.
+      // It goes over the same data channel as hearts now, reliably, so the
+      // whole room gets the moment.
+      live.gift(gift.id, quantity, from);
+
+      // Still NO network call and no "you were charged" language, because
+      // there is still no stream gift endpoint. The spec has a working KASH
+      // tip rail — `GET /tips/capability` answers `enabled: true`, and
+      // `POST /posts/{id}/tips` settles a real amount — but it is scoped to
+      // POSTS. There is no `POST /streams/{id}/tips`, so a live gift cannot be
+      // charged to the sender or credited to the host today. Verified against
+      // the live openapi.json, not assumed.
+      //
+      // So a live gift is FREE and says so: it is the shared on-stream moment
+      // without the money leg. `MARKET_FLAGS.liveGifts` still gates every
+      // priced surface — KASH totals, the coin balance, "Get Coins" — so none
+      // of it can appear before the settlement exists. When the stream tip
+      // route ships, this callback awaits it and reports its real result, and
+      // the flag turns the prices on. Nothing else here changes.
+    },
+    [live, spawnGift, me.data?.displayName],
+  );
 
   const share = useCallback(() => {
     const url = window.location.href;
@@ -641,7 +706,23 @@ export function StreamRoom({
   const owner = data.owner;
   // Gifting is governance-gated: with it off the panel is absent entirely,
   // and so is every piece of coin chrome that would imply it exists.
-  const giftsAvailable = data.status === "live" && MARKET_FLAGS.liveGifts;
+  /**
+   * Two gates, because gifting is two things and only one of them exists.
+   *
+   * `giftsAvailable` is the on-stream MOMENT — pick an object, the whole room
+   * sees it fly, the host sees who sent it. That needs nothing but the data
+   * channel, so it is on for any live stream.
+   *
+   * `MARKET_FLAGS.liveGifts` is the MONEY — KASH prices, totals, the coin
+   * balance, "Get Coins". There is no `POST /streams/{id}/tips` in the spec
+   * (checked, not assumed: the tip rail exists but is scoped to posts), so
+   * nothing can be charged or credited and every priced surface stays hidden.
+   *
+   * Collapsing these into one flag is what made the room giftless: the money
+   * was not ready, so the moment was withheld too.
+   */
+  const giftsAvailable = data.status === "live";
+  const giftsPriced = giftsAvailable && MARKET_FLAGS.liveGifts;
   // The service's own tally, never inflated by unsaved local taps.
   const likeCount = data.likeCount;
   const pulseCounts: PulseCounts = data.pulse;
@@ -879,7 +960,7 @@ export function StreamRoom({
                     {qualityOpen && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setQualityOpen(false)} />
-                        <div className="ws-glass absolute bottom-full right-0 z-20 mb-2 w-32 rounded-2xl p-1.5">
+                        <div className="ws-popover absolute bottom-full right-0 z-20 mb-2 w-32 rounded-2xl p-1.5">
                           <button
                             onClick={() => {
                               quality.setLevel(-1);
@@ -979,10 +1060,13 @@ export function StreamRoom({
                     <span className="mt-1.5 max-w-full truncate text-[12px] font-semibold text-body">
                       {gift.name}
                     </span>
-                    <span className="tnum mt-0.5 flex items-center gap-1 text-[11px] text-meta">
-                      <IconCoin className="h-3 w-3 text-coin" />
-                      {gift.priceKash}
-                    </span>
+                    {/* A price only where one is charged — see `giftsPriced`. */}
+                    {giftsPriced && (
+                      <span className="tnum mt-0.5 flex items-center gap-1 text-[11px] text-meta">
+                        <IconCoin className="h-3 w-3 text-coin" />
+                        {gift.priceKash}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1026,12 +1110,20 @@ export function StreamRoom({
             </span>
           </div>
           {giftsAvailable && (
+            // GOLD ONLY WHEN IT COSTS SOMETHING. `--color-coin` is the one gold
+            // left in the product and it means exactly one thing: money. A free
+            // gift wearing the coin token and the coin glyph would be claiming
+            // a charge in the loudest way the palette can, before the sheet
+            // even opens. Free rides the silver ramp, like every other action.
             <button
               onClick={() => gate(() => setGiftsOpen(true))}
-              aria-label="Send a live gift"
-              className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-coin text-ink transition-colors hover:brightness-110"
+              aria-label={giftsPriced ? "Send a live gift" : "Send a free gift the whole room sees"}
+              className={cn(
+                "ws-press flex h-11 w-11 items-center justify-center rounded-full text-ink transition-colors hover:brightness-110",
+                giftsPriced ? "bg-coin" : "bg-accent"
+              )}
             >
-              <IconCoin className="h-5 w-5" />
+              {giftsPriced ? <IconCoin className="h-5 w-5" /> : <IconSpark className="h-5 w-5" filled />}
             </button>
           )}
           {data.status === "live" && !watchOnly && me.data?.id !== data.ownerId && (
@@ -1136,10 +1228,16 @@ export function StreamRoom({
                 <span className="relative block h-9 w-9 shrink-0">
                   <Image src={burst.gift.art} alt="" fill sizes="36px" className="object-contain" />
                 </span>
-                <span>
-                  <span className="block text-xs font-semibold text-grey-300">Gift sent</span>
+                <span className="min-w-0">
+                  {/* "Gift sent" said nothing — every burst is a gift being
+                      sent. The sender's name is the information, and it is what
+                      lets a host thank somebody by name mid-stream. */}
+                  <span className="block max-w-[160px] truncate text-xs font-semibold text-grey-300">
+                    {burst.from}
+                  </span>
                   <span className="block text-sm font-bold text-white">
-                    {burst.gift.name} <span className="text-accent">×{burst.quantity}</span>
+                    {burst.gift.name}{" "}
+                    {burst.quantity > 1 && <span className="text-accent">×{burst.quantity}</span>}
                   </span>
                 </span>
               </div>
@@ -1187,8 +1285,28 @@ export function StreamRoom({
       </aside>
 
       <TicketSheet stream={data} open={ticketsOpen} onClose={() => setTicketsOpen(false)} />
-      {MARKET_FLAGS.liveGifts && (
-        <GiftSheet open={giftsOpen} onClose={() => setGiftsOpen(false)} onSend={sendGift} />
+      {/*
+        Mounted on `giftsAvailable`, the SAME gate as the buttons that open it.
+
+        It used to be mounted behind `MARKET_FLAGS.liveGifts` while both
+        openers — the desktop "view all" chevron and the mobile gift button —
+        were gated on `giftsAvailable`. With the flag off, which is its default
+        and its value in every environment today, tapping either one set
+        `giftsOpen` and rendered nothing at all. On a phone that button is the
+        ONLY way to reach the tray, so gifting was silently dead there.
+
+        The money half is already handled one level down: `priced` is what
+        decides whether prices and coin chrome appear, so the flag still
+        governs everything it is meant to govern without also deciding whether
+        the dialog exists.
+      */}
+      {giftsAvailable && (
+        <GiftSheet
+          open={giftsOpen}
+          onClose={() => setGiftsOpen(false)}
+          onSend={sendGift}
+          priced={giftsPriced}
+        />
       )}
     </div>
   );

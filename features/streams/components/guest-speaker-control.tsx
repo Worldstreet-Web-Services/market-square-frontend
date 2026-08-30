@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { IconCamera, IconUser } from "@/components/ui/icons";
+import { cn } from "@/lib/cn";
+import { IconCamera, IconDots, IconUser, IconVolume } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
 import { STAGE_FAILURES, useStage } from "@/features/streams/hooks/use-stage";
 import {
@@ -54,16 +55,76 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
               ? (publisher.error ?? "Couldn't put you on stage.")
               : "Putting you on stage…";
 
+  /**
+   * On stage, the mic and camera come OUT of the sheet.
+   *
+   * Both toggles have always existed — inside this component's dialog, which
+   * meant a guest who was live in front of an audience had to open a dialog
+   * over the stream, find the button, and close it again in order to mute. In
+   * practice that reads as "I can't mute": nobody hunts through a modal while
+   * they are on camera, and the one moment you need to mute is the one moment
+   * you cannot afford to go looking. They are now persistent controls in the
+   * same rail as everything else, in the cockpit's own grammar (44px circle,
+   * MIC/MUTED written out, danger fill when off) so the guest's controls and
+   * the host's are the same controls.
+   *
+   * The sheet stays for what genuinely belongs in one: the join request, the
+   * waiting state, the self-preview, device errors and Leave stage.
+   */
+  const onStage = approved && publisher.state === "live";
+
   return (
     <>
-      <button
-        onClick={() => gate(() => setOpen(true))}
-        aria-label="Request to join this live"
-        className="ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full bg-black/50 text-heading"
-      >
-        <IconUser className="h-5 w-5" />
-        <span className="mt-0.5 text-[8px] font-bold">JOIN</span>
-      </button>
+      {onStage ? (
+        <>
+          <button
+            onClick={() => void publisher.toggleMic()}
+            aria-label={publisher.micOn ? "Mute your microphone" : "Unmute your microphone"}
+            aria-pressed={!publisher.micOn}
+            className={cn(
+              "ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full transition-colors",
+              publisher.micOn ? "bg-black/50 text-heading" : "bg-down/80 text-ink"
+            )}
+          >
+            <IconVolume className="h-4 w-4" muted={!publisher.micOn} />
+            <span className="mt-0.5 text-[8px] font-bold">
+              {publisher.micOn ? "MIC" : "MUTED"}
+            </span>
+          </button>
+          <button
+            onClick={() => void publisher.toggleCam()}
+            aria-label={publisher.camOn ? "Turn your camera off" : "Turn your camera on"}
+            aria-pressed={!publisher.camOn}
+            className={cn(
+              "ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full transition-colors",
+              publisher.camOn ? "bg-black/50 text-heading" : "bg-down/80 text-ink"
+            )}
+          >
+            <IconCamera className="h-4 w-4" />
+            <span className="mt-0.5 text-[8px] font-bold">
+              {publisher.camOn ? "CAM" : "OFF"}
+            </span>
+          </button>
+          {/* Everything that is not mic or camera — preview, errors, and the
+              way off the stage — is still one tap away. */}
+          <button
+            onClick={() => setOpen(true)}
+            aria-label="Stage options"
+            className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-heading"
+          >
+            <IconDots className="h-5 w-5" />
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={() => gate(() => setOpen(true))}
+          aria-label="Request to join this live"
+          className="ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full bg-black/50 text-heading"
+        >
+          <IconUser className="h-5 w-5" />
+          <span className="mt-0.5 text-[8px] font-bold">JOIN</span>
+        </button>
+      )}
       <Sheet open={open} onClose={() => setOpen(false)} title="Join this LIVE">
         {/* The spec's terminal states are denied/withdrawn/removed. This read
             "declined"/"left" — names the backend never sends — so a viewer who

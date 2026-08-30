@@ -10,7 +10,7 @@ import {
   getKashDeskBuyQuote,
   getKashDeskInfo,
   getKashPurchaseQuote,
-  getKashStatus,
+
   postKashDeskBuyTx,
   postKashDeskPrepareBuy,
   postKashPurchase,
@@ -34,24 +34,13 @@ const STATUS_STALE_MS = 60_000;
 const ACCOUNT_POLL_MS = 15_000;
 
 /**
- * Engine status: the price, the mode, and the addresses a purchase pays to.
+ * Engine status — the shared hook, not a second copy.
  *
- * Public and wallet-free, so it is the one read that can answer "is KASH here
- * at all" for a signed-out visitor — and being shared and cached, forty
- * surfaces discover the answer once between them rather than each finding out
- * on its own.
- *
- * `retry: false`: a 404 cannot be retried into existence, and a dead engine
- * should not be asked three times per surface.
+ * It lives in `hooks/` because the tips slice needs the same answer (a tip is
+ * a KSH transfer, so it needs the token address), and two hooks on one
+ * endpoint is two keys and two answers that can disagree.
  */
-export function useKashStatus() {
-  return useQuery({
-    queryKey: ["kash", "status"],
-    queryFn: getKashStatus,
-    staleTime: STATUS_STALE_MS,
-    retry: false,
-  });
-}
+export { useKashStatus } from "@/hooks/use-kash-status";
 
 /**
  * The reader's own KASH account. Disabled until there is a wallet, so a

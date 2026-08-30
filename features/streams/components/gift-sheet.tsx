@@ -44,10 +44,21 @@ export function GiftSheet({
   open,
   onClose,
   onSend,
+  priced = false,
 }: {
   open: boolean;
   onClose: () => void;
   onSend: (gift: LiveGift, quantity: number) => void;
+  /**
+   * Whether sending this actually costs KASH.
+   *
+   * False today, and the copy follows it exactly. There is no
+   * `POST /streams/{id}/tips` — the KASH tip rail exists but is scoped to
+   * posts — so a live gift is a free on-stream moment, and the sheet must not
+   * print a price, a total, or the word "tip" for something nobody is charged
+   * for. Flip it with `MARKET_FLAGS.liveGifts` once the route ships.
+   */
+  priced?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(LIVE_GIFTS[0].id);
   const [quantity, setQuantity] = useState<number>(1);
@@ -64,7 +75,9 @@ export function GiftSheet({
         </div>
 
         <div className="relative mt-3 flex items-center justify-center">
-          <h2 className="text-[15px] font-bold leading-5 text-white">Tip your creator</h2>
+          <h2 className="text-[15px] font-bold leading-5 text-white">
+            {priced ? "Tip your creator" : "Send a gift"}
+          </h2>
           {/* 23px circle, 4% white, blurred — the file's, pinned right. */}
           <button
             onClick={onClose}
@@ -81,6 +94,7 @@ export function GiftSheet({
           <GiftGrid
             selectedId={selectedId}
             onSelect={(gift) => setSelectedId(gift.id)}
+            showPrices={priced}
           />
         </div>
 
@@ -112,10 +126,12 @@ export function GiftSheet({
             onClose();
           }}
         >
-          Send {selected.name} · {formatKash(total)}
+          {priced ? `Send ${selected.name} · ${formatKash(total)}` : `Send ${selected.name}`}
         </Button>
         <p className="mt-2 text-center text-[11px] text-grey-600">
-          KASH settlement activates when live gifting is connected to the platform gateway.
+          {priced
+            ? "Sent from your KASH balance."
+            : "Free — everyone watching sees it. KASH gifting turns on when live settlement ships."}
         </p>
       </div>
     </Sheet>

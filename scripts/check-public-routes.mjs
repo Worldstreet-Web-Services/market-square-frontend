@@ -227,17 +227,25 @@ function collectCalls(root) {
  * route ships. Anything not listed here fails the check.
  */
 const PENDING_ROUTES = {
-  "post /posts/{}/tips": {
+  "post /posts/{}/tips/{}/transfer": {
     reason:
-      "Tipping is being built to an agreed contract (POST /posts/:id/tips and " +
-      "POST /profiles/:id/tips, { amountKash } in, { tipId, amountKash, " +
-      "recipient, status } out) while the UI ships against it. Until the spec " +
-      "documents them both routes answer 404, which the client reads as 'not " +
-      "deployed' and quiets the tip button everywhere (features/tips/lib/" +
-      "availability.ts). DELETE BOTH ENTRIES the day they appear in openapi.json.",
+      "The sender reports the KSH transfer they signed. Built and merged on " +
+      "the service (apps/market-square, PR #146) and not yet DEPLOYED, so it " +
+      "is absent from the running spec. It is only ever called when " +
+      "GET /tips/capability answers settlement:'client-signed', which the " +
+      "same undeployed change introduces — so against today's production the " +
+      "client takes the rail path and never calls this at all. DELETE THIS " +
+      "ENTRY once PR #146 is deployed and the route appears in openapi.json.",
   },
   "post /profiles/{}/tips": {
-    reason: "Ships with post /posts/{}/tips — see above. Delete both together.",
+    reason:
+      "Tipping a PROFILE directly is still not in the spec — only " +
+      "post /posts/{}/tips shipped, and it is documented now, so its entry " +
+      "here was deleted. The tips slice keeps the profile path because " +
+      "TipTarget models both; nothing renders it today (TipButton is only " +
+      "composed with kind:'post'). DELETE THIS the day /profiles/{id}/tips " +
+      "appears in openapi.json, or delete the profile branch from the slice " +
+      "if product decides a tip is always addressed to a post.",
   },
   // EMPTY IS THE CORRECT STATE. `/profiles` lived here for the few hours
   // between the People tab being built and the directory route shipping; it

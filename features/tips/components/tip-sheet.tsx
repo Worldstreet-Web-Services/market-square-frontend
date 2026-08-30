@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,7 +17,11 @@ import {
   tipAmountMessage,
 } from "@/lib/tips";
 import { TIP_ERROR_COPY } from "@/lib/tip-errors";
-import { useSendTip } from "@/features/tips/hooks/use-tips";
+import { useSendTip, useTipCapability, type TipPhase } from "@/features/tips/hooks/use-tips";
+import {
+  tipAmountOutOfBounds,
+  tipBoundsMessage,
+} from "@/lib/tip-capability";
 import type { Tip, TipTarget } from "@/features/tips/lib/types";
 
 /**
@@ -30,6 +34,20 @@ import type { Tip, TipTarget } from "@/features/tips/lib/types";
  * amount and the recipient together.
  */
 type Stage = "amount" | "confirm" | "sent";
+
+/**
+ * What each step of a payment is called.
+ *
+ * `signing` is the one that matters: on this app wallet prompts are off
+ * (`showWalletUIs: false`), so nothing else on screen would tell the reader
+ * that their wallet is moving money right now.
+ */
+const TIP_PHASE_LABEL: Record<Exclude<TipPhase, "idle">, string> = {
+  creating: "Starting…",
+  signing: "Sending from your wallet…",
+  confirming: "Confirming on-chain…",
+  reporting: "Almost done…",
+};
 
 export function TipSheet({
   open,
@@ -56,6 +74,32 @@ export function TipSheet({
    */
   balance?: (amountKash: string | null) => React.ReactNode;
 }) {
+  const capability = useTipCapability().data ?? null;
+
+  /**
+   * Gifts the SERVICE would refuse, by id.
+   *
+   * Production sets `minKash: 1` while the tray's eight cheapest tiles sit
+   * under a whole KASH, so those tiles were tappable, confirmable, and then
+   * rejected. They are inert now, and the sheet opens on a gift that can
+   * actually be sent.
+   */
+  const unsendableGifts = useMemo(
+    () =>
+      new Set(
+        LIVE_GIFTS.filter(
+          (gift) => tipAmountOutOfBounds(gift.priceKash, capability) !== null
+        ).map((gift) => gift.id)
+      ),
+    [capability]
+  );
+
+  /** The cheapest gift the service accepts — what the sheet should open on. */
+  const openingGift = useMemo(
+    () => LIVE_GIFTS.find((gift) => !unsendableGifts.has(gift.id)) ?? null,
+    [unsendableGifts]
+  );
+
   const [stage, setStage] = useState<Stage>("amount");
   const [amount, setAmount] = useState<string>(DEFAULT_TIP_KASH);
   const [custom, setCustom] = useState("");
@@ -75,6 +119,14 @@ export function TipSheet({
   // to consider it a failure, and this screen must.
   const [settlementFailed, setSettlementFailed] = useState(false);
   const send = useSendTip();
+  /**
+   * Which step of the payment is happening.
+   *
+   * A client-settled tip is four steps, two of which involve the reader's own
+   * wallet. One undifferentiated spinner across all of them leaves somebody
+   * staring at a dialog with no idea whether it wants something from them.
+   */
+  const [phase, setPhase] = useState<TipPhase>("idle");
   const recipient = target.recipient;
 
   /**
@@ -89,8 +141,32 @@ export function TipSheet({
    * had already walked away from.
    */
 
-  const chosen = custom.trim() ? custom : amount;
+  /**
+   * The amount and the lit tile, DERIVED rather than stored.
+   *
+   * The capability arrives after this sheet mounts, so a stored default of
+   * 0.05 would sit there disabled until the reader touched something. Deriving
+   * means the sheet self-corrects the moment the service's rules land, with no
+   * effect and no second render pass: a preset the service would refuse falls
+   * back to the cheapest one it accepts.
+   */
+  const presetUnsendable = tipAmountOutOfBounds(amount, capability) !== null;
+  const effectiveAmount = presetUnsendable && openingGift ? openingGift.priceKash : amount;
+  const effectiveGiftId =
+    selectedGift && !unsendableGifts.has(selectedGift)
+      ? selectedGift
+      : presetUnsendable
+        ? (openingGift?.id ?? null)
+        : selectedGift;
+
+  const chosen = custom.trim() ? custom : effectiveAmount;
   const parsed = parseTipAmount(chosen);
+  /**
+   * The server's own bounds, checked BEFORE the confirm step rather than at
+   * the end of it. `parseTipAmount` says whether the text is an amount; this
+   * says whether the service will take it.
+   */
+  const outOfBounds = parsed.ok ? tipAmountOutOfBounds(parsed.amountKash, capability) : null;
 
   const failureCopy = (() => {
     // Discovered mid-flow: the route 404'd, so tipping is not deployed on this
@@ -113,8 +189,9 @@ export function TipSheet({
     if (!parsed.ok) return;
     setSettlementFailed(false);
     send.mutate(
-      { target, amountKash: parsed.amountKash },
+      { target, amountKash: parsed.amountKash, onPhase: setPhase },
       {
+        onSettled: () => setPhase("idle"),
         onSuccess: (tip) => {
           // "failed" is a completed request that did NOT move money. It is a
           // 200, so it would sail straight into a success screen if the only
@@ -199,7 +276,8 @@ export function TipSheet({
               the screen. */}
           <div className="max-h-[min(38dvh,300px)] overflow-y-auto overscroll-contain pr-0.5">
             <GiftGrid
-              selectedId={selectedGift}
+              selectedId={effectiveGiftId}
+              unavailable={unsendableGifts}
               onSelect={(gift) => {
                 setSelectedGift(gift.id);
                 setAmount(gift.priceKash);
@@ -266,10 +344,18 @@ export function TipSheet({
                 </p>
               )}
 
+            {/* The service's bound, named. This used to be discovered only
+                after the confirm step, as a generic failure. */}
+            {parsed.ok && outOfBounds && capability && (
+              <p className="mt-2 text-[13px] text-down">
+                {tipBoundsMessage(outOfBounds, capability)}
+              </p>
+            )}
+
             <Button
               className="mt-3 w-full"
               size="lg"
-              disabled={!parsed.ok}
+              disabled={!parsed.ok || outOfBounds !== null}
               onClick={() => setStage("confirm")}
             >
               Continue
@@ -302,19 +388,27 @@ export function TipSheet({
           <Button
             className="mt-6 w-full"
             size="lg"
-            loading={send.isPending}
-            // Nothing to retry once the route is known to be absent.
-            disabled={send.isPending || send.unavailable}
+            loading={send.isPending || phase !== "idle"}
+            /* Dead for the WHOLE payment, not just the request. A client-
+               settled tip signs a transfer and then waits on a block, and a
+               live button across that is a second payment waiting for an
+               impatient tap. Nothing to retry once the route is absent. */
+            disabled={send.isPending || phase !== "idle" || send.unavailable}
             onClick={confirm}
           >
-            {send.isError || settlementFailed
-              ? "Try again"
-              : `Send ${formatKash(parsed.amountKash)}`}
+            {/* The button names the step, because a client-settled tip asks
+                the reader's own wallet to move money and an undifferentiated
+                spinner leaves them unsure whether something wants them. */}
+            {phase !== "idle"
+              ? TIP_PHASE_LABEL[phase]
+              : send.isError || settlementFailed
+                ? "Try again"
+                : `Send ${formatKash(parsed.amountKash)}`}
           </Button>
           <button
             type="button"
             onClick={() => setStage("amount")}
-            disabled={send.isPending}
+            disabled={send.isPending || phase !== "idle"}
             className="mt-3 w-full text-[13px] text-white/50 transition-colors hover:text-white disabled:opacity-40"
           >
             Change amount

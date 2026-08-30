@@ -40,6 +40,8 @@ export function LiveKitPlayer({
   token,
   onPlayingChange,
   fill = false,
+  onRemoveGuest,
+  removing,
 }: {
   /** Claims this stream's single Room slot — see lib/live-room.ts. */
   streamId: string;
@@ -50,6 +52,9 @@ export function LiveKitPlayer({
   onPlayingChange?: (playing: boolean) => void;
   /** Full-bleed mode: fills the parent instead of a rounded 16:9 box. */
   fill?: boolean;
+  /** Host moderation, when the viewer owns the stream. Absent for everyone else. */
+  onRemoveGuest?: (identity: string) => void;
+  removing?: boolean;
 }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [state, setState] = useState<ViewerState>("connecting");
@@ -132,7 +137,13 @@ export function LiveKitPlayer({
           : "relative aspect-video w-full overflow-hidden rounded-2xl bg-[#0A0A0B]"
       }
     >
-      <LiveStage room={room} hostIdentity={hostIdentity} onStageChange={onStageChange} />
+      <LiveStage
+        room={room}
+        hostIdentity={hostIdentity}
+        onStageChange={onStageChange}
+        onRemoveGuest={onRemoveGuest}
+        removing={removing}
+      />
       {overlay && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/70 text-center">
           {state === "connecting" && <Spinner className="h-8 w-8 text-grey-500" />}

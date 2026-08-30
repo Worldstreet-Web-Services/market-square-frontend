@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { errorCode } from "@/lib/api/envelope";
@@ -8,7 +8,7 @@ import { useGate } from "@/hooks/use-gate";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/ui/states";
-import { IconDots, IconEmoji, IconSend } from "@/components/ui/icons";
+import { IconChevronDown, IconDots, IconEmoji, IconSend } from "@/components/ui/icons";
 import { useChat, useSendChat } from "@/features/streams/hooks/use-chat";
 import type { ChatMessage, Stream } from "@/features/streams/lib/types";
 
@@ -103,11 +103,65 @@ export function ChatPanel({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
-  const count = chat.data?.items.length ?? 0;
-  useEffect(() => {
+  /**
+   * Follow the live chat the way every broadcast app does: ride the bottom
+   * while you are at the bottom, and stop the moment the reader scrolls up.
+   *
+   * The old version keyed on `items.length` and set `scrollTop` outright, which
+   * failed in both directions. It MISSED arrivals, because the endpoint answers
+   * with a window rather than the whole history — once that window is full the
+   * count stops changing, every later message replaces an older one, and the
+   * effect never fires again. And when it did fire it yanked the reader back
+   * down mid-sentence, which is the one thing a chat must not do to somebody
+   * reading what was said thirty seconds ago.
+   *
+   * So: key on the LAST MESSAGE ID (a window that slides still changes its last
+   * id), and only follow while pinned. Unpinned, the new messages are counted
+   * and offered on a pill instead — the reader decides when to rejoin the live
+   * edge, which is exactly the affordance TikTok and YouTube put there.
+   */
+  const items = chat.data?.items;
+  const lastId = items && items.length > 0 ? items[items.length - 1].id : null;
+  // Pinning is a REF, not state: nothing renders from it, and the arrival
+  // effect must not re-run when it flips — scrolling up would otherwise be the
+  // thing that triggers a scroll. `behind` is the only part that renders.
+  const pinnedRef = useRef(true);
+  const [behind, setBehind] = useState(0);
+  // First paint jumps; every message after that glides. An animated scroll on
+  // mount is the panel appearing to load in front of you.
+  const settled = useRef(false);
+
+  const jumpToLatest = useCallback((smooth: boolean) => {
     const node = listRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [count]);
+    if (!node) return;
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    node.scrollTo({ top: node.scrollHeight, behavior: smooth && !reduced ? "smooth" : "auto" });
+    pinnedRef.current = true;
+    setBehind(0);
+  }, []);
+
+  useEffect(() => {
+    if (!lastId) return;
+    if (pinnedRef.current) {
+      jumpToLatest(settled.current);
+      settled.current = true;
+      return;
+    }
+    setBehind((previous) => previous + 1);
+  }, [lastId, jumpToLatest]);
+
+  // 48px of slack, not equality: a smooth scroll lands a fraction short, and
+  // sub-pixel heights mean `scrollTop + clientHeight === scrollHeight` is a
+  // condition that is briefly false while sitting still at the bottom.
+  const handleScroll = () => {
+    const node = listRef.current;
+    if (!node) return;
+    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+    pinnedRef.current = atBottom;
+    if (atBottom) setBehind(0);
+  };
 
   const gatedByTicket =
     stream.visibility === "ticketed" && !stream.myTicket && errorCode(send.error) === "FORBIDDEN";
@@ -115,7 +169,16 @@ export function ChatPanel({
   const submit = () => {
     const text = draft.trim();
     if (!text) return;
-    gate(() => send.mutate(text, { onSuccess: () => setDraft("") }));
+    gate(() =>
+      send.mutate(text, {
+        onSuccess: () => {
+          setDraft("");
+          // Saying something is opting back into the live edge: nobody types a
+          // message and then wants to keep reading history.
+          jumpToLatest(true);
+        },
+      })
+    );
   };
 
   const overlay = variant === "overlay";
@@ -136,6 +199,7 @@ export function ChatPanel({
 
       <ul
         ref={listRef}
+        onScroll={handleScroll}
         className={cn(
           "min-h-0 flex-1 overflow-y-auto",
           overlay ? "ws-chat-mask space-y-2 px-1 py-2" : "px-3 py-3"
@@ -237,6 +301,20 @@ export function ChatPanel({
           </li>
         ))}
       </ul>
+
+      {/* Only while there is something to rejoin. A control that is always
+          there, greyed out, teaches people to stop looking at that spot. */}
+      {behind > 0 && (
+        <div className="pointer-events-none relative z-10 flex justify-center">
+          <button
+            onClick={() => jumpToLatest(true)}
+            className="ws-press pointer-events-auto -mt-1 mb-1 flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12px] font-bold text-ink shadow-[0_6px_20px_-6px_rgba(0,0,0,0.9)]"
+          >
+            <IconChevronDown className="h-3.5 w-3.5" />
+            {behind === 1 ? "1 new message" : `${behind} new messages`}
+          </button>
+        </div>
+      )}
 
       <div className={overlay ? "pt-2" : cn("ws-hair border-t p-3", theater && "px-4 py-4")}>
         {send.isError && !gatedByTicket && (

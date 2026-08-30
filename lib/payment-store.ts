@@ -30,7 +30,7 @@ import {
  */
 
 /** Which flow a hold belongs to. Two flows must never read each other's. */
-export type PaymentNamespace = "kash" | "token";
+export type PaymentNamespace = "kash" | "token" | "tip";
 
 function storageKey(namespace: PaymentNamespace, wallet: string): string {
   return `ms.payment.${namespace}.${wallet.toLowerCase()}`;

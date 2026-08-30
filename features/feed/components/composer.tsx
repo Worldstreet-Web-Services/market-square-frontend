@@ -332,7 +332,7 @@ export function Composer({
         />
 
         {mentionRange && (
-          <div className="ws-glass relative z-30 mb-2 max-h-64 overflow-y-auto rounded-2xl p-1.5">
+          <div className="ws-popover relative z-30 mb-2 max-h-64 overflow-y-auto rounded-2xl p-1.5">
             <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-meta">People and groups</p>
             {mentionResults.isPending && <p className="px-3 py-3 text-xs text-meta">Searching…</p>}
             {mentionResults.data?.items.map((mention) => (

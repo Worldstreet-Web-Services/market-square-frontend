@@ -6,6 +6,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
 import { IconVolume, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import {
+  MAX_STAGE_SLOTS,
+  stageLayoutClass,
+  stageTileSpanClass,
+} from "@/lib/stage-layout";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
 import {
   buildStageLayout,
@@ -34,18 +39,6 @@ import {
 const TILE =
   "relative min-h-[104px] overflow-hidden rounded-[14px] border border-[#2A2A2E] bg-[#141416] md:rounded-2xl";
 
-function layoutClass(count: number): string {
-  if (count <= 1) return "grid grid-cols-1 grid-rows-1";
-  // Host + 1: vertical 50/50 on mobile (a conversation, never a PiP thumbnail),
-  // horizontal 50/50 on desktop.
-  if (count === 2) return "grid grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1";
-  // 3+ is P2 territory; until then keep every tile above the 104px floor.
-  if (count === 3) return "grid grid-cols-1 grid-rows-3 md:grid-cols-3 md:grid-rows-1";
-  return "grid grid-cols-2 auto-rows-fr";
-}
-
-/** Spec caps the stage at 6; beyond that tiles stop being faces. */
-const MAX_SLOTS = 6;
 
 /** What a tile decided about fit, reported up so the host can be told. */
 export interface TileFitReport {
@@ -64,6 +57,7 @@ function MediaTile({
   removing,
   compact,
   onFit,
+  className,
 }: {
   tile: StageTile;
   localTile?: ReactNode;
@@ -72,6 +66,8 @@ function MediaTile({
   /** Strip tile: smaller chrome, no moderation control. */
   compact?: boolean;
   onFit?: (report: TileFitReport | null) => void;
+  /** Grid placement from the caller — the odd tile out at three. */
+  className?: string;
 }) {
   const slot = tile.slot;
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -163,7 +159,7 @@ function MediaTile({
   const box = cn("absolute inset-0", fit === "contain" && "bg-[#0A0A0B]", hideVideo && "hidden");
 
   return (
-    <div ref={frameRef} className={TILE}>
+    <div ref={frameRef} className={cn(TILE, className)}>
       {useOwnAttach ? (
         <div ref={mountRef} className={box} />
       ) : (
@@ -190,8 +186,20 @@ function MediaTile({
       )}
 
       <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-1.5">
+        {/* Its OWN chip, not "Host · " glued to the front of the name.
+            Inside one pill the role was just more of the same sentence, so it
+            truncated away first on a narrow tile — the label is capped at 70%
+            and the name is what the truncation ate into. A separate `shrink-0`
+            pill is the thing that survives a small tile, which is correct:
+            on a stage of strangers, who is running the room outranks the
+            fourth character of their handle. Silver on ink, matching every
+            other Host marker in the room (chat rows use the same pair). */}
+        {slot.role === "host" && !isScreen && (
+          <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-ink">
+            Host
+          </span>
+        )}
         <span className="max-w-[70%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-[#E8EAED]">
-          {slot.role === "host" && !isScreen ? "Host · " : ""}
           {tile.label}
         </span>
         {slot.isMuted && (
@@ -288,7 +296,7 @@ export function LiveStage({
   onLocalFit?: (reports: TileFitReport[]) => void;
 }) {
   const all = useStageSlots(room, hostIdentity);
-  const slots = all.slice(0, MAX_SLOTS);
+  const slots = all.slice(0, MAX_STAGE_SLOTS);
   const audio = remoteAudioSlots(all);
   // Screens take the stage; faces drop to a strip. With nobody sharing this is
   // exactly the previous behaviour — cameras in the grid, no strip.
@@ -377,13 +385,14 @@ export function LiveStage({
           <div
             className={cn(
               "min-h-0 min-w-0 flex-1 gap-0.5",
-              layoutClass(primary.length)
+              stageLayoutClass(primary.length)
             )}
           >
-            {primary.map((tile) => (
+            {primary.map((tile, index) => (
               <MediaTile
                 key={tile.key}
                 tile={tile}
+                className={stageTileSpanClass(primary.length, index)}
                 localTile={localTile}
                 onRemove={onRemoveGuest}
                 removing={removing}
