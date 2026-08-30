@@ -67,7 +67,7 @@ function ReportMenu({ targetId }: { targetId: string }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="ws-glass absolute right-0 z-20 mt-1 w-56 rounded-2xl p-1.5">
+          <div className="ws-popover absolute right-0 z-20 mt-1 w-56 rounded-2xl p-1.5">
             <p className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-meta">
               <IconFlag className="h-3.5 w-3.5" /> Report
             </p>
@@ -262,7 +262,7 @@ function RepostMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="ws-glass absolute bottom-full left-0 z-20 mb-2 w-44 rounded-2xl p-1.5">
+          <div className="ws-popover absolute bottom-full left-0 z-20 mb-2 w-44 rounded-2xl p-1.5">
             <button
               onClick={() => {
                 setOpen(false);

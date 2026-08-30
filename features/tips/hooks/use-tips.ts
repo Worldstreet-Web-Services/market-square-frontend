@@ -1,14 +1,39 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode } from "@/lib/api/envelope";
 import { isTipRouteMissing } from "@/lib/tip-errors";
-import { sendTip } from "@/features/tips/lib/api";
+import { fetchTipCapability, sendTip } from "@/features/tips/lib/api";
 import { markTippingUnavailable, useTippingUnavailable } from "@/features/tips/lib/availability";
 import type { Tip, TipTarget } from "@/features/tips/lib/types";
 
 function isRouteMissing(error: unknown): boolean {
   return isTipRouteMissing(errorCode(error));
+}
+
+/**
+ * The service's own tipping rules — and the read that nothing was making.
+ *
+ * `GET /tips/capability` publishes `{ enabled, minKash, maxKash,
+ * verifiedAuthorsOnly }`, and the client shipped without ever asking. In
+ * production the answer is min 1 KASH and verified authors only, while the
+ * sheet defaulted to 0.05 and offered eight gift tiles under a whole KASH — so
+ * the most natural tip a reader could send was refused by the server after
+ * they had already confirmed it.
+ *
+ * Public and wallet-free, so one long-cached read serves every tip button on
+ * screen. It is deliberately NOT retried into existence: a deployment without
+ * the route answers 404, and `lib/tip-capability.ts` treats a missing
+ * capability as permissive so a failed lookup can never take tipping down.
+ */
+export function useTipCapability() {
+  return useQuery({
+    queryKey: ["ms", "tips", "capability"],
+    queryFn: fetchTipCapability,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: false,
+  });
 }
 
 /**

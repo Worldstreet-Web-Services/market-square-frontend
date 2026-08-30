@@ -39,9 +39,26 @@ function layoutClass(count: number): string {
   // Host + 1: vertical 50/50 on mobile (a conversation, never a PiP thumbnail),
   // horizontal 50/50 on desktop.
   if (count === 2) return "grid grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1";
-  // 3+ is P2 territory; until then keep every tile above the 104px floor.
-  if (count === 3) return "grid grid-cols-1 grid-rows-3 md:grid-cols-3 md:grid-rows-1";
+  // Three is TWO COLUMNS on a phone, not three stacked bands. Three full-width
+  // rows in a 9:16 stage gives every tile a ~3:1 letterbox — the shape a face
+  // fits worst — and drives each one toward the 104px floor. Two abreast with
+  // the third spanning underneath keeps all three close to square, which is
+  // the whole point of putting people on a stage. Desktop is wide enough for
+  // three across, so it keeps that (see the per-tile span below).
+  if (count === 3) return "grid grid-cols-2 auto-rows-fr md:grid-cols-3 md:grid-rows-1";
+  // Four is the 2x2 grid; five and six continue in the same two columns.
   return "grid grid-cols-2 auto-rows-fr";
+}
+
+/**
+ * A tile's column span, which only ever differs for the odd one out.
+ *
+ * At three, the last tile spans both phone columns so the row below is not a
+ * half-empty grid with a hole in it. From `md` the grid is three across and
+ * every tile is back to one column.
+ */
+function tileSpanClass(count: number, index: number): string {
+  return count === 3 && index === 2 ? "col-span-2 md:col-span-1" : "";
 }
 
 /** Spec caps the stage at 6; beyond that tiles stop being faces. */
@@ -64,6 +81,7 @@ function MediaTile({
   removing,
   compact,
   onFit,
+  className,
 }: {
   tile: StageTile;
   localTile?: ReactNode;
@@ -72,6 +90,8 @@ function MediaTile({
   /** Strip tile: smaller chrome, no moderation control. */
   compact?: boolean;
   onFit?: (report: TileFitReport | null) => void;
+  /** Grid placement from the caller — the odd tile out at three. */
+  className?: string;
 }) {
   const slot = tile.slot;
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -163,7 +183,7 @@ function MediaTile({
   const box = cn("absolute inset-0", fit === "contain" && "bg-[#0A0A0B]", hideVideo && "hidden");
 
   return (
-    <div ref={frameRef} className={TILE}>
+    <div ref={frameRef} className={cn(TILE, className)}>
       {useOwnAttach ? (
         <div ref={mountRef} className={box} />
       ) : (
@@ -190,8 +210,20 @@ function MediaTile({
       )}
 
       <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-1.5">
+        {/* Its OWN chip, not "Host · " glued to the front of the name.
+            Inside one pill the role was just more of the same sentence, so it
+            truncated away first on a narrow tile — the label is capped at 70%
+            and the name is what the truncation ate into. A separate `shrink-0`
+            pill is the thing that survives a small tile, which is correct:
+            on a stage of strangers, who is running the room outranks the
+            fourth character of their handle. Silver on ink, matching every
+            other Host marker in the room (chat rows use the same pair). */}
+        {slot.role === "host" && !isScreen && (
+          <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-ink">
+            Host
+          </span>
+        )}
         <span className="max-w-[70%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-[#E8EAED]">
-          {slot.role === "host" && !isScreen ? "Host · " : ""}
           {tile.label}
         </span>
         {slot.isMuted && (
@@ -380,10 +412,11 @@ export function LiveStage({
               layoutClass(primary.length)
             )}
           >
-            {primary.map((tile) => (
+            {primary.map((tile, index) => (
               <MediaTile
                 key={tile.key}
                 tile={tile}
+                className={tileSpanClass(primary.length, index)}
                 localTile={localTile}
                 onRemove={onRemoveGuest}
                 removing={removing}

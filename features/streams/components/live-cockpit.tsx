@@ -26,8 +26,7 @@ import {
   useBanFromChat,
   useDeleteChatMessage,
   useEndStream,
-  useResolveSpeakerRequest,
-  useSpeakerRequests,
+  useRemoveGuest,
   useStreamEvents,
   useUpdateStream,
 } from "@/features/streams/hooks/use-streams";
@@ -291,21 +290,9 @@ export function LiveCockpit({
   // the cockpit rendered exactly one video element — its own preview — and never
   // attached a single remote track, video or audio.
   const room = useLiveRoom(stream.id);
-  const requests = useSpeakerRequests(stream.id, stream.status === "live");
-  const resolve = useResolveSpeakerRequest(stream.id);
-  // Remove-from-stage is the backend's resolve action; LiveKit drops the grant
-  // and unpublishes their tracks, and the stage loses the slot on the next
-  // ParticipantPermissionsChanged.
-  const removeGuest = (identity: string) => {
-    const request = requests.data?.items.find(
-      (item) => item.userId === identity && item.status === "approved"
-    );
-    if (!request) {
-      toast.error("Couldn't find that guest's request.");
-      return;
-    }
-    resolve.mutate({ requestId: request.id, action: "remove" });
-  };
+  // Remove-from-stage is `useRemoveGuest` — shared with the watch page, so the
+  // host moderates identically wherever they happen to be standing.
+  const { remove: removeGuest, removing } = useRemoveGuest(stream.id, stream.status === "live");
 
   // What viewers are actually seeing of OUR video. A host framing a shot has no
   // other way to learn that the stage is letterboxing their screen share, or
@@ -355,7 +342,7 @@ export function LiveCockpit({
             room={room}
             hostIdentity={stream.ownerId}
             onRemoveGuest={removeGuest}
-            removing={resolve.isPending}
+            removing={removing}
             emptyState={<Spinner className="h-6 w-6 text-grey-500" />}
             onLocalFit={setFits}
           />

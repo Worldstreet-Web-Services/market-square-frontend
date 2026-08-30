@@ -7,6 +7,8 @@ import { useMe } from "@/hooks/use-me";
 import { IconMsHandDeposit } from "@/components/ui/design-icons";
 import { TipSheet } from "@/features/tips/components/tip-sheet";
 import { useTippingUnavailable } from "@/features/tips/lib/availability";
+import { useTipCapability } from "@/features/tips/hooks/use-tips";
+import { tipBlockedBecause } from "@/lib/tip-capability";
 import type { TipTarget } from "@/features/tips/lib/types";
 
 /**
@@ -46,9 +48,23 @@ export function TipButton({
   const gate = useGate();
   const me = useMe();
   const unavailable = useTippingUnavailable();
+  const capability = useTipCapability();
 
   const isMine = Boolean(target.recipient && me.data?.id === target.recipient.id);
   if (isMine) return null;
+
+  /**
+   * 3. **The service will not accept a tip for this account.**
+   *
+   * Production publishes `verifiedAuthorsOnly: true`, so an unverified author
+   * cannot receive one. The button used to open anyway: the reader picked a
+   * gift, confirmed, and was refused at the last step. Same rule as the two
+   * cases above — a control that can only fail is worse than no control.
+   *
+   * A capability we could not read leaves the button alone, because the
+   * alternative is hiding tipping everywhere over a failed lookup.
+   */
+  if (tipBlockedBecause(capability.data, target.recipient) !== null) return null;
 
   // The 404 can also arrive MID-FLOW, from this very sheet. Hiding the button
   // then must not take the open dialog down with it: the person pressed Send

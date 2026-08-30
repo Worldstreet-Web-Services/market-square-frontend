@@ -15,20 +15,37 @@
 /**
  * The preset ladder.
  *
- * Deliberately a SUBSET of the live-gift prices in
- * `features/streams/components/tip-sheet.tsx`: every rung here (1 / 5 / 10 /
- * 25 / 50 / 100) is a price in that tray. Two different ladders for the two
- * ways of handing someone KASH would teach the reader that a "10" means
- * something different in each place. The tray grew to fourteen gifts when it
- * was built to the design; these six stayed the presets because a tip is a
- * quick gesture, not a catalogue. Keep this a subset — if a rung here stops
- * existing over there, move it.
+ * Deliberately a SUBSET of the live-gift prices in `lib/gifts.ts`: every rung
+ * here is a price in that tray. Two different ladders for the two ways of
+ * handing someone KASH would teach the reader that a "10" means something
+ * different in each place. The tray grew to fourteen gifts when it was built
+ * to the design; these stayed the presets because a tip is a quick gesture,
+ * not a catalogue. Keep this a subset — if a rung here stops existing over
+ * there, move it. `lib/gifts.test.ts` fails if it drifts.
+ *
+ * `100` was one of them and is gone, because the gift ladder was repriced for
+ * a $7 token and no longer goes that high: at today's price it was a $700
+ * one-tap button on a sheet whose default is a gesture.
+ *
+ * THE RUNGS ARE SUB-UNIT for the same reason the gift ladder is: KASH is a $7
+ * token. The old 1 / 5 / 10 / 25 / 50 / 100 read as small round numbers and
+ * was in fact $7 to $700, with a $35 default — so the cheapest tip on the
+ * sheet cost more than most people tip in a month, and a wallet holding a
+ * couple of dollars could not send the smallest one. `0.01` is a 7c tip and
+ * `5` is $35, which spans a gesture to a real one.
+ *
+ * THE SERVER STILL HAS THE FINAL SAY. `GET /tips/capability` publishes
+ * `minKash`, and the service defaults it to `1` — so with a default backend
+ * every rung below `1` here is refused on arrival. That floor is config
+ * (`TIP_MIN_KASH`), not a constant, and it has to come down with these. The
+ * client never invents its own bound: it offers these and reports whatever
+ * the server answers.
  */
-export const TIP_PRESETS_KASH = ["1", "5", "10", "25", "50", "100"] as const;
+export const TIP_PRESETS_KASH = ["0.01", "0.05", "0.1", "0.25", "1", "5"] as const;
 
 /** The default selection when the sheet opens — the second rung, not the first,
  *  so the common case is one tap and the cheapest option still needs a choice. */
-export const DEFAULT_TIP_KASH = "5";
+export const DEFAULT_TIP_KASH = "0.05";
 
 /**
  * Upper bound, as a digit count rather than a number.

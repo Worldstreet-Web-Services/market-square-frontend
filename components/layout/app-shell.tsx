@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
@@ -299,6 +301,93 @@ const BADGE_FOR: Record<
 };
 
 /**
+ * A rail menu that can actually leave the rail.
+ *
+ * The sidebar is `overflow-hidden` — it has to be, because it resizes by drag
+ * and labels would spill at every intermediate width — so an `absolute` panel
+ * inside it is CLIPPED at the rail's edge. In the collapsed 72px rail that
+ * sliced a 208px menu down to a stub: "View p…", "Log ou…". Nothing about the
+ * panel's own classes could fix it; the clip belongs to an ancestor.
+ *
+ * So the panel is portalled to the body and positioned `fixed` from the
+ * trigger's rect — the same escape `symbol-picker` already makes. It is
+ * re-measured on open, scroll and resize, and clamped into the viewport so a
+ * short window cannot push it off the top.
+ */
+function RailMenu({
+  label,
+  trigger,
+  children,
+  align = "right",
+}: {
+  label: string;
+  trigger: (props: { open: boolean; toggle: () => void }) => React.ReactNode;
+  children: (close: () => void) => React.ReactNode;
+  /** "right" clears the collapsed rail; "above" stacks over the account chip. */
+  align?: "right" | "above";
+}) {
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLDivElement | null>(null);
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const node = anchor.current;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      const width = 224;
+      const left =
+        align === "right"
+          ? Math.min(rect.right + 8, window.innerWidth - width - 8)
+          : Math.min(rect.left, window.innerWidth - width - 8);
+      // 8px of breathing room at the top, so a short viewport clamps rather
+      // than opening a menu whose first item is off-screen.
+      const top = Math.max(8, rect.top - 8);
+      setAt({ left: Math.max(8, left), top });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, align]);
+
+  return (
+    <div ref={anchor} className="relative">
+      {trigger({ open, toggle: () => setOpen((value) => !value) })}
+      {open &&
+        at &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+            <div
+              role="menu"
+              aria-label={label}
+              style={{
+                left: at.left,
+                // Bottom-anchored: the menu grows upward from the trigger,
+                // which is what both rail menus want — they live at the foot.
+                bottom: Math.max(8, window.innerHeight - at.top),
+                width: 224,
+              }}
+              className="ws-popover fixed z-[61] rounded-2xl p-1.5"
+            >
+              {children(() => setOpen(false))}
+            </div>
+          </>,
+          document.body
+        )}
+    </div>
+  );
+}
+
+/**
  * The icon rail's overflow.
  *
  * It used to open on hover and `focus-within` only, so a tap opened nothing
@@ -306,42 +395,43 @@ const BADGE_FOR: Record<
  * reachable from the keyboard.
  */
 function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
-  const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   return (
-    <div className="relative group-data-[rail=full]/rail:hidden">
-      <button
-        aria-label="More"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        className="ws-nav flex w-full items-center gap-4 p-3 text-body"
+    <div className="group-data-[rail=full]/rail:hidden">
+      <RailMenu
+        label="More"
+        align="right"
+        trigger={({ open, toggle }) => (
+          <button
+            aria-label="More"
+            aria-expanded={open}
+            onClick={toggle}
+            className="ws-nav flex w-full items-center gap-4 p-3 text-body"
+          >
+            <IconMore className="h-6 w-6 shrink-0" />
+          </button>
+        )}
       >
-        <IconMore className="h-6 w-6 shrink-0" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="ws-glass absolute bottom-0 left-full z-50 ml-2 w-52 rounded-2xl p-1.5">
-            {items.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                {...(item.external
-                  ? { target: "_blank", rel: "noopener noreferrer" }
-                  : {})}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-white/10",
-                  isActive(pathname, item.href) ? "text-heading" : "text-body",
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
+        {(close) =>
+          items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              {...(item.external
+                ? { target: "_blank", rel: "noopener noreferrer" }
+                : {})}
+              onClick={close}
+              className={cn(
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-white/10",
+                isActive(pathname, item.href) ? "text-heading" : "text-body",
+              )}
+            >
+              <item.icon className="h-5 w-5" />
+              {item.label}
+            </Link>
+          ))
+        }
+      </RailMenu>
     </div>
   );
 }
@@ -371,43 +461,63 @@ function AccountChip() {
 
   // Pinned to the foot of the rail as a bordered 12px-radius card, sat under
   // its own hairline — the design's account block, not a bare row.
+  // The chip is a BUTTON, not a link with a hover menu. It was
+  // `group-hover:block group-focus-within:block`, which is the same defect
+  // MoreMenu was fixed for one screen earlier: on a touch device a tap follows
+  // the link and the menu never opens, so "View profile" and "Log out" did not
+  // exist on a tablet at all. Opening it on click gives both entries a target
+  // and keeps the profile reachable as the menu's first item.
   return (
-    <div className="group relative">
-      <Link
-        href={me.data ? `/u/${me.data.username}` : "/auth"}
-        className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 transition-colors hover:bg-white/8"
-      >
-        <Avatar
-          name={me.data?.displayName ?? "Me"}
-          seed={me.data?.id}
-          src={me.data?.avatarUrl}
-          size={34}
-        />
-        <span className="hidden min-w-0 flex-1 group-data-[rail=full]/rail:block">
-          <span className="block truncate text-[12px] font-bold leading-4 text-white">
-            {me.data?.displayName ?? "You"}
-          </span>
-          <span className="block truncate text-[10px] leading-[15px] text-white/40">
-            @{me.data?.username ?? "…"}
-          </span>
-        </span>
-        <IconDots className="hidden h-4 w-4 shrink-0 text-meta group-data-[rail=full]/rail:block" />
-      </Link>
-      <div className="ws-glass absolute bottom-full left-0 z-50 mb-2 hidden w-56 rounded-2xl p-1.5 group-focus-within:block group-hover:block">
-        <Link
-          href={me.data ? `/u/${me.data.username}` : "/auth"}
-          className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-        >
-          View profile
-        </Link>
+    <RailMenu
+      label="Account"
+      align="above"
+      trigger={({ open, toggle }) => (
         <button
-          onClick={() => void logout()}
-          className="block w-full rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label={`Account menu for @${me.data?.username ?? "you"}`}
+          className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 text-left transition-colors hover:bg-white/8"
         >
-          Log out @{me.data?.username ?? ""}
+          <Avatar
+            name={me.data?.displayName ?? "Me"}
+            seed={me.data?.id}
+            src={me.data?.avatarUrl}
+            size={34}
+          />
+          <span className="hidden min-w-0 flex-1 group-data-[rail=full]/rail:block">
+            <span className="block truncate text-[12px] font-bold leading-4 text-white">
+              {me.data?.displayName ?? "You"}
+            </span>
+            <span className="block truncate text-[10px] leading-[15px] text-white/40">
+              @{me.data?.username ?? "…"}
+            </span>
+          </span>
+          <IconDots className="hidden h-4 w-4 shrink-0 text-meta group-data-[rail=full]/rail:block" />
         </button>
-      </div>
-    </div>
+      )}
+    >
+      {(close) => (
+        <>
+          <Link
+            href={me.data ? `/u/${me.data.username}` : "/auth"}
+            onClick={close}
+            className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+          >
+            View profile
+          </Link>
+          <button
+            onClick={() => {
+              close();
+              void logout();
+            }}
+            className="block w-full truncate rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
+          >
+            Log out @{me.data?.username ?? ""}
+          </button>
+        </>
+      )}
+    </RailMenu>
   );
 }
 

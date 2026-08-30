@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -17,7 +17,11 @@ import {
   tipAmountMessage,
 } from "@/lib/tips";
 import { TIP_ERROR_COPY } from "@/lib/tip-errors";
-import { useSendTip } from "@/features/tips/hooks/use-tips";
+import { useSendTip, useTipCapability } from "@/features/tips/hooks/use-tips";
+import {
+  tipAmountOutOfBounds,
+  tipBoundsMessage,
+} from "@/lib/tip-capability";
 import type { Tip, TipTarget } from "@/features/tips/lib/types";
 
 /**
@@ -56,6 +60,32 @@ export function TipSheet({
    */
   balance?: (amountKash: string | null) => React.ReactNode;
 }) {
+  const capability = useTipCapability().data ?? null;
+
+  /**
+   * Gifts the SERVICE would refuse, by id.
+   *
+   * Production sets `minKash: 1` while the tray's eight cheapest tiles sit
+   * under a whole KASH, so those tiles were tappable, confirmable, and then
+   * rejected. They are inert now, and the sheet opens on a gift that can
+   * actually be sent.
+   */
+  const unsendableGifts = useMemo(
+    () =>
+      new Set(
+        LIVE_GIFTS.filter(
+          (gift) => tipAmountOutOfBounds(gift.priceKash, capability) !== null
+        ).map((gift) => gift.id)
+      ),
+    [capability]
+  );
+
+  /** The cheapest gift the service accepts — what the sheet should open on. */
+  const openingGift = useMemo(
+    () => LIVE_GIFTS.find((gift) => !unsendableGifts.has(gift.id)) ?? null,
+    [unsendableGifts]
+  );
+
   const [stage, setStage] = useState<Stage>("amount");
   const [amount, setAmount] = useState<string>(DEFAULT_TIP_KASH);
   const [custom, setCustom] = useState("");
@@ -89,8 +119,32 @@ export function TipSheet({
    * had already walked away from.
    */
 
-  const chosen = custom.trim() ? custom : amount;
+  /**
+   * The amount and the lit tile, DERIVED rather than stored.
+   *
+   * The capability arrives after this sheet mounts, so a stored default of
+   * 0.05 would sit there disabled until the reader touched something. Deriving
+   * means the sheet self-corrects the moment the service's rules land, with no
+   * effect and no second render pass: a preset the service would refuse falls
+   * back to the cheapest one it accepts.
+   */
+  const presetUnsendable = tipAmountOutOfBounds(amount, capability) !== null;
+  const effectiveAmount = presetUnsendable && openingGift ? openingGift.priceKash : amount;
+  const effectiveGiftId =
+    selectedGift && !unsendableGifts.has(selectedGift)
+      ? selectedGift
+      : presetUnsendable
+        ? (openingGift?.id ?? null)
+        : selectedGift;
+
+  const chosen = custom.trim() ? custom : effectiveAmount;
   const parsed = parseTipAmount(chosen);
+  /**
+   * The server's own bounds, checked BEFORE the confirm step rather than at
+   * the end of it. `parseTipAmount` says whether the text is an amount; this
+   * says whether the service will take it.
+   */
+  const outOfBounds = parsed.ok ? tipAmountOutOfBounds(parsed.amountKash, capability) : null;
 
   const failureCopy = (() => {
     // Discovered mid-flow: the route 404'd, so tipping is not deployed on this
@@ -199,7 +253,8 @@ export function TipSheet({
               the screen. */}
           <div className="max-h-[min(38dvh,300px)] overflow-y-auto overscroll-contain pr-0.5">
             <GiftGrid
-              selectedId={selectedGift}
+              selectedId={effectiveGiftId}
+              unavailable={unsendableGifts}
               onSelect={(gift) => {
                 setSelectedGift(gift.id);
                 setAmount(gift.priceKash);
@@ -266,10 +321,18 @@ export function TipSheet({
                 </p>
               )}
 
+            {/* The service's bound, named. This used to be discovered only
+                after the confirm step, as a generic failure. */}
+            {parsed.ok && outOfBounds && capability && (
+              <p className="mt-2 text-[13px] text-down">
+                {tipBoundsMessage(outOfBounds, capability)}
+              </p>
+            )}
+
             <Button
               className="mt-3 w-full"
               size="lg"
-              disabled={!parsed.ok}
+              disabled={!parsed.ok || outOfBounds !== null}
               onClick={() => setStage("confirm")}
             >
               Continue

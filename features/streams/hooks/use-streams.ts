@@ -361,6 +361,38 @@ export function useSpeakerRequests(streamId: string, enabled: boolean) {
   });
 }
 
+/**
+ * Take a guest off the stage, by LiveKit identity.
+ *
+ * Shared because the host has TWO surfaces — the studio cockpit they broadcast
+ * from and the watch page they may be moderating from — and the removal is the
+ * same act on both: find that identity's approved speaker-request and resolve
+ * it with `remove`. The backend drops the publish grant, LiveKit unpublishes
+ * their tracks, and the stage loses the slot on the next
+ * ParticipantPermissionsChanged. This lived inline in the cockpit; a second
+ * copy on the watch page is how one of them quietly stops matching the other.
+ *
+ * `enabled` gates the underlying request poll, so a viewer who is not the host
+ * never opens it.
+ */
+export function useRemoveGuest(streamId: string, enabled: boolean) {
+  const requests = useSpeakerRequests(streamId, enabled);
+  const resolve = useResolveSpeakerRequest(streamId);
+  const remove = (identity: string) => {
+    const request = requests.data?.items.find(
+      (item) => item.userId === identity && item.status === "approved"
+    );
+    // Not an assertion failure: the guest may have left a moment ago, and the
+    // poll has not caught up. Say so rather than throwing.
+    if (!request) {
+      toast.error("Couldn't find that guest's request.");
+      return;
+    }
+    resolve.mutate({ requestId: request.id, action: "remove" });
+  };
+  return { remove, removing: resolve.isPending };
+}
+
 export function useResolveSpeakerRequest(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
