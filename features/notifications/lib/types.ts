@@ -11,6 +11,15 @@ export const NotificationKindSchema = z
     "repost",
     "bookmark",
     "ticket_purchased",
+    /**
+     * Somebody tipped you.
+     *
+     * The service has sent this since tipping shipped; this enum did not list
+     * it, and `.catch("follow")` turned every one of them into "followed you".
+     * A creator who was paid was told they had gained a follower — the wrong
+     * event, and the one that matters most to get right.
+     */
+    "tip_received",
     "stream_live",
     "verification_resolved",
     "role_resolved",

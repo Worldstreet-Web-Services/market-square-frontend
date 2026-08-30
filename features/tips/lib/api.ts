@@ -40,6 +40,7 @@ const TipResponseSchema = z.object({
   id: z.string(),
   amountKash: z.string(),
   status: z.enum(["pending", "confirmed", "failed"]).catch("pending"),
+  giftId: z.string().nullable().optional().default(null),
   /**
    * The wallet to pay, present only when the SENDER must settle this tip.
    *
@@ -59,6 +60,7 @@ function adopt(raw: unknown, target: TipTarget): Tip {
     amountKash: parsed.amountKash,
     recipient: target.recipient,
     status: parsed.status === "confirmed" ? "settled" : parsed.status,
+    giftId: parsed.giftId,
   });
 }
 
@@ -68,9 +70,14 @@ export interface CreatedTip {
   toWallet: string | null;
 }
 
-export async function sendTip(target: TipTarget, amountKash: string): Promise<CreatedTip> {
+export async function sendTip(
+  target: TipTarget,
+  amountKash: string,
+  /** The gift chosen, if one was. A label the service records, never a price. */
+  giftId: string | null = null,
+): Promise<CreatedTip> {
   const path = target.kind === "post" ? `/posts/${target.id}/tips` : `/profiles/${target.id}/tips`;
-  const raw = await msApi.post(path, { amountKash });
+  const raw = await msApi.post(path, giftId ? { amountKash, giftId } : { amountKash });
   const parsed = TipResponseSchema.parse(raw);
   return { tip: adopt(raw, target), toWallet: parsed.toWallet ?? null };
 }

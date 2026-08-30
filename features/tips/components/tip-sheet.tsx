@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { IconMsHandDeposit } from "@/components/ui/design-icons";
 import { KashCoin } from "@/components/ui/kash-coin";
+import Image from "next/image";
 import { GiftGrid } from "@/components/ui/gift-grid";
+import { giftById } from "@/lib/gift-lookup";
 import { LIVE_GIFTS } from "@/lib/gifts";
 import { formatKash } from "@/lib/format";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
@@ -114,6 +116,9 @@ export function TipSheet({
     LIVE_GIFTS.find((gift) => gift.priceKash === DEFAULT_TIP_KASH)?.id ?? null,
   );
   const [receipt, setReceipt] = useState<Tip | null>(null);
+  // Resolved from the SERVER's echoed id, not from what was selected locally:
+  // the receipt should show what was actually recorded.
+  const receiptGift = giftById(receipt?.giftId);
   // A 200 whose `status` is "failed": the request succeeded, the payment did
   // not. Tracked separately from `send.isError` because TanStack has no reason
   // to consider it a failure, and this screen must.
@@ -189,7 +194,7 @@ export function TipSheet({
     if (!parsed.ok) return;
     setSettlementFailed(false);
     send.mutate(
-      { target, amountKash: parsed.amountKash, onPhase: setPhase },
+      { target, amountKash: parsed.amountKash, giftId: effectiveGiftId, onPhase: setPhase },
       {
         onSettled: () => setPhase("idle"),
         onSuccess: (tip) => {
@@ -421,10 +426,24 @@ export function TipSheet({
           actually happened. */}
       {stage === "sent" && receipt && (
         <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <IconMsHandDeposit className="h-9 w-9 text-spotlight-chip-ink" />
+          {/* The GIFT, where one was chosen — the object is what the sender
+              picked and what the recipient will be told about; the amount is
+              how it was priced. A gift this build no longer carries falls back
+              to the deposit glyph rather than showing artwork for something
+              that was never sent. */}
+          {receiptGift ? (
+            <span className="relative block h-14 w-14">
+              <Image src={receiptGift.art} alt="" fill sizes="56px" className="object-contain" />
+            </span>
+          ) : (
+            <IconMsHandDeposit className="h-9 w-9 text-spotlight-chip-ink" />
+          )}
           <p className="ws-display tnum text-3xl text-white">
             {formatKash(receipt.amountKash)}
           </p>
+          {receiptGift && (
+            <p className="-mt-1 text-[13px] text-white/50">{receiptGift.name}</p>
+          )}
           <p className="text-[14px] text-body">
             {receipt.status === "settled" ? "Sent to " : "On its way to "}
             <span className="font-bold text-white">

@@ -49,6 +49,8 @@ export type TipPhase = "idle" | "creating" | "signing" | "confirming" | "reporti
 export interface SendTipInput {
   target: TipTarget;
   amountKash: string;
+  /** The gift the sender chose, so the recipient can see what arrived. */
+  giftId?: string | null;
   onPhase?: (phase: TipPhase) => void;
 }
 
@@ -87,7 +89,7 @@ export function useSendTip() {
   const chain = useKashStatus().data?.chain ?? null;
 
   const mutation = useMutation<Tip, unknown, SendTipInput>({
-    mutationFn: async ({ target, amountKash, onPhase }) => {
+    mutationFn: async ({ target, amountKash, giftId, onPhase }) => {
       const phase = onPhase ?? (() => {});
       const key = holdKey(`tip:${target.kind}:${target.id}`, amountKash);
 
@@ -103,7 +105,7 @@ export function useSendTip() {
       phase("creating");
       let created;
       try {
-        created = await sendTip(target, amountKash);
+        created = await sendTip(target, amountKash, giftId ?? null);
       } catch (error) {
         /**
          * The service already has a tip open for this post and sender — which

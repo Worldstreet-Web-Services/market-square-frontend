@@ -31,6 +31,15 @@ export const TipSchema = z.object({
    * to "we don't know yet" and the receipt says only what it can stand behind.
    */
   status: z.enum(["pending", "settled", "failed"]).catch("pending"),
+  /**
+   * Which gift was sent, when the sender chose one.
+   *
+   * Recorded by the service and echoed back so a receipt can say WHAT arrived
+   * rather than only how much — the tray is fourteen objects and the object is
+   * the message. Null for a plain typed amount, and null on every tip that
+   * predates the gift tray.
+   */
+  giftId: z.string().nullable().optional().default(null),
 });
 
 export type Tip = z.infer<typeof TipSchema>;
