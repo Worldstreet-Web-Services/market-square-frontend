@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { baseIdentity } from "@/features/streams/lib/stage";
 import { errorMessage } from "@/lib/api/envelope";
 import { trackMarketEvent } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
@@ -379,8 +380,13 @@ export function useRemoveGuest(streamId: string, enabled: boolean) {
   const requests = useSpeakerRequests(streamId, enabled);
   const resolve = useResolveSpeakerRequest(streamId);
   const remove = (identity: string) => {
+    // The tile hands us the LiveKit identity, which for an approved speaker is
+    // `<did>#speaker`; the request is keyed on the bare DID. Comparing them raw
+    // never matched, so removing a guest always failed with "couldn't find
+    // that guest's request" while the guest stayed on stage.
+    const userId = baseIdentity(identity);
     const request = requests.data?.items.find(
-      (item) => item.userId === identity && item.status === "approved"
+      (item) => baseIdentity(item.userId) === userId && item.status === "approved"
     );
     // Not an assertion failure: the guest may have left a moment ago, and the
     // poll has not caught up. Say so rather than throwing.
