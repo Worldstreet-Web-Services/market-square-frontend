@@ -7,6 +7,13 @@ import { errorMessage } from "@/lib/api/envelope";
 import { trackMarketEvent } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
+import { KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
+import { encodeErc20Transfer, toBaseUnits } from "@/lib/erc20";
+import { holdKey } from "@/lib/payment-hold";
+import { clearHeldPayment, heldPayment, holdPayment } from "@/lib/payment-store";
+import { useEmbeddedWallet } from "@/hooks/use-wallet";
+import { useEvmSend } from "@/hooks/use-evm-send";
+import { useKashStatus } from "@/hooks/use-kash-status";
 import {
   banFromChat,
   cancelActivity,
@@ -24,6 +31,7 @@ import {
   fetchStreams,
   goLive,
   purchaseTicket,
+  reportTicketTransfer,
   quoteTicket,
   requestToSpeak,
   fetchMySpeakerRequest,
@@ -87,10 +95,69 @@ export function useTicketQuote(streamId: string, tier: TicketTier, enabled: bool
   });
 }
 
+/**
+ * Buy a ticket — settling it yourself where the service cannot.
+ *
+ * Mirrors the tip flow deliberately, down to the held payment: a ticket that
+ * comes back carrying `toWallet` is NOT paid for, and the buyer's own wallet
+ * has to sign a transfer to that address. Where the rail settles server-side
+ * the response has no wallet and this is the single request it always was.
+ *
+ * The hash is written down BEFORE the confirmation wait. From the moment the
+ * transfer is broadcast, the only thing that makes a retry safe is that the
+ * hash and the ticket it belongs to were recorded first — otherwise a retry
+ * opens a second ticket and the buyer pays twice for one seat.
+ */
 export function usePurchaseTicket(streamId: string) {
   const queryClient = useQueryClient();
+  const { address: wallet } = useEmbeddedWallet();
+  const { send, waitForReceipt } = useEvmSend();
+  const chain = useKashStatus().data?.chain ?? null;
+
   return useMutation({
-    mutationFn: (tier: TicketTier) => purchaseTicket(streamId, tier),
+    mutationFn: async (tier: TicketTier) => {
+      const created = await purchaseTicket(streamId, tier);
+
+      // Rail settlement, or a ticket this buyer already holds: nothing to sign.
+      if (!created.toWallet || created.status === "confirmed") return created;
+
+      if (!wallet) throw new Error("Sign in to buy a ticket.");
+      if (!chain?.tokenAddress) {
+        // Without the engine's own token address there is nothing to transfer,
+        // and guessing one sends real money into nothing.
+        throw new Error("Ticketing isn't configured on this environment yet.");
+      }
+
+      const key = holdKey(`ticket:${streamId}:${tier}`, created.priceKash);
+      // A payment a previous attempt made and failed to report.
+      const held = key ? heldPayment("ticket", wallet, key) : null;
+      let txHash = (held?.txHash ?? null) as `0x${string}` | null;
+
+      if (!txHash) {
+        txHash = await send({
+          to: chain.tokenAddress as `0x${string}`,
+          // The TOKEN's precision, not the API's — see KASH_TOKEN_DECIMALS.
+          data: encodeErc20Transfer(
+            created.toWallet,
+            toBaseUnits(created.priceKash, KASH_TOKEN_DECIMALS)
+          ),
+          chainId: chain.chainId,
+        });
+        if (key) holdPayment("ticket", wallet, { key, txHash, ref: created.id });
+
+        const outcome = await waitForReceipt(txHash, chain.chainId);
+        if (outcome === "reverted") {
+          // Nothing moved, so nothing may be reported as payment.
+          clearHeldPayment("ticket", wallet);
+          throw new Error("The transfer failed on-chain. Nothing was sent.");
+        }
+      }
+
+      const reported = await reportTicketTransfer(streamId, created.id, txHash);
+      // Reported: the service owns it now and a retry must not re-report it.
+      clearHeldPayment("ticket", wallet);
+      return reported;
+    },
     onSuccess: (ticket) => {
       trackMarketEvent("ticket_purchased", { surface: "ticket_checkout", entityType: "stream", entityId: streamId, accessType: ticket.tier });
       trackMarketEvent("entitlement_issued", { surface: "ticket_checkout", entityType: "ticket", entityId: ticket.id });
@@ -100,7 +167,18 @@ export function usePurchaseTicket(streamId: string) {
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId] });
       queryClient.invalidateQueries({ queryKey: ["ms", "my-tickets"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
-      toast.success("Ticket confirmed — enjoy the stream.");
+      /**
+       * "On its way", never "confirmed", on a ticket the chain has not settled.
+       *
+       * A client-signed ticket stays `pending` until the watcher observes the
+       * transfer, so telling the buyer to enjoy a stream they cannot open yet
+       * is the one claim this flow may not make.
+       */
+      toast.success(
+        ticket.status === "confirmed"
+          ? "Ticket confirmed — enjoy the stream."
+          : "Payment sent — your ticket unlocks once it confirms."
+      );
     },
   });
 }

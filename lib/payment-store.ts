@@ -30,7 +30,11 @@ import {
  */
 
 /** Which flow a hold belongs to. Two flows must never read each other's. */
-export type PaymentNamespace = "kash" | "token" | "tip";
+/**
+ * One namespace per kind of payment, so a stranded tip can never be replayed
+ * as a ticket. They are stored under separate keys for that reason alone.
+ */
+export type PaymentNamespace = "kash" | "token" | "tip" | "ticket";
 
 function storageKey(namespace: PaymentNamespace, wallet: string): string {
   return `ms.payment.${namespace}.${wallet.toLowerCase()}`;

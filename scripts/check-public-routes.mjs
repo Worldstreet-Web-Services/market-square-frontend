@@ -253,6 +253,16 @@ const PENDING_ROUTES = {
       "Ships with PR #148, same gate as the route above: unreachable while " +
       "the tray is unpriced. DELETE THIS ENTRY once PR #148 is deployed.",
   },
+  "post /streams/{}/tickets/{}/transfer": {
+    reason:
+      "The buyer reports the KSH transfer they signed for a ticket. Built on " +
+      "the service (apps/market-square, PR #150) and not yet DEPLOYED, so it " +
+      "is absent from the running spec. It is only ever called when a ticket " +
+      "comes back carrying `toWallet`, which the same undeployed change " +
+      "introduces — against today's production the rail settles the ticket " +
+      "server-side and this is never called. DELETE THIS ENTRY once PR #150 " +
+      "is deployed and the route appears in openapi.json.",
+  },
   "post /profiles/{}/tips": {
     reason:
       "Tipping a PROFILE directly is still not in the spec — only " +
