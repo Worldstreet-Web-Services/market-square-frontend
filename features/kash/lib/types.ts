@@ -17,57 +17,13 @@ import { z } from "zod";
  */
 
 /**
- * `GET /status` — every live engine parameter.
+ * The engine's status schema lives in `lib/kash-api.ts`, not here.
  *
- * The half that matters for buying is `chain`: the addresses a purchase pays
- * to and with, and the chain it happens on. Those are read from the SERVICE
- * and never hard-coded, because a wrong token address is a transfer into
- * nothing and a wrong payment address is a gift to a stranger.
+ * Tipping needs the chain configuration too — a tip is a KSH transfer the
+ * sender signs — and slices never import each other. Re-exported so this
+ * slice's own modules keep one import path.
  */
-export const KashStatusSchema = z.object({
-  price: z.object({ kashPriceUsd: z.string() }),
-  /**
-   * `mock` settles in the engine's ledger only; `ethers` moves real USDC and
-   * therefore requires a verified on-chain payment before anything is minted.
-   * The buy flow branches on this, so an unknown value degrades to the SAFE
-   * side — treat it as real money and demand the payment.
-   */
-  treasury: z.object({ usdcMode: z.enum(["mock", "ethers"]).catch("ethers") }),
-  chainMode: z.enum(["mock", "ethers", "off"]).catch("off"),
-  /**
-   * DELIBERATELY NOT PARSED: `status.coverage`.
-   *
-   * It reports treasury solvency for REDEMPTION — `paused` in production
-   * today, with coverage at 12% — and nothing here may read it as a buy state.
-   * A purchase adds USDC to the treasury rather than drawing on it, so gating
-   * the buy button on coverage would halt the one direction that repairs the
-   * number it is reporting. It is named here so the next reader does not
-   * "helpfully" wire it up.
-   */
-  desk: z
-    .object({
-      purchaseMinUsdc: z.number().optional(),
-      purchaseMaxUsdc: z.number().optional(),
-    })
-    .optional(),
-  /**
-   * Present only in `ethers` mode. `paymentAddress` is where the buyer's USDC
-   * must go and `usdcAddress` is the token to send — the engine verifies the
-   * transfer came FROM the buying wallet, so the payment cannot be made on
-   * their behalf and both addresses have to be known client-side.
-   */
-  chain: z
-    .object({
-      chainId: z.number(),
-      tokenAddress: z.string().optional(),
-      controllerAddress: z.string().optional(),
-      paymentAddress: z.string().optional(),
-      usdcAddress: z.string().optional(),
-    })
-    .optional(),
-});
-
-export type KashStatus = z.infer<typeof KashStatusSchema>;
+export { KashStatusSchema, type KashStatus } from "@/lib/kash-api";
 
 /**
  * `GET /accounts/:wallet` — the wallet-scoped read.

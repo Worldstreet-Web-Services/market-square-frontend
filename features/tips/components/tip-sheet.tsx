@@ -17,7 +17,7 @@ import {
   tipAmountMessage,
 } from "@/lib/tips";
 import { TIP_ERROR_COPY } from "@/lib/tip-errors";
-import { useSendTip, useTipCapability } from "@/features/tips/hooks/use-tips";
+import { useSendTip, useTipCapability, type TipPhase } from "@/features/tips/hooks/use-tips";
 import {
   tipAmountOutOfBounds,
   tipBoundsMessage,
@@ -34,6 +34,20 @@ import type { Tip, TipTarget } from "@/features/tips/lib/types";
  * amount and the recipient together.
  */
 type Stage = "amount" | "confirm" | "sent";
+
+/**
+ * What each step of a payment is called.
+ *
+ * `signing` is the one that matters: on this app wallet prompts are off
+ * (`showWalletUIs: false`), so nothing else on screen would tell the reader
+ * that their wallet is moving money right now.
+ */
+const TIP_PHASE_LABEL: Record<Exclude<TipPhase, "idle">, string> = {
+  creating: "Starting…",
+  signing: "Sending from your wallet…",
+  confirming: "Confirming on-chain…",
+  reporting: "Almost done…",
+};
 
 export function TipSheet({
   open,
@@ -105,6 +119,14 @@ export function TipSheet({
   // to consider it a failure, and this screen must.
   const [settlementFailed, setSettlementFailed] = useState(false);
   const send = useSendTip();
+  /**
+   * Which step of the payment is happening.
+   *
+   * A client-settled tip is four steps, two of which involve the reader's own
+   * wallet. One undifferentiated spinner across all of them leaves somebody
+   * staring at a dialog with no idea whether it wants something from them.
+   */
+  const [phase, setPhase] = useState<TipPhase>("idle");
   const recipient = target.recipient;
 
   /**
@@ -167,8 +189,9 @@ export function TipSheet({
     if (!parsed.ok) return;
     setSettlementFailed(false);
     send.mutate(
-      { target, amountKash: parsed.amountKash },
+      { target, amountKash: parsed.amountKash, onPhase: setPhase },
       {
+        onSettled: () => setPhase("idle"),
         onSuccess: (tip) => {
           // "failed" is a completed request that did NOT move money. It is a
           // 200, so it would sail straight into a success screen if the only
@@ -365,19 +388,27 @@ export function TipSheet({
           <Button
             className="mt-6 w-full"
             size="lg"
-            loading={send.isPending}
-            // Nothing to retry once the route is known to be absent.
-            disabled={send.isPending || send.unavailable}
+            loading={send.isPending || phase !== "idle"}
+            /* Dead for the WHOLE payment, not just the request. A client-
+               settled tip signs a transfer and then waits on a block, and a
+               live button across that is a second payment waiting for an
+               impatient tap. Nothing to retry once the route is absent. */
+            disabled={send.isPending || phase !== "idle" || send.unavailable}
             onClick={confirm}
           >
-            {send.isError || settlementFailed
-              ? "Try again"
-              : `Send ${formatKash(parsed.amountKash)}`}
+            {/* The button names the step, because a client-settled tip asks
+                the reader's own wallet to move money and an undifferentiated
+                spinner leaves them unsure whether something wants them. */}
+            {phase !== "idle"
+              ? TIP_PHASE_LABEL[phase]
+              : send.isError || settlementFailed
+                ? "Try again"
+                : `Send ${formatKash(parsed.amountKash)}`}
           </Button>
           <button
             type="button"
             onClick={() => setStage("amount")}
-            disabled={send.isPending}
+            disabled={send.isPending || phase !== "idle"}
             className="mt-3 w-full text-[13px] text-white/50 transition-colors hover:text-white disabled:opacity-40"
           >
             Change amount

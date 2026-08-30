@@ -40,6 +40,16 @@ const TipResponseSchema = z.object({
   id: z.string(),
   amountKash: z.string(),
   status: z.enum(["pending", "confirmed", "failed"]).catch("pending"),
+  /**
+   * The wallet to pay, present only when the SENDER must settle this tip.
+   *
+   * Its presence is the instruction: no wallet means the service moved the
+   * money and the tip is already confirmed; a wallet means nothing has moved
+   * and the sender's own wallet has to sign a KSH transfer to it. The kash
+   * rail cannot pay a third party — it exposes mint and burn and no transfer,
+   * and the platform is non-custodial — so this is how a real tip settles.
+   */
+  toWallet: z.string().optional(),
 });
 
 function adopt(raw: unknown, target: TipTarget): Tip {
@@ -52,7 +62,47 @@ function adopt(raw: unknown, target: TipTarget): Tip {
   });
 }
 
-export async function sendTip(target: TipTarget, amountKash: string): Promise<Tip> {
+/** A created tip, plus the wallet to pay when the sender must settle it. */
+export interface CreatedTip {
+  tip: Tip;
+  toWallet: string | null;
+}
+
+export async function sendTip(target: TipTarget, amountKash: string): Promise<CreatedTip> {
   const path = target.kind === "post" ? `/posts/${target.id}/tips` : `/profiles/${target.id}/tips`;
-  return adopt(await msApi.post(path, { amountKash }), target);
+  const raw = await msApi.post(path, { amountKash });
+  const parsed = TipResponseSchema.parse(raw);
+  return { tip: adopt(raw, target), toWallet: parsed.toWallet ?? null };
+}
+
+/**
+ * Report the transfer the sender signed.
+ *
+ * The service RECORDS this and settles nothing: a hash from a client is a
+ * claim, not proof, so the tip stays pending until kash's watcher observes the
+ * transfer on-chain and the amount and both wallets check out. Nothing here
+ * may tell the reader their money arrived.
+ */
+export async function reportTipTransfer(
+  target: TipTarget,
+  tipId: string,
+  txHash: string,
+): Promise<Tip> {
+  /**
+   * Posts only, and the path is written INLINE.
+   *
+   * Two reasons. The service has no profile-tip route at all, so a profile
+   * branch here would be a path that 404s dressed up as support for something.
+   * And `pnpm check:public-routes` reads call sites statically: a path
+   * assembled into a variable is invisible to it, which is exactly how a route
+   * that does not exist upstream reaches production as a mystery 404. Written
+   * out, this one is checked like every other.
+   */
+  if (target.kind !== "post") {
+    throw new Error("Only posts can be tipped.");
+  }
+  return adopt(
+    await msApi.post(`/posts/${target.id}/tips/${tipId}/transfer`, { txHash }),
+    target,
+  );
 }

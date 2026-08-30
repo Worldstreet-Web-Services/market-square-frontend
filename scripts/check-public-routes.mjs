@@ -227,6 +227,16 @@ function collectCalls(root) {
  * route ships. Anything not listed here fails the check.
  */
 const PENDING_ROUTES = {
+  "post /posts/{}/tips/{}/transfer": {
+    reason:
+      "The sender reports the KSH transfer they signed. Built and merged on " +
+      "the service (apps/market-square, PR #146) and not yet DEPLOYED, so it " +
+      "is absent from the running spec. It is only ever called when " +
+      "GET /tips/capability answers settlement:'client-signed', which the " +
+      "same undeployed change introduces — so against today's production the " +
+      "client takes the rail path and never calls this at all. DELETE THIS " +
+      "ENTRY once PR #146 is deployed and the route appears in openapi.json.",
+  },
   "post /profiles/{}/tips": {
     reason:
       "Tipping a PROFILE directly is still not in the spec — only " +

@@ -1,6 +1,5 @@
 "use client";
 
-import { createServiceClient } from "@/lib/api/service";
 import {
   KashAccountSchema,
   KashDeskBuyQuoteSchema,
@@ -9,7 +8,6 @@ import {
   KashDeskTxSchema,
   KashPurchaseQuoteSchema,
   KashPurchaseSchema,
-  KashStatusSchema,
   type KashAccount,
   type KashDeskBuyQuote,
   type KashDeskInfo,
@@ -17,28 +15,12 @@ import {
   type KashDeskTx,
   type KashPurchase,
   type KashPurchaseQuote,
-  type KashStatus,
 } from "@/features/kash/lib/types";
+import { kashApi } from "@/lib/kash-api";
 
-/**
- * The KASH transport.
- *
- * Its own client rather than `msApi`, because it is its own upstream behind its
- * own proxy (`app/api/kash/[...path]`), and — the part that matters — because
- * `breaker: false` keeps its failures out of Market Square's shared circuit
- * breaker. The engine is not running in every environment; three 502s from a
- * balance poll must not open the breaker and tell the feed, messages and
- * notifications that the square is down.
- */
-const kashApi = createServiceClient("/api/kash", {
-  fallbackMessage: "KASH is unavailable right now.",
-  breaker: false,
-});
-
-/** Public. Every live parameter, including the addresses a purchase pays to. */
-export async function getKashStatus(): Promise<KashStatus> {
-  return KashStatusSchema.parse(await kashApi.get("/status"));
-}
+// The transport and the status read are shared with the tips slice — see
+// `lib/kash-api.ts` for why they are not owned here.
+export { getKashStatus } from "@/lib/kash-api";
 
 /**
  * Wallet-scoped. The BFF proves this wallet is the caller's own before the

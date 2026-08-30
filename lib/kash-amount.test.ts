@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { compareKashAmounts, exceedsBalance, isKashAmount } from "./kash-amount.ts";
+import {
+  KASH_DECIMALS,
+  KASH_TOKEN_DECIMALS,
+  compareKashAmounts,
+  exceedsBalance,
+  isKashAmount,
+} from "./kash-amount.ts";
 
 test("equal values compare equal however they are written", () => {
   // The trailing-zero case is the one a UI produces constantly: a preset "5"
@@ -81,4 +87,12 @@ test("an UNKNOWN balance never produces a shortfall warning", () => {
   for (const unknown of [null, undefined, ""]) {
     assert.equal(exceedsBalance(unknown, "10"), false, String(unknown));
   }
+});
+
+test("the API's precision and the TOKEN's are different numbers", () => {
+  // Sending 5 KASH as 5e6 instead of 5e18 moves a trillionth of what the
+  // sender agreed to — and the transfer succeeds. Two constants, two names.
+  assert.equal(KASH_DECIMALS, 6);
+  assert.equal(KASH_TOKEN_DECIMALS, 18);
+  assert.notEqual(KASH_DECIMALS, KASH_TOKEN_DECIMALS);
 });

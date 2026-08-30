@@ -8,7 +8,13 @@ import {
 } from "./tip-capability.ts";
 
 /** What production actually publishes today. */
-const LIVE = { enabled: true, minKash: "1", maxKash: "10000", verifiedAuthorsOnly: true };
+const LIVE = {
+  enabled: true,
+  settlement: "client-signed" as const,
+  minKash: "1",
+  maxKash: "10000",
+  verifiedAuthorsOnly: true,
+};
 const verified = { verification: "verified" };
 
 test("the amounts the sheet shipped with are BELOW the server's minimum", () => {

@@ -221,6 +221,20 @@ export const PostSchema = z.object({
  */
 export const TipCapabilitySchema = z.object({
   enabled: z.boolean(),
+  /**
+   * HOW a tip settles, and therefore what the client must do.
+   *
+   * `rail` — the service moves the money and the tip is confirmed by the time
+   * the call returns. `client-signed` — the kash rail cannot pay a third
+   * party (it exposes mint and burn and no transfer, and the platform is
+   * non-custodial), so the SENDER signs a KSH transfer themselves and the tip
+   * stays pending until the chain is observed.
+   *
+   * Defaulted to `rail` for a service that predates the field, because that is
+   * what those deployments do. Treating an unknown value as client-signed
+   * would leave the sender waiting to sign something nobody asked for.
+   */
+  settlement: z.enum(["rail", "client-signed"]).catch("rail").default("rail"),
   minKash: z.string(),
   maxKash: z.string(),
   verifiedAuthorsOnly: z.boolean(),

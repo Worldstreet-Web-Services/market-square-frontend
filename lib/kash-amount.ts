@@ -27,6 +27,19 @@
 export const KASH_DECIMALS = 6;
 
 /**
+ * The KSH ERC-20's OWN precision, which is not the API's.
+ *
+ * The engine speaks in 6 decimal places; the token on Base holds 18. A tip is
+ * a transfer of that token, so an amount crossing from one to the other must
+ * be re-scaled — sending `5` KASH as 5×10^6 instead of 5×10^18 moves a
+ * trillionth of what the sender agreed to, and the transaction succeeds.
+ *
+ * Two constants rather than one, named for what each describes, so the two can
+ * never be confused for a single "KASH precision".
+ */
+export const KASH_TOKEN_DECIMALS = 18;
+
+/**
  * Digits, optionally one dot, optionally more digits. No sign, no exponent, no
  * separators — deliberately the same shape `lib/tips.ts` accepts, because an
  * amount that reached the wire as `1e3` or `1,000` would be read differently
