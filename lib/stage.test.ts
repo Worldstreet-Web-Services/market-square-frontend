@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   CROP_BUDGET,
+  baseIdentity,
   buildStage,
   chooseFit,
   cropLoss,
@@ -537,5 +538,83 @@ describe("fit, by construction", () => {
     assert.match(cockpit, /function describeFraming/);
     assert.match(cockpit, /letterboxed/);
     assert.match(cockpit, /cropped view/);
+  });
+});
+
+describe("the user behind a LiveKit identity", () => {
+  /**
+   * REGRESSION: a host could never remove a guest.
+   *
+   * An approved speaker rejoins as `<did>#speaker`, because LiveKit will not
+   * let one identity hold two connections while the old one drains. The
+   * remove control passed that identity into a lookup keyed on the speaker
+   * request's `userId` — the bare DID — so it never matched, every attempt
+   * said "couldn't find that guest's request", and the guest stayed on stage.
+   */
+  it("strips the speaker suffix so both sides agree", () => {
+    assert.equal(baseIdentity("did:privy:abc123#speaker"), "did:privy:abc123");
+    assert.equal(baseIdentity("did:privy:abc123"), "did:privy:abc123");
+  });
+
+  it("is idempotent — a bare id survives it unchanged", () => {
+    const bare = "did:privy:abc123";
+    assert.equal(baseIdentity(baseIdentity(bare)), bare);
+  });
+
+  it("leaves a non-DID identity alone", () => {
+    assert.equal(baseIdentity("host"), "host");
+    assert.equal(baseIdentity(""), "");
+  });
+});
+
+describe("the host is the host, however they published", () => {
+  /**
+   * REGRESSION: the host was classified as a GUEST.
+   *
+   * They publish as `<did>#speaker` — the same suffix an approved guest gets,
+   * because LiveKit will not let one identity hold two connections — while
+   * `hostIdentity` is the stream's plain `ownerId`. Compared raw they never
+   * matched, so the host's own tile carried no Host chip, offered a remove
+   * button, and could reflow out from under the viewer.
+   */
+  const publication = (): StagePublication => ({
+    trackSid: "t1",
+    isMuted: false,
+    source: "camera",
+    track: {},
+  });
+  const participant = (identity: string): StageParticipant => ({
+    identity,
+    permissions: { canPublish: true },
+    videoTrackPublications: new Map([["t1", publication()]]),
+    audioTrackPublications: new Map(),
+  });
+
+  it("recognises a host publishing under the speaker suffix", () => {
+    const room: StageRoom = {
+      localParticipant: participant("did:privy:host#speaker"),
+      remoteParticipants: new Map([["g", participant("did:privy:guest#speaker")]]),
+    };
+    const slots = buildStage(room, "did:privy:host");
+    assert.equal(slots[0].role, "host");
+    assert.equal(slots[0].identity, "did:privy:host#speaker");
+    assert.equal(slots[1].role, "guest");
+  });
+
+  it("still recognises a host publishing under the bare id", () => {
+    const room: StageRoom = {
+      localParticipant: participant("did:privy:host"),
+      remoteParticipants: new Map(),
+    };
+    assert.equal(buildStage(room, "did:privy:host")[0].role, "host");
+  });
+
+  it("does not promote a guest whose id merely starts the same", () => {
+    const room: StageRoom = {
+      localParticipant: participant("did:privy:hostile#speaker"),
+      remoteParticipants: new Map(),
+    };
+    assert.equal(buildStage(room, "did:privy:host").length, 1);
+    assert.equal(buildStage(room, "did:privy:host")[0].role, "guest");
   });
 });

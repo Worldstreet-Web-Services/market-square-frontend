@@ -166,11 +166,30 @@ function toSlot(participant: StageParticipant, role: "host" | "guest"): StageSlo
  * on both counts: it tells two unnamed guests apart without publishing either
  * one's identifier.
  */
+/**
+ * The USER behind a LiveKit identity.
+ *
+ * An approved speaker rejoins the room as `<did>#speaker` — a distinct
+ * identity, because LiveKit will not let one identity hold two connections
+ * while the old one is still draining. Everything OUTSIDE the room, though,
+ * knows them by the plain DID: the speaker-request row, the profile, the
+ * ledger.
+ *
+ * Forgetting that broke removing a guest. The host's control passed the tile's
+ * identity — the `#speaker` one — into a lookup keyed on the request's
+ * `userId`, which is the bare DID, so it never matched and every attempt said
+ * "couldn't find that guest's request" while the guest stayed on stage. One
+ * function, used by both sides, so the two can no longer disagree.
+ */
+export function baseIdentity(identity: string): string {
+  return identity.split("#")[0] ?? identity;
+}
+
 export function participantLabel(name: string | undefined, identity: string): string {
   const given = name?.trim();
   if (given) return given;
   // Approved speakers join as `<did>#speaker`, so drop the suffix first.
-  const base = identity.split("#")[0] ?? identity;
+  const base = baseIdentity(identity);
   const tail = base.slice(-4).toUpperCase();
   return base.startsWith("did:") ? `Guest ${tail}` : base;
 }
@@ -187,7 +206,13 @@ export function buildStage(room: StageRoom, hostIdentity: string): StageSlot[] {
 
   for (const participant of everyone) {
     if (!participant || seen.has(participant.identity)) continue;
-    const isHost = Boolean(hostIdentity) && participant.identity === hostIdentity;
+    // Compared on the BASE identity, because the host publishes as
+    // `<did>#speaker` while `hostIdentity` is the stream's plain `ownerId`.
+    // Comparing them raw never matched, so the host was classified as a guest:
+    // no Host chip on their own tile, a remove button offered on it, and their
+    // slot free to reflow out from under the viewer.
+    const isHost =
+      Boolean(hostIdentity) && baseIdentity(participant.identity) === baseIdentity(hostIdentity);
     // Read permissions fresh off the participant every time. LiveKit mutates
     // this object in place on ParticipantPermissionsChanged, and the documented
     // race is exactly a client trusting a role it cached at join.
