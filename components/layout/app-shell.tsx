@@ -165,7 +165,10 @@ function visibleNav(options: {
   );
 }
 
-const WIDE_EXACT = ["/store", "/operations"];
+// Messages is two panes side by side — the conversation list and the thread
+// it opens — so it needs the width a right rail would take. On a phone the
+// panes swap instead, which is why only the exact path is wide.
+const WIDE_EXACT = ["/store", "/operations", "/messages"];
 const WIDE_PREFIX = ["/store/", "/operations/", "/studio/"];
 
 function isWide(pathname: string): boolean {

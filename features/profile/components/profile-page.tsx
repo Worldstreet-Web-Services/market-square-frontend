@@ -9,7 +9,8 @@ import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IconCalendar } from "@/components/ui/icons";
+import { IconCalendar, IconFlag, IconShield } from "@/components/ui/icons";
+import { IconMsMore } from "@/components/ui/design-icons";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
@@ -47,23 +48,59 @@ function FollowButton({ profile }: { profile: Profile }) {
   );
 }
 
+/**
+ * Report and block, behind the same "more" disc a post uses.
+ *
+ * They were two full-width text buttons in the header row, which on a phone
+ * left four actions and a 112px avatar fighting over ~343px of content width —
+ * Follow ended up jammed against the right edge. Safety actions are also the
+ * two nobody is reaching for on a normal visit, so the row keeps the actions a
+ * visitor came to use (Message, Follow) and puts these behind the menu.
+ */
 function SafetyActions({ profile }: { profile: Profile }) {
+  const [open, setOpen] = useState(false);
   const safety = useProfileSafety(profile);
   const gate = useGate();
+  const blockDisabled = safety.blockUnavailable || safety.block.isPending;
   return (
-    <div className="flex gap-2">
-      <Button variant="ghost" size="sm" onClick={() => gate(() => safety.report.mutate())}>Report</Button>
-      {/* Once the service has answered "no such route", the danger-styled
-          button stops offering an action it cannot perform. */}
-      <Button
-        variant={profile.isBlocked ? "secondary" : "danger"}
-        size="sm"
-        disabled={safety.blockUnavailable || safety.block.isPending}
-        title={safety.blockUnavailable ? "Blocking isn't available yet" : undefined}
-        onClick={() => gate(() => safety.block.mutate(!profile.isBlocked))}
+    <div className="relative">
+      <button
+        aria-label="More options"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="ws-press flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5 text-grey-100 transition-colors hover:bg-white/10"
       >
-        {profile.isBlocked ? "Unblock" : "Block"}
-      </Button>
+        <IconMsMore className="h-5 w-5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="ws-popover ws-popover-enter absolute right-0 z-20 mt-1 w-48 rounded-2xl p-1.5">
+            <button
+              onClick={() => {
+                setOpen(false);
+                gate(() => safety.report.mutate());
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
+            >
+              <IconFlag className="h-4 w-4" /> Report
+            </button>
+            {/* Once the service has answered "no such route", the entry stops
+                offering an action it cannot perform. */}
+            <button
+              disabled={blockDisabled}
+              title={safety.blockUnavailable ? "Blocking isn't available yet" : undefined}
+              onClick={() => {
+                setOpen(false);
+                gate(() => safety.block.mutate(!profile.isBlocked));
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-down transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <IconShield className="h-4 w-4" /> {profile.isBlocked ? "Unblock" : "Block"}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -291,7 +328,7 @@ export function ProfilePage({
         back
       />
 
-      <GradientThumb seed={data.username} className="h-36 w-full sm:h-44" />
+      <GradientThumb seed={data.username} className="h-32 w-full sm:h-44" />
 
       <div className="px-4 pb-3">
         <div className="flex items-start justify-between gap-3">
@@ -299,11 +336,25 @@ export function ProfilePage({
               cover above is `relative` (positioned), and within one stacking
               context positioned elements paint above in-flow block boxes — so
               an unpositioned avatar pulled up over the cover had its top half
-              painted over by it. */}
-          <div className="relative z-10 -mt-14 rounded-full border-4 border-black sm:-mt-16">
-            <Avatar name={data.displayName} seed={data.id} src={data.avatarUrl} size={112} />
+              painted over by it.
+
+              88px on a phone, 112 from `sm` up: at 112 the disc plus its ring
+              ate 120 of ~343px of content width and squeezed the action row
+              into the right edge. Sized by class, not by `size`, because the
+              inline width/height `size` writes would beat the breakpoint. */}
+          <div className="relative z-10 -mt-11 rounded-full border-4 border-black sm:-mt-16">
+            <Avatar
+              name={data.displayName}
+              seed={data.id}
+              src={data.avatarUrl}
+              size={112}
+              sizeClassName="h-22 w-22 sm:h-28 sm:w-28"
+            />
           </div>
-          <div className="flex items-center gap-2 pt-3">
+          {/* `flex-wrap` with `justify-end` is the last-resort escape: a long
+              Message label or a future action drops onto a second line rather
+              than shrinking every pill into its own text. */}
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-3">
             {isMe ? (
               <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
                 Edit profile
@@ -319,13 +370,16 @@ export function ProfilePage({
         </div>
 
         <div className="mt-3">
-          <h1 className="ws-display flex items-center gap-2 text-xl">
-            {data.displayName}
+          <h1 className="ws-display flex flex-wrap items-center gap-x-2 text-xl">
+            <span className="min-w-0 break-words">{data.displayName}</span>
             <VerifiedBadge verification={data.verification} className="h-5 w-5" />
             <OrgBadgeChip orgBadge={data.orgBadge} />
             <RoleChip role={data.role} />
           </h1>
-          <p className="text-[15px] text-meta">@{data.username}</p>
+          {/* An unclaimed member's username is their Privy DID — 40-odd
+              unbroken characters. Without a wrap rule it runs past the column
+              on a phone; `break-all` is the only break this string offers. */}
+          <p className="break-all text-[15px] text-meta">@{data.username}</p>
         </div>
 
         {data.bio && <p className="mt-3 text-[15px] leading-normal text-body">{data.bio}</p>}
