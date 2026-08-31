@@ -39,10 +39,15 @@ import { MESSAGE_MAX, type Conversation, type Message } from "@/features/message
  * header, two ahead of the composer field — plus the send button, which is the
  * same shape in purple.
  *
- * Geometry is the source's, literally: 38.37px, a #0A0A0A fill, a 1px white
- * ring, and 8.077px of padding around the glyph. #0A0A0A had to be read off a
- * render: the node tree reports these fills as fully transparent, which is a
- * serialisation artefact — they paint solid black in the file.
+ * Geometry is the source's, literally: 38.37px, no fill, a 1px white ring, and
+ * 8.077px of padding around the glyph.
+ *
+ * The fill really is nothing. #11064:5761, :5764, :5770 and :5773 each report
+ * `rgba(0, 0, 0, 0)`, and this was once read as a serialisation artefact and
+ * painted #0A0A0A. It is not one: the send button (#11064:5780) sits in the
+ * same node tree and reports its #7E3BEB fill perfectly well, so transparency
+ * is not being lost on the way out — these circles simply have no fill, and
+ * the pane behind them is meant to show through.
  */
 function CircleButton({
   label,
@@ -73,9 +78,16 @@ function CircleButton({
       title={title}
       aria-label={label}
       className={cn(
-        "ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full border border-white transition-opacity",
-        accent ? "bg-spotlight" : "bg-[#0A0A0A]",
-        disabled ? "cursor-not-allowed" : "hover:opacity-80",
+        // The source fills every one of these `rgba(0, 0, 0, 0)` and strokes
+        // it #FFFFFF — only send (#11064:5780) carries a fill, #7E3BEB, and it
+        // keeps the same white stroke. A near-black fill reads as a lighter
+        // disc over the #080808 composer bar and blocks the header's blur.
+        "ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full border border-white transition-colors disabled:opacity-40",
+        accent ? "bg-spotlight" : "bg-transparent",
+        // Neither hover nor disabled exists as a state in the source — these
+        // are the house treatments, the same wash the post card's "more" disc
+        // and the column header's back arrow use.
+        disabled ? "cursor-not-allowed" : "hover:bg-white/10",
         className
       )}
     >
@@ -319,7 +331,6 @@ function Composer({ conversationId }: { conversationId: string }) {
           size={16}
           onClick={submit}
           disabled={!body || send.isPending}
-          className={cn(!body || send.isPending ? "opacity-40" : undefined)}
           icon={
             send.isPending ? (
               <Spinner className="h-4 w-4 text-white" />
