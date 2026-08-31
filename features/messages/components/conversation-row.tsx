@@ -3,7 +3,7 @@
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
-import { VerifiedBadge } from "@/components/ui/badge";
+import { OrgBadgeChip } from "@/components/ui/badge";
 import Image from "next/image";
 import type { Conversation } from "@/features/messages/lib/types";
 
@@ -60,14 +60,16 @@ export function ConversationRow({
           <span className="truncate text-[12px] font-bold leading-4 text-white">
             {peer?.displayName ?? "Unknown"}
           </span>
-          {/* The file draws a small capsule here on four rows of five. It is a
-              38×5 squiggle with no semantics, and the one row without it is the
-              one whose peer is unverified — so it is read as the verified mark
-              and drawn with the house badge. The exported asset is kept at
-              public/messages/row-badge.svg if the literal shape is wanted. */}
-          {peer?.verification && (
-            <VerifiedBadge verification={peer.verification} className="h-3 w-3 shrink-0" />
-          )}
+          {/*
+            The capsule the file draws beside four names of five is the ORG
+            badge, not a verified check: it is OrgBadgeChip's own recipe — 4%
+            fill, hairline border, ~13.29px radius — and the exported glyph
+            carries only white marks, which `org-badge-glyphs.tsx` records as
+            MARKET's signature (ARK dims its flanking marks to #979797 at 18%).
+            The one row drawn without it is a peer with NO org badge, not an
+            unverified peer.
+          */}
+          {peer?.orgBadge && <OrgBadgeChip orgBadge={peer.orgBadge} className="scale-[0.65]" />}
         </span>
 
         <span className="flex items-center gap-2 truncate text-[11px] font-normal leading-[16.5px] text-white/50">
