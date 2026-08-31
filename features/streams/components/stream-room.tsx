@@ -6,7 +6,7 @@ import {
   useLiveReactions,
   type LiveGiftPacket,
 } from "@/features/streams/hooks/use-live-reactions";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
@@ -64,6 +64,7 @@ import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker
 import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
 import { TicketSheet } from "@/features/streams/components/ticket-sheet";
 import { streamPriceLabel } from "@/features/streams/components/stream-card";
+import { stageFrameAspect } from "@/features/streams/lib/stage";
 import type { Stream } from "@/features/streams/lib/types";
 import { MARKET_FLAGS } from "@/lib/market-config";
 
@@ -101,12 +102,15 @@ function PlaybackSurface({
   mode,
   onNeedTicket,
   onQuality,
+  onSourceAspect,
 }: {
   stream: Stream;
   mode: "live" | "replay";
   onNeedTicket: () => void;
   /** Renditions reported by hls.js, so the control bar can offer a real pick. */
   onQuality?: (api: QualityApi | null) => void;
+  /** The broadcast's own shape, which the frame around this surface adopts. */
+  onSourceAspect?: (aspect: number | null) => void;
 }) {
   const playback = usePlaybackToken(stream.id, true);
   const [playing, setPlaying] = useState(false);
@@ -170,6 +174,7 @@ function PlaybackSurface({
         url={playback.data.url}
         token={playback.data.token}
         onPlayingChange={setPlaying}
+        onSourceAspect={onSourceAspect}
         onRemoveGuest={isHost ? guests.remove : undefined}
         removing={guests.removing}
         fill
@@ -182,6 +187,7 @@ function PlaybackSurface({
       captionSrc={playback.data.captionUrl}
       onPlayingChange={setPlaying}
       onQuality={onQuality}
+      onSourceAspect={onSourceAspect}
       fill
     />
   );
@@ -192,10 +198,12 @@ function StageBody({
   stream,
   onOpenTickets,
   onQuality,
+  onSourceAspect,
 }: {
   stream: Stream;
   onOpenTickets: () => void;
   onQuality?: (api: QualityApi | null) => void;
+  onSourceAspect?: (aspect: number | null) => void;
 }) {
   const gate = useGate();
   // Ark game broadcast → the route back into Ark. Null for native streams and
@@ -258,11 +266,23 @@ function StageBody({
       );
     }
     return (
-      <PlaybackSurface stream={stream} mode="replay" onNeedTicket={() => gate(onOpenTickets)} onQuality={onQuality} />
+      <PlaybackSurface
+        stream={stream}
+        mode="replay"
+        onNeedTicket={() => gate(onOpenTickets)}
+        onQuality={onQuality}
+        onSourceAspect={onSourceAspect}
+      />
     );
   }
   return (
-    <PlaybackSurface stream={stream} mode="live" onNeedTicket={() => gate(onOpenTickets)} onQuality={onQuality} />
+    <PlaybackSurface
+      stream={stream}
+      mode="live"
+      onNeedTicket={() => gate(onOpenTickets)}
+      onQuality={onQuality}
+      onSourceAspect={onSourceAspect}
+    />
   );
 }
 
@@ -486,6 +506,12 @@ export function StreamRoom({
   const [paused, setPaused] = useState(true);
   const [quality, setQuality] = useState<QualityApi | null>(null);
   const [qualityOpen, setQualityOpen] = useState(false);
+  // What is actually being published, measured by the player, null until the
+  // first frame's metadata arrives. `stageFrameAspect` turns it into the shape
+  // the desktop frame takes — see the comment on that function for why the
+  // frame follows the source rather than the other way round.
+  const [sourceAspect, setSourceAspect] = useState<number | null>(null);
+  const frameAspect = stageFrameAspect(sourceAspect);
 
   useEffect(() => {
     const timers = reactionTimers.current;
@@ -936,13 +962,27 @@ export function StreamRoom({
 
         {/* ---- Player -------------------------------------------------- */}
         <div className="absolute inset-0 lg:static lg:min-h-0 lg:flex-1">
-          <div className="relative h-full w-full bg-black">
-            <div className="h-full w-full bg-black lg:mx-auto lg:aspect-[9/16] lg:w-auto lg:border-x lg:border-white/10">
+          <div className="relative h-full w-full bg-black lg:flex lg:items-center lg:justify-center">
+            {/* The frame takes the SHAPE OF THE STREAM, within limits: 9:16 for
+                a phone camera or an unmeasured stream, up to 16:9 for a
+                landscape one. It used to be 9:16 unconditionally, which is why
+                a host filling their studio tile with a landscape camera watched
+                the same camera become a strip in a black column here.
+
+                Phone stays full-bleed: the stage IS the viewport there, with
+                the chrome floating over it, and there is no spare width to give
+                a wide source. Whatever letterbox survives at either breakpoint
+                is filled by the stage's blurred backdrop rather than by black. */}
+            <div
+              style={{ "--stage-aspect": frameAspect } as CSSProperties}
+              className="h-full w-full bg-black lg:aspect-[var(--stage-aspect)] lg:w-auto lg:max-w-full lg:border-x lg:border-white/10"
+            >
               <div ref={stageRef} className="h-full w-full">
                 <StageBody
                   stream={data}
                   onOpenTickets={() => setTicketsOpen(true)}
                   onQuality={setQuality}
+                  onSourceAspect={setSourceAspect}
                 />
               </div>
             </div>

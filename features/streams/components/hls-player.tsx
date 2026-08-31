@@ -21,12 +21,20 @@ export interface QualityApi {
 export function HlsPlayer({
   src,
   onPlayingChange,
+  onSourceAspect,
   fill = false,
   captionSrc,
   onQuality,
 }: {
   src: string;
   onPlayingChange?: (playing: boolean) => void;
+  /**
+   * The stream's intrinsic shape, so the page can size its frame to the
+   * broadcast rather than to an assumption. An Ark game feed is 16:9 and was
+   * being dropped into a 9:16 column, which is the same letterbox the LiveKit
+   * stage had.
+   */
+  onSourceAspect?: (aspect: number | null) => void;
   /** Full-bleed mode: fills the parent instead of a rounded 16:9 box. */
   fill?: boolean;
   captionSrc?: string | null;
@@ -41,6 +49,30 @@ export function HlsPlayer({
   useEffect(() => {
     qualityRef.current = onQuality;
   }, [onQuality]);
+  const aspectRef = useRef(onSourceAspect);
+  useEffect(() => {
+    aspectRef.current = onSourceAspect;
+  }, [onSourceAspect]);
+
+  // Intrinsic size is not known before metadata, and it CHANGES: an HLS ladder
+  // can switch to a rendition of a different shape mid-stream, which fires
+  // `resize` and not `loadedmetadata`.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const read = () => {
+      const { videoWidth, videoHeight } = video;
+      aspectRef.current?.(videoWidth > 0 && videoHeight > 0 ? videoWidth / videoHeight : null);
+    };
+    video.addEventListener("loadedmetadata", read);
+    video.addEventListener("resize", read);
+    read();
+    return () => {
+      video.removeEventListener("loadedmetadata", read);
+      video.removeEventListener("resize", read);
+      aspectRef.current?.(null);
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;

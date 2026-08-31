@@ -39,6 +39,7 @@ export function LiveKitPlayer({
   url,
   token,
   onPlayingChange,
+  onSourceAspect,
   fill = false,
   onRemoveGuest,
   removing,
@@ -50,6 +51,11 @@ export function LiveKitPlayer({
   url: string;
   token: string;
   onPlayingChange?: (playing: boolean) => void;
+  /**
+   * The shape of a solo publisher's video, forwarded straight from the stage.
+   * The page above sizes its frame with it — see `stageFrameAspect`.
+   */
+  onSourceAspect?: (aspect: number | null) => void;
   /** Full-bleed mode: fills the parent instead of a rounded 16:9 box. */
   fill?: boolean;
   /** Host moderation, when the viewer owns the stream. Absent for everyone else. */
@@ -141,6 +147,7 @@ export function LiveKitPlayer({
         room={room}
         hostIdentity={hostIdentity}
         onStageChange={onStageChange}
+        onSourceAspect={onSourceAspect}
         onRemoveGuest={onRemoveGuest}
         removing={removing}
       />

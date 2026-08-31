@@ -45,9 +45,75 @@ export interface TileFitReport {
   key: string;
   identity: string;
   isScreenShare: boolean;
+  /** Ours, so the cockpit's framing hint can still speak only about us. */
+  isLocal: boolean;
   fit: TileFit;
   /** Fraction of the frame `cover` would discard, 0..1. */
   loss: number;
+  /**
+   * The source's intrinsic width/height, null until metadata lands. Reported
+   * because the STAGE, not just the tile, needs it: a watch page that knows a
+   * solo publisher is landscape can shape its frame to them instead of posting
+   * them into a portrait hole.
+   */
+  sourceAspect: number | null;
+}
+
+/**
+ * The letterbox fill: the same video, blown up, blurred, sunk behind the tile.
+ *
+ * Bars are unavoidable somewhere — a phone's full-bleed stage is 9:16 and a
+ * landscape camera is not, and cropping to fit would throw away two thirds of
+ * the picture. What IS avoidable is the bars being dead black, which is what
+ * made the reported stage read as broken rather than as letterboxed. Filling
+ * them with a defocused blow-up of the frame is what TikTok and Instagram do
+ * with an off-shape source, and it costs no extra stream: LiveKit attaches one
+ * track to as many elements as you like, so this is the frames we already have,
+ * painted twice.
+ *
+ * Cameras only. A shared screen keeps black bars: blurring code and slides out
+ * into the margins reads as a rendering fault, and every other product
+ * (Meet, Zoom, Twitch) letterboxes a screen onto black.
+ *
+ * Mounted AFTER the video in DOM order and pushed behind it with z-index,
+ * because the watch page reaches into the stage with `querySelector("video")`
+ * for its transport controls and must keep finding the real one.
+ */
+function TileBackdrop({
+  track,
+}: {
+  track: { attach: () => HTMLMediaElement; detach: (el: HTMLMediaElement) => unknown };
+}) {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const element = track.attach() as HTMLVideoElement;
+    element.autoplay = true;
+    element.playsInline = true;
+    element.muted = true;
+    element.className = "h-full w-full";
+    // Always fills, whatever the shape — this element IS the fill, so it is not
+    // a fit decision and never goes through `chooseFit`. Set in JS for the same
+    // reason the tile's own fit is: no re-attach when the source changes shape.
+    element.style.objectFit = "cover";
+    mount.replaceChildren(element);
+    return () => {
+      track.detach(element);
+      element.remove();
+    };
+  }, [track]);
+
+  return (
+    <div
+      ref={mountRef}
+      aria-hidden
+      // scale-110 hides the blur's soft edge; the dim keeps the backdrop
+      // subordinate to the picture it sits behind.
+      className="pointer-events-none absolute inset-0 z-0 scale-110 opacity-60 blur-2xl"
+    />
+  );
 }
 
 function MediaTile({
@@ -150,20 +216,44 @@ function MediaTile({
   }, [onFit]);
   useEffect(() => {
     report.current?.(
-      hideVideo ? null : { key: tile.key, identity: slot.identity, isScreenShare: isScreen, fit, loss }
+      hideVideo
+        ? null
+        : {
+            key: tile.key,
+            identity: slot.identity,
+            isScreenShare: isScreen,
+            isLocal: slot.isLocal,
+            fit,
+            loss,
+            sourceAspect,
+          }
     );
-  }, [hideVideo, fit, loss, tile.key, slot.identity, isScreen]);
+  }, [hideVideo, fit, loss, tile.key, slot.identity, isScreen, slot.isLocal, sourceAspect]);
+  // Leaving takes the report with it. A guest who drops off the stage must stop
+  // voting on its shape, and the stage's record must not grow for the length of
+  // a long session.
+  useEffect(() => () => report.current?.(null), []);
 
   // Letterbox bars are the stage GROUND, never the tile surface: bars have to
-  // read as absence, not as a lighter panel drawn around the video.
+  // read as absence, not as a lighter panel drawn around the video. It stays
+  // the ground under the backdrop too — the blur is translucent, and it is what
+  // is showing for the frame or two before the second element paints.
   const box = cn("absolute inset-0", fit === "contain" && "bg-[#0A0A0B]", hideVideo && "hidden");
+  // Only when there are bars TO fill, and never behind a screen share.
+  const backdrop = fit === "contain" && !hideVideo && !isScreen && track ? track : null;
 
   return (
     <div ref={frameRef} className={cn(TILE, className)}>
       {useOwnAttach ? (
-        <div ref={mountRef} className={box} />
+        <div className={box}>
+          <div ref={mountRef} className="relative z-10 h-full w-full" />
+          {backdrop && <TileBackdrop track={backdrop} />}
+        </div>
       ) : (
-        <div className={box}>{localTile}</div>
+        <div className={box}>
+          <div className="relative z-10 h-full w-full">{localTile}</div>
+          {backdrop && <TileBackdrop track={backdrop} />}
+        </div>
       )}
 
       {/* Camera off, or approved and still bringing a device up. NEVER a black
@@ -275,6 +365,7 @@ export function LiveStage({
   emptyState,
   onStageChange,
   onLocalFit,
+  onSourceAspect,
 }: {
   room: Room | null;
   /** The stream's ownerId — LiveKit identities are user ids here. */
@@ -294,6 +385,13 @@ export function LiveStage({
    * other way to learn that viewers are seeing bars, or missing the edges.
    */
   onLocalFit?: (reports: TileFitReport[]) => void;
+  /**
+   * The shape of a SOLO publisher's source, so the page around the stage can
+   * take that shape instead of guessing one. Null while the stage is empty, is
+   * a grid of several people, or has not measured anything yet — in all three
+   * cases the caller's default frame is the right one.
+   */
+  onSourceAspect?: (aspect: number | null) => void;
 }) {
   const all = useStageSlots(room, hostIdentity);
   const slots = all.slice(0, MAX_STAGE_SLOTS);
@@ -326,7 +424,10 @@ export function LiveStage({
         existing &&
         existing.fit === report.fit &&
         existing.isScreenShare === report.isScreenShare &&
-        Math.abs(existing.loss - report.loss) < 0.01
+        Math.abs(existing.loss - report.loss) < 0.01 &&
+        // Without this the frame would never hear about a phone rotating: the
+        // fit stays `contain` either side of the turn while the aspect flips.
+        Math.abs((existing.sourceAspect ?? 0) - (report.sourceAspect ?? 0)) < 0.01
       ) {
         return previous;
       }
@@ -338,8 +439,25 @@ export function LiveStage({
     localFit.current = onLocalFit;
   }, [onLocalFit]);
   useEffect(() => {
-    localFit.current?.(Object.values(fits));
+    localFit.current?.(Object.values(fits).filter((report) => report.isLocal));
   }, [fits]);
+
+  // One person on the main stage — a solo camera, or a single shared screen —
+  // is the case where the stage can honestly take the source's shape. Put two
+  // people up and the shape belongs to the GRID again (lib/stage-layout), so
+  // nothing is reported and the caller keeps its portrait column.
+  const soloKey = primary.length === 1 ? primary[0].key : null;
+  const soloAspect = soloKey ? fits[soloKey]?.sourceAspect ?? null : null;
+  const announceAspect = useRef(onSourceAspect);
+  useEffect(() => {
+    announceAspect.current = onSourceAspect;
+  }, [onSourceAspect]);
+  useEffect(() => {
+    announceAspect.current?.(soloAspect);
+  }, [soloAspect]);
+  // Leaving the stage hands the frame back, so a page that outlives this
+  // component does not stay shaped to a stream that ended.
+  useEffect(() => () => announceAspect.current?.(null), []);
 
   const [audioBlocked, setAudioBlocked] = useState(false);
   useEffect(() => {
@@ -396,11 +514,10 @@ export function LiveStage({
                 localTile={localTile}
                 onRemove={onRemoveGuest}
                 removing={removing}
-                onFit={
-                  tile.slot.isLocal
-                    ? (report) => handleFit(report, tile.key)
-                    : undefined
-                }
+                // Every tile on the main stage reports, not just our own: the
+                // shape a VIEWER's frame should take is the shape of whoever
+                // is on it, and on the watch page that is never us.
+                onFit={(report) => handleFit(report, tile.key)}
               />
             ))}
           </div>
