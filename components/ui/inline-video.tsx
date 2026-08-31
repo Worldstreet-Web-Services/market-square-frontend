@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  getFeedSoundServerSnapshot,
+  isFeedSoundOn,
+  setFeedSoundOn,
+  subscribeFeedSound,
+} from "@/lib/feed-sound";
 import { cn } from "@/lib/cn";
 import { IconVolume } from "@/components/ui/icons";
 import { MediaFrame } from "@/components/ui/media-frame";
@@ -26,7 +32,19 @@ export function InlineVideo({
   className?: string;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState(true);
+  /**
+   * Sound is a SESSION choice, not this video's private state.
+   *
+   * It used to be `useState(true)` here, so turning sound on for one clip and
+   * scrolling to the next put the reader back in silence — every video asked
+   * the same question and no answer ever carried. One store, every video.
+   */
+  const soundOn = useSyncExternalStore(
+    subscribeFeedSound,
+    isFeedSoundOn,
+    getFeedSoundServerSnapshot
+  );
+  const muted = !soundOn;
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
@@ -48,10 +66,14 @@ export function InlineVideo({
           // an error worth surfacing.
           void video.play().catch(() => {});
         } else {
+          /*
+            Pause only. Scrolling a clip out of view used to force sound back
+            OFF, which is why turning it on never survived the scroll to the
+            next post — the reader answered, and leaving the video revoked the
+            answer. A paused video is silent on its own, so nothing leaks; the
+            choice now belongs to the session and the next clip honours it.
+          */
           video.pause();
-          // Leaving the viewport also drops sound, so scrolling back never
-          // surprises the reader with audio they did not ask for again.
-          setMuted(true);
         }
       },
       { threshold: 0.6 }
@@ -91,7 +113,8 @@ export function InlineVideo({
           onClick={(event) => {
             // The frame around it may open the video. Sound is not that.
             event.stopPropagation();
-            setMuted((value) => !value);
+            // Answers for every video in the session, not just this one.
+            setFeedSoundOn(muted);
           }}
           aria-label={muted ? "Unmute video" : "Mute video"}
           aria-pressed={!muted}
