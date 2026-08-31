@@ -531,14 +531,26 @@ function StoryViewer({
           </button>
         </div>
 
-        {/* Tap zones: left third steps back, the rest advances. Holding
-            anywhere pauses, the way Instagram does. */}
+        {/*
+          Tap zones: left third steps back, the rest advances. Holding anywhere
+          pauses, the way Instagram does.
+
+          HOVERING pauses too, but only for a mouse. On a touch screen a tap
+          fires `pointerenter` immediately before `pointerdown`, so binding
+          hover unconditionally would be a second, redundant pause on every tap
+          — and on a mouse the story used to run on regardless of whether
+          anyone was reading it, with no way to hold it short of pressing and
+          not letting go. `pointerType` is what separates the two, and it is
+          why this is not just `onMouseEnter`: a pen reports as a mouse-like
+          device without being one.
+        */}
         <button
           aria-label="Previous story"
           className="absolute inset-y-0 left-0 z-10 w-1/3"
           onClick={previous}
           onPointerDown={() => setPaused(true)}
           onPointerUp={() => setPaused(false)}
+          onPointerEnter={(event) => event.pointerType === "mouse" && setPaused(true)}
           onPointerLeave={() => setPaused(false)}
         />
         <button
@@ -547,6 +559,7 @@ function StoryViewer({
           onClick={next}
           onPointerDown={() => setPaused(true)}
           onPointerUp={() => setPaused(false)}
+          onPointerEnter={(event) => event.pointerType === "mouse" && setPaused(true)}
           onPointerLeave={() => setPaused(false)}
         />
 

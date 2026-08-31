@@ -43,3 +43,25 @@ describe("story video sound", () => {
     assert.match(source, /measured\?\.key === storyKey \? measured\.ms : STORY_MS/);
   });
 });
+
+describe("holding a story", () => {
+  // Pressing already paused; a mouse had no way to hold at all, so a story
+  // ran on whether or not anyone was reading it.
+  test("hovering pauses, and only for a mouse", () => {
+    const enters = source.match(/onPointerEnter=\{\(event\) =>[^}]*\}/g) ?? [];
+    assert.equal(enters.length, 2, "both tap zones pause on hover");
+    for (const handler of enters) {
+      assert.match(
+        handler,
+        /event\.pointerType === "mouse"/,
+        "a tap fires pointerenter too — touch must not take this path"
+      );
+      assert.match(handler, /setPaused\(true\)/);
+    }
+  });
+
+  test("leaving resumes, however the pause began", () => {
+    const leaves = source.match(/onPointerLeave=\{\(\) => setPaused\(false\)\}/g) ?? [];
+    assert.equal(leaves.length, 2, "a story must never be left paused forever");
+  });
+});
