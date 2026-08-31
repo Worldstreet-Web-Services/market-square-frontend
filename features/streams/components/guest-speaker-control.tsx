@@ -1,13 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import { IconCamera, IconDots, IconUser, IconVolume } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
-import { STAGE_FAILURES, useStage } from "@/features/streams/hooks/use-stage";
+import { useStage } from "@/features/streams/hooks/use-stage";
+import { guestStagePanel, type SpeakerRequestStatus } from "@/lib/stage-recovery";
 import {
   useMySpeakerRequest,
   useRequestToSpeak,
@@ -28,50 +29,49 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
   // already watching from. `joinUrl`/`joinToken` are deliberately unused — a
   // speaker token carries the same LiveKit identity as the playback token, so
   // connecting with it evicts the viewer and starts the reconnect loop that
-  // killed the page on mobile.
+  // killed the page on mobile. The playback token the player already refetches
+  // is what carries the publish grant.
   const publisher = useStage({ streamId: stream.id, approved, previewRef });
 
-  const statusLabel = approved ? "On stage" : mine.data?.status === "pending" ? "Requested" : "Join live";
-
-  // One message and one remedy per failure class. These used to be a single
-  // "Allow camera and microphone access", which was actively misleading for
-  // every case except a real permission refusal — the reported bug was a busy
-  // device, where no permission prompt will ever appear.
-  const failed = STAGE_FAILURES.includes(publisher.state);
-  const stageMessage =
-    publisher.state === "not-permitted"
-      ? (publisher.error ?? "The host hasn't finished bringing you on stage yet.")
-      : publisher.state === "waiting-for-room"
-        ? "Connecting to the stream…"
-        : publisher.state === "awaiting-grant"
-          ? "The host approved you — waiting for the stage to open your mic…"
-        : publisher.state === "denied"
-      ? "Allow camera and microphone access to join."
-        : publisher.state === "device-busy"
-          ? "Your camera or microphone is in use by another app or browser tab. Close it and try again."
-          : publisher.state === "device-missing"
-            ? "No camera or microphone found. Connect one, or check another app is not holding it, then try again."
-            : publisher.state === "failed"
-              ? (publisher.error ?? "Couldn't put you on stage.")
-              : "Putting you on stage…";
-
   /**
-   * On stage, the mic and camera come OUT of the sheet.
+   * On stage means PUBLISHING, not "the host said yes".
    *
-   * Both toggles have always existed — inside this component's dialog, which
-   * meant a guest who was live in front of an audience had to open a dialog
-   * over the stream, find the button, and close it again in order to mute. In
-   * practice that reads as "I can't mute": nobody hunts through a modal while
-   * they are on camera, and the one moment you need to mute is the one moment
-   * you cannot afford to go looking. They are now persistent controls in the
-   * same rail as everything else, in the cockpit's own grammar (44px circle,
-   * MIC/MUTED written out, danger fill when off) so the guest's controls and
-   * the host's are the same controls.
-   *
-   * The sheet stays for what genuinely belongs in one: the join request, the
-   * waiting state, the self-preview, device errors and Leave stage.
+   * This one line is the bug. It used to be `approved` alone, so a guest whose
+   * camera was busy, whose grant never landed, or whose connection had come
+   * back on a subscribe-only token was shown the on-stage panel — mic toggle,
+   * camera toggle, and a "Leave stage" button — while the stage did not
+   * contain them. The only route back to "Request to join" was to leave a
+   * stage they were never on. See lib/stage-recovery.ts.
    */
   const onStage = approved && publisher.state === "live";
+
+  const status: SpeakerRequestStatus | null =
+    (mine.data?.status as SpeakerRequestStatus | undefined) ?? null;
+  const panel = guestStagePanel({ status, state: publisher.state, error: publisher.error });
+  const statusLabel =
+    panel.kind === "live" ? "On stage" : status === "pending" ? "Requested" : "Join live";
+
+  /**
+   * Start over, in one tap.
+   *
+   * This is the sequence the reporter was performing by hand — withdraw the
+   * approval that is no longer doing anything, then ask again — and doing it
+   * by hand is what made the state feel stuck, because the only button that
+   * began it was labelled "Leave stage" and they were not on one. `leave` is
+   * still the correct call: it is the guest's own self-service resolution, and
+   * it is what frees the backend to accept a new request (an open row is
+   * returned rather than duplicated).
+   */
+  const requestId = mine.data?.id;
+  const requestAgain = useCallback(() => {
+    if (!requestId) return;
+    resolve.mutate(
+      { requestId, action: "leave" },
+      { onSuccess: () => request.mutate() }
+    );
+  }, [requestId, resolve, request]);
+
+  const busy = resolve.isPending || request.isPending;
 
   return (
     <>
@@ -116,57 +116,60 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
           </button>
         </>
       ) : (
+        /* Not publishing, whatever the row says — so this is still the JOIN
+           button, and a guest whose stage attempt died lands back where they
+           expect rather than on a mute toggle that controls nothing. The dot
+           marks a state that needs them: approved, and not on stage. */
         <button
           onClick={() => gate(() => setOpen(true))}
-          aria-label="Request to join this live"
-          className="ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full bg-black/50 text-heading"
+          aria-label={panel.kind === "recover" ? "Rejoin the stage" : "Request to join this live"}
+          className="ws-press relative flex h-11 w-11 flex-col items-center justify-center rounded-full bg-black/50 text-heading"
         >
+          {panel.kind === "recover" && (
+            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-down" />
+          )}
           <IconUser className="h-5 w-5" />
           <span className="mt-0.5 text-[8px] font-bold">JOIN</span>
         </button>
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title="Join this LIVE">
-        {/* The spec's terminal states are denied/withdrawn/removed. This read
-            "declined"/"left" — names the backend never sends — so a viewer who
-            had been denied or had stepped down could never ask again. */}
-        {!mine.data || ["denied", "withdrawn", "removed"].includes(mine.data.status) ? (
+        {/* The panel is decided in lib/stage-recovery.ts from two separate
+            facts — what the host decided, and what this connection is actually
+            doing — because conflating them is what produced the stuck state.
+            The spec's terminal statuses are denied/withdrawn/removed; an
+            earlier version read "declined"/"left", names the backend never
+            sends, so a viewer who had been turned down could never ask again. */}
+        {panel.kind === "request" ? (
           <div className="space-y-4 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/8">
               <IconCamera className="h-7 w-7 text-accent" />
             </div>
             <div>
               <p className="text-sm font-semibold text-heading">Ask to speak with the host</p>
-              <p className="mt-1 text-xs leading-5 text-grey-400">The host can bring you on stage. Your camera and microphone only start after approval.</p>
+              <p className="mt-1 text-xs leading-5 text-grey-400">{panel.message}</p>
             </div>
             <Button className="w-full" loading={request.isPending} onClick={() => request.mutate()}>
               Request to join
             </Button>
           </div>
-        ) : mine.data.status === "pending" ? (
+        ) : panel.kind === "waiting" ? (
           <div className="space-y-4 py-4 text-center">
             <span className="mx-auto block h-3 w-3 animate-pulse rounded-full bg-accent" />
             <p className="text-sm font-semibold text-heading">Waiting for the host</p>
-            <p className="text-xs text-grey-400">You can keep watching. This panel updates automatically.</p>
+            <p className="text-xs text-grey-400">{panel.message}</p>
           </div>
         ) : (
           <div className="space-y-3">
             <div ref={previewRef} className="aspect-video overflow-hidden rounded-2xl bg-black">
-              {publisher.state !== "live" && (
+              {panel.kind !== "live" && (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-grey-400">
-                  <p>{stageMessage}</p>
-                  {/* Every terminal state gets a way out. Without this the panel
-                      was a dead end: no failure, no retry, just a spinner. */}
-                  {failed && (
-                    <Button size="sm" variant="secondary" onClick={publisher.retry}>
-                      Retry
-                    </Button>
-                  )}
+                  <p>{panel.message}</p>
                 </div>
               )}
             </div>
             {/* Audio-only is a SUCCESS, not a failure — say what happened and
                 leave the camera toggle live so it can come up later. */}
-            {publisher.audioOnly && publisher.state === "live" && (
+            {publisher.audioOnly && panel.kind === "live" && (
               <p className="rounded-xl bg-white/5 px-3 py-2 text-center text-xs text-grey-300">
                 Joined with microphone only — camera unavailable.
                 {publisher.error ? ` ${publisher.error}` : ""} You can turn the
@@ -174,22 +177,55 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
               </p>
             )}
             <p className="text-center text-sm font-semibold text-heading">{statusLabel}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant={publisher.micOn ? "secondary" : "danger"} onClick={() => void publisher.toggleMic()}>
-                {publisher.micOn ? "Mute" : "Unmute"}
-              </Button>
-              <Button variant={publisher.camOn ? "secondary" : "danger"} onClick={() => void publisher.toggleCam()}>
-                {publisher.camOn ? "Camera off" : "Camera on"}
-              </Button>
-            </div>
-            <Button
-              variant="ghost"
-              className="w-full"
-              loading={resolve.isPending}
-              onClick={() => resolve.mutate({ requestId: mine.data!.id, action: "leave" })}
-            >
-              Leave stage
-            </Button>
+            {panel.kind === "live" && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant={publisher.micOn ? "secondary" : "danger"} onClick={() => void publisher.toggleMic()}>
+                  {publisher.micOn ? "Mute" : "Unmute"}
+                </Button>
+                <Button variant={publisher.camOn ? "secondary" : "danger"} onClick={() => void publisher.toggleCam()}>
+                  {publisher.camOn ? "Camera off" : "Camera on"}
+                </Button>
+              </div>
+            )}
+            {/* Every action the panel decided on, in its order — the first is
+                the one that matches the cause. Nothing here is a dead end, and
+                "leave" is never the only thing on offer. */}
+            {panel.actions.map((action) =>
+              action === "retry" ? (
+                <Button key={action} className="w-full" onClick={publisher.retry}>
+                  Try camera and mic again
+                </Button>
+              ) : action === "rejoin" ? (
+                <Button key={action} className="w-full" onClick={publisher.rejoin}>
+                  Rejoin stage
+                </Button>
+              ) : action === "request-again" ? (
+                <Button
+                  key={action}
+                  variant="secondary"
+                  className="w-full"
+                  loading={busy}
+                  onClick={requestAgain}
+                >
+                  Ask to join again
+                </Button>
+              ) : action === "leave" ? (
+                <Button
+                  key={action}
+                  variant="ghost"
+                  className="w-full"
+                  loading={resolve.isPending}
+                  onClick={() => requestId && resolve.mutate({ requestId, action: "leave" })}
+                >
+                  {/* Truthful in both cases. Calling it "Leave stage" while the
+                      guest is not on one is the sentence that made this bug
+                      feel inescapable — you cannot leave somewhere you have
+                      never been, and being told to is what made it read as
+                      stuck. */}
+                  {panel.kind === "live" ? "Leave stage" : "Give up my spot"}
+                </Button>
+              ) : null
+            )}
           </div>
         )}
       </Sheet>
@@ -235,7 +271,8 @@ export function SpeakerRequestQueue({ stream }: { stream: Stream }) {
       {active.length > 0 && (
         <p className="text-[11px] leading-4 text-grey-600">
           Approved guests may still be connecting. If you cannot hear someone,
-          their camera or microphone may be blocked or in use by another app.
+          their camera or microphone may be blocked or in use by another app —
+          they can rejoin from their own Join panel without you re-approving.
         </p>
       )}
       {!requests.isPending && pending.length === 0 && active.length === 0 && (
