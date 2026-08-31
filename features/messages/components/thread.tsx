@@ -250,8 +250,19 @@ function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
         </p>
 
         <span className="flex shrink-0 items-center gap-1">
-          {/* #8A8A8A on BOTH bubbles, which is what the source specifies. */}
-          <span className="tnum text-[12px] font-medium leading-4 tracking-[-0.005em] text-[#8A8A8A]">
+          {/*
+            The source gives the two bubbles DIFFERENT timestamp greys —
+            #8A8A8A on the white, #999999 on the purple — and one value was
+            being used for both. The lighter grey is not decoration: #8A8A8A
+            on #7E3BEB is about 1.6:1 and unreadable, which is what the flat
+            value produced on every incoming message.
+          */}
+          <span
+            className={cn(
+              "tnum text-[12px] font-medium leading-4 tracking-[-0.005em]",
+              mine ? "text-[#8A8A8A]" : "text-[#999999]"
+            )}
+          >
             {formatClockTime(message.createdAt)}
           </span>
           {mine && <SentMark />}
