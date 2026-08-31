@@ -181,28 +181,21 @@ function ThreadHeader({
         </div>
       </div>
 
-      {/* The source's two trailing controls, at its geometry. Neither has
-          anything behind it yet: the product has no calling of any kind, and
-          there is no thread-level menu on the messages service — no mute,
-          block, report or delete. They are real `disabled` buttons rather than
-          decoration, so they look exactly as drawn but announce themselves as
-          unavailable and cannot be clicked or tabbed into. */}
-      <div className="flex shrink-0 items-center gap-4">
-        <CircleButton
-          label="Start a video call"
-          title="Video calls are not available yet"
-          disabled
-          size={16}
-          icon={<Image src="/messages/call.svg" alt="" width={16} height={16} />}
-        />
-        <CircleButton
-          label="Conversation options"
-          title="Conversation options are not available yet"
-          disabled
-          size={24}
-          icon={<Image src="/messages/more.svg" alt="" width={24} height={24} />}
-        />
-      </div>
+      {/*
+        The source draws two trailing controls here — a video call and a
+        conversation menu — and both are HIDDEN rather than drawn.
+
+        Nothing is behind either one: the product has no calling of any kind,
+        and the messages service has no thread-level menu (no mute, block,
+        report or delete). A disabled button still reads as a feature that is
+        one tap away, and a screen full of things that cannot be used teaches
+        people to stop trying them.
+
+        The geometry is preserved above in `CircleButton` and the icons are in
+        public/messages/, so restoring either is a few lines the day its route
+        lands.
+      */}
+
     </header>
   );
 }
@@ -289,24 +282,16 @@ function Composer({ conversationId }: { conversationId: string }) {
     // to an opaque value. The hairline above is the source's 10%.
     <div className="flex min-h-20 shrink-0 flex-col justify-center gap-1 border-t border-white/10 bg-[#080808] px-6 py-4">
       <div className="flex items-center gap-4">
-        {/* The source's two leading controls. `POST /conversations/:id/messages`
-            takes a `text` body and nothing else — no upload, no media id, no
-            audio — so neither can send anything yet. Drawn exactly as the
-            source has them, and genuinely `disabled` rather than faked. */}
-        <CircleButton
-          label="Attach a file"
-          title="Attachments are not available yet"
-          disabled
-          size={24}
-          icon={<Image src="/messages/attach.svg" alt="" width={24} height={24} />}
-        />
-        <CircleButton
-          label="Record a voice note"
-          title="Voice notes are not available yet"
-          disabled
-          size={24}
-          icon={<Image src="/messages/voice.svg" alt="" width={24} height={24} />}
-        />
+        {/*
+          The source draws an attachment button and a voice-note button here.
+          Both are HIDDEN: `POST /conversations/:id/messages` requires `text`
+          and accepts nothing else — no upload, no media id, no audio — and
+          `ConversationMessage` has no field to carry one back, so neither
+          could send anything even if it opened a picker.
+
+          They return when the message payload can hold something other than
+          text; the icons and the button geometry are kept for that day.
+        */}
 
         <label className="sr-only" htmlFor="message-composer">
           Write a message
