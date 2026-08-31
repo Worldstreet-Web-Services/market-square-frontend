@@ -98,7 +98,20 @@ export function EcosystemPartnersRail() {
       {/* The card's top edge sits 49px down the block: 17 of inset, a 20px
           heading, 12 of gap. */}
       <div className="relative mt-3 h-[156px] overflow-hidden rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] backdrop-blur-[7px]">
-        <div className="absolute left-4 top-6 flex w-[195px] max-w-[calc(100%-128px)] flex-col gap-4">
+        {/*
+          Bounded by BOTH edges, not by a fixed width.
+
+          The text box was 195px wide with the art pinned 112px off the right
+          (16 inset + 96 of art). That leaves 24px of air on the 347px card the
+          design was drawn at — and the rail is not always 347: at its real
+          331px the same numbers leave SIX pixels, so the headline reads as if
+          it is touching the logo.
+
+          `right-32` reserves the art's 112px plus a 16px gutter, so the gap is
+          the same at every rail width and the headline rewraps instead of
+          closing on the art.
+        */}
+        <div className="absolute left-4 right-32 top-6 flex flex-col gap-4">
           <div>
             <p className="whitespace-pre-line text-[18px] font-bold leading-6 tracking-[-0.008em] text-white">
               {slide.headline.lead}
