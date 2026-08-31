@@ -41,6 +41,9 @@ export interface ForwardResult {
   contentType: string;
 }
 
+/** Privy's signed identity token — carries the linked accounts, including the wallet. */
+const PRIVY_IDENTITY_HEADER = "privy-id-token";
+
 export interface ForwardOptions {
   /** The incoming request. Plain `Request` — `NextRequest` satisfies it. */
   req: Request;
@@ -106,6 +109,24 @@ export function multipartBoundary(contentType: string): string | null {
   return value.length > 0 ? value : null;
 }
 
+/**
+ * One cookie out of a Cookie header.
+ *
+ * `req` here is a plain `Request`, deliberately — it is what makes this
+ * testable without Next — so there is no `.cookies` accessor to reach for.
+ */
+function cookieValue(header: string | null, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const index = part.indexOf("=");
+    if (index === -1) continue;
+    if (part.slice(0, index).trim() !== name) continue;
+    const value = part.slice(index + 1).trim();
+    return value.length > 0 ? decodeURIComponent(value) : null;
+  }
+  return null;
+}
+
 export async function forwardToUpstream(options: ForwardOptions): Promise<ForwardResult> {
   const { req, url, method } = options;
   const doFetch = options.fetchImpl ?? fetch;
@@ -119,6 +140,25 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
   const headers: Record<string, string> = { accept: JSON_CT, "x-request-id": requestId };
   const auth = req.headers.get("authorization");
   if (auth) headers.authorization = auth;
+
+  /**
+   * The Privy IDENTITY token, forwarded so the service can learn the caller's
+   * wallet.
+   *
+   * The access token carries only the DID, so without this the service has no
+   * address to pay: every profile is created with a null wallet, and a tip is
+   * refused with "This author has no wallet to receive tips" no matter how
+   * well the rest of the payment path works.
+   *
+   * Safe to forward because the service VERIFIES it — it is a signed token,
+   * not a claim. Read from the cookie as well as the header, since Privy sets
+   * it as a cookie and a plain `fetch` from our own pages sends neither
+   * automatically.
+   */
+  const identity =
+    req.headers.get(PRIVY_IDENTITY_HEADER) ??
+    cookieValue(req.headers.get("cookie"), PRIVY_IDENTITY_HEADER);
+  if (identity) headers[PRIVY_IDENTITY_HEADER] = identity;
 
   let body: ArrayBuffer | undefined;
   if (method !== "GET" && method !== "HEAD") {

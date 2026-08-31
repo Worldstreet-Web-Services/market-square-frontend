@@ -377,3 +377,56 @@ describe("the breaker learns from reads, not from writes", () => {
     resetUpstreamHealth();
   });
 });
+
+describe("the Privy identity token", () => {
+  const capturing = (calls: { headers: Record<string, string> }[]) =>
+    (async (_url: string, init: { headers: Record<string, string> }) => {
+      calls.push({ headers: init.headers });
+      return new Response(JSON.stringify({ success: true, data: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+  it("is forwarded so the service can learn the caller's wallet", async () => {
+    // Without it the service only ever sees the DID, every profile keeps a
+    // null wallet, and a tip is refused with "This author has no wallet to
+    // receive tips" however well the rest of the payment path works.
+    const calls: { headers: Record<string, string> }[] = [];
+    await forwardToUpstream({
+      req: new Request("http://localhost/api/market-square/me", {
+        headers: { "privy-id-token": "signed-identity-token" },
+      }),
+      url: "http://upstream/me",
+      method: "GET",
+      fetchImpl: capturing(calls),
+    });
+    assert.equal(calls[0]!.headers["privy-id-token"], "signed-identity-token");
+  });
+
+  it("is read from the cookie when no header carries it", async () => {
+    // Privy sets it as a cookie, and a plain fetch from our own pages sends
+    // neither header nor cookie upstream on its own.
+    const calls: { headers: Record<string, string> }[] = [];
+    await forwardToUpstream({
+      req: new Request("http://localhost/api/market-square/me", {
+        headers: { cookie: "other=1; privy-id-token=from-cookie; another=2" },
+      }),
+      url: "http://upstream/me",
+      method: "GET",
+      fetchImpl: capturing(calls),
+    });
+    assert.equal(calls[0]!.headers["privy-id-token"], "from-cookie");
+  });
+
+  it("is absent when there is nothing to send", async () => {
+    const calls: { headers: Record<string, string> }[] = [];
+    await forwardToUpstream({
+      req: new Request("http://localhost/api/market-square/me"),
+      url: "http://upstream/me",
+      method: "GET",
+      fetchImpl: capturing(calls),
+    });
+    assert.equal("privy-id-token" in calls[0]!.headers, false);
+  });
+});
