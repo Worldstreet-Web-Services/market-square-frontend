@@ -1,201 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { relativeTime } from "@/lib/format";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { InboxFilters, InboxSearch, type InboxFilter } from "@/features/messages/components/inbox-chrome";
 import { ConversationRow } from "@/features/messages/components/conversation-row";
+import { Thread } from "@/features/messages/components/thread";
 import { ThreadPlaceholder } from "@/features/messages/components/thread-placeholder";
-import { matchesQuery, visibleConversations } from "@/features/messages/lib/filter";
-import { Avatar } from "@/components/ui/avatar";
+import { visibleConversations } from "@/features/messages/lib/filter";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { IconArrowLeft, IconSend } from "@/components/ui/icons";
-import {
-  useConversations,
-  useMarkConversationRead,
-  useMessages,
-  useSendMessage,
-} from "@/features/messages/hooks/use-messages";
-import { MESSAGE_MAX, type Conversation } from "@/features/messages/lib/types";
-
-function Composer({ conversationId }: { conversationId: string }) {
-  const send = useSendMessage(conversationId);
-  const [text, setText] = useState("");
-  const body = text.trim();
-
-  const submit = () => {
-    if (!body || send.isPending) return;
-    send.mutate(body, { onSuccess: () => setText("") });
-  };
-
-  return (
-    <div className="ws-hair sticky bottom-0 border-t bg-ground p-3">
-      <div className="ws-field flex items-end gap-2 px-3 py-2">
-        <label className="sr-only" htmlFor="message-composer">
-          Write a message
-        </label>
-        <textarea
-          id="message-composer"
-          value={text}
-          rows={1}
-          // The service rejects anything longer, so the field stops there too.
-          onChange={(event) => setText(event.target.value.slice(0, MESSAGE_MAX))}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit();
-            }
-          }}
-          placeholder="Write a message…"
-          className="max-h-32 min-w-0 flex-1 resize-none bg-transparent py-1 text-[15px] text-heading outline-none placeholder:text-meta"
-        />
-        <button
-          onClick={submit}
-          disabled={!body || send.isPending}
-          aria-label="Send message"
-          className="ws-press shrink-0 rounded-full p-2 text-accent transition-colors hover:bg-white/10 disabled:opacity-40"
-        >
-          {send.isPending ? <Spinner className="h-4 w-4" /> : <IconSend className="h-4 w-4" />}
-        </button>
-      </div>
-      {text.length > MESSAGE_MAX - 200 && (
-        <p className="tnum mt-1 px-3 text-right text-[11px] text-meta">
-          {MESSAGE_MAX - text.length} left
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Thread({
-  conversation,
-  onBack,
-}: {
-  conversation: Conversation;
-  onBack: () => void;
-}) {
-  const me = useMe();
-  const messages = useMessages(conversation.id, true);
-  const markRead = useMarkConversationRead();
-
-  // Opening the thread is the acknowledgement — once per thread, not on every
-  // poll tick.
-  const acknowledged = useRef<string | null>(null);
-  useEffect(() => {
-    if (acknowledged.current === conversation.id) return;
-    acknowledged.current = conversation.id;
-    if (conversation.unreadCount > 0) markRead.mutate(conversation.id);
-  }, [conversation.id, conversation.unreadCount, markRead]);
-
-  // The service returns newest-first; a thread reads oldest-first.
-  const items = [...(messages.data?.items ?? [])].reverse();
-
-  return (
-    <>
-      <ColumnHeader
-        title={conversation.peer?.displayName ?? "Conversation"}
-        subtitle={conversation.peer ? `@${conversation.peer.username}` : undefined}
-        action={
-          <button
-            onClick={onBack}
-            aria-label="Back to inbox"
-            className="ws-press rounded-full p-2 text-heading transition-colors hover:bg-white/10"
-          >
-            <IconArrowLeft className="h-5 w-5" />
-          </button>
-        }
-      />
-
-      <div className="flex flex-col gap-2 p-4">
-        {messages.isPending && [0, 1, 2].map((i) => <RowSkeleton key={i} />)}
-        {messages.isError && (
-          <ErrorState
-            error={messages.error}
-            fallback="Couldn't load this conversation."
-            onRetry={() => messages.refetch()}
-          />
-        )}
-        {messages.isSuccess && items.length === 0 && (
-          <EmptyState
-            glyph="◇"
-            title="No messages yet"
-            body={`Say hello to ${conversation.peer?.displayName ?? "them"}.`}
-          />
-        )}
-
-        {items.map((message) => {
-          const mine = Boolean(me.data && message.senderId === me.data.id);
-          return (
-            <div
-              key={message.id}
-              className={cn("flex items-end gap-2", mine && "flex-row-reverse")}
-            >
-              {/* The thread is 1:1 and the payload carries no `sender`, so the
-                  only other participant is the peer. Reading it from the
-                  conversation is what makes the bubble avatar match the same
-                  person everywhere else. */}
-              {!mine && (
-                <Avatar
-                  name={conversation.peer?.displayName ?? "?"}
-                  seed={message.senderId || conversation.peer?.id}
-                  src={conversation.peer?.avatarUrl}
-                  size={28}
-                />
-              )}
-              <div
-                className={cn(
-                  "max-w-[75%] rounded-2xl px-3.5 py-2",
-                  mine ? "bg-accent text-ink" : "ws-inset text-body"
-                )}
-              >
-                <p
-                  className={cn(
-                    "whitespace-pre-wrap break-words text-[15px] leading-normal",
-                    message.status === "removed" && "italic opacity-60"
-                  )}
-                >
-                  {message.status === "removed" ? "Message removed" : message.text}
-                </p>
-                <p
-                  className={cn(
-                    "mt-1 text-[11px]",
-                    mine ? "text-ink/60" : "text-meta"
-                  )}
-                >
-                  {relativeTime(message.createdAt)}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <Composer conversationId={conversation.id} />
-    </>
-  );
-}
-
-/** The inbox preview line. `lastMessage` is a full message object, so the row
-    can say who sent it — "You: " when the viewer did, which is the standard
-    inbox affordance — and a removed message keeps its row without its body. */
-function Preview({ conversation, meId }: { conversation: Conversation; meId?: string }) {
-  const last = conversation.lastMessage;
-  if (!last) return <>No messages yet</>;
-  if (last.status === "removed") return <span className="italic">Message removed</span>;
-  const mine = Boolean(meId && last.senderId === meId);
-  return (
-    <>
-      {mine && <span className="text-body">You: </span>}
-      {last.text}
-    </>
-  );
-}
+import { useConversations } from "@/features/messages/hooks/use-messages";
+import { type Conversation } from "@/features/messages/lib/types";
 
 function Inbox({
   onOpen,
