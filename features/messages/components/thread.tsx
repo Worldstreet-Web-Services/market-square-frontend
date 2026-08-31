@@ -216,9 +216,14 @@ function ThreadHeader({
  *
  * Own messages are the WHITE bubble on the right, the peer's the purple one on
  * the left — the source's assignment, and the inverse of the usual convention.
- * It is not a misread: only the right-hand bubbles carry the sent mark, and
- * only outgoing messages have one. Both fills were sampled off a render:
- * #FFFFFF and #7E3BEB exactly.
+ * The evidence is position, not colour: every #FFFFFF bubble ends at x=8607
+ * and every #7E3BEB one starts at x=7833, in a pane spanning 7810..8631.
+ *
+ * Do NOT re-derive this from the sent marks. The source draws a check on all
+ * four bubbles, incoming included (#8A8A8A on the white, #999999 on the
+ * purple), which is a duplicated component rather than an instruction — a
+ * read receipt on a message the peer sent us says nothing. Only `mine` gets
+ * one here, and that is a deliberate departure from the file.
  */
 function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
   const removed = message.status === "removed";
