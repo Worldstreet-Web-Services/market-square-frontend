@@ -253,6 +253,17 @@ const PENDING_ROUTES = {
       "Ships with PR #148, same gate as the route above: unreachable while " +
       "the tray is unpriced. DELETE THIS ENTRY once PR #148 is deployed.",
   },
+  "post /streams/{}/reactions": {
+    reason:
+      "Records a burst of hearts against a live stream's tally, which is the " +
+      "half of a reaction that has to outlive the animation. Built on the " +
+      "service (apps/market-square) and not yet DEPLOYED, so it is absent " +
+      "from the running spec — until it is, the room draws and broadcasts " +
+      "hearts exactly as it does today and the write simply fails silently, " +
+      "which is already how a failed heart behaves. DELETE THIS ENTRY once " +
+      "the reactions change is deployed and the route appears in " +
+      "openapi.json.",
+  },
   "post /streams/{}/tickets/{}/transfer": {
     reason:
       "The buyer reports the KSH transfer they signed for a ticket. Built on " +

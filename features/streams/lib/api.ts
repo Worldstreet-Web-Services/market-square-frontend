@@ -17,6 +17,7 @@ import {
   SpeakerRequestSchema,
   StreamListSchema,
   StreamSchema,
+  StreamReactionSchema,
   StreamStatsSchema,
   TicketSchema,
   type StreamCategory,
@@ -46,6 +47,24 @@ export async function fetchStreams(params: {
 
 export async function fetchStream(id: string) {
   return StreamSchema.parse(await msApi.get(`/streams/${id}`));
+}
+
+/**
+ * Record a burst of hearts against the stream, and read back the real tally.
+ *
+ * The floating hearts still travel over the room's data channel — that is what
+ * makes them instant and what lets a dropped one simply not appear. This is
+ * the other half: the COUNT, which has to survive the moment the animation is
+ * about. Without it the header read 0 for the whole broadcast however hard the
+ * room tapped, because nothing had ever been asked to count.
+ *
+ * A burst, not a tap, because callers coalesce: holding the button is one
+ * request a second rather than one per heart.
+ */
+export async function reactToStream(streamId: string, burst: number) {
+  return StreamReactionSchema.parse(
+    await msApi.post(`/streams/${streamId}/reactions`, { burst })
+  );
 }
 
 export async function quoteTicket(streamId: string, tier: TicketTier) {
