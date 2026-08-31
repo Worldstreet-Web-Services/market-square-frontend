@@ -56,6 +56,20 @@ export async function purchaseTicket(streamId: string, tier: TicketTier) {
   return TicketSchema.parse(await msApi.post(`/streams/${streamId}/tickets`, { tier }));
 }
 
+/**
+ * Report the transfer the buyer signed for a ticket.
+ *
+ * The service RECORDS this and grants nothing: a hash from a client is a
+ * claim, not proof, so the ticket stays pending until the watcher observes
+ * that transfer paying the treasury the exact price from the buyer's own
+ * wallet. Nothing here may tell the buyer they are in.
+ */
+export async function reportTicketTransfer(streamId: string, ticketId: string, txHash: string) {
+  return TicketSchema.parse(
+    await msApi.post(`/streams/${streamId}/tickets/${ticketId}/transfer`, { txHash })
+  );
+}
+
 export async function fetchPlaybackToken(streamId: string) {
   return PlaybackSchema.parse(await msApi.post(`/streams/${streamId}/playback-token`));
 }

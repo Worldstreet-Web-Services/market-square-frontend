@@ -104,6 +104,19 @@ export const TicketSchema = z.object({
   status: z.enum(["pending", "confirmed", "failed", "refunded"]).catch("confirmed"),
   createdAt: z.string().optional().default(""),
   confirmedAt: z.string().nullable().optional().default(null),
+  /**
+   * The transfer the buyer signed, once reported. Null until then, and null
+   * forever on a ticket the rail settled server-side.
+   */
+  txHash: z.string().nullable().optional().default(null),
+  /**
+   * Where to send the money, on a deployment the BUYER settles.
+   *
+   * Present only when the service cannot move the money itself. Its presence
+   * IS the instruction: a ticket that comes back carrying a wallet is not paid
+   * for yet, and the buyer's own signature is what completes it.
+   */
+  toWallet: z.string().nullable().optional().default(null),
 });
 
 export const StreamSchema = z.object({
