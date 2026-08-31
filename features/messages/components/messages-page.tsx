@@ -7,6 +7,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
+import { InboxFilters, InboxSearch, type InboxFilter } from "@/features/messages/components/inbox-chrome";
+import { ConversationRow } from "@/features/messages/components/conversation-row";
+import { ThreadPlaceholder } from "@/features/messages/components/thread-placeholder";
+import { matchesQuery, visibleConversations } from "@/features/messages/lib/filter";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -193,87 +197,86 @@ function Preview({ conversation, meId }: { conversation: Conversation; meId?: st
   );
 }
 
-function Inbox({ onOpen }: { onOpen: (conversation: Conversation) => void }) {
+function Inbox({
+  onOpen,
+  selectedId,
+}: {
+  onOpen: (conversation: Conversation) => void;
+  selectedId?: string;
+}) {
   const conversations = useConversations();
   const me = useMe();
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<InboxFilter>("all");
   const sentinel = useInfiniteScroll(
     () => conversations.fetchNextPage(),
     Boolean(conversations.hasNextPage && !conversations.isFetchingNextPage)
   );
 
   const items = conversations.data?.pages.flatMap((page) => page.items) ?? [];
+  const shown = visibleConversations(items, filter, query);
+  const unreadTotal = items.filter((conversation) => conversation.unreadCount > 0).length;
 
   return (
     <>
       <ColumnHeader title="Messages" subtitle="Your conversations across the square" />
 
-      {conversations.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
-      {conversations.isError && (
-        <div className="p-4">
+      <div className="flex flex-col gap-6 px-6 pb-4 pt-6">
+        <InboxSearch value={query} onChange={setQuery} />
+        <InboxFilters value={filter} onChange={setFilter} unreadCount={unreadTotal} />
+      </div>
+
+      <div className="flex flex-col gap-4 px-6 pb-6">
+        {conversations.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
+
+        {conversations.isError && (
           <ErrorState
             error={conversations.error}
             fallback="Couldn't load your messages."
             onRetry={() => conversations.refetch()}
           />
-        </div>
-      )}
-      {conversations.isSuccess && items.length === 0 && (
-        <div className="p-4">
+        )}
+
+        {conversations.isSuccess && items.length === 0 && (
           <EmptyState
             glyph="◇"
             title="No conversations yet"
             body="Open someone's profile and start one."
           />
-        </div>
-      )}
+        )}
 
-      {items.map((conversation) => (
-        <button
-          key={conversation.id}
-          onClick={() => onOpen(conversation)}
-          className={cn(
-            "ws-row flex w-full items-center gap-3 px-4 py-3 text-left",
-            conversation.unreadCount > 0 && "bg-white/4"
-          )}
-        >
-          <Avatar
-            name={conversation.peer?.displayName ?? "?"}
-            seed={conversation.peer?.id} src={conversation.peer?.avatarUrl}
-            size={40}
+        {/* A filter or a search that matches nothing is NOT an empty inbox, and
+            saying "no conversations yet" there would be a lie the user can
+            disprove by clearing the box. */}
+        {conversations.isSuccess && items.length > 0 && shown.length === 0 && (
+          <EmptyState
+            glyph="◇"
+            title={query.trim() ? "No matches" : "Nothing unread"}
+            body={
+              query.trim()
+                ? "No conversation matches that search."
+                : "Every conversation here has been read."
+            }
           />
-          <span className="min-w-0 flex-1">
-            <span className="flex items-baseline gap-2">
-              <span className="truncate text-[15px] font-bold text-heading">
-                {conversation.peer?.displayName ?? "Unknown"}
-              </span>
-              {/* The message's own timestamp is the truthful one — the
-                  conversation's lastMessageAt can lag it. */}
-              {(conversation.lastMessage?.createdAt ?? conversation.lastMessageAt) && (
-                <span className="shrink-0 text-[12px] text-meta">
-                  {relativeTime(
-                    conversation.lastMessage?.createdAt ?? conversation.lastMessageAt!
-                  )}
-                </span>
-              )}
-            </span>
-            <span className="mt-0.5 block truncate text-[14px] text-meta">
-              <Preview conversation={conversation} meId={me.data?.id} />
-            </span>
-          </span>
-          {conversation.unreadCount > 0 && (
-            <span className="tnum flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-spotlight px-1.5 text-[11px] font-bold text-white">
-              {conversation.unreadCount}
-            </span>
-          )}
-        </button>
-      ))}
+        )}
 
-      <div ref={sentinel} />
-      {conversations.isFetchingNextPage && (
-        <div className="flex justify-center py-6">
-          <Spinner className="h-6 w-6 text-meta" />
-        </div>
-      )}
+        {shown.map((conversation) => (
+          <ConversationRow
+            key={conversation.id}
+            conversation={conversation}
+            meId={me.data?.id}
+            selected={conversation.id === selectedId}
+            onOpen={() => onOpen(conversation)}
+          />
+        ))}
+
+        <div ref={sentinel} />
+        {conversations.isFetchingNextPage && (
+          <div className="flex justify-center py-6">
+            <Spinner className="h-6 w-6 text-meta" />
+          </div>
+        )}
+      </div>
     </>
   );
 }
@@ -305,6 +308,35 @@ export function MessagesPage() {
     );
   }
 
-  if (open) return <Thread conversation={open} onBack={() => setOpen(null)} />;
-  return <Inbox onOpen={setOpen} />;
+  return (
+    <div className="flex min-h-full">
+      {/*
+        Two panes on a desktop, one at a time on a phone.
+
+        The list is a fixed 395 because that is what the design fixes it at —
+        347 of content inside 24px gutters — and a conversation list that
+        reflows with the window makes the previews rewrap on every drag. The
+        thread takes whatever is left.
+
+        On a phone the list gives way to the thread entirely, which is why the
+        route is only wide at its exact path.
+      */}
+      <div
+        className={cn(
+          "w-full shrink-0 lg:w-[395px] lg:border-r lg:border-white/10",
+          open && "hidden lg:block"
+        )}
+      >
+        <Inbox onOpen={setOpen} selectedId={open?.id} />
+      </div>
+
+      <div className={cn("min-w-0 flex-1", !open && "hidden lg:block")}>
+        {open ? (
+          <Thread conversation={open} onBack={() => setOpen(null)} />
+        ) : (
+          <ThreadPlaceholder />
+        )}
+      </div>
+    </div>
+  );
 }
