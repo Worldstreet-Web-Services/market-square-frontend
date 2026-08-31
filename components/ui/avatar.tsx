@@ -23,6 +23,7 @@ export function Avatar({
   seed,
   src,
   size = 40,
+  sizeClassName,
   className,
   ring = false,
 }: {
@@ -31,10 +32,19 @@ export function Avatar({
   seed?: string | null;
   src?: string | null;
   size?: number;
+  /**
+   * Sizing by CLASS instead of the inline `width`/`height`, for the one case
+   * `size` cannot express: an avatar that changes size at a breakpoint. Inline
+   * styles beat utilities, so a responsive class on `className` alone would
+   * never win — this replaces the inline pair rather than fighting it. `size`
+   * is still required and still feeds the intrinsic dimensions and the
+   * initials' font size; pass the larger of the two.
+   */
+  sizeClassName?: string;
   className?: string;
   ring?: boolean;
 }) {
-  const style = { width: size, height: size };
+  const style = sizeClassName ? undefined : { width: size, height: size };
   const ringClass = ring ? "ring-2 ring-accent/70 ring-offset-2 ring-offset-black" : "";
 
   // The display name is the last resort, so a caller with no id still gets a
@@ -48,7 +58,7 @@ export function Avatar({
         src={src}
         alt={name}
         style={style}
-        className={cn("shrink-0 rounded-full object-cover", ringClass, className)}
+        className={cn("shrink-0 rounded-full object-cover", sizeClassName, ringClass, className)}
       />
     );
   }
@@ -65,7 +75,7 @@ export function Avatar({
         width={size}
         height={size}
         style={style}
-        className={cn("shrink-0 rounded-full object-cover", ringClass, className)}
+        className={cn("shrink-0 rounded-full object-cover", sizeClassName, ringClass, className)}
       />
     );
   }
@@ -75,6 +85,7 @@ export function Avatar({
       style={style}
       className={cn(
         "flex shrink-0 select-none items-center justify-center rounded-full border border-white/10 bg-grey-700 text-grey-200",
+        sizeClassName,
         ringClass,
         className
       )}
