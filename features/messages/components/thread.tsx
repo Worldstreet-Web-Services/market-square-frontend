@@ -35,69 +35,54 @@ import { MESSAGE_MAX, type Conversation, type Message } from "@/features/message
  */
 
 /**
- * The round icon button that appears four times across this pane — two in the
- * header, two ahead of the composer field — plus the send button, which is the
- * same shape in purple.
+ * The send button.
  *
- * Geometry is the source's, literally: 38.37px, no fill, a 1px white ring, and
- * 8.077px of padding around the glyph.
+ * The one round control on this pane that does anything, and the only one of
+ * the five the design draws that survives — see the notes in `ThreadHeader`
+ * and `Composer`.
  *
- * The fill really is nothing. #11064:5761, :5764, :5770 and :5773 each report
- * `rgba(0, 0, 0, 0)`, and this was once read as a serialisation artefact and
- * painted #0A0A0A. It is not one: the send button (#11064:5780) sits in the
- * same node tree and reports its #7E3BEB fill perfectly well, so transparency
- * is not being lost on the way out — these circles simply have no fill, and
- * the pane behind them is meant to show through.
+ * Its properties come from the RAW REST node. A summarised export gets two of
+ * them wrong, and both were shipped at some point: it reports the four dark
+ * circles' fill as `rgba(0, 0, 0, 0)` and omits `strokeWeight` entirely.
+ *
+ *   fills        #7E3BEB solid  (the four dark ones: black @ 0.004 opacity)
+ *   strokes      #FFFFFF, strokeWeight 0
+ *   effects      GLASS
+ *   size         38.37, fully rounded
+ *
+ * So there is NO ring on any of them. A white stroke is declared, but at zero
+ * width it draws nothing — reading the stroke without the weight is what put a
+ * hard white ring on all five. And the dark circles are not empty either, they
+ * are black at 0.4%, which is why sampling a render read them as the page
+ * ground: near enough to nothing that treating them as unfilled was right in
+ * practice, for the wrong reason.
+ *
+ * `backdrop-blur-sm` is the house translation of the GLASS effect — the same
+ * recipe live-hero uses on its round icon buttons. It does nothing visible
+ * over an opaque purple, but keeps this button the material the design drew.
  */
-function CircleButton({
-  label,
-  icon,
-  size,
+function SendButton({
   onClick,
   disabled,
-  title,
-  accent,
-  className,
+  pending,
 }: {
-  label: string;
-  icon: React.ReactNode;
-  /** The glyph's own box — 16 or 24 in the source, per icon. */
-  size: number;
-  onClick?: () => void;
-  disabled?: boolean;
-  title?: string;
-  /** The send button: same circle, purple fill. */
-  accent?: boolean;
-  className?: string;
+  onClick: () => void;
+  disabled: boolean;
+  pending: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={title}
-      aria-label={label}
-      className={cn(
-        // The source fills every one of these `rgba(0, 0, 0, 0)` and strokes
-        // it #FFFFFF — only send (#11064:5780) carries a fill, #7E3BEB, and it
-        // keeps the same white stroke. A near-black fill reads as a lighter
-        // disc over the #080808 composer bar and blocks the header's blur.
-        "ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full border border-white transition-colors disabled:opacity-40",
-        accent ? "bg-spotlight" : "bg-transparent",
-        // Neither hover nor disabled exists as a state in the source — these
-        // are the house treatments, the same wash the post card's "more" disc
-        // and the column header's back arrow use.
-        disabled ? "cursor-not-allowed" : "hover:bg-white/10",
-        className
-      )}
+      aria-label="Send message"
+      className="ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full bg-spotlight backdrop-blur-sm transition-opacity disabled:opacity-40"
     >
-      {/* The source pads these by 8.077px, which is exact for its 16px glyphs
-          and overflows its own 38.37px box for the 24px ones. The glyph's own
-          size is the reliable half of that pair, so it is set here and the
-          circle simply centres it. */}
-      <span className="flex items-center justify-center" style={{ width: size, height: size }}>
-        {icon}
-      </span>
+      {pending ? (
+        <Spinner className="h-4 w-4 text-white" />
+      ) : (
+        <Image src="/messages/send.svg" alt="" width={16} height={16} />
+      )}
     </button>
   );
 }
@@ -181,28 +166,15 @@ function ThreadHeader({
         </div>
       </div>
 
-      {/* The source's two trailing controls, at its geometry. Neither has
-          anything behind it yet: the product has no calling of any kind, and
-          there is no thread-level menu on the messages service — no mute,
-          block, report or delete. They are real `disabled` buttons rather than
-          decoration, so they look exactly as drawn but announce themselves as
-          unavailable and cannot be clicked or tabbed into. */}
-      <div className="flex shrink-0 items-center gap-4">
-        <CircleButton
-          label="Start a video call"
-          title="Video calls are not available yet"
-          disabled
-          size={16}
-          icon={<Image src="/messages/call.svg" alt="" width={16} height={16} />}
-        />
-        <CircleButton
-          label="Conversation options"
-          title="Conversation options are not available yet"
-          disabled
-          size={24}
-          icon={<Image src="/messages/more.svg" alt="" width={24} height={24} />}
-        />
-      </div>
+      {/*
+        The design puts two more round buttons here — a video call and a
+        three-dot menu. Neither is built: the product has no calling of any
+        kind, and there is no thread-level menu on the messages service (no
+        mute, block, report or delete). A control that cannot do anything is
+        worse than no control, so they are not drawn. Their glass recipe is on
+        `SendButton`, and the exported icons are in this commit's history, if
+        either capability lands.
+      */}
     </header>
   );
 }
@@ -278,25 +250,12 @@ function Composer({ conversationId }: { conversationId: string }) {
     // to an opaque value. The hairline above is the source's 10%.
     <div className="flex min-h-20 shrink-0 flex-col justify-center gap-1 border-t border-white/10 bg-[#080808] px-6 py-4">
       <div className="flex items-center gap-4">
-        {/* The source's two leading controls. `POST /conversations/:id/messages`
-            takes a `text` body and nothing else — no upload, no media id, no
-            audio — so neither can send anything yet. Drawn exactly as the
-            source has them, and genuinely `disabled` rather than faked. */}
-        <CircleButton
-          label="Attach a file"
-          title="Attachments are not available yet"
-          disabled
-          size={24}
-          icon={<Image src="/messages/attach.svg" alt="" width={24} height={24} />}
-        />
-        <CircleButton
-          label="Record a voice note"
-          title="Voice notes are not available yet"
-          disabled
-          size={24}
-          icon={<Image src="/messages/voice.svg" alt="" width={24} height={24} />}
-        />
-
+        {/*
+          The design also puts an attachment button and a voice-note button
+          ahead of the field. `POST /conversations/:id/messages` takes a `text`
+          body and nothing else — no upload, no media id, no audio — so neither
+          could ever send anything, and neither is drawn.
+        */}
         <label className="sr-only" htmlFor="message-composer">
           Write a message
         </label>
@@ -305,7 +264,7 @@ function Composer({ conversationId }: { conversationId: string }) {
             inset on a 40px row with its content centred. It grows past 40 on a
             multi-line draft, which the source has no state for — losing
             shift+enter to keep the pill rigid would be the worse trade. */}
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[30px] border border-[#26262B] bg-[#18181C] px-4 py-2">
+        <div className="flex min-h-10 min-w-0 flex-1 items-center rounded-[30px] border border-[#26262B] bg-[#18181C] px-4 py-2">
           <textarea
             id="message-composer"
             value={text}
@@ -321,28 +280,18 @@ function Composer({ conversationId }: { conversationId: string }) {
             placeholder="Write a message…"
             className="max-h-32 min-w-0 flex-1 resize-none bg-transparent text-[13px] leading-5 text-white outline-none placeholder:text-meta"
           />
-          {/* Decoration, not a control — there is no emoji picker in the app,
-              and the live-stream composer draws the same glyph the same way.
-              The exported 20px asset, since the house `IconEmoji` is a plain
-              smiley and the source's carries a plus. */}
-          <span aria-hidden className="shrink-0">
-            <Image src="/messages/emoji.svg" alt="" width={20} height={20} />
-          </span>
+          {/*
+            The design puts an emoji glyph at the right of the field. There is
+            no emoji picker in the app, and an icon sitting inside an input
+            reads as a button whether or not it is one — the same reason the
+            four buttons above are gone. Removed with them.
+          */}
         </div>
 
-        <CircleButton
-          label="Send message"
-          accent
-          size={16}
+        <SendButton
           onClick={submit}
           disabled={!body || send.isPending}
-          icon={
-            send.isPending ? (
-              <Spinner className="h-4 w-4 text-white" />
-            ) : (
-              <Image src="/messages/send.svg" alt="" width={16} height={16} />
-            )
-          }
+          pending={send.isPending}
         />
       </div>
 
