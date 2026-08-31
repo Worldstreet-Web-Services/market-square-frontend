@@ -2,6 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { isStoryVideoMedia, storyCover } from "@/lib/story-cover";
+import {
+  advanceRatio,
+  clipDurationMs,
+  hasOverrun,
+  isAutoplayRefusal,
+  isHeld,
+  mediaToSilence,
+  nextPosition,
+  previousPosition,
+  storyDurationMs,
+  type StoryPosition,
+} from "@/lib/story-playback";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -21,17 +33,11 @@ import { useMe } from "@/hooks/use-me";
 import { useFeed, useStories } from "@/features/feed/hooks/use-feed";
 import type { FeedItem, Post } from "@/features/feed/lib/types";
 
-const STORY_MS = 5000;
-
 /**
- * How long a video story may hold the viewer.
- *
- * A story is a glance, and an author who uploads a ten-minute clip must not be
- * able to freeze the set on it — but cutting every clip at the picture
- * duration was why sound "did not work": you heard five seconds of a
- * thirty-second video and the viewer moved on.
+ * Everything the frame can put keyboard focus on, for the dialog's focus trap.
  */
-const STORY_VIDEO_MAX_MS = 60_000;
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])';
 
 const SEEN_KEY = "ms.stories.seen";
 
@@ -341,22 +347,40 @@ function StoryViewer({
   onClose: () => void;
   onSeen: (storyId: string) => void;
 }) {
-  const [groupIndex, setGroupIndex] = useState(startGroup);
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+  const [at, setAt] = useState<StoryPosition>({ group: startGroup, story: 0 });
+  /*
+   * WHY A SET OF REASONS AND NOT ONE `paused` BOOLEAN.
+   *
+   * A story can be held for several reasons at once — a reader presses and
+   * holds while the cursor is also inside the frame, and the tab goes to the
+   * background while both are true. With one boolean, whichever release fires
+   * first resumes a story the other reason still wants held; worse, a reason
+   * that is never released (see the hover note on the tap zones) leaves the
+   * story frozen with no way back. Each reason clears itself, and the story
+   * runs when none of them is set.
+   */
+  const [pressing, setPressing] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const paused = isHeld({ pressing, hovering, hidden });
   // Progress is driven from the SAME clock that advances the story, so a hold
   // freezes the bar with the story instead of racing on to 100% underneath a
   // paused card.
   const [progress, setProgress] = useState(0);
 
-  const group = groups[groupIndex];
-  const story = group?.stories[index];
-  const storyKey = `${groupIndex}:${index}`;
-  // The authoritative elapsed fraction, so a pause/resume cycle can pick up
-  // where it stopped without re-arming the frame loop on every tick.
+  const sizes = useMemo(() => groups.map((group) => group.stories.length), [groups]);
+  const group = groups[at.group];
+  const story = group?.stories[at.story];
+  const storyKey = `${at.group}:${at.story}`;
+  const isVideo = story ? Boolean(story.mediaUrl) && isStoryVideoMedia(story) : false;
+
+  /** Elapsed wall time on this story, in MILLISECONDS — see `advanceRatio`. */
+  const elapsedRef = useRef(0);
   const progressRef = useRef(0);
   const storyKeyRef = useRef(storyKey);
+  const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const backdropRef = useRef<HTMLVideoElement>(null);
   /**
    * Sound is ON on open and stays wherever the viewer last put it.
    *
@@ -364,8 +388,8 @@ function StoryViewer({
    * the user gesture the autoplay policy asks for — so unmuted playback is
    * normally allowed. "Normally" is not "always" — a browser with no media
    * engagement for the origin can still refuse — which is why the play below
-   * catches the rejection and drops to muted rather than leaving the viewer
-   * on a frozen first frame. Holding the choice across stories is the
+   * catches that ONE rejection and drops to muted rather than leaving the
+   * viewer on a frozen first frame. Holding the choice across stories is the
    * Instagram behaviour — nobody wants to set sound on every clip.
    */
   const [soundOn, setSoundOn] = useState(true);
@@ -377,31 +401,135 @@ function StoryViewer({
    * that impossible without a second render.
    */
   const [measured, setMeasured] = useState<{ key: string; ms: number } | null>(null);
+  const measuredMs = measured?.key === storyKey ? measured.ms : null;
   // A picture holds for the fixed beat; a clip holds for its own length,
   // capped, and falls back to the picture beat until metadata arrives.
-  const durationMs = measured?.key === storyKey ? measured.ms : STORY_MS;
+  const durationMs = storyDurationMs(measuredMs);
+  /**
+   * Whether the CLIP is the clock rather than the wall.
+   *
+   * Only once its length is known: before that there is nothing to be a
+   * fraction of, and a clip that never reports one (a dead link, a file the
+   * browser will not decode) has to stay on the wall clock or the set would
+   * park on it forever.
+   */
+  const clipIsClock = isVideo && measuredMs !== null;
+
+  /**
+   * Stop this viewer's own media, synchronously.
+   *
+   * `AnimatePresence` keeps the viewer mounted through its fade-out, so an
+   * effect cleanup is far too late: the story went on talking over the closing
+   * animation, and over whatever the reader landed on next. Every exit —
+   * the X, Escape, the author link, the CTA, the end of the last story — goes
+   * through here.
+   */
+  const close = useCallback(() => {
+    videoRef.current?.pause();
+    backdropRef.current?.pause();
+    onClose();
+  }, [onClose]);
+
+  const restart = useCallback(() => {
+    elapsedRef.current = 0;
+    progressRef.current = 0;
+    setProgress(0);
+    if (videoRef.current) videoRef.current.currentTime = 0;
+    if (backdropRef.current) backdropRef.current.currentTime = 0;
+  }, []);
 
   // Advance within the author, then to the next author, then close — the
-  // Instagram traversal.
+  // Instagram traversal, decided in `lib/story-playback.ts`.
   const next = useCallback(() => {
-    if (!group) return onClose();
-    if (index + 1 < group.stories.length) return setIndex(index + 1);
-    if (groupIndex + 1 < groups.length) {
-      setGroupIndex(groupIndex + 1);
-      return setIndex(0);
-    }
-    onClose();
-  }, [group, groupIndex, groups.length, index, onClose]);
+    const to = nextPosition(at, sizes);
+    if (!to) return close();
+    setAt(to);
+  }, [at, close, sizes]);
 
   const previous = useCallback(() => {
-    if (index > 0) return setIndex(index - 1);
-    if (groupIndex > 0) {
-      const previousGroup = groups[groupIndex - 1];
-      setGroupIndex(groupIndex - 1);
-      return setIndex(Math.max(0, previousGroup.stories.length - 1));
-    }
-    onClose();
-  }, [groupIndex, groups, index, onClose]);
+    const to = previousPosition(at, sizes);
+    // Already at the very first story: replay it. Closing the whole set
+    // because the reader asked to see something again is not a "back".
+    if (to.group === at.group && to.story === at.story) return restart();
+    setAt(to);
+  }, [at, restart, sizes]);
+
+  /**
+   * NOTHING ELSE ON THE PAGE MAY BE AUDIBLE WHILE A STORY IS OPEN.
+   *
+   * The feed pauses its clips with an `IntersectionObserver`, and an observer
+   * measures the viewport, not what is stacked on top of it — so a feed video
+   * 60% on screen carried on playing, with sound, underneath a story that was
+   * also playing with sound. Two voices at once, which is the single loudest
+   * way the app's audio "did not make sense".
+   *
+   * On the way out it restarts exactly what it stopped and nothing else, so
+   * closing a story hands the reader back the clip they were watching rather
+   * than a feed frozen mid-frame.
+   */
+  useEffect(() => {
+    const root = rootRef.current;
+    const stopped = mediaToSilence<HTMLMediaElement>(
+      document.querySelectorAll("video, audio"),
+      (media) => Boolean(root?.contains(media))
+    );
+    for (const media of stopped) media.pause();
+    return () => {
+      for (const media of stopped) {
+        if (media.isConnected) void media.play().catch(() => {});
+      }
+    };
+  }, []);
+
+  // The page behind must not scroll while the overlay owns the viewport —
+  // scrolling it would also move feed clips in and out of the intersection
+  // that starts them, i.e. start a second soundtrack behind an open story.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  /**
+   * A BACKGROUNDED TAB HOLDS THE STORY.
+   *
+   * `requestAnimationFrame` stops in a hidden tab but a `<video>` does not, so
+   * switching tabs left the story talking out of an unattended tab while its
+   * progress bar sat frozen — and coming back showed a bar half way through a
+   * clip that had already finished. Holding on `visibilitychange` keeps the
+   * two on one clock and stops the disembodied audio.
+   */
+  useEffect(() => {
+    const sync = () => setHidden(document.hidden);
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, []);
+
+  /**
+   * A press must be releasable from anywhere.
+   *
+   * `pointerup` only reaches the tap zone when the pointer is still over it;
+   * releasing outside it, or losing the pointer to a system gesture, or
+   * tabbing away mid-press, would otherwise leave the story held for good.
+   */
+  useEffect(() => {
+    const release = () => setPressing(false);
+    const blur = () => {
+      setPressing(false);
+      setHovering(false);
+    };
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
 
   useEffect(() => {
     if (story) onSeen(story.id);
@@ -412,17 +540,31 @@ function StoryViewer({
     // A new story starts from zero; a resumed one continues from the hold.
     if (storyKeyRef.current !== storyKey) {
       storyKeyRef.current = storyKey;
+      elapsedRef.current = 0;
       progressRef.current = 0;
     }
-    const elapsed = progressRef.current * durationMs;
     let frame = 0;
-    let start: number | null = null;
+    let last: number | null = null;
     const tick = (now: number) => {
-      if (start === null) start = now;
-      const ratio = Math.min(1, (elapsed + (now - start)) / durationMs);
+      if (last === null) last = now;
+      elapsedRef.current += now - last;
+      last = now;
+      /*
+       * THE CLIP IS ITS OWN CLOCK.
+       *
+       * A bar on wall time runs away from a video that is buffering, and it
+       * leapt the moment a measured duration replaced the picture beat. Read
+       * off `currentTime` and the bar cannot disagree with the picture: it
+       * stalls when the clip stalls and resumes exactly where the clip
+       * resumed. The wall clock still runs underneath, purely so a clip that
+       * has stopped downloading for good cannot park the reader on one frame.
+       */
+      const node = videoRef.current;
+      const elapsed = clipIsClock && node ? node.currentTime * 1000 : elapsedRef.current;
+      const ratio = advanceRatio(progressRef.current, elapsed, durationMs);
       progressRef.current = ratio;
       setProgress(ratio);
-      if (ratio >= 1) {
+      if (ratio >= 1 || hasOverrun(elapsedRef.current, durationMs)) {
         next();
         return;
       }
@@ -430,7 +572,7 @@ function StoryViewer({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [durationMs, next, paused, storyKey]);
+  }, [clipIsClock, durationMs, next, paused, storyKey]);
 
   // Holding to pause has to stop the CLIP, not just the progress bar. It only
   // stopped the bar, so a held story kept playing — and with sound on, kept
@@ -438,17 +580,36 @@ function StoryViewer({
   useEffect(() => {
     const node = videoRef.current;
     if (!node) return;
+    const backdrop = backdropRef.current;
     if (paused) {
       node.pause();
+      backdrop?.pause();
       return;
     }
+    if (backdrop) {
+      // The letterbox fill is the same clip decoded a second time, so it has to
+      // be nudged back onto the frame it is filling for. Left to itself it
+      // drifts a little further behind on every hold.
+      if (Math.abs(backdrop.currentTime - node.currentTime) > 0.25) {
+        backdrop.currentTime = node.currentTime;
+      }
+      void backdrop.play().catch(() => {});
+    }
     let cancelled = false;
-    void node.play().catch(() => {
-      // The only rejection worth acting on is the autoplay policy refusing
-      // SOUND. Retry muted so the story runs; the button turns it back on.
-      if (cancelled || !soundOn) return;
+    void node.play().catch((error: unknown) => {
+      if (cancelled) return;
+      /*
+       * ONLY the autoplay policy refusing sound is worth acting on.
+       *
+       * `play()` also rejects with `AbortError` whenever a pause or a new
+       * `src` overtakes it — which happens every time the reader taps through
+       * quickly — and this used to answer that by turning sound off for the
+       * rest of the session. Tapping through three stories silenced the app.
+       * A real refusal drops to muted and the effect re-runs and plays; the
+       * button turns it back on.
+       */
+      if (!isAutoplayRefusal(error)) return;
       setSoundOn(false);
-      void node.play().catch(() => {});
     });
     return () => {
       cancelled = true;
@@ -457,20 +618,53 @@ function StoryViewer({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      if (event.key === "ArrowRight") next();
-      if (event.key === "ArrowLeft") previous();
+      if (event.key === "Escape") return close();
+      if (event.key === "ArrowRight") return next();
+      if (event.key === "ArrowLeft") return previous();
+      // Focus stays inside the dialog: it covers the page, and tabbing onto
+      // the feed underneath lands a screen reader on content nobody can see.
+      if (event.key !== "Tab") return;
+      const root = rootRef.current;
+      if (!root) return;
+      const stops = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (node) => node.getAttribute("aria-hidden") !== "true"
+      );
+      if (stops.length === 0) return;
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === root)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, previous, onClose]);
+  }, [close, next, previous]);
+
+  // The overlay takes focus on open and hands it back on close, so a keyboard
+  // or screen-reader user is put inside the thing that just covered the page
+  // and returned to the tile they opened it from.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    rootRef.current?.focus();
+    return () => opener?.focus?.();
+  }, []);
 
   if (!group || !story) return null;
   const cta = resolveCta(story.deepLink);
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
+      ref={rootRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Stories from ${group.displayName}`}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 outline-none"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -486,6 +680,12 @@ function StoryViewer({
         />
         <div className="absolute inset-0 bg-white/[0.07]" />
 
+        {/* Where the reader is in the set, for anyone who cannot see the
+            segments. `role="status"` re-announces it as the story turns. */}
+        <p role="status" className="sr-only">
+          {`${group.displayName}, story ${at.story + 1} of ${group.stories.length}`}
+        </p>
+
         {/* One segment per story in this author's set. */}
         <div className="relative z-20 flex gap-1 px-3 pt-3">
           {group.stories.map((s, i) => (
@@ -493,7 +693,7 @@ function StoryViewer({
               <div
                 className="h-full bg-white"
                 style={{
-                  width: i < index ? "100%" : i === index ? `${progress * 100}%` : "0%",
+                  width: i < at.story ? "100%" : i === at.story ? `${progress * 100}%` : "0%",
                 }}
               />
             </div>
@@ -501,13 +701,13 @@ function StoryViewer({
         </div>
 
         <div className="relative z-20 flex items-center gap-3 px-3 py-3">
-          <Link href={`/u/${group.username}`} onClick={onClose}>
+          <Link href={`/u/${group.username}`} onClick={close}>
             <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={32} />
           </Link>
           <div className="min-w-0 flex-1">
             <Link
               href={`/u/${group.username}`}
-              onClick={onClose}
+              onClick={close}
               className="ws-text-shadow block truncate text-sm font-bold text-white"
             >
               {group.displayName}
@@ -516,7 +716,7 @@ function StoryViewer({
           </div>
           {/* Shown only on a clip — a mute button over a photograph is a
               control for something that cannot make a sound. */}
-          {story.mediaUrl && isStoryVideoMedia(story) && (
+          {isVideo && (
             <button
               onClick={() => setSoundOn((on) => !on)}
               aria-label={soundOn ? "Mute story" : "Unmute story"}
@@ -526,7 +726,7 @@ function StoryViewer({
               <IconVolume className="h-5 w-5" muted={!soundOn} />
             </button>
           )}
-          <button onClick={onClose} aria-label="Close stories" className="p-1.5 text-white">
+          <button onClick={close} aria-label="Close stories" className="p-1.5 text-white">
             <IconX className="h-5 w-5" />
           </button>
         </div>
@@ -535,32 +735,59 @@ function StoryViewer({
           Tap zones: left third steps back, the rest advances. Holding anywhere
           pauses, the way Instagram does.
 
-          HOVERING pauses too, but only for a mouse. On a touch screen a tap
-          fires `pointerenter` immediately before `pointerdown`, so binding
-          hover unconditionally would be a second, redundant pause on every tap
-          — and on a mouse the story used to run on regardless of whether
-          anyone was reading it, with no way to hold it short of pressing and
-          not letting go. `pointerType` is what separates the two, and it is
-          why this is not just `onMouseEnter`: a pen reports as a mouse-like
-          device without being one.
+          HOVERING pauses too, but only for a mouse that has actually MOVED
+          inside the frame — and that distinction is the whole reason this is
+          `onPointerMove` rather than the `onPointerEnter` it started as.
+          `pointerenter` also fires when an element APPEARS under a stationary
+          cursor, which is exactly what an overlay does: opening a story from a
+          rail tile that happens to sit under the centred card paused the story
+          on the frame it opened on, and because the mouse never moved again
+          nothing ever fired `pointerleave` to release it. The clip stayed
+          frozen at 0:00 with its blurred backdrop still running behind it —
+          the story "not playing" that started this. `pointermove` is only ever
+          produced by real movement, so a cursor that merely finds itself over
+          the card holds nothing.
+
+          `pointerType` still matters: on a touch screen a tap fires the hover
+          events immediately before `pointerdown`, so binding them
+          unconditionally would be a second, redundant pause on every tap. And
+          a pen reports as a mouse-like device without being one, which is why
+          this is not just `onMouseMove`.
+
+          A CLICK clears the hover hold: asking for the next story is asking to
+          watch it, and leaving the hold set would open it paused under a
+          cursor that is once again not moving. It re-arms on the next real
+          movement.
         */}
         <button
           aria-label="Previous story"
           className="absolute inset-y-0 left-0 z-10 w-1/3"
-          onClick={previous}
-          onPointerDown={() => setPaused(true)}
-          onPointerUp={() => setPaused(false)}
-          onPointerEnter={(event) => event.pointerType === "mouse" && setPaused(true)}
-          onPointerLeave={() => setPaused(false)}
+          onClick={() => {
+            setHovering(false);
+            previous();
+          }}
+          onPointerDown={() => setPressing(true)}
+          onPointerUp={() => setPressing(false)}
+          onPointerMove={(event) => event.pointerType === "mouse" && setHovering(true)}
+          onPointerLeave={() => {
+            setHovering(false);
+            setPressing(false);
+          }}
         />
         <button
           aria-label="Next story"
           className="absolute inset-y-0 right-0 z-10 w-2/3"
-          onClick={next}
-          onPointerDown={() => setPaused(true)}
-          onPointerUp={() => setPaused(false)}
-          onPointerEnter={(event) => event.pointerType === "mouse" && setPaused(true)}
-          onPointerLeave={() => setPaused(false)}
+          onClick={() => {
+            setHovering(false);
+            next();
+          }}
+          onPointerDown={() => setPressing(true)}
+          onPointerUp={() => setPressing(false)}
+          onPointerMove={(event) => event.pointerType === "mouse" && setHovering(true)}
+          onPointerLeave={() => {
+            setHovering(false);
+            setPressing(false);
+          }}
         />
 
         {/* Media is CONTAINED, never cropped: the frame is 9:16 but a story can
@@ -569,25 +796,35 @@ function StoryViewer({
             same frame — the Instagram/WhatsApp treatment — so the card still
             reads full-bleed without losing content. The copy is decorative and
             hidden from assistive tech; both layers stay under the tap zones
-            (z-10) and the progress/header chrome (z-20). */}
+            (z-10) and the progress/header chrome (z-20).
+
+            Both layers are KEYED on the story, so turning the page builds a new
+            element rather than swapping `src` on the old one — a reused
+            element carries the previous clip's `currentTime`, which is the
+            clock the progress bar now reads. */}
         {story.mediaUrl && (
           <div className="absolute inset-0 overflow-hidden">
-            {isStoryVideoMedia(story) ? (
+            {isVideo ? (
               <>
                 {/* The backdrop copy is ALWAYS muted, whatever the sound
                     setting: it is the same file decoded twice, so letting it
                     carry audio would play every story over itself, slightly
-                    out of sync. */}
+                    out of sync. It is also NOT looped and is paused, resumed
+                    and re-seeked with the clip it is filling for — left
+                    running on its own it drifted out of step with the picture
+                    in front of it the first time anyone held the story. */}
                 <video
+                  key={`bd-${story.id}`}
+                  ref={backdropRef}
                   src={story.mediaUrl}
                   autoPlay
                   muted
                   playsInline
-                  loop
                   aria-hidden
                   className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl saturate-150"
                 />
                 <video
+                  key={story.id}
                   ref={videoRef}
                   src={story.mediaUrl}
                   autoPlay
@@ -597,15 +834,16 @@ function StoryViewer({
                   // length, so a loop would restart the audio underneath a bar
                   // that is about to advance.
                   onLoadedMetadata={(event) => {
-                    const seconds = event.currentTarget.duration;
+                    const ms = clipDurationMs(event.currentTarget.duration);
                     // A stream with no known length reports Infinity or NaN;
-                    // timing a story off that would stall the set forever.
-                    if (!Number.isFinite(seconds) || seconds <= 0) return;
-                    setMeasured({
-                      key: storyKey,
-                      ms: Math.min(seconds * 1000, STORY_VIDEO_MAX_MS),
-                    });
+                    // timing a story off that would stall the set forever, so
+                    // it keeps the picture beat instead.
+                    if (ms === null) return;
+                    setMeasured({ key: storyKey, ms });
                   }}
+                  // A clip can finish a shade before its reported length; the
+                  // set moves on with it rather than holding a black frame.
+                  onEnded={next}
                   className="relative h-full w-full object-contain"
                 />
               </>
@@ -613,6 +851,7 @@ function StoryViewer({
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
                 <img
+                  key={`bd-${story.id}`}
                   src={story.mediaUrl}
                   alt=""
                   aria-hidden
@@ -620,6 +859,7 @@ function StoryViewer({
                 />
                 {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
                 <img
+                  key={story.id}
                   src={story.mediaUrl}
                   alt=""
                   className="relative h-full w-full object-contain"
@@ -638,7 +878,7 @@ function StoryViewer({
           <div className="relative z-20 px-6 pb-8">
             <Link
               href={cta.href}
-              onClick={onClose}
+              onClick={close}
               className="ws-press flex h-11 w-full items-center justify-center rounded-full bg-accent text-sm font-bold text-ink"
             >
               {cta.label}
@@ -647,17 +887,23 @@ function StoryViewer({
         )}
       </div>
 
-      {/* Desktop arrows sit outside the card, Instagram-style. */}
+      {/* Desktop arrows sit outside the card, Instagram-style. They are a
+          POINTER affordance and duplicate the tap zones exactly, so they stay
+          out of the tab order and out of the accessibility tree — the zones
+          are the keyboard path, and they exist at every breakpoint whereas
+          these are hidden below `lg`. */}
       <button
         onClick={previous}
-        aria-label="Previous"
+        aria-hidden
+        tabIndex={-1}
         className="ws-glass absolute left-6 hidden h-10 w-10 items-center justify-center rounded-full text-white lg:flex"
       >
         <IconChevronLeft className="h-5 w-5" />
       </button>
       <button
         onClick={next}
-        aria-label="Next"
+        aria-hidden
+        tabIndex={-1}
         className="ws-glass absolute right-6 hidden h-10 w-10 items-center justify-center rounded-full text-white lg:flex"
       >
         <IconChevronRight className="h-5 w-5" />
@@ -665,7 +911,6 @@ function StoryViewer({
     </motion.div>
   );
 }
-
 /**
  * Circular story rail — the mobile frame's shape.
  *
