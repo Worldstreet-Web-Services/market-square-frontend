@@ -48,6 +48,7 @@ import { isArkOriginated, resolveCta } from "@/lib/deeplink";
 import type { Profile } from "@/lib/api/schemas";
 import {
   useRemoveGuest,
+  useRecordReactions,
   useStream,
   useStreamList,
 } from "@/features/streams/hooks/use-streams";
@@ -284,9 +285,27 @@ interface GiftBurst {
 }
 
 const MAX_REACTIONS = 30;
-// TikTok floats saturated hearts; Ark is monochrome, so the drift varies the
-// silver ramp instead of the hue.
-const REACTION_COLORS = ["#ffffff", "#f4f4f4", "#d4d4d8", "#bfbfbf", "#9b9b9b"];
+/**
+ * A warm red ramp, built out of the palette rather than beside it.
+ *
+ * These hearts used to float in a silver ramp, on the reasoning that the room
+ * is monochrome. But a heart is not chrome — it is the same universal
+ * affordance the feed already paints in `--color-like`, and a grey one reads
+ * as disabled rather than as applause. The feed's own double-tap burst is
+ * `text-like`; the live room now agrees with it.
+ *
+ * Every stop is derived from house tokens (`--color-like` warmed toward
+ * `--color-live`, lightened toward white) so the variation that keeps a burst
+ * from looking like one stamp repeated cannot drift into a colour nothing else
+ * in the app uses.
+ */
+const REACTION_COLORS = [
+  "var(--color-like)",
+  "color-mix(in srgb, var(--color-like) 72%, #ffffff)",
+  "color-mix(in srgb, var(--color-like) 55%, #ffffff)",
+  "color-mix(in srgb, var(--color-like) 55%, var(--color-live))",
+  "var(--color-live)",
+];
 let reactionSeq = 0;
 let giftSeq = 0;
 
@@ -542,12 +561,27 @@ export function StreamRoom({
     onReceive: spawnReaction,
     onGift: receiveGift,
   });
+  /**
+   * One tap, three destinations — and it used to reach only two.
+   *
+   * It DREW a heart locally and BROADCAST one to the room, and there it
+   * stopped. Nothing counted, so the tally beside the stream sat at 0 for the
+   * whole broadcast however hard the room tapped. The number was not stale; it
+   * had never been asked to move.
+   *
+   * `recordReaction` is the third destination and the only durable one. It is
+   * deliberately last: the animation and the broadcast are the moment, and
+   * neither may wait on a write. Taps are pooled inside the hook, so hammering
+   * the button is one request a second rather than one per heart.
+   */
+  const recordReaction = useRecordReactions(streamId);
   const react = useCallback(
     (burst = 1) => {
       spawnReaction(burst);
       live.react(burst);
+      recordReaction(burst);
     },
-    [spawnReaction, live],
+    [spawnReaction, live, recordReaction],
   );
 
 
@@ -838,7 +872,7 @@ export function StreamRoom({
                 </span>
               )}
               <span className="flex items-center gap-1">
-                <IconHeart className="h-4 w-4" filled />
+                <IconHeart className="h-4 w-4 text-like" filled />
                 <span className="tnum">{formatCount(likeCount)}</span>
               </span>
               <span className="line-clamp-1">{data.title}</span>
@@ -1136,7 +1170,7 @@ export function StreamRoom({
               aria-label={`Send a heart. ${likeCount} likes`}
               className="ws-press flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-heading"
             >
-              <IconHeart className="h-6 w-6 text-heading" filled />
+              <IconHeart className="h-6 w-6 text-like" filled />
             </button>
             <span className="tnum ws-text-shadow min-w-11 text-center text-[11px] font-bold text-white">
               {formatCount(likeCount)}
@@ -1307,7 +1341,7 @@ export function StreamRoom({
                 <button
                   onClick={() => react(1)}
                   aria-label={`Send a heart. ${likeCount} likes`}
-                  className="ws-press absolute bottom-[92px] right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-heading backdrop-blur-md transition-colors hover:bg-white/15"
+                  className="ws-press absolute bottom-[92px] right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-like backdrop-blur-md transition-colors hover:bg-white/15"
                 >
                   <IconHeart className="h-7 w-7" filled />
                 </button>

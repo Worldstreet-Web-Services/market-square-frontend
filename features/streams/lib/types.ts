@@ -41,6 +41,16 @@ export const HeartbeatSchema = z.object({
 // Every one of the four is nullable in the spec, `url` and `roomToken`
 // included — declaring those two as plain strings meant an explicit null threw
 // instead of degrading, which is exactly the case the comment above describes.
+/**
+ * The stream's running heart tally, after the burst just recorded.
+ *
+ * The SERVICE's total, not a local sum: hearts arrive from every viewer in the
+ * room, so the only number that can be right is the one the service kept.
+ */
+export const StreamReactionSchema = z.object({
+  likeCount: z.number(),
+});
+
 export const IngestSchema = z.object({
   rtmpUrl: z.string().nullable().optional().default(null),
   streamKey: z.string().nullable().optional().default(null),

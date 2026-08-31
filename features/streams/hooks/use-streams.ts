@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { baseIdentity } from "@/features/streams/lib/stage";
@@ -33,12 +34,17 @@ import {
   purchaseTicket,
   reportTicketTransfer,
   quoteTicket,
+  reactToStream,
   requestToSpeak,
   fetchMySpeakerRequest,
   fetchSpeakerRequests,
   resolveSpeakerRequest,
 } from "@/features/streams/lib/api";
 import type { Stream, TicketTier } from "@/features/streams/lib/types";
+import {
+  createReactionBuffer,
+  type ReactionBuffer,
+} from "@/features/streams/lib/reaction-buffer";
 
 /**
  * A stream's lifecycle moves more than the stream list.
@@ -82,6 +88,75 @@ export function useStream(id: string, poll: boolean | number = false) {
     queryFn: () => fetchStream(id),
     refetchInterval: poll === false ? false : poll === true ? 10_000 : poll,
   });
+}
+
+/**
+ * Record hearts against the stream's tally.
+ *
+ * The tally used to be unmovable: hearts were published on the room's data
+ * channel and nowhere else, so `likeCount` — a field the service did not even
+ * return — sat at 0 for the whole broadcast. Tapping felt like it did nothing
+ * because, as far as anything that outlived the animation was concerned, it
+ * did.
+ *
+ * OPTIMISTIC then RECONCILED. The number moves on the tap, because a counter
+ * that waits for a round trip to acknowledge your own tap is exactly the lag
+ * this is meant to remove. What comes back is the SERVICE's total — which
+ * includes every other viewer's hearts, so it is the only number that can be
+ * right — and it replaces the guess rather than adding to it. A failed write
+ * rolls its own bump back, so the tally cannot drift upward on requests that
+ * never landed.
+ *
+ * Taps are pooled by `createReactionBuffer`, so hammering the button is one
+ * request a second rather than one per heart.
+ *
+ * Silent on failure. A heart is not a transaction, and a toast apologising for
+ * one is louder than the thing it is apologising for.
+ */
+export function useRecordReactions(streamId: string) {
+  const queryClient = useQueryClient();
+
+  const bump = useCallback(
+    (delta: number) => {
+      queryClient.setQueryData(["ms", "stream", streamId], (old: Stream | undefined) =>
+        old ? { ...old, likeCount: Math.max(0, old.likeCount + delta) } : old
+      );
+    },
+    [queryClient, streamId]
+  );
+
+  const { mutate } = useMutation({
+    mutationFn: (burst: number) => reactToStream(streamId, burst),
+    onSuccess: (result) => {
+      // The service's count, not ours plus ours: other people are tapping too.
+      queryClient.setQueryData(["ms", "stream", streamId], (old: Stream | undefined) =>
+        old ? { ...old, likeCount: result.likeCount } : old
+      );
+    },
+    onError: (_error, burst) => {
+      bump(-burst);
+    },
+  });
+
+  // One buffer per stream, kept across renders — a new one per render would
+  // pool nothing, since each would hold a single tap and flush it alone.
+  const bufferRef = useRef<ReactionBuffer | null>(null);
+  if (bufferRef.current === null) {
+    bufferRef.current = createReactionBuffer({ send: (burst) => mutate(burst) });
+  }
+  useEffect(() => {
+    const buffer = bufferRef.current;
+    return () => buffer?.dispose();
+  }, []);
+
+  return useCallback(
+    (burst = 1) => {
+      // Bump by what the buffer actually took, so the tally on screen and the
+      // count on its way to the service can never disagree.
+      bump(bufferRef.current?.add(burst) ?? 0);
+    },
+    [bump]
+  );
 }
 
 export function useTicketQuote(streamId: string, tier: TicketTier, enabled: boolean) {

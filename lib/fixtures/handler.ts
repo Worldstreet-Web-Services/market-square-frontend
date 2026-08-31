@@ -487,6 +487,7 @@ function streamDto(s: FxStream) {
     refundPolicy: "Automatic refund when the host cancels before the stream begins.",
     replayPolicy: "Confirmed tickets include replay access when a replay is published.",
     peakViewers: s.viewerCount,
+    likeCount: streamReactions.get(s.id) ?? 0,
     totalViewSeconds: s.viewerCount * 240,
     createdAt: s.scheduledAt ?? new Date().toISOString(),
   };
@@ -778,6 +779,9 @@ const creatorApplications = new Map<string, FxCreatorApplication>(seededApplicat
 // Moderation state: banned users and removed chat messages per stream.
 const chatBans = new Map<string, Set<string>>();
 const removedMessages = new Set<string>();
+// Heart tallies per stream. Hearts are repeatable applause, so this is a
+// running count and not a set of who-has-liked — there is nothing to dedupe.
+const streamReactions = new Map<string, number>();
 const readNotifications = new Set<string>();
 const moderationCaseStatus = new Map<string, "open" | "resolved" | "dismissed">();
 const blockedProfiles = new Map<string, Set<string>>();
@@ -1781,6 +1785,19 @@ export function handleFixture(
       if (typeof body.thumbnailUrl === "string") stream.thumbnailUrl = body.thumbnailUrl || null;
       if (stream.ticketPriceKash || stream.vipPriceKash) stream.visibility = "ticketed";
       return ok(streamDto(stream));
+    }
+
+    // POST /streams/:id/reactions — a burst of hearts. Repeatable on purpose:
+    // this is applause, so the same viewer adds to it every time they tap.
+    if (p[2] === "reactions" && method === "POST") {
+      const denied = requireAuth(userId);
+      if (denied) return denied;
+      if (stream.status === "ended") return fail(400, "VALIDATION", "This stream has ended.");
+      const asked = Number((body as { burst?: unknown }).burst ?? 1);
+      const burst = Number.isFinite(asked) ? Math.min(Math.max(Math.floor(asked), 1), 10) : 1;
+      const total = (streamReactions.get(stream.id) ?? 0) + burst;
+      streamReactions.set(stream.id, total);
+      return ok({ likeCount: total });
     }
 
     // GET /streams/:id/stats — owner-only summary. Numbers derive from real
