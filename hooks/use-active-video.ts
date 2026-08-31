@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useSyncExternalStore } from "rea
 import {
   getFeedSoundServerSnapshot,
   isFeedSoundOn,
+  preferSoundForImmersive,
   setFeedSoundOn,
   subscribeFeedSound,
 } from "@/lib/feed-sound";
@@ -14,6 +15,7 @@ import {
   reportVideoVisibility,
   requestActiveVideo,
   subscribeActiveVideo,
+  VIDEO_LAYER,
   VISIBILITY_STEPS,
   type VideoLayer,
 } from "@/lib/video-coordinator";
@@ -39,6 +41,22 @@ import {
 export function useActiveVideo({ layer, enabled }: { layer: VideoLayer; enabled: boolean }) {
   const id = useId();
   const ref = useRef<HTMLVideoElement>(null);
+
+  /**
+   * A video opened FULL-SCREEN starts audible.
+   *
+   * Tapping a video to fill the screen is a request to watch it, not to mime
+   * it — the story viewer already works this way, and every short-video app
+   * does. The preference itself declines to override a reader who has muted
+   * on purpose, so this cannot shout over somebody who asked for quiet.
+   *
+   * Run on mount of the overlay layer only. The timeline keeps the muted
+   * default, because a video that scrolls past unasked-for should not make
+   * noise.
+   */
+  useEffect(() => {
+    if (enabled && layer === VIDEO_LAYER.overlay) preferSoundForImmersive();
+  }, [enabled, layer]);
 
   const activeId = useSyncExternalStore(
     subscribeActiveVideo,
