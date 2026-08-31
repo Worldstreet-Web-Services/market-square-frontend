@@ -16,6 +16,7 @@ import {
   useSendMessage,
 } from "@/features/messages/hooks/use-messages";
 import { formatClockTime, groupMessagesByDay } from "@/features/messages/lib/thread-groups";
+import { isAtBottom } from "@/features/messages/lib/thread-scroll";
 import { MESSAGE_MAX, type Conversation, type Message } from "@/features/messages/lib/types";
 
 /**
@@ -114,10 +115,12 @@ function ThreadHeader({
   const peer = conversation.peer;
 
   return (
-    // The source gives this band a fully transparent fill. It is sticky over
-    // scrolling messages, so it needs an opaque one; `bg-ground` is the app's.
-    // The hairline is the source's 10%, not `ws-head`'s 8%.
-    <header className="sticky top-[var(--ws-topbar-h)] z-30 flex min-h-20 items-center gap-4 border-b border-white/10 bg-ground px-6 py-4">
+    // Pinned, not sticky: this band is a fixed row of the pane's flex column
+    // and never enters the scroller, so it cannot drift or jitter the way a
+    // sticky element does. The source gives it a fully transparent fill; it
+    // sits over the app ground, so it takes `bg-ground`. The hairline is the
+    // source's 10%, not `ws-head`'s 8%.
+    <header className="flex min-h-20 shrink-0 items-center gap-4 border-b border-white/10 bg-ground px-6 py-4">
       {/* Not in the source, which only ever draws the desktop two-pane state.
           Below lg the list gives way to the thread entirely, so without this
           there is no route back to the inbox. Hidden where both panes are up. */}
@@ -252,10 +255,11 @@ function Composer({ conversationId }: { conversationId: string }) {
   };
 
   return (
-    // 3% white over the app's pure-black ground, flattened to an opaque value
-    // because this bar is sticky and a translucent one would show the messages
-    // sliding under it. The hairline above is the source's 10%.
-    <div className="sticky bottom-0 z-20 flex min-h-20 flex-col justify-center gap-1 border-t border-white/10 bg-[#080808] px-6 py-4">
+    // Pinned, not sticky, for the same reason as the header: it is the last
+    // fixed row of the pane's flex column, so it sits still while the messages
+    // scroll behind it. 3% white over the app's pure-black ground, flattened
+    // to an opaque value. The hairline above is the source's 10%.
+    <div className="flex min-h-20 shrink-0 flex-col justify-center gap-1 border-t border-white/10 bg-[#080808] px-6 py-4">
       <div className="flex items-center gap-4">
         {/* The source's two leading controls. `POST /conversations/:id/messages`
             takes a `text` body and nothing else — no upload, no media id, no
@@ -357,15 +361,53 @@ export function Thread({
   const items = [...(messages.data?.items ?? [])].reverse();
   const days = groupMessagesByDay(items);
 
+  // Only the messages scroll. The header and the composer are fixed rows of
+  // this column, so the reader's eye keeps both while the river moves between
+  // them — which is what every messaging app does and what page-level
+  // scrolling with sticky bands only approximates.
+  const river = useRef<HTMLDivElement>(null);
+  // Whether the reader is at the live edge and should be carried along by new
+  // messages. A ref, not state: it changes on every scroll frame and nothing
+  // renders from it.
+  const following = useRef(true);
+
+  const toBottom = () => {
+    const node = river.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  };
+
+  // Opening a conversation lands on its newest message, never at the top of
+  // its history.
+  useEffect(() => {
+    following.current = true;
+    toBottom();
+  }, [conversation.id]);
+
+  // Follow arriving messages, but only from the live edge — someone scrolled
+  // up reading yesterday must not be yanked down because a message landed.
+  useEffect(() => {
+    if (following.current) toBottom();
+  }, [items.length]);
+
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <ThreadHeader conversation={conversation} onBack={onBack} />
 
       {/* 40px from the header to the first separator is the source's (header
           80, first label at y=120). The gap below is ours — its two day
           sections are absolutely placed, so it has no measurable bottom, and
-          24 is every other gap in this pane. */}
-      <div className="flex flex-1 flex-col gap-6 px-6 pb-6 pt-10">
+          24 is every other gap in this pane.
+
+          `min-h-0` because a flex child's default minimum is its CONTENT, so
+          without it this grows to fit the whole thread and the pane scrolls as
+          a page again instead of scrolling here. */}
+      <div
+        ref={river}
+        onScroll={(event) => {
+          following.current = isAtBottom(event.currentTarget);
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-6 pt-10"
+      >
         {messages.isPending && [0, 1, 2].map((i) => <RowSkeleton key={i} />)}
         {messages.isError && (
           <ErrorState

@@ -129,28 +129,43 @@ export function MessagesPage() {
   }
 
   return (
-    <div className="flex min-h-full">
-      {/*
-        Two panes on a desktop, one at a time on a phone.
+    /*
+      Two panes on a desktop, one at a time on a phone.
 
-        The list is a fixed 395 because that is what the design fixes it at —
-        347 of content inside 24px gutters — and a conversation list that
-        reflows with the window makes the previews rewrap on every drag. The
-        thread takes whatever is left.
+      The list is a fixed 395 because that is what the design fixes it at —
+      347 of content inside 24px gutters — and a conversation list that
+      reflows with the window makes the previews rewrap on every drag. The
+      thread takes whatever is left.
 
-        On a phone the list gives way to the thread entirely, which is why the
-        route is only wide at its exact path.
-      */}
+      On a phone the list gives way to the thread entirely, which is why the
+      route is only wide at its exact path.
+
+      HEIGHT. Messages is the one route that does not scroll as a page. It
+      claims exactly the room the shell leaves — the viewport less the mobile
+      top strip and the mobile tab bar, both of which are already the padding
+      on `main` and are 0 from md up — and then each pane scrolls inside
+      itself. That is what lets the chat pane pin its header and its composer
+      and move only the messages between them. Without the bound, both panes
+      grow to fit their content and the whole document scrolls instead.
+    */
+    <div className="flex h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-nav-h))] overflow-hidden">
       <div
         className={cn(
-          "w-full shrink-0 lg:w-[395px] lg:border-r lg:border-white/10",
+          // Its own scroller, so a long inbox does not drag the chat pane with
+          // it. `--ws-topbar-h` is reset to 0 inside: it exists to hold sticky
+          // children clear of the shell's FIXED top strip, and this box already
+          // starts below that strip, so the offset would push the inbox header
+          // 48px down its own scroll box on a phone.
+          "w-full shrink-0 overflow-y-auto [--ws-topbar-h:0px] lg:w-[395px] lg:border-r lg:border-white/10",
           open && "hidden lg:block"
         )}
       >
         <Inbox onOpen={setOpen} selectedId={open?.id} />
       </div>
 
-      <div className={cn("min-w-0 flex-1", !open && "hidden lg:block")}>
+      {/* `min-h-0` so the chat pane can be shorter than its content and scroll
+          internally rather than stretching this row. */}
+      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", !open && "hidden lg:flex")}>
         {open ? (
           <Thread conversation={open} onBack={() => setOpen(null)} />
         ) : (
