@@ -5,6 +5,7 @@ import {
   isFeedSoundOn,
   resetFeedSoundForTest,
   setFeedSoundOn,
+  preferSoundForImmersive,
   subscribeFeedSound,
 } from "./feed-sound.ts";
 
@@ -50,4 +51,33 @@ test("unsubscribing stops the notifications", () => {
   off();
   setFeedSoundOn(true);
   assert.equal(calls, 0);
+});
+
+test("opening a video full-screen turns sound on", () => {
+  // Tapping a video to fill the screen is a request to watch it, not to mime
+  // it — the story viewer already behaves this way.
+  preferSoundForImmersive();
+  assert.equal(isFeedSoundOn(), true);
+});
+
+test("but never over a reader who chose quiet", () => {
+  // Muting and continuing to swipe means "keep it quiet". Re-unmuting on the
+  // next post is the same disrespect as forgetting a request for sound.
+  setFeedSoundOn(false);
+  preferSoundForImmersive();
+  assert.equal(isFeedSoundOn(), false);
+});
+
+test("a reader who turned sound on stays on", () => {
+  setFeedSoundOn(true);
+  preferSoundForImmersive();
+  assert.equal(isFeedSoundOn(), true);
+});
+
+test("opening full-screen twice notifies once", () => {
+  let calls = 0;
+  subscribeFeedSound(() => (calls += 1));
+  preferSoundForImmersive();
+  preferSoundForImmersive();
+  assert.equal(calls, 1);
 });

@@ -7,7 +7,9 @@ import { formatCount, relativeTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
+import { VIDEO_LAYER, type VideoLayer } from "@/lib/video-coordinator";
 import { useGate } from "@/hooks/use-gate";
+import { useActiveVideo } from "@/hooks/use-active-video";
 import { Avatar } from "@/components/ui/avatar";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { PostText } from "@/components/ui/post-text";
@@ -26,12 +28,27 @@ const DOUBLE_TAP_MS = 300;
  * its full-screen video viewer both render it, so a clip behaves identically in
  * both places rather than drifting into two players.
  *
- * Playback grammar (the same one `InlineVideo` uses in the timeline): muted
- * autoplay once the slide is actually on screen, pause AND re-mute the moment
- * it leaves — scrolling back never surprises the reader with audio they did
- * not ask for — and sound only ever from an explicit tap. Under
- * `prefers-reduced-motion` nothing plays on its own and the element keeps its
- * native controls.
+ * Playback grammar, and it is now literally the same code `InlineVideo` runs
+ * in the timeline rather than a second copy of the same idea: `useActiveVideo`
+ * reports how much of the slide is on screen, ONE coordinator elects the
+ * single video allowed to play anywhere in the app, and everything else is
+ * paused and silent. Under `prefers-reduced-motion` nothing plays on its own
+ * and the element keeps its native controls.
+ *
+ * Two bugs died in that swap, and they are the two halves of the same report.
+ *
+ * SOUND DID NOT CARRY. This slide owned a private `muted` boolean and forced
+ * it back to `true` whenever the slide left the viewport — so swiping to the
+ * next reel always landed in silence, however many times the reader had asked
+ * for sound. That is "when going to next video or post it still mute", and the
+ * earlier fix never reached it: it changed `InlineVideo` and left this file,
+ * which is the player the full-screen viewer actually uses, untouched.
+ *
+ * TWO VIDEOS PLAYED AT ONCE. The viewer is `fixed inset-0` over a timeline
+ * that stays mounted, and an IntersectionObserver cannot see occlusion: the
+ * card underneath reported itself fully visible and kept playing behind the
+ * slide. Hence the layer — the viewer says it is on top, because geometry
+ * cannot.
  */
 export function PostSlide({
   post,
@@ -41,9 +58,17 @@ export function PostSlide({
    * the transition is running — two elements sharing one name aborts it.
    */
   viewTransitionName,
+  /**
+   * Which surface this slide is mounted on. The reels column sits IN the page
+   * beside other players; the full-screen viewer sits OVER them. Defaulting to
+   * the in-page layer keeps the claim honest: only the viewer, which knows it
+   * covers everything, passes the overlay layer.
+   */
+  layer = VIDEO_LAYER.feed,
 }: {
   post: VideoItem;
   viewTransitionName?: string;
+  layer?: VideoLayer;
 }) {
   const like = useLikePost();
   const gate = useGate();
@@ -54,12 +79,10 @@ export function PostSlide({
   // the video the moment it buffers, and a scrubbed reel would then show a
   // position it is not at.
   const [progress, setProgress] = useState(0);
-  const [muted, setMuted] = useState(true);
   const [reduced, setReduced] = useState(false);
   // A reel fills the screen, so time on screen is a real watch.
   const viewRef = useRecordView(post.id);
   const lastTap = useRef(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const hasVideo = isVideoPost(post);
 
   useEffect(() => {
@@ -70,26 +93,14 @@ export function PostSlide({
     return () => query.removeEventListener("change", sync);
   }, []);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || reduced) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          // A play() that loses a race with an unmount rejects; not an error
-          // worth surfacing.
-          void video.play().catch(() => {});
-        } else {
-          video.pause();
-          setMuted(true);
-        }
-      },
-      { threshold: 0.6 }
-    );
-    observer.observe(video);
-    return () => observer.disconnect();
-  }, [reduced, post.id]);
+  // Registers unconditionally, even on a text post that renders no <video>:
+  // the ref simply never attaches, the effect sees no element and does
+  // nothing. Calling it conditionally would be a hook behind an `if`.
+  const {
+    ref: videoRef,
+    muted,
+    toggleSound,
+  } = useActiveVideo({ layer, enabled: hasVideo && !reduced });
 
   // Seek by fraction. Clamped, and guarded on a duration: before metadata
   // arrives `duration` is NaN and seeking would throw.
@@ -109,8 +120,10 @@ export function PostSlide({
       if (!post.likedByMe) gate(() => like.mutate({ postId: post.id, like: true }));
     } else {
       lastTap.current = now;
-      // Sound only on an explicit tap — never autoplayed.
-      if (hasVideo) setMuted((v) => !v);
+      // Sound only on an explicit tap — never autoplayed. The answer is the
+      // SESSION's now, so the next reel you swipe to keeps it instead of
+      // asking again.
+      if (hasVideo) toggleSound();
     }
   };
 
@@ -181,7 +194,7 @@ export function PostSlide({
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            setMuted((value) => !value);
+            toggleSound();
           }}
           aria-label={muted ? "Unmute" : "Mute"}
           aria-pressed={!muted}

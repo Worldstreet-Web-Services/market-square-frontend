@@ -6,6 +6,7 @@ import { nextVideoIndex, type VideoItem } from "@/lib/video-context";
 import { Spinner } from "@/components/ui/button";
 import { IconX } from "@/components/ui/icons";
 import { PostSlide } from "@/features/feed/components/post-slide";
+import { VIDEO_LAYER } from "@/lib/video-coordinator";
 
 /**
  * The immersive video viewer — the X/Twitter pattern.
@@ -186,6 +187,13 @@ export function VideoViewer({
             <PostSlide
               post={item}
               viewTransitionName={item.id === activeId ? morphNameFor?.(item.id) : undefined}
+              // This viewer is `fixed inset-0` over a timeline that stays
+              // mounted, and an IntersectionObserver measures geometry, not
+              // what is painted on top of it: the card underneath reports
+              // itself fully visible and would keep playing behind the slide.
+              // Occlusion is not observable, so the surface that knows it
+              // covers everything says so.
+              layer={VIDEO_LAYER.overlay}
             />
           </div>
         ))}
