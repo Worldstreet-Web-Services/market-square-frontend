@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   CROP_BUDGET,
+  STAGE_LANDSCAPE_ASPECT,
+  STAGE_PORTRAIT_ASPECT,
   baseIdentity,
   buildStage,
   chooseFit,
   cropLoss,
   remoteAudioSlots,
+  stageFrameAspect,
   type StageParticipant,
   type StagePublication,
   type StageRoom,
@@ -623,5 +626,183 @@ describe("the host is the host, however they published", () => {
     };
     assert.equal(buildStage(room, "did:privy:host").length, 1);
     assert.equal(buildStage(room, "did:privy:host")[0].role, "guest");
+  });
+});
+
+/**
+ * The reported bug: the host's studio filled its tile with a landscape camera
+ * while /live/:id showed the same camera as a strip in a tall black frame.
+ *
+ * Neither surface was individually wrong — they disagreed. The cockpit preview
+ * is a landscape panel, so a 16:9 camera matched it and `chooseFit` filled. The
+ * watch page hardcoded `aspect-[9/16]`, so the same camera was 3.16x off its
+ * frame, over the crop budget, and correctly letterboxed down to a third of the
+ * height. The frame was decided before anyone knew what shape the stream was.
+ */
+describe("the stage frame takes the shape of the stream", () => {
+  const ASPECT = {
+    ultrawide: 21 / 9,
+    wide: 16 / 9,
+    classic: 4 / 3,
+    square: 1,
+    portrait: 9 / 16,
+    tall: 9 / 21,
+  };
+
+  it("keeps the portrait column while nothing has been measured", () => {
+    // The shape the page lays out before the first frame arrives. Resolving to
+    // anything else would visibly reshape the room a second after it opened.
+    assert.equal(stageFrameAspect(null), STAGE_PORTRAIT_ASPECT);
+    assert.equal(stageFrameAspect(undefined), STAGE_PORTRAIT_ASPECT);
+  });
+
+  it("treats junk geometry as unmeasured rather than shaping to it", () => {
+    for (const junk of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.equal(stageFrameAspect(junk), STAGE_PORTRAIT_ASPECT, `${junk}`);
+    }
+  });
+
+  it("adopts a landscape source instead of posting it into a portrait hole", () => {
+    assert.equal(stageFrameAspect(ASPECT.wide), ASPECT.wide);
+    assert.equal(stageFrameAspect(ASPECT.classic), ASPECT.classic);
+    assert.equal(stageFrameAspect(ASPECT.square), ASPECT.square);
+  });
+
+  it("never narrows past the portrait column", () => {
+    // A phone camera is already the column's shape; anything TALLER than the
+    // column would leave bars down the sides of a stage that has no width to
+    // spare, so 9:16 is the floor.
+    assert.equal(stageFrameAspect(ASPECT.portrait), STAGE_PORTRAIT_ASPECT);
+    assert.equal(stageFrameAspect(ASPECT.tall), STAGE_PORTRAIT_ASPECT);
+  });
+
+  it("stops at 16:9, so an ultrawide share cannot flatten the room", () => {
+    assert.equal(stageFrameAspect(ASPECT.ultrawide), STAGE_LANDSCAPE_ASPECT);
+    assert.equal(stageFrameAspect(32 / 9), STAGE_LANDSCAPE_ASPECT);
+  });
+
+  it("closes the gap between the two surfaces", () => {
+    // THE regression test. At the old fixed 9:16 the viewer's fit was
+    // `contain` with two thirds of the picture in bars; at the frame the
+    // source now gets, the very same camera fills — which is exactly what the
+    // host was already seeing in their studio.
+    const camera = 16 / 9;
+    assert.equal(
+      chooseFit({ isScreenShare: false, sourceAspect: camera, tileAspect: STAGE_PORTRAIT_ASPECT }),
+      "contain"
+    );
+    assert.ok(cropLoss(camera, STAGE_PORTRAIT_ASPECT) > 0.66);
+    assert.equal(
+      chooseFit({
+        isScreenShare: false,
+        sourceAspect: camera,
+        tileAspect: stageFrameAspect(camera),
+      }),
+      "cover"
+    );
+  });
+
+  it("still fills for every source the frame can actually reach", () => {
+    // Anything inside the clamp gets a frame of its own shape, so nothing in
+    // that range is ever letterboxed on the watch page. Outside it (a source
+    // taller than 9:16, wider than 16:9) bars are unavoidable — that is what
+    // the blurred backdrop is for.
+    for (const source of [ASPECT.wide, ASPECT.classic, ASPECT.square, ASPECT.portrait]) {
+      assert.equal(
+        chooseFit({ isScreenShare: false, sourceAspect: source, tileAspect: stageFrameAspect(source) }),
+        "cover",
+        `${source}`
+      );
+    }
+  });
+
+  it("is clamped, not rounded — a near-square source keeps its own shape", () => {
+    assert.equal(stageFrameAspect(1.1), 1.1);
+    assert.equal(stageFrameAspect(0.8), 0.8);
+  });
+});
+
+describe("the watch page frame, by construction", () => {
+  const room = source("features/streams/components/stream-room.tsx");
+  const hls = source("features/streams/components/hls-player.tsx");
+
+  it("no longer pins the desktop stage to 9:16", () => {
+    // The single line that caused the report.
+    assert.doesNotMatch(room, /aspect-\[9\/16\]/);
+    assert.match(room, /lg:aspect-\[var\(--stage-aspect\)\]/);
+    assert.match(room, /const frameAspect = stageFrameAspect\(sourceAspect\);/);
+  });
+
+  it("takes the shape from the player rather than from the stream record", () => {
+    // `stream.orientation` would be a promise the backend does not keep; what
+    // is on the wire is what the video element measures.
+    assert.match(room, /onSourceAspect=\{setSourceAspect\}/);
+    assert.match(player, /onSourceAspect=\{onSourceAspect\}/);
+    assert.match(stageView, /announceAspect\.current\?\.\(soloAspect\)/);
+    // HLS too: an Ark game feed is 16:9 and was letterboxed by the same frame.
+    assert.match(hls, /videoWidth \/ videoHeight : null/);
+    assert.match(hls, /addEventListener\("resize", read\)/);
+  });
+
+  it("keeps the phone stage full-bleed", () => {
+    // The stage IS the viewport there, with the chrome floating over it, so
+    // every shape override is behind `lg:` and the base stays h-full w-full.
+    const frame = room.match(/className="h-full w-full bg-black lg:[^"]*"/);
+    assert.ok(frame, "the stage frame's classes must still be readable here");
+    for (const token of frame[0].slice('className="'.length, -1).split(/\s+/)) {
+      if (token.startsWith("aspect-") || token.startsWith("w-auto") || token.startsWith("max-w-")) {
+        assert.fail(`${token} must be behind a breakpoint — the phone stage is full-bleed`);
+      }
+    }
+    assert.match(frame[0], /lg:w-auto/);
+    // Without this a 16:9 frame overflows a column narrower than 16:9 of its
+    // own height, and the room scrolls sideways.
+    assert.match(frame[0], /lg:max-w-full/);
+  });
+
+  it("only reshapes for a SOLO publisher", () => {
+    // Two people on stage is a grid, and `lib/stage-layout` stacks that grid
+    // on the assumption the frame is the portrait column. A stage that widened
+    // under a two-up grid would put both faces back in the slivers that layout
+    // exists to prevent.
+    assert.match(stageView, /const soloKey = primary\.length === 1 \? primary\[0\]\.key : null;/);
+  });
+});
+
+describe("the letterbox is filled, not dead black", () => {
+  it("puts a blurred blow-up behind a camera that cannot fill its tile", () => {
+    // Bars are unavoidable on a phone: the stage is the 9:16 viewport and a
+    // landscape camera is not, and `chooseFit` is right to refuse a 68% crop.
+    // What made it read as broken was the bars being empty black.
+    assert.match(stageView, /const backdrop = fit === "contain" && !hideVideo && !isScreen && track \? track : null;/);
+    assert.match(stageView, /<TileBackdrop track=\{backdrop\} \/>/);
+    assert.match(stageView, /blur-2xl/);
+    // It IS the fill, so it always covers — this is not a `chooseFit` decision
+    // and must not become one.
+    assert.match(stageView, /element\.style\.objectFit = "cover";/);
+  });
+
+  it("never blurs a shared screen out into the margins", () => {
+    // A defocused blow-up of code or slides reads as a rendering fault; every
+    // other product letterboxes a screen onto black.
+    assert.match(stageView, /!isScreen && track/);
+  });
+
+  it("keeps the real video first in the DOM", () => {
+    // The room reaches into the stage with `querySelector("video")` for its
+    // transport controls. A backdrop mounted ahead of the picture would take
+    // play, pause, restart and picture-in-picture with it.
+    const video = stageView.indexOf('<div ref={mountRef} className="relative z-10 h-full w-full" />');
+    const backdrop = stageView.indexOf("<TileBackdrop");
+    assert.ok(video > 0 && backdrop > video, "the backdrop must mount after the video");
+    assert.match(stageView, /absolute inset-0 z-0 scale-110/);
+  });
+
+  it("still reports OUR fit only, to the host who can act on it", () => {
+    // Every primary tile reports now — the viewer's frame is shaped by whoever
+    // is on stage, and on the watch page that is never us — so the cockpit's
+    // framing hint has to filter back down to our own tiles.
+    assert.match(stageView, /onFit=\{\(report\) => handleFit\(report, tile\.key\)\}/);
+    assert.match(stageView, /filter\(\(report\) => report\.isLocal\)/);
   });
 });

@@ -22,6 +22,12 @@
  * abreast with the third spanning keeps all three near square, which is the
  * entire point of putting people on a stage.
  *
+ * Still portrait, after `stageFrameAspect`. The watch page's frame can now
+ * widen to a landscape source, but only for a SOLO publisher — the moment
+ * there are two tiles to lay out, the frame is back to the 9:16 column these
+ * shapes assume. Nothing below may start reasoning about a wide stage without
+ * changing that rule first.
+ *
  * Pure, so `lib/stage-layout.test.ts` can pin the shapes without a browser —
  * a layout that silently regresses to slivers is exactly the kind of thing
  * nobody notices until a four-way stream looks broken.

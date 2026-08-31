@@ -371,3 +371,51 @@ export function cropLoss(sourceAspect: number | null, tileAspect: number | null)
   if (!sourceAspect || !tileAspect || sourceAspect <= 0 || tileAspect <= 0) return 0;
   return 1 - Math.min(sourceAspect, tileAspect) / Math.max(sourceAspect, tileAspect);
 }
+
+/* ------------------------------------------------------------------ *
+ * How the stage FRAME is shaped
+ * ------------------------------------------------------------------ */
+
+/** The room's default column: a portrait 9:16 stage, phone and desktop alike. */
+export const STAGE_PORTRAIT_ASPECT = 9 / 16;
+/** The widest the stage will ever get. Past 16:9 a frame stops being a stage. */
+export const STAGE_LANDSCAPE_ASPECT = 16 / 9;
+
+/**
+ * The shape the watch page's stage should take for what is being published.
+ *
+ * The reported bug: on the host's studio a landscape camera filled its tile,
+ * while on /live/:id the same camera was a small strip floating in a tall black
+ * frame. Neither surface was wrong on its own — they simply disagreed. The
+ * cockpit preview is a landscape panel (65% of a desktop grid), so a 16:9
+ * camera matched it and `chooseFit` filled. The watch page hardcoded a 9:16
+ * frame at every breakpoint, so the SAME camera came out at a ratio of 3.16 —
+ * over the crop budget, correctly letterboxed by `chooseFit`, and left
+ * occupying about a third of the frame's height with dead black above and
+ * below.
+ *
+ * `chooseFit` was doing its job: at 9:16 the only alternative was throwing away
+ * two thirds of the picture. The mistake was upstream of it — a stage whose
+ * shape was fixed before anyone knew what shape the stream was.
+ *
+ * So the frame adopts the source instead, the way a landscape live stream
+ * widens its player on TikTok's web view rather than being posted into a
+ * portrait hole. Clamped at both ends because the stage still has to be a
+ * stage: a portrait phone camera keeps the 9:16 column (it can be no
+ * narrower), and an ultrawide desktop share stops at 16:9 rather than
+ * flattening the room into a letterbox slot.
+ *
+ * Unknown geometry resolves to portrait: that is the column the page lays out
+ * before the first frame arrives, and it is also the shape most Market Square
+ * streams turn out to be, so the common case never visibly reshapes.
+ *
+ * Only a SOLO publisher's shape reaches this function (see `LiveStage`). A
+ * multi-tile stage keeps the portrait column, which is what `lib/stage-layout`
+ * assumes when it stacks two faces rather than slivering them side by side.
+ */
+export function stageFrameAspect(sourceAspect: number | null | undefined): number {
+  if (!sourceAspect || !Number.isFinite(sourceAspect) || sourceAspect <= 0) {
+    return STAGE_PORTRAIT_ASPECT;
+  }
+  return Math.min(Math.max(sourceAspect, STAGE_PORTRAIT_ASPECT), STAGE_LANDSCAPE_ASPECT);
+}
