@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
@@ -9,6 +10,13 @@ import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { InboxFilters, InboxSearch, type InboxFilter } from "@/features/messages/components/inbox-chrome";
 import { ConversationRow } from "@/features/messages/components/conversation-row";
+import {
+  Bubble,
+  DayHeading,
+  RoundAction,
+  ThreadHeader,
+} from "@/features/messages/components/thread-chrome";
+import { groupByDay } from "@/features/messages/lib/day-groups";
 import { ThreadPlaceholder } from "@/features/messages/components/thread-placeholder";
 import { matchesQuery, visibleConversations } from "@/features/messages/lib/filter";
 import { Avatar } from "@/components/ui/avatar";
@@ -28,45 +36,74 @@ function Composer({ conversationId }: { conversationId: string }) {
   const send = useSendMessage(conversationId);
   const [text, setText] = useState("");
   const body = text.trim();
+  const over = body.length > MESSAGE_MAX;
 
   const submit = () => {
-    if (!body || send.isPending) return;
+    if (!body || over || send.isPending) return;
     send.mutate(body, { onSuccess: () => setText("") });
   };
 
   return (
-    <div className="ws-hair sticky bottom-0 border-t bg-ground p-3">
-      <div className="ws-field flex items-end gap-2 px-3 py-2">
-        <label className="sr-only" htmlFor="message-composer">
-          Write a message
-        </label>
-        <textarea
-          id="message-composer"
-          value={text}
-          rows={1}
-          // The service rejects anything longer, so the field stops there too.
-          onChange={(event) => setText(event.target.value.slice(0, MESSAGE_MAX))}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit();
-            }
-          }}
-          placeholder="Write a message…"
-          className="max-h-32 min-w-0 flex-1 resize-none bg-transparent py-1 text-[15px] text-heading outline-none placeholder:text-meta"
-        />
-        <button
-          onClick={submit}
-          disabled={!body || send.isPending}
-          aria-label="Send message"
-          className="ws-press shrink-0 rounded-full p-2 text-accent transition-colors hover:bg-white/10 disabled:opacity-40"
+    <div className="sticky bottom-0 border-t border-white/10 bg-white/3 px-6 py-4 backdrop-blur-md">
+      <div className="flex items-center gap-4">
+        {/*
+          Attachment and voice are drawn because the design draws them, and
+          disabled because neither exists: the messages contract carries text
+          only — no upload, no audio. A control that silently does nothing is
+          worse than one that says it cannot yet.
+        */}
+        <div className="hidden shrink-0 items-center gap-4 sm:flex">
+          <RoundAction label="Attach a file — not available yet" icon="/messages/attach.svg" size={24} disabled />
+          <RoundAction label="Voice note — not available yet" icon="/messages/voice.svg" size={24} disabled />
+        </div>
+
+        <div
+          className={cn(
+            "ws-field flex min-h-10 flex-1 items-center justify-between gap-3 rounded-[30px] border border-[#26262B] bg-[#18181C] px-4 py-2",
+            over && "border-danger"
+          )}
         >
-          {send.isPending ? <Spinner className="h-4 w-4" /> : <IconSend className="h-4 w-4" />}
-        </button>
+          <label className="sr-only" htmlFor="message-composer">
+            Write a message
+          </label>
+          <textarea
+            id="message-composer"
+            rows={1}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              // Enter sends, Shift+Enter breaks the line — the convention in
+              // every messenger this sits beside.
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Write a message"
+            className="max-h-32 min-w-0 flex-1 resize-none bg-transparent py-1 text-[13px] leading-5 text-white caret-[#008CFF] outline-none placeholder:text-white/40"
+          />
+          <Image
+            src="/messages/emoji-add.svg"
+            alt=""
+            width={20}
+            height={20}
+            className="shrink-0 opacity-60"
+          />
+        </div>
+
+        <RoundAction
+          label="Send"
+          icon="/messages/send.svg"
+          size={16}
+          filled
+          disabled={!body || over || send.isPending}
+          onClick={submit}
+        />
       </div>
-      {text.length > MESSAGE_MAX - 200 && (
-        <p className="tnum mt-1 px-3 text-right text-[11px] text-meta">
-          {MESSAGE_MAX - text.length} left
+
+      {over && (
+        <p className="tnum mt-2 px-2 text-right text-[11px] text-danger">
+          {body.length}/{MESSAGE_MAX}
         </p>
       )}
     </div>
@@ -95,25 +132,16 @@ function Thread({
 
   // The service returns newest-first; a thread reads oldest-first.
   const items = [...(messages.data?.items ?? [])].reverse();
+  const days = groupByDay(items);
 
   return (
-    <>
-      <ColumnHeader
-        title={conversation.peer?.displayName ?? "Conversation"}
-        subtitle={conversation.peer ? `@${conversation.peer.username}` : undefined}
-        action={
-          <button
-            onClick={onBack}
-            aria-label="Back to inbox"
-            className="ws-press rounded-full p-2 text-heading transition-colors hover:bg-white/10"
-          >
-            <IconArrowLeft className="h-5 w-5" />
-          </button>
-        }
-      />
+    <div className="flex h-full min-h-[calc(100dvh-76px)] flex-col">
+      <ThreadHeader conversation={conversation} onBack={onBack} />
 
-      <div className="flex flex-col gap-2 p-4">
+      {/* The design's 23px gutter and 24px rhythm between day groups. */}
+      <div className="flex flex-1 flex-col gap-6 px-[23px] py-10">
         {messages.isPending && [0, 1, 2].map((i) => <RowSkeleton key={i} />)}
+
         {messages.isError && (
           <ErrorState
             error={messages.error}
@@ -121,6 +149,7 @@ function Thread({
             onRetry={() => messages.refetch()}
           />
         )}
+
         {messages.isSuccess && items.length === 0 && (
           <EmptyState
             glyph="◇"
@@ -129,55 +158,24 @@ function Thread({
           />
         )}
 
-        {items.map((message) => {
-          const mine = Boolean(me.data && message.senderId === me.data.id);
-          return (
-            <div
-              key={message.id}
-              className={cn("flex items-end gap-2", mine && "flex-row-reverse")}
-            >
-              {/* The thread is 1:1 and the payload carries no `sender`, so the
-                  only other participant is the peer. Reading it from the
-                  conversation is what makes the bubble avatar match the same
-                  person everywhere else. */}
-              {!mine && (
-                <Avatar
-                  name={conversation.peer?.displayName ?? "?"}
-                  seed={message.senderId || conversation.peer?.id}
-                  src={conversation.peer?.avatarUrl}
-                  size={28}
+        {days.map((day) => (
+          <section key={day.key} className="flex flex-col gap-6">
+            <DayHeading label={day.label} />
+            <div className="flex flex-col gap-6">
+              {day.items.map((message) => (
+                <Bubble
+                  key={message.id}
+                  message={message}
+                  mine={Boolean(me.data?.id && message.senderId === me.data.id)}
                 />
-              )}
-              <div
-                className={cn(
-                  "max-w-[75%] rounded-2xl px-3.5 py-2",
-                  mine ? "bg-accent text-ink" : "ws-inset text-body"
-                )}
-              >
-                <p
-                  className={cn(
-                    "whitespace-pre-wrap break-words text-[15px] leading-normal",
-                    message.status === "removed" && "italic opacity-60"
-                  )}
-                >
-                  {message.status === "removed" ? "Message removed" : message.text}
-                </p>
-                <p
-                  className={cn(
-                    "mt-1 text-[11px]",
-                    mine ? "text-ink/60" : "text-meta"
-                  )}
-                >
-                  {relativeTime(message.createdAt)}
-                </p>
-              </div>
+              ))}
             </div>
-          );
-        })}
+          </section>
+        ))}
       </div>
 
       <Composer conversationId={conversation.id} />
-    </>
+    </div>
   );
 }
 
