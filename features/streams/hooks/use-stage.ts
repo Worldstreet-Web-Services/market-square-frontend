@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { captureErrorMessage, classifyCaptureError } from "@/lib/media-errors";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
+import { STAGE_STALL_MS, type StageState } from "@/lib/stage-recovery";
+
+export { STAGE_FAILURES, type StageState } from "@/lib/stage-recovery";
 
 /**
  * Going on stage over the connection the guest ALREADY has.
@@ -18,36 +22,16 @@ import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
  * acquire the hardware and publish in one step; the server-side grant is what
  * makes publishing legal, and if it has not landed the SDK's publish is
  * refused and we report that rather than retrying blindly.
+ *
+ * What it will NOT do is claim the guest is on stage because a row somewhere
+ * says `approved`. `state` describes this connection and nothing else.
+ *
+ * `StageState` and `STAGE_FAILURES` live in `lib/stage-recovery.ts` alongside
+ * the rule that turns them into a panel — the union and the decision that
+ * reads it drift apart the moment they live in different files, and that
+ * drift is exactly what let "approved" mean "on stage". Re-exported above so
+ * callers still have one import.
  */
-export type StageState =
-  | "idle"
-  /** Approved, but the viewer connection is not up yet — nothing to upgrade. */
-  | "waiting-for-room"
-  /**
-   * The host approved us, but LiveKit has not yet told this client that its
-   * publish grant landed. Publishing here is rejected by the server, so we wait
-   * for `ParticipantPermissionsChanged` instead of guessing.
-   */
-  | "awaiting-grant"
-  | "starting"
-  | "live"
-  /** NotAllowedError / SecurityError — permission actually refused. */
-  | "denied"
-  /** NotReadableError / TrackStartError — device held by another app or tab. */
-  | "device-busy"
-  /** NotFoundError / OverconstrainedError — nothing matches the constraints. */
-  | "device-missing"
-  /** The server has not granted publish permission (yet). */
-  | "not-permitted"
-  | "failed";
-
-export const STAGE_FAILURES: readonly StageState[] = [
-  "denied",
-  "device-busy",
-  "device-missing",
-  "not-permitted",
-  "failed",
-];
 
 export interface StageControls {
   state: StageState;
@@ -56,7 +40,20 @@ export interface StageControls {
   /** Mic came up but the camera did not — a success worth naming. */
   audioOnly: boolean;
   error: string | null;
+  /** Re-acquire the local devices. The remedy for a camera that was busy. */
   retry: () => void;
+  /**
+   * Throw away the playback token and come back on a new connection.
+   *
+   * The remedy for a MISSING GRANT, which `retry` cannot touch: the devices
+   * are fine, this LiveKit connection simply is not the one the host's
+   * approval landed on — or is one whose grant died with a reconnect, or with
+   * the ≤5 min token it was issued under. The backend mints an approved
+   * speaker's playback token WITH publish rights, so refetching it is the
+   * whole repair: the player reconnects on the new token and the grant is
+   * there before the first frame.
+   */
+  rejoin: () => void;
   toggleMic: () => Promise<void>;
   toggleCam: () => Promise<void>;
 }
@@ -113,6 +110,16 @@ export function useStage({
   const [audioOnly, setAudioOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  /**
+   * The attempt whose connect/grant wait outlived STAGE_STALL_MS.
+   *
+   * Held as the attempt number rather than a boolean so `stalled` can be
+   * DERIVED. A boolean needs clearing whenever the wait ends or a retry
+   * starts, and clearing it means a synchronous setState inside the effect
+   * that watches those things — cascading renders, and one more piece of state
+   * that can disagree with reality.
+   */
+  const [stalledAttempt, setStalledAttempt] = useState<number | null>(null);
   // Publishing is a one-shot per approval; without this the effect re-runs on
   // every room notification and re-acquires the devices.
   const startedFor = useRef<string | null>(null);
@@ -302,13 +309,64 @@ export function useStage({
     setAttempt((n) => n + 1);
   }, []);
 
+  /**
+   * Reconnect on a fresh token.
+   *
+   * Invalidating the playback query is the whole mechanism: `usePlaybackToken`
+   * refetches, `LiveKitPlayer` keys its connect effect on the token, so the
+   * room comes down and back up — and the new token carries the publish grant
+   * for an approved speaker, which the old one may never have had. Everything
+   * downstream (the grant listener, the publish effect) then runs normally
+   * against the new room.
+   *
+   * The local flags are reset first so the panel does not spend the reconnect
+   * still showing the failure that prompted it.
+   */
+  const queryClient = useQueryClient();
+  const rejoin = useCallback(() => {
+    setError(null);
+    setAudioOnly(false);
+    setMicOn(false);
+    setCamOn(false);
+    setPhase("idle");
+    startedFor.current = null;
+    setAttempt((n) => n + 1);
+    void queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "playback"] });
+  }, [queryClient, streamId]);
+
+  /**
+   * "Connecting" that never connects is a failure, and must be named as one.
+   *
+   * `waiting-for-room` and `awaiting-grant` are both legitimate for a second
+   * or two and both can last forever: the room may never come up, and the
+   * grant may have been applied to a connection that no longer exists. Neither
+   * resolves itself, and while they spun the panel showed a pulsing dot and
+   * offered nothing but "Leave stage" — the reported dead end. After
+   * STAGE_STALL_MS we stop pretending and hand over a remedy.
+   */
+  const pending = approved && !canPublish && phase !== "live";
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setTimeout(() => setStalledAttempt(attempt), STAGE_STALL_MS);
+    return () => clearTimeout(timer);
+    // `attempt` restarts the clock after a retry or a rejoin: a second attempt
+    // gets the same patience as the first, not zero.
+  }, [pending, attempt]);
+  // Both ways out clear themselves: the grant landing ends `pending`, and a
+  // retry or rejoin moves `attempt` past the one that stalled.
+  const stalled = pending && stalledAttempt === attempt;
+
   const state: StageState = !approved
     ? "idle"
     : !room
-      ? "waiting-for-room"
+      ? stalled
+        ? "grant-stalled"
+        : "waiting-for-room"
       : !canPublish && phase !== "live"
-        ? "awaiting-grant"
+        ? stalled
+          ? "grant-stalled"
+          : "awaiting-grant"
         : phase;
 
-  return { state, micOn, camOn, audioOnly, error, retry, toggleMic, toggleCam };
+  return { state, micOn, camOn, audioOnly, error, retry, rejoin, toggleMic, toggleCam };
 }
