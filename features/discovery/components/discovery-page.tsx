@@ -164,32 +164,36 @@ function ResultRow({
 function BrowseTab({
   tab,
   people,
+  peopleFiltersSlot,
   products,
   renderPerson,
   renderProduct,
 }: {
   tab: ExploreTab;
   people: BrowseQuery<Profile>;
+  /** The people filter bar, composed by the screen that owns the selection. */
+  peopleFiltersSlot: React.ReactNode;
   products: BrowseQuery<StoreItem>;
   renderPerson: (profile: Profile) => React.ReactNode;
   renderProduct: (item: StoreItem) => React.ReactNode;
 }) {
   if (tab === "people") {
     return (
-      <BrowseList
-        query={people.query}
-        items={people.items}
-        renderItem={renderPerson}
-        emptyTitle="Nobody to show yet"
-        emptyBody="Check back shortly."
-        errorFallback="Couldn't load people."
-      />
+      <>
+        {peopleFiltersSlot}
+        <BrowseList
+          query={people.query}
+          items={people.items}
+          renderItem={renderPerson}
+          emptyTitle="Nobody matches that yet"
+          /* Names the two things that could be true, because a filtered
+             directory can be empty for a reason the reader can fix. */
+          emptyBody="Try a different name, or clear the filters above."
+          errorFallback="Couldn't load people."
+        />
+      </>
     );
   }
-
-  // Posts is REELS: one video per screen, vertical snap, no ending. It owns
-  // its whole scroll container rather than rendering rows, so the route
-  // composes the surface in instead of a per-item renderer.
 
   return (
     <div className="space-y-4 p-4">
@@ -209,17 +213,36 @@ function BrowseTab({
 const resultKey = (result: DiscoveryResult) => `${result.kind}-${result.id}`;
 
 /**
- * Explore.
+ * Explore — and Explore is PEOPLE.
  *
- * The page IS the design: the search field, ONE chip row, and the card grid.
- * It used to open with a helper line and a hand-written list of other
- * surfaces to visit ("Home feed / Live / ARK Store / Citizen Spotlight") —
- * interim scaffolding from before the grid existed, which sat above the design
- * and pushed it below the fold. Both are gone; do not reintroduce them.
+ * The page IS the design: the search field, ONE chip row, and the surface the
+ * chip selects. It used to open with a helper line and a hand-written list of
+ * other surfaces to visit ("Home feed / Live / ARK Store / Citizen Spotlight")
+ * — interim scaffolding from before the grid existed, which sat above the
+ * design and pushed it below the fold. Both are gone; do not reintroduce them.
+ *
+ * WHAT MOVED, and why (the chip order itself is in `lib/explore-tabs.ts`):
+ *
+ *   People →  FIRST, and the resting state. This surface is how somebody
+ *             finds another person on the square; opening on a grid of
+ *             pictures answered a question nobody had walked in with.
+ *   Posts  →  OFF this surface. It was the reel — the endless vertical video
+ *             scroll — and the shape of a video product competes directly
+ *             with the thing this one is for. `ReelsFeed` still backs Home's
+ *             Reels lane, where the reader chose the lane.
+ *   For you,  UNCHANGED, and all still here. They are destinations a reader
+ *   Shows,    arrives already looking for, and the media the reel carried is
+ *   Streams,  browsable in the For you grid and on each person's profile.
+ *   Products
+ *
+ * The one HELPER LINE that came back is the people filter bar's, and only on
+ * the People tab. It is not scaffolding: it names what the wink is, which is
+ * a control nobody has seen before on any other product.
  *
  * Search state is CONTROLLED from `discover-screen`, because the grid, the
  * search results and the immersive viewer all read one selection and the
- * viewer lives in another slice. The screen owns that join.
+ * viewer lives in another slice. The screen owns that join — including the
+ * people filter and sort, since the sort is a request parameter.
  */
 export function DiscoveryPage({
   query,
@@ -229,6 +252,7 @@ export function DiscoveryPage({
   onTabChange,
   search,
   people,
+  peopleFiltersSlot,
   products,
   gridItems,
   gridPending,
@@ -251,6 +275,12 @@ export function DiscoveryPage({
   search: ReturnType<typeof useDiscovery>;
   /** The People directory — its own paged route, narrowed by the query. */
   people: BrowseQuery<Profile>;
+  /**
+   * The people filter bar. Composed in rather than built here because the
+   * selection it drives — the sort, which is a SERVER parameter — belongs to
+   * the same screen that owns the query and the tab.
+   */
+  peopleFiltersSlot: React.ReactNode;
   /** The Products tab — the ARK Store's paged item list. */
   products: BrowseQuery<StoreItem>;
   gridItems: ExploreItem[];
@@ -293,8 +323,8 @@ export function DiscoveryPage({
   const unavailable = errorCode(search.error) === "NOT_FOUND";
   const items = search.data?.pages.flatMap((page) => page.items) ?? [];
   const hasQuery = deferredQuery.trim().length > 0;
-  // People, Posts and Products are row lists from their own routes; every
-  // other browsing tab is the media/stream grid.
+  // People and Products are row lists from their own routes; every other
+  // browsing tab is the media/stream grid.
   const isBrowseTab = exploreTabIsRowList(tab);
   // Every page reports the same filter, so the first one answers for all.
   const topicFilter = search.data?.pages[0]?.topicFilter ?? null;
@@ -315,6 +345,8 @@ export function DiscoveryPage({
             <input
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
+              /* People first, because that is what the surface is now for and
+                 what an empty field is already showing. */
               placeholder="Search people, posts, streams, products…"
               autoComplete="off"
               className="min-w-0 flex-1 bg-transparent text-[15px] text-heading outline-none"
@@ -406,6 +438,7 @@ export function DiscoveryPage({
         <BrowseTab
           tab={tab}
           people={people}
+          peopleFiltersSlot={peopleFiltersSlot}
           products={products}
           renderPerson={renderPerson}
           renderProduct={renderProduct}
@@ -481,6 +514,9 @@ export function DiscoveryPage({
         </div>
       )}
 
+      {/* The catch-all is still `for-you` — it is the chip that searches
+          EVERYTHING (`type=all`), which is a different question from which
+          chip Explore opens on. */}
       {!isBrowseTab && hasQuery && search.isSuccess && items.length === 0 && (
         <div className="p-4">
           <EmptyState

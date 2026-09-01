@@ -122,7 +122,11 @@ function SafetyActions({ profile, gate }: { profile: Profile; gate: (fn: () => v
         icon={<IconFlag className="h-4 w-4" />}
         label="Report"
         disabled={safety.report.isPending}
-        onClick={() => gate(() => safety.report.mutate())}
+        // "other", explicitly. This row is the escape hatch inside a live
+        // room, where the reader wants out of a conversation rather than a
+        // taxonomy — the reason picker lives on the person card and the
+        // profile, where there is room for one and time to read it.
+        onClick={() => gate(() => safety.report.mutate("other"))}
       />
     </>
   );

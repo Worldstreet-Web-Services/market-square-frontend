@@ -1,4 +1,5 @@
 import { msApi } from "@/lib/api/service";
+import { parsePeopleSort, type PeopleSort } from "@/lib/people-filters";
 import {
   CategoryListSchema,
   PeoplePageSchema,
@@ -54,12 +55,18 @@ export async function saveMyInterests(topics: string[]) {
  * to ignore an unknown parameter; the client never re-sorts a paged list
  * itself, since sorting one loaded page is not sorting the list.
  */
-export async function fetchPeople(params: { query?: string; cursor?: string } = {}) {
+export async function fetchPeople(
+  params: { query?: string; sort?: PeopleSort; cursor?: string } = {}
+) {
   const query = params.query?.trim() ?? "";
   return PeoplePageSchema.parse(
     await msApi.get("/profiles", {
       ...(query ? { q: query } : {}),
-      sort: "followers",
+      // `q` and `sort` are the ONLY narrowing this route accepts — the spec
+      // documents four parameters and these are two of them. Location and
+      // gender are not among them and are not faked into `q`; see
+      // `lib/people-filters.ts` for what the backend still owes.
+      sort: parsePeopleSort(params.sort),
       limit: 30,
       cursor: params.cursor,
     })

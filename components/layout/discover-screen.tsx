@@ -12,10 +12,18 @@ import {
   type ExploreTab,
 } from "@/lib/explore-tabs";
 import { useQueryParam } from "@/hooks/use-query-param";
+import {
+  EMPTY_PEOPLE_FILTER,
+  filterPeople,
+  parsePeopleSort,
+  type PeopleFilter,
+  type PeopleSort,
+} from "@/lib/people-filters";
 import { EcosystemPartnersRail } from "@/components/layout/ecosystem-partners-rail";
 import {
   DiscoveryPage,
   ExploreCategoriesRail,
+  PeopleFilters,
   useDiscovery,
   usePeople,
 } from "@/features/discovery";
@@ -50,6 +58,7 @@ export function DiscoverScreen() {
   const seedQuery = useQueryParam("q");
   const seedTab = useQueryParam("tab");
   const seedVideo = useQueryParam("v");
+  const seedSort = useQueryParam("sort");
 
   const [typed, setTyped] = useState<string | null>(null);
   const query = typed ?? seedQuery ?? "";
@@ -58,6 +67,23 @@ export function DiscoverScreen() {
   // pure and live in `lib/explore-tabs.ts`.
   const [tab, setTab] = useState<ExploreTab>(() => parseExploreTab(seedTab));
   const [openVideoId, setOpenVideoId] = useState<string | null>(seedVideo);
+  /*
+    The people selection, split by WHERE IT IS ANSWERED and not by how it looks.
+
+    `sort` is a request parameter, so it lives in the query key and a change
+    starts a new paged list from the service in that order — a client-side
+    re-sort of one loaded page would make page 1 look ordered while page 2
+    contradicted it.
+
+    `filter` is matched over the pages already loaded, because `GET /profiles`
+    accepts no facet parameters at all. That is a stopgap and it is labelled as
+    one on the surface itself; `lib/people-filters.ts` carries the contract
+    check and the exact list of what the backend still owes.
+
+    Both seed from the URL so a filtered directory is a link somebody can send.
+  */
+  const [peopleSort, setPeopleSort] = useState<PeopleSort>(() => parsePeopleSort(seedSort));
+  const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>(EMPTY_PEOPLE_FILTER);
 
   const deferredQuery = useDeferredValue(query);
   const hasQuery = deferredQuery.trim().length > 0;
@@ -81,7 +107,11 @@ export function DiscoverScreen() {
   // narrowed by the query — never a blank tab waiting to be searched.
   // Each browsing tab pages its own endpoint, and only the active one runs —
   // the others would be paying for a list nobody is looking at.
-  const people = usePeople(tab === "people" ? deferredQuery : "", tab === "people");
+  const people = usePeople(
+    tab === "people" ? deferredQuery : "",
+    peopleSort,
+    tab === "people"
+  );
   // `/feed` and `/store/items` take no `q`, so on those tabs a query falls
   // through to /search rather than narrowing this list. See the report.
   const storeItems = useStoreItems(undefined, tab === "products" && !hasQuery);
@@ -98,9 +128,22 @@ export function DiscoverScreen() {
    * and still must not be offered a Follow button on yourself.
    */
   const me = useMe();
-  const directoryPeople = useMemo(
+  const loadedPeople = useMemo(
     () => excludeViewer(people.data?.pages.flatMap((page) => page.items) ?? [], me.data?.id),
     [people.data?.pages, me.data?.id]
+  );
+  /*
+    The facet filter, applied over the loaded pages.
+
+    Kept SEPARATE from `loadedPeople` on purpose: the filter bar reads the
+    unfiltered rows to decide which facets the payload can even answer
+    (`facetAvailability`), and feeding it the filtered list would make a
+    control vanish the moment it excluded everything that carried the field it
+    was filtering on.
+  */
+  const directoryPeople = useMemo(
+    () => filterPeople(loadedPeople, peopleFilter),
+    [loadedPeople, peopleFilter]
   );
 
   // The grid: LIVE first — it is the only thing on the square that expires
@@ -223,6 +266,16 @@ export function DiscoverScreen() {
           query: people,
           items: directoryPeople,
         }}
+        peopleFiltersSlot={
+          <PeopleFilters
+            /* The UNFILTERED rows — see the note on `directoryPeople`. */
+            people={loadedPeople}
+            filter={peopleFilter}
+            onFilterChange={setPeopleFilter}
+            sort={peopleSort}
+            onSortChange={setPeopleSort}
+          />
+        }
         products={{
           query: storeItems,
           items: storeItems.data?.pages.flatMap((page) => page.items) ?? [],

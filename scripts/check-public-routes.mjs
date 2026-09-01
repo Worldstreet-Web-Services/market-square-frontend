@@ -274,6 +274,26 @@ const PENDING_ROUTES = {
       "server-side and this is never called. DELETE THIS ENTRY once PR #150 " +
       "is deployed and the route appears in openapi.json.",
   },
+  "post /profiles/{}/wink": {
+    reason:
+      "The wink — a one-tap signal of interest addressed to a PERSON, and the " +
+      "control Explore's people directory is built around. Not on the service " +
+      "at all yet: the spec documents no wink route and no `wink` " +
+      "notification kind, so this 404s against every real environment today. " +
+      "That is handled rather than hidden — `useWink` reads a 404 as 'not " +
+      "deployed' and removes the control entirely (the same contract " +
+      "Arkmarks and Block already follow), so nothing ever reports a wink as " +
+      "sent without a 2xx behind it. The fixture BFF implements the route in " +
+      "full, including the rate limit and the block-at-delivery rule, so the " +
+      "flow is demonstrable end to end while the service catches up. " +
+      "WHAT THE SERVICE OWES: the route itself; a per-sender rate limit " +
+      "(12/hour, 1 per person per 24h — the client's copy in lib/winks.ts is " +
+      "a courtesy, not enforcement); dropping a wink at delivery when either " +
+      "party has blocked the other, WITHOUT a distinguishable error, since a " +
+      "distinct response lets anyone probe whether they have been blocked; " +
+      "and a `wink` kind on GET /me/notifications. DELETE THIS ENTRY once the " +
+      "route appears in openapi.json.",
+  },
   "post /profiles/{}/tips": {
     reason:
       "Tipping a PROFILE directly is still not in the spec — only " +

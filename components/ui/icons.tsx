@@ -165,6 +165,45 @@ export function IconEye({ className }: IconProps) {
   );
 }
 
+/**
+ * The wink: a one-tap "I find you interesting", addressed to a person.
+ *
+ * NOT an eye. `IconEye` sits directly above this and means "views" — a tally
+ * of who looked at a post. Interest is a thing a face does, not a thing an
+ * organ does, and an eye pointed at a stranger reads as surveillance, which is
+ * the exact wrong note for a signal we are asking people to send warmly.
+ *
+ * NOT a poke either. That word carries a decade of other people's meaning; the
+ * product calls this a wink and the glyph has to be one.
+ *
+ * So: a face. One eye open as a dot, the other closed as a short downward arc
+ * with an upward flick at its outer end — the lash line that makes a closed eye
+ * read as a WINK rather than as someone asleep — and a curved mouth. The mouth
+ * is what carries the warmth; without it the face is neutral and the wink
+ * turns knowing rather than friendly.
+ *
+ * House rules kept, so it sits in the set: 24x24, `currentColor`, 1.6 stroke
+ * from `base()`. The open eye is drawn as a filled dot rather than a stroked
+ * circle because at 16px a stroked 1.2r circle closes into a blob; a filled
+ * one stays a clean point. It is deliberately NOT a `NavIconProps` icon — a
+ * "filled" wink would be a solid disc with no face left in it, and the sent
+ * state is carried by colour and a tinted ring at the call site instead.
+ */
+export function IconWink({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="8.75" />
+      {/* Open eye, viewer's left. A dot, not a ring — see above. */}
+      <circle cx="9.1" cy="10" r="0.85" fill="currentColor" stroke="none" />
+      {/* Closed eye with its lash flick. */}
+      <path d="M13 10.35q1 -1.05 2.3 0" />
+      <path d="M15.3 10.35l0.85 -0.85" />
+      {/* The smile. Short of the cheeks, so the face is not a bowl. */}
+      <path d="M8.9 14.35q3.1 2.15 6.2 0" />
+    </svg>
+  );
+}
+
 export function IconClock({ className }: IconProps) {
   return (
     <svg {...base(className)}>
