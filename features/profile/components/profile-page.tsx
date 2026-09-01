@@ -15,6 +15,7 @@ import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
+import { MediaTab } from "@/features/profile/components/media-tab";
 import type { Post, Profile } from "@/lib/api/schemas";
 import {
   useFollow,
@@ -30,7 +31,18 @@ import { VerificationCard } from "@/features/profile/components/verification-car
 import { CreatorCard } from "@/features/profile/components/creator-card";
 import { useMarketView } from "@/lib/analytics";
 
-type Tab = "posts" | "streams" | "activities";
+/*
+  Media is a tab, not a section inside Posts.
+
+  It is the replacement for the reels, and it only works if it is somewhere a
+  person GOES: "if you need to see someone's picture, you have to go to their
+  profile, and then you can slide". Buried under a timeline it would be a
+  scroll away and nobody would find it.
+
+  Second, not first. A profile answers "who is this" before "what have they
+  posted", and Posts carries the words that answer it.
+*/
+type Tab = "posts" | "media" | "streams" | "activities";
 
 function FollowButton({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
@@ -274,6 +286,7 @@ export function ProfilePage({
   messageSlot,
   composeSlot,
   postSlot,
+  mediaViewerSlot,
 }: {
   username: string;
   /** Composed from outside — profile never imports the messages slice. */
@@ -281,6 +294,11 @@ export function ProfilePage({
   /** Composed from outside — profile never imports the feed slice. */
   composeSlot?: React.ReactNode;
   postSlot: (post: Post) => React.ReactNode;
+  /**
+   * The full-screen swipeable viewer, composed by the route: profile never
+   * imports the feed slice, and the viewer lives there.
+   */
+  mediaViewerSlot: (items: Post[], openId: string, onClose: () => void) => React.ReactNode;
 }) {
   const profile = useProfile(username);
   const me = useMe();
@@ -412,6 +430,7 @@ export function ProfilePage({
         <ColumnTabs
           tabs={[
             { value: "posts" as Tab, label: "Posts" },
+            { value: "media" as Tab, label: "Media" },
             { value: "streams" as Tab, label: "Streams" },
             { value: "activities" as Tab, label: "Activities" },
           ]}
@@ -422,6 +441,9 @@ export function ProfilePage({
 
       {tab === "posts" && (
         <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
+      )}
+      {tab === "media" && (
+        <MediaTab username={username} isMe={isMe} viewerSlot={mediaViewerSlot} />
       )}
       {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
       {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}

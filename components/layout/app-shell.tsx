@@ -126,6 +126,19 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
+  /*
+    Houses is a row of its own after all.
+
+    The hallway at the top of Home shows the three rooms open now, which is an
+    overview's job — but an overview is a summary, and a summary needs
+    somewhere to point. Without a row, the only door to every other room was a
+    "See all" that appears only when a fourth room exists.
+
+    `/houses/[id]` still resolves whatever the flag says: a link somebody was
+    sent has to work, and hiding an entry must never break a route.
+  */
+  { href: "/houses", label: "Houses", icon: IconHouses, flag: "houses" },
+  
   { href: "/messages", label: "Messages", icon: IconMail, authed: true },
   {
     href: "/notifications",
@@ -134,11 +147,7 @@ const NAV: NavItem[] = [
     authed: true,
   },
   { href: "/live", label: "Live", icon: IconLive, secondary: true },
-  // Houses has no rail entry: the hallway is the top of Home, and "See all"
-  // there is the door to /houses. `/houses/[id]` always resolves whatever the
-  // flag says — a link somebody was sent has to work, and hiding an entry
-  // must never break a route.
-  // Reachable by URL, by deep link and from Explore's Products tab — just
+// Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true, secondary: true },
