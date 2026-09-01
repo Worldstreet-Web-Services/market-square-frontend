@@ -41,3 +41,17 @@ test("the ring is what knows the room has arrived", () => {
   );
   assert.match(ring, /roomSettled=\{settled\}/, "and passes it to every occupied seat");
 });
+
+/**
+ * The gallery drew author-supplied media with `next/image`, which refuses a
+ * host that is not in next.config — and this app deliberately configures
+ * none, because the media host is author-supplied and unknown. It also put
+ * `.mp4` URLs into an image, which is the story-tile bug: the browser cannot
+ * decode a clip and paints its broken-image glyph instead.
+ */
+test("the profile gallery does not use next/image, and never draws a clip as a picture", () => {
+  const gallery = source("features/profile/components/media-tab.tsx");
+  assert.doesNotMatch(gallery, /from "next\/image"/, "the media host is unknown; use a plain img");
+  assert.match(gallery, /isVideo\(post\) \?/, "a clip takes the video path");
+  assert.match(gallery, /#t=0\.1/, "a clip with no poster shows its own first frame");
+});

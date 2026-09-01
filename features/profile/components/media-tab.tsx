@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -105,13 +104,49 @@ export function MediaTab({
               aria-label={post.text ? `Open: ${post.text.slice(0, 60)}` : "Open media"}
               className="ws-press group relative block aspect-square w-full overflow-hidden bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
-              <Image
-                src={post.thumbnailUrl ?? post.mediaUrl!}
-                alt=""
-                fill
-                sizes="(min-width: 1024px) 200px, 33vw"
-                className="object-cover transition-transform duration-200 group-hover:scale-105"
-              />
+              {/*
+                A CLIP IS NOT A PICTURE, and neither is drawn with next/image.
+
+                Two bugs in one line, and the second is the interesting one.
+                `next/image` refuses a host that is not in next.config, which
+                this app deliberately does not configure — the media host is
+                author-supplied and unknown, which is why every other surface
+                here uses a plain <img>. And passing an .mp4 to an <img> at all
+                is the story-tile bug again: the browser cannot decode it and
+                paints its broken-image glyph, so a clip advertises itself as a
+                failed upload.
+
+                So: a video with a poster shows the poster; a video without one
+                shows its own first frame through a muted <video> seeked to
+                #t=0.1, because plenty of clips open on black. Pictures stay
+                pictures.
+              */}
+              {isVideo(post) ? (
+                post.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+                  <img
+                    src={post.thumbnailUrl}
+                    alt=""
+                    className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                  />
+                ) : (
+                  <video
+                    src={`${post.mediaUrl}#t=0.1`}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    aria-hidden
+                    className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                  />
+                )
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+                <img
+                  src={post.thumbnailUrl ?? post.mediaUrl!}
+                  alt=""
+                  className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                />
+              )}
               {isVideo(post) && (
                 // The one thing a still frame cannot say about itself.
                 <span className="absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1">
