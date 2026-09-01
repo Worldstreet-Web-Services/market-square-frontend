@@ -83,10 +83,29 @@ interface NavItem {
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
 //
-// Spotlight has a nav entry because the right rail, which used to be its only
-// door, is `hidden lg:block` — so below lg there was no way to reach it at all.
-// The "second door to the same room" argument only holds where the first door
-// exists, and on a phone it does not.
+/*
+  FOUR primary rows, and everything else behind More.
+
+  The rail used to list every surface the app has, which turned the first
+  thing a reader sees into a directory. 2.0 does three things — talk in a
+  room, meet somebody, keep up with your people — and the rail now says so.
+
+  What moved is not gone: `secondary` folds an entry into More, so Tickets,
+  Studio, Arkmarks, Schedule, Spotlight and Store keep their routes, their
+  deep links and their behaviour. They stop costing a permanent slot for
+  something opened once a week.
+
+  Live went secondary rather than away. With video leaving Market Square, Live
+  and Houses are two names for "a room happening now", and two names is how a
+  reader learns to guess which one they want. Houses is not in the rail at all
+  any more: the hallway is the top of Home, and a nav row pointing at the same
+  rooms would be a second door to the room you are already looking at.
+
+  Spotlight has a nav entry because the right rail, which used to be its only
+  door, is `hidden lg:block` — so below lg there was no way to reach it at
+  all. The "second door to the same room" argument only holds where the first
+  door exists, and on a phone it does not.
+*/
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
@@ -97,12 +116,12 @@ const NAV: NavItem[] = [
     icon: IconBell,
     authed: true,
   },
-  { href: "/live", label: "Live", icon: IconLive },
-  // Houses: audio-only rooms. Promotion only — `/houses/[id]` always resolves
-  // whatever the flag says, because a link somebody was sent has to work and
-  // hiding an entry must never break a route.
-  { href: "/houses", label: "Houses", icon: IconHouses, flag: "houses" },
-  { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
+  { href: "/live", label: "Live", icon: IconLive, secondary: true },
+  // Houses has no rail entry: the hallway is the top of Home, and "See all"
+  // there is the door to /houses. `/houses/[id]` always resolves whatever the
+  // flag says — a link somebody was sent has to work, and hiding an entry
+  // must never break a route.
+  { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true, secondary: true },
   // Arkmarks had a route and a save button on every post, and no way in: the
   // only path to something you saved was typing the URL.
   {
@@ -123,7 +142,7 @@ const NAV: NavItem[] = [
     authed: true,
     secondary: true,
   },
-  { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
+  { href: "/studio", label: "Studio", icon: IconCamera, authed: true, secondary: true },
   {
     href: "/admin",
     label: "Admin",

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { Avatar } from "@/components/ui/avatar";
 import { EmptySeat, OccupiedSeat } from "@/features/houses/components/seat";
 import type { HouseAudio } from "@/features/houses/hooks/use-house-audio";
@@ -52,6 +54,25 @@ export function SeatRing({
   // the next person gets.
   const nextFree = nextFreeSeat(seating);
 
+  /*
+    Whether the room has finished arriving.
+
+    Seats mount and unmount as people sit and stand, so a seat cannot tell the
+    difference between "somebody just took this chair" and "this chair was
+    already taken when I opened the room" — both look like a fresh mount to it.
+    The ring can: it knows when IT arrived. Everything that mounts in the first
+    frame was already here; everything after that is somebody sitting down.
+
+    A frame rather than a timer: one paint is exactly the window in which the
+    initial seats mount, and a duration would be a guess that breaks on a slow
+    device.
+  */
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setSettled(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   return (
     <ul
       aria-label="Speakers"
@@ -71,6 +92,7 @@ export function SeatRing({
                 audio={audio}
                 mutedForMe={mutedForMe.has(seat.slot.identity)}
                 onOpen={() => onOpenPerson(seat.slot!)}
+                roomSettled={settled}
               />
             ) : (
               <EmptySeat

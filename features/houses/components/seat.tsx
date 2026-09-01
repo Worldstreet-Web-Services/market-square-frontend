@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { ChipShell } from "@/components/ui/badge";
 import { IconHand, IconVolume } from "@/components/ui/icons";
@@ -38,11 +38,19 @@ export function OccupiedSeat({
   audio,
   mutedForMe,
   onOpen,
+  roomSettled,
 }: {
   seat: SeatModel;
   audio: HouseAudio;
   mutedForMe: boolean;
   onOpen: () => void;
+  /**
+   * False while the room is still drawing itself for the first time. Seats
+   * that appear during that window were already occupied when we arrived and
+   * must not animate — animating the whole ring on join makes an ordinary
+   * room look like an event.
+   */
+  roomSettled: boolean;
 }) {
   const slot = seat.slot!;
   const meta = parseParticipantMeta(slot.metadata);
@@ -56,19 +64,25 @@ export function OccupiedSeat({
    * then never again for this occupant, so a re-render — a level tick, a name
    * change, a mute — cannot replay it.
    */
-  const [landing, setLanding] = useState(false);
-  const seen = useRef<string | null>(null);
-  useEffect(() => {
-    if (seen.current === slot.identity) return;
-    const first = seen.current === null;
-    seen.current = slot.identity;
-    // Somebody already seated when we walked in did not just arrive. Animating
-    // the whole ring on join would make an ordinary room look like an event.
-    if (first) return;
-    setLanding(true);
-    const timer = setTimeout(() => setLanding(false), 560);
-    return () => clearTimeout(timer);
-  }, [slot.identity]);
+  /*
+    Does this seat LIFT as it appears?
+
+    An empty seat and an occupied one are different components, so this one
+    mounts the moment somebody sits down — it has no previous render of itself
+    to compare against. The old guard kept a ref of the last identity and
+    skipped the animation when it was null, meaning "I just arrived, do not
+    animate the people already here". But null is also what a fresh mount looks
+    like, so the lift never fired for anyone: the one moment this feature
+    budgets motion for was dead in every case.
+
+    "Did I just walk in?" is a question about the ROOM, and the ring answers it.
+    Read ONCE at mount, deliberately: a lazy initialiser captures the room's
+    state at the instant this seat appeared, so a seat that mounted while the
+    room was still drawing itself never lifts, even after the room settles a
+    frame later. No effect, no timer, no second render — the CSS animation runs
+    once and ends on its own.
+  */
+  const [landing] = useState(() => roomSettled);
 
   return (
     <button
