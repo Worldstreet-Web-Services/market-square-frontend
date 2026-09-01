@@ -15,6 +15,7 @@ import { clearHeldPayment, heldPayment, holdPayment } from "@/lib/payment-store"
 import { useEmbeddedWallet } from "@/hooks/use-wallet";
 import { useEvmSend } from "@/hooks/use-evm-send";
 import { useKashStatus } from "@/hooks/use-kash-status";
+import { isHouse } from "@/features/houses/lib/house";
 import {
   banFromChat,
   cancelActivity,
@@ -293,9 +294,15 @@ export function useCreateStream() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createStream,
-    onSuccess: () => {
+    onSuccess: (stream) => {
       invalidateStreamSurfaces(queryClient);
-      toast.success("Stream created");
+      /*
+        A house is not a stream, and the person who just opened one should not
+        be told it is. One mutation creates both — a house IS a stream with
+        `category: "house"` — so the confirmation reads off what was actually
+        made rather than off the function that made it.
+      */
+      toast.success(isHouse(stream) ? "House opened" : "Stream created");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't create the stream.")),
   });

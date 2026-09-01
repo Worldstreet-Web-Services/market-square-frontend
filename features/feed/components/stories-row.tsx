@@ -30,6 +30,7 @@ import {
   IconX,
 } from "@/components/ui/icons";
 import { useMe } from "@/hooks/use-me";
+import { isHouse } from "@/features/houses/lib/house";
 import { useFeed, useStories } from "@/features/feed/hooks/use-feed";
 import type { FeedItem, Post } from "@/features/feed/lib/types";
 
@@ -87,6 +88,20 @@ function toLiveEntries(items: FeedItem[]): LiveEntry[] {
   for (const item of items) {
     const stream = item.stream;
     if (!stream || stream.status !== "live") continue;
+    /*
+      A HOUSE IS NOT A BROADCAST, and it must never appear here.
+
+      This rail collected every live stream and drew it with a red Live pill,
+      then `liveHref` sent it to `/live/:id`. A house went in with the rest —
+      so the flagship feature had a second front door, wearing a broadcast
+      badge, that opened the video room: a player, a viewer count, a paid gift
+      tray, and a header reading HOUSE above a loading video.
+
+      The hallway at the top of Home is where a house belongs, and it is
+      already there. Excluded here rather than re-routed, because a house in a
+      rail of red Live pills is still telling the reader it is a broadcast.
+    */
+    if (isHouse(stream)) continue;
     if (seenIds.has(stream.id)) continue;
     seenIds.add(stream.id);
     live.push({
