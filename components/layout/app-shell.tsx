@@ -106,6 +106,23 @@ interface NavItem {
   all. The "second door to the same room" argument only holds where the first
   door exists, and on a phone it does not.
 */
+/*
+  Four more left the rail, and none of them were destinations.
+
+  Tickets and Arkmarks are RECORDS — what you bought, what you saved. They
+  belong to you, so they moved under your own avatar with View profile and
+  Log out, which is where a person looks for their own things.
+
+  Schedule merged into the job it is part of. Scheduling a stream is a studio
+  function, and it already has four real doors: the Live hub, your profile,
+  the arena block and the feed's empty state. A fifth in the rail was a
+  shortcut to a page nobody navigates to cold.
+
+  Spotlight is deferred rather than dropped. Status is the LAST thing 2.0
+  builds — it is only worth being seen once there is a room to be seen in —
+  and until then a permanent rail entry advertises a system that does not
+  exist. The route still resolves.
+*/
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
@@ -121,27 +138,9 @@ const NAV: NavItem[] = [
   // there is the door to /houses. `/houses/[id]` always resolves whatever the
   // flag says — a link somebody was sent has to work, and hiding an entry
   // must never break a route.
-  { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true, secondary: true },
-  // Arkmarks had a route and a save button on every post, and no way in: the
-  // only path to something you saved was typing the URL.
-  {
-    href: "/arkmarks",
-    label: "Arkmarks",
-    icon: IconBookmark,
-    authed: true,
-    secondary: true,
-  },
-  { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
   // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
-  {
-    href: "/schedule",
-    label: "Schedule",
-    icon: IconCalendar,
-    authed: true,
-    secondary: true,
-  },
   { href: "/studio", label: "Studio", icon: IconCamera, authed: true, secondary: true },
   {
     href: "/admin",
@@ -533,6 +532,33 @@ function AccountChip() {
           >
             View profile
           </Link>
+          {/*
+            What is YOURS lives under you.
+
+            Tickets and Arkmarks are records — what you bought, what you saved
+            — not places you navigate to. In the rail they each cost a
+            permanent row to serve something opened once a week; here they sit
+            where a person already looks for their own things, next to their
+            own name.
+          */}
+          {me.data && (
+            <>
+              <Link
+                href="/tickets"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Tickets
+              </Link>
+              <Link
+                href="/arkmarks"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Arkmarks
+              </Link>
+            </>
+          )}
           <button
             onClick={() => {
               close();
