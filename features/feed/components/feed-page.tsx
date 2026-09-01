@@ -19,22 +19,11 @@ import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
-import { FeaturedArena } from "@/features/feed/components/featured-arena";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
 import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
-
-// The workspace switcher above the timeline, in the design's order. "Feeds"
-// is the current surface and renders as the active chip; every other entry is
-// a real route, so the list carries no "no destination" case.
-const SECTIONS: Array<{ label: string; href: string }> = [
-  { label: "Discover", href: "/discover" },
-  { label: "Messages", href: "/messages" },
-  { label: "Notifications", href: "/notifications" },
-  { label: "Arkmarks", href: "/arkmarks" },
-];
 
 /*
   Lanes filter the timeline, in the design's order.
@@ -52,7 +41,6 @@ const SECTIONS: Array<{ label: string; href: string }> = [
 */
 const LANES: Array<{ lane: Lane; label: string }> = [
   { lane: "for-you", label: "For You" },
-  { lane: "live", label: "Live Streaming" },
   { lane: "following", label: "Following" },
   { lane: "trending", label: "Trending" },
 ];
@@ -229,51 +217,33 @@ export function FeedPage({
           the desktop did. Video moved to Explore's reels, where it is watched
           rather than scrolled past. */}
       <div className="relative px-4 py-4 lg:px-6">
-        {/* Section switcher and the two creation actions share one long
-            outlined pill — that enclosure is the design's, not decoration.
-            Desktop only: on a phone every one of these sections is already a
-            tab in the bottom bar, so the row was a second copy of the same
-            navigation sitting above the stories, and one that ran off the
-            right edge because the pill cannot fit four labels at that width. */}
-        <div className="ws-tabbar mb-4 hidden items-center gap-3 p-1.5 md:flex">
-          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <span
-              aria-current="page"
-              className="ws-btn-silver shrink-0 rounded-full px-4 py-2 text-[14px] font-medium"
-            >
-              Feeds
-            </span>
-            {SECTIONS.map((section) => (
-              <Link
-                key={section.label}
-                href={section.href}
-                className="shrink-0 rounded-full px-4 py-2 text-[12px] font-bold text-white/40 transition-colors hover:bg-white/8 hover:text-body"
-              >
-                {section.label}
-              </Link>
-            ))}
-          </div>
+        {/*
+          The section pills are gone. They were Feeds · Discover · Messages ·
+          Notifications · Arkmarks — the sidebar, drawn a second time, twelve
+          pixels from the sidebar. Home had THREE navigation systems stacked:
+          this row, the rail beside it, and the lane tabs below. A reader
+          deciding where to look first had to rule out two of them.
 
-          {/* Hidden on a phone: the shell's floating create button already
-              covers posting there, and these two would squeeze the section
-              pills into nothing. */}
-          <div className="hidden shrink-0 items-center gap-3 md:flex">
-            <Link
-              href="/schedule"
-              className="ws-press flex shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/[0.18] px-4 py-2 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-[#979797]/25"
-            >
-              <IconCalendar className="h-4 w-4" />
-              Schedule Stream
-              <IconChevronDown className="h-3.5 w-3.5" />
-            </Link>
-            <button
-              onClick={() => setComposerOpen(true)}
-              className="ws-btn-create ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
-            >
-              <IconPlus className="h-4 w-4" />
-              Create Post
-            </button>
-          </div>
+          The two creation actions stay, because they are not navigation —
+          they are the two things a person comes here to DO. They sit alone
+          now, right-aligned, where the eye lands after the rooms.
+        */}
+        <div className="mb-4 hidden items-center justify-end gap-3 md:flex">
+          <Link
+            href="/schedule"
+            className="ws-press flex shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/[0.18] px-4 py-2 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-[#979797]/25"
+          >
+            <IconCalendar className="h-4 w-4" />
+            Schedule Stream
+            <IconChevronDown className="h-3.5 w-3.5" />
+          </Link>
+          <button
+            onClick={() => setComposerOpen(true)}
+            className="ws-btn-create ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
+          >
+            <IconPlus className="h-4 w-4" />
+            Create Post
+          </button>
         </div>
 
         {/* Reels is a mode, not a filter. The story rail and the hero are
@@ -321,9 +291,18 @@ export function FeedPage({
           </div>
         )}
 
-        <div className="mb-4">
-          <FeaturedArena />
-        </div>
+        {/*
+          The arena banner is gone from Home.
+
+          It is a green, full-width call to join a LIVE ARENA — another
+          product, in another slice, shouting on the one page that is supposed
+          to say what this place is. Between it, the Live badge on the story
+          rail and a "Live Streaming" lane, Home read as a broadcast product.
+          It is not one: "we don't do all those streaming thing".
+
+          It keeps its home on /live, which is where somebody who wants an
+          arena goes.
+        */}
 
         {authenticated && showComposer && (
           <div className="ws-post mb-4">

@@ -32,7 +32,16 @@ import type { Stream } from "@/features/streams/lib/types";
  * right place for it.
  */
 
-const SHOWN = 3;
+/*
+  FIVE, not three.
+
+  Three was sized for a strip under other furniture. With the section pills,
+  the arena banner and the Live lane gone, the hallway IS the top of Home —
+  and a hallway showing three doors when eight are open is a summary of a
+  summary. Five fills the first screen on a phone without pushing the feed
+  out of reach.
+*/
+const SHOWN = 5;
 
 export function Hallway() {
   const live = useStreamList("live");
@@ -51,14 +60,40 @@ export function Hallway() {
     );
   }
 
-  // A failed load is silent here. The hallway is not the reason somebody
-  // opened Home, and an error banner above the feed would make a working page
-  // look broken.
-  if (live.isError || houses.length === 0) return null;
+  // A failed load stays silent: an error banner at the top of Home makes a
+  // working page look broken, and the feed below is unaffected.
+  if (live.isError) return null;
+
+  /*
+    An empty hallway now INVITES rather than disappearing.
+
+    While the hallway was a strip under other furniture, rendering nothing on a
+    quiet evening was right — an empty state there was a permanent apology. Now
+    that it leads the page, vanishing leaves Home opening on a story rail and a
+    feed, which is the product this one is trying not to be. On the day nobody
+    has opened a house, the most useful thing Home can say is: you could.
+  */
+  if (houses.length === 0) {
+    return (
+      <section className="ws-hair border-b px-4 py-5">
+        <p className="text-[15px] font-bold leading-5 text-heading">No houses open</p>
+        <p className="ws-meta mt-1 normal-case tracking-normal">
+          A house is a room where people talk. Open one and name what it is about — anyone can
+          walk in.
+        </p>
+        <Link
+          href="/houses"
+          className="ws-press mt-3 inline-flex items-center rounded-full border border-white/12 px-4 py-2 text-[13px] font-bold text-body transition-colors hover:bg-white/6"
+        >
+          Open a house
+        </Link>
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="hallway-heading" className="ws-hair border-b">
-      <div className="flex items-baseline justify-between px-4 pb-1 pt-4">
+      <div className="flex items-baseline justify-between px-4 pb-2 pt-4">
         <h2 id="hallway-heading" className="ws-meta flex items-center gap-2">
           <span className="relative flex h-1.5 w-1.5">
             {/*
@@ -102,16 +137,16 @@ function HallwayRow({ stream }: { stream: Stream }) {
   return (
     <Link
       href={housePath(stream.id)}
-      className="ws-row flex items-center gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+      className="ws-row flex items-center gap-3 px-4 py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
     >
       <Avatar
         name={host?.displayName ?? "Host"}
         seed={stream.ownerId}
         src={host?.avatarUrl}
-        size={36}
+        size={44}
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-bold leading-5 text-heading">{stream.title}</p>
+        <p className="truncate text-[15px] font-bold leading-5 text-heading">{stream.title}</p>
         {/* Only what the LIST payload carries. `viewerCount` is nullable by
             contract precisely so "no count available" cannot be drawn as a
             confident 0, so neither it nor the host is invented. */}
