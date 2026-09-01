@@ -15,7 +15,6 @@ import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
 import { Hallway } from "@/features/houses/components/hallway";
-import { ReelsFeed } from "@/features/feed/components/reels-feed";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
@@ -36,12 +35,23 @@ const SECTIONS: Array<{ label: string; href: string }> = [
   { label: "Arkmarks", href: "/arkmarks" },
 ];
 
-// Lanes filter the timeline, in the design's order. Every one of these is a
-// real backend lane — `reels` and `trending` included.
+/*
+  Lanes filter the timeline, in the design's order.
+
+  REELS IS GONE, by product decision and not by accident. The endless vertical
+  scroll is the shape of a video product, and Market Square is not one — it is
+  a place to talk in a room and meet the people in it. A lane that swallows a
+  reader for twenty minutes is in direct competition with that, and while it
+  existed Home had two centres.
+
+  What did NOT go with it: video in a post, the upload that makes one, and the
+  story viewer. Media still belongs in the feed. What it no longer does is
+  become a river you fall into — to see what somebody has posted you go to
+  their profile, which is where their media lives.
+*/
 const LANES: Array<{ lane: Lane; label: string }> = [
   { lane: "for-you", label: "For You" },
   { lane: "live", label: "Live Streaming" },
-  { lane: "reels", label: "Reels" },
   { lane: "following", label: "Following" },
   { lane: "trending", label: "Trending" },
 ];
@@ -282,23 +292,21 @@ export function FeedPage({
           stories row does: browsing furniture pushes the first clip halfway
           down the screen.
         */}
-        {lane !== "reels" && MARKET_FLAGS.houses && (
+        {MARKET_FLAGS.houses && (
           <div className="mb-4">
             <Hallway />
           </div>
         )}
 
-        {authenticated && lane !== "reels" && (
+        {authenticated && (
           <div className="mb-4">
             <StoriesRow />
           </div>
         )}
 
-        {lane !== "reels" && (
-          <div className="mb-4">
-            <FeaturedArena />
-          </div>
-        )}
+        <div className="mb-4">
+          <FeaturedArena />
+        </div>
 
         {authenticated && showComposer && (
           <div className="ws-post mb-4">
@@ -346,26 +354,6 @@ export function FeedPage({
           </div>
         </div>
 
-        {/* The Reels lane IS reels: full-bleed, one clip per screen, endless.
-            Rendering it as timeline cards made a clip a thumbnail that happens
-            to move, which is exactly what did not feel like a reel. Every
-            other lane stays a timeline, where a tap promotes a clip instead. */}
-        {lane === "reels" ? (
-          // Edge to edge: the column's own padding is cancelled, because a
-          // reel with a 16px gutter either side is a video in a page, not a
-          // reel. The reserved space is the lane switcher above it.
-          <div className="-mx-4 lg:-mx-6">
-            <ReelsFeed
-              items={videoItems}
-              isPending={feed.isPending}
-              hasNextPage={Boolean(feed.hasNextPage)}
-              isFetchingNextPage={feed.isFetchingNextPage}
-              fetchNextPage={() => void feed.fetchNextPage()}
-              reservedSpace="var(--ws-home-reels-chrome)"
-            />
-          </div>
-        ) : (
-          <>
         <div className="space-y-4">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
@@ -403,8 +391,6 @@ export function FeedPage({
         )}
         {feed.isSuccess && !feed.hasNextPage && items.length > 0 && (
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
-        )}
-        </>
         )}
 
         {/* The floating compose button used to live here, which is why it
