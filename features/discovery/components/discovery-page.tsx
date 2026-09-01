@@ -164,15 +164,12 @@ function ResultRow({
 function BrowseTab({
   tab,
   people,
-  postsSlot,
   products,
   renderPerson,
   renderProduct,
 }: {
   tab: ExploreTab;
   people: BrowseQuery<Profile>;
-  /** The reels surface, composed by the route. */
-  postsSlot: React.ReactNode;
   products: BrowseQuery<StoreItem>;
   renderPerson: (profile: Profile) => React.ReactNode;
   renderProduct: (item: StoreItem) => React.ReactNode;
@@ -193,7 +190,6 @@ function BrowseTab({
   // Posts is REELS: one video per screen, vertical snap, no ending. It owns
   // its whole scroll container rather than rendering rows, so the route
   // composes the surface in instead of a per-item renderer.
-  if (tab === "posts") return <>{postsSlot}</>;
 
   return (
     <div className="space-y-4 p-4">
@@ -233,7 +229,6 @@ export function DiscoveryPage({
   onTabChange,
   search,
   people,
-  postsSlot,
   products,
   gridItems,
   gridPending,
@@ -256,8 +251,6 @@ export function DiscoveryPage({
   search: ReturnType<typeof useDiscovery>;
   /** The People directory — its own paged route, narrowed by the query. */
   people: BrowseQuery<Profile>;
-  /** The Posts tab, which is the reels surface. */
-  postsSlot: React.ReactNode;
   /** The Products tab — the ARK Store's paged item list. */
   products: BrowseQuery<StoreItem>;
   gridItems: ExploreItem[];
@@ -413,7 +406,6 @@ export function DiscoveryPage({
         <BrowseTab
           tab={tab}
           people={people}
-          postsSlot={postsSlot}
           products={products}
           renderPerson={renderPerson}
           renderProduct={renderProduct}

@@ -373,6 +373,62 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Houses: the lift
+
+   The ONE moment in an audio room worth moving for is a stranger being handed
+   the floor. Everything else in a house holds still on purpose — a seat is a
+   PLACE, and a place that slides, pulses or glows is not a place. So this is
+   the whole motion delta for the feature: two keyframes, spent on one event.
+--------------------------------------------------------------------------- */
+
+/* The avatar arriving in a chair. The curve is the app's own press spring
+   (0.34, 1.56, 0.64, 1) rather than a new one — the overshoot is what makes it
+   read as being SET DOWN rather than faded in. */
+@keyframes ws-seat-land {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@utility ws-seat-land {
+  animation: ws-seat-land 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* One full silver sweep of the level arc as the seat resolves.
+   This is INFORMATION, not decoration — it is the room saying "this
+   microphone is open now" — so it survives prefers-reduced-motion at the same
+   duration. 238.76 is the circumference of the r=38 arc in seat-meter.tsx; the
+   two numbers have to agree, which is why the component names it too. */
+@keyframes ws-seat-sweep {
+  from {
+    stroke-dashoffset: 238.76;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@utility ws-seat-sweep {
+  animation: ws-seat-sweep 0.52s ease-out both;
+}
+
+/* The reduced-motion replacement for the land: the same 
+   arrival, without the spring. */
+@keyframes ws-seat-land-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ws-press,
   .ws-press:active {
@@ -393,6 +449,13 @@ body {
   }
   .ws-gift-burst {
     animation-duration: 1.6s;
+  }
+  /* The lift keeps its meaning and loses its spring. ws-seat-sweep is
+     deliberately ABSENT from this list: it says "your mic is open", and a
+     state indicator that stops indicating under a motion preference is a
+     regression, not an accommodation. */
+  .ws-seat-land {
+    animation: ws-seat-land-reduced 0.12s linear both;
   }
   ::view-transition-old(root),
   ::view-transition-new(root) {
@@ -642,6 +705,12 @@ body {
      Declared here so anything reading it renders correctly before that
      component has mounted, and after it unmounts. */
   --ws-colhead-h: 0px;
+  /* The house header's height, measured and republished by HouseHeader — the
+     same trick, for the same reason: the talking line sticks directly under
+     it, and the header is taller with a two-line topic than with a one-line
+     one. Declared here so anything reading it renders correctly before that
+     component has mounted, and after it unmounts. */
+  --ws-house-head-h: 0px;
   --ws-nav-h: calc(env(safe-area-inset-bottom, 0px) + 69px);
   --ws-fab-bottom: calc(env(safe-area-inset-bottom, 0px) + 81px);
   /* Clear of the create button entirely: its 71px hit frame sits on top of
