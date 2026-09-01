@@ -100,12 +100,12 @@ export function HousesStreet() {
   return (
     <div className="mx-auto w-full max-w-[600px]">
       <ColumnHeader
-        title="Houses"
+        title="Gist rooms"
         subtitle="Rooms you can talk in. Voice only."
         action={
           <Button size="sm" onClick={() => gate(() => setOpening(true))}>
             <IconPlus className="h-4 w-4" />
-            Open a house
+            Open a gist room
           </Button>
         }
       />
@@ -118,7 +118,7 @@ export function HousesStreet() {
         <div className="px-4 py-8">
           <ErrorState
             error={live.error}
-            fallback="Couldn't load the houses."
+            fallback="Couldn't load the gist rooms."
             onRetry={() => live.refetch()}
           />
         </div>
@@ -126,11 +126,11 @@ export function HousesStreet() {
         <div className="px-4 py-10">
           <EmptyState
             glyph="◇"
-            title="No houses open"
-            body="A house is a room where people talk. Open one and name what it is about — anyone can walk in."
+            title="No gist rooms open"
+            body="A gist room is where people talk. Open one and name what it is about — anyone can walk in."
             action={
               <Button size="sm" onClick={() => gate(() => setOpening(true))}>
-                Open a house
+                Open a gist room
               </Button>
             }
           />

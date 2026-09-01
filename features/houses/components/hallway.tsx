@@ -22,7 +22,7 @@ import type { Stream } from "@/features/streams/lib/types";
  * — you go in for who is talking, not for a thumbnail.
  *
  * THREE rooms, and a door to the rest. The hallway is an invitation, not the
- * directory; `/houses` is the directory, and it is one tap away. A section
+ * directory; `/gist-rooms` is the directory, and it is one tap away. A section
  * that can grow without limit at the top of Home would push the feed off the
  * screen on a busy evening.
  *
@@ -76,16 +76,16 @@ export function Hallway() {
   if (houses.length === 0) {
     return (
       <section className="ws-hair border-b px-4 py-5">
-        <p className="text-[15px] font-bold leading-5 text-heading">No houses open</p>
+        <p className="text-[15px] font-bold leading-5 text-heading">No gist rooms open</p>
         <p className="ws-meta mt-1 normal-case tracking-normal">
-          A house is a room where people talk. Open one and name what it is about — anyone can
+          A gist room is where people talk. Open one and name what it is about — anyone can
           walk in.
         </p>
         <Link
-          href="/houses"
+          href="/gist-rooms"
           className="ws-press mt-3 inline-flex items-center rounded-full border border-white/12 px-4 py-2 text-[13px] font-bold text-body transition-colors hover:bg-white/6"
         >
-          Open a house
+          Open a gist room
         </Link>
       </section>
     );
@@ -113,7 +113,7 @@ export function Hallway() {
         </h2>
         {houses.length > SHOWN && (
           <Link
-            href="/houses"
+            href="/gist-rooms"
             className="text-[12px] font-bold text-create transition-opacity hover:opacity-80"
           >
             See all {houses.length}

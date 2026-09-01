@@ -1,3 +1,19 @@
+/*
+ * NAMING: a "gist room" to a reader, `house` in the code.
+ *
+ * The product calls these GIST ROOMS — that is what every label, heading,
+ * button and page title says, and it is the word the team uses.
+ *
+ * The code and the route's data still say `house`, deliberately. The backend
+ * category value IS the string "house" — it is in the deployed enum, the
+ * database CHECK constraint and the served spec — and the token signer reads
+ * it to refuse a camera. Renaming the identifier without renaming that value
+ * would leave a codebase whose words disagree with the wire, which is worse
+ * than a codebase whose words disagree with the marketing.
+ *
+ * If the service ever renames the category, rename these with it, in one
+ * change, with a migration. Not before.
+ */
 /**
  * What a house IS.
  *
@@ -66,7 +82,7 @@ export function isValidTopic(input: string): boolean {
 }
 
 export function housePath(houseId: string): string {
-  return `/houses/${houseId}`;
+  return `/gist-rooms/${houseId}`;
 }
 
 /**

@@ -302,7 +302,7 @@ export function useCreateStream() {
         `category: "house"` — so the confirmation reads off what was actually
         made rather than off the function that made it.
       */
-      toast.success(isHouse(stream) ? "House opened" : "Stream created");
+      toast.success(isHouse(stream) ? "Gist room opened" : "Stream created");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't create the stream.")),
   });

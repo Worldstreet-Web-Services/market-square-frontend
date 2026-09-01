@@ -22,9 +22,9 @@ const inputClass =
   "ws-inset w-full bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-grey-600";
 
 /**
- * Open a house: ONE required field.
+ * Open a gist room: ONE required field.
  *
- * "Anyone can open a house and name its topic" is the whole of the brief here,
+ * "Anyone can open a gist room and name its topic" is the whole of the brief here,
  * so the form is the whole of the brief and nothing else. No thumbnail, no
  * category picker (a house is never chosen from the Go Live dropdown — see
  * BROADCAST_CATEGORIES), no ticket price, no schedule. A house is never
@@ -38,7 +38,7 @@ const inputClass =
 export function OpenHouseSheet({
   open,
   onClose,
-  /** Prefills the topic — used by "Open a house about this" on a closed house. */
+  /** Prefills the topic — used by "Open a gist room about this" on a closed house. */
   initialTopic = "",
 }: {
   open: boolean;
@@ -72,7 +72,7 @@ export function OpenHouseSheet({
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="Open a house">
+    <Sheet open={open} onClose={onClose} title="Open a gist room">
       <label className="block">
         <span className="ws-meta mb-2 block">What is it about?</span>
         <input

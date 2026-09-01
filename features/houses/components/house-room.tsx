@@ -220,7 +220,7 @@ function HostScheduled({
         // go-live has returned, so the host IS live — our cached stream object
         // just has not caught up. Rendering from the ingest already in hand
         // opens their microphone now rather than on the next ten-second poll,
-        // which is the difference between "I opened a house" and "did that
+        // which is the difference between "I opened a gist room" and "did that
         // work?".
         stream={{ ...stream, status: "live" }}
         isHost
@@ -286,7 +286,7 @@ function ClosedHouse({ stream }: { stream: Stream }) {
           className="mt-5"
           onClick={() => gate(() => setReopening(true))}
         >
-          Open a house about this
+          Open a gist room about this
         </Button>
       </div>
       {stream.owner && (
@@ -466,7 +466,7 @@ function LiveHouse({
     if (seatParamUsed.current || isHost || mine.isPending) return;
     if (new URLSearchParams(window.location.search).get("seat") !== "1") return;
     seatParamUsed.current = true;
-    router.replace(`/houses/${stream.id}`, { scroll: false });
+    router.replace(`/gist-rooms/${stream.id}`, { scroll: false });
     if (!mine.data || mine.data.status === "denied" || mine.data.status === "withdrawn") {
       request.mutate();
     }
@@ -574,7 +574,7 @@ function LiveHouse({
     if (before === null || before === state) return;
     if (state === "reconnecting") announce("Reconnecting");
     else if (state === "live" && before === "reconnecting") announce("Connected");
-    else if (state === "failed") announce("Lost connection to the house");
+    else if (state === "failed") announce("Lost connection to the gist room");
   }, [state, announce]);
 
   /**
@@ -625,7 +625,7 @@ function LiveHouse({
     if (!isHost && myRequestId) {
       resolve.mutate({ requestId: myRequestId, action: "leave" });
     }
-    router.push("/houses");
+    router.push("/gist-rooms");
   }, [isHost, myRequestId, resolve, router]);
 
   const leave = useCallback(() => {
@@ -778,7 +778,7 @@ function LiveHouse({
 
       {state === "failed" && (
         <div className="ws-inset mx-4 mb-4 px-4 py-3">
-          <p className="text-[13px] leading-5 text-body">Lost connection to the house.</p>
+          <p className="text-[13px] leading-5 text-body">Lost connection to the gist room.</p>
           <Button
             size="sm"
             variant="secondary"
@@ -868,7 +868,7 @@ function LiveHouse({
         incoming={incoming}
         leave={
           isHost
-            ? { label: "Close the house", onLeave: () => setConfirmLeave(true) }
+            ? { label: "Close the gist room", onLeave: () => setConfirmLeave(true) }
             : // Naming the absence of a notification is free retention, and it
               // is the truth. Do not soften it to "Leave".
               { label: "Leave quietly", onLeave: leave }
@@ -961,7 +961,7 @@ function LiveHouse({
               setConfirmLeave(true);
             }}
           >
-            Close the house
+            Close the gist room
           </Button>
         )}
       </Sheet>
@@ -969,11 +969,11 @@ function LiveHouse({
       <Sheet
         open={confirmLeave}
         onClose={() => setConfirmLeave(false)}
-        title={isHost ? "Close the house?" : "Leave quietly?"}
+        title={isHost ? "Close the gist room?" : "Leave quietly?"}
       >
         <p className="text-[13px] leading-5 text-body">
           {isHost
-            ? "Everyone will be sent out and the house will be closed."
+            ? "Everyone will be sent out and the gist room will be closed."
             : "Nobody is told you left."}
         </p>
         <div className="mt-5 flex gap-2">
@@ -985,7 +985,7 @@ function LiveHouse({
             loading={endHouse.isPending}
             onClick={() => {
               if (isHost) {
-                endHouse.mutate(stream.id, { onSuccess: () => router.push("/houses") });
+                endHouse.mutate(stream.id, { onSuccess: () => router.push("/gist-rooms") });
                 return;
               }
               try {

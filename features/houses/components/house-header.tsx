@@ -54,7 +54,7 @@ export function HouseHeader({
     <header ref={ref} className="ws-head sticky top-[var(--ws-topbar-h)] z-30 px-4 pb-3 pt-3">
       <div className="flex items-center gap-2">
         <button
-          onClick={() => (canGoBack() ? router.back() : router.push("/houses"))}
+          onClick={() => (canGoBack() ? router.back() : router.push("/gist-rooms"))}
           aria-label="Back"
           className="ws-press -ml-2 flex h-10 w-10 items-center justify-center rounded-full text-heading transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         >
@@ -66,7 +66,7 @@ export function HouseHeader({
         {live && <LiveBadge />}
         <button
           onClick={onOverflow}
-          aria-label="House options"
+          aria-label="Gist room options"
           className="ws-press -mr-2 flex h-10 w-10 items-center justify-center rounded-full text-heading transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         >
           <IconDots className="h-5 w-5" />

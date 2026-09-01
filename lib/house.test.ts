@@ -67,11 +67,11 @@ describe("pinned note", () => {
 
 describe("links", () => {
   it("builds the listener link", () => {
-    assert.equal(housePath("abc"), "/houses/abc");
-    assert.equal(houseShareUrl("https://ark.test", "abc"), "https://ark.test/houses/abc");
+    assert.equal(housePath("abc"), "/gist-rooms/abc");
+    assert.equal(houseShareUrl("https://ark.test", "abc"), "https://ark.test/gist-rooms/abc");
   });
 
   it("builds the speaker link, which raises a hand and is NOT pre-approval", () => {
-    assert.equal(houseShareUrl("https://ark.test", "abc", true), "https://ark.test/houses/abc?seat=1");
+    assert.equal(houseShareUrl("https://ark.test", "abc", true), "https://ark.test/gist-rooms/abc?seat=1");
   });
 });

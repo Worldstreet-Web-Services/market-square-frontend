@@ -12,7 +12,7 @@ import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
  * so a house parses, is compared and is filtered like anything else.
  *
  * It is NOT in `BROADCAST_CATEGORIES`, which is what every picker renders. A
- * house is opened from "Open a house", never chosen from the Go Live sheet's
+ * house is opened from "Open a gist room", never chosen from the Go Live sheet's
  * dropdown: picking "house" there would create a room whose whole surface —
  * the ring, the audience band, the audio-only publisher — lives on a different
  * route, and the creator would land in a video cockpit for a room with no

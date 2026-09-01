@@ -134,10 +134,10 @@ const NAV: NavItem[] = [
     somewhere to point. Without a row, the only door to every other room was a
     "See all" that appears only when a fourth room exists.
 
-    `/houses/[id]` still resolves whatever the flag says: a link somebody was
+    `/gist-rooms/[id]` still resolves whatever the flag says: a link somebody was
     sent has to work, and hiding an entry must never break a route.
   */
-  { href: "/houses", label: "Houses", icon: IconHouses, flag: "houses" },
+  { href: "/gist-rooms", label: "Gist rooms", icon: IconHouses, flag: "houses" },
   
   { href: "/messages", label: "Messages", icon: IconMail, authed: true },
   {

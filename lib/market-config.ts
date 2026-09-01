@@ -33,10 +33,10 @@ export const MARKET_FLAGS = {
   /**
    * Houses: audio-only rooms where anyone can open a table and raise a hand.
    *
-   * This gates PROMOTION, never the room. `/houses/[id]` always resolves — a
+   * This gates PROMOTION, never the room. `/gist-rooms/[id]` always resolves — a
    * link somebody was sent has to work, and hiding an entry must never break a
    * route. What it hides is the app pointing at it: the street link in
-   * navigation and the "Open a house" entry point.
+   * navigation and the "Open a gist room" entry point.
    *
    * OFF by default with the rest, and it is a soft launch switch rather than a
    * governance one: nothing behind it takes money, issues an entitlement, or

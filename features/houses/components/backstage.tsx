@@ -24,7 +24,7 @@ const inputClass =
 /**
  * Backstage: the host's soundcheck, before anybody can hear them.
  *
- * A full column rather than a sheet, and it happens on `/houses/[id]` rather
+ * A full column rather than a sheet, and it happens on `/gist-rooms/[id]` rather
  * than in the studio. A house never routes to `/studio/[id]`: that screen is a
  * video cockpit — camera picker, self-view, stage tiles — and sending a host
  * there to open an audio room would put a camera preview in front of somebody
@@ -86,7 +86,7 @@ export function Backstage({
           value={topic}
           onChange={(event) => setTopic(clampTopic(event.target.value))}
           maxLength={TOPIC_MAX}
-          placeholder="What is this house about?"
+          placeholder="What is this gist room about?"
           className={inputClass}
           aria-label="Topic"
         />
@@ -116,7 +116,7 @@ export function Backstage({
                   ? "No microphone found. Connect one and try again."
                   : devices.status === "requesting"
                     ? "Waiting for your microphone…"
-                    : "Nobody can hear a house you opened without checking this first."}
+                    : "Nobody can hear a gist room you opened without checking this first."}
             </p>
             {devices.status !== "requesting" && (
               <Button size="sm" variant="secondary" onClick={devices.request}>
@@ -150,7 +150,7 @@ export function Backstage({
           onChange={(event) => setNote(clampNote(event.target.value))}
           maxLength={NOTE_MAX}
           rows={2}
-          placeholder="A link or a line people should see. This is what a house has instead of a shared screen."
+          placeholder="A link or a line people should see. This is what a gist room has instead of a shared screen."
           className={inputClass}
         />
       </label>
@@ -173,7 +173,7 @@ export function Backstage({
       >
         {/* A disabled button names its own reason: a control that will not fire
             and will not say why is the thing people file bugs about. */}
-        {!micReady ? "Waiting for your microphone" : !topicOk ? "Add a topic first" : "Open the house"}
+        {!micReady ? "Waiting for your microphone" : !topicOk ? "Add a topic first" : "Open the gist room"}
       </Button>
 
       <p className="mt-3 text-center text-[12px] leading-5 text-meta">
