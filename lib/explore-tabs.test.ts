@@ -15,7 +15,6 @@ test("the row is exactly the designed chip set, in order", () => {
   assert.deepEqual(EXPLORE_TABS, [
     "for-you",
     "people",
-    "posts",
     "shows",
     "streams",
     "products",
@@ -30,7 +29,6 @@ test("For you and Shows search EVERYTHING, never a result kind", () => {
 
 test("the result-kind chips map straight to the service's own types", () => {
   assert.equal(exploreTabSearchType("people"), "people");
-  assert.equal(exploreTabSearchType("posts"), "posts");
   assert.equal(exploreTabSearchType("streams"), "streams");
   assert.equal(exploreTabSearchType("products"), "products");
 });
@@ -48,7 +46,6 @@ test("no other chip filters by topic — interests boost, they do not filter", (
   // interests at onboarding saw LESS of the square than one who chose none.
   assert.deepEqual(exploreTabTopics("for-you"), []);
   assert.deepEqual(exploreTabTopics("people"), []);
-  assert.deepEqual(exploreTabTopics("posts"), []);
   assert.deepEqual(exploreTabTopics("streams"), []);
   assert.deepEqual(exploreTabTopics("products"), []);
 });
@@ -57,7 +54,6 @@ test("row lists and the card grid are different surfaces", () => {
   // People, Posts and Products are rows from their own paged routes; the rest
   // are the media/stream grid.
   assert.equal(exploreTabIsRowList("people"), true);
-  assert.equal(exploreTabIsRowList("posts"), true);
   assert.equal(exploreTabIsRowList("products"), true);
   assert.equal(exploreTabIsRowList("for-you"), false);
   assert.equal(exploreTabIsRowList("shows"), false);

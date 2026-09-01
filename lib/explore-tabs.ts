@@ -12,10 +12,18 @@
  * chip, and both are pinned by tests.
  */
 
+/*
+  No "posts" tab. It rendered the endless vertical scroll — a reel by another
+  name — and reels are gone by product decision: the shape of a video product
+  competes with the thing this one is for, which is talking to people.
+
+  Media did not go with it. It is browsable in the For you grid, and a person's
+  own media lives on their profile, which is where you go to see what somebody
+  has posted.
+*/
 export const EXPLORE_TABS = [
   "for-you",
   "people",
-  "posts",
   "shows",
   "streams",
   "products",
@@ -26,7 +34,6 @@ export type ExploreTab = (typeof EXPLORE_TABS)[number];
 export const EXPLORE_TAB_LABEL: Record<ExploreTab, string> = {
   "for-you": "For you",
   people: "People",
-  posts: "Posts",
   shows: "Shows",
   streams: "Streams",
   products: "Products",
@@ -91,7 +98,7 @@ export function exploreTabTopics(tab: ExploreTab): string[] {
  * tabs render a different list entirely — not a differently-filtered grid.
  */
 export function exploreTabIsRowList(tab: ExploreTab): boolean {
-  return tab === "people" || tab === "posts" || tab === "products";
+  return tab === "people" || tab === "products";
 }
 
 /**

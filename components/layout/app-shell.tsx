@@ -40,6 +40,7 @@ import {
   IconCamera,
   IconDots,
   IconHome,
+  IconHouses,
   IconLive,
   IconMail,
   IconMore,
@@ -82,13 +83,62 @@ interface NavItem {
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
 //
-// Spotlight has a nav entry because the right rail, which used to be its only
-// door, is `hidden lg:block` — so below lg there was no way to reach it at all.
-// The "second door to the same room" argument only holds where the first door
-// exists, and on a phone it does not.
+/*
+  FOUR primary rows, and everything else behind More.
+
+  The rail used to list every surface the app has, which turned the first
+  thing a reader sees into a directory. 2.0 does three things — talk in a
+  room, meet somebody, keep up with your people — and the rail now says so.
+
+  What moved is not gone: `secondary` folds an entry into More, so Tickets,
+  Studio, Arkmarks, Schedule, Spotlight and Store keep their routes, their
+  deep links and their behaviour. They stop costing a permanent slot for
+  something opened once a week.
+
+  Live went secondary rather than away. With video leaving Market Square, Live
+  and Houses are two names for "a room happening now", and two names is how a
+  reader learns to guess which one they want. Houses is not in the rail at all
+  any more: the hallway is the top of Home, and a nav row pointing at the same
+  rooms would be a second door to the room you are already looking at.
+
+  Spotlight has a nav entry because the right rail, which used to be its only
+  door, is `hidden lg:block` — so below lg there was no way to reach it at
+  all. The "second door to the same room" argument only holds where the first
+  door exists, and on a phone it does not.
+*/
+/*
+  Four more left the rail, and none of them were destinations.
+
+  Tickets and Arkmarks are RECORDS — what you bought, what you saved. They
+  belong to you, so they moved under your own avatar with View profile and
+  Log out, which is where a person looks for their own things.
+
+  Schedule merged into the job it is part of. Scheduling a stream is a studio
+  function, and it already has four real doors: the Live hub, your profile,
+  the arena block and the feed's empty state. A fifth in the rail was a
+  shortcut to a page nobody navigates to cold.
+
+  Spotlight is deferred rather than dropped. Status is the LAST thing 2.0
+  builds — it is only worth being seen once there is a room to be seen in —
+  and until then a permanent rail entry advertises a system that does not
+  exist. The route still resolves.
+*/
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
+  /*
+    Houses is a row of its own after all.
+
+    The hallway at the top of Home shows the three rooms open now, which is an
+    overview's job — but an overview is a summary, and a summary needs
+    somewhere to point. Without a row, the only door to every other room was a
+    "See all" that appears only when a fourth room exists.
+
+    `/houses/[id]` still resolves whatever the flag says: a link somebody was
+    sent has to work, and hiding an entry must never break a route.
+  */
+  { href: "/houses", label: "Houses", icon: IconHouses, flag: "houses" },
+  
   { href: "/messages", label: "Messages", icon: IconMail, authed: true },
   {
     href: "/notifications",
@@ -96,29 +146,11 @@ const NAV: NavItem[] = [
     icon: IconBell,
     authed: true,
   },
-  { href: "/live", label: "Live", icon: IconLive },
-  { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
-  // Arkmarks had a route and a save button on every post, and no way in: the
-  // only path to something you saved was typing the URL.
-  {
-    href: "/arkmarks",
-    label: "Arkmarks",
-    icon: IconBookmark,
-    authed: true,
-    secondary: true,
-  },
-  { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
-  // Reachable by URL, by deep link and from Explore's Products tab — just
+  { href: "/live", label: "Live", icon: IconLive, secondary: true },
+// Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
-  {
-    href: "/schedule",
-    label: "Schedule",
-    icon: IconCalendar,
-    authed: true,
-    secondary: true,
-  },
-  { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
+  { href: "/studio", label: "Studio", icon: IconCamera, authed: true, secondary: true },
   {
     href: "/admin",
     label: "Admin",
@@ -509,6 +541,33 @@ function AccountChip() {
           >
             View profile
           </Link>
+          {/*
+            What is YOURS lives under you.
+
+            Tickets and Arkmarks are records — what you bought, what you saved
+            — not places you navigate to. In the rail they each cost a
+            permanent row to serve something opened once a week; here they sit
+            where a person already looks for their own things, next to their
+            own name.
+          */}
+          {me.data && (
+            <>
+              <Link
+                href="/tickets"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Tickets
+              </Link>
+              <Link
+                href="/arkmarks"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Arkmarks
+              </Link>
+            </>
+          )}
           <button
             onClick={() => {
               close();

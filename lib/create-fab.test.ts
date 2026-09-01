@@ -35,7 +35,6 @@ const SOURCES = [
   "features/feed/components/feed-page.tsx",
   // snap-feed.tsx drew the third copy. It is gone: home is the timeline now
   // and the reels feed lives in Explore, which never had its own button.
-  "features/feed/components/reels-feed.tsx",
 ];
 
 describe("the create button is rendered once, fixed, in the shell", () => {

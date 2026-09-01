@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import type { Post } from "@/lib/api/schemas";
 import { useRouter } from "next/navigation";
 import { ProfilePage } from "@/features/profile";
-import { PostCard } from "@/features/feed";
+import { PostCard, VideoViewer } from "@/features/feed";
 import { useOpenConversation } from "@/features/messages";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,27 @@ function ComposeCta() {
   );
 }
 
+/** Holds the active slide, so sliding changes which item is open. */
+function ProfileMediaViewer({
+  items,
+  openId,
+  onClose,
+}: {
+  items: Post[];
+  openId: string;
+  onClose: () => void;
+}) {
+  const [activeId, setActiveId] = useState(openId);
+  return (
+    <VideoViewer
+      items={items}
+      activeId={activeId}
+      onActiveChange={setActiveId}
+      onClose={onClose}
+    />
+  );
+}
+
 export function ProfileScreen({ username }: { username: string }) {
   return (
     <ProfilePage
@@ -63,6 +85,16 @@ export function ProfileScreen({ username }: { username: string }) {
       // draw its own stripped row, whose heart was a <span> with no handler,
       // so a like from a profile silently did nothing.
       postSlot={(post) => <PostCard post={post} />}
+      /*
+        The same full-screen viewer the timeline promotes a video into,
+        composed in here because profile never imports the feed slice. It is
+        given the gallery in grid order, so sliding moves through exactly what
+        was on screen — which is the whole point of "go to their profile and
+        slide".
+      */
+      mediaViewerSlot={(items, openId, onClose) => (
+        <ProfileMediaViewer items={items} openId={openId} onClose={onClose} />
+      )}
     />
   );
 }
