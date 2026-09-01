@@ -40,6 +40,7 @@ import {
   IconCamera,
   IconDots,
   IconHome,
+  IconHouses,
   IconLive,
   IconMail,
   IconMore,
@@ -97,6 +98,10 @@ const NAV: NavItem[] = [
     authed: true,
   },
   { href: "/live", label: "Live", icon: IconLive },
+  // Houses: audio-only rooms. Promotion only — `/houses/[id]` always resolves
+  // whatever the flag says, because a link somebody was sent has to work and
+  // hiding an entry must never break a route.
+  { href: "/houses", label: "Houses", icon: IconHouses, flag: "houses" },
   { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
   // Arkmarks had a route and a save button on every post, and no way in: the
   // only path to something you saved was typing the URL.
