@@ -15,6 +15,7 @@ import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
 import { Hallway } from "@/features/houses/components/hallway";
+import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
@@ -297,6 +298,22 @@ export function FeedPage({
             <Hallway />
           </div>
         )}
+
+        {/*
+          What the square is talking about, on the overview where it belongs.
+
+          It already existed — in the right rail, which is `hidden lg:block`.
+          So the one thing the brief names as the point of the place ("they
+          just discussing about any new discussion, that was the top topic")
+          was invisible to every reader on a phone. An overview that only
+          overviews on a desktop is not an overview.
+
+          Below the hallway, above the feed: a room happening now beats a
+          subject being discussed, and both beat a post from this morning.
+        */}
+        <div className="mb-4 lg:hidden">
+          <TrendingDiscussions limit={4} />
+        </div>
 
         {authenticated && (
           <div className="mb-4">
