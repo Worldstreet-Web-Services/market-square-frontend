@@ -277,22 +277,16 @@ const PENDING_ROUTES = {
   "post /profiles/{}/wink": {
     reason:
       "The wink — a one-tap signal of interest addressed to a PERSON, and the " +
-      "control Explore's people directory is built around. Not on the service " +
-      "at all yet: the spec documents no wink route and no `wink` " +
-      "notification kind, so this 404s against every real environment today. " +
-      "That is handled rather than hidden — `useWink` reads a 404 as 'not " +
-      "deployed' and removes the control entirely (the same contract " +
-      "Arkmarks and Block already follow), so nothing ever reports a wink as " +
-      "sent without a 2xx behind it. The fixture BFF implements the route in " +
-      "full, including the rate limit and the block-at-delivery rule, so the " +
-      "flow is demonstrable end to end while the service catches up. " +
-      "WHAT THE SERVICE OWES: the route itself; a per-sender rate limit " +
-      "(12/hour, 1 per person per 24h — the client's copy in lib/winks.ts is " +
-      "a courtesy, not enforcement); dropping a wink at delivery when either " +
-      "party has blocked the other, WITHOUT a distinguishable error, since a " +
-      "distinct response lets anyone probe whether they have been blocked; " +
-      "and a `wink` kind on GET /me/notifications. DELETE THIS ENTRY once the " +
-      "route appears in openapi.json.",
+      "control Explore's people directory is built around. BUILT on the " +
+      "service (apps/market-square: migration 034, ProfileService.wink, " +
+      "POST /profiles/:id/wink) together with the person-to-person block it " +
+      "depends on (migration 033, POST|DELETE /profiles/:id/block), and not " +
+      "yet DEPLOYED — so it is absent from the running production spec while " +
+      "being present against a local backend. Until the deploy, a 404 is read " +
+      "as 'not deployed' and the control removes itself, the same contract " +
+      "Arkmarks and Block already follow; nothing ever reports a wink as sent " +
+      "without a 2xx behind it. DELETE THIS ENTRY once the service deploy " +
+      "lands and the route appears in openapi.json.",
   },
   "post /profiles/{}/tips": {
     reason:
