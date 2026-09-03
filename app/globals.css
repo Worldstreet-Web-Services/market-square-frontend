@@ -78,6 +78,15 @@
      hairline light borders, never shadows. */
   --color-ground: #000000;
   --color-raised: #0f0f11;
+  /* The CHROME surface: the rail and the breadcrumb bar, the two frames that
+     hold the content rather than being it.
+
+     They are a step LIGHTER than the page, not darker — node 15:1302 paints
+     the canvas #0F0F0F and both bars #121214, which is what separates the
+     furniture from the column without a heavy border. The rail used to be
+     #0f0f0f, identical to the page, so the only thing dividing them was the
+     8% hairline and the rail read as a hole rather than a panel. */
+  --color-chrome: #121214;
   --color-overlay: #18181b;
   /* Text ladder: headings #fafafa, body silver, meta zinc — never pure white
      body text on pure black (halation). */
@@ -701,6 +710,13 @@ body {
      69px row, so the shell's 64px bottom padding left content five pixels
      under it on every column surface. */
   --ws-topbar-h: 48px;
+  /* The desktop breadcrumb bar's height — 76px in node 15:1302, and 0 on a
+     phone where the bar is `hidden md:flex`.
+     Published because one surface has to subtract it: Messages is the only
+     route that claims an exact viewport height instead of scrolling as a
+     page, and it was computing `100dvh` while the bar above it ate 76 of
+     them, so its two panes hung that far past the bottom of the window. */
+  --ws-crumb-h: 0px;
   /* The column header's height, measured and republished by ColumnHeader.
      Declared here so anything reading it renders correctly before that
      component has mounted, and after it unmounts. */
@@ -729,6 +745,7 @@ body {
   :root {
     --ws-home-reels-chrome: 134px;
     --ws-topbar-h: 0px;
+    --ws-crumb-h: 76px;
     --ws-nav-h: 0px;
     --ws-fab-bottom: 33px;
     --ws-fab-clearance: 33px;

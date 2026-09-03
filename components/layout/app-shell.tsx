@@ -139,7 +139,7 @@ const NAV: NavItem[] = [
   */
   { href: "/gist-rooms", label: "Gist rooms", icon: IconHouses, flag: "houses" },
   
-  { href: "/messages", label: "Messages", icon: IconMail, authed: true },
+  { href: "/messages", label: "Chat", icon: IconMail, authed: true },
   {
     href: "/notifications",
     label: "Notifications",
@@ -683,7 +683,7 @@ function Sidebar({
     <aside
       data-rail={rail.mode}
       style={{ width: railWidth(rail) }}
-      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-[#0f0f0f] px-3 py-5 md:flex data-[rail=full]:items-stretch"
+      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-chrome px-3 py-5 md:flex data-[rail=full]:items-stretch"
     >
       <RailHandle rail={rail} preview={preview} commit={commit} />
       {/* The wordmark lockup sits over its own hairline. */}
@@ -814,7 +814,7 @@ const CRUMB: Array<[RegExp, string]> = [
   [/^\/$/, "Market Square"],
   [/^\/discover/, "Discover"],
   [/^\/arkmarks/, "Arkmarks"],
-  [/^\/messages/, "Messages"],
+  [/^\/messages/, "Chat"],
   [/^\/notifications/, "Notifications"],
   [/^\/live\b/, "Live"],
   [/^\/tickets/, "Tickets"],
@@ -829,18 +829,102 @@ const CRUMB: Array<[RegExp, string]> = [
   [/^\/auth/, "Sign in"],
 ];
 
+/**
+ * The bar above the columns.
+ *
+ * Node 15:1302's own numbers: 76 tall, #121214 behind a 6px backdrop blur, a
+ * 10% hairline underneath, 24px gutters, and the crumb pushed against the
+ * right-hand cluster by `justify-between`.
+ *
+ * TWO things changed from the earlier build and both were wrong rather than
+ * merely different. The bar was 69px and painted #0f0f0f — the same colour as
+ * the page it sits on, so it read as part of the column instead of as chrome.
+ * And the whole crumb was #979797, which made the page you are ON the same
+ * weight as the ecosystem you are in; the file whitens the leaf.
+ */
 function Breadcrumb({ pathname }: { pathname: string }) {
   const leaf =
     CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Market Square";
   return (
-    <div className="ws-hair hidden h-[69px] shrink-0 items-center border-b bg-[#0f0f0f] px-6 md:flex">
-      <nav aria-label="Breadcrumb" className="text-[16px] text-[#979797]">
-        <Link href="/" className="hover:text-body">
+    <div className="ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-center justify-between border-b bg-chrome/80 px-6 backdrop-blur-[6px] md:flex">
+      {/* Geist Medium 16/21.75. The trailing space belongs to the grey run in
+          the file — "Ark Ecosystem/ " — so the slash hugs the root and the gap
+          before the leaf is part of the dim text, not the bright text. */}
+      <nav
+        aria-label="Breadcrumb"
+        className="min-w-0 truncate text-[16px] font-medium leading-[21.75px] text-[#979797]"
+      >
+        <Link href="/" className="transition-colors hover:text-body">
           Ark Ecosystem
         </Link>
         <span aria-hidden>/ </span>
-        <span aria-current="page">{leaf}</span>
+        <span aria-current="page" className="text-white">
+          {leaf}
+        </span>
       </nav>
+
+      <TopBarActions />
+    </div>
+  );
+}
+
+/**
+ * The breadcrumb's right-hand cluster: notifications, then you.
+ *
+ * The file draws a 38px glass circle 11px from a 34px avatar. Both were
+ * missing entirely on desktop — the bar carried the crumb and nothing else —
+ * which left the bell as a rail row only and gave the account no door from the
+ * top of the screen.
+ *
+ * The 7px ring on the bell is the file's, but it is drawn from the real unread
+ * count rather than always: a permanent marker on a bell is indistinguishable
+ * from a broken bell, and it trains people to ignore the one that means
+ * something.
+ */
+function TopBarActions() {
+  const { authenticated } = useAuth();
+  const me = useMe();
+  const unread = useUnread();
+  const notifications = unread.data?.notifications ?? 0;
+
+  if (!authenticated) return null;
+
+  return (
+    <div className="flex shrink-0 items-center gap-[11px]">
+      <Link
+        href="/notifications"
+        aria-label={
+          notifications > 0
+            ? `Notifications, ${notifications} unread`
+            : "Notifications"
+        }
+        // GLASS in the file: a translucent fill over the blurred bar rather
+        // than a flat chip.
+        className="ws-press relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-body backdrop-blur-[6px] transition-colors hover:bg-white/12 hover:text-white"
+      >
+        <IconBell className="h-6 w-6" />
+        {notifications > 0 && (
+          /* 7px, ringed in #F4F4F4 over the bar's own #0F0F0F — a ring, not a
+             filled dot, which is what keeps it legible against the glyph. */
+          <span
+            aria-hidden
+            className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full border-2 border-[#F4F4F4] bg-chrome"
+          />
+        )}
+      </Link>
+
+      <Link
+        href={me.data ? `/u/${me.data.username}` : "/auth"}
+        aria-label="Your profile"
+        className="ws-press flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10"
+      >
+        <Avatar
+          name={me.data?.displayName ?? "Me"}
+          seed={me.data?.id}
+          src={me.data?.avatarUrl}
+          size={32}
+        />
+      </Link>
     </div>
   );
 }
@@ -1235,7 +1319,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               // black at 1440, 197px at 1512, 445px at 1920, always parked on
               // the right, where it reads as the whole product shoved to one
               // side. Every pane flexes to the window it is in instead.
-              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+              // `100dvh` MINUS the breadcrumb, not `min-h-dvh`. The bar is a
+              // sibling above this in the same flex column, so a full-viewport
+              // minimum made the document exactly one bar taller than the
+              // window and every short route grew a scrollbar with 76px of
+              // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
+              // bar is `hidden md:flex`, so this is identical there.
+              "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
             )}
           >
             {children}
