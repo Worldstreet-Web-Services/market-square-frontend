@@ -14,4 +14,8 @@ export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";
 // composed into the houses room through a route slot, because a room learns a
 // username off the media plane and never holds the whole object.
 export { PersonSafetyRows, PersonFollow } from "./components/person-safety-rows";
+export { useProfileSafety, useWink, useFollow } from "./hooks/use-profile";
+// The follow-edge resolver every follow control must read — a missing
+// `isFollowing` can never render a fabricated "Following". See CLAUDE.md.
+export { useIsFollowing } from "./lib/follow-state";
 export { PersonQuickActions } from "./components/person-quick-actions";

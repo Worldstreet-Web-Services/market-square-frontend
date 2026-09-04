@@ -234,3 +234,74 @@ describe("the creators entry is node 225:3252", () => {
     assert.doesNotMatch(NAV, /label:\s*"Studio"/, "the old label is back");
   });
 });
+
+/**
+ * Two things that were CLIPPED or INERT, and could be again.
+ *
+ * Both failed silently. The partner card looked finished while its call to
+ * action was cut in half, and the deck's follow badge looked like a control
+ * while doing nothing at all — neither produces an error, a warning or a
+ * failing test on its own.
+ */
+describe("the partner card cannot hide its own call to action", () => {
+  it("uses a MINIMUM height, never a fixed one", () => {
+    // `h-[156px]` is the height the file draws, and it holds only while the
+    // headline is two lines. "One Platform. Every Currency. Every Asset."
+    // wraps to three at the rail's real width.
+    assert.doesNotMatch(
+      rail,
+      // Negative lookbehind, or this matches the `h-[156px]` inside
+      // `min-h-[156px]` and fails on the fix itself.
+      /(?<!min-)h-\[156px\]/,
+      "the partner card is back on a fixed height — a longer headline will push Join now out of it"
+    );
+    assert.match(rail, /min-h-\[156px\]/, "the card lost its minimum height");
+  });
+
+  it("does not clip its overflow", () => {
+    // With a floor and flowing children nothing should overflow; if something
+    // does, it must be visible rather than quietly cut off.
+    assert.doesNotMatch(
+      rail,
+      /overflow-hidden/,
+      "overflow-hidden is back on the partner card — that is what made the clipped Join now invisible"
+    );
+  });
+
+  it("lets the headline column shrink instead of pinning its width", () => {
+    // Without min-w-0 a flex child refuses to go below its longest word, and
+    // the text pushes into the logo again.
+    assert.match(rail, /min-w-0/, "the headline column can no longer rewrap");
+  });
+});
+
+describe("the friends deck offers a real Follow", () => {
+  const deck = stripComments(read("components/layout/make-some-friends.tsx"));
+
+  it("is a button, not a decorative glyph", () => {
+    // It shipped as a bare <IconDeckAdd/>: pass and wink were real buttons and
+    // the one control people actually reach for was an ornament.
+    assert.match(
+      deck,
+      /aria-label=\{isFollowing \? `Unfollow/,
+      "the follow badge is not a labelled control any more"
+    );
+    assert.match(deck, /follow\.mutate\(!isFollowing\)/, "the follow badge does nothing again");
+  });
+
+  it("sits INSIDE the card, as the file places it", () => {
+    // Node 225:3412 is at x=137.28 in a 183.7 card — a 7.29px inset. The badge
+    // hung 8px off the right edge, which is what made it read as stuck onto
+    // the photo rather than part of the card.
+    assert.doesNotMatch(
+      deck,
+      /-right-2/,
+      "the follow badge hangs outside the card again"
+    );
+    assert.match(deck, /right-\[7px\] top-\[7px\]/, "the badge lost the file's inset");
+  });
+
+  it("reads the follow edge rather than the raw field", () => {
+    assert.match(deck, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
+  });
+});
