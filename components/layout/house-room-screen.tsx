@@ -8,6 +8,7 @@
 // The slots take a USERNAME rather than a Profile: a room learns who somebody
 // is from the identity on their room token, and never holds the whole object.
 
+import { useEffect } from "react";
 import { HouseRoom, RoomPeopleSection } from "@/features/houses";
 import { useConversationMembers } from "@/features/messages";
 import { PersonQuickActions as QuickActions } from "@/features/profile";
@@ -36,10 +37,16 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
       // so react-query dedupes them into one fetch; the three parts were
       // written and then never handed to the room, which is why the header read
       // "0 listening · 1 speaking" instead of "306 gist partners".
-      houseSlot={(conversationId) => ({
+      houseSlot={(conversationId, stage) => ({
         name: <HouseName conversationId={conversationId} />,
         partners: <HousePartners conversationId={conversationId} />,
-        members: <HouseMembers conversationId={conversationId} />,
+        members: (
+          <HouseMembers
+            conversationId={conversationId}
+            speakerIds={stage.speakerIds}
+            onRoster={stage.onRoster}
+          />
+        ),
       })}
     />
   );
@@ -77,13 +84,42 @@ function HousePartners({ conversationId }: { conversationId: string }) {
  * Deliberately a different list from the Audience: a member of the house may
  * not be in the room, and somebody in the room may not be a member. The old
  * design had one ring and nowhere to say that.
+ *
+ * IT EXCLUDES WHOEVER IS ON STAGE. The room draws three sections and a person
+ * belongs to exactly one of them — the host was appearing under Speakers AND
+ * under House Members, which reads as two different people with the same face.
+ * `speakerIds` carries the bare user ids (an approved speaker's LiveKit
+ * identity is `<did>#speaker`, so the suffix is stripped before comparing).
+ *
+ * It also REPORTS the roster back up through `onRoster`, which is what lets the
+ * room keep its Audience external: everybody listening who is not in this
+ * house. The roster is fetched here because a house group is a conversation and
+ * slices never import each other, but the room is the only thing that can act
+ * on it.
  */
-function HouseMembers({ conversationId }: { conversationId: string }) {
+function HouseMembers({
+  conversationId,
+  speakerIds,
+  onRoster,
+}: {
+  conversationId: string;
+  speakerIds: ReadonlySet<string>;
+  onRoster: (ids: ReadonlySet<string>) => void;
+}) {
   const members = useConversationMembers(conversationId, true);
+  const items = members.data?.items;
+
+  // react-query hands back the same array between renders, so this fires once
+  // per fetch rather than once per render.
+  useEffect(() => {
+    if (!items) return;
+    onRoster(new Set(items.flatMap((member) => (member.profile ? [member.profile.id] : []))));
+  }, [items, onRoster]);
+
   // A member whose profile did not come back is DROPPED rather than drawn as
   // a blank tile: the membership is the record, the profile is the display.
-  const people = (members.data?.items ?? []).flatMap((member) =>
-    member.profile
+  const people = (items ?? []).flatMap((member) =>
+    member.profile && !speakerIds.has(member.profile.id)
       ? [
           {
             id: member.profile.id,
@@ -99,7 +135,7 @@ function HouseMembers({ conversationId }: { conversationId: string }) {
     <RoomPeopleSection
       title="House Members"
       people={people}
-      empty="This house has no other members yet."
+      empty="Everyone in this house is on the stage."
     />
   );
 }

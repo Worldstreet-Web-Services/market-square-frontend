@@ -14,7 +14,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
 import { RemoteAudio } from "@/features/streams/components/remote-audio";
-import { baseIdentity, remoteAudioSlots, type StageSlot } from "@/features/streams/lib/stage";
+import { baseIdentity, participantLabel, remoteAudioSlots, type StageSlot } from "@/features/streams/lib/stage";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
 import { usePublisher } from "@/features/streams/hooks/use-publisher";
 import { useStage } from "@/features/streams/hooks/use-stage";
@@ -108,7 +108,23 @@ interface SlotProps {
    * belongs to no house — then the name row and the members grid simply do not
    * appear, rather than naming nothing.
    */
-  houseSlot?: (conversationId: string) => {
+  houseSlot?: (
+    conversationId: string,
+    stage: {
+      /**
+       * Profile ids on stage right now. House Members EXCLUDES them: a person
+       * cannot be in two of the room's three lists at once, and the file draws
+       * Speakers, House Members and Audience as three disjoint sets.
+       */
+      speakerIds: ReadonlySet<string>;
+      /**
+       * Reports the roster's profile ids back to the room, which is what lets
+       * the AUDIENCE stay external — the people listening who are not members
+       * of this house. Without it a member who is listening appears twice.
+       */
+      onRoster: (ids: ReadonlySet<string>) => void;
+    }
+  ) => {
     name: React.ReactNode;
     partners: React.ReactNode;
     members: React.ReactNode;
@@ -133,6 +149,9 @@ interface SlotProps {
     mute: { muted: boolean; onToggle: () => void } | undefined
   ) => React.ReactNode;
 }
+
+/** One frozen empty set, so an unresolved roster is not a new value per render. */
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 export function HouseRoom({
   houseId,
@@ -382,6 +401,7 @@ function LiveHouse({
 } & SlotProps) {
   const router = useRouter();
   const gate = useGate();
+  const me = useMe();
   const { message, announce } = useHouseAnnouncer();
 
   /* ---- the one connection ------------------------------------------- */
@@ -447,13 +467,52 @@ function LiveHouse({
 
   /* ---- who is at the table ------------------------------------------ */
 
+  const slots = useStageSlots(room, stream.ownerId);
+
+  /**
+   * THE ROOM'S THREE LISTS ARE DISJOINT, and these two sets are what keeps
+   * them that way.
+   *
+   * `speakerIds` are the people on stage, keyed on the BARE user id — an
+   * approved speaker's LiveKit identity is `<did>#speaker`, so comparing raw
+   * identities against a roster of profile ids never matches. House Members
+   * drops anyone in this set.
+   *
+   * `houseMemberIds` comes back from the roster slot, and the Audience drops
+   * anyone in it: an audience member who is also in the house is already drawn
+   * under House Members, and the file's Audience is the people listening from
+   * OUTSIDE — which is exactly who a public room lets in.
+   */
+  const speakerIds = useMemo(
+    () =>
+      new Set(
+        slots.map((slot) =>
+          // The host's publisher token has NO user id in it — its identity is
+          // the literal string `broadcaster` — so the host slot is keyed on the
+          // stream's own `ownerId` instead. Without this the host matched
+          // nothing in the roster and appeared under Speakers AND House
+          // Members, which is two records for one person.
+          slot.role === "host" ? stream.ownerId : baseIdentity(slot.identity)
+        )
+      ),
+    [slots, stream.ownerId]
+  );
+
+  /* Our own identity, read once. See the note on `isMe` below for why the
+     token cannot supply it. */
+  const myId = me.data?.id;
+  const myName = me.data?.displayName || me.data?.username || null;
+  const myAvatar = me.data?.avatarUrl ?? null;
+  const [houseMemberIds, setHouseMemberIds] = useState<ReadonlySet<string>>(EMPTY_IDS);
+
   /* The house group, resolved once — its name, its partner count and its
      roster all come from the same conversation. Null for a street room. */
   const house = stream.houseConversationId
-    ? (houseSlot?.(stream.houseConversationId) ?? null)
+    ? (houseSlot?.(stream.houseConversationId, {
+        speakerIds,
+        onRoster: setHouseMemberIds,
+      }) ?? null)
     : null;
-
-  const slots = useStageSlots(room, stream.ownerId);
   const seating = useMemo(() => buildSeating(slots), [slots]);
   const audio = useHouseAudio(room);
   const audience = useAudience(room);
@@ -761,36 +820,82 @@ function LiveHouse({
           const slot = seat.slot as StageSlot;
           // Null until the token carries it (B1). No username, no actions —
           // rather than a wink aimed at nobody.
-          const username = parseParticipantMeta(slot.metadata)?.username ?? null;
+          const meta = parseParticipantMeta(slot.metadata);
+          const username = meta?.username ?? null;
+          /*
+            OUR OWN NAME COMES FROM `/me`, NEVER FROM THE TOKEN.
+
+            The room token's `name` is the publisher label the service mints —
+            literally the string "broadcaster" — so the host saw themselves
+            listed as `broadcaster` in their own room. The token metadata that
+            would name everybody else is backend B1 and has not shipped, but we
+            have never needed it for OURSELVES: `/me` is already loaded. So the
+            local participant is named and pictured from the signed-in profile,
+            and everyone else still degrades to the token then to `Guest 4B2C`.
+          */
+          /*
+            THE HOST IS NAMED FROM THE STREAM, NOT FROM THE TOKEN.
+
+            `GET /streams/:id` already carries `owner` — id, username,
+            displayName, avatarUrl — and the host's room token carries none of
+            that: it is minted with the literal identity `broadcaster`. So the
+            host tile reads the stream's owner, which works for EVERY viewer
+            rather than only for the host looking at their own screen.
+
+            An approved guest speaker still joins as `<did>#speaker`, so the
+            `isMe` path below covers naming ourselves when we are that guest.
+            Everyone else waits on token metadata (backend B1).
+          */
+          const owner = slot.role === "host" ? stream.owner : null;
+          const isMe = myId !== undefined && baseIdentity(slot.identity) === myId;
+          const ownerName = owner ? owner.displayName || owner.username : null;
           return {
             id: slot.identity,
-            name: slot.name,
-            avatarUrl: parseParticipantMeta(slot.metadata)?.avatarUrl ?? null,
+            name:
+              ownerName ??
+              (isMe && myName ? myName : participantLabel(slot.name, slot.identity)),
+            avatarUrl: owner ? (owner.avatarUrl ?? null) : isMe ? myAvatar : (meta?.avatarUrl ?? null),
             speaking: audio.loudest === slot.identity,
             // The file draws a microphone on every speaker's plate. It reads
             // the PUBLICATION (`slot.isMuted`), which is their real microphone,
             // and falls back to muted when this viewer has silenced them — a
             // person you cannot hear must not be drawn as talking.
             mic: slot.isMuted || mutedForMe.has(slot.identity) ? "muted" : "on",
-            actions: username ? personActionsSlot?.(username) : undefined,
+            // No wink-and-follow aimed at yourself.
+            actions:
+              owner && owner.id !== myId
+                ? personActionsSlot?.(owner.username)
+                : isMe || !username
+                  ? undefined
+                  : personActionsSlot?.(username),
             onOpen: () => openSlot(slot),
           };
         }),
-    [seating, audio.loudest, mutedForMe, openSlot, personActionsSlot]
+    [seating, audio.loudest, mutedForMe, openSlot, personActionsSlot, myId, myName, myAvatar, stream.owner]
   );
 
   const audiencePeople: RoomPerson[] = useMemo(
     () =>
-      audience.map((member: AudienceMember) => ({
-        id: member.identity,
-        name: member.name,
-        avatarUrl: member.meta?.avatarUrl ?? null,
-        actions: member.meta?.username
-          ? personActionsSlot?.(member.meta.username)
-          : undefined,
-        onOpen: () => openMember(member),
-      })),
-    [audience, openMember, personActionsSlot]
+      audience
+        // EXTERNAL ONLY. Somebody who belongs to this house is already drawn
+        // under House Members; listing them again put the same face in two
+        // sections of one screen. What is left is what the file's Audience
+        // actually means — the people a PUBLIC room let in from outside.
+        .filter((member: AudienceMember) => !houseMemberIds.has(member.userId))
+        .map((member: AudienceMember) => {
+          const isMe = myId !== undefined && member.userId === myId;
+          return {
+            id: member.identity,
+            name: isMe && myName ? myName : member.name,
+            avatarUrl: isMe ? myAvatar : (member.meta?.avatarUrl ?? null),
+            actions:
+              isMe || !member.meta?.username
+                ? undefined
+                : personActionsSlot?.(member.meta.username),
+            onOpen: () => openMember(member),
+          };
+        }),
+    [audience, houseMemberIds, openMember, personActionsSlot, myId, myName, myAvatar]
   );
 
   /* ---- keyboard --------------------------------------------------------- */
@@ -985,7 +1090,11 @@ function LiveHouse({
         <RoomPeopleSection
           title="Audience"
           people={audiencePeople}
-          empty="Nobody is listening yet."
+          empty={
+            house
+              ? "Nobody from outside the house is listening yet."
+              : "Nobody is listening yet."
+          }
         />
       </div>
 

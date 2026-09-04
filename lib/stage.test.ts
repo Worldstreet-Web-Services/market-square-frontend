@@ -6,6 +6,7 @@ import {
   STAGE_PORTRAIT_ASPECT,
   baseIdentity,
   buildStage,
+  isHostParticipant,
   chooseFit,
   cropLoss,
   remoteAudioSlots,
@@ -804,5 +805,59 @@ describe("the letterbox is filled, not dead black", () => {
     // framing hint has to filter back down to our own tiles.
     assert.match(stageView, /onFit=\{\(report\) => handleFit\(report, tile\.key\)\}/);
     assert.match(stageView, /filter\(\(report\) => report\.isLocal\)/);
+  });
+});
+
+describe("the host arriving on the publisher token", () => {
+  // The service now mints the owner's roomToken with `<ownerId>#broadcaster`
+  // (and the RTMP participant as `<ownerId>#rtmp`), so the host carries their
+  // own id like everyone else. It used to be the bare literal `broadcaster` —
+  // no user id at all — which made the host a guest in their own room: no Host
+  // chip, a remove control on their own tile, and in a gist room they appeared
+  // under Speakers and House Members at once, as two people.
+  it("recognises the host on their publisher token", () => {
+    assert.equal(isHostParticipant("did:privy:abc#broadcaster", "did:privy:abc"), true);
+  });
+
+  it("...and when they are pushing RTMP", () => {
+    assert.equal(isHostParticipant("did:privy:abc#rtmp", "did:privy:abc"), true);
+  });
+
+  it("still recognises the host on their own viewer connection", () => {
+    assert.equal(isHostParticipant("did:privy:abc", "did:privy:abc"), true);
+    assert.equal(isHostParticipant("did:privy:abc#speaker", "did:privy:abc"), true);
+  });
+
+  it("does not promote a guest", () => {
+    assert.equal(isHostParticipant("did:privy:zzz", "did:privy:abc"), false);
+    assert.equal(isHostParticipant("did:privy:zzz#speaker", "did:privy:abc"), false);
+    assert.equal(isHostParticipant("did:privy:zzz#broadcaster", "did:privy:abc"), false);
+  });
+
+  it("no longer trusts the bare `broadcaster` literal", () => {
+    // The workaround this replaced matched it for EVERY stream, so anyone who
+    // took that identity was the host of all of them. It is deleted rather
+    // than kept beside the real check.
+    assert.equal(isHostParticipant("broadcaster", "did:privy:abc"), false);
+  });
+
+  it("never guesses a host when the stream has no owner", () => {
+    assert.equal(isHostParticipant("did:privy:abc#broadcaster", ""), false);
+  });
+
+  it("gives the publisher the host slot in buildStage", () => {
+    const room = {
+      localParticipant: {
+        identity: "did:privy:abc#broadcaster",
+        isLocal: true,
+        permissions: { canPublish: true },
+        videoTrackPublications: new Map(),
+        audioTrackPublications: new Map(),
+      },
+      remoteParticipants: new Map(),
+    };
+    const slots = buildStage(room as never, "did:privy:abc");
+    assert.equal(slots.length, 1);
+    assert.equal(slots[0].role, "host");
   });
 });
