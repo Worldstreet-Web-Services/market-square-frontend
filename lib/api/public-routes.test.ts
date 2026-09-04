@@ -63,6 +63,9 @@ const PUBLIC: string[][] = [
   ["streams", "st_1"],
   ["streams", "st_1", "chat"],
   ["verification", "rule"],
+  // Home's "Join a community" grid renders signed out, so the directory it
+  // reads has to answer signed out. This exact shape only.
+  ["conversations", "discover"],
   // Public upstream and public here: the trending rail is a discovery surface
   // that renders signed out.
   ["hashtags", "trending"],
@@ -203,6 +206,18 @@ describe("isPublicGet", () => {
       // A hashtag's own feed is served by /feed?hashtag=, which is already
       // public on its own head — this head must not open a second door.
       assert.equal(isPublicGet(["hashtags", "solana"]), false);
+    });
+
+    it("opens the house directory and NOTHING else under /conversations", () => {
+      // The directory answers for people who are not members and carries no
+      // message, unread or last activity. Every other conversation route is a
+      // membership-gated read and must stay behind a session — letting the
+      // head through would expose whole threads.
+      assert.equal(isPublicGet(["conversations", "discover"]), true);
+      assert.equal(isPublicGet(["conversations"]), false);
+      assert.equal(isPublicGet(["conversations", "cv_1"]), false);
+      assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
+      assert.equal(isPublicGet(["conversations", "discover", "anything"]), false);
     });
 
     it("gates /verification unless it is the rule", () => {
