@@ -30,6 +30,9 @@
  * count lives in seating.ts for the same reason. Pinned by lib/house.test.ts.
  */
 
+// Relative, not `@/`: this module is loaded directly by `node --test`, which
+// does not resolve the alias.
+import { housePath } from "../../../lib/house-path.ts";
 import type { Stream } from "@/lib/api/schemas";
 
 export const HOUSE_CATEGORY = "house";
@@ -81,9 +84,10 @@ export function isValidTopic(input: string): boolean {
   return trimmed.length >= TOPIC_MIN && trimmed.length <= TOPIC_MAX;
 }
 
-export function housePath(houseId: string): string {
-  return `/gist-rooms/${houseId}`;
-}
+// Lifted to shared lib/: the messages slice needs it to link a room
+// announcement, and slices never import each other. Re-exported so every
+// existing caller in this slice is unchanged.
+export { housePath };
 
 /**
  * The share links, named in words rather than hidden inside a chair.

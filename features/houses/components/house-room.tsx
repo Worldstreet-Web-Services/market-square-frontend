@@ -30,18 +30,19 @@ import {
   useStream,
 } from "@/features/streams/hooks/use-streams";
 import type { Ingest, Stream } from "@/features/streams/lib/types";
-import { AudienceBands } from "@/features/houses/components/audience-band";
+import { RoomPeopleSection, type RoomPerson } from "@/features/houses/components/room-people";
+import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { Backstage } from "@/features/houses/components/backstage";
 import { CaptionRail } from "@/features/houses/components/caption-rail";
 import { CopyRow } from "@/features/houses/components/copy-row";
 import { HandTray } from "@/features/houses/components/hand-tray";
 import { HouseControls } from "@/features/houses/components/house-controls";
 import { HouseHeader } from "@/features/houses/components/house-header";
+import { RecordGistButton, RoomDock } from "@/features/houses/components/room-dock";
+import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PersonSheet, type PersonTarget } from "@/features/houses/components/person-sheet";
-import { OverflowRow, SeatRing } from "@/features/houses/components/seat-ring";
-import { TableEdge } from "@/features/houses/components/table-edge";
-import { useAudience, useAudienceBands, type AudienceMember } from "@/features/houses/hooks/use-audience";
+import { useAudience, type AudienceMember } from "@/features/houses/hooks/use-audience";
 import { useHouseAnnouncer } from "@/features/houses/hooks/use-house-announcer";
 import { useHouseAudio } from "@/features/houses/hooks/use-house-audio";
 import { useHouseConnection } from "@/features/houses/hooks/use-house-connection";
@@ -83,6 +84,50 @@ import {
 interface SlotProps {
   /** Composed in components/layout — slices never import each other. */
   followSlot: (username: string) => React.ReactNode;
+  /**
+   * The roster of the HOUSE GROUP this room belongs to — the file's "House
+   * Members", which is a different list from the audience: a member may not be
+   * here, and somebody here may not be a member.
+   *
+   * A slot rather than an import, because the roster is a CONVERSATION and
+   * slices never import each other. It renders nothing when the room has no
+   * house group (one opened from the street belongs to none), so the section
+   * simply does not appear rather than appearing empty.
+   */
+  /**
+   * THE HOUSE GROUP this room was opened from, in the three places node
+   * 129:11887 shows it: its name beside the people glyph, its partner count
+   * under the title, and its roster as the House Members grid.
+   *
+   * ONE slot returning three nodes rather than three slots, because all three
+   * read the same conversation — react-query dedupes the fetch, and splitting
+   * them would invite one of the three to drift onto a different source.
+   *
+   * A slot at all because a house group is a CONVERSATION, and slices never
+   * import each other. It is absent for a room opened from the street, which
+   * belongs to no house — then the name row and the members grid simply do not
+   * appear, rather than naming nothing.
+   */
+  houseSlot?: (conversationId: string) => {
+    name: React.ReactNode;
+    partners: React.ReactNode;
+    members: React.ReactNode;
+  };
+  /**
+   * The wink + follow pair on a person's card (node 169:13368). A slot, because
+   * both are the profile slice's actions and slices never import each other.
+   */
+  personActionsSlot?: (username: string) => React.ReactNode;
+  /**
+   * "Give a tip" — node 121:10996, the AUDIENCE's left-hand pill in the bottom
+   * bar, where the host has Record Gist.
+   *
+   * A slot because tipping is the tips slice's flow and slices never import
+   * each other. It is handed the room and its host, which is the tip's
+   * recipient; the control renders nothing on your own room or where the
+   * service refuses the recipient, so the host never sees it either way.
+   */
+  tipSlot?: (streamId: string, owner: Stream["owner"]) => React.ReactNode;
   safetySlot: (
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
@@ -93,6 +138,9 @@ export function HouseRoom({
   houseId,
   followSlot,
   safetySlot,
+  houseSlot,
+  personActionsSlot,
+  tipSlot,
 }: { houseId: string } & SlotProps) {
   const stream = useStream(houseId, 10_000);
   const me = useMe();
@@ -136,14 +184,14 @@ export function HouseRoom({
 
   if (data.status === "scheduled") {
     return isHost ? (
-      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} />
+      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} tipSlot={tipSlot} />
     ) : (
       <NotOpenYet stream={data} />
     );
   }
 
   return (
-    <LiveHouse
+    <LiveHouse houseSlot={houseSlot} personActionsSlot={personActionsSlot} tipSlot={tipSlot}
       key={data.id}
       stream={data}
       isHost={isHost}
@@ -200,11 +248,17 @@ function EmptyRing() {
 function HostScheduled({
   stream,
   followSlot,
+  houseSlot,
+  personActionsSlot,
   safetySlot,
+  tipSlot,
 }: {
   stream: Stream;
   followSlot: SlotProps["followSlot"];
   safetySlot: SlotProps["safetySlot"];
+  houseSlot?: SlotProps["houseSlot"];
+  personActionsSlot?: SlotProps["personActionsSlot"];
+  tipSlot?: SlotProps["tipSlot"];
 }) {
   const [ingest, setIngest] = useState<Ingest | null>(null);
   const [micId, setMicId] = useState("");
@@ -216,7 +270,7 @@ function HostScheduled({
   const [opened, setOpened] = useState(false);
   if (opened && ingest) {
     return (
-      <LiveHouse
+      <LiveHouse houseSlot={houseSlot} personActionsSlot={personActionsSlot} tipSlot={tipSlot}
         // go-live has returned, so the host IS live — our cached stream object
         // just has not caught up. Rendering from the ingest already in hand
         // opens their microphone now rather than on the next ten-second poll,
@@ -317,6 +371,9 @@ function LiveHouse({
   micId = "",
   followSlot,
   safetySlot,
+  houseSlot,
+  personActionsSlot,
+  tipSlot,
 }: {
   stream: Stream;
   isHost: boolean;
@@ -390,17 +447,18 @@ function LiveHouse({
 
   /* ---- who is at the table ------------------------------------------ */
 
+  /* The house group, resolved once — its name, its partner count and its
+     roster all come from the same conversation. Null for a street room. */
+  const house = stream.houseConversationId
+    ? (houseSlot?.(stream.houseConversationId) ?? null)
+    : null;
+
   const slots = useStageSlots(room, stream.ownerId);
   const seating = useMemo(() => buildSeating(slots), [slots]);
   const audio = useHouseAudio(room);
   const audience = useAudience(room);
-  const bands = useAudienceBands(audience, audio.recentSpeakers);
-  const full = seatsFull(seating);
 
-  const loudestSlot = useMemo(
-    () => slots.find((slot) => slot.identity === audio.loudest) ?? null,
-    [slots, audio.loudest]
-  );
+  const full = seatsFull(seating);
 
   /* ---- asking for the floor ------------------------------------------ */
 
@@ -488,6 +546,8 @@ function LiveHouse({
     useCallback(() => getMutes(stream.id), [stream.id]),
     getServerMutes
   );
+
+
   const toggleMute = useCallback(
     (identity: string) => setMutes(stream.id, toggleMuteSet(getMutes(stream.id), identity)),
     [stream.id]
@@ -667,6 +727,8 @@ function LiveHouse({
   const openMember = useCallback(
     (member: AudienceMember) => {
       const waiting = handsUp.find((item) => item.userId === member.userId);
+
+
       setPerson({
         identity: member.identity,
         name: member.name,
@@ -676,6 +738,59 @@ function LiveHouse({
       });
     },
     [handsUp]
+  );
+
+  /*
+    THE FILE'S THREE LISTS, from the state the room already had.
+
+    `Speakers` is the stage; `Audience` is everyone else in the room. They come
+    from different sources on purpose — a slot is somebody publishing, an
+    audience member is somebody connected — and the old ring collapsed both
+    into one arrangement of eight chairs, which is why there was nowhere to put
+    a room of thirty.
+
+    `muted` reads the audio map rather than being inferred from silence: a
+    person who simply is not talking is not muted, and drawing them as muted
+    would be a claim about their microphone we did not check.
+  */
+  const speakerPeople: RoomPerson[] = useMemo(
+    () =>
+      seating.seats
+        .filter((seat) => seat.slot !== null)
+        .map((seat) => {
+          const slot = seat.slot as StageSlot;
+          // Null until the token carries it (B1). No username, no actions —
+          // rather than a wink aimed at nobody.
+          const username = parseParticipantMeta(slot.metadata)?.username ?? null;
+          return {
+            id: slot.identity,
+            name: slot.name,
+            avatarUrl: parseParticipantMeta(slot.metadata)?.avatarUrl ?? null,
+            speaking: audio.loudest === slot.identity,
+            // The file draws a microphone on every speaker's plate. It reads
+            // the PUBLICATION (`slot.isMuted`), which is their real microphone,
+            // and falls back to muted when this viewer has silenced them — a
+            // person you cannot hear must not be drawn as talking.
+            mic: slot.isMuted || mutedForMe.has(slot.identity) ? "muted" : "on",
+            actions: username ? personActionsSlot?.(username) : undefined,
+            onOpen: () => openSlot(slot),
+          };
+        }),
+    [seating, audio.loudest, mutedForMe, openSlot, personActionsSlot]
+  );
+
+  const audiencePeople: RoomPerson[] = useMemo(
+    () =>
+      audience.map((member: AudienceMember) => ({
+        id: member.identity,
+        name: member.name,
+        avatarUrl: member.meta?.avatarUrl ?? null,
+        actions: member.meta?.username
+          ? personActionsSlot?.(member.meta.username)
+          : undefined,
+        onOpen: () => openMember(member),
+      })),
+    [audience, openMember, personActionsSlot]
   );
 
   /* ---- keyboard --------------------------------------------------------- */
@@ -722,9 +837,32 @@ function LiveHouse({
   const speaking = slots.length;
 
   return (
+    /*
+      NODE 129:11748. The room is TWO columns, not one narrow one.
+
+      The file draws them 805 and 411 inside a 1440 frame. Only the CHAT is
+      fixed at 411 — the stage takes whatever is left, which is why it has no
+      max-width. Capping it at the file's 805 left everything past 1216px of
+      pane as dead black parked on the right edge, which is exactly the bug the
+      shell removed its own max-widths to fix.
+
+      The people grid still reads from 744 up: six 104px cards on a 24px gutter
+      is 6*104 + 5*24, and a wider stage simply wraps a seventh onto the row
+      rather than leaving a margin nobody asked for.
+
+      Below `xl` the right column drops under the left rather than squeezing:
+      a 411px chat beside a 744px grid needs 1155px of room before the shell's
+      own rail, and cramming it makes both unusable.
+    */
     <main
       aria-label={houseTopic(stream)}
-      className="ws-wash mx-auto w-full max-w-[520px] pb-[calc(var(--ws-nav-h)+72px)]"
+      /* `bg-grey-900` (#0f0f0f) is the file's own frame fill, not `ws-wash`.
+         The wash paints pure #000 with a radial highlight, which made the
+         left column DARKER than the page it sits on and flattened the step up
+         to the chat column's #121214 — the two read as one surface. Flat
+         ground on the left, `--color-chrome` on the right, exactly as
+         129:11887 and 129:12852 are painted. */
+      className="flex w-full flex-col bg-grey-900 pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
     >
       {/* The audio itself. Mounted from its OWN map so it can never become
           conditional on anything visual — the reason RemoteAudio is its own
@@ -739,40 +877,70 @@ function LiveHouse({
         {message}
       </div>
 
+      {/* LEFT COLUMN — 805 in the file, 744 of content inside 32px gutters.
+          A COLUMN, not a plain block: the file's bottom bar (129:12197) is the
+          last thing in it, and it has to sit on the column's own bottom edge
+          rather than beside the chat. */}
+      <div className="ws-hair flex min-w-0 flex-1 flex-col xl:overflow-y-auto xl:border-r">
+
       <HouseHeader
         topic={houseTopic(stream)}
-        live={stream.status === "live"}
+        house={house?.name}
         meta={
-          <>
-            <span className="tnum">{listening}</span> listening ·{" "}
-            <span className="tnum">{speaking}</span> speaking
-          </>
+          // The file's line is the HOUSE's partner count. A room with no house
+          // has no partners to count, so it falls back to what it does know:
+          // who is actually in the room right now.
+          house?.partners ?? (
+            <>
+              <span className="tnum">{listening}</span> listening ·{" "}
+              <span className="tnum">{speaking}</span> speaking
+            </>
+          )
         }
-        onOverflow={() => setOverflowSheet(true)}
+        onLeave={isHost ? () => setConfirmLeave(true) : leave}
+        // The file's row 2 has two circles, not three. The overflow sheet the
+        // third one opened is this one — both room links and the keyboard
+        // shortcuts — so nothing was lost when the dots went.
+        onShare={() => setOverflowSheet(true)}
+        // The same action the free chair fires — see HouseHeader's note on why
+        // "Join House" is a seat request and not a membership.
+        join={
+          asking
+            ? {
+                onJoin: ask,
+                state: approved ? "seated" : pendingMine ? "pending" : "idle",
+                reason: askReason,
+              }
+            : undefined
+        }
       />
 
-      <TableEdge
-        audio={audio}
-        loudest={loudestSlot}
-        connecting={state === "connecting"}
-        reconnecting={state === "reconnecting"}
-      />
+      {/*
+        The cover: 741x200 at radius 24. The file fills it white because that
+        is where the room's own picture goes — a room without one gets the
+        surface rather than a white slab, which would read as a broken image.
+      */}
+      <div className="px-4 pt-4 xl:px-8">
+        {stream.thumbnailUrl ? (
+          // A plain <img>: the host uploads this and the store types it, so
+          // `next/image` handed something it cannot decode is a crash this
+          // repo has already shipped twice.
+          <img
+            src={stream.thumbnailUrl}
+            alt=""
+            className="h-[200px] w-full rounded-3xl object-cover"
+          />
+        ) : (
+          <div className="h-[200px] w-full rounded-3xl bg-white/[0.06]" />
+        )}
+      </div>
 
-      <div className={cn("px-5 pb-4 pt-6", state === "failed" && "opacity-40")}>
-        <SeatRing
-          seating={seating}
-          audio={audio}
-          // BACKEND: `GET /streams/:id/speaker-requests` is host-scoped
-          // (authedGet, verified), so a listener cannot know how many hands
-          // are up — only their own. So the chair shows the host the real
-          // count and shows everyone else their own hand, which is the honest
-          // subset rather than a number nobody can check.
-          pending={isHost ? handsUp.length : pendingMine ? 1 : 0}
-          seatsDisabled={!canAsk || askReason !== null}
-          askLabel={canAsk ? "Ask to speak" : "Free seat"}
-          mutedForMe={mutedForMe}
-          onAsk={ask}
-          onOpenPerson={openSlot}
+      <div className={cn("flex flex-col gap-6 px-4 pb-6 pt-10 xl:px-8", state === "failed" && "opacity-40")}>
+        <RoomPeopleSection
+          title="Speakers"
+          rule={false}
+          people={speakerPeople}
+          empty="Nobody has the floor yet."
         />
       </div>
 
@@ -801,10 +969,28 @@ function LiveHouse({
         </div>
       )}
 
-      <OverflowRow overflow={seating.overflow} onOpenPerson={openSlot} />
+      <div className="flex flex-col gap-6 px-4 pb-6 xl:px-8">
+        {/*
+          HOUSE MEMBERS is the roster of the group this room belongs to, and it
+          is genuinely a different list from the AUDIENCE: a member may not be
+          here, and somebody here may not be a member. It renders only when the
+          room HAS a house group — a room opened from the street belongs to no
+          house, and an empty "House Members" would invent one.
+
+          The roster arrives through a slot, because it is a conversation and
+          slices never import each other.
+        */}
+        {house?.members}
+
+        <RoomPeopleSection
+          title="Audience"
+          people={audiencePeople}
+          empty="Nobody is listening yet."
+        />
+      </div>
 
       {stream.description?.trim() && (
-        <div className="ws-row flex items-start gap-3 px-4 py-3">
+        <div className="ws-row flex items-start gap-3 px-4 py-3 xl:px-8">
           <IconLink className="mt-0.5 h-4 w-4 shrink-0 text-meta" />
           <p className="min-w-0 flex-1 text-[13px] leading-5 text-body">
             {stream.description.trim()}
@@ -814,33 +1000,97 @@ function LiveHouse({
 
       <CaptionRail captionUrl={playback.data?.captionUrl ?? null} />
 
-      <AudienceBands
-        bands={bands}
-        total={listening}
-        onOpen={openMember}
-        emptyAction={
-          <>
-            <p className="text-[15px] font-bold text-heading">Nobody is here yet.</p>
-            <p className="mt-1 text-[13px] leading-5 text-meta">
-              Your voice is live. Share the link and people can walk straight in.
-            </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="mt-3"
-              onClick={() =>
-                void navigator.clipboard
-                  .writeText(houseShareUrl(shareOrigin, stream.id))
-                  .then(() => toast.success("Link copied"))
+      {/* Everything above scrolls; the bar below is pinned to the column's
+          bottom edge. `mt-auto` rather than `sticky`, because the column is
+          only viewport-tall from `xl` — on a phone the page scrolls as one and
+          the bar belongs at the end of it, under the mobile control pill. */}
+      <div className="mt-auto" />
+      <RoomDock
+        /* The host records; everyone else tips (129:12198 / 121:10996). The
+           tip control is the tips slice's and comes in through a slot, and it
+           removes itself where a tip could not be taken — so a room with no
+           tippable host simply has an empty left edge, as the file's host
+           frame does before Record Gist is pressed. */
+        primary={isHost ? <RecordGistButton /> : (tipSlot?.(stream.id, stream.owner) ?? null)}
+        mic={
+          onStage
+            ? {
+                on: micOn,
+                toggle: () => void micToggle(),
+                disabled: state === "reconnecting" || state === "failed",
               }
-            >
-              Copy invite link
-            </Button>
-          </>
+            : null
         }
+        /* The same request state the header's "Join House" pill drives, and
+           the same mutations — one queue, one poll, two places to reach it. */
+        ask={
+          canAsk
+            ? {
+                label: pendingMine ? handLabel(mine.data?.createdAt) : "Ask to speak",
+                reason: pendingMine ? null : askReason,
+                pending: pendingMine,
+                busy: request.isPending || resolve.isPending || state !== "live",
+                onAsk: ask,
+                onLower: () =>
+                  mine.data?.id && resolve.mutate({ requestId: mine.data.id, action: "leave" }),
+              }
+            : null
+        }
+        onReact={() => live.react(1)}
+        className="xl:sticky xl:bottom-0"
       />
 
+      </div>
+      {/* ── END LEFT COLUMN ──────────────────────────────────────────────── */}
+
+      {/*
+        RIGHT COLUMN — 411, painted `--color-chrome`, carrying the host's
+        Speaker Request panel over the room's chat. It is a column on a wide
+        screen and a stacked block below `xl`; it is never hidden, because the
+        chat is the only way somebody without a seat can say anything.
+      */}
+      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
+        {/* SPEAKER REQUEST — node 129:12809, host only, above the chat. It used
+            to be the tray SHEET mounted here, which renders nothing until it
+            opens, so the band the file draws was simply a 48px hole. */}
+        {isHost && (
+          <SpeakerRequestPanel
+            stream={stream}
+            seatsFull={full}
+            onManage={() => setTray(true)}
+          />
+        )}
+
+        {/* The file's "Gistroom Chat". A gist room IS a stream, so this is the
+            same chat endpoint every stream has — not a second one. The heading
+            is the file's own 24px row over a hairline; the panel below it draws
+            the room's purple bubbles and pill composer (variant "room"). */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <h2 className="shrink-0 border-b border-white/10 px-6 py-6 text-[14px] font-bold leading-5 text-white">
+            Gistroom Chat
+          </h2>
+          <div className="min-h-0 flex-1">
+            <ChatPanel stream={stream} variant="room" />
+          </div>
+        </div>
+      </aside>
+
+      {/*
+        THE FLOATING CONTROL PILL IS A PHONE PATTERN, and from `xl` it is gone.
+
+        Every one of its controls has a place in the file's own desktop chrome:
+        the microphone and the heart are in the bottom bar (129:12197), leaving
+        is the header's red circle (129:11905), asking for the floor is
+        "Join House" (129:11893), and the host's queue is the Speaker Request
+        band (129:12809). Keeping it as well would draw each of them twice, one
+        of the two floating over the file's layout.
+
+        Below `xl` there is no such chrome — the columns stack, the bar is at
+        the very bottom of a long page, and this pill is the only thing within
+        reach — so it stays exactly as it was.
+      */}
       <HouseControls
+        className="xl:hidden"
         mic={
           onStage
             ? {

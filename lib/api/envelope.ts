@@ -43,6 +43,11 @@ function fallbackCode(status: number): string {
 
 export async function unwrap<T>(res: Response, fallbackMessage: string): Promise<T> {
   const text = await res.text();
+  // A 204 is a SUCCESS that has no body by definition — declining a chat
+  // request, leaving a group, removing a member all answer with one. Without
+  // this they fell through to the envelope check below, found no
+  // `success: true`, and threw BAD_RESPONSE on a call that had worked.
+  if (res.ok && text.trim() === "") return undefined as T;
   const body = parseBody(text) as {
     success?: boolean;
     data?: T;

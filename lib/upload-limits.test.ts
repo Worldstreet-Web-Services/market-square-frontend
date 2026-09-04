@@ -47,6 +47,11 @@ const SERVER_LIMITS = {
   maxVideoBytes: 200 * MB,
   imageContentTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   videoContentTypes: ["video/mp4", "video/webm"],
+  // Voice notes. Audio joined the published contract when chat attachments
+  // did — this fixture stands in for what the service actually serves, so it
+  // carries the same fields the service does.
+  maxAudioBytes: 10 * MB,
+  audioContentTypes: ["audio/mpeg", "audio/mp4", "audio/webm", "audio/ogg", "audio/wav"],
   maxVideoSeconds: 90,
 };
 

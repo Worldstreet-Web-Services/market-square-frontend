@@ -1,65 +1,209 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, Spinner } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/states";
 import { Sheet } from "@/components/ui/sheet";
+import { TopicTagsField } from "@/components/ui/topic-tags-field";
 import { cn } from "@/lib/cn";
 import { useCreateStream } from "@/features/streams/hooks/use-streams";
+import { acceptFor, ensureUploadLimits, uploadFile, validateUpload } from "@/lib/api/upload";
 import {
   HOUSE_CATEGORY,
-  NOTE_MAX,
   TOPIC_MAX,
   TOPIC_WARN,
-  clampNote,
   clampTopic,
   housePath,
   isValidTopic,
 } from "@/features/houses/lib/house";
 
-const inputClass =
-  "ws-inset w-full bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-grey-600";
+/**
+ * New Gistroom — node 59:7544.
+ *
+ * ─── THE FILE'S FIELDS, IN ITS ORDER ─────────────────────────────────────────
+ * Visibility, Title, Tags, Upload image, Chat access, then a right-aligned
+ * "Create Gistroom". The 40px fields are `white/4` inside a 1px `white/10` at a
+ * 30px radius; labels are 13/SemiBold white; the dropzone is `#18181C` behind a
+ * 1.5px `#26262B` dash (6,4) at a 16px radius. All verbatim.
+ *
+ * ─── WHAT IS REAL AND WHAT IS NOT ────────────────────────────────────────────
+ * Title, Tags and the image are REAL: they map to `title`, `topics` and
+ * `thumbnailUrl` on `POST /streams`, and the picture goes through the same
+ * upload path every other image does.
+ *
+ * VISIBILITY and CHAT ACCESS are drawn and INERT, and the reasons differ:
+ *
+ *  - A stream's `visibility` is `public | ticketed` — a door charge, not an
+ *    audience. There is no private room: a house is a room you can walk into,
+ *    and nothing in the service can keep somebody out of one. A Private option
+ *    that merely stored a flag would be a claim about who can hear you, which
+ *    is the one kind of control that has to be true the day it ships.
+ *  - Chat access has no field at all. Nothing distinguishes "anyone can chat"
+ *    from "followers of the host", so both would be the same room.
+ *
+ * Both are disabled with the reason on them rather than removed, because the
+ * design says they are coming and a reader should see what the room will
+ * eventually offer — the house rule for a capability that does not exist yet.
+ *
+ * ─── WHAT THE FILE DROPS ─────────────────────────────────────────────────────
+ * The old sheet had a "Pinned note" writing to `description`. 59:7544 has no
+ * such field, so it is gone from the form. The column is untouched and rooms
+ * that already have a note keep it.
+ *
+ * Creating and opening stay two acts: this makes the room `scheduled` and
+ * routes to it, where the host lands on Backstage and turns their own
+ * microphone on deliberately rather than as a side effect of naming a topic.
+ */
 
 /**
- * Open a gist room: ONE required field.
+ * The file's 40px field: `white/4` inside a 1px `white/10` at a 30px radius.
  *
- * "Anyone can open a gist room and name its topic" is the whole of the brief here,
- * so the form is the whole of the brief and nothing else. No thumbnail, no
- * category picker (a house is never chosen from the Go Live dropdown — see
- * BROADCAST_CATEGORIES), no ticket price, no schedule. A house is never
- * ticketed in this slice and no money surface appears anywhere in one.
- *
- * It creates the stream as `scheduled` and routes to the room, where the host
- * lands on Backstage. Creating and opening are two acts on purpose: the second
- * one is where somebody's microphone turns on, and it should take a deliberate
- * tap rather than happening as a side effect of naming a topic.
+ * Every colour here is an alpha over the ground rather than a hex, which is
+ * both what the file specifies and what this tree requires — `features/houses`
+ * is asserted to contain NO hex literal, because a hex in a component is a
+ * colour nobody can repoint. The design's #0088FF caret is the one property
+ * dropped: there is no token for it and inventing one for a single field is
+ * how a palette grows a colour nobody owns.
  */
+const FIELD =
+  "w-full rounded-[30px] border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[14px] text-white outline-none placeholder:text-white/50";
+const LABEL = "text-[13px] font-semibold text-white";
+
+/** The file's 314x40 radio pill. */
+function RadioPill({
+  text,
+  hint,
+  selected,
+  disabled,
+  title,
+  onSelect,
+}: {
+  text: string;
+  hint?: string;
+  selected: boolean;
+  disabled?: boolean;
+  title?: string;
+  onSelect?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      disabled={disabled}
+      onClick={onSelect}
+      title={title}
+      className={cn(
+        "flex h-10 max-w-[314px] flex-1 items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 text-[12px] leading-4 text-white/90",
+        disabled && "cursor-not-allowed opacity-50"
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+          selected ? "border-white" : "border-white/40"
+        )}
+      >
+        {selected && <span className="h-2 w-2 rounded-full bg-white" />}
+      </span>
+      {text}
+      {hint && <span className="text-white/50">{hint}</span>}
+    </button>
+  );
+}
+
 export function OpenHouseSheet({
   open,
   onClose,
-  /** Prefills the topic — used by "Open a gist room about this" on a closed house. */
+  /** Prefills the title — used by "Open a gist room about this" on a closed house. */
   initialTopic = "",
+  /**
+   * The house group this composer was opened from, when it was opened from
+   * one — a GROUP thread's "Create Gist Room".
+   *
+   * It is what makes Private selectable: a private room is reachable only by
+   * members of a house group, so without one there is no group to be private
+   * TO. Opened from the street there is no group, and Private says so rather
+   * than offering a choice that would be refused on submit.
+   */
+  houseConversationId,
 }: {
   open: boolean;
   onClose: () => void;
   initialTopic?: string;
+  houseConversationId?: string;
 }) {
   const router = useRouter();
   const create = useCreateStream();
   const [topic, setTopic] = useState(initialTopic);
-  const [note, setNote] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [audience, setAudience] = useState<"public" | "private">("public");
+  /* Who may TYPE in the room (migration 041). `open` is the default and the
+     historic behaviour, so a host who never touches this gets the room every
+     room used to be. */
+  const [chatAccess, setChatAccess] = useState<"open" | "followers">("open");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const valid = isValidTopic(topic);
+
+  const takeImage = async (file: File | undefined) => {
+    if (!file || imageBusy) return;
+    setImageError(null);
+    await ensureUploadLimits();
+    const problem = validateUpload(file, "image");
+    if (problem) {
+      setImageError(problem);
+      return;
+    }
+    setImageBusy(true);
+    try {
+      const result = await uploadFile(file, undefined, "image");
+      setImageUrl(result.url);
+    } catch (cause) {
+      setImageError(cause instanceof Error ? cause.message : "That upload didn't finish.");
+    } finally {
+      setImageBusy(false);
+    }
+  };
 
   const submit = () => {
     create.mutate(
       {
         title: topic.trim(),
-        description: note.trim() || undefined,
         category: HOUSE_CATEGORY,
-        // Always public. A house is a room you can walk into; a door charge is
-        // a different product and it is not this slice.
+        // Omitted when empty: an empty array reads as "match no topics" on the
+        // query side and there is no reason to teach the write side a second
+        // meaning for it.
+        ...(tags.length > 0 ? { topics: tags } : {}),
+        ...(imageUrl ? { thumbnailUrl: imageUrl } : {}),
+        audience,
+        /*
+          THE HOUSE GROUP IS SENT WHENEVER WE HAVE ONE — public rooms included.
+
+          It used to be gated on `audience === "private"`, which conflated two
+          different questions: WHERE a room came from, and WHO may find it. A
+          public room opened from a house group still belongs to that group, and
+          the file's header says so — node 129:11892 names the house beside a
+          "Join House" pill, which only makes sense for a room outsiders CAN
+          see. Gating it meant every public room lost its community: the header
+          row, the partner count and the House Members grid all rendered
+          nothing, because `houseConversationId` came back null.
+
+          The service agrees: it REQUIRES the field when `audience` is private
+          and otherwise simply records it, checking that the conversation is a
+          group and that the caller is a member of it.
+        */
+        ...(houseConversationId ? { houseConversationId } : {}),
+        // `visibility` is the door CHARGE and is unrelated to `audience`: a
+        // gist room is never ticketed in this slice.
+          // Who may TYPE in the room. `open` is the default and the historic
+          // behaviour; the service enforces the other one on send.
+          chatAccess,
         visibility: "public",
       },
       {
@@ -72,61 +216,214 @@ export function OpenHouseSheet({
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="Open a gist room">
-      <label className="block">
-        <span className="ws-meta mb-2 block">What is it about?</span>
-        <input
-          autoFocus
-          value={topic}
-          onChange={(event) => setTopic(clampTopic(event.target.value))}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && valid && !create.isPending) submit();
-          }}
-          maxLength={TOPIC_MAX}
-          placeholder="Lagos rent, honestly"
-          className={inputClass}
-          aria-label="Topic"
-        />
-      </label>
-      <p
-        className={cn(
-          "tnum mt-1 text-right text-[11px]",
-          // See backstage.tsx: silver, not red. --color-down owns value
-          // deltas, and a character count is not one.
-          topic.length > TOPIC_WARN ? "font-semibold text-heading" : "text-meta"
+    <Sheet
+      open={open}
+      onClose={onClose}
+      bare
+      /*
+        The file's own surface and WIDTH: 644 of content inside 16px gutters is
+        a 676 panel, so this is a wide desktop form, not the 448 default sheet.
+        `--color-raised` (#0f0f11) is the token nearest the file's Woodsmoke
+        rgba(16,16,18,...) — this tree may not carry a hex, and inventing a
+        second near-black for one panel is how a palette grows a colour nobody
+        owns. Below `sm` it stays a full-width bottom sheet, which is what the
+        Sheet does for every other form on a phone.
+      */
+      panelClassName="border border-white/[0.18] bg-raised/[0.62] backdrop-blur-[7px] sm:max-w-[676px] sm:rounded-[22px]"
+    >
+      <div className="flex max-h-[85dvh] flex-col gap-6 overflow-y-auto p-4">
+        {/* The file's own chrome: the title left, a 43px round dismiss right —
+            not the house Sheet's left-hand X. */}
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-[16px] font-bold leading-6 text-white">New Gistroom</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="ws-press flex h-[43px] w-[43px] shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-white/80 backdrop-blur-[4.84px] transition-colors hover:text-white"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 22 22"
+              className="h-[22px] w-[22px]"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.6}
+              strokeLinecap="round"
+            >
+              <path d="m5 5 12 12M17 5 5 17" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className={LABEL}>Visibility</span>
+          <div className="flex flex-wrap gap-4">
+            <RadioPill
+              text="Public"
+              selected={audience === "public"}
+              onSelect={() => setAudience("public")}
+            />
+            <RadioPill
+              text="Private"
+              hint="(only group members)"
+              selected={audience === "private"}
+              // Private needs a group to be private TO. Opened from the street
+              // there is none, so the option says why instead of failing on
+              // submit with a 400 the reader cannot act on.
+              disabled={!houseConversationId}
+              title={
+                houseConversationId
+                  ? undefined
+                  : "Open a gist room from a house group to make it private to that group."
+              }
+              onSelect={() => setAudience("private")}
+            />
+          </div>
+          <p className="flex items-center gap-2 text-[13px] text-meta">
+            <svg
+              aria-hidden
+              viewBox="0 0 18 18"
+              className="h-[18px] w-[18px] shrink-0"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.3}
+              strokeLinecap="round"
+            >
+              <circle cx="9" cy="9" r="7" />
+              <path d="M2.4 9h13.2M9 2a13 13 0 0 1 0 14M9 2a13 13 0 0 0 0 14" />
+            </svg>
+            {audience === "private"
+              ? "Only members of this house group can find or join it."
+              : "Visible to anyone on Market Square — it shows on the home page."}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className={LABEL} htmlFor="gistroom-title">
+            Title
+          </label>
+          <input
+            id="gistroom-title"
+            autoFocus
+            value={topic}
+            onChange={(event) => setTopic(clampTopic(event.target.value))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && valid && !create.isPending) submit();
+            }}
+            maxLength={TOPIC_MAX}
+            placeholder="Enter gistroom title here..."
+            className={FIELD}
+          />
+          <p
+            className={cn(
+              // See backstage.tsx: silver, not red. --color-down owns value
+              // deltas, and a character count is not one.
+              "tnum text-right text-[11px]",
+              topic.length > TOPIC_WARN ? "font-semibold text-heading" : "text-meta"
+            )}
+          >
+            {topic.length}/{TOPIC_MAX}
+          </p>
+        </div>
+
+        <TopicTagsField selected={tags} onChange={setTags} max={5} />
+
+        <div className="flex flex-col gap-2">
+          <span className={LABEL}>Upload image</span>
+          <div
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              void takeImage(event.dataTransfer.files?.[0]);
+            }}
+            className="flex h-[174px] flex-col items-center justify-center gap-4 rounded-2xl border-[1.5px] border-dashed border-white/[0.14] bg-overlay p-6"
+          >
+            {imageUrl ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */}
+                <img src={imageUrl} alt="" className="h-20 w-20 rounded-xl object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setImageUrl(null)}
+                  className="ws-press rounded-lg border border-white/[0.14] bg-white/5 px-4 py-2 text-[12px] font-semibold text-grey-400"
+                >
+                  Remove
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <p className="text-[14px] font-semibold text-white">Add photos or media</p>
+                  <p className="text-[12px] text-meta">
+                    Drag and drop your images here or click to browse.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={imageBusy}
+                  className="ws-press flex items-center gap-2 rounded-lg border border-white/[0.14] bg-white/5 px-4 py-2 text-[12px] font-semibold text-grey-400 disabled:opacity-60"
+                >
+                  {imageBusy && <Spinner className="h-3.5 w-3.5 text-grey-400" />}
+                  {imageBusy ? "Uploading…" : "Choose File"}
+                </button>
+              </>
+            )}
+          </div>
+          {/* The shared error component rather than a local red: `--color-down`
+              owns value deltas and this tree is forbidden from borrowing it. */}
+          {imageError && <InlineError error={new Error(imageError)} fallback={imageError} />}
+          <input
+            ref={fileInput}
+            type="file"
+            accept={acceptFor("image")}
+            className="hidden"
+            onChange={(event) => {
+              void takeImage(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className={LABEL}>Chat access</span>
+          <div className="flex flex-wrap gap-4">
+            <RadioPill
+              text="Open chat"
+              hint="(anyone can chat)"
+              selected={chatAccess === "open"}
+              onSelect={() => setChatAccess("open")}
+            />
+            <RadioPill
+              text="Followers of the host"
+              selected={chatAccess === "followers"}
+              onSelect={() => setChatAccess("followers")}
+            />
+          </div>
+          {/* It gates WRITING, never reading — say so, because "chat access"
+              could reasonably be read either way. */}
+          <p className="text-[12px] leading-4 text-meta">
+            {chatAccess === "open"
+              ? "Anyone in the room can send a message."
+              : "Only people who follow you — and anyone you invite to speak — can send a message. Everyone can still read."}
+          </p>
+        </div>
+
+        {create.isError && (
+          <InlineError error={create.error} fallback="Couldn't open that gist room." />
         )}
-      >
-        {topic.length}/{TOPIC_MAX}
-      </p>
 
-      <label className="mt-4 block">
-        <span className="ws-meta mb-2 block">Pinned note (optional)</span>
-        <textarea
-          value={note}
-          onChange={(event) => setNote(clampNote(event.target.value))}
-          maxLength={NOTE_MAX}
-          rows={2}
-          placeholder="A link or a line people should see."
-          className={inputClass}
-        />
-      </label>
+        <div className="flex justify-end">
+          <Button size="lg" loading={create.isPending} disabled={!valid} onClick={submit}>
+            Create Gistroom
+          </Button>
+        </div>
 
-      {create.isError && (
-        <InlineError error={create.error} fallback="Couldn't open that house." className="mt-3" />
-      )}
-
-      <Button
-        size="lg"
-        className="mt-5 w-full"
-        loading={create.isPending}
-        disabled={!valid}
-        onClick={submit}
-      >
-        Open it
-      </Button>
-      <p className="mt-3 text-center text-[12px] leading-5 text-meta">
-        You will check your microphone before anyone can hear you. Houses are voice only.
-      </p>
+        <p className="text-center text-[12px] leading-5 text-meta">
+          You will check your microphone before anyone can hear you. Gist rooms are voice only.
+        </p>
+      </div>
     </Sheet>
   );
 }

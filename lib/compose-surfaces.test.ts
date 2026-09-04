@@ -33,6 +33,9 @@ test("the immersive and operator surfaces suppress it", () => {
     // "start a new conversation", not "write a post". The shell's viewport-edge
     // button would land over the thread pane beside the message composer.
     "/messages",
+    // A gist room is the same two-pane shape as Chat, and the viewport's right
+    // edge lands inside the room's chat column — directly on its composer.
+    "/gist-rooms/01a069ba-e8ec-7000-bb5b-7331bce25477",
   ]) {
     assert.equal(allowsCompose(path), false, `${path} should suppress composing`);
   }
@@ -44,6 +47,8 @@ test("index routes are not their detail routes", () => {
   // immersive surfaces, so only they lose the control.
   assert.equal(allowsCompose("/studio"), true);
   assert.equal(allowsCompose("/live"), true);
+  assert.equal(allowsCompose("/gist-rooms"), true);
   assert.equal(allowsCompose("/studio/abc"), false);
   assert.equal(allowsCompose("/live/abc"), false);
+  assert.equal(allowsCompose("/gist-rooms/abc"), false);
 });

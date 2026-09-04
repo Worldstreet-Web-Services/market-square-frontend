@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { IconMsHandDeposit } from "@/components/ui/design-icons";
+import { IconDonate } from "@/components/ui/room-icons";
 import { TipSheet } from "@/features/tips/components/tip-sheet";
 import { useTippingUnavailable } from "@/features/tips/lib/availability";
 import { useTipCapability } from "@/features/tips/hooks/use-tips";
@@ -34,10 +35,22 @@ import type { TipTarget } from "@/features/tips/lib/types";
 export function TipButton({
   target,
   balance,
+  variant = "icon",
 }: {
   target: TipTarget;
   /** Forwarded straight to the sheet — see `TipSheet` for why it is a slot. */
   balance?: (amountKash: string | null) => React.ReactNode;
+  /**
+   * "icon" is the timeline's 42×26 glyph pill described above.
+   *
+   * "dock" is the LABELLED pill node 121:10996 draws in a gist room's bottom
+   * bar — the same purple ramp as `Record Gist` beside it, 40 tall, with the
+   * `la:donate` glyph and the words "Give a tip". A bar with one labelled
+   * control and one bare glyph reads as a mistake, and the file labels this
+   * one. Every guard above still applies: on your own room, on a 404, or where
+   * the capability refuses the recipient, it still renders nothing.
+   */
+  variant?: "icon" | "dock";
 }) {
   const [open, setOpen] = useState(false);
   // Counts openings. It does two jobs: zero means the sheet has never been
@@ -71,6 +84,39 @@ export function TipButton({
   // and is owed an answer, so the trigger goes and the sheet stays until they
   // close it. Only after that does the control disappear for good.
   if (unavailable && !open) return null;
+
+  if (variant === "dock") {
+    return (
+      <>
+        {!unavailable && (
+          <button
+            type="button"
+            onClick={() =>
+              gate(() => {
+                setOpened((n) => n + 1);
+                setOpen(true);
+              })
+            }
+            className="ws-press flex h-10 shrink-0 items-center gap-2 rounded-full bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] px-3 text-[12px] font-medium leading-4 text-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1),0_1px_3px_0_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
+          >
+            {/* `la:donate`, node 121:10998 — the room's own glyph, not the
+                timeline pill's `IconMsHandDeposit`. */}
+            <IconDonate className="h-4 w-4" />
+            Give a tip
+          </button>
+        )}
+        {opened > 0 && (
+          <TipSheet
+            key={opened}
+            open={open}
+            onClose={() => setOpen(false)}
+            target={target}
+            balance={balance}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="group relative">

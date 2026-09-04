@@ -483,6 +483,25 @@ export function IconHouses({ className, filled }: NavIconProps) {
   );
 }
 
+/**
+ * Microphone — the gist-room mark.
+ *
+ * Drawn here rather than exported from the design file: the house set had no
+ * mic of its own (the live cockpit only ever renders a LEVEL meter), and one
+ * more line glyph on the same 24 grid at the same 1.6px stroke is the cheap
+ * answer. An imported SVG would arrive with its own weight and sit beside
+ * fifty icons that share one.
+ */
+export function IconMic({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+      <path d="M12 17.5V21" />
+    </svg>
+  );
+}
+
 export function IconVolume({ className, muted }: IconProps & { muted?: boolean }) {
   return (
     <svg {...base(className)}>
@@ -565,6 +584,49 @@ export function IconExportArrow({ className }: IconProps) {
       <path d="M6.50021 5.875C6.40521 5.875 6.31021 5.83999 6.23521 5.765C6.09021 5.62 6.09021 5.38 6.23521 5.235L10.3352 1.135C10.4802 0.989995 10.7202 0.989995 10.8652 1.135C11.0102 1.28 11.0102 1.52 10.8652 1.665L6.76521 5.765C6.69021 5.83999 6.59521 5.875 6.50021 5.875Z" />
       <path d="M11.0001 3.775C10.7951 3.775 10.6251 3.605 10.6251 3.4V1.375H8.6001C8.3951 1.375 8.2251 1.205 8.2251 1C8.2251 0.795 8.3951 0.625 8.6001 0.625H11.0001C11.2051 0.625 11.3751 0.795 11.3751 1V3.4C11.3751 3.605 11.2051 3.775 11.0001 3.775Z" />
       <path d="M7.5 11.375H4.5C1.785 11.375 0.625 10.215 0.625 7.5V4.5C0.625 1.785 1.785 0.625 4.5 0.625H5.5C5.705 0.625 5.875 0.795 5.875 1C5.875 1.205 5.705 1.375 5.5 1.375H4.5C2.195 1.375 1.375 2.195 1.375 4.5V7.5C1.375 9.805 2.195 10.625 4.5 10.625H7.5C9.805 10.625 10.625 9.805 10.625 7.5V6.5C10.625 6.295 10.795 6.125 11 6.125C11.205 6.125 11.375 6.295 11.375 6.5V7.5C11.375 10.215 10.215 11.375 7.5 11.375Z" />
+    </svg>
+  );
+}
+
+/** Leaving: a door with an arrow out. The gist room header's red control
+    (node 129:11905) and the only exit glyph in the set. */
+export function IconLogout({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M14.5 3.5h2.6a2.4 2.4 0 0 1 2.4 2.4v12.2a2.4 2.4 0 0 1-2.4 2.4h-2.6" />
+      <path d="M9.8 16.2 5.6 12l4.2-4.2M5.6 12h9.6" />
+    </svg>
+  );
+}
+
+/** The file's `vuesax/outline/people` at 12 — five heads and a shoulder line.
+    It marks a GROUP row in the inbox (node 31:6589), where it is the one
+    purple mark on an otherwise white row. */
+export function IconPeople({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="9" cy="7.5" r="3" />
+      <circle cx="17" cy="7.5" r="2.4" />
+      <path d="M3.4 18.2c0-2.9 2.5-4.7 5.6-4.7s5.6 1.8 5.6 4.7" />
+      <path d="M17 13.9c2.3.2 3.9 1.7 3.9 4" />
     </svg>
   );
 }

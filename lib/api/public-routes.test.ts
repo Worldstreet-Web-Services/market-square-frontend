@@ -63,6 +63,9 @@ const PUBLIC: string[][] = [
   ["streams", "st_1"],
   ["streams", "st_1", "chat"],
   ["verification", "rule"],
+  // Public upstream and public here: the trending rail is a discovery surface
+  // that renders signed out.
+  ["hashtags", "trending"],
   // Whether tipping works at all, and the amount band. Read before drawing the
   // control, by signed-out readers too.
   ["tips", "capability"],
@@ -191,6 +194,15 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["tips"]), false);
       assert.equal(isPublicGet(["tips", "capability", "extra"]), false);
       assert.equal(isPublicGet(["tips", "received"]), false);
+    });
+
+    it("opens exactly /hashtags/trending and nothing else under /hashtags", () => {
+      assert.equal(isPublicGet(["hashtags", "trending"]), true);
+      assert.equal(isPublicGet(["hashtags"]), false);
+      assert.equal(isPublicGet(["hashtags", "trending", "extra"]), false);
+      // A hashtag's own feed is served by /feed?hashtag=, which is already
+      // public on its own head — this head must not open a second door.
+      assert.equal(isPublicGet(["hashtags", "solana"]), false);
     });
 
     it("gates /verification unless it is the rule", () => {

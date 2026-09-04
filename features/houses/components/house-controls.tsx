@@ -47,9 +47,22 @@ export interface HouseControlsProps {
    */
   incoming: number;
   leave: { label: string; onLeave: () => void };
+  /**
+   * Merged into the root. The room hides this whole pill from `xl` up, where
+   * the file gives every one of its controls a place in the page's own chrome.
+   */
+  className?: string;
 }
 
-export function HouseControls({ mic, ask, tray, onReact, incoming, leave }: HouseControlsProps) {
+export function HouseControls({
+  mic,
+  ask,
+  tray,
+  onReact,
+  incoming,
+  leave,
+  className,
+}: HouseControlsProps) {
   const reactions = useReactionGutter();
   const seen = useRef(incoming);
   useEffect(() => {
@@ -59,7 +72,12 @@ export function HouseControls({ mic, ask, tray, onReact, incoming, leave }: Hous
   }, [incoming, reactions]);
 
   return (
-    <div className="fixed inset-x-0 bottom-[var(--ws-nav-h)] z-40 mx-auto w-[calc(100%-2rem)] max-w-[520px]">
+    <div
+      className={cn(
+        "fixed inset-x-0 bottom-[var(--ws-nav-h)] z-40 mx-auto w-[calc(100%-2rem)] max-w-[520px]",
+        className
+      )}
+    >
       {/* The reason a control is unavailable belongs beside the control, not in
           a toast that has already gone by the time somebody taps it again. */}
       {ask?.reason && (

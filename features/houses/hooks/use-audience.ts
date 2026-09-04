@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Participant, Room } from "livekit-client";
 import { baseIdentity, participantLabel } from "@/features/streams/lib/stage";
 import {
@@ -37,21 +37,6 @@ export interface AudienceMember {
   joinedAt: number;
   isLocal: boolean;
 }
-
-export interface AudienceBand {
-  /** Null renders the grid with NO header — never an empty band header. */
-  title: string | null;
-  members: AudienceMember[];
-}
-
-/**
- * How many faces render before the room asks.
- *
- * A cap, not a collapse: past it there is a full-width row reading "Show 240
- * more", which raises the cap by another 240. No windowing library, no new
- * dependency, and — the part that matters — no number standing in for people.
- */
-export const AUDIENCE_PAGE = 240;
 
 function toMember(participant: Participant): AudienceMember {
   const meta = parseParticipantMeta(participant.metadata);
@@ -136,47 +121,4 @@ function same(a: readonly AudienceMember[], b: readonly AudienceMember[]): boole
       member.meta?.username === other.meta?.username
     );
   });
-}
-
-/**
- * The bands, in order.
- *
- * Each one is omitted entirely when it cannot be computed — never rendered
- * empty, and never invented. With none of them computable the answer is ONE
- * unheaded grid, which is a complete, correct rendering rather than a
- * degraded one.
- */
-export function useAudienceBands(
-  members: readonly AudienceMember[],
-  recentSpeakers: ReadonlySet<string>
-): AudienceBand[] {
-  return useMemo(() => {
-    const bands: AudienceBand[] = [];
-    const placed = new Set<string>();
-
-    // PEOPLE YOU FOLLOW needs the follow edge, which rides in on the token's
-    // metadata (B1). `isFollowing` is deliberately never defaulted anywhere in
-    // this app: undefined means "this payload does not carry the edge", which
-    // is not "you do not follow them", and defaulting it would render a band
-    // that quietly claims you follow nobody here.
-    const following = members.filter((member) => member.meta?.isFollowing === true);
-    if (following.length > 0) {
-      bands.push({ title: "People you follow", members: following });
-      for (const member of following) placed.add(member.identity);
-    }
-
-    const spoke = members.filter(
-      (member) => !placed.has(member.identity) && recentSpeakers.has(member.identity)
-    );
-    if (spoke.length > 0) {
-      bands.push({ title: "Spoke recently", members: spoke });
-      for (const member of spoke) placed.add(member.identity);
-    }
-
-    const rest = members.filter((member) => !placed.has(member.identity));
-    // Unheaded. When it is the only band this is the whole grid, and a lone
-    // header reading "Everyone else" over the complete list would be furniture.
-    if (rest.length > 0) bands.push({ title: null, members: rest });
-    return bands;
-  }, [members, recentSpeakers]);
 }

@@ -23,13 +23,14 @@
  *     writes a public post. Suppressed here so exactly one purple circle is
  *     visible and it does what its position implies.
  *
- * The two INDEX routes deliberately keep it: `/studio` is a list of streams
- * and `/live` is a directory, neither of which is a broadcast surface. That
- * distinction is the whole reason these are prefix rules with a trailing
- * slash rather than plain `startsWith` on the section name.
+ * The INDEX routes deliberately keep it: `/studio` is a list of streams,
+ * `/live` is a directory and `/gist-rooms` is a list of rooms — none of them a
+ * broadcast or two-pane surface. That distinction is the whole reason these are
+ * prefix rules with a trailing slash rather than plain `startsWith` on the
+ * section name.
  */
 const NO_COMPOSE_EXACT = ["/auth", "/operations", "/messages"];
-const NO_COMPOSE_PREFIX = ["/live/", "/studio/", "/admin", "/operations/"];
+const NO_COMPOSE_PREFIX = ["/live/", "/studio/", "/admin", "/operations/", "/gist-rooms/"];
 
 export function allowsCompose(pathname: string): boolean {
   if (NO_COMPOSE_EXACT.includes(pathname)) return false;

@@ -34,8 +34,6 @@ import { ConnectionBanner } from "@/components/layout/connection-banner";
 import { Sheet } from "@/components/ui/sheet";
 import {
   IconBell,
-  IconBookmark,
-  IconCalendar,
   IconChevronLeft,
   IconCamera,
   IconDots,
@@ -46,10 +44,8 @@ import {
   IconMore,
   IconPlus,
   IconSearch,
-  IconSpark,
   IconShield,
   IconStore,
-  IconTicket,
   IconUser,
 } from "@/components/ui/icons";
 
@@ -201,7 +197,19 @@ function visibleNav(options: {
 // it opens — so it needs the width a right rail would take. On a phone the
 // panes swap instead, which is why only the exact path is wide.
 const WIDE_EXACT = ["/store", "/operations", "/messages"];
-const WIDE_PREFIX = ["/store/", "/operations/", "/studio/"];
+/*
+  `/gist-rooms/:id` joins the wide set.
+
+  A gist room is TWO columns of its own — a 805 stage beside a 411 chat, per
+  node 129:11748 — so the shell's right rail is a third column competing for
+  the same width, and the room ends up squeezed into the centre while partner
+  cards sit beside it. The room is the destination; nothing should share the
+  screen with it.
+
+  The INDEX stays narrow: `/gist-rooms` is a list of rooms, which reads better
+  in the column with the rail beside it.
+*/
+const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
 
 function isWide(pathname: string): boolean {
   return (

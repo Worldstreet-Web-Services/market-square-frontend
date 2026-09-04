@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
@@ -12,6 +11,7 @@ import {
   useSpeakerRequests,
 } from "@/features/streams/hooks/use-streams";
 import type { SpeakerRequest, Stream } from "@/features/streams/lib/types";
+import { RequestRow } from "@/features/houses/components/request-row";
 import { SEAT_COUNT } from "@/features/houses/lib/seating";
 
 /**
@@ -38,65 +38,6 @@ import { SEAT_COUNT } from "@/features/houses/lib/seating";
  *      button that fails silently against a table with nowhere to put anyone.
  *   4. "On stage" becomes "Seated", because a house has a table, not a stage.
  */
-function RequestRow({
-  request,
-  disabled,
-  disabledReason,
-  onSeat,
-  onDismiss,
-  busy,
-}: {
-  request: SpeakerRequest;
-  disabled: boolean;
-  disabledReason: string | undefined;
-  onSeat: () => void;
-  onDismiss: () => void;
-  busy: boolean;
-}) {
-  const profile = request.profile;
-  return (
-    <div className="ws-inset flex items-start gap-3 p-3">
-      <Avatar
-        name={profile?.displayName ?? "Listener"}
-        seed={request.userId}
-        src={profile?.avatarUrl}
-        size={38}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1">
-          {/* Never fabricated: with no hydrated profile the row says
-              "Listener" rather than inventing a name from an id. */}
-          <span className="truncate text-[13px] font-bold text-heading">
-            {profile?.displayName ?? "Listener"}
-          </span>
-          {profile && (
-            <>
-              <VerifiedBadge verification={profile.verification} className="h-3 w-3 shrink-0" />
-              <OrgBadgeChip orgBadge={profile.orgBadge} />
-              <RoleChip role={profile.role} />
-            </>
-          )}
-        </div>
-        {profile && (
-          <span className="block truncate text-[11px] text-meta">@{profile.username}</span>
-        )}
-        {profile?.bio && (
-          <span className="mt-0.5 line-clamp-1 block text-[11px] leading-4 text-meta">
-            {profile.bio}
-          </span>
-        )}
-      </div>
-      {/* Destructive is never first under the thumb. */}
-      <Button size="sm" onClick={onSeat} disabled={busy || disabled} title={disabledReason}>
-        Seat
-      </Button>
-      <Button size="sm" variant="ghost" onClick={onDismiss} disabled={busy}>
-        Dismiss
-      </Button>
-    </div>
-  );
-}
-
 export function HandTray({
   stream,
   open,
@@ -151,7 +92,7 @@ export function HandTray({
   const fullReason = `All ${SEAT_COUNT} seats are taken. Move someone down first.`;
 
   return (
-    <Sheet open={open} onClose={onClose} title="Asking to speak">
+    <Sheet open={open} onClose={onClose} title="Speaker Request">
       <div className="space-y-4">
         {/* BACKEND B4: `PATCH /streams/:id { requestsOpen }` does not exist, so
             this switch is client-local and session-only. The footnote says

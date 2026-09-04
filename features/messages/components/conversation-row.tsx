@@ -4,6 +4,8 @@ import { cn } from "@/lib/cn";
 import { inboxTime } from "@/lib/inbox-time";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip } from "@/components/ui/badge";
+import { IconPeople } from "@/components/ui/icons";
+import { isGroupThread, threadTitle } from "@/features/messages/lib/thread-identity";
 import Image from "next/image";
 import type { Conversation } from "@/features/messages/lib/types";
 
@@ -28,6 +30,23 @@ export function ConversationRow({
 }) {
   const peer = conversation.peer;
   const last = conversation.lastMessage;
+  /*
+    HOW THE ROW NAMES ITSELF.
+
+    A group has NO peer — that is deliberate on the service, because a room of
+    twenty has no single other person — so a row that only ever read
+    `peer.displayName` rendered every group as "Unknown". It is the group's
+    `title`, its picture, and the people glyph beside it.
+  */
+  const group = isGroupThread(conversation);
+  // ONE naming rule for the row and the thread pane. `threadTitle` already
+  // handled groups — the row simply never asked it, which is the whole bug:
+  // it read `peer.displayName`, a group has no peer by design, and every group
+  // rendered as "Unknown".
+  const name = threadTitle(conversation);
+  const seed = group ? conversation.id : peer?.id;
+  const avatarUrl = group ? conversation.imageUrl : peer?.avatarUrl;
+
   const at = last?.createdAt ?? conversation.lastMessageAt;
   const stamp = inboxTime(at);
   const unread = conversation.unreadCount;
@@ -48,19 +67,18 @@ export function ConversationRow({
       )}
     >
       <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
-        <Avatar
-          name={peer?.displayName ?? "?"}
-          seed={peer?.id}
-          src={peer?.avatarUrl}
-          size={38}
-        />
+        <Avatar name={name} seed={seed} src={avatarUrl} size={38} />
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex items-center gap-1">
-          <span className="truncate text-[12px] font-bold leading-4 text-white">
-            {peer?.displayName ?? "Unknown"}
-          </span>
+        <span className="flex items-center gap-2">
+          <span className="truncate text-[12px] font-bold leading-4 text-white">{name}</span>
+          {/*
+            THE PEOPLE GLYPH, in `--color-spotlight`, 12px — node 31:6589.
+            It is what tells a group apart from a person at a glance, and it is
+            the one mark on this row that is purple rather than white.
+          */}
+          {group && <IconPeople className="h-3 w-3 shrink-0 text-spotlight" />}
           {/*
             The capsule the file draws beside four names of five is the ORG
             badge, not a verified check: it is OrgBadgeChip's own recipe — 4%
@@ -70,7 +88,7 @@ export function ConversationRow({
             The one row drawn without it is a peer with NO org badge, not an
             unverified peer.
           */}
-          {peer?.orgBadge && <OrgBadgeChip orgBadge={peer.orgBadge} className="scale-[0.65]" />}
+          {!group && peer?.orgBadge && <OrgBadgeChip orgBadge={peer.orgBadge} className="scale-[0.65]" />}
         </span>
 
         <span className="flex items-center gap-2 truncate text-[11px] font-normal leading-[16.5px] text-white/50">
@@ -122,14 +140,28 @@ function Preview({ conversation, meId }: { conversation: Conversation; meId?: st
         {/* The file's own 16px document glyph, exported rather than
             approximated — the house set has no attachment icon. */}
         <Image src="/messages/attachment.svg" alt="" width={16} height={16} className="shrink-0" />
-        <span className="truncate">Shared attachment</span>
+        <span className="truncate">
+          {mine ? "You: " : ""}
+          Shared attachment
+        </span>
       </>
     );
   }
 
+  /*
+    THE SENDER PREFIX — node 31:6604, the file's `Patrick_dev:`.
+
+    On a GROUP the preview is unreadable without it: "Buy the dip and hodl"
+    from a room of twenty says nothing about who said it. On a 1:1 there are
+    only two possibilities and the row already names the peer, so the prefix
+    is only ever "You:" there.
+  */
+  const sender =
+    mine ? "You" : conversation.kind === "group" ? conversation.lastSender?.displayName : null;
+
   return (
     <span className="truncate">
-      {mine && <span className="text-white/70">You: </span>}
+      {sender && <span className="text-white/70">{sender}: </span>}
       {body}
     </span>
   );

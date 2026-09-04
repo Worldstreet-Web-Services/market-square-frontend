@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { cn } from "@/lib/cn";
+import type { InboxTab } from "@/features/messages/lib/filter";
 
 /**
  * The inbox's search field and its All/Unread filter.
@@ -19,9 +20,20 @@ import { cn } from "@/lib/cn";
 export function InboxSearch({
   value,
   onChange,
+  // The New Gist / Create Group panel draws the SAME 315x38 pill (node
+  // 36:7089 is 36:7004's copy of this one), so it reuses this component rather
+  // than restating the geometry. Two of them can be in the DOM at once — the
+  // panel opens over the inbox — and a duplicated `id` breaks the label
+  // association for both, so the id and its label are the caller's.
+  id = "inbox-search",
+  label = "Search conversations",
+  placeholder = "Search",
 }: {
   value: string;
   onChange: (value: string) => void;
+  id?: string;
+  label?: string;
+  placeholder?: string;
 }) {
   return (
     <div className="ws-field flex h-[38px] items-center gap-2 rounded-full border-[0.68px] border-white/40 bg-transparent px-2 shadow-[0px_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0px_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)]">
@@ -32,15 +44,15 @@ export function InboxSearch({
         height={16}
         className="shrink-0 opacity-90"
       />
-      <label className="sr-only" htmlFor="inbox-search">
-        Search conversations
+      <label className="sr-only" htmlFor={id}>
+        {label}
       </label>
       <input
-        id="inbox-search"
+        id={id}
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Search"
+        placeholder={placeholder}
         // 16px Medium, #7A7A7A — the design's caret is #0088FF, which is the
         // browser default accent here rather than a token worth inventing.
         className="min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.007em] text-[#7A7A7A] caret-[#0088FF] outline-none placeholder:text-[#7A7A7A]"
@@ -61,94 +73,89 @@ export type InboxFilter = "all" | "unread";
  * rule. Reproduced verbatim, including the widths — the row is a fixed spread,
  * not a gap, so it holds its rhythm at any column width.
  *
- * ─── WHAT THE SERVICE CAN ANSWER ─────────────────────────────────────────────
- * Three of the four cannot be honoured yet, and it is a data problem rather
- * than a styling one. `Conversation` is strictly 1:1 —
- * `{ id, peer, lastMessage, lastMessageAt, unreadCount }` over participant ids
- * — and `GET /me/conversations` accepts only `cursor` and `limit`. There is no
- * conversation KIND to partition on, and no group conversation at all:
+ * ─── ALL FOUR ARE LIVE ───────────────────────────────────────────────────────
+ * Three of them used to be drawn and inert, and it was a data problem rather
+ * than a styling one: a conversation had no KIND to partition on, there was no
+ * group conversation at all, and no notion of a chat you had not agreed to. So
+ * `Gists`, `Houses` and `Gist Requests` could only have shown everything or
+ * nothing — the failure that teaches a reader the square is empty when it was
+ * never asked.
  *
- *   Gists         needs a kind on the conversation
- *   Houses        needs the same, and gist rooms are audio rooms rather than
- *                 conversations today — which of the two this tab means is a
- *                 product answer, not something the payload implies
- *   Gist Requests needs a request-to-chat inbox that does not exist
+ * The service answers all three now:
  *
- * The file's own rows give it away: "Naija Tech Bros in Diaspora" with a people
- * glyph and a `Patrick_dev:` sender prefix is a GROUP thread, and the service
- * has no such object. Wiring the three against today's payload would mean
- * three tabs that quietly show everything or nothing — the failure that
- * teaches a reader the square is empty when it was never asked.
+ *   Gists          kind = 'direct'
+ *   Houses         kind = 'group'
+ *   Gist Requests  state = 'pending'
+ *   All            every accepted conversation, either kind
  *
- * So they are DRAWN and INERT: real `disabled` buttons, unclickable and
- * untabbable and announced as such, each naming itself in its tooltip. That is
- * the house rule for a capability that does not exist yet
- * (`MARKET_FLAGS`-style: visible and inert, never a control that looks
- * tappable). The moment `Conversation.kind` lands, `TABS` is the only edit.
+ * and each tab is its OWN query with its own cursor (`tabQuery` in
+ * `lib/filter.ts`), so paging inside a tab pages that tab rather than slicing
+ * one fetched page four ways.
  *
- * There is NO explanatory line under the row. An earlier pass put one there —
- * "Gists, Houses and Gist Requests need a conversation type the service
- * doesn't send yet" — which is a note to us wearing the reader's clothes, in
- * our vocabulary not theirs, and it cost 40px of the list's room and broke the
- * file's 24/24 rhythm between the tabs and the first row.
- *
- * `Unread` is not in this node and is not drawn. `visibleConversations` still
- * takes the filter and is still pinned by `lib/messages-filter.test.ts`,
- * because it is correct and because the first tab that CAN be backed will want
- * exactly that shape — but a fifth chip would change the spread of a row the
- * file fixes at four, and the unread count is already on every row that has
- * one and on the nav glyph.
+ * `Unread` is not in this node and is not drawn — a fifth chip would change the
+ * spread of a row the file fixes at four, and the unread count is already on
+ * every row that has one and on the nav glyph.
  */
-interface InboxTab {
-  key: InboxFilter | "gists" | "houses" | "requests";
+interface InboxTabSpec {
+  key: InboxTab;
   label: string;
   /** The file's hit width. `Gist Requests` is the wide one. */
   width: number;
-  /** False until the service can partition conversations — see above. */
-  available: boolean;
 }
 
-const TABS: InboxTab[] = [
-  { key: "all", label: "All", width: 80, available: true },
-  { key: "gists", label: "Gists", width: 80, available: false },
-  { key: "houses", label: "Houses", width: 80, available: false },
-  { key: "requests", label: "Gist Requests", width: 120, available: false },
+const TABS: InboxTabSpec[] = [
+  { key: "all", label: "All", width: 80 },
+  { key: "gists", label: "Gists", width: 80 },
+  { key: "houses", label: "Houses", width: 80 },
+  { key: "requests", label: "Gist Requests", width: 120 },
 ];
 
 export function InboxFilters({
   value,
   onChange,
+  /** Unanswered requests, drawn on the last tab the way the nav badge is. */
+  pendingCount = 0,
 }: {
-  value: InboxFilter;
-  onChange: (value: InboxFilter) => void;
+  value: InboxTab;
+  onChange: (value: InboxTab) => void;
+  pendingCount?: number;
 }) {
   return (
     // `justify-between` across the full content width, as the file lays it out.
-    <div className="flex items-center justify-between" role="group" aria-label="Filter conversations">
+    <div
+      className="flex items-center justify-between"
+      role="tablist"
+      aria-label="Filter conversations"
+    >
       {TABS.map((tab) => {
-        const selected = tab.available && value === tab.key;
+        const selected = value === tab.key;
         return (
           <button
             key={tab.key}
             type="button"
-            disabled={!tab.available}
-            aria-pressed={tab.available ? selected : undefined}
-            title={tab.available ? undefined : `${tab.label} isn't available yet`}
-            onClick={() => tab.available && onChange(tab.key as InboxFilter)}
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(tab.key)}
             style={{ width: tab.width }}
             className={cn(
               // 38 tall, centred, the file's Roboto Bold 12/16 rendered in
               // Geist — the house face, per the type rule.
-              "ws-press flex h-[38px] shrink-0 items-center justify-center p-2.5 text-[12px] font-bold leading-4 transition-colors",
+              "ws-press flex h-[38px] shrink-0 items-center justify-center gap-1.5 p-2.5 text-[12px] font-bold leading-4 transition-colors",
               selected
                 ? // The active tab is an underline, not a pill: 1px of solid
                   // white beneath the hit area.
                   "border-b border-white text-white"
-                : "text-white/40",
-              tab.available ? "hover:text-white/70" : "cursor-not-allowed",
+                : "text-white/40 hover:text-white/70"
             )}
           >
             {tab.label}
+            {tab.key === "requests" && pendingCount > 0 && (
+              // Solid purple takes the ramp's DARK stop with white ink — the
+              // same badge the nav wears, per the contrast rule.
+              <span className="tnum rounded-full bg-spotlight px-1.5 text-[10px] leading-4 text-white">
+                {pendingCount}
+              </span>
+            )}
           </button>
         );
       })}

@@ -227,6 +227,46 @@ function collectCalls(root) {
  * route ships. Anything not listed here fails the check.
  */
 const PENDING_ROUTES = {
+  // ── the operations console ────────────────────────────────────────────────
+  // `app/operations/page.tsx` renders this slice, and all three of its calls
+  // 404 today: no `/operations/*` route exists in market-square's spec, and no
+  // service in the monorepo serves that prefix. They are recorded here rather
+  // than left as phantoms so the check stays useful — a report that always has
+  // three failures in it is a report everybody learns to skip, which is
+  // exactly how the chat routes could have rotted unnoticed.
+  //
+  // THIS IS NOT AN ENDORSEMENT. Either the operations backend ships, or the
+  // route and the page that calls it come out. Whoever owns that console
+  // should decide; until then the page is a console that cannot load.
+  "get /operations/summary": {
+    reason:
+      "The operations console's dashboard read. No /operations/* route exists " +
+      "in market-square's openapi.json and no service in the monorepo serves " +
+      "the prefix, so this 404s at runtime today. DELETE THIS ENTRY when the " +
+      "operations backend ships, or delete the slice if the console is dead.",
+  },
+  "patch /operations/cases/{}": {
+    reason:
+      "Resolves one operations case. Same missing backend as " +
+      "get /operations/summary — see that entry.",
+  },
+  "get /operations/entitlements/{}": {
+    reason:
+      "Looks up an entitlement by reference. Same missing backend as " +
+      "get /operations/summary — see that entry.",
+  },
+
+  "get /conversations/{}/members": {
+    reason:
+      "The full member roster of a GROUP conversation. Group threads " +
+      "(`kind: 'group'`) are being added to the service now, together with " +
+      "POST /conversations/groups and the add/remove member routes; this is " +
+      "the read half and the only one the thread pane calls. It is issued " +
+      "ONLY when a conversation parses as kind:'group', and today's service " +
+      "sends no such conversation at all, so against production this is " +
+      "never called. DELETE THIS ENTRY once the group-conversation change is " +
+      "deployed and the route appears in openapi.json.",
+  },
   "post /posts/{}/tips/{}/transfer": {
     reason:
       "The sender reports the KSH transfer they signed. Built and merged on " +

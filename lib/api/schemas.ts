@@ -81,6 +81,17 @@ const RawProfileSchema = z.object({
   city: z.string().nullable().optional().default(null),
   region: z.string().nullable().optional().default(null),
   gender: z.string().nullable().optional().default(null),
+  /*
+    When this person was last seen, for the chat thread's "Active 20m ago".
+
+    NULL IS A REAL ANSWER AND MUST STAY ONE. Presence is the field most often
+    absent — a `ProfileSummary` embedded in a conversation may carry it while
+    the same person's `PublicProfile` does not, and an account can legitimately
+    have never been seen. `lastActiveLabel` returns null for a null, and the
+    thread header then renders the handle alone rather than "Active recently",
+    which would be a claim nobody made.
+  */
+  lastSeenAt: z.string().nullable().optional().default(null),
 });
 
 // "Member ·A1B2" beats "Someone": derived from the tail of the Privy DID so
@@ -150,6 +161,20 @@ export const StreamSchema = z.object({
   title: z.string(),
   description: z.string().nullable().optional().default(null),
   category: z.string().optional().default("other"),
+  /**
+   * WHERE THIS ROOM BELONGS, and who may see it (migrations 039/041).
+   *
+   * `houseConversationId` is the house GROUP a gist room was opened from; it
+   * feeds the room's own header ("Hacker House Maestros '26"), its partner
+   * count and its House Members grid — all three read the same group. Null for
+   * a room opened from the street, which belongs to no house.
+   *
+   * All optional with a default, the forward-compatible shape `orgBadge` uses:
+   * a backend that has not shipped them parses exactly as it does today.
+   */
+  audience: z.enum(["public", "private"]).optional().default("public").catch("public"),
+  houseConversationId: z.string().nullable().optional().default(null),
+  chatAccess: z.enum(["open", "followers"]).optional().default("open").catch("open"),
   // Ark broadcasts a casino game to Market Square as a stream, and carries the
   // way back into Ark here: { kind: "game", ref: "<game>:<id>" }. The service
   // has always sent this field; the schema dropped it, so the link never

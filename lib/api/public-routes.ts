@@ -95,6 +95,13 @@ export function isPublicGet(path: string[]): boolean {
 
   if (head === "verification" && second === "rule") return true;
 
+  // The trending hashtag rail. Public upstream and public here: it is a
+  // DISCOVERY surface that renders for signed-out visitors, and gating it gave
+  // them a 401 on content the service was serving to anyone who asked. Only
+  // this exact shape — every other /hashtags route stays behind the predicate
+  // below.
+  if (head === "hashtags" && second === "trending" && path.length === 2) return true;
+
   // The tip capability probe, and only that exact shape. A signed-out reader
   // has to see the same tip control a signed-in one does, so the sign-in
   // prompt lands when they choose to pay rather than when they merely look.

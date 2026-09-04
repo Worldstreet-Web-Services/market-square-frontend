@@ -6,15 +6,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
-import { InboxFilters, InboxSearch, type InboxFilter } from "@/features/messages/components/inbox-chrome";
+import { InboxFilters, InboxSearch } from "@/features/messages/components/inbox-chrome";
+import { NewChatMenu } from "@/features/messages/components/new-chat-menu";
 import { ConversationRow } from "@/features/messages/components/conversation-row";
 import { Thread } from "@/features/messages/components/thread";
 import { ThreadPlaceholder } from "@/features/messages/components/thread-placeholder";
-import { visibleConversations } from "@/features/messages/lib/filter";
+import { visibleConversations, type InboxTab } from "@/features/messages/lib/filter";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { useConversations } from "@/features/messages/hooks/use-messages";
+import { useAnswerRequest, useConversations } from "@/features/messages/hooks/use-messages";
 import { type Conversation } from "@/features/messages/lib/types";
 
 /**
@@ -28,10 +29,21 @@ import { type Conversation } from "@/features/messages/lib/types";
  */
 export interface NewChatPickerProps {
   open: boolean;
+  /**
+   * Which of the `+` menu's two items opened this.
+   *
+   * One picker with a mode rather than two components: the panel, its search
+   * field, its rows and its people query are identical, and only the selection
+   * rule and the commit differ. Two copies would be two places to restyle when
+   * node 36:7004 changes.
+   */
+  mode: NewChatMode;
   onClose: () => void;
   /** Called with a thread to open once a person has been chosen. */
   onStarted: (conversation: Conversation) => void;
 }
+
+export type NewChatMode = "gist" | "group";
 
 function Inbox({
   onOpen,
@@ -40,17 +52,20 @@ function Inbox({
   onOpen: (conversation: Conversation) => void;
   selectedId?: string;
 }) {
-  const conversations = useConversations();
+  const [tab, setTab] = useState<InboxTab>("all");
+  const conversations = useConversations(tab);
+  const requests = useAnswerRequest();
   const me = useMe();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<InboxFilter>("all");
   const sentinel = useInfiniteScroll(
     () => conversations.fetchNextPage(),
     Boolean(conversations.hasNextPage && !conversations.isFetchingNextPage)
   );
 
   const items = conversations.data?.pages.flatMap((page) => page.items) ?? [];
-  const shown = visibleConversations(items, filter, query);
+  // The TAB is server-side; only the search box narrows what came back.
+  const shown = visibleConversations(items, "all", query);
+  const answering = requests.accept.isPending || requests.decline.isPending;
 
   return (
     <>
@@ -73,7 +88,17 @@ function Inbox({
       */}
       <div className="flex flex-col gap-6 px-6 pt-6">
         <InboxSearch value={query} onChange={setQuery} />
-        <InboxFilters value={filter} onChange={setFilter} />
+        <InboxFilters
+          value={tab}
+          onChange={(next) => {
+            setTab(next);
+            // A search typed against one tab means nothing in another, and
+            // leaving it set makes the new tab look empty for no visible
+            // reason.
+            setQuery("");
+          }}
+          pendingCount={conversations.data?.pages[0]?.pendingRequests ?? 0}
+        />
       </div>
 
       {/* 24 from the tabs, 16 between rows — the file's `gap: 16px` on the
@@ -91,10 +116,27 @@ function Inbox({
         )}
 
         {conversations.isSuccess && items.length === 0 && (
+          // Each tab says what IT is empty of. "No conversations yet" under
+          // Gist Requests would read as an inbox problem rather than the good
+          // news that nobody is waiting on you.
           <EmptyState
             glyph="◇"
-            title="No conversations yet"
-            body="Open someone's profile and start one."
+            title={
+              tab === "requests"
+                ? "No requests"
+                : tab === "houses"
+                  ? "No houses yet"
+                  : tab === "gists"
+                    ? "No gists yet"
+                    : "No conversations yet"
+            }
+            body={
+              tab === "requests"
+                ? "Chats from people who don't follow you land here first."
+                : tab === "houses"
+                  ? "Press + and create a group to start one."
+                  : "Press + to start one, or open someone's profile."
+            }
           />
         )}
 
@@ -114,13 +156,45 @@ function Inbox({
         )}
 
         {shown.map((conversation) => (
-          <ConversationRow
-            key={conversation.id}
-            conversation={conversation}
-            meId={me.data?.id}
-            selected={conversation.id === selectedId}
-            onOpen={() => onOpen(conversation)}
-          />
+          <div key={conversation.id} className="flex flex-col gap-2">
+            <ConversationRow
+              conversation={conversation}
+              meId={me.data?.id}
+              selected={conversation.id === selectedId}
+              onOpen={() => onOpen(conversation)}
+            />
+            {/*
+              A request you cannot answer is just a row. Accept and decline are
+              the whole point of the tab, so they are ON the row rather than
+              behind opening it — and only where the SERVICE says the caller may
+              act: `requestedBy` is the person who asked, and only the other
+              side may answer.
+            */}
+            {tab === "requests" &&
+              conversation.requestState === "pending" &&
+              conversation.requestedBy !== me.data?.id && (
+                <div className="flex items-center gap-2 pl-[52px]">
+                  <button
+                    type="button"
+                    disabled={answering}
+                    onClick={() => requests.accept.mutate(conversation.id)}
+                    className="ws-press rounded-full bg-spotlight px-3 py-1.5 text-[12px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    disabled={answering}
+                    onClick={() => requests.decline.mutate(conversation.id)}
+                    // Declining DELETES the thread and tells the sender
+                    // nothing, so it is worded as the plain refusal it is.
+                    className="ws-press rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white/70 transition-colors hover:text-white disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
+          </div>
         ))}
 
         <div ref={sentinel} />
@@ -192,12 +266,30 @@ function NewChatFab({ onClick }: { onClick: () => void }) {
 export function MessagesPage({
   /** The people picker for the column's `+` — see NewChatPickerProps. */
   renderNewChat,
+  /**
+   * The gist-room composer, opened by a GROUP thread's "Create Gist Room".
+   * Passed in for the same reason the picker is: it belongs to the houses
+   * slice, and slices never import each other.
+   */
+  renderGistRoom,
 }: {
   renderNewChat?: (props: NewChatPickerProps) => React.ReactNode;
+  renderGistRoom?: (props: {
+    open: boolean;
+    onClose: () => void;
+    /** The group the room is being opened from — what makes Private possible. */
+    houseConversationId?: string;
+  }) => React.ReactNode;
 } = {}) {
   const { ready, authenticated, login } = useAuth();
   const [open, setOpen] = useState<Conversation | null>(null);
-  const [picking, setPicking] = useState(false);
+  // The `+` opens a MENU first — node 24:6403 — and the menu chooses which
+  // picker. Null means neither is open.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [picking, setPicking] = useState<NewChatMode | null>(null);
+  // The gist-room composer lives in the houses slice, so the layout supplies
+  // it; this only owns whether it is open. Same slot pattern as the picker.
+  const [gistRoomOpen, setGistRoomOpen] = useState(false);
 
   if (ready && !authenticated) {
     return (
@@ -270,24 +362,51 @@ export function MessagesPage({
           <Inbox onOpen={setOpen} selectedId={open?.id} />
         </div>
 
-        {renderNewChat && <NewChatFab onClick={() => setPicking(true)} />}
+        {renderNewChat && (
+          <>
+            <NewChatFab onClick={() => setMenuOpen((wasOpen) => !wasOpen)} />
+            <NewChatMenu
+              open={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              onNewGist={() => setPicking("gist")}
+              onCreateGroup={() => setPicking("group")}
+            />
+          </>
+        )}
       </div>
 
       {/* `min-h-0` so the chat pane can be shorter than its content and scroll
           internally rather than stretching this row. */}
       <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", !open && "hidden lg:flex")}>
         {open ? (
-          <Thread conversation={open} onBack={() => setOpen(null)} />
+          <Thread
+            conversation={open}
+            onBack={() => setOpen(null)}
+            // Only offered when the layout actually supplied a composer.
+            onCreateGistRoom={renderGistRoom ? () => setGistRoomOpen(true) : undefined}
+          />
         ) : (
           <ThreadPlaceholder />
         )}
       </div>
 
+      {renderGistRoom?.({
+        open: gistRoomOpen,
+        onClose: () => setGistRoomOpen(false),
+        // Only a GROUP thread offers the button, so this is always a house
+        // group — which is exactly what a private room needs to be private to.
+        houseConversationId: open?.kind === "group" ? open.id : undefined,
+      })}
+
       {renderNewChat?.({
-        open: picking,
-        onClose: () => setPicking(false),
+        open: picking !== null,
+        // `gist` while closed is arbitrary and never read — the panel is only
+        // rendered when `open`, and defaulting keeps the prop non-optional so
+        // a caller cannot forget it.
+        mode: picking ?? "gist",
+        onClose: () => setPicking(null),
         onStarted: (conversation) => {
-          setPicking(false);
+          setPicking(null);
           setOpen(conversation);
         },
       })}
