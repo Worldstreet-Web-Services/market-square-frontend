@@ -95,18 +95,19 @@ interface SlotProps {
    * simply does not appear rather than appearing empty.
    */
   /**
-   * THE HOUSE GROUP this room was opened from, in the three places node
-   * 129:11887 shows it: its name beside the people glyph, its partner count
-   * under the title, and its roster as the House Members grid.
+   * The HOUSE MEMBERS grid — and ONLY that, now.
    *
-   * ONE slot returning three nodes rather than three slots, because all three
-   * read the same conversation — react-query dedupes the fetch, and splitting
-   * them would invite one of the three to drift onto a different source.
+   * The house's NAME and its partner COUNT used to come through here too,
+   * read from the conversation. They no longer do: `GET /streams/:id` carries
+   * a `house` doorplate inline, so the header names the house for anybody who
+   * can see the room. That is the whole point — the conversation read is
+   * membership-gated, so the header worked only for people already inside, and
+   * "Join House" had nothing to name for exactly the person it is aimed at.
    *
-   * A slot at all because a house group is a CONVERSATION, and slices never
-   * import each other. It is absent for a room opened from the street, which
-   * belongs to no house — then the name row and the members grid simply do not
-   * appear, rather than naming nothing.
+   * The ROSTER is still a conversation read and still gated, which is correct:
+   * who is in a house is the members' business. So this stays a slot (slices
+   * never import each other) and the grid is simply absent for a non-member,
+   * while the name and the count are not.
    */
   houseSlot?: (
     conversationId: string,
@@ -124,11 +125,7 @@ interface SlotProps {
        */
       onRoster: (ids: ReadonlySet<string>) => void;
     }
-  ) => {
-    name: React.ReactNode;
-    partners: React.ReactNode;
-    members: React.ReactNode;
-  };
+  ) => React.ReactNode;
   /**
    * The wink + follow pair on a person's card (node 169:13368). A slot, because
    * both are the profile slice's actions and slices never import each other.
@@ -144,6 +141,14 @@ interface SlotProps {
    * service refuses the recipient, so the host never sees it either way.
    */
   tipSlot?: (streamId: string, owner: Stream["owner"]) => React.ReactNode;
+  /**
+   * Joining the house group — `POST /conversations/:id/join`.
+   *
+   * A slot because a house group is a CONVERSATION and slices never import
+   * each other. The room decides WHETHER to offer it (a public house this
+   * viewer is not in); the layout owns the mutation and its toast.
+   */
+  joinHouse?: { onJoin: (conversationId: string) => void; pending: boolean };
   safetySlot: (
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
@@ -160,6 +165,7 @@ export function HouseRoom({
   houseSlot,
   personActionsSlot,
   tipSlot,
+  joinHouse,
 }: { houseId: string } & SlotProps) {
   const stream = useStream(houseId, 10_000);
   const me = useMe();
@@ -210,7 +216,7 @@ export function HouseRoom({
   }
 
   return (
-    <LiveHouse houseSlot={houseSlot} personActionsSlot={personActionsSlot} tipSlot={tipSlot}
+    <LiveHouse houseSlot={houseSlot} personActionsSlot={personActionsSlot} tipSlot={tipSlot} joinHouse={joinHouse}
       key={data.id}
       stream={data}
       isHost={isHost}
@@ -231,7 +237,7 @@ export function HouseRoom({
  */
 function RoomSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-[520px] bg-grey-900" aria-busy="true">
+    <div className="mx-auto w-full max-w-[520px] bg-chrome" aria-busy="true">
       <div className="px-4 pb-3 pt-3">
         <div className="ws-skeleton h-6 w-3/5" />
         <div className="ws-skeleton mt-2 h-3 w-2/5" />
@@ -318,7 +324,7 @@ function HostScheduled({
 
 function NotOpenYet({ stream }: { stream: Stream }) {
   return (
-    <div className="mx-auto w-full max-w-[520px] bg-grey-900">
+    <div className="mx-auto w-full max-w-[520px] bg-chrome">
       <div className="px-4 pb-3 pt-4">
         <h1 className="ws-display text-[22px] leading-7">{houseTopic(stream)}</h1>
         <p className="ws-meta mt-2">
@@ -339,7 +345,7 @@ function ClosedHouse({ stream }: { stream: Stream }) {
   const [reopening, setReopening] = useState(false);
   const gate = useGate();
   return (
-    <div className="mx-auto w-full max-w-[520px] bg-grey-900">
+    <div className="mx-auto w-full max-w-[520px] bg-chrome">
       <div className="px-4 pb-3 pt-4">
         {/* The header keeps the topic, so the page is still ABOUT something
             rather than a tombstone. */}
@@ -393,6 +399,7 @@ function LiveHouse({
   houseSlot,
   personActionsSlot,
   tipSlot,
+  joinHouse,
 }: {
   stream: Stream;
   isHost: boolean;
@@ -505,14 +512,19 @@ function LiveHouse({
   const myAvatar = me.data?.avatarUrl ?? null;
   const [houseMemberIds, setHouseMemberIds] = useState<ReadonlySet<string>>(EMPTY_IDS);
 
-  /* The house group, resolved once — its name, its partner count and its
-     roster all come from the same conversation. Null for a street room. */
-  const house = stream.houseConversationId
+  /*
+    The house's DOORPLATE, straight off the room — id, title, picture, member
+    count, visibility, and whether this viewer is already in it. Null for a
+    room opened from the street, which belongs to no house.
+  */
+  const house = stream.house;
+  const houseMembers = stream.houseConversationId
     ? (houseSlot?.(stream.houseConversationId, {
         speakerIds,
         onRoster: setHouseMemberIds,
       }) ?? null)
     : null;
+
   const seating = useMemo(() => buildSeating(slots), [slots]);
   const audio = useHouseAudio(room);
   const audience = useAudience(room);
@@ -967,13 +979,13 @@ function LiveHouse({
     */
     <main
       aria-label={houseTopic(stream)}
-      /* `bg-grey-900` (#0f0f0f) is the file's own frame fill, not `ws-wash`.
+      /* `bg-chrome` (#0f0f0f) is the file's own frame fill, not `ws-wash`.
          The wash paints pure #000 with a radial highlight, which made the
          left column DARKER than the page it sits on and flattened the step up
          to the chat column's #121214 — the two read as one surface. Flat
          ground on the left, `--color-chrome` on the right, exactly as
          129:11887 and 129:12852 are painted. */
-      className="flex w-full flex-col bg-grey-900 pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
+      className="flex w-full flex-col bg-chrome pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
     >
       {/* The audio itself. Mounted from its OWN map so it can never become
           conditional on anything visual — the reason RemoteAudio is its own
@@ -996,12 +1008,17 @@ function LiveHouse({
 
       <HouseHeader
         topic={houseTopic(stream)}
-        house={house?.name}
+        house={house?.title}
         meta={
           // The file's line is the HOUSE's partner count. A room with no house
           // has no partners to count, so it falls back to what it does know:
           // who is actually in the room right now.
-          house?.partners ?? (
+          (house && house.memberCount !== null ? (
+            <>
+              <span className="tnum">{house.memberCount}</span> gist{" "}
+              {house.memberCount === 1 ? "partner" : "partners"}
+            </>
+          ) : null) ?? (
             <>
               <span className="tnum">{listening}</span> listening ·{" "}
               <span className="tnum">{speaking}</span> speaking
@@ -1013,38 +1030,59 @@ function LiveHouse({
         // third one opened is this one — both room links and the keyboard
         // shortcuts — so nothing was lost when the dots went.
         onShare={() => setOverflowSheet(true)}
-        // The same action the free chair fires — see HouseHeader's note on why
-        // "Join House" is a seat request and not a membership.
+        /*
+          JOIN HOUSE IS NOW A REAL JOIN.
+
+          It used to fire a speaker request, because there was no way to join a
+          house group — which meant a button labelled "Join House" asked for a
+          microphone instead. `POST /conversations/:id/join` exists, and the
+          room now knows enough to offer it honestly:
+
+            · absent once you are already a member — a Join button on something
+              you have joined is the surest way to make a control look broken;
+            · absent on a PRIVATE house, where the service would refuse with
+              "ask a member to add you". The name still shows; the invitation
+              does not, because there is nothing to accept.
+
+          Asking for the floor is a different act and has its own control — the
+          raised hand in the bottom bar.
+        */
         join={
-          asking
+          joinHouse && house && house.visibility === "public" && !house.viewerIsMember
             ? {
-                onJoin: ask,
-                state: approved ? "seated" : pendingMine ? "pending" : "idle",
-                reason: askReason,
+                onJoin: () => gate(() => joinHouse?.onJoin(house.id)),
+                state: joinHouse?.pending ? "pending" : "idle",
+                reason: null,
               }
             : undefined
         }
       />
 
       {/*
-        The cover: 741x200 at radius 24. The file fills it white because that
-        is where the room's own picture goes — a room without one gets the
-        surface rather than a white slab, which would read as a broken image.
+        The cover: 741x200 at radius 24, and ONLY when there is one.
+
+        A room without a picture used to get an empty 200px panel in its
+        place. The file fills that rectangle white because it is drawing a room
+        that HAS a cover; an empty tinted slab is not what it specifies, it is
+        our stand-in for something that does not exist — and it reads as an
+        image that failed to load rather than as a room that never had one. It
+        also pushed Speakers 216px down the page to make room for nothing.
+
+        So the whole block is absent, padding included: there is no gap where
+        the cover would have been, and the section below simply starts higher.
       */}
-      <div className="px-4 pt-4 xl:px-8">
-        {stream.thumbnailUrl ? (
-          // A plain <img>: the host uploads this and the store types it, so
-          // `next/image` handed something it cannot decode is a crash this
-          // repo has already shipped twice.
+      {stream.thumbnailUrl && (
+        <div className="px-4 pt-4 xl:px-8">
+          {/* A plain <img>: the host uploads this and the store types it, so
+              `next/image` handed something it cannot decode is a crash this
+              repo has already shipped twice. */}
           <img
             src={stream.thumbnailUrl}
             alt=""
             className="h-[200px] w-full rounded-3xl object-cover"
           />
-        ) : (
-          <div className="h-[200px] w-full rounded-3xl bg-white/[0.06]" />
-        )}
-      </div>
+        </div>
+      )}
 
       <div className={cn("flex flex-col gap-6 px-4 pb-6 pt-10 xl:px-8", state === "failed" && "opacity-40")}>
         <RoomPeopleSection
@@ -1091,7 +1129,7 @@ function LiveHouse({
           The roster arrives through a slot, because it is a conversation and
           slices never import each other.
         */}
-        {house?.members}
+        {houseMembers}
 
         <RoomPeopleSection
           title="Audience"

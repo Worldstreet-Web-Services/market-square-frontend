@@ -343,3 +343,34 @@ describe("the friends deck offers a real Follow", () => {
     assert.match(deck, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
   });
 });
+
+/**
+ * A room with no cover shows NO COVER.
+ *
+ * The design fills a 741x200 rectangle white because it is drawing a room that
+ * HAS a picture. An empty tinted slab in its place is our stand-in for
+ * something that does not exist, and it reads as an image that failed to load
+ * rather than as a room that never had one — while pushing everything below it
+ * 216px down the page to make room for nothing.
+ */
+describe("the gist room hides its cover rather than faking one", () => {
+  const room = stripComments(read("features/houses/components/house-room.tsx"));
+
+  it("renders the cover only when there is one", () => {
+    assert.match(
+      room,
+      /\{stream\.thumbnailUrl && \(/,
+      "the cover is no longer conditional on there being a cover"
+    );
+  });
+
+  it("keeps no empty panel to stand in for it", () => {
+    // The placeholder was `<div className="h-[200px] w-full rounded-3xl
+    // bg-white/[0.06]" />`. Nothing should hold that space open.
+    assert.doesNotMatch(
+      room,
+      /h-\[200px\][^"]*bg-white/,
+      "the empty cover placeholder is back"
+    );
+  });
+});
