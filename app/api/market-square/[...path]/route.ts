@@ -195,6 +195,9 @@ async function serveFixture(req: NextRequest, path: string[], method: string) {
   return NextResponse.json(result.body, { status: result.status });
 }
 
+/** Statuses the Fetch spec forbids a body on. Constructing one throws. */
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
 async function forward(req: NextRequest, path: string[], method: string) {
   const joined = path.join("/");
 
@@ -212,9 +215,29 @@ async function forward(req: NextRequest, path: string[], method: string) {
     url: `${BASE}/${joined}${req.nextUrl.search}`,
     method,
   });
-  return new NextResponse(result.body, {
+  /*
+    A 204 MUST BE CONSTRUCTED WITH A NULL BODY.
+
+    204, 205 and 304 are "null body statuses" in the Fetch spec: passing ANY
+    body init — including the empty string this proxy carries for them —
+    throws `TypeError: Response constructor: Invalid response status code 204`.
+    The throw happens HERE, after the upstream call has already succeeded, so
+    Next answers 5xx for a request the service completed. The client then sees
+    a server error, trips the shared circuit breaker, and tells the reader
+    "Can't reach Market Square right now" about an action that worked.
+
+    That is what leaving a group looked like: the member really was removed,
+    the app reported the square unreachable, the confirm sheet stayed open, and
+    the next press hit a membership that was already gone. Two of our routes
+    answer 204 — leaving a group and declining a chat request — so both were
+    unusable through the proxy while both were succeeding upstream.
+  */
+  return new NextResponse(NULL_BODY_STATUSES.has(result.status) ? null : result.body, {
     status: result.status,
-    headers: { "content-type": result.contentType },
+    // A bodyless response must not claim a content type either.
+    headers: NULL_BODY_STATUSES.has(result.status)
+      ? undefined
+      : { "content-type": result.contentType },
   });
 }
 
