@@ -228,6 +228,14 @@ function PersonCard({
           card. `-right-2` hung it 8px off the card's edge instead, which is
           what makes it read as stuck onto the image rather than part of it.
           At our 186px width that inset is 7px, and the badge is 39.13 → 40.
+
+          `z-10` IS LOAD BEARING. The badge deliberately overlaps the photo's
+          corner, and it sits before the photo's own `relative` wrapper in the
+          markup — two positioned elements at the same z-index paint in DOM
+          order, so without this the photo is painted OVER the badge and the
+          follow control disappears into the picture. It is not hidden by
+          overflow and not mispositioned; it is simply underneath, which is why
+          it looks like it is inside the image.
         */}
         <button
           type="button"
@@ -238,7 +246,7 @@ function PersonCard({
             gate(() => follow.mutate(!isFollowing));
           }}
           aria-label={isFollowing ? `Unfollow ${name}` : `Follow ${name}`}
-          className="ws-press absolute right-[7px] top-[7px] h-10 w-10 transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="ws-press absolute right-[7px] top-[7px] z-10 h-10 w-10 transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {/* Following dims the badge rather than removing it: a control that
               vanishes on success leaves no way back, and the deck moves on to

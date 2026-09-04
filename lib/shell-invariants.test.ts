@@ -301,6 +301,19 @@ describe("the friends deck offers a real Follow", () => {
     assert.match(deck, /right-\[7px\] top-\[7px\]/, "the badge lost the file's inset");
   });
 
+  it("paints ABOVE the photo it overlaps", () => {
+    // The badge is `absolute` and sits before the photo's own `relative`
+    // wrapper in the markup. Two positioned elements at the same z-index paint
+    // in DOM order, so without an explicit lift the photo covers the badge and
+    // the control vanishes into the picture — not clipped, not mispositioned,
+    // just underneath. Nothing else in the build can see that.
+    assert.match(
+      block(deck, "aria-label={isFollowing ?", "</button>"),
+      /\bz-10\b/,
+      "the follow badge lost its z-index and is painted under the photo again"
+    );
+  });
+
   it("reads the follow edge rather than the raw field", () => {
     assert.match(deck, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
   });
