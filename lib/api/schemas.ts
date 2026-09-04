@@ -162,6 +162,15 @@ export const StreamSchema = z.object({
   description: z.string().nullable().optional().default(null),
   category: z.string().optional().default("other"),
   /**
+   * Shared-vocabulary topic keys, as chosen in the composer. The service has
+   * always returned them; the schema simply never modelled them, so the gist
+   * room's invite card had no way to draw the topic chips node 225:3887 puts
+   * on it. Defaulted to empty rather than optional — "no topics" and "this
+   * payload does not carry topics" render identically here, and an array is
+   * the shape every reader wants.
+   */
+  topics: z.array(z.string()).optional().default([]),
+  /**
    * WHERE THIS ROOM BELONGS, and who may see it (migrations 039/041).
    *
    * `houseConversationId` is the house GROUP a gist room was opened from; it

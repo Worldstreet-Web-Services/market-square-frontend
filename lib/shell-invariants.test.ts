@@ -160,3 +160,77 @@ describe("the mobile tab bar reserves the create button's footprint", () => {
     );
   });
 });
+
+/**
+ * What the sidebar promotes, and what only the sidebar drops.
+ *
+ * `NAV` feeds three surfaces — the desktop sidebar, the mobile tab bar and the
+ * mobile drawer — so "remove it from the sidebar" and "remove it" are
+ * different edits with very different consequences, and the difference is not
+ * visible from the list alone.
+ */
+describe("the sidebar hides rows without removing their route", () => {
+  it("asks visibleNav WHICH surface is filtering", () => {
+    // Without the surface argument the filter cannot tell the sidebar from the
+    // mobile bar, and `sidebar: false` silently applies to both.
+    assert.match(
+      shell,
+      /surface:\s*"sidebar"/,
+      "the sidebar no longer identifies itself to visibleNav"
+    );
+    assert.match(
+      shell,
+      /surface:\s*"mobile"/,
+      "the mobile nav no longer identifies itself to visibleNav"
+    );
+    assert.match(
+      shell,
+      /options\.surface !== "sidebar" \|\| item\.sidebar !== false/,
+      "visibleNav stopped scoping `sidebar: false` to the sidebar"
+    );
+  });
+
+  it("KEEPS notifications in NAV, because a phone has no other door to it", () => {
+    // The desktop breadcrumb carries a bell; below md there is no breadcrumb
+    // (`--ws-crumb-h` is 0) and the mobile header deliberately carries no bell
+    // because this entry exists. Deleting the row — the obvious way to "finish"
+    // hiding it — leaves a phone with no route to notifications and no unread
+    // badge anywhere in the app.
+    assert.match(
+      NAV,
+      /href:\s*"\/notifications"/,
+      "the notifications entry was deleted from NAV, not just hidden from the sidebar"
+    );
+    assert.match(
+      NAV,
+      /"\/notifications"[\s\S]{0,400}?sidebar:\s*false/,
+      "notifications is no longer hidden from the sidebar"
+    );
+  });
+
+  it("hides gist rooms from the sidebar and leaves the route alone", () => {
+    assert.match(
+      NAV,
+      /"\/gist-rooms"[^\n]*sidebar:\s*false/,
+      "the gist rooms entry is back in the sidebar"
+    );
+  });
+});
+
+describe("the creators entry is node 225:3252", () => {
+  it("says For Creators, on the file's own glyph", () => {
+    assert.match(NAV, /label:\s*"For Creators"/, "the label is no longer the design's");
+    assert.match(NAV, /icon:\s*IconForCreators/, "the entry is not on the design's icon");
+  });
+
+  it("still points at /studio — a renamed entry is not a moved route", () => {
+    // Every link already sent to /studio has to keep working; the design
+    // changed what the row says, not where it goes.
+    assert.match(
+      NAV,
+      /href:\s*"\/studio"/,
+      "the creators entry no longer points at /studio"
+    );
+    assert.doesNotMatch(NAV, /label:\s*"Studio"/, "the old label is back");
+  });
+});

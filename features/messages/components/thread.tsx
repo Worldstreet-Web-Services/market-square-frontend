@@ -642,13 +642,36 @@ function RoomInviteBubble({
   mine,
   group,
   tail,
+  card,
 }: {
   message: Message;
   mine: boolean;
   group: boolean;
   tail: boolean;
+  /**
+   * The designed card — node 225:3873 — composed in `components/layout` because
+   * it reads the room, the topic vocabulary and the group's roster, and slices
+   * never import each other.
+   *
+   * Absent on a surface that has not wired it: the bubble then falls back to
+   * the plain sentence plus its Join button, which is a working invite rather
+   * than a hole.
+   */
+  card?: React.ReactNode;
 }) {
   const ref = message.deepLink?.ref;
+  if (card) {
+    // The card IS the bubble here: it carries its own 22px glass shell, so
+    // wrapping it in the message shell would draw two panels round one object.
+    return (
+      <div className="flex max-w-[min(85%,480px)] flex-col gap-1">
+        {card}
+        <span className={cn("flex justify-end", mine ? "pr-1" : "pl-1")}>
+          <BubbleMeta message={message} mine={mine} group={group} />
+        </span>
+      </div>
+    );
+  }
   return (
     <div className={cn("flex max-w-[min(85%,480px)] flex-col gap-2 p-3", bubbleShell(mine, tail))}>
       <div className="flex items-start gap-2.5">
@@ -889,11 +912,13 @@ function MessageRow({
   mine,
   group,
   sender,
+  roomCardSlot,
 }: {
   message: Message;
   mine: boolean;
   group: boolean;
   sender: Profile | null;
+  roomCardSlot?: (streamId: string) => React.ReactNode;
 }) {
   const kind = messageMediaKind(message);
   const removed = message.status === "removed";
@@ -908,7 +933,13 @@ function MessageRow({
 
   const content =
     invite ? (
-      <RoomInviteBubble message={message} mine={mine} group={group} tail={tail} />
+      <RoomInviteBubble
+        message={message}
+        mine={mine}
+        group={group}
+        tail={tail}
+        card={roomCardSlot?.(message.deepLink!.ref)}
+      />
     ) : removed || !kind ? (
       <TextBubble message={message} mine={mine} group={group} tail={tail} />
     ) : kind === "audio" ? (
@@ -1230,10 +1261,17 @@ export function Thread({
   onBack,
   /** Opens the gist-room composer. Supplied by the layout, which owns it. */
   onCreateGistRoom,
+  /**
+   * The designed invite card for a gist-room announcement (node 225:3873).
+   * Supplied by the layout, which is the one place allowed to read the room,
+   * the topic vocabulary and this group's roster at once.
+   */
+  roomCardSlot,
 }: {
   conversation: Conversation;
   onBack: () => void;
   onCreateGistRoom?: () => void;
+  roomCardSlot?: (streamId: string) => React.ReactNode;
 }) {
   const me = useMe();
   const group = isGroupThread(conversation);
@@ -1360,6 +1398,7 @@ export function Thread({
                     mine={Boolean(me.data && message.senderId === me.data.id)}
                     group={group}
                     sender={senders.get(message.senderId) ?? null}
+                    roomCardSlot={roomCardSlot}
                   />
                 ))}
               </div>

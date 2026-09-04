@@ -83,11 +83,30 @@ export function useStreamList(
 
 // The room polls the detail to refresh viewerCount and status. Pass a number
 // for a custom interval (the cockpit polls at 5 s per spec).
-export function useStream(id: string, poll: boolean | number = false) {
+/**
+ * One stream.
+ *
+ * `poll` is `false` (never), `true` (10s), a millisecond interval, or the
+ * tuple `["while-live", ms]` — which polls at `ms` only while the stream is
+ * actually live and STOPS once it ends. A surface that outlives the broadcast
+ * needs that last one: the gist-room invite card sits in a group thread for
+ * ever, and the only transition it cares about is live -> ended, after which
+ * polling a finished room for the rest of the session is pure waste.
+ */
+export function useStream(
+  id: string,
+  poll: boolean | number | readonly ["while-live", number] = false
+) {
   return useQuery({
     queryKey: ["ms", "stream", id],
     queryFn: () => fetchStream(id),
-    refetchInterval: poll === false ? false : poll === true ? 10_000 : poll,
+    refetchInterval: Array.isArray(poll)
+      ? (query) => (query.state.data?.status === "live" ? poll[1] : false)
+      : poll === false
+        ? false
+        : poll === true
+          ? 10_000
+          : (poll as number),
   });
 }
 

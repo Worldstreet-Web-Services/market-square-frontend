@@ -220,3 +220,41 @@ export function IconViewAll({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** The 24px badge on a gist-room invite card — node 225:3877. The disc's own `#9F65FD -> #7E3BEB` gradient is the purple ramp's two stops, kept as the file draws them. */
+export function IconRoomBadgeMic({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="24" height="24" rx="12" fill="url(#room_mic_badge_paint0_linear_225_3877)"/>
+      <g clipPath="url(#room_mic_badge_clip0_225_3877)">
+      <path d="M13.501 8.50195C13.501 7.67353 12.8294 7.00195 12.001 7.00195C11.1725 7.00195 10.501 7.67353 10.501 8.50195V11.502C10.501 12.3304 11.1725 13.002 12.001 13.002C12.8294 13.002 13.501 12.3304 13.501 11.502V8.50195Z" fill="white" stroke="white" strokeWidth="0.750607"/>
+      <path d="M8.50146 7.50195V8.50195M6.50146 7.00195V9.00195M15.5015 7.50195V8.50195M17.5015 7.00195V9.00195M8.50146 11.002V11.502C8.50146 12.4302 8.87021 13.3204 9.52659 13.9768C10.183 14.6332 11.0732 15.002 12.0015 15.002M12.0015 15.002C12.9297 15.002 13.82 14.6332 14.4763 13.9768C15.1327 13.3204 15.5015 12.4302 15.5015 11.502V11.002M12.0015 15.002V17.002M12.0015 17.002H10.5015M12.0015 17.002H13.5015" stroke="white" strokeWidth="0.750607" strokeLinecap="round" strokeLinejoin="round"/>
+      </g>
+      <defs>
+      <linearGradient id="room_mic_badge_paint0_linear_225_3877" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#9F65FD"/>
+      <stop offset="1" stopColor="#7E3BEB"/>
+      </linearGradient>
+      <clipPath id="room_mic_badge_clip0_225_3877">
+      <rect width="12" height="12" fill="white" transform="translate(6 6)"/>
+      </clipPath>
+      </defs>
+    </svg>
+  );
+}
+
+/** `codicon:voice-mode-compact` — the waveform on the invite card's Join Gistroom pill, node 225:3885. */
+export function IconVoiceMode({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 8 8" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g clipPath="url(#voice_mode_clip0_225_3885)">
+      <path d="M3.33219 0.333333V7.66667C3.33219 7.85333 3.18553 8 2.99886 8C2.81219 8 2.66553 7.85333 2.66553 7.66667V0.333333C2.66553 0.146667 2.81219 0 2.99886 0C3.18553 0 3.33219 0.146667 3.33219 0.333333ZM4.99886 1.33333C4.81219 1.33333 4.66553 1.48 4.66553 1.66667V6.33333C4.66553 6.52 4.81219 6.66667 4.99886 6.66667C5.18553 6.66667 5.33219 6.52 5.33219 6.33333V1.66667C5.33219 1.48 5.18553 1.33333 4.99886 1.33333ZM6.99886 2.66667C6.81219 2.66667 6.66553 2.81333 6.66553 3V5C6.66553 5.18667 6.81219 5.33333 6.99886 5.33333C7.18553 5.33333 7.33219 5.18667 7.33219 5V3C7.33219 2.81333 7.18553 2.66667 6.99886 2.66667ZM0.998861 2C0.812194 2 0.665527 2.14667 0.665527 2.33333V5.66667C0.665527 5.85333 0.812194 6 0.998861 6C1.18553 6 1.33219 5.85333 1.33219 5.66667V2.33333C1.33219 2.14667 1.18553 2 0.998861 2Z" fill="currentColor"/>
+      </g>
+      <defs>
+      <clipPath id="voice_mode_clip0_225_3885">
+      <rect width="8" height="8" fill="currentColor"/>
+      </clipPath>
+      </defs>
+    </svg>
+  );
+}

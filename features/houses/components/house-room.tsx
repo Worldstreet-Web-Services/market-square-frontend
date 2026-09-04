@@ -231,7 +231,7 @@ export function HouseRoom({
  */
 function RoomSkeleton() {
   return (
-    <div className="ws-wash mx-auto w-full max-w-[520px]" aria-busy="true">
+    <div className="mx-auto w-full max-w-[520px] bg-grey-900" aria-busy="true">
       <div className="px-4 pb-3 pt-3">
         <div className="ws-skeleton h-6 w-3/5" />
         <div className="ws-skeleton mt-2 h-3 w-2/5" />
@@ -318,7 +318,7 @@ function HostScheduled({
 
 function NotOpenYet({ stream }: { stream: Stream }) {
   return (
-    <div className="ws-wash mx-auto w-full max-w-[520px]">
+    <div className="mx-auto w-full max-w-[520px] bg-grey-900">
       <div className="px-4 pb-3 pt-4">
         <h1 className="ws-display text-[22px] leading-7">{houseTopic(stream)}</h1>
         <p className="ws-meta mt-2">
@@ -339,7 +339,7 @@ function ClosedHouse({ stream }: { stream: Stream }) {
   const [reopening, setReopening] = useState(false);
   const gate = useGate();
   return (
-    <div className="ws-wash mx-auto w-full max-w-[520px]">
+    <div className="mx-auto w-full max-w-[520px] bg-grey-900">
       <div className="px-4 pb-3 pt-4">
         {/* The header keeps the topic, so the page is still ABOUT something
             rather than a tombstone. */}

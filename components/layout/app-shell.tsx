@@ -37,6 +37,7 @@ import {
   IconChevronLeft,
   IconCamera,
   IconDots,
+  IconForCreators,
   IconHome,
   IconHouses,
   IconLive,
@@ -59,6 +60,15 @@ interface NavItem {
   admin?: boolean;
   /** Folded into the "More" menu below xl, where vertical room runs out. */
   secondary?: boolean;
+  /**
+   * Promoted in the DESKTOP SIDEBAR. Defaults to true.
+   *
+   * Separate from `flag`, which hides an entry everywhere: this hides it from
+   * one surface while the mobile tab bar and drawer keep it. The sidebar sits
+   * under a breadcrumb bar that already carries a bell and an avatar, so an
+   * entry can be redundant there and still be the only door on a phone.
+   */
+  sidebar?: boolean;
   /**
    * Hidden unless this `MARKET_FLAGS` capability is on.
    *
@@ -133,7 +143,7 @@ const NAV: NavItem[] = [
     `/gist-rooms/[id]` still resolves whatever the flag says: a link somebody was
     sent has to work, and hiding an entry must never break a route.
   */
-  { href: "/gist-rooms", label: "Gist rooms", icon: IconHouses, flag: "houses" },
+  { href: "/gist-rooms", label: "Gist rooms", icon: IconHouses, flag: "houses", sidebar: false },
   
   { href: "/messages", label: "Chat", icon: IconMail, authed: true },
   {
@@ -141,12 +151,36 @@ const NAV: NavItem[] = [
     label: "Notifications",
     icon: IconBell,
     authed: true,
+    /*
+      Off the SIDEBAR only, and deliberately not off the mobile bar.
+
+      On desktop the breadcrumb's bell is the same destination with the same
+      unread ring, so the row was the second of two doors to one place. On a
+      phone there is no breadcrumb — `--ws-crumb-h` is 0 below md — and the
+      mobile header carries no bell precisely because this entry exists. Take
+      it out of `NAV` outright and a phone has no route to notifications at
+      all, and no unread badge anywhere.
+    */
+    sidebar: false,
   },
   { href: "/live", label: "Live", icon: IconLive, secondary: true },
 // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
-  { href: "/studio", label: "Studio", icon: IconCamera, authed: true, secondary: true },
+  /*
+    Node 225:3252. The row's geometry was already this node's — 46px tall,
+    `px-3.5 py-2.5`, `gap-3`, `rounded-xl`, 12/16 bold — so the design changed
+    only what it says and what it shows: "For Creators", on the file's own
+    MusicNotesPlus. The ROUTE is untouched; /studio still resolves and every
+    link already sent to it still works.
+  */
+  {
+    href: "/studio",
+    label: "For Creators",
+    icon: IconForCreators,
+    authed: true,
+    secondary: true,
+  },
   {
     href: "/admin",
     label: "Admin",
@@ -181,9 +215,12 @@ function visibleNav(options: {
   authenticated: boolean;
   isAdmin: boolean;
   isOperator: boolean;
+  /** Which surface is asking. Only the sidebar drops `sidebar: false` rows. */
+  surface: "sidebar" | "mobile";
 }): NavItem[] {
   return NAV.filter(
     (item) =>
+      (options.surface !== "sidebar" || item.sidebar !== false) &&
       (!item.authed || options.authenticated) &&
       (!item.operator || options.isOperator) &&
       // Presentation only. Every /admin route is enforced server-side, so a
@@ -675,6 +712,7 @@ function Sidebar({
     authenticated,
     isAdmin: Boolean(me.data?.isAdmin),
     isOperator: me.data?.role === "worldstreet",
+    surface: "sidebar",
   });
 
   return (
@@ -1208,6 +1246,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     authenticated,
     isAdmin: Boolean(me.data?.isAdmin),
     isOperator: me.data?.role === "worldstreet",
+    surface: "mobile",
   });
 
   // One piece of local state drives every compose entry point in the shell —

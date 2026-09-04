@@ -272,6 +272,12 @@ export function MessagesPage({
    * slice, and slices never import each other.
    */
   renderGistRoom,
+  /**
+   * The designed card for a gist-room announcement in a thread (node 225:3873).
+   * It reads the room, the shared topic vocabulary and this group's roster —
+   * three slices — so the layout composes it and hands it down.
+   */
+  renderRoomCard,
 }: {
   renderNewChat?: (props: NewChatPickerProps) => React.ReactNode;
   renderGistRoom?: (props: {
@@ -280,6 +286,7 @@ export function MessagesPage({
     /** The group the room is being opened from — what makes Private possible. */
     houseConversationId?: string;
   }) => React.ReactNode;
+  renderRoomCard?: (props: { streamId: string; conversationId: string }) => React.ReactNode;
 } = {}) {
   const { ready, authenticated, login } = useAuth();
   const [open, setOpen] = useState<Conversation | null>(null);
@@ -384,6 +391,13 @@ export function MessagesPage({
             onBack={() => setOpen(null)}
             // Only offered when the layout actually supplied a composer.
             onCreateGistRoom={renderGistRoom ? () => setGistRoomOpen(true) : undefined}
+            // The announcement card, bound to the thread it is being read in —
+            // the card needs the group as well as the room.
+            roomCardSlot={
+              renderRoomCard
+                ? (streamId) => renderRoomCard({ streamId, conversationId: open.id })
+                : undefined
+            }
           />
         ) : (
           <ThreadPlaceholder />

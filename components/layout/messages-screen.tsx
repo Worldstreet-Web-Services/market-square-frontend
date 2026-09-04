@@ -11,6 +11,7 @@ import { useMe } from "@/hooks/use-me";
 import { usePeople } from "@/features/discovery";
 import { InboxSearch } from "@/features/messages/components/inbox-chrome";
 import { CreateGroupFlow } from "@/components/layout/create-group-flow";
+import { GistRoomCard } from "@/components/layout/gist-room-card";
 import { OpenHouseSheet } from "@/features/houses";
 import { MessagesPage, useOpenConversation, type NewChatPickerProps } from "@/features/messages";
 import type { Profile } from "@/lib/api/schemas";
@@ -36,6 +37,12 @@ export function MessagesScreen() {
           onClose={onClose}
           houseConversationId={houseConversationId}
         />
+      )}
+      // The announcement card a gist room posts into its house group
+      // (node 225:3873). Composed here because it reads three slices at once —
+      // the room, the topic vocabulary and this group's roster.
+      renderRoomCard={({ streamId, conversationId }) => (
+        <GistRoomCard streamId={streamId} conversationId={conversationId} />
       )}
       renderNewChat={(props) =>
         // Two designs, two components. Create Group is a two-STEP flow (choose
