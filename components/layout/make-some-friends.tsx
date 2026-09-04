@@ -175,6 +175,45 @@ function DeckArrow({
  * `aria-hidden`, because only the front card is the thing being decided about
  * — a screen reader offered three winks would be offered two that do nothing.
  */
+/**
+ * WHERE THE THREE CARDS SIT — the file's own numbers, not a formula.
+ *
+ * Node 225:3374 draws exactly three cards and this deck renders exactly three
+ * (`[index - 1, index, index + 1]`), so their positions are read off the file
+ * rather than generated from an offset:
+ *
+ *   left  225:3388  x=0       y=8.21   205.55 x 256.35
+ *   front 225:3401  x=124.73  y=0      183.70 x 250.01
+ *   right 225:3375  x=253.24  y=11.24  207.76 x 257.78
+ *
+ * Two things in there are the opposite of what a generated fan assumes, and
+ * both were wrong here:
+ *
+ *   THE NEIGHBOURS ARE FULLY OPAQUE. They were rendered at `opacity: 0.55`,
+ *   which washed the file's white-to-#D0B3FF card out to grey against the
+ *   black page and made the deck look faded. Every card carries the same
+ *   fill at full strength; depth comes from overlap and from the front card
+ *   being raised, never from transparency.
+ *
+ *   NOTHING IS ROTATED. A `rotate(-4deg)` per step was invented here. The
+ *   file's cards are upright.
+ *
+ * The neighbours are also LARGER than the front card (205.55 and 207.76
+ * against 183.70), which reads as the front one being lifted toward you
+ * rather than the sides being pushed back — again the reverse of the usual
+ * scale-down fan.
+ *
+ * Values are CENTRE deltas, because the cards are centred in their container
+ * and `scale()` grows from the centre; they are the file's numbers times
+ * 186/183.7, our card being 186 wide. The left/right asymmetry (-115 against
+ * +142) is the file's own hand placement and is kept rather than averaged.
+ */
+const DECK_PLACES: Record<number, { x: number; y: number; scale: number }> = {
+  [-1]: { x: -115, y: 11, scale: 1.119 },
+  0: { x: 0, y: 0, scale: 1 },
+  1: { x: 142, y: 15, scale: 1.131 },
+};
+
 function PersonCard({
   profile,
   offset,
@@ -202,6 +241,7 @@ function PersonCard({
   const isFollowing = useIsFollowing(profile);
   const gate = useGate();
   const front = offset === 0;
+  const place = DECK_PLACES[offset] ?? DECK_PLACES[0]!;
   const name = profile.displayName || profile.username;
   return (
     <div
@@ -211,11 +251,14 @@ function PersonCard({
         front ? "z-20" : "z-10"
       )}
       style={{
-        transform: `translateX(${offset * 92}px) translateY(${front ? 0 : 10}px) rotate(${offset * -4}deg) scale(${front ? 1 : 0.92})`,
-        opacity: front ? 1 : 0.55,
+        transform: `translate(${place.x}px, ${place.y}px) scale(${place.scale})`,
       }}
     >
-      <div className="relative w-[186px] rounded-[18.57px] bg-[linear-gradient(180deg,#FFFFFF_0%,#D0B3FF_100%)] p-3 pb-14">
+      {/* The file's insets are NOT uniform, and `p-3` flattened them: the photo
+            sits 11.94 from the sides but 15.92 from the top, and the band below
+            it is 66.31 (250.01 card less a photo ending at 183.7) rather than
+            the 56 of `pb-14`. x 186/183.7 gives 12 / 16 / 67. */}
+        <div className="relative w-[186px] rounded-[18.57px] bg-[linear-gradient(180deg,#FFFFFF_0%,#D0B3FF_100%)] px-3 pb-[67px] pt-4">
         {/*
           FOLLOW — node 225:3412, which is the `profile-add` component, not an
           ornament. It was drawn as a bare glyph and did nothing: the deck
@@ -256,23 +299,23 @@ function PersonCard({
         <Link
           href={`/u/${profile.username}`}
           tabIndex={front ? undefined : -1}
-          className="relative block overflow-hidden rounded-[26.57px]"
+          className="relative block overflow-hidden rounded-[26.9px]"
         >
           <Avatar
             name={name}
             seed={profile.id}
             src={profile.avatarUrl}
-            size={168}
-            sizeClassName="h-[168px] w-[162px]"
+            size={170}
+            sizeClassName="h-[170px] w-[162px]"
             className="rounded-none border-0 object-cover"
           />
           {/* The file's bottom scrim: transparent to solid black, carrying the
               name and handle so they read over any photograph. */}
-          <span className="absolute inset-x-0 bottom-0 flex flex-col items-center bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,1)_100%)] px-2 pb-2 pt-8">
+          <span className="absolute inset-x-0 bottom-0 flex h-[74px] flex-col items-center justify-end bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,1)_100%)] px-2 pb-2">
             <span className="w-full truncate text-center text-[12px] font-semibold leading-5 text-white">
               {name}
             </span>
-            <span className="w-full truncate text-center text-[9px] leading-3 text-white/50">
+            <span className="w-full truncate text-center text-[8px] leading-[13px] text-white/50">
               @{profile.username}
             </span>
           </span>
@@ -281,13 +324,18 @@ function PersonCard({
 
       {/* The two controls straddle the shell's lower edge, as the file draws
           them — outside the photo, on the gradient. */}
-      <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-3">
+      {/* The two boxes ABUT in the file — pass ends at 92.17 and wink starts at
+          92.18 — because each exported glyph carries its own ~4.7px of padding
+          around a 36.58 squircle, and that padding IS the gap you see. `gap-3`
+          added 12px on top of it and pushed them apart. 45.08 -> 46, and the
+          pair bottoms out 10.62 from the card's foot. */}
+      <div className="absolute inset-x-0 bottom-[11px] flex items-center justify-center gap-0">
         <button
           type="button"
           disabled={!front}
           onClick={onPass}
           aria-label={`Skip ${name}`}
-          className="ws-press h-11 w-11 shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="ws-press h-[46px] w-[46px] shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           <IconDeckPass className="h-full w-full" />
         </button>
@@ -305,7 +353,10 @@ function PersonCard({
             })
           }
           aria-label={`Wink at ${name}`}
-          className="ws-press h-11 w-11 shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60"
+          /* The file sets the wink 3.32px higher than the pass (190.99 against
+             194.31). Kept rather than levelled — it is what gives the pair its
+             slight lift to the right. */
+          className="ws-press h-[46px] w-[46px] shrink-0 -translate-y-[3px] transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           <IconDeckWink className={cn("h-full w-full", wink.winked && "opacity-60")} />
         </button>

@@ -314,6 +314,31 @@ describe("the friends deck offers a real Follow", () => {
     );
   });
 
+  it("draws every card at FULL strength — the file's fills carry their own alpha", () => {
+    // The neighbours were rendered at `opacity: 0.55`, which washed the
+    // white-to-#D0B3FF card out to grey against the black page. Depth in this
+    // deck comes from overlap and from the front card being raised; the only
+    // transparency in it belongs to the fills themselves — pass is #9F65FD at
+    // 23% inside its own exported glyph.
+    assert.doesNotMatch(
+      deck,
+      /opacity:\s*front \?/,
+      "the deck dims its neighbouring cards again — the file draws all three opaque"
+    );
+  });
+
+  it("does not rotate the cards — the file's are upright", () => {
+    assert.doesNotMatch(
+      deck,
+      /rotate\(/,
+      "a rotation is back on the deck; node 225:3374 has none"
+    );
+  });
+
+  it("places the three cards from the file rather than a formula", () => {
+    assert.match(deck, /DECK_PLACES/, "the deck is generating positions again");
+  });
+
   it("reads the follow edge rather than the raw field", () => {
     assert.match(deck, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
   });
