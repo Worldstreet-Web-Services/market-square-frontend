@@ -29,6 +29,15 @@ export const STREAM_CATEGORIES = [
 ] as const;
 export type StreamCategory = (typeof STREAM_CATEGORIES)[number];
 
+/**
+ * What kind of live thing, as opposed to what it is about.
+ *
+ * `broadcast` is every stream except a house; `room` is a gist room. The
+ * distinction exists because a room IS a stream — same table, same chat — and
+ * `category` can name one but cannot exclude one. See `useStreamList`.
+ */
+export type StreamKind = "broadcast" | "room";
+
 /** The categories a BROADCAST picker offers. See above for why "house" is absent. */
 export const BROADCAST_CATEGORIES = STREAM_CATEGORIES.filter(
   (category) => category !== "house"

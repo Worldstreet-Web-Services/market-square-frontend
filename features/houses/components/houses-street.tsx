@@ -13,7 +13,7 @@ import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PorchSheet } from "@/features/houses/components/porch-sheet";
-import { housePath, isHouse } from "@/features/houses/lib/house";
+import { housePath } from "@/features/houses/lib/house";
 
 /**
  * The street: a LIST of houses, and deliberately nothing more.
@@ -83,19 +83,23 @@ export function HousesStreet() {
   const router = useRouter();
   const [opening, setOpening] = useState(false);
   const [porch, setPorch] = useState<Stream | null>(null);
-  /**
-   * BACKEND B5: `GET /streams?category=` is server-side enum-validated
-   * (worldstreet|music|podcast|gaming|other), so asking for `category=house`
-   * 400s until the enum is extended. Until then the street reads the live list
-   * — the SAME query key the Live hub uses, so this is one cache and one poll
-   * — and filters client-side. DELETE the filter and pass the category once
-   * the enum ships.
-   */
-  const live = useStreamList("live");
-  const scheduled = useStreamList("scheduled");
+  /*
+    Rooms, asked for by KIND.
 
-  const liveHouses = (live.data?.items ?? []).filter(isHouse);
-  const scheduledHouses = (scheduled.data?.items ?? []).filter(isHouse);
+    This used to read the whole live list and filter with `isHouse`, on a note
+    saying `category=house` 400d against the enum. The enum has carried
+    `house` for a while, and `kind=room` says the thing more directly — the
+    street wants rooms, not one taxonomy value that happens to mean rooms.
+
+    Filtering here was also wrong on its own terms: a page of live streams is
+    mostly broadcasts, so the street showed whatever handful of rooms survived
+    ONE page rather than a page of rooms.
+  */
+  const live = useStreamList("live", [], undefined, "room");
+  const scheduled = useStreamList("scheduled", [], undefined, "room");
+
+  const liveHouses = live.data?.items ?? [];
+  const scheduledHouses = scheduled.data?.items ?? [];
 
   return (
     <div className="mx-auto w-full max-w-[600px]">

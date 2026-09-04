@@ -41,7 +41,7 @@ import {
   fetchSpeakerRequests,
   resolveSpeakerRequest,
 } from "@/features/streams/lib/api";
-import type { Stream, TicketTier } from "@/features/streams/lib/types";
+import type { Stream, StreamCategory, StreamKind, TicketTier } from "@/features/streams/lib/types";
 import {
   createReactionBuffer,
   type ReactionBuffer,
@@ -65,15 +65,41 @@ function invalidateStreamSurfaces(queryClient: ReturnType<typeof useQueryClient>
 // ended, so replays are ended streams with a replayUrl.
 export function useStreamList(
   section: "live" | "scheduled" | "replay",
-  topics: string[] = []
+  topics: string[] = [],
+  /**
+   * Narrow to one category SERVER-SIDE — `GET /streams?category=` is on the
+   * contract. Home's gist-room carousel wants houses and nothing else, and
+   * loading every live stream to throw most of them away would make a page of
+   * broadcasts yield two rooms.
+   */
+  category?: StreamCategory,
+  /**
+   * BROADCASTS or GIST ROOMS — `GET /streams?kind=` on the contract.
+   *
+   * A gist room IS a stream, distinguished only by `category: "house"`, so a
+   * live list asks for every one of them by default. That put audio rooms on
+   * Live beside video broadcasts: something offered to watch with nothing to
+   * watch, and its own page to join instead.
+   *
+   * `category` cannot express it, because the filter needed is the NEGATIVE —
+   * "not a house" is not a taxonomy value. Hence a separate axis, and hence
+   * server-side: filtering here would make a page of broadcasts yield the two
+   * that were not rooms.
+   */
+  kind?: StreamKind
 ) {
   const status = section === "replay" ? "ended" : section;
   // Sorted so the same selection always produces the same cache key.
   const key = [...topics].sort().join(",");
   return useQuery({
-    queryKey: ["ms", "streams", section, key],
+    queryKey: ["ms", "streams", section, key, category ?? "all", kind ?? "any"],
     queryFn: async () => {
-      const page = await fetchStreams({ status, topics });
+      const page = await fetchStreams({
+        status,
+        topics,
+        ...(category ? { category } : {}),
+        ...(kind ? { kind } : {}),
+      });
       if (section !== "replay") return page;
       return { ...page, items: page.items.filter((stream) => stream.replayUrl !== null) };
     },

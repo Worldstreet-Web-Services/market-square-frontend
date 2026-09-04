@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { housePath, isHouse } from "@/features/houses/lib/house";
+import { housePath } from "@/features/houses/lib/house";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
 
@@ -44,8 +44,11 @@ import type { Stream } from "@/features/streams/lib/types";
 const SHOWN = 5;
 
 export function Hallway() {
-  const live = useStreamList("live");
-  const houses = (live.data?.items ?? []).filter(isHouse);
+  // Asked for by kind rather than filtered here: the enum-validated
+  // `category=house` and the client-side `isHouse` both existed only because
+  // the API could not say "rooms". It can now.
+  const live = useStreamList("live", [], undefined, "room");
+  const houses = live.data?.items ?? [];
 
   if (live.isPending) {
     return (

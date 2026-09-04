@@ -21,6 +21,7 @@ import {
   StreamStatsSchema,
   TicketSchema,
   type StreamCategory,
+  type StreamKind,
   type TicketTier,
 } from "@/features/streams/lib/types";
 
@@ -29,6 +30,8 @@ import {
 export async function fetchStreams(params: {
   status?: "live" | "scheduled" | "ended";
   category?: StreamCategory;
+  /** Broadcasts or gist rooms — see StreamKind. */
+  kind?: StreamKind;
   /** Topic keys from the viewer's picker; omitted when nothing is chosen. */
   topics?: string[];
   cursor?: string;
