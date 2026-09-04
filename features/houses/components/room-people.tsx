@@ -27,6 +27,20 @@ import { cn } from "@/lib/cn";
 export interface RoomPerson {
   /** Stable key — a LiveKit identity or a profile id. */
   id: string;
+  /**
+   * The person's USER id, when `id` is a LiveKit identity.
+   *
+   * This is what the avatar is SEEDED with, and the two are not the same
+   * string: a LiveKit identity carries a role suffix (`#broadcaster`,
+   * `#speaker`, `#rtmp`) and a user id never does. Seeding on the identity
+   * gave one person a different generated character in the room than the one
+   * the sidebar, the topbar and House Members draw for them — most visibly the
+   * host, whose identity is the only one that changes when they go live.
+   *
+   * Only matters for somebody with no uploaded avatar, which is most people,
+   * and it is exactly then that the generated artwork IS their face.
+   */
+  userId?: string;
   name: string;
   avatarUrl?: string | null;
   /** Speaking right now: the plate gets the live ring. */
@@ -94,7 +108,8 @@ function PersonCard({ person }: { person: RoomPerson }) {
           */}
           <Avatar
             name={person.name}
-            seed={person.id}
+            // The USER, never the connection: see RoomPerson.userId.
+            seed={person.userId ?? person.id}
             src={person.avatarUrl}
             size={113}
             sizeClassName="h-full w-full"

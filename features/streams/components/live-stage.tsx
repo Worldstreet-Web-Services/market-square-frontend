@@ -16,6 +16,7 @@ import {
 import { RemoteAudio } from "@/features/streams/components/remote-audio";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
 import {
+  baseIdentity,
   buildStageLayout,
   chooseFit,
   cropLoss,
@@ -263,7 +264,11 @@ function MediaTile({
           rectangle — a black tile is indistinguishable from a broken one. */}
       {hideVideo && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center">
-          <Avatar name={slot.name} seed={slot.identity} size={compact ? 32 : 56} />
+          {/* Seeded on the USER, not the connection. A LiveKit identity
+              carries a role suffix (`#broadcaster`, `#speaker`), and seeding on
+              it drew a different generated face here than the sidebar and the
+              profile draw for the same person. */}
+          <Avatar name={slot.name} seed={baseIdentity(slot.identity)} size={compact ? 32 : 56} />
           {!compact && (
             <p className="max-w-full truncate text-xs font-semibold text-[#E8EAED]">{slot.name}</p>
           )}

@@ -851,6 +851,11 @@ function LiveHouse({
           const ownerName = owner ? owner.displayName || owner.username : null;
           return {
             id: slot.identity,
+            // The connection identifies the TILE; the person identifies the
+            // FACE. `slot.identity` carries a `#broadcaster` / `#speaker`
+            // suffix, and seeding generated artwork with it drew the host as
+            // somebody else than the sidebar does.
+            userId: owner ? owner.id : baseIdentity(slot.identity),
             name:
               ownerName ??
               (isMe && myName ? myName : participantLabel(slot.name, slot.identity)),
@@ -886,6 +891,7 @@ function LiveHouse({
           const isMe = myId !== undefined && member.userId === myId;
           return {
             id: member.identity,
+            userId: member.userId,
             name: isMe && myName ? myName : member.name,
             avatarUrl: isMe ? myAvatar : (member.meta?.avatarUrl ?? null),
             actions:

@@ -564,6 +564,13 @@ describe("the user behind a LiveKit identity", () => {
    */
   it("strips the speaker suffix so both sides agree", () => {
     assert.equal(baseIdentity("did:privy:abc123#speaker"), "did:privy:abc123");
+    // Every role suffix, because this is what avatars are SEEDED with: a
+    // person with no uploaded picture gets generated artwork keyed on the
+    // seed, so a suffix that leaks through draws them as somebody else in the
+    // room than the sidebar draws. The host is the visible case — theirs is
+    // the identity that changes the moment they go live.
+    assert.equal(baseIdentity("did:privy:abc123#broadcaster"), "did:privy:abc123");
+    assert.equal(baseIdentity("did:privy:abc123#rtmp"), "did:privy:abc123");
     assert.equal(baseIdentity("did:privy:abc123"), "did:privy:abc123");
   });
 
