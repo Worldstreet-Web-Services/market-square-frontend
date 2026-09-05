@@ -57,6 +57,30 @@ const RawProfileSchema = z.object({
   // absent field falls back to the session's own intent instead of a lie.
   isFollowing: z.boolean().optional(),
   isBlocked: z.boolean().optional().default(false),
+  /*
+    Self-declared place and gender — Explore's people filters.
+
+    NOT ON THE CONTRACT YET. `PublicProfile` carries none of these three today
+    (checked against api.tsionark.com and localhost:8080; the two documents are
+    identical), so they parse to null on every real payload and the filter
+    controls that need them are not rendered at all — `facetAvailability` in
+    `lib/people-filters.ts` reads that from the DATA, so the day the service
+    sends a city the control appears with no code change here. Optional with a
+    null default is the same forward-compatible shape `orgBadge` uses; it is
+    not a claim that the field exists.
+
+    THE SHAPE IS THE SAFETY DECISION, and it is deliberate. City and region are
+    STRINGS a person typed about themselves. There is no `latitude`, no
+    `longitude`, no `distanceKm`, and there must never be one: a place somebody
+    named is a fact they chose to publish, while a distance to a stranger is
+    their position, recomputed every time you look. If a backend ever starts
+    sending coordinates, this schema drops them on the floor — which is the
+    correct outcome and the reason the fields are enumerated rather than passed
+    through.
+  */
+  city: z.string().nullable().optional().default(null),
+  region: z.string().nullable().optional().default(null),
+  gender: z.string().nullable().optional().default(null),
 });
 
 // "Member ·A1B2" beats "Someone": derived from the tail of the Privy DID so

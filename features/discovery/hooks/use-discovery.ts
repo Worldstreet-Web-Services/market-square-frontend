@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { useAuth } from "@/hooks/use-auth";
 import { sortTopicsByOrder } from "@/lib/topic-order";
+import type { PeopleSort } from "@/lib/people-filters";
 import {
   fetchCategories,
   fetchPeople,
@@ -97,11 +98,15 @@ export function useSaveInterests() {
  * Public: signed-out visitors get the list too, and only the Follow action
  * asks them to sign in.
  */
-export function usePeople(query: string, enabled = true) {
+export function usePeople(query: string, sort: PeopleSort = "followers", enabled = true) {
   const trimmed = query.trim();
   return useInfiniteQuery({
-    queryKey: ["ms", "people", trimmed],
-    queryFn: ({ pageParam }) => fetchPeople({ query: trimmed, cursor: pageParam ?? undefined }),
+    // The sort is in the KEY, not applied to a loaded page. Re-ordering one
+    // page would make page 1 look sorted while page 2 contradicted it; the
+    // service's cursor encodes the sort key, so changing it starts a new list.
+    queryKey: ["ms", "people", trimmed, sort],
+    queryFn: ({ pageParam }) =>
+      fetchPeople({ query: trimmed, sort, cursor: pageParam ?? undefined }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     // Only the People tab needs this; every other tab would be paying for a

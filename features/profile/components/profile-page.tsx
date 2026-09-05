@@ -9,12 +9,12 @@ import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { LiveBadge, OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IconCalendar, IconFlag, IconShield } from "@/components/ui/icons";
-import { IconMsMore } from "@/components/ui/design-icons";
+import { IconCalendar } from "@/components/ui/icons";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
+import { MediaTab } from "@/features/profile/components/media-tab";
 import type { Post, Profile } from "@/lib/api/schemas";
 import {
   useFollow,
@@ -22,15 +22,27 @@ import {
   useProfileActivities,
   useProfilePosts,
   useProfileStreams,
-  useProfileSafety,
 } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
 import { EditProfileSheet } from "@/features/profile/components/edit-profile-sheet";
+import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
+import { WinkButton } from "@/features/profile/components/wink-button";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import { CreatorCard } from "@/features/profile/components/creator-card";
 import { useMarketView } from "@/lib/analytics";
 
-type Tab = "posts" | "streams" | "activities";
+/*
+  Media is a tab, not a section inside Posts.
+
+  It is the replacement for the reels, and it only works if it is somewhere a
+  person GOES: "if you need to see someone's picture, you have to go to their
+  profile, and then you can slide". Buried under a timeline it would be a
+  scroll away and nobody would find it.
+
+  Second, not first. A profile answers "who is this" before "what have they
+  posted", and Posts carries the words that answer it.
+*/
+type Tab = "posts" | "media" | "streams" | "activities";
 
 function FollowButton({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
@@ -45,63 +57,6 @@ function FollowButton({ profile }: { profile: Profile }) {
     >
       {isFollowing ? "Following" : "Follow"}
     </Button>
-  );
-}
-
-/**
- * Report and block, behind the same "more" disc a post uses.
- *
- * They were two full-width text buttons in the header row, which on a phone
- * left four actions and a 112px avatar fighting over ~343px of content width —
- * Follow ended up jammed against the right edge. Safety actions are also the
- * two nobody is reaching for on a normal visit, so the row keeps the actions a
- * visitor came to use (Message, Follow) and puts these behind the menu.
- */
-function SafetyActions({ profile }: { profile: Profile }) {
-  const [open, setOpen] = useState(false);
-  const safety = useProfileSafety(profile);
-  const gate = useGate();
-  const blockDisabled = safety.blockUnavailable || safety.block.isPending;
-  return (
-    <div className="relative">
-      <button
-        aria-label="More options"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="ws-press flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5 text-grey-100 transition-colors hover:bg-white/10"
-      >
-        <IconMsMore className="h-5 w-5" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="ws-popover ws-popover-enter absolute right-0 z-20 mt-1 w-48 rounded-2xl p-1.5">
-            <button
-              onClick={() => {
-                setOpen(false);
-                gate(() => safety.report.mutate());
-              }}
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
-            >
-              <IconFlag className="h-4 w-4" /> Report
-            </button>
-            {/* Once the service has answered "no such route", the entry stops
-                offering an action it cannot perform. */}
-            <button
-              disabled={blockDisabled}
-              title={safety.blockUnavailable ? "Blocking isn't available yet" : undefined}
-              onClick={() => {
-                setOpen(false);
-                gate(() => safety.block.mutate(!profile.isBlocked));
-              }}
-              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-down transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <IconShield className="h-4 w-4" /> {profile.isBlocked ? "Unblock" : "Block"}
-            </button>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 
@@ -274,6 +229,7 @@ export function ProfilePage({
   messageSlot,
   composeSlot,
   postSlot,
+  mediaViewerSlot,
 }: {
   username: string;
   /** Composed from outside — profile never imports the messages slice. */
@@ -281,6 +237,11 @@ export function ProfilePage({
   /** Composed from outside — profile never imports the feed slice. */
   composeSlot?: React.ReactNode;
   postSlot: (post: Post) => React.ReactNode;
+  /**
+   * The full-screen swipeable viewer, composed by the route: profile never
+   * imports the feed slice, and the viewer lives there.
+   */
+  mediaViewerSlot: (items: Post[], openId: string, onClose: () => void) => React.ReactNode;
 }) {
   const profile = useProfile(username);
   const me = useMe();
@@ -361,7 +322,12 @@ export function ProfilePage({
               </Button>
             ) : (
               <>
-                <SafetyActions profile={data} />
+                {/* The wink sits with the other things a visitor came to
+                    do, not behind the menu: it is the light action and the
+                    one this slice is for. Safety stays behind the disc — the
+                    two actions nobody reaches for on a normal visit. */}
+                <PersonMoreMenu profile={data} size="md" />
+                <WinkButton profile={data} size="md" />
                 {messageSlot?.(data)}
                 <FollowButton profile={data} />
               </>
@@ -412,6 +378,7 @@ export function ProfilePage({
         <ColumnTabs
           tabs={[
             { value: "posts" as Tab, label: "Posts" },
+            { value: "media" as Tab, label: "Media" },
             { value: "streams" as Tab, label: "Streams" },
             { value: "activities" as Tab, label: "Activities" },
           ]}
@@ -422,6 +389,9 @@ export function ProfilePage({
 
       {tab === "posts" && (
         <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
+      )}
+      {tab === "media" && (
+        <MediaTab username={username} isMe={isMe} viewerSlot={mediaViewerSlot} />
       )}
       {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
       {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}

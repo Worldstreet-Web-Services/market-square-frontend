@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   invalidateContentSurfaces,
   invalidateIdentitySurfaces,
+  patchBlockInData,
   patchFollowInData,
 } from "./invalidate.ts";
 
@@ -102,5 +103,47 @@ describe("patchFollowInData", () => {
     const data = { items: [{ id: "a", isFollowing: true, followerCount: 0 }] };
     const next = patchFollowInData(data, "a", false) as typeof data;
     assert.equal(next.items[0]?.followerCount, 0);
+  });
+});
+
+/**
+ * The block patch, which is a SAFETY guarantee and not a label refresh.
+ *
+ * Explore's people cards carry a wink, and the wink control refuses to send
+ * into a block by reading `isBlocked` off the row it was handed — a row from
+ * the `["ms","people"]` page, not from the profile query. Between the block
+ * click and the refetch, that stale row would still have offered a wink at
+ * somebody the reader had just decided they wanted nothing to do with.
+ */
+describe("patchBlockInData", () => {
+  it("stamps the block onto a directory row", () => {
+    const data = { pages: [{ items: [{ id: "a", isBlocked: false, isFollowing: true }] }] };
+    const next = patchBlockInData(data, "a", true) as typeof data;
+    assert.deepEqual(next.pages[0]?.items[0], { id: "a", isBlocked: true, isFollowing: false });
+  });
+
+  it("severs the follow when blocking, and does not restore it when unblocking", () => {
+    // The server does not give the follow back either, so neither does this.
+    const data = { items: [{ id: "a", isBlocked: true, isFollowing: false }] };
+    const next = patchBlockInData(data, "a", false) as typeof data;
+    assert.deepEqual(next.items[0], { id: "a", isBlocked: false, isFollowing: false });
+  });
+
+  it("reaches a profile nested under a search result", () => {
+    const data = { items: [{ kind: "profile", id: "r1", profile: { id: "a", isBlocked: false } }] };
+    const next = patchBlockInData(data, "a", true) as typeof data;
+    assert.equal(next.items[0]?.profile.isBlocked, true);
+  });
+
+  it("leaves other people, and a row that does not carry the field, alone", () => {
+    // A ProfileSummary has no viewer edge on it; inventing one would be worse
+    // than leaving it, because the row would then claim an answer it never got.
+    const data = { items: [{ id: "b", isBlocked: false }, { id: "a", displayName: "A" }] };
+    assert.equal(patchBlockInData(data, "a", true), data);
+  });
+
+  it("returns the same object when nothing changed, so nothing re-renders", () => {
+    const data = { items: [{ id: "a", isBlocked: true }] };
+    assert.equal(patchBlockInData(data, "a", true), data);
   });
 });

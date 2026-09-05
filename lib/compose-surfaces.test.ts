@@ -6,7 +6,6 @@ test("ordinary reading surfaces all carry a compose control", () => {
   for (const path of [
     "/",
     "/discover",
-    "/messages",
     "/notifications",
     "/tickets",
     "/store",
@@ -30,6 +29,10 @@ test("the immersive and operator surfaces suppress it", () => {
     "/operations",
     "/operations/queue",
     "/auth",
+    // The chat surface draws its own `+` inside the conversation column —
+    // "start a new conversation", not "write a post". The shell's viewport-edge
+    // button would land over the thread pane beside the message composer.
+    "/messages",
   ]) {
     assert.equal(allowsCompose(path), false, `${path} should suppress composing`);
   }

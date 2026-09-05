@@ -14,33 +14,33 @@ import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
-import { ReelsFeed } from "@/features/feed/components/reels-feed";
+import { Hallway } from "@/features/houses/components/hallway";
+import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
-import { FeaturedArena } from "@/features/feed/components/featured-arena";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
 import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
 
-// The workspace switcher above the timeline, in the design's order. "Feeds"
-// is the current surface and renders as the active chip; every other entry is
-// a real route, so the list carries no "no destination" case.
-const SECTIONS: Array<{ label: string; href: string }> = [
-  { label: "Discover", href: "/discover" },
-  { label: "Messages", href: "/messages" },
-  { label: "Notifications", href: "/notifications" },
-  { label: "Arkmarks", href: "/arkmarks" },
-];
+/*
+  Lanes filter the timeline, in the design's order.
 
-// Lanes filter the timeline, in the design's order. Every one of these is a
-// real backend lane — `reels` and `trending` included.
+  REELS IS GONE, by product decision and not by accident. The endless vertical
+  scroll is the shape of a video product, and Market Square is not one — it is
+  a place to talk in a room and meet the people in it. A lane that swallows a
+  reader for twenty minutes is in direct competition with that, and while it
+  existed Home had two centres.
+
+  What did NOT go with it: video in a post, the upload that makes one, and the
+  story viewer. Media still belongs in the feed. What it no longer does is
+  become a river you fall into — to see what somebody has posted you go to
+  their profile, which is where their media lives.
+*/
 const LANES: Array<{ lane: Lane; label: string }> = [
   { lane: "for-you", label: "For You" },
-  { lane: "live", label: "Live Streaming" },
-  { lane: "reels", label: "Reels" },
   { lane: "following", label: "Following" },
   { lane: "trending", label: "Trending" },
 ];
@@ -217,68 +217,92 @@ export function FeedPage({
           the desktop did. Video moved to Explore's reels, where it is watched
           rather than scrolled past. */}
       <div className="relative px-4 py-4 lg:px-6">
-        {/* Section switcher and the two creation actions share one long
-            outlined pill — that enclosure is the design's, not decoration.
-            Desktop only: on a phone every one of these sections is already a
-            tab in the bottom bar, so the row was a second copy of the same
-            navigation sitting above the stories, and one that ran off the
-            right edge because the pill cannot fit four labels at that width. */}
-        <div className="ws-tabbar mb-4 hidden items-center gap-3 p-1.5 md:flex">
-          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <span
-              aria-current="page"
-              className="ws-btn-silver shrink-0 rounded-full px-4 py-2 text-[14px] font-medium"
-            >
-              Feeds
-            </span>
-            {SECTIONS.map((section) => (
-              <Link
-                key={section.label}
-                href={section.href}
-                className="shrink-0 rounded-full px-4 py-2 text-[12px] font-bold text-white/40 transition-colors hover:bg-white/8 hover:text-body"
-              >
-                {section.label}
-              </Link>
-            ))}
-          </div>
+        {/*
+          The section pills are gone. They were Feeds · Discover · Messages ·
+          Notifications · Arkmarks — the sidebar, drawn a second time, twelve
+          pixels from the sidebar. Home had THREE navigation systems stacked:
+          this row, the rail beside it, and the lane tabs below. A reader
+          deciding where to look first had to rule out two of them.
 
-          {/* Hidden on a phone: the shell's floating create button already
-              covers posting there, and these two would squeeze the section
-              pills into nothing. */}
-          <div className="hidden shrink-0 items-center gap-3 md:flex">
-            <Link
-              href="/schedule"
-              className="ws-press flex shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/[0.18] px-4 py-2 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-[#979797]/25"
-            >
-              <IconCalendar className="h-4 w-4" />
-              Schedule Stream
-              <IconChevronDown className="h-3.5 w-3.5" />
-            </Link>
-            <button
-              onClick={() => setComposerOpen(true)}
-              className="ws-btn-create ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
-            >
-              <IconPlus className="h-4 w-4" />
-              Create Post
-            </button>
-          </div>
+          The two creation actions stay, because they are not navigation —
+          they are the two things a person comes here to DO. They sit alone
+          now, right-aligned, where the eye lands after the rooms.
+        */}
+        <div className="mb-4 hidden items-center justify-end gap-3 md:flex">
+          <Link
+            href="/schedule"
+            className="ws-press flex shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/[0.18] px-4 py-2 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-[#979797]/25"
+          >
+            <IconCalendar className="h-4 w-4" />
+            Schedule Stream
+            <IconChevronDown className="h-3.5 w-3.5" />
+          </Link>
+          <button
+            onClick={() => setComposerOpen(true)}
+            className="ws-btn-create ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
+          >
+            <IconPlus className="h-4 w-4" />
+            Create Post
+          </button>
         </div>
 
         {/* Reels is a mode, not a filter. The story rail and the hero are
             browsing furniture: left in place they push the first clip halfway
             down the screen, which is the whole reason home's reels did not
             feel like Explore's. */}
-        {authenticated && lane !== "reels" && (
+        {/*
+          The hallway leads.
+
+          Home opened on a composer and a feed — a product about what people
+          SAID. What 2.0 is for is what people are saying right now, out loud,
+          in a room you can walk into, so the open rooms go above everything
+          and the feed reads underneath them.
+
+          It renders nothing when no house is open, so a quiet evening costs no
+          space, and it sits outside the reels lane for the same reason the
+          stories row does: browsing furniture pushes the first clip halfway
+          down the screen.
+        */}
+        {MARKET_FLAGS.houses && (
+          <div className="mb-4">
+            <Hallway />
+          </div>
+        )}
+
+        {/*
+          What the square is talking about, on the overview where it belongs.
+
+          It already existed — in the right rail, which is `hidden lg:block`.
+          So the one thing the brief names as the point of the place ("they
+          just discussing about any new discussion, that was the top topic")
+          was invisible to every reader on a phone. An overview that only
+          overviews on a desktop is not an overview.
+
+          Below the hallway, above the feed: a room happening now beats a
+          subject being discussed, and both beat a post from this morning.
+        */}
+        <div className="mb-4 lg:hidden">
+          <TrendingDiscussions limit={4} />
+        </div>
+
+        {authenticated && (
           <div className="mb-4">
             <StoriesRow />
           </div>
         )}
 
-        {lane !== "reels" && (
-          <div className="mb-4">
-            <FeaturedArena />
-          </div>
-        )}
+        {/*
+          The arena banner is gone from Home.
+
+          It is a green, full-width call to join a LIVE ARENA — another
+          product, in another slice, shouting on the one page that is supposed
+          to say what this place is. Between it, the Live badge on the story
+          rail and a "Live Streaming" lane, Home read as a broadcast product.
+          It is not one: "we don't do all those streaming thing".
+
+          It keeps its home on /live, which is where somebody who wants an
+          arena goes.
+        */}
 
         {authenticated && showComposer && (
           <div className="ws-post mb-4">
@@ -326,26 +350,6 @@ export function FeedPage({
           </div>
         </div>
 
-        {/* The Reels lane IS reels: full-bleed, one clip per screen, endless.
-            Rendering it as timeline cards made a clip a thumbnail that happens
-            to move, which is exactly what did not feel like a reel. Every
-            other lane stays a timeline, where a tap promotes a clip instead. */}
-        {lane === "reels" ? (
-          // Edge to edge: the column's own padding is cancelled, because a
-          // reel with a 16px gutter either side is a video in a page, not a
-          // reel. The reserved space is the lane switcher above it.
-          <div className="-mx-4 lg:-mx-6">
-            <ReelsFeed
-              items={videoItems}
-              isPending={feed.isPending}
-              hasNextPage={Boolean(feed.hasNextPage)}
-              isFetchingNextPage={feed.isFetchingNextPage}
-              fetchNextPage={() => void feed.fetchNextPage()}
-              reservedSpace="var(--ws-home-reels-chrome)"
-            />
-          </div>
-        ) : (
-          <>
         <div className="space-y-4">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
@@ -383,8 +387,6 @@ export function FeedPage({
         )}
         {feed.isSuccess && !feed.hasNextPage && items.length > 0 && (
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
-        )}
-        </>
         )}
 
         {/* The floating compose button used to live here, which is why it

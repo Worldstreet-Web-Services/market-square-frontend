@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { Avatar } from "@/components/ui/avatar";
+import { IconWink } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -27,6 +28,10 @@ const GLYPHS: Record<MarketNotification["kind"], string> = {
   bookmark: "▱",
   ticket_purchased: "▣",
   tip_received: "◆",
+  // The one kind whose glyph is a real icon rather than a geometric mark: a
+  // wink is a face, and no dingbat in this set reads as one. Rendered by the
+  // row, which is why this entry is empty — see `Row`.
+  wink: "",
   stream_live: "◉",
   verification_resolved: "✓",
   role_resolved: "○",
@@ -53,6 +58,11 @@ function describe(item: MarketNotification): string {
       // no amount or gift, so this says the true general thing and the tips
       // list (Earnings) carries the detail.
       return "sent you a tip";
+    case "wink":
+      // Says what happened and nothing about what it obliges. A wink is an
+      // opening, not a request, and copy that implies otherwise ("wants to
+      // meet you") puts the recipient on a spot they did not step onto.
+      return "winked at you";
     case "stream_live":
       return "is live now";
     case "verification_resolved":
@@ -78,7 +88,7 @@ function Row({ item, onMarkRead }: { item: MarketNotification; onMarkRead: (id: 
   const body = (
     <>
       <span className="flex h-9 w-9 shrink-0 items-center justify-center text-xl text-create">
-        {GLYPHS[item.kind]}
+        {item.kind === "wink" ? <IconWink className="h-5 w-5" /> : GLYPHS[item.kind]}
       </span>
       {item.actor ? (
         <Avatar name={item.actor.displayName} seed={item.actor.id} src={item.actor.avatarUrl} size={36} />

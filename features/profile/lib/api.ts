@@ -41,11 +41,42 @@ export async function setBlocked(profileId: string, blocked: boolean) {
   return blocked ? msApi.post<{ blocked: boolean }>(path) : msApi.del<{ blocked: boolean }>(path);
 }
 
-export async function reportProfile(profileId: string) {
+/**
+ * Send a wink — a one-tap signal of interest, addressed to a PERSON.
+ *
+ * The path is written out in full rather than assembled from a variable so the
+ * public-route check can see it: `POST /profiles/{id}/wink` is not in the
+ * service's OpenAPI document yet, and the point of that check is to catch
+ * exactly this before it becomes a mystery 404 in production. It is listed in
+ * `PENDING_ROUTES` with the condition for deleting the entry.
+ *
+ * Until it ships, this 404s and `useWink` reads that as "not deployed" and
+ * takes the control away — the same contract `useBookmarkPost` and the block
+ * action already follow. Nothing about this flow may end in a success toast
+ * without a 2xx behind it: a wink that says "sent" and reached nobody is worse
+ * than no wink, because the sender stops wondering.
+ */
+export async function sendWink(profileId: string) {
+  return msApi.post<{ winked: boolean; createdAt?: string }>(`/profiles/${profileId}/wink`);
+}
+
+/**
+ * The reasons `POST /reports` accepts, verbatim from `CreateReportRequest`.
+ *
+ * Every profile report used to be filed as `other`, which is the bucket a
+ * moderator reads last. A report of harassment that arrives indistinguishable
+ * from "I don't like this person" is a report that gets triaged like the
+ * latter — and this slice adds an unsolicited interest signal, so which of
+ * these four a reader picks is now load-bearing.
+ */
+export const REPORT_REASONS = ["abuse", "spam", "scam", "other"] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+export async function reportProfile(profileId: string, reason: ReportReason = "other") {
   return msApi.post<{ id: string; status: string }>("/reports", {
     targetType: "profile",
     targetId: profileId,
-    reason: "other",
+    reason,
   });
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { relativeTime } from "@/lib/format";
+import { inboxTime } from "@/lib/inbox-time";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip } from "@/components/ui/badge";
 import Image from "next/image";
@@ -29,6 +29,7 @@ export function ConversationRow({
   const peer = conversation.peer;
   const last = conversation.lastMessage;
   const at = last?.createdAt ?? conversation.lastMessageAt;
+  const stamp = inboxTime(at);
   const unread = conversation.unreadCount;
 
   return (
@@ -77,10 +78,17 @@ export function ConversationRow({
         </span>
       </span>
 
-      <span className="flex shrink-0 items-center gap-2 self-start pt-3">
-        {at && (
+      {/* VERTICALLY CENTRED, not top-aligned. The file positions this cluster
+          at y=24 in a 62px row — its own height is 15, so 24+7.5 lands on 31,
+          which is the row's exact middle. It was `self-start pt-3`, i.e. 12
+          from the top, sitting a clear 12px high against the two lines of text
+          beside it. */}
+      <span className="flex shrink-0 items-center gap-2">
+        {/* The file's stamp: a clock inside today, an age past it — see
+            lib/inbox-time.ts for why an inbox reads differently from a post. */}
+        {stamp && (
           <span className="tnum text-[10px] font-normal leading-[15px] text-white/50">
-            {relativeTime(at)}
+            {stamp}
           </span>
         )}
         {unread > 0 && (

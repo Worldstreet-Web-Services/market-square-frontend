@@ -274,6 +274,20 @@ const PENDING_ROUTES = {
       "server-side and this is never called. DELETE THIS ENTRY once PR #150 " +
       "is deployed and the route appears in openapi.json.",
   },
+  "post /profiles/{}/wink": {
+    reason:
+      "The wink — a one-tap signal of interest addressed to a PERSON, and the " +
+      "control Explore's people directory is built around. BUILT on the " +
+      "service (apps/market-square: migration 034, ProfileService.wink, " +
+      "POST /profiles/:id/wink) together with the person-to-person block it " +
+      "depends on (migration 033, POST|DELETE /profiles/:id/block), and not " +
+      "yet DEPLOYED — so it is absent from the running production spec while " +
+      "being present against a local backend. Until the deploy, a 404 is read " +
+      "as 'not deployed' and the control removes itself, the same contract " +
+      "Arkmarks and Block already follow; nothing ever reports a wink as sent " +
+      "without a 2xx behind it. DELETE THIS ENTRY once the service deploy " +
+      "lands and the route appears in openapi.json.",
+  },
   "post /profiles/{}/tips": {
     reason:
       "Tipping a PROFILE directly is still not in the spec — only " +

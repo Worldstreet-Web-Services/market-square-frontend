@@ -165,6 +165,45 @@ export function IconEye({ className }: IconProps) {
   );
 }
 
+/**
+ * The wink: a one-tap "I find you interesting", addressed to a person.
+ *
+ * NOT an eye. `IconEye` sits directly above this and means "views" — a tally
+ * of who looked at a post. Interest is a thing a face does, not a thing an
+ * organ does, and an eye pointed at a stranger reads as surveillance, which is
+ * the exact wrong note for a signal we are asking people to send warmly.
+ *
+ * NOT a poke either. That word carries a decade of other people's meaning; the
+ * product calls this a wink and the glyph has to be one.
+ *
+ * So: a face. One eye open as a dot, the other closed as a short downward arc
+ * with an upward flick at its outer end — the lash line that makes a closed eye
+ * read as a WINK rather than as someone asleep — and a curved mouth. The mouth
+ * is what carries the warmth; without it the face is neutral and the wink
+ * turns knowing rather than friendly.
+ *
+ * House rules kept, so it sits in the set: 24x24, `currentColor`, 1.6 stroke
+ * from `base()`. The open eye is drawn as a filled dot rather than a stroked
+ * circle because at 16px a stroked 1.2r circle closes into a blob; a filled
+ * one stays a clean point. It is deliberately NOT a `NavIconProps` icon — a
+ * "filled" wink would be a solid disc with no face left in it, and the sent
+ * state is carried by colour and a tinted ring at the call site instead.
+ */
+export function IconWink({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="8.75" />
+      {/* Open eye, viewer's left. A dot, not a ring — see above. */}
+      <circle cx="9.1" cy="10" r="0.85" fill="currentColor" stroke="none" />
+      {/* Closed eye with its lash flick. */}
+      <path d="M13 10.35q1 -1.05 2.3 0" />
+      <path d="M15.3 10.35l0.85 -0.85" />
+      {/* The smile. Short of the cheeks, so the face is not a bowl. */}
+      <path d="M8.9 14.35q3.1 2.15 6.2 0" />
+    </svg>
+  );
+}
+
 export function IconClock({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -404,6 +443,42 @@ export function IconFullscreen({ className }: IconProps) {
   return (
     <svg {...base(className)}>
       <path d="M9 4.5H4.5V9M15 4.5h4.5V9M9 19.5H4.5V15M15 19.5h4.5V15" />
+    </svg>
+  );
+}
+
+/**
+ * The raised hand: asking for the floor.
+ *
+ * Four fingers rising over a thumb folded across the palm. Drawn to the file's
+ * own convention — 24-box, 1.6 stroke, round caps, currentColor — rather than
+ * imported, because an icon from another set reads as a foreign object next to
+ * these even when nobody can say why.
+ */
+export function IconHand({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M8 11V5.5a1.5 1.5 0 1 1 3 0V11m0 0V4.5a1.5 1.5 0 1 1 3 0V11m0 0V6.5a1.5 1.5 0 1 1 3 0V14c0 3.9-2.6 6.5-6 6.5-2.6 0-4.2-1.2-5.4-3.3L5 14.2a1.5 1.5 0 0 1 2.4-1.7L8 13.2V11Z" />
+    </svg>
+  );
+}
+
+/**
+ * A house: a room you can talk in.
+ *
+ * Two people under one roof rather than a building — the nav entry is not
+ * about property, it is about the two visible sections a house has, speakers
+ * and audience. Drawn to the file's own convention (24-box, 1.6 stroke, round
+ * caps, currentColor) and filled for the active nav state like the other
+ * navigation glyphs.
+ */
+export function IconHouses({ className, filled }: NavIconProps) {
+  return (
+    <svg {...base(className, filled)}>
+      <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8.5Z" />
+      <circle cx="9.5" cy="12.5" r="1.6" fill="none" />
+      <circle cx="14.5" cy="12.5" r="1.6" fill="none" />
+      <path d="M8 17.2c1-.9 2.4-1.4 4-1.4s3 .5 4 1.4" fill="none" />
     </svg>
   );
 }

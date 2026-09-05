@@ -40,6 +40,7 @@ import {
   IconCamera,
   IconDots,
   IconHome,
+  IconHouses,
   IconLive,
   IconMail,
   IconMore,
@@ -82,43 +83,74 @@ interface NavItem {
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
 //
-// Spotlight has a nav entry because the right rail, which used to be its only
-// door, is `hidden lg:block` — so below lg there was no way to reach it at all.
-// The "second door to the same room" argument only holds where the first door
-// exists, and on a phone it does not.
+/*
+  FOUR primary rows, and everything else behind More.
+
+  The rail used to list every surface the app has, which turned the first
+  thing a reader sees into a directory. 2.0 does three things — talk in a
+  room, meet somebody, keep up with your people — and the rail now says so.
+
+  What moved is not gone: `secondary` folds an entry into More, so Tickets,
+  Studio, Arkmarks, Schedule, Spotlight and Store keep their routes, their
+  deep links and their behaviour. They stop costing a permanent slot for
+  something opened once a week.
+
+  Live went secondary rather than away. With video leaving Market Square, Live
+  and Houses are two names for "a room happening now", and two names is how a
+  reader learns to guess which one they want. Houses is not in the rail at all
+  any more: the hallway is the top of Home, and a nav row pointing at the same
+  rooms would be a second door to the room you are already looking at.
+
+  Spotlight has a nav entry because the right rail, which used to be its only
+  door, is `hidden lg:block` — so below lg there was no way to reach it at
+  all. The "second door to the same room" argument only holds where the first
+  door exists, and on a phone it does not.
+*/
+/*
+  Four more left the rail, and none of them were destinations.
+
+  Tickets and Arkmarks are RECORDS — what you bought, what you saved. They
+  belong to you, so they moved under your own avatar with View profile and
+  Log out, which is where a person looks for their own things.
+
+  Schedule merged into the job it is part of. Scheduling a stream is a studio
+  function, and it already has four real doors: the Live hub, your profile,
+  the arena block and the feed's empty state. A fifth in the rail was a
+  shortcut to a page nobody navigates to cold.
+
+  Spotlight is deferred rather than dropped. Status is the LAST thing 2.0
+  builds — it is only worth being seen once there is a room to be seen in —
+  and until then a permanent rail entry advertises a system that does not
+  exist. The route still resolves.
+*/
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconHome },
   { href: "/discover", label: "Explore", icon: IconSearch },
-  { href: "/messages", label: "Messages", icon: IconMail, authed: true },
+  /*
+    Houses is a row of its own after all.
+
+    The hallway at the top of Home shows the three rooms open now, which is an
+    overview's job — but an overview is a summary, and a summary needs
+    somewhere to point. Without a row, the only door to every other room was a
+    "See all" that appears only when a fourth room exists.
+
+    `/gist-rooms/[id]` still resolves whatever the flag says: a link somebody was
+    sent has to work, and hiding an entry must never break a route.
+  */
+  { href: "/gist-rooms", label: "Gist rooms", icon: IconHouses, flag: "houses" },
+  
+  { href: "/messages", label: "Chat", icon: IconMail, authed: true },
   {
     href: "/notifications",
     label: "Notifications",
     icon: IconBell,
     authed: true,
   },
-  { href: "/live", label: "Live", icon: IconLive },
-  { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
-  // Arkmarks had a route and a save button on every post, and no way in: the
-  // only path to something you saved was typing the URL.
-  {
-    href: "/arkmarks",
-    label: "Arkmarks",
-    icon: IconBookmark,
-    authed: true,
-    secondary: true,
-  },
-  { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
-  // Reachable by URL, by deep link and from Explore's Products tab — just
+  { href: "/live", label: "Live", icon: IconLive, secondary: true },
+// Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
-  {
-    href: "/schedule",
-    label: "Schedule",
-    icon: IconCalendar,
-    authed: true,
-    secondary: true,
-  },
-  { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
+  { href: "/studio", label: "Studio", icon: IconCamera, authed: true, secondary: true },
   {
     href: "/admin",
     label: "Admin",
@@ -509,6 +541,33 @@ function AccountChip() {
           >
             View profile
           </Link>
+          {/*
+            What is YOURS lives under you.
+
+            Tickets and Arkmarks are records — what you bought, what you saved
+            — not places you navigate to. In the rail they each cost a
+            permanent row to serve something opened once a week; here they sit
+            where a person already looks for their own things, next to their
+            own name.
+          */}
+          {me.data && (
+            <>
+              <Link
+                href="/tickets"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Tickets
+              </Link>
+              <Link
+                href="/arkmarks"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Arkmarks
+              </Link>
+            </>
+          )}
           <button
             onClick={() => {
               close();
@@ -624,7 +683,7 @@ function Sidebar({
     <aside
       data-rail={rail.mode}
       style={{ width: railWidth(rail) }}
-      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-[#0f0f0f] px-3 py-5 md:flex data-[rail=full]:items-stretch"
+      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-chrome px-3 py-5 md:flex data-[rail=full]:items-stretch"
     >
       <RailHandle rail={rail} preview={preview} commit={commit} />
       {/* The wordmark lockup sits over its own hairline. */}
@@ -755,7 +814,7 @@ const CRUMB: Array<[RegExp, string]> = [
   [/^\/$/, "Market Square"],
   [/^\/discover/, "Discover"],
   [/^\/arkmarks/, "Arkmarks"],
-  [/^\/messages/, "Messages"],
+  [/^\/messages/, "Chat"],
   [/^\/notifications/, "Notifications"],
   [/^\/live\b/, "Live"],
   [/^\/tickets/, "Tickets"],
@@ -770,18 +829,102 @@ const CRUMB: Array<[RegExp, string]> = [
   [/^\/auth/, "Sign in"],
 ];
 
+/**
+ * The bar above the columns.
+ *
+ * Node 15:1302's own numbers: 76 tall, #121214 behind a 6px backdrop blur, a
+ * 10% hairline underneath, 24px gutters, and the crumb pushed against the
+ * right-hand cluster by `justify-between`.
+ *
+ * TWO things changed from the earlier build and both were wrong rather than
+ * merely different. The bar was 69px and painted #0f0f0f — the same colour as
+ * the page it sits on, so it read as part of the column instead of as chrome.
+ * And the whole crumb was #979797, which made the page you are ON the same
+ * weight as the ecosystem you are in; the file whitens the leaf.
+ */
 function Breadcrumb({ pathname }: { pathname: string }) {
   const leaf =
     CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Market Square";
   return (
-    <div className="ws-hair hidden h-[69px] shrink-0 items-center border-b bg-[#0f0f0f] px-6 md:flex">
-      <nav aria-label="Breadcrumb" className="text-[16px] text-[#979797]">
-        <Link href="/" className="hover:text-body">
+    <div className="ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-center justify-between border-b bg-chrome/80 px-6 backdrop-blur-[6px] md:flex">
+      {/* Geist Medium 16/21.75. The trailing space belongs to the grey run in
+          the file — "Ark Ecosystem/ " — so the slash hugs the root and the gap
+          before the leaf is part of the dim text, not the bright text. */}
+      <nav
+        aria-label="Breadcrumb"
+        className="min-w-0 truncate text-[16px] font-medium leading-[21.75px] text-[#979797]"
+      >
+        <Link href="/" className="transition-colors hover:text-body">
           Ark Ecosystem
         </Link>
         <span aria-hidden>/ </span>
-        <span aria-current="page">{leaf}</span>
+        <span aria-current="page" className="text-white">
+          {leaf}
+        </span>
       </nav>
+
+      <TopBarActions />
+    </div>
+  );
+}
+
+/**
+ * The breadcrumb's right-hand cluster: notifications, then you.
+ *
+ * The file draws a 38px glass circle 11px from a 34px avatar. Both were
+ * missing entirely on desktop — the bar carried the crumb and nothing else —
+ * which left the bell as a rail row only and gave the account no door from the
+ * top of the screen.
+ *
+ * The 7px ring on the bell is the file's, but it is drawn from the real unread
+ * count rather than always: a permanent marker on a bell is indistinguishable
+ * from a broken bell, and it trains people to ignore the one that means
+ * something.
+ */
+function TopBarActions() {
+  const { authenticated } = useAuth();
+  const me = useMe();
+  const unread = useUnread();
+  const notifications = unread.data?.notifications ?? 0;
+
+  if (!authenticated) return null;
+
+  return (
+    <div className="flex shrink-0 items-center gap-[11px]">
+      <Link
+        href="/notifications"
+        aria-label={
+          notifications > 0
+            ? `Notifications, ${notifications} unread`
+            : "Notifications"
+        }
+        // GLASS in the file: a translucent fill over the blurred bar rather
+        // than a flat chip.
+        className="ws-press relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-body backdrop-blur-[6px] transition-colors hover:bg-white/12 hover:text-white"
+      >
+        <IconBell className="h-6 w-6" />
+        {notifications > 0 && (
+          /* 7px, ringed in #F4F4F4 over the bar's own #0F0F0F — a ring, not a
+             filled dot, which is what keeps it legible against the glyph. */
+          <span
+            aria-hidden
+            className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full border-2 border-[#F4F4F4] bg-chrome"
+          />
+        )}
+      </Link>
+
+      <Link
+        href={me.data ? `/u/${me.data.username}` : "/auth"}
+        aria-label="Your profile"
+        className="ws-press flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10"
+      >
+        <Avatar
+          name={me.data?.displayName ?? "Me"}
+          seed={me.data?.id}
+          src={me.data?.avatarUrl}
+          size={32}
+        />
+      </Link>
     </div>
   );
 }
@@ -1176,7 +1319,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               // black at 1440, 197px at 1512, 445px at 1920, always parked on
               // the right, where it reads as the whole product shoved to one
               // side. Every pane flexes to the window it is in instead.
-              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+              // `100dvh` MINUS the breadcrumb, not `min-h-dvh`. The bar is a
+              // sibling above this in the same flex column, so a full-viewport
+              // minimum made the document exactly one bar taller than the
+              // window and every short route grew a scrollbar with 76px of
+              // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
+              // bar is `hidden md:flex`, so this is identical there.
+              "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
             )}
           >
             {children}

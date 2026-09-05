@@ -9,6 +9,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { useFollow } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
+import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
+import { WinkButton } from "@/features/profile/components/wink-button";
 
 /**
  * ONE row for a person, wherever people are listed.
@@ -49,8 +51,17 @@ export function PersonRow({ profile }: { profile: Profile }) {
   // than assumed impossible — you can absolutely match your own search.
   const isMe = me.data?.id === profile.id;
 
+  // One cluster, rendered in whichever line has room — see the note below.
+  const badges = (
+    <>
+      <VerifiedBadge verification={profile.verification} className="h-3 w-3 shrink-0" />
+      <OrgBadgeChip orgBadge={profile.orgBadge} />
+      <RoleChip role={profile.role} className="shrink-0" />
+    </>
+  );
+
   return (
-    <div className="ws-row flex items-center gap-[9px] px-4 py-3">
+    <div className="ws-row flex items-center gap-2 px-4 py-3 sm:gap-[9px]">
       {/* The row links to the profile — except the button, which is why the
           link wraps the identity block rather than the whole row. */}
       <Link href={`/u/${profile.username}`} className="flex min-w-0 flex-1 items-center gap-[9px]">
@@ -67,17 +78,60 @@ export function PersonRow({ profile }: { profile: Profile }) {
             <span className="truncate text-[12px] font-bold leading-4 text-white">
               {profile.displayName}
             </span>
-            {/* Three independent signals that can co-exist; none is derived
-                from another, and an absent one renders nothing. */}
-            <VerifiedBadge verification={profile.verification} className="h-3 w-3 shrink-0" />
-            <OrgBadgeChip orgBadge={profile.orgBadge} />
-            <RoleChip role={profile.role} />
+            {/* From `sm` up the chips sit beside the name, as designed. */}
+            <span className="hidden shrink-0 items-center gap-1 sm:flex">{badges}</span>
           </span>
-          <span className="truncate text-[11px] font-normal leading-4 text-white/50">
-            @{profile.username}
+          {/*
+            ON A PHONE THE CHIPS MOVE DOWN TO THE HANDLE.
+
+            This row grew two controls in this change — the wink and the safety
+            menu — and the chips are fixed-width while the name is the only
+            thing that truncates. At 375px, an iPhone SE or a 13 mini, that
+            turned "Amara Okafor" into "Amara Ok…", and one row rendered a
+            verified check and a MARKET lockup with no name beside them at all.
+
+            Hiding the chips below `sm` was the smaller change and the wrong
+            one: the org lockup and the check are real signals, and "below sm"
+            is every phone, so it would have deleted them for most of the
+            traffic. Moving them onto the handle line costs nothing — the
+            handle is the shorter string and the one that can afford to
+            truncate — and every signal survives at every width.
+
+            The three are independent and can co-exist; none is derived from
+            another, and an absent one renders nothing.
+          */}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-[11px] font-normal leading-4 text-white/50">
+              @{profile.username}
+            </span>
+            <span className="flex shrink-0 items-center gap-1 sm:hidden">{badges}</span>
           </span>
         </span>
       </Link>
+
+      {/*
+        Wink · more · Follow, in that order, right-aligned.
+
+        The wink is FIRST because it is the light action — one tap, no
+        commitment, and the whole reason this row is on Explore. Follow stays
+        last because it is the loudest control on the row and the eye should
+        land on it after the identity, not before the two smaller discs.
+
+        The safety menu sits BETWEEN them, on the card itself. An unsolicited
+        interest signal on a browse surface is exactly where block and report
+        have to be reachable without opening a profile first; putting them one
+        navigation deeper than the thing they protect against is how safety
+        ends up shipping in the next slice.
+
+        All three are outside the Link: the row opens the profile, and these
+        must not.
+      */}
+      {!isMe && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <WinkButton profile={profile} />
+          <PersonMoreMenu profile={profile} />
+        </div>
+      )}
 
       {!isMe && (
         <button

@@ -4,8 +4,35 @@ import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
 // Mirrors the backend contract (openapi.json). Streams carry no owner object
 // and no live viewer count in lists; StreamDetail adds viewerCount + myTicket.
 
-export const STREAM_CATEGORIES = ["worldstreet", "music", "podcast", "gaming", "other"] as const;
+/**
+ * Every category a stream object can carry, "house" included.
+ *
+ * A house IS a stream — same room, same tokens, same speaker requests — told
+ * apart only by this field (features/houses/lib/house.ts). It is in the union
+ * so a house parses, is compared and is filtered like anything else.
+ *
+ * It is NOT in `BROADCAST_CATEGORIES`, which is what every picker renders. A
+ * house is opened from "Open a gist room", never chosen from the Go Live sheet's
+ * dropdown: picking "house" there would create a room whose whole surface —
+ * the ring, the audience band, the audio-only publisher — lives on a different
+ * route, and the creator would land in a video cockpit for a room with no
+ * video. Two lists, because they answer two different questions: what can
+ * arrive, and what can be chosen.
+ */
+export const STREAM_CATEGORIES = [
+  "worldstreet",
+  "music",
+  "podcast",
+  "gaming",
+  "other",
+  "house",
+] as const;
 export type StreamCategory = (typeof STREAM_CATEGORIES)[number];
+
+/** The categories a BROADCAST picker offers. See above for why "house" is absent. */
+export const BROADCAST_CATEGORIES = STREAM_CATEGORIES.filter(
+  (category) => category !== "house"
+) as readonly Exclude<StreamCategory, "house">[];
 
 import { StreamSchema, TicketSchema } from "@/lib/api/schemas";
 export { StreamSchema, TicketSchema };

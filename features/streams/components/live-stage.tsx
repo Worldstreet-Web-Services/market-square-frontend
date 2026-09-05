@@ -11,6 +11,9 @@ import {
   stageLayoutClass,
   stageTileSpanClass,
 } from "@/lib/stage-layout";
+// Lifted into its own file so a surface with NO video path — a house — can
+// mount it without importing this one. Behaviour here is unchanged.
+import { RemoteAudio } from "@/features/streams/components/remote-audio";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
 import {
   buildStageLayout,
@@ -322,37 +325,6 @@ function MediaTile({
       )}
     </div>
   );
-}
-
-/**
- * One hidden <audio> per remote audio track.
- *
- * Its own component, mounted from its own map, so that audio can never again
- * become conditional on a video element existing.
- */
-function RemoteAudio({ slot }: { slot: StageSlot }) {
-  const track = slot.audioTrack?.track as
-    | { attach: () => HTMLMediaElement; detach: (el: HTMLMediaElement) => unknown }
-    | undefined;
-  const mountRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!track) return;
-    const mount = mountRef.current;
-    if (!mount) return;
-    const element = track.attach();
-    element.autoplay = true;
-    element.muted = false;
-    element.volume = 1;
-    element.style.display = "none";
-    mount.replaceChildren(element);
-    return () => {
-      track.detach(element);
-      element.remove();
-    };
-  }, [track]);
-
-  return <div ref={mountRef} className="hidden" aria-hidden />;
 }
 
 export function LiveStage({
