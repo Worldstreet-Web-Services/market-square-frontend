@@ -133,3 +133,70 @@ export async function fetchConversationMembers(conversationId: string) {
     await msApi.authedGet(`/conversations/${conversationId}/members`)
   );
 }
+
+/**
+ * Add people to a group — `POST /conversations/:id/members { memberIds }`.
+ *
+ * ANY member may, not only the owner, which is why the file puts it on both
+ * the joined menu ("Invite gist partners") and the owner's ("Add gist
+ * partners"). Capped at 20 per call by the contract.
+ */
+export async function addGroupMembers(conversationId: string, memberIds: string[]) {
+  return msApi.post<unknown>(`/conversations/${conversationId}/members`, { memberIds });
+}
+
+/**
+ * Remove somebody from a group — `DELETE /conversations/:id/members/:profileId`.
+ *
+ * ONE route for two acts, because they are the same operation with a different
+ * subject: anybody may remove THEMSELVES (a group you cannot leave is a group
+ * anybody can trap you in) and only the owner may name somebody else. The last
+ * member out deletes the group.
+ */
+export async function removeGroupMember(conversationId: string, profileId: string) {
+  return msApi.del<unknown>(`/conversations/${conversationId}/members/${profileId}`);
+}
+
+/**
+ * Rename a group — `PATCH /conversations/:id { title }`.
+ *
+ * The route takes title, description and imageUrl in ONE call, deliberately:
+ * three endpoints would be three round trips that can half-fail, leaving a
+ * group named after the edit and described before it. Only the title is sent
+ * here, so an absent description is left alone rather than cleared.
+ */
+export async function renameGroup(conversationId: string, title: string) {
+  return msApi.patch<unknown>(`/conversations/${conversationId}`, { title: title.trim() });
+}
+
+/**
+ * Walk into a public group — `POST /conversations/:id/join`.
+ *
+ * What makes a group's `visibility` mean something rather than being a stored
+ * preference. It succeeds on a public group, refuses a private one with 403
+ * ("ask a member to add you" — the link's existence is not the secret, entry
+ * is), and is idempotent for somebody already inside. The owner's blocks still
+ * apply: a public door is not a bypass.
+ */
+export async function joinGroup(conversationId: string) {
+  return msApi.post<unknown>(`/conversations/${conversationId}/join`);
+}
+
+/**
+ * Remove a chat from YOUR inbox — `DELETE /conversations/:id`.
+ *
+ * It is "delete for me", and the difference matters enough that the confirm
+ * copy has to say it:
+ *
+ *   · the thread leaves your inbox, and history before this moment stops being
+ *     returned to you;
+ *   · the OTHER person keeps everything, read receipts included;
+ *   · you stay a member — this is not leaving a group;
+ *   · a new message brings the thread back, carrying only what arrived after.
+ *
+ * So it is reversible, and nothing here may say "this cannot be undone".
+ * Idempotent; 403 if you are not a participant.
+ */
+export async function deleteConversation(conversationId: string) {
+  return msApi.del<unknown>(`/conversations/${conversationId}`);
+}

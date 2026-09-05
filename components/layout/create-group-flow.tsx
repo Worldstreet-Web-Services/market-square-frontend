@@ -179,6 +179,10 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
           onStarted({
             id: conversation.id,
             kind: "group",
+      // Both stated rather than defaulted: this group was just created BY the
+      // caller, and with the visibility they chose on the form.
+      createdBy: me.data?.id ?? null,
+      visibility,
           imageUrl: imageUrl ?? null,
           description: description.trim() || null,
             title: conversation.title ?? name,

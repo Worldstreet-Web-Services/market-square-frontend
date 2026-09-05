@@ -7,13 +7,18 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRefreshUnread } from "@/hooks/use-unread";
 import {
   acceptConversation,
+  addGroupMembers,
   createGroup,
+  joinGroup,
   declineConversation,
+  deleteConversation,
   fetchConversationMembers,
   fetchConversations,
   fetchMessages,
   markConversationRead,
   openConversation,
+  removeGroupMember,
+  renameGroup,
   sendMessage,
 } from "@/features/messages/lib/api";
 import type { OutgoingMessage } from "@/features/messages/lib/types";
@@ -161,5 +166,92 @@ export function useOpenConversation() {
     mutationFn: openConversation,
     onSuccess: () => client.invalidateQueries({ queryKey: ["ms", "conversations"] }),
     onError: (error) => toast.error(errorMessage(error, "Couldn't open that conversation.")),
+  });
+}
+
+/**
+ * The three group-management mutations behind the thread's overflow menu
+ * (nodes 78:8337 and 78:8525).
+ *
+ * They share one invalidation set because they change the same two things a
+ * reader can see: the roster (`conversation-members`) and the inbox row that
+ * names and counts it (`conversations`). Splitting them was how a rename
+ * landed in the header and not in the list.
+ */
+function useConversationAction<TVariables>(
+  conversationId: string,
+  mutationFn: (variables: TVariables) => Promise<unknown>,
+  message: string
+) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["ms", "conversation-members", conversationId] });
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+      toast.success(message);
+    },
+    onError: (error) => toast.error(errorMessage(error, "That didn't work.")),
+  });
+}
+
+/** "Add gist partners" / "Invite gist partners" — any member may. */
+export function useAddGroupMembers(conversationId: string) {
+  return useConversationAction<string[]>(
+    conversationId,
+    (memberIds) => addGroupMembers(conversationId, memberIds),
+    "Added to the group"
+  );
+}
+
+/** "Edit group title" — owner only, enforced by the service. */
+export function useRenameGroup(conversationId: string) {
+  return useConversationAction<string>(
+    conversationId,
+    (title) => renameGroup(conversationId, title),
+    "Group renamed"
+  );
+}
+
+/**
+ * "Leave group" — `DELETE /conversations/:id/members/:me`.
+ *
+ * The caller passes their OWN profile id. The same route removes somebody
+ * else when the owner names them, so this hook does not hard-code "me": the
+ * menu knows who is leaving and the roster sheet may one day know who is being
+ * removed.
+ */
+export function useLeaveGroup(conversationId: string) {
+  return useConversationAction<string>(
+    conversationId,
+    (profileId) => removeGroupMember(conversationId, profileId),
+    "You left the group"
+  );
+}
+
+/** "Join House" on Home's community grid — `POST /conversations/:id/join`. */
+export function useJoinGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: joinGroup,
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+      client.invalidateQueries({ queryKey: ["ms", "discover-houses"] });
+      toast.success("You're in");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't join that house.")),
+  });
+}
+
+/** "Delete Chat" — removes the thread from YOUR inbox only. See the api note. */
+export function useDeleteConversation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: deleteConversation,
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+      toast.success("Removed from your inbox");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't remove that chat.")),
   });
 }

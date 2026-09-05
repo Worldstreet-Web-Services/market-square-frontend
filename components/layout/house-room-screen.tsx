@@ -10,12 +10,13 @@
 
 import { useEffect } from "react";
 import { HouseRoom, RoomPeopleSection } from "@/features/houses";
-import { useConversationMembers } from "@/features/messages";
+import { useConversationMembers, useJoinGroup } from "@/features/messages";
 import { PersonQuickActions as QuickActions } from "@/features/profile";
 import { PersonFollow, PersonQuickActions, PersonSafetyRows } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 
 export function HouseRoomScreen({ houseId }: { houseId: string }) {
+  const join = useJoinGroup();
   return (
     <HouseRoom
       houseId={houseId}
@@ -31,50 +32,23 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
       tipSlot={(streamId, owner) => (
         <TipButton variant="dock" target={{ kind: "stream", id: streamId, recipient: owner ?? null }} />
       )}
-      // The house group in the three places node 129:11887 shows it — its name
-      // beside the people glyph, its partner count under the title, and its
-      // roster as the House Members grid. All three read the SAME conversation,
-      // so react-query dedupes them into one fetch; the three parts were
-      // written and then never handed to the room, which is why the header read
-      // "0 listening · 1 speaking" instead of "306 gist partners".
-      houseSlot={(conversationId, stage) => ({
-        name: <HouseName conversationId={conversationId} />,
-        partners: <HousePartners conversationId={conversationId} />,
-        members: (
-          <HouseMembers
-            conversationId={conversationId}
-            speakerIds={stage.speakerIds}
-            onRoster={stage.onRoster}
-          />
-        ),
-      })}
+      // The House Members grid. The house's NAME and COUNT no longer come from
+      // here — `GET /streams/:id` carries a `house` doorplate, so the header
+      // names the house for anybody who can see the room. The roster stays
+      // membership-gated, which is correct: who is in a house is the members'
+      // business, so the grid is simply absent for a non-member.
+      houseSlot={(conversationId, stage) => (
+        <HouseMembers
+          conversationId={conversationId}
+          speakerIds={stage.speakerIds}
+          onRoster={stage.onRoster}
+        />
+      )}
+      // "Join House" — `POST /conversations/:id/join`. The room decides whether
+      // to offer it (a public house this viewer is not in); joining is the
+      // messages slice's, so the mutation is composed here.
+      joinHouse={{ onJoin: (id) => join.mutate(id), pending: join.isPending }}
     />
-  );
-}
-
-/**
- * The house group's name, beside the people glyph — "Hacker House Maestros '26".
- *
- * The roster endpoint is what this app has: it answers the members, and the
- * group's own title rides on the conversation the room was opened from. Until
- * the roster resolves it renders NOTHING rather than a placeholder — a name
- * that changes under the reader is worse than a name that arrives late.
- */
-function HouseName({ conversationId }: { conversationId: string }) {
-  const members = useConversationMembers(conversationId, true);
-  const title = members.data?.title;
-  return title ? <>{title}</> : null;
-}
-
-/** "306 gist partners" — the group's size, not the room's. */
-function HousePartners({ conversationId }: { conversationId: string }) {
-  const members = useConversationMembers(conversationId, true);
-  const total = members.data?.items.length;
-  if (total === undefined) return null;
-  return (
-    <>
-      <span className="tnum">{total}</span> gist {total === 1 ? "partner" : "partners"}
-    </>
   );
 }
 

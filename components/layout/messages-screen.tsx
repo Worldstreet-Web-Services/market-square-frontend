@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Sheet } from "@/components/ui/sheet";
-import { Spinner } from "@/components/ui/button";
+import { Button, Spinner } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
@@ -12,8 +13,15 @@ import { usePeople } from "@/features/discovery";
 import { InboxSearch } from "@/features/messages/components/inbox-chrome";
 import { CreateGroupFlow } from "@/components/layout/create-group-flow";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
+import { ThreadSafetyRows } from "@/components/layout/thread-safety-rows";
 import { OpenHouseSheet } from "@/features/houses";
-import { MessagesPage, useOpenConversation, type NewChatPickerProps } from "@/features/messages";
+import {
+  MessagesPage,
+  useAddGroupMembers,
+  useConversationMembers,
+  useOpenConversation,
+  type NewChatPickerProps,
+} from "@/features/messages";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -44,6 +52,13 @@ export function MessagesScreen() {
       renderRoomCard={({ streamId, conversationId }) => (
         <GistRoomCard streamId={streamId} conversationId={conversationId} />
       )}
+      // Block and Report inside a 1:1's overflow menu (node 77:8287). Both
+      // belong to the profile slice, so the rows are composed here and drawn
+      // by the menu — see `ThreadSafetyRows`.
+      renderThreadSafety={(peer) => <ThreadSafetyRows peer={peer} />}
+      // "Add / Invite gist partners" (78:8527, 78:8345). Choosing a person is
+      // the discovery slice's directory, exactly as the inbox's own `+` is.
+      renderAddMembers={(props) => <AddMembersSheet {...props} />}
       renderNewChat={(props) =>
         // Two designs, two components. Create Group is a two-STEP flow (choose
         // people, then name and describe the room) and folding it into the
@@ -117,6 +132,10 @@ function NewChatSheet({ open, onClose, onStarted }: NewChatPickerProps) {
         onStarted({
           id: conversation.id,
           kind: "direct",
+          // A 1:1 has no creator and is never joinable by link — the service
+          // says so too, and these are the values it would have returned.
+          createdBy: null,
+          visibility: "private" as const,
           imageUrl: null,
           description: null,
           title: null,
@@ -211,6 +230,169 @@ function NewChatSheet({ open, onClose, onStarted }: NewChatPickerProps) {
             </div>
           )}
         </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * "Add gist partners" / "Invite gist partners" — nodes 78:8527 and 78:8345.
+ *
+ * The SAME picker chrome as `NewChatSheet` and the same directory, differing in
+ * three ways that all follow from adding to a group rather than starting a
+ * chat:
+ *
+ *  1. it is MULTI-SELECT, because `POST /conversations/:id/members` takes up to
+ *     twenty ids in one call, and twenty round trips is twenty chances to
+ *     half-fail;
+ *  2. people ALREADY IN the group are filtered out — a row that would be a
+ *     no-op reads as broken, the same rule the directory applies to your own
+ *     row;
+ *  3. it closes on success rather than navigating, because you are already in
+ *     the thread you just changed.
+ *
+ * ANY member may add people — the service says so explicitly — so this is
+ * offered on both group menus rather than only the owner's.
+ */
+function AddMembersSheet({
+  open,
+  onClose,
+  conversationId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  conversationId: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<Profile[]>([]);
+  const me = useMe();
+  const members = useConversationMembers(conversationId, open);
+  const add = useAddGroupMembers(conversationId);
+
+  const people = usePeople(query, "followers", open);
+  const sentinel = useInfiniteScroll(
+    () => people.fetchNextPage(),
+    Boolean(people.hasNextPage && !people.isFetchingNextPage)
+  );
+
+  const already = new Set(
+    (members.data?.items ?? []).flatMap((row) => (row.profile ? [row.profile.id] : []))
+  );
+  const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
+    (profile) => profile.id !== me.data?.id && !already.has(profile.id)
+  );
+
+  const close = () => {
+    setQuery("");
+    setPicked([]);
+    onClose();
+  };
+
+  const toggle = (profile: Profile) =>
+    setPicked((current) =>
+      current.some((entry) => entry.id === profile.id)
+        ? current.filter((entry) => entry.id !== profile.id)
+        : // The contract caps a single call at twenty.
+          current.length >= 20
+          ? current
+          : [...current, profile]
+    );
+
+  return (
+    <Sheet
+      open={open}
+      onClose={close}
+      bare
+      panelClassName="border border-white/[0.18] bg-[#101012]/[0.62] backdrop-blur-[7px] sm:max-w-[347px] sm:rounded-[22px]"
+    >
+      <div className="flex flex-col gap-3 p-4">
+        <h2 className="text-[14px] font-bold leading-5 text-white">Add gist partners</h2>
+
+        <InboxSearch value={query} onChange={setQuery} id="add-members-search" label="Search people" />
+
+        <div className="flex max-h-[46vh] flex-col gap-3 overflow-y-auto">
+          {people.isPending && [0, 1, 2].map((i) => <RowSkeleton key={i} />)}
+
+          {people.isError && (
+            <ErrorState
+              error={people.error}
+              fallback="Couldn't load people."
+              onRetry={() => people.refetch()}
+            />
+          )}
+
+          {people.isSuccess && items.length === 0 && (
+            <EmptyState
+              glyph="◇"
+              title={query.trim() ? "No matches" : "Everyone is already here"}
+              body={
+                query.trim()
+                  ? "No one here matches that name."
+                  : "Every person in the directory is already in this group."
+              }
+            />
+          )}
+
+          {items.map((profile) => {
+            const name = profile.displayName ?? profile.username;
+            const on = picked.some((entry) => entry.id === profile.id);
+            return (
+              <button
+                key={profile.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggle(profile)}
+                className={cn(
+                  "ws-press flex h-[54.5px] items-center gap-[9px] rounded-xl border bg-white/[0.03] px-3 text-left transition-colors hover:bg-white/[0.06]",
+                  on ? "border-white/40" : "border-white/10"
+                )}
+              >
+                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+                  <Avatar name={name} seed={profile.id} src={profile.avatarUrl} size={38} />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[12px] font-bold leading-4 text-white">{name}</span>
+                  <span className="truncate text-[11px] leading-[16.5px] text-white/50">
+                    {profile.followerCount > 0
+                      ? `${profile.followerCount.toLocaleString()} followers`
+                      : `@${profile.username}`}
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                    on ? "border-white bg-white text-black" : "border-white/40"
+                  )}
+                >
+                  {on && "✓"}
+                </span>
+              </button>
+            );
+          })}
+
+          <div ref={sentinel} />
+          {people.isFetchingNextPage && (
+            <div className="flex justify-center py-4">
+              <Spinner className="h-5 w-5 text-meta" />
+            </div>
+          )}
+        </div>
+
+        <Button
+          disabled={picked.length === 0}
+          loading={add.isPending}
+          onClick={() =>
+            add.mutate(
+              picked.map((profile) => profile.id),
+              { onSuccess: close }
+            )
+          }
+        >
+          {picked.length === 0
+            ? "Add to group"
+            : `Add ${picked.length} ${picked.length === 1 ? "person" : "people"}`}
+        </Button>
       </div>
     </Sheet>
   );

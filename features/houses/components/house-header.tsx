@@ -111,13 +111,13 @@ export function HouseHeader({
       everything below it.
 
       It stays STICKY (the column scrolls and the room's title is what the page
-      is about), so it needs an opaque background — but the column's own
-      `--color-grey-900`, which is the file's #0F0F0F exactly, so the header is
-      invisible as a band and only the content moves.
+      is about), so it needs an opaque background — the column's own
+      `--color-chrome` (#121214 at full opacity), so the header is invisible as
+      a band and only the content moves under it.
     */
     <header
       ref={ref}
-      className="sticky top-[var(--ws-topbar-h)] z-30 bg-grey-900 px-4 pb-6 pt-4 xl:px-8 xl:pt-6"
+      className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-4 pb-6 pt-4 xl:px-8 xl:pt-6"
     >
       <div className="flex flex-col gap-6">
         {/* ── row 1 ── */}

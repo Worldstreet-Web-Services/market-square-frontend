@@ -42,7 +42,10 @@ export function TableEdge({
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className="ws-hair sticky top-[calc(var(--ws-topbar-h)+var(--ws-house-head-h))] z-20 flex items-center gap-2.5 border-y bg-ground px-4 py-2.5"
+      /* A sticky bar needs an opaque fill so the river does not read through
+         it — but it must be the PAGE'S ground (`--color-chrome`), not `#000`.
+         Black here drew a darker band across a `#121214` surface. */
+      className="ws-hair sticky top-[calc(var(--ws-topbar-h)+var(--ws-house-head-h))] z-20 flex items-center gap-2.5 border-y bg-chrome px-4 py-2.5"
     >
       {reconnecting ? (
         <>

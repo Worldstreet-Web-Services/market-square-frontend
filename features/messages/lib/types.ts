@@ -110,6 +110,24 @@ export const ConversationSchema = z.object({
   // header renders nothing for the first and would render "0 members" for the
   // second.
   memberCount: z.number().nullable().optional().default(null),
+  /**
+   * Who created the group. Groups only, null on a 1:1.
+   *
+   * It decides WHICH overflow menu a thread draws — the owner's (78:8525) or a
+   * member's (78:8337). It used to be absent from the summary, so the client
+   * had to infer ownership from `role === "owner"` on the roster, which meant
+   * the menu could not be right until a second request landed.
+   */
+  createdBy: z.string().nullable().optional().default(null),
+  /**
+   * Whether somebody holding this group's link may join it themselves via
+   * `POST /conversations/:id/join`. It does NOT mean "listed in a directory" —
+   * `GET /conversations/discover` is what lists them, and it lists exactly the
+   * public ones. A direct conversation is always private.
+   *
+   * "Copy link" reads it to say what it just handed out.
+   */
+  visibility: z.enum(["public", "private"]).optional().default("private").catch("private"),
   /** Groups only: who wrote `lastMessage`, so the inbox row can prefix it. */
   lastSender: ProfileSchema.nullable().optional().default(null),
   lastMessage: MessageSchema.nullable().optional().default(null),

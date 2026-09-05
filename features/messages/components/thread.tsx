@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/use-me";
+import { useGate } from "@/hooks/use-gate";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
@@ -11,9 +12,12 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
-import { EmptyState, ErrorState } from "@/components/ui/states";
+import { ErrorState } from "@/components/ui/states";
 import Link from "next/link";
 import { housePath } from "@/lib/house-path";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ThreadMenu } from "@/features/messages/components/thread-menu";
 import {
   AttachmentPanel,
   type Measured,
@@ -26,8 +30,11 @@ import { uploadFile } from "@/lib/api/upload";
 import { IconArrowLeft, IconHouses, IconMic, IconPlay, IconPause } from "@/components/ui/icons";
 import {
   useConversationMembers,
+  useLeaveGroup,
+  useDeleteConversation,
   useMarkConversationRead,
   useMessages,
+  useRenameGroup,
   useSendMessage,
 } from "@/features/messages/hooks/use-messages";
 import {
@@ -230,14 +237,16 @@ function ReceiptMark({ state, readBy }: { state: ReceiptState; readBy: number })
 function ThreadHeader({
   conversation,
   onBack,
-  onOpenMembers,
   onCreateGistRoom,
+  menu,
 }: {
   conversation: Conversation;
   onBack: () => void;
-  onOpenMembers: () => void;
   onCreateGistRoom?: () => void;
+  /** The overflow menu's panel — nodes 77:8287 / 78:8337 / 78:8525. */
+  menu: React.ReactNode;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const group = isGroupThread(conversation);
   const peer = conversation.peer;
   const title = threadTitle(conversation);
@@ -248,8 +257,12 @@ function ThreadHeader({
     // and never enters the scroller, so it cannot drift or jitter the way a
     // sticky element does. The design gives it a fill of `rgba(255,255,255,
     // 0.002)`, which is nothing — it sits over the app ground, so it takes
-    // `bg-ground`. The hairline is the design's 10%, not `ws-head`'s 8%.
-    <header className="flex min-h-20 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-ground px-6 py-4">
+    /* NO FILL. Node 75:8117 is `white/0.2%`, which is nothing — the bar sits on
+       the pane's own ground and is separated by its hairline alone. It used to
+       be `bg-ground` (#000), which made the whole thread pane read as a
+       different, darker black from the inbox column beside it. The hairline is
+       the design's 10%, not `ws-head`'s 8%. */
+    <header className="flex min-h-20 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
       {/* Not in the design, which only ever draws the desktop two-pane state.
           Below lg the list gives way to the thread entirely, so without this
           there is no route back to the inbox. Hidden where both panes are up. */}
@@ -266,15 +279,32 @@ function ThreadHeader({
         <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
           {group ? (
             /*
-              A GROUP HAS NO PICTURE ON THE CONTRACT, and it must not borrow
-              one. `members` is a roster capped at four, so the obvious
-              shortcut — draw the first member's avatar — puts one person's
-              face on a room of seventy-five and makes the header say
-              something false about whose thread this is. The house glyph is
-              the same mark the inbox files these under ("Houses"), so it
-              reads as a room rather than as a missing image.
+              THE GROUP'S OWN PICTURE, when it has one.
+
+              `imageUrl` is on `ConversationSummary` now — it was not when this
+              was written, and the note here said so and drew the house glyph
+              instead. The inbox row beside it has been drawing the picture ever
+              since the field landed, so the header was the only place in the
+              app still showing a group as a generic mark.
+
+              The glyph remains the FALLBACK, and the rule it was written for
+              still holds: a group with no picture must not borrow one.
+              `members` is a roster capped at four, so the obvious shortcut —
+              draw the first member's face — puts one person on a room of
+              seventy-five and says something false about whose thread this is.
+              The house glyph is the same mark the inbox files these under
+              ("Houses"), so it reads as a room rather than a broken image.
             */
-            <IconHouses className="h-5 w-5 text-white/70" />
+            conversation.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- the media host is a runtime value, unknown at build time
+              <img
+                src={conversation.imageUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <IconHouses className="h-5 w-5 text-white/70" />
+            )
           ) : (
             <Avatar
               name={peer?.displayName ?? "?"}
@@ -321,32 +351,45 @@ function ThreadHeader({
         {group && <CreateGistRoomButton onClick={onCreateGistRoom} />}
 
         {/*
-          The overflow control.
+          THE OVERFLOW CONTROL — the three vertical dots.
 
-          On a GROUP it opens the member list, which is a real route
-          (`GET /conversations/:id/members`) and the one thing a reader
-          genuinely wants from a house's header: who is in here.
+          It used to open the member sheet on a group and be DISABLED on a 1:1,
+          on the reading that the conversation contract had no thread-level
+          action. That was wrong: the service has add-members, rename, leave,
+          block and report, and the file draws a real menu on all three thread
+          shapes (77:8287, 78:8337, 78:8525). It now opens that menu, and the
+          rows the service genuinely cannot back are disabled inside it with
+          their reason — which is where an unavailable capability belongs, next
+          to its name, rather than swallowing the whole control.
 
-          On a 1:1 it is drawn and DISABLED. The conversation contract has no
-          thread-level action — no mute, no block, no report, no delete, no
-          leave — so there is nothing for a menu to contain. Disabled rather
-          than hidden because the design draws the control on both nodes and
-          the house rule for a capability that does not exist is visible and
-          inert; the tooltip names the reason so it reads as deliberate rather
-          than broken.
+          The backdrop is a full-screen button rather than a document listener:
+          it closes on the same click that would otherwise fall through to
+          whatever is underneath, and it is reachable by keyboard.
         */}
-        <CircleButton
-          label={group ? "Members" : "Conversation options"}
-          size={24}
-          disabled={!group}
-          title={
-            group
-              ? undefined
-              : "There are no conversation options yet — the messages service has no mute, block, report or delete for a thread."
-          }
-          onClick={group ? onOpenMembers : undefined}
-          icon={<Image src="/messages/more.svg" alt="" width={24} height={24} />}
-        />
+        <div className="relative">
+          <CircleButton
+            label="Conversation options"
+            size={24}
+            onClick={() => setMenuOpen((open) => !open)}
+            icon={<Image src="/messages/more.svg" alt="" width={24} height={24} />}
+          />
+          {menuOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="fixed inset-0 z-40 cursor-default"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div
+                className="absolute right-0 top-full z-50 mt-2"
+                onClick={() => setMenuOpen(false)}
+              >
+                {menu}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );
@@ -1043,7 +1086,10 @@ function Composer({ conversationId }: { conversationId: string }) {
     // scroll behind it. The design's 3% white is flattened to an opaque value
     // over the app's ground — a translucent bar would show the river sliding
     // through the composer. The hairline above is the design's 10%.
-    <div className="flex min-h-20 shrink-0 flex-col justify-center gap-1 border-t border-white/10 bg-[#080808] px-6 py-4">
+    /* Node 75:8147 — `white/3` OVER the ground, not `#080808`. A near-black of
+       its own put a third black in the pane; a 3% wash lifts the bar off the
+       ground it shares with everything else. */
+    <div className="flex min-h-20 shrink-0 flex-col justify-center gap-1 border-t border-white/10 bg-white/[0.03] px-6 py-4">
       {/*
         The staged attachment, above the field.
 
@@ -1267,17 +1313,55 @@ export function Thread({
    * the topic vocabulary and this group's roster at once.
    */
   roomCardSlot,
+  safetyRowsSlot,
+  onAddMembers,
 }: {
   conversation: Conversation;
   onBack: () => void;
   onCreateGistRoom?: () => void;
   roomCardSlot?: (streamId: string) => React.ReactNode;
+  /**
+   * Block and Report for a 1:1 — the profile slice's actions, drawn as this
+   * menu's own rows. A slot, because slices never import each other.
+   */
+  safetyRowsSlot?: (peer: Profile) => React.ReactNode;
+  /** Opens the people picker for "Add / Invite gist partners". */
+  onAddMembers?: () => void;
 }) {
   const me = useMe();
   const group = isGroupThread(conversation);
   const messages = useMessages(conversation.id, true);
   const markRead = useMarkConversationRead();
   const [membersOpen, setMembersOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const removeChat = useDeleteConversation();
+  const rename = useRenameGroup(conversation.id);
+  const leave = useLeaveGroup(conversation.id);
+
+  /**
+   * "Copy link" — node 78:8620.
+   *
+   * The URL is the thread itself. What the toast says depends on the group's
+   * `visibility`, because that is the flag `POST /conversations/:id/join` reads:
+   * on a `public` group anybody holding it may let themselves in, and on a
+   * `private` one the same link answers 403 with "ask a member to add you".
+   *
+   * `visibility` is on `ConversationSummary` now, so the toast says which of
+   * the two the reader has just handed out. Copying a link that silently
+   * refuses everyone who receives it, without saying so, is worse than no row.
+   */
+  const copyLink = () => {
+    const url = `${window.location.origin}/messages?c=${conversation.id}`;
+    void navigator.clipboard.writeText(url).then(() =>
+      toast.success(
+        conversation.visibility === "public"
+          ? "Link copied — anyone with it can join"
+          : "Link copied — only members can open it"
+      )
+    );
+  };
 
   // The roster, for turning a bubble's `senderId` into a face. Groups only —
   // a 1:1 reads identity from `peer` and never issues the request.
@@ -1336,8 +1420,44 @@ export function Thread({
       <ThreadHeader
         conversation={conversation}
         onBack={onBack}
-        onOpenMembers={() => setMembersOpen(true)}
         onCreateGistRoom={onCreateGistRoom}
+        menu={
+          <ThreadMenu
+            kind={group ? "group" : "direct"}
+            // The service lets only the group's creator rename it, and
+            // `createdBy` is the field that says who that is. A member sees the
+            // shorter menu (78:8337), which is not a degraded version of the
+            // owner's — it is the correct one for what they may do.
+            /*
+              OWNERSHIP IS ON THE CONVERSATION NOW.
+
+              `ConversationSummary` carries `createdBy`, so the menu is right on
+              the first render. It used to be inferred from `role === "owner"`
+              on the roster, which meant a second request had to land before the
+              owner saw the owner's menu — the roster is still read for sender
+              avatars, and is kept here only as the fallback for a payload that
+              predates the field.
+            */
+            isOwner={
+              conversation.createdBy
+                ? conversation.createdBy === me.data?.id
+                : (members.data?.items.some(
+                    (row) => row.role === "owner" && row.profile?.id === me.data?.id
+                  ) ?? false)
+            }
+            safetyRows={
+              !group && conversation.peer ? safetyRowsSlot?.(conversation.peer) : undefined
+            }
+            actions={{
+              onAddMembers,
+              onViewMembers: () => setMembersOpen(true),
+              onCopyLink: copyLink,
+              onRenameGroup: () => setRenaming(true),
+              onLeaveGroup: me.data ? () => setLeaving(true) : undefined,
+              onDeleteChat: () => setDeleting(true),
+            }}
+          />
+        }
       />
 
       {/* 40px from the header to the first separator is the design's (header
@@ -1364,15 +1484,7 @@ export function Thread({
           />
         )}
         {messages.isSuccess && items.length === 0 && (
-          <EmptyState
-            glyph="◇"
-            title="No messages yet"
-            body={
-              group
-                ? `Say hello to ${threadTitle(conversation)}.`
-                : `Say hello to ${conversation.peer?.displayName ?? "them"}.`
-            }
-          />
+          <ThreadWelcome conversation={conversation} group={group} />
         )}
 
         {days.map((day) => (
@@ -1416,6 +1528,190 @@ export function Thread({
           onClose={() => setMembersOpen(false)}
         />
       )}
+
+      {/* "Edit group title" — `PATCH /conversations/:id { title }`, owner only,
+          which the service enforces. 80 characters is the contract's cap, so
+          the field stops there rather than letting the request be rejected. */}
+      <Sheet open={renaming} onClose={() => setRenaming(false)} title="Edit group title">
+        <RenameGroupForm
+          current={conversation.title ?? ""}
+          busy={rename.isPending}
+          onSubmit={(title) =>
+            rename.mutate(title, { onSuccess: () => setRenaming(false) })
+          }
+        />
+      </Sheet>
+
+      {/*
+        "Delete Chat" is DELETE FOR ME, and the copy says so.
+
+        It is reversible — a new message brings the thread back — so nothing
+        here says "this cannot be undone", which is what a delete dialog
+        normally says and would be a lie. What it does say is the part people
+        actually get wrong: the other person keeps everything.
+      */}
+      <Sheet open={deleting} onClose={() => setDeleting(false)} title="Remove this chat?">
+        <p className="text-[13px] leading-5 text-body">
+          It leaves your inbox and you stop seeing what was said before now.{" "}
+          {conversation.peer?.displayName ?? "They"} keeps the whole conversation. If they
+          message you again the chat comes back, carrying only what arrives after.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={() => setDeleting(false)}>
+            Keep it
+          </Button>
+          <Button
+            className="flex-1"
+            loading={removeChat.isPending}
+            onClick={() =>
+              removeChat.mutate(conversation.id, {
+                onSuccess: () => {
+                  setDeleting(false);
+                  onBack();
+                },
+              })
+            }
+          >
+            Remove
+          </Button>
+        </div>
+      </Sheet>
+
+      {/* Leaving is not undoable from here — rejoining needs a member to add
+          you back, or a public group's link — so it asks first. */}
+      <Sheet open={leaving} onClose={() => setLeaving(false)} title="Leave group?">
+        <p className="text-[13px] leading-5 text-body">
+          You will stop receiving messages from {conversation.title ?? "this group"}. A member
+          can add you back.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={() => setLeaving(false)}>
+            Stay
+          </Button>
+          <Button
+            className="flex-1"
+            loading={leave.isPending}
+            onClick={() => {
+              if (!me.data) return;
+              leave.mutate(me.data.id, {
+                onSuccess: () => {
+                  setLeaving(false);
+                  onBack();
+                },
+              });
+            }}
+          >
+            Leave
+          </Button>
+        </div>
+      </Sheet>
+    </div>
+  );
+}
+
+/**
+ * The one field behind "Edit group title".
+ *
+ * Its own component so the input's draft state is created fresh on every
+ * opening — the sheet is only mounted while open, so there is no stale value to
+ * reset and no effect needed to reset it.
+ */
+function RenameGroupForm({
+  current,
+  busy,
+  onSubmit,
+}: {
+  current: string;
+  busy: boolean;
+  onSubmit: (title: string) => void;
+}) {
+  const [title, setTitle] = useState(current);
+  const valid = title.trim().length > 0 && title.trim() !== current.trim();
+  return (
+    <div>
+      <input
+        autoFocus
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        onKeyDown={(event) => event.key === "Enter" && valid && onSubmit(title)}
+        maxLength={80}
+        placeholder="Group title"
+        className="ws-field w-full px-4 py-2.5 text-[14px] text-white outline-none placeholder:text-white/40"
+      />
+      <Button
+        className="mt-4 w-full"
+        disabled={!valid}
+        loading={busy}
+        onClick={() => onSubmit(title)}
+      >
+        Save
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * A THREAD NOBODY HAS SPOKEN IN YET — node 76:8216.
+ *
+ * ─── WHY IT IS NOT `EmptyState` ──────────────────────────────────────────────
+ * The shared component draws its contents inside `ws-inset` — a `black/35`
+ * panel — so on a `#121214` pane it rendered as a darker slab with different
+ * corners from everything around it: a second black in the middle of the
+ * thread. The file draws NO panel. It is centred text on the pane's own ground
+ * with one pill under it, which is why it reads as the room being empty rather
+ * than as a card that failed to load.
+ *
+ * ─── THE FILE'S NUMBERS ──────────────────────────────────────────────────────
+ * A 352-wide column, centred, gap 16, holding a gap-8 column and then the
+ * button:
+ *
+ *   · "Welcome!" at Roboto Bold 24/32 with 0.01em of tracking, `#FFFFFF`
+ *   · the body at 16/24 centred in 50% white
+ *   · `Say hello 👋` — 6px/16px of padding at a full round over `white/5`,
+ *     the words at 80% white and the emoji at its own colour
+ *
+ * ─── WHAT THE BUTTON DOES ────────────────────────────────────────────────────
+ * It SENDS the wave, rather than typing it into the composer for you to send
+ * again. A control called "Say hello" that only fills a field is a control that
+ * did not do the thing it named. It goes through `useSendMessage` — the same
+ * hook and the same cache as the composer below, never a second send path — so
+ * the message lands in the thread and the empty state disappears with it.
+ *
+ * ─── THE COPY IS THE FILE'S FOR A GROUP AND HONEST FOR A 1:1 ─────────────────
+ * "Your house is created…" is written for a house somebody just made. A direct
+ * chat was not created by anybody and has no members to invite, so it says the
+ * one true thing instead.
+ */
+function ThreadWelcome({
+  conversation,
+  group,
+}: {
+  conversation: Conversation;
+  group: boolean;
+}) {
+  const send = useSendMessage(conversation.id);
+  const gate = useGate();
+  return (
+    <div className="flex flex-1 items-center justify-center py-16">
+      <div className="flex w-[352px] max-w-full flex-col items-center gap-4 text-center">
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-[24px] font-bold leading-8 tracking-[0.01em] text-white">Welcome!</p>
+          <p className="text-[16px] leading-6 text-white/50">
+            {group
+              ? "Your house is created. Start the conversation or invite new members to get things moving."
+              : `Say hello to ${conversation.peer?.displayName ?? conversation.peer?.username ?? "them"} — nobody has said anything yet.`}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={send.isPending}
+          onClick={() => gate(() => send.mutate({ text: "👋" }))}
+          className="ws-press flex items-center gap-2.5 rounded-full bg-white/5 px-4 py-1.5 text-[16px] leading-6 transition-colors hover:bg-white/10 disabled:opacity-50"
+        >
+          <span className="text-white/80">Say hello</span>
+          <span aria-hidden>👋</span>
+        </button>
+      </div>
     </div>
   );
 }

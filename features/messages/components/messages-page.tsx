@@ -12,6 +12,7 @@ import { ConversationRow } from "@/features/messages/components/conversation-row
 import { Thread } from "@/features/messages/components/thread";
 import { ThreadPlaceholder } from "@/features/messages/components/thread-placeholder";
 import { visibleConversations, type InboxTab } from "@/features/messages/lib/filter";
+import type { Profile } from "@/lib/api/schemas";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -278,6 +279,18 @@ export function MessagesPage({
    * three slices — so the layout composes it and hands it down.
    */
   renderRoomCard,
+  /**
+   * Block and Report inside a 1:1 thread's overflow menu (node 77:8287). The
+   * profile slice owns both, so the layout draws the rows and this hands them
+   * down.
+   */
+  renderThreadSafety,
+  /**
+   * The people picker behind "Add / Invite gist partners" (78:8527, 78:8345).
+   * Choosing a person is the DISCOVERY slice's directory, which is the same
+   * reason the inbox's own `+` takes a slot.
+   */
+  renderAddMembers,
 }: {
   renderNewChat?: (props: NewChatPickerProps) => React.ReactNode;
   renderGistRoom?: (props: {
@@ -287,12 +300,19 @@ export function MessagesPage({
     houseConversationId?: string;
   }) => React.ReactNode;
   renderRoomCard?: (props: { streamId: string; conversationId: string }) => React.ReactNode;
+  renderThreadSafety?: (peer: Profile) => React.ReactNode;
+  renderAddMembers?: (props: {
+    open: boolean;
+    onClose: () => void;
+    conversationId: string;
+  }) => React.ReactNode;
 } = {}) {
   const { ready, authenticated, login } = useAuth();
   const [open, setOpen] = useState<Conversation | null>(null);
   // The `+` opens a MENU first — node 24:6403 — and the menu chooses which
   // picker. Null means neither is open.
   const [menuOpen, setMenuOpen] = useState(false);
+  const [addingMembers, setAddingMembers] = useState(false);
   const [picking, setPicking] = useState<NewChatMode | null>(null);
   // The gist-room composer lives in the houses slice, so the layout supplies
   // it; this only owns whether it is open. Same slot pattern as the picker.
@@ -398,11 +418,20 @@ export function MessagesPage({
                 ? (streamId) => renderRoomCard({ streamId, conversationId: open.id })
                 : undefined
             }
+            safetyRowsSlot={renderThreadSafety}
+            onAddMembers={renderAddMembers ? () => setAddingMembers(true) : undefined}
           />
         ) : (
           <ThreadPlaceholder />
         )}
       </div>
+
+      {open?.kind === "group" &&
+        renderAddMembers?.({
+          open: addingMembers,
+          onClose: () => setAddingMembers(false),
+          conversationId: open.id,
+        })}
 
       {renderGistRoom?.({
         open: gistRoomOpen,

@@ -57,6 +57,16 @@ const RawProfileSchema = z.object({
   // absent field falls back to the session's own intent instead of a lie.
   isFollowing: z.boolean().optional(),
   isBlocked: z.boolean().optional().default(false),
+  /**
+   * Whether this account has been through onboarding. PRIVATE — it is on
+   * `GET /me` and deliberately absent from `PublicProfile`, because whether
+   * somebody finished a product tour is nobody else's business.
+   *
+   * Defaulted TRUE, and the direction matters: absent means a payload that does
+   * not carry the field, and the safe reading of that is "do not take over
+   * somebody's screen". A missing field must never produce an onboarding flow.
+   */
+  hasOnboarded: z.boolean().optional().default(true),
   /*
     Self-declared place and gender — Explore's people filters.
 
@@ -183,6 +193,37 @@ export const StreamSchema = z.object({
    */
   audience: z.enum(["public", "private"]).optional().default("public").catch("public"),
   houseConversationId: z.string().nullable().optional().default(null),
+  /**
+   * THE HOUSE GROUP THIS ROOM BELONGS TO, inline on the room.
+   *
+   * The room used to carry only `houseConversationId`, so naming the house
+   * meant reading the CONVERSATION — which is membership-gated. The header
+   * therefore worked only for people already inside, and "Join House" had
+   * nothing to name for exactly the person it is aimed at.
+   *
+   * `viewerIsMember` is the whole decision: draw Join House or do not. It is
+   * `false` for a signed-out reader too, so there is no third state to handle.
+   * `visibility` decides whether joining is even possible —
+   * `POST /conversations/:id/join` succeeds on a public group and refuses a
+   * private one, so a private house shows the name without the invitation.
+   *
+   * A DOORPLATE, not a conversation: no roster, no messages, no last activity.
+   * `GET /streams/:id` only — never on a list card, so nothing may build a grid
+   * that expects it. Null when the room has no house, and null (not a 404) when
+   * the house has been deleted.
+   */
+  house: z
+    .object({
+      id: z.string(),
+      title: z.string().nullable().optional().default(null),
+      imageUrl: z.string().nullable().optional().default(null),
+      memberCount: z.number().nullable().optional().default(null),
+      visibility: z.enum(["public", "private"]).optional().default("private").catch("private"),
+      viewerIsMember: z.boolean().optional().default(false),
+    })
+    .nullable()
+    .optional()
+    .default(null),
   chatAccess: z.enum(["open", "followers"]).optional().default("open").catch("open"),
   // Ark broadcasts a casino game to Market Square as a stream, and carries the
   // way back into Ark here: { kind: "game", ref: "<game>:<id>" }. The service
@@ -245,6 +286,14 @@ export const PostSchema = z.object({
   deepLink: DeepLinkSchema.nullable().optional().default(null),
   storyExpiresAt: z.string().nullable().optional().default(null),
   createdAt: z.string(),
+  /**
+   * When the author last edited this post. Null means never.
+   *
+   * Every edit stamps it — there is no quiet window in which a post can change
+   * without saying so — which is what makes it safe to render an "edited"
+   * marker straight from the field rather than diffing anything.
+   */
+  editedAt: z.string().nullable().optional().default(null),
   likeCount: z.number(),
   commentCount: z.number(),
   repostCount: z.number().optional().default(0),
