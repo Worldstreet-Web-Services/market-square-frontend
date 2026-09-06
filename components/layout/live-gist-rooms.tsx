@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
 import { useStreamList } from "@/features/streams";
-import { cn } from "@/lib/cn";
+import { DeckDots } from "@/components/ui/deck-dots";
 
 /**
  * THE ROOMS OPEN RIGHT NOW — node 225:3822, the carousel under Home's tab row.
@@ -69,17 +69,7 @@ export function LiveGistRooms() {
   return (
     <section aria-label="Gist rooms open now" className="flex flex-col gap-4">
       {items.length > 1 && (
-        <div aria-hidden className="flex items-center gap-[2.71px]">
-          {Array.from({ length: DOTS }).map((_, index) => (
-            <span
-              key={index}
-              className={cn(
-                "h-[4.33px] rounded-[13.54px] transition-all",
-                index === active ? "w-[27.08px] bg-[#7E3BEB]" : "w-[9.21px] bg-[#D9D9D9]"
-              )}
-            />
-          ))}
-        </div>
+        <DeckDots count={DOTS} active={active} className="justify-start" />
       )}
 
       <div

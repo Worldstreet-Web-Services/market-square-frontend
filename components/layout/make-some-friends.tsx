@@ -14,6 +14,7 @@ import { useMe } from "@/hooks/use-me";
 import { useFollow, useIsFollowing, useWink } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
+import { DeckDots } from "@/components/ui/deck-dots";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -137,7 +138,7 @@ export function MakeSomeFriends() {
       <div className="flex items-center justify-center gap-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <DeckArrow direction="prev" disabled={index === 0} onClick={() => step(-1)} />
 
-        <div className="relative flex h-[272px] w-[467px] shrink-0 items-center justify-center">
+        <div className="relative flex h-[273px] w-[467px] shrink-0 items-center justify-center">
           {window.map((position) => (
             <PersonCard
               key={items[position]!.id}
@@ -156,6 +157,27 @@ export function MakeSomeFriends() {
           onClick={() => step(1)}
         />
       </div>
+
+      {/*
+        Node 289:5455 — three page pills 5.7px under the deck, which the file
+        puts at y=529 against a deck ending at 523.3.
+
+        THREE PILLS CANNOT COUNT AN UNBOUNDED ROSTER, so they do not try: the
+        reader's position is mapped across the three, which is what a row of
+        four-pixel pills can honestly say. With one person there is nothing to
+        page through and the row is absent rather than showing a lit pill and
+        two dead ones.
+
+        `-mt-*` because the section's own `gap-6` is the rhythm between the
+        heading and the deck, not between the deck and this.
+      */}
+      {items.length > 1 && (
+        <DeckDots
+          count={3}
+          active={Math.round((index / (items.length - 1)) * 2)}
+          className="-mt-[18px]"
+        />
+      )}
     </section>
   );
 }
@@ -230,18 +252,28 @@ function DeckArrow({
  * every one of the three carries a `relativeTransform`, and two of them turn.
  * The tilt is most of what makes this look like a deck.
  *
- * Positions are CENTRE deltas from the front card, because the cards are
- * centred in their container and both `scale()` and `rotate()` work from the
- * centre. They are the file's centres times 186/183.7, our card being 186 wide.
- * The left/right asymmetry (-115 against +142) is the file's own hand placement
- * and is kept rather than averaged.
+ * ─── THE DELTAS ARE FROM THE CONTAINER'S CENTRE, NOT THE FRONT CARD'S ──────
+ * They were from the front card's, which quietly assumed the front card is
+ * centred in the group. It is not: the file puts it at the group's TOP EDGE
+ * (y=0 of 269) while the two neighbours hang below it at 8.21 and 11.24. So
+ * centring it dropped the whole deck 9.6px, and both neighbours — already the
+ * tallest boxes, because rotation grows them — ran past the container's bottom
+ * and were CLIPPED by the rail's `overflow-x-auto`. A card with a straight
+ * edge sliced off its lower corner is what that looked like.
+ *
+ * Measured against the file, the three now span y 8.31..267.87, 0..253.14 and
+ * 11.38..272.39 inside a 272.4 container: exactly the file's own group, with
+ * nothing to clip.
+ *
+ * Every number is the file's centre times 186/183.7, our card being 186 wide.
+ * The left/right asymmetry is the file's own hand placement and is kept rather
+ * than averaged.
  */
 const DECK_PLACES: Record<number, { x: number; y: number; scale: number; rot: number }> = {
-  [-1]: { x: -115.2, y: 11.5, scale: 0.9279, rot: -9.27 },
-  0: { x: 0, y: 0, scale: 1, rot: 0 },
-  1: { x: 142.3, y: 15.3, scale: 0.9279, rot: 9.9 },
+  [-1]: { x: -129.32, y: 1.91, scale: 0.9279, rot: -9.27 },
+  0: { x: -14.09, y: -9.61, scale: 1, rot: 0 },
+  1: { x: 128.21, y: 5.7, scale: 0.9279, rot: 9.9 },
 };
-
 function PersonCard({
   profile,
   offset,
