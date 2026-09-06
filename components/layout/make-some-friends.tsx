@@ -98,6 +98,29 @@ export function MakeSomeFriends() {
   const window = [index - 1, index, index + 1].filter((i) => items[i]);
 
   /*
+    WHICH SLOT EACH CARD TAKES — and why it is not simply `position - index`.
+
+    The file's LEFT slot sits BEHIND the front card: its cards are drawn
+    right, left, front, so the front one covers the inner half of both
+    neighbours. With three cards that is the design — the left card's face
+    still clears the front card's edge. With only TWO it is not: step to the
+    last person and the spare card lands on the left, where the front card
+    buries most of it, including its face and one of its two controls.
+
+    So when there is no card ahead to fill the right slot, the spare one takes
+    it instead of the left. Both cards stay readable and swap places as you
+    step, which is also a clearer transition than one sliding out from under
+    the other. Which of the two is "previous" is not something the reader
+    needs read off the geometry — the arrows are the navigation.
+  */
+  const slotOf = (position: number) => {
+    const slot = position - index;
+    const spareOnLeftOnly =
+      window.length === 2 && window.includes(index - 1) && !window.includes(index + 1);
+    return spareOnLeftOnly && slot === -1 ? 1 : slot;
+  };
+
+  /*
     THE FAN IS RE-CENTRED WHEN IT IS NOT FULL.
 
     The file draws three cards and places them by hand, slightly right of the
@@ -110,7 +133,7 @@ export function MakeSomeFriends() {
     offsets actually drawn. At three it shifts by nothing and the file's own
     placement stands untouched.
   */
-  const drawn = window.map((i) => DECK_PLACES[i - index]?.x ?? 0);
+  const drawn = window.map((i) => DECK_PLACES[slotOf(i)]?.x ?? 0);
   const recentre =
     drawn.length < 3 ? -drawn.reduce((a, b) => a + b, 0) / drawn.length : 0;
 
@@ -143,7 +166,7 @@ export function MakeSomeFriends() {
             <PersonCard
               key={items[position]!.id}
               profile={items[position]!}
-              offset={position - index}
+              offset={slotOf(position)}
               shift={recentre}
               onPass={() => step(1)}
               onWinked={() => step(1)}
