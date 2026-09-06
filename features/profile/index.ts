@@ -1,6 +1,7 @@
 export { ProfilePage } from "./components/profile-page";
 export { SpotlightPage } from "./components/spotlight-page";
 export { AuthPage } from "./components/auth-page";
+export { SignInCard } from "./components/sign-in-card";
 export { VerificationCard } from "./components/verification-card";
 export { ClaimUsernameGate } from "./components/claim-username-gate";
 export { CreatorCard } from "./components/creator-card";
@@ -14,8 +15,11 @@ export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";
 // composed into the houses room through a route slot, because a room learns a
 // username off the media plane and never holds the whole object.
 export { PersonSafetyRows, PersonFollow } from "./components/person-safety-rows";
-export { useProfileSafety, useWink, useFollow } from "./hooks/use-profile";
+export { useProfileSafety, useUpdateMe, useWink, useFollow } from "./hooks/use-profile";
 // The follow-edge resolver every follow control must read — a missing
 // `isFollowing` can never render a fabricated "Following". See CLAUDE.md.
 export { useIsFollowing } from "./lib/follow-state";
 export { PersonQuickActions } from "./components/person-quick-actions";
+/** `POST /geo/reverse` — a device reading turned into a place NAME. Never a
+    coordinate stored, never one returned. See the api note. */
+export { reverseGeocode } from "./lib/api";

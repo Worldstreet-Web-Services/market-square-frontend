@@ -128,3 +128,37 @@ export async function reportTarget(input: {
 }) {
   return msApi.post<{ id: string; status: string }>("/reports", input);
 }
+
+/**
+ * Edit a post — `PATCH /posts/:id`.
+ *
+ * TEXT AND TOPICS ONLY, and that is a product decision rather than a gap:
+ * media, the quoted post and the deep link are not editable, because swapping
+ * the picture under something people have already liked changes what they
+ * endorsed. New media means delete and repost.
+ *
+ * Author only — 403 for anybody else, admins included: admins remove, they do
+ * not rephrase. Same 2000-character cap as create, 400 on empty, 404 once
+ * deleted. Works on a story too.
+ */
+export async function editPost(
+  postId: string,
+  input: { text: string; topics?: string[] }
+) {
+  return PostSchema.parse(
+    await msApi.patch(`/posts/${postId}`, {
+      text: input.text.trim(),
+      ...(input.topics ? { topics: input.topics } : {}),
+    })
+  );
+}
+
+/**
+ * Delete a post or a story — `DELETE /posts/:id`.
+ *
+ * ONE route for both, because a story IS a post (`kind: "story"`). A soft
+ * remove by the author or an admin; the post then 404s.
+ */
+export async function deletePost(postId: string) {
+  return msApi.del<unknown>(`/posts/${postId}`);
+}

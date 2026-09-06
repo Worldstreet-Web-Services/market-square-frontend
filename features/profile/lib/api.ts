@@ -1,5 +1,6 @@
 "use client";
 
+import { z } from "zod";
 import { msApi } from "@/lib/api/service";
 import { ProfileSchema } from "@/lib/api/schemas";
 import {
@@ -85,9 +86,45 @@ export async function updateMe(input: {
   displayName?: string;
   bio?: string;
   avatarUrl?: string;
+  /**
+   * The self-declared place and gender.
+   *
+   * ABSENT leaves the field alone; explicit `null` clears it — the same
+   * semantics `PATCH /conversations/:id` uses, so an editor that only touches
+   * a bio can never wipe somebody's city. The service also reads a blank or
+   * whitespace-only string as a clear rather than storing it, which is what
+   * stops `""` and `null` becoming two ways to say the same thing where only
+   * one of them matches a filter.
+   *
+   * FREE TEXT, all three. `gender` is not an enum, deliberately: an enum is a
+   * decision about which identities exist, and it is not ours to take in a
+   * migration. The service folds case so self-declared answers stay comparable
+   * without anybody owning a gazetteer.
+   *
+   * There is no coordinate here and there must never be one — see
+   * `lib/people-filters.ts`.
+   */
+  city?: string | null;
+  region?: string | null;
+  gender?: string | null;
+  /**
+   * Marks onboarding complete. `true` ONLY.
+   *
+   * The service answers 400 to `false` on purpose: finishing onboarding cannot
+   * become less true, and a form that serialised its whole state would
+   * otherwise re-onboard somebody on every device they own. Nothing here should
+   * ever send it as anything but `true`.
+   */
+  hasOnboarded?: true;
 }) {
   return ProfileSchema.parse(await msApi.patch("/me", input));
 }
+
+/** `{ city, region }`, both nullable — a miss is an ANSWER, not an error. */
+const ReverseGeocodeSchema = z.object({
+  city: z.string().nullable().optional().default(null),
+  region: z.string().nullable().optional().default(null),
+});
 
 export async function fetchVerificationRule() {
   return VerificationRuleSchema.parse(await msApi.get("/verification/rule"));
@@ -120,4 +157,25 @@ export async function applyForCreator(note?: string) {
   return CreatorApplicationSchema.parse(
     await msApi.post("/me/creator-application", note ? { note } : {})
   );
+}
+
+/**
+ * A device reading turned into a place NAME — `POST /geo/reverse`.
+ *
+ * The endpoint answers exactly `{ city, region }` and nothing else: no country,
+ * no street, no formatted address, and never the coordinates echoed back. That
+ * narrowness is the privacy property — a caller cannot store what the route
+ * will not return — so this parser is deliberately as narrow as the contract
+ * and drops anything else that arrives.
+ *
+ * The COORDINATES ARE NEVER STORED. They exist for the duration of this one
+ * request, on the server, to ask a provider a question; what comes back is a
+ * place a person can read, edit and delete. There is no `distanceKm` here and
+ * there must never be one — see `lib/people-filters.ts`.
+ *
+ * NOT YET DEPLOYED. Recorded in `PENDING_ROUTES`; a 404 means the button that
+ * calls this goes quiet rather than failing in front of somebody.
+ */
+export async function reverseGeocode(input: { latitude: number; longitude: number }) {
+  return ReverseGeocodeSchema.parse(await msApi.post("/geo/reverse", input));
 }

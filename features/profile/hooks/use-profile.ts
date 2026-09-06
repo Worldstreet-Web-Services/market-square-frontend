@@ -327,6 +327,24 @@ export function useUpdateMe() {
       invalidateIdentitySurfaces(queryClient);
       toast.success("Profile updated");
     },
+    /*
+      A FAILED SAVE HAS TO SAY SO.
+
+      This had no `onError` at all, so a rejected edit did nothing visible: the
+      sheet stayed open, the field kept what was typed, and the reader had no
+      way to tell whether it had landed. `EditProfileSheet` renders an
+      `InlineError` from the mutation, but the location sheet and anything else
+      that only calls `mutate` got silence — and silence after pressing Save
+      reads as success.
+
+      The username conflict keeps its own wording, because "Username taken" is
+      the one failure the reader can act on directly and the surfaces that show
+      it inline should not also get a toast.
+    */
+    onError: (error) => {
+      if (errorCode(error) === "CONFLICT") return;
+      toast.error(errorMessage(error, "Couldn't save your profile."));
+    },
   });
 }
 

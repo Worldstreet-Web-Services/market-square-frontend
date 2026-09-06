@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { IconLocationPin } from "@/components/ui/topbar-icons";
 import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
@@ -350,6 +351,30 @@ export function ProfilePage({
 
         {data.bio && <p className="mt-3 text-[15px] leading-normal text-body">{data.bio}</p>}
 
+        {/*
+          THE PLACE AND GENDER THIS PERSON PUBLISHED.
+
+          Rendered only when they said something — null means "hasn't said",
+          which is not a blank to fill with an em-dash or a guess. Both are the
+          person's own words, and they are the fields Explore's People filters
+          match on, so the profile is where a reader confirms what they matched.
+
+          A place, never a distance: there is no "3 km away" here and there is
+          no field for one. See `lib/people-filters.ts`.
+        */}
+        {(data.city || data.region || data.gender) && (
+          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-meta">
+            {(data.city || data.region) && (
+              <span className="flex items-center gap-1.5">
+                <IconLocationPin className="h-4 w-4 shrink-0" />
+                {/* "Ikeja, Lagos" from whichever halves they gave. */}
+                {[data.city, data.region].filter(Boolean).join(", ")}
+              </span>
+            )}
+            {data.gender && <span>{data.gender}</span>}
+          </p>
+        )}
+
         <p className="tnum mt-3 flex gap-4 text-[15px] text-meta">
           <span>
             <span className="font-bold text-heading">{formatCount(data.followingCount)}</span> Following
@@ -374,7 +399,7 @@ export function ProfilePage({
           own measured height. At `top-0` with a lower z-index they stuck
           straight underneath both and vanished, so a scrolled profile had no
           way left to switch tab. */}
-      <div className="ws-hair sticky top-[calc(var(--ws-topbar-h)_+_var(--ws-colhead-h))] z-20 border-b bg-ground">
+      <div className="ws-hair sticky top-[calc(var(--ws-topbar-h)_+_var(--ws-colhead-h))] z-20 border-b bg-chrome">
         <ColumnTabs
           tabs={[
             { value: "posts" as Tab, label: "Posts" },

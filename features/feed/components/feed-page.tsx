@@ -2,28 +2,30 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
-import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { Spinner } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconCalendar, IconChevronDown, IconPlus } from "@/components/ui/icons";
 import { useQueryParam } from "@/hooks/use-query-param";
 import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
-import { Hallway } from "@/features/houses/components/hallway";
 import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
-import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
 import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
+import { TopicTabs, type TopicTab } from "@/features/feed/components/topic-tabs";
+import { IconLoadMore } from "@/components/ui/home-icons";
+
+/** The file draws three posts before "Load more" (229:4113). */
+const FIRST_PAGE = 3;
+/** What one press reveals. The file cannot say; three matches what it shows. */
+const STEP = 3;
 
 /*
   Lanes filter the timeline, in the design's order.
@@ -39,12 +41,6 @@ import { useMarketView } from "@/lib/analytics";
   become a river you fall into — to see what somebody has posted you go to
   their profile, which is where their media lives.
 */
-const LANES: Array<{ lane: Lane; label: string }> = [
-  { lane: "for-you", label: "For You" },
-  { lane: "following", label: "Following" },
-  { lane: "trending", label: "Trending" },
-];
-
 /**
  * Empty copy per lane.
  *
@@ -132,48 +128,97 @@ function PostSkeleton() {
 export function FeedPage({
   followSlot,
   tipSlot,
+  topicTabs = [],
+  roomsSlot,
+  friendsSlot,
+  communitySlot,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
-  /** Real count of live streams, for the mobile lane badge. */
+  /**
+   * The shared topic vocabulary for the tab row (node 225:3352), supplied by
+   * the layout. `GET /topics` lives in the DISCOVERY slice and slices never
+   * import each other — and this is the data rather than a node, because the
+   * row's selection drives this component's own query.
+   */
+  topicTabs?: readonly TopicTab[];
+  /**
+   * The three sections the file puts around the timeline, each composed in
+   * `components/layout` because each reads a slice this one may not import:
+   * the open gist rooms (225:3822), the people deck (225:3374) and the
+   * community grid (258:5545).
+   */
+  roomsSlot?: React.ReactNode;
+  friendsSlot?: React.ReactNode;
+  communitySlot?: React.ReactNode;
 }) {
   const compose = useQueryParam("compose");
   const prefill = useComposePrefill();
-  const [lane, setLane] = useState<Lane>("for-you");
+  /*
+    THE TAB ROW SELECTS A TOPIC, NOT A LANE — node 225:3352.
+
+    Home used to head the timeline with `For You · Following · Trending`, which
+    are three ways of RANKING the same posts. The file heads it with the
+    subjects the square is talking about, which is the proposition of the
+    product. `null` is "For you" — the unfiltered lane.
+
+    The lane stays `for-you` throughout: a topic narrows what is in the lane, it
+    does not change how the lane is ranked. `GET /feed?topics=` does the
+    narrowing server-side.
+  */
+  const [topic, setTopic] = useState<string | null>(null);
+  /*
+    HOME SHOWS THREE POSTS AND A "LOAD MORE" — nodes 229:4113 and 242:4890.
+
+    The file draws exactly three, then an `ep:refresh-left` row reading "Load
+    more", then "Join a community". That last part is why this matters and is
+    not a mockup convenience: with an infinitely scrolling timeline the
+    community grid sits below content that never ends, so it could never be
+    reached. An explicit control puts a floor under the feed and makes
+    everything after it reachable on the first screen.
+
+    It also matches what this product is. Home is an OVERVIEW — the rooms open
+    now, people to meet, a taste of the conversation, communities to join — not
+    an endless scroll. The endless scroll is Ark's.
+
+    STEP is the one number worth arguing about and the file cannot settle it:
+    three is what it draws, so three is what a press reveals. Change `STEP`
+    alone to make it bigger.
+  */
+  const [shown, setShown] = useState(FIRST_PAGE);
+  const lane: Lane = "for-you";
   const [composerOpen, setComposerOpen] = useState(false);
   // The post being quoted, if the composer was opened from a repost menu.
   const [quoting, setQuoting] = useState<Post | null>(null);
   const { authenticated } = useAuth();
-  const feed = useFeed(lane);
-  const sentinel = useInfiniteScroll(
-    () => feed.fetchNextPage(),
-    Boolean(feed.hasNextPage && !feed.isFetchingNextPage)
+  const topics = useMemo(() => (topic ? [topic] : []), [topic]);
+  const feed = useFeed(lane, topics);
+
+  /* `For you` plus whatever vocabulary the layout supplied, in the backend's
+     own order — nothing hard-coded, so a topic added upstream appears with no
+     client change. */
+  const tabs: TopicTab[] = useMemo(
+    () => [{ key: null, label: "For you" }, ...topicTabs],
+    [topicTabs]
   );
 
-  const items = useMemo(
+  const loaded = useMemo(
     () => feed.data?.pages.flatMap((page) => page.items) ?? [],
     [feed.data?.pages]
   );
-
-  /**
-   * The clips in this lane, in lane order.
-   *
-   * The viewer scrolls THIS list, so swiping up inside it walks the timeline
-   * the reader was already in rather than some separate video feed. Paging is
-   * the lane's own pager, so a swipe past the loaded page fetches the next one
-   * exactly as scrolling the timeline would.
-   */
-  const videoItems = useMemo(
-    () =>
-      items.flatMap((item) =>
-        item.type === "post" && item.post && isVideoPost(item.post)
-          ? [item.post as VideoItem]
-          : []
-      ),
-    [items]
-  );
+  const items = useMemo(() => loaded.slice(0, shown), [loaded, shown]);
+  /* More to reveal from what is already here, or another page to ask for. */
+  const canLoadMore = shown < loaded.length || Boolean(feed.hasNextPage);
+  const loadMore = () => {
+    setShown((current) => current + STEP);
+    // Fetch ahead only when the reveal is about to run past what we hold — a
+    // press should never leave the reader looking at the same three posts.
+    if (shown + STEP > loaded.length && feed.hasNextPage && !feed.isFetchingNextPage) {
+      void feed.fetchNextPage();
+    }
+  };
 
   /**
    * What the full-screen viewer scrolls: every MEDIA post of the lane, photos
@@ -181,8 +226,7 @@ export function FeedPage({
    *
    * Clips only would strand a reader who expanded a photo on a single slide
    * with nothing above or below it, and would skip past the photos of the lane
-   * they were reading. The Reels lane keeps `videoItems`, because reels are
-   * clips and a still frame in a reels feed is a dead screen.
+   * they were reading.
    */
   const mediaItems = useMemo(
     () =>
@@ -207,7 +251,7 @@ export function FeedPage({
     document.startViewTransition(apply);
   };
   const showComposer = composerOpen || compose === "1" || compose === "story";
-  useMarketView("feed_viewed", { surface: "market_square_home", source: lane });
+  useMarketView("feed_viewed", { surface: "market_square_home", source: topic ?? lane });
 
   return (
     <>
@@ -216,80 +260,50 @@ export function FeedPage({
           in a wall of black and why the phone never had the reading surface
           the desktop did. Video moved to Explore's reels, where it is watched
           rather than scrolled past. */}
+      {/* The ground is `#0F0F0F` and belongs to the shell's pane, not to this
+          column — see AppShell. Painting it here left a seam beside the right
+          rail. */}
       <div className="relative px-4 py-4 lg:px-6">
         {/*
-          The section pills are gone. They were Feeds · Discover · Messages ·
-          Notifications · Arkmarks — the sidebar, drawn a second time, twelve
-          pixels from the sidebar. Home had THREE navigation systems stacked:
-          this row, the rail beside it, and the lane tabs below. A reader
-          deciding where to look first had to rule out two of them.
+          HOME STARTS AT THE STORIES — node 225:3315.
 
-          The two creation actions stay, because they are not navigation —
-          they are the two things a person comes here to DO. They sit alone
-          now, right-aligned, where the eye lands after the rooms.
+          Three things used to sit above them and none is in the file:
+
+          · a `Schedule Stream` / `Create Post` pair. Composing is already
+            global — the shell's floating `+` opens the composer on every
+            surface that allows one — so this was a second entry point for the
+            same act, occupying the first thing a reader sees.
+          · the HALLWAY, whose whole job is now done by the rooms carousel
+            below the tab row (225:3822). It was drawing its own empty state,
+            so a square with no room open opened on "No gist rooms open" — an
+            apology, at the top of the home page, for a quiet evening. The
+            carousel renders NOTHING when nothing is open, which is the same
+            information and costs no space.
+          · `Trending discussions`, which is real and stays, but below the
+            stories rather than above them — see its own note.
+
+          What the file opens on is the people you follow, which is what a
+          social page should say first.
         */}
-        <div className="mb-4 hidden items-center justify-end gap-3 md:flex">
-          <Link
-            href="/schedule"
-            className="ws-press flex shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/[0.18] px-4 py-2 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-[#979797]/25"
-          >
-            <IconCalendar className="h-4 w-4" />
-            Schedule Stream
-            <IconChevronDown className="h-3.5 w-3.5" />
-          </Link>
-          <button
-            onClick={() => setComposerOpen(true)}
-            className="ws-btn-create ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
-          >
-            <IconPlus className="h-4 w-4" />
-            Create Post
-          </button>
-        </div>
-
-        {/* Reels is a mode, not a filter. The story rail and the hero are
-            browsing furniture: left in place they push the first clip halfway
-            down the screen, which is the whole reason home's reels did not
-            feel like Explore's. */}
-        {/*
-          The hallway leads.
-
-          Home opened on a composer and a feed — a product about what people
-          SAID. What 2.0 is for is what people are saying right now, out loud,
-          in a room you can walk into, so the open rooms go above everything
-          and the feed reads underneath them.
-
-          It renders nothing when no house is open, so a quiet evening costs no
-          space, and it sits outside the reels lane for the same reason the
-          stories row does: browsing furniture pushes the first clip halfway
-          down the screen.
-        */}
-        {MARKET_FLAGS.houses && (
-          <div className="mb-4">
-            <Hallway />
-          </div>
-        )}
-
-        {/*
-          What the square is talking about, on the overview where it belongs.
-
-          It already existed — in the right rail, which is `hidden lg:block`.
-          So the one thing the brief names as the point of the place ("they
-          just discussing about any new discussion, that was the top topic")
-          was invisible to every reader on a phone. An overview that only
-          overviews on a desktop is not an overview.
-
-          Below the hallway, above the feed: a room happening now beats a
-          subject being discussed, and both beat a post from this morning.
-        */}
-        <div className="mb-4 lg:hidden">
-          <TrendingDiscussions limit={4} />
-        </div>
-
         {authenticated && (
           <div className="mb-4">
             <StoriesRow />
           </div>
         )}
+
+        {/*
+          What the square is talking about, on the overview where it belongs.
+          It lives in the right rail, which is `hidden lg:block`, so without
+          this the one thing the brief names as the point of the place was
+          invisible to every reader on a phone.
+
+          BELOW the stories now, not above: the file opens Home on the stories
+          strip, and a section that is not in the design must not be the first
+          thing anybody sees.
+        */}
+        <div className="mb-4 lg:hidden">
+          <TrendingDiscussions limit={4} />
+        </div>
 
         {/*
           The arena banner is gone from Home.
@@ -324,31 +338,29 @@ export function FeedPage({
           </div>
         )}
 
-        {/* Lane tabs. The rule runs the full width at 8% white and the active
-            segment sits on top of it in solid white — not an amber bar. */}
-        <div className="mb-4 border-b border-white/8">
-          <div
-            aria-label="Timeline"
-            className="flex justify-between overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {LANES.map(({ lane: value, label }) => (
-              <button
-                key={value}
-                onClick={() => setLane(value)}
-                aria-current={lane === value ? "true" : undefined}
-                className={cn(
-                  "relative shrink-0 px-2.5 pb-2.5 pt-2.5 text-[12px] font-bold transition-colors",
-                  lane === value ? "text-grey-100" : "text-white/40 hover:text-body"
-                )}
-              >
-                {label}
-                {lane === value && (
-                  <span className="absolute inset-x-0 -bottom-px mx-auto h-0.5 w-[74px] bg-white" />
-                )}
-              </button>
-            ))}
-          </div>
+        {/* NODE 225:3352 — the topic row, over its own 2px rule. */}
+        <div className="mb-4">
+          <TopicTabs
+            tabs={tabs}
+            active={topic}
+            // Choosing a topic starts a NEW list, so the reveal goes back to
+            // the first three. Reset in the handler rather than derived during
+            // render — a ref read while rendering is exactly the pattern that
+            // stops a component updating when you expect it to.
+            onSelect={(key) => {
+              setTopic(key);
+              setShown(FIRST_PAGE);
+            }}
+          />
         </div>
+
+        {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
+            A room happening now beats a subject being discussed, and both beat
+            a post from this morning. Renders nothing when none is open. */}
+        {roomsSlot && <div className="mb-6">{roomsSlot}</div>}
+
+        {/* NODES 225:3526 + 225:3374 — "Make some friends". */}
+        {friendsSlot && <div className="mb-6">{friendsSlot}</div>}
 
         <div className="space-y-4">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
@@ -358,9 +370,15 @@ export function FeedPage({
           {feed.isSuccess && items.length === 0 && (
             <EmptyState
               glyph="◇"
-              title={EMPTY_COPY[lane].title}
-              body={EMPTY_COPY[lane].body}
-              action={<LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />}
+              title={topic ? "Nothing here yet" : EMPTY_COPY[lane].title}
+              body={
+                topic
+                  ? "Nobody has posted under this topic yet. Try another, or start the conversation."
+                  : EMPTY_COPY[lane].body
+              }
+              action={
+                topic ? null : <LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />
+              }
             />
           )}
           {items.map((item) => (
@@ -379,15 +397,44 @@ export function FeedPage({
           ))}
         </div>
 
-        <div ref={sentinel} />
-        {feed.isFetchingNextPage && (
-          <div className="flex justify-center py-6">
-            <Spinner className="h-6 w-6 text-meta" />
+        {/*
+          NODE 242:4890 — a 16px `ep:refresh-left` glyph, an 8px gap, and
+          "Load more" at 12/16 in 60% white.
+
+          CENTRED. The node is a hug-width row, which reads as left-aligned
+          until you measure it: it sits at x=6244 and is 82 wide, so its centre
+          is 6285 against the feed block's 6268.5 — sixteen pixels off dead
+          centre, which is a hand-nudge rather than an alignment. A control that
+          ends a list belongs in the middle of it, the same place "You're all
+          caught up" already sits.
+        */}
+        {canLoadMore && (
+          <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={feed.isFetchingNextPage}
+            className="ws-press flex items-center gap-2 text-[12px] leading-4 text-white/60 transition-colors hover:text-white disabled:opacity-50"
+          >
+            {feed.isFetchingNextPage ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <IconLoadMore className="h-4 w-4" />
+            )}
+            Load more
+          </button>
           </div>
         )}
-        {feed.isSuccess && !feed.hasNextPage && items.length > 0 && (
+        {feed.isSuccess && !canLoadMore && items.length > 0 && (
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
         )}
+
+        {/* NODE 258:5545 — "Join a community" closes the page. It is the last
+            thing the file draws, and it is the right last thing: somebody who
+            reached the bottom of the timeline has run out of the square they
+            are in, and the answer is another one. Renders nothing until the
+            directory route exists. */}
+        {communitySlot && <div className="pt-2">{communitySlot}</div>}
 
         {/* The floating compose button used to live here, which is why it
             existed on home and nowhere else. AppShell owns it now and renders

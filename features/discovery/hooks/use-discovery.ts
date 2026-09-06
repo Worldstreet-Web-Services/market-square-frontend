@@ -98,15 +98,30 @@ export function useSaveInterests() {
  * Public: signed-out visitors get the list too, and only the Follow action
  * asks them to sign in.
  */
-export function usePeople(query: string, sort: PeopleSort = "followers", enabled = true) {
+export function usePeople(
+  query: string,
+  sort: PeopleSort = "followers",
+  enabled = true,
+  /**
+   * Place and gender, narrowed by the SERVICE.
+   *
+   * In the query key for the same reason `sort` is: the cursor encodes the
+   * filter, so changing one starts a new list rather than paging the old one
+   * with a mismatched token.
+   */
+  facets: { city?: string; region?: string; gender?: string } = {}
+) {
   const trimmed = query.trim();
+  const city = facets.city?.trim() ?? "";
+  const region = facets.region?.trim() ?? "";
+  const gender = facets.gender?.trim() ?? "";
   return useInfiniteQuery({
     // The sort is in the KEY, not applied to a loaded page. Re-ordering one
     // page would make page 1 look sorted while page 2 contradicted it; the
     // service's cursor encodes the sort key, so changing it starts a new list.
-    queryKey: ["ms", "people", trimmed, sort],
+    queryKey: ["ms", "people", trimmed, sort, city, region, gender],
     queryFn: ({ pageParam }) =>
-      fetchPeople({ query: trimmed, sort, cursor: pageParam ?? undefined }),
+      fetchPeople({ query: trimmed, sort, city, region, gender, cursor: pageParam ?? undefined }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     // Only the People tab needs this; every other tab would be paying for a

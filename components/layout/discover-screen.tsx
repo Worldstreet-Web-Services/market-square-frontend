@@ -110,7 +110,26 @@ export function DiscoverScreen() {
   const people = usePeople(
     tab === "people" ? deferredQuery : "",
     peopleSort,
-    tab === "people"
+    tab === "people",
+    /*
+      PLACE AND GENDER GO TO THE SERVICE NOW.
+
+      `GET /profiles` takes `city`, `region` and `gender` — case-insensitive,
+      exact, composing with each other and with `q` — so the directory is
+      narrowed where it lives instead of on the thirty rows that happened to be
+      loaded. That stopgap could never work: a filtered page came back short and
+      its cursor topped it up with rows that were then filtered away too, so
+      picking a city produced a stub list and a scroll that went nowhere.
+
+      One free-text box feeds BOTH place parameters, because the reader types a
+      place and does not know whether we file it as a city or a region. The
+      service matches either.
+    */
+    {
+      city: peopleFilter.location,
+      region: peopleFilter.location,
+      gender: peopleFilter.gender,
+    }
   );
   // `/feed` and `/store/items` take no `q`, so on those tabs a query falls
   // through to /search rather than narrowing this list. See the report.
@@ -133,16 +152,28 @@ export function DiscoverScreen() {
     [people.data?.pages, me.data?.id]
   );
   /*
-    The facet filter, applied over the loaded pages.
+    ROLE AND VERIFICATION are still applied here, and only those two.
+
+    They are on every row by contract and the service takes no parameter for
+    either, so narrowing the loaded page is the only place they can be applied
+    — and it is honest for them in a way it never was for place: a role is
+    carried by every profile, so a filtered page is short but not WRONG, and
+    paging tops it up with more rows that also carry it.
+
+    Place and gender have moved to the service (see `usePeople` above) and are
+    deliberately NOT re-applied here. Doing both would be the "two layers doing
+    one job" that makes the server-side filter unverifiable — if this ever
+    starts hiding a row the service returned, that is a bug in the service worth
+    seeing rather than papering over.
 
     Kept SEPARATE from `loadedPeople` on purpose: the filter bar reads the
     unfiltered rows to decide which facets the payload can even answer
-    (`facetAvailability`), and feeding it the filtered list would make a
-    control vanish the moment it excluded everything that carried the field it
-    was filtering on.
+    (`facetAvailability`), and feeding it the filtered list would make a control
+    vanish the moment it excluded everything that carried the field it was
+    filtering on.
   */
   const directoryPeople = useMemo(
-    () => filterPeople(loadedPeople, peopleFilter),
+    () => filterPeople(loadedPeople, { ...peopleFilter, location: "", gender: "" }),
     [loadedPeople, peopleFilter]
   );
 

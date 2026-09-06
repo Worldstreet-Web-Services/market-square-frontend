@@ -327,12 +327,38 @@ describe("the friends deck offers a real Follow", () => {
     );
   });
 
-  it("does not rotate the cards — the file's are upright", () => {
-    assert.doesNotMatch(
-      deck,
-      /rotate\(/,
-      "a rotation is back on the deck; node 225:3374 has none"
-    );
+  it("ROTATES the two neighbours — node 225:3374 tilts them", () => {
+    // This test used to assert the exact opposite, and it was wrong. Every one
+    // of the three cards carries a `relativeTransform`, and two of them turn:
+    // -9.27 and +9.90 degrees. The tilt is most of what makes the group read as
+    // a deck rather than three overlapping rectangles.
+    assert.match(deck, /rot: -9\.27/, "the left card lost the file's tilt");
+    assert.match(deck, /rot: 9\.9/, "the right card lost the file's tilt");
+    assert.match(deck, /rotate\(\$\{place\.rot\}deg\)/, "the tilt is no longer applied");
+  });
+
+  it("draws the neighbours SMALLER than the card in front — not larger", () => {
+    /*
+      The trap this pins. The file's neighbours report 205.55 and 207.76 wide
+      against the front card's 183.70, which reads as "the back cards are
+      bigger". Those are the bounding boxes of ROTATED cards. Solve the rotation
+      out and both are 170.5 — the same card at 92.79%.
+
+      Built from the AABBs, this deck had its neighbours at 1.119 and 1.131, so
+      the back cards were larger than the one being offered.
+    */
+    const scales = [...deck.matchAll(/scale: ([\d.]+)/g)].map((m) => Number(m[1]));
+    assert.ok(scales.length >= 3, "the deck stopped declaring its scales");
+    for (const scale of scales) {
+      assert.ok(scale <= 1, `a neighbour is scaled to ${scale} — larger than the front card`);
+    }
+    assert.match(deck, /scale: 0\.9279/, "the neighbours lost the file's 92.79%");
+  });
+
+  it("re-centres a fan that is not full", () => {
+    // The file draws three. With one or two people on the square the remaining
+    // cards sat off to one side of an empty row.
+    assert.match(deck, /drawn\.length < 3/, "a short deck is lopsided again");
   });
 
   it("places the three cards from the file rather than a formula", () => {
@@ -371,6 +397,68 @@ describe("the gist room hides its cover rather than faking one", () => {
       room,
       /h-\[200px\][^"]*bg-white/,
       "the empty cover placeholder is back"
+    );
+  });
+});
+
+/**
+ * A MENU OPENED IN A FEED ITEM MUST PAINT OVER THE ITEM BELOW IT.
+ *
+ * `ws-enter` animates a transform and holds it with `both`, so every feed item
+ * carries one permanently — and a transform creates a stacking context. The
+ * post's overflow menu is `z-20`, but that only orders it INSIDE its own post;
+ * against the next post, a sibling stacking context, DOM order wins. The menu
+ * opened in exactly the right place and the following post painted over it,
+ * with the next author's Follow button sitting on top of "Scam or fraud".
+ *
+ * `Sheet` hit the same transform and was portalled, but that was a different
+ * failure: a `position: fixed` overlay anchors to the transformed ancestor
+ * rather than the viewport, which no z-index can repair. An absolute dropdown
+ * is positioned correctly here — only its paint order is wrong.
+ */
+describe("a feed item that owns an open popover", () => {
+  const css = read("app/globals.css");
+
+  it("lifts above the items after it", () => {
+    assert.match(
+      css,
+      /\.ws-enter:has\(\.ws-popover\)\s*\{[^}]*z-index:\s*\d+/,
+      "a popover in a feed card can be painted over by the next card again"
+    );
+  });
+
+  it("is POSITIONED, or the z-index does nothing", () => {
+    // `ws-enter` is `position: static`, and z-index has no effect on a static
+    // element outside a flex or grid parent — the feed is a plain block list.
+    assert.match(
+      css,
+      /\.ws-enter:has\(\.ws-popover\)\s*\{[^}]*position:\s*relative/,
+      "the lift lost its positioning and is inert"
+    );
+  });
+
+  it("stays STRICTLY under the breadcrumb bar", () => {
+    /*
+      Read the breadcrumb's own z-index rather than hard-coding one, because
+      this is a RELATIONSHIP and the number on either side may move.
+
+      The first attempt set the lift to 30, which is exactly what the breadcrumb
+      carries. Equal z-index is broken by DOM order and the feed comes later, so
+      the post won: its author row, avatar and Follow button printed over
+      "Ark Ecosystem / Market Square" and the search field.
+    */
+    const shell = read("components/layout/app-shell.tsx");
+    const crumb = shell.match(/sticky top-0 z-(\d+)[^"]*h-\[76px\]|h-\[76px\][^"]*sticky top-0 z-(\d+)/);
+    const crumbZ = Number(crumb?.[1] ?? crumb?.[2] ?? 0);
+    assert.ok(crumbZ > 0, "could not find the breadcrumb bar's z-index in the shell");
+
+    const lift = css.match(/\.ws-enter:has\(\.ws-popover\)\s*\{[^}]*\}/)?.[0] ?? "";
+    const z = Number(lift.match(/z-index:\s*(\d+)/)?.[1] ?? 0);
+
+    assert.ok(z > 0, "the lift must beat its sibling feed items");
+    assert.ok(
+      z < crumbZ,
+      `the lift is z-${z} and the breadcrumb is z-${crumbZ}; a tie or a win means a post paints over the chrome`
     );
   });
 });

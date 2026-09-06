@@ -4,6 +4,10 @@ import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/fe
 import { FollowPill } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
+import { useTopics } from "@/features/discovery";
+import { JoinACommunity } from "@/components/layout/join-a-community";
+import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
+import { MakeSomeFriends } from "@/components/layout/make-some-friends";
 
 // Slices never import each other, so the follow control — which belongs to the
 // profile slice — is composed into the timeline here, the same way the stream
@@ -30,8 +34,31 @@ const tipSlot = (post: Post) => (
   />
 );
 
+/**
+ * Home, composed — node 225:3315.
+ *
+ * The file's order is stories, the TOPIC row, the rooms open now, "Make some
+ * friends", the timeline, then "Join a community". Three of those read slices
+ * the feed may not import, so they are assembled here and handed down as slots
+ * — the same route-slot pattern the follow pill and the tip button above use.
+ *
+ * The topic vocabulary is DATA rather than a node, because the row's selection
+ * drives the feed's own query: `GET /topics` belongs to the discovery slice and
+ * `GET /feed?topics=` is the feed's, and this is the one layer allowed to know
+ * both.
+ */
 export function HomeScreen() {
-  return <FeedPage followSlot={followSlot} tipSlot={tipSlot} />;
+  const topics = useTopics();
+  return (
+    <FeedPage
+      followSlot={followSlot}
+      tipSlot={tipSlot}
+      topicTabs={(topics.data ?? []).map((topic) => ({ key: topic.key, label: topic.label }))}
+      roomsSlot={<LiveGistRooms />}
+      friendsSlot={<MakeSomeFriends />}
+      communitySlot={<JoinACommunity />}
+    />
+  );
 }
 
 export function ArkmarksScreen() {

@@ -1069,6 +1069,27 @@ export function StoriesRow() {
             avatar, a white + badge cut into it, and the label beneath. */}
         <Link href="/?compose=story" className="ws-press shrink-0" aria-label="Add to your story">
           <span className="ws-story-card relative flex h-24 w-[100px] flex-col items-center justify-center gap-1">
+            {/* The file's dashed ring, drawn rather than bordered so the dash
+                length (6.13 on, 6.13 off), the 0.68px weight and the 16.34
+                radius are all the file's exactly. Inset by half the stroke so
+                it sits inside the tile instead of straddling its edge. */}
+            <svg
+              aria-hidden
+              viewBox="0 0 100 96"
+              fill="none"
+              className="pointer-events-none absolute inset-0 h-full w-full"
+            >
+              <rect
+                x="0.34"
+                y="0.34"
+                width="99.32"
+                height="95.32"
+                rx="16.34"
+                stroke="rgba(255,255,255,0.4)"
+                strokeWidth="0.68"
+                strokeDasharray="6.13 6.13"
+              />
+            </svg>
             <span className="relative">
               <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={48} />
               <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-black bg-white text-black">

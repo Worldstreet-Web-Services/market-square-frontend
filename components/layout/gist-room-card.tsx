@@ -123,17 +123,47 @@ export function GistRoomCard({
     .slice(0, 3);
 
   return (
-    <div className="w-[min(100%,338px)] rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 backdrop-blur-[7px]">
-      <div className="flex items-center justify-between gap-3">
+    /*
+      338 WIDE, ALWAYS — `shrink-0` is the load-bearing half.
+
+      The card sits in a `flex gap-4 overflow-x-auto` rail, and a flex item
+      shrinks below its width unless told not to. So a room with a short title
+      collapsed to whatever its text measured and the rail showed cards of three
+      different widths. The file's card is `layoutSizingHorizontal: FIXED` at
+      338 regardless of what is in it.
+
+      `max-w-full` still caps it, because this same card is composed into a
+      message thread whose column can be narrower than 338.
+    */
+    <div className="w-[338px] max-w-full shrink-0 rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 backdrop-blur-[7px]">
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <IconRoomBadgeMic className="h-6 w-6 shrink-0" />
-            <p className="min-w-0 text-[12px] font-semibold leading-4 text-white">{title}</p>
+          {/*
+            The title box is a FIXED TWO LINES, which is the file's 186x32 at
+            12/16. Two things follow from that and both matter:
+
+            · a LONG title WRAPS rather than truncating on one line — the box is
+              186 wide and the file sizes it that way on purpose;
+            · a SHORT one still occupies 32, so the chips and the Join pill stay
+              where the file puts them (y=56.3 and y=84.7) instead of sliding up
+              and giving every card a different rhythm.
+
+            The 186 is not hard-coded: the column is 218 after the faces take
+            their 72.4 and the gap its 16, and the disc and its 8px gap leave
+            exactly 186.
+          */}
+          <div className="flex h-8 gap-2">
+            <IconRoomBadgeMic className="h-6 w-6 shrink-0 self-center" />
+            <p className="line-clamp-2 min-w-0 flex-1 text-[12px] font-semibold leading-4 text-white">
+              {title}
+            </p>
           </div>
 
           {/* Indented to the title's own left edge — 24 + 8, which is the
-              file's x=31.57 on both the chip row and the pill. */}
-          <div className="mt-4 space-y-3 pl-8">
+              file's x=31.57 on both the chip row and the pill. The 8 and 16
+              below are the file's own gaps: title ends at 48.3, chips open at
+              56.3, and the pill at 84.7. */}
+          <div className="mt-2 space-y-4 pl-8">
             {labelled.length > 0 && (
               <div className="flex flex-wrap items-center gap-1">
                 {labelled.map(({ key, label, Icon }) => (

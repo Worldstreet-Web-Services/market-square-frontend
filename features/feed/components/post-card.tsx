@@ -15,6 +15,8 @@ import { CoinChips } from "@/components/ui/coin-chips";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { useRecordView } from "@/features/feed/hooks/use-record-view";
 import { useGate } from "@/hooks/use-gate";
+import { Sheet } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
@@ -28,10 +30,12 @@ import {
   IconMsShare,
 } from "@/components/ui/design-icons";
 import { formatCount } from "@/lib/format";
-import { IconEye } from "@/components/ui/icons";
+import { IconStats } from "@/components/ui/icons";
 import {
   useAddComment,
   useBookmarkPost,
+  useDeletePost,
+  useEditPost,
   useLikePost,
   useReport,
   useRepostPost,
@@ -48,9 +52,26 @@ const REPORT_REASONS: Array<{ reason: ReportReason; label: string }> = [
   { reason: "other", label: "Something else" },
 ];
 
-function ReportMenu({ targetId }: { targetId: string }) {
+/**
+ * The post's overflow menu.
+ *
+ * It used to offer only Report. `PATCH /posts/:id` and `DELETE /posts/:id` are
+ * both live, so the AUTHOR now gets Edit and Delete above the report reasons —
+ * and only the author: the service refuses both for anybody else (403 even for
+ * an admin, because admins remove rather than rephrase), so offering them would
+ * be a control that can only fail.
+ *
+ * EDIT IS TEXT ONLY, which the sheet says. Media, a quote and a deep link are
+ * deliberately not editable — swapping the picture under a post people have
+ * already liked changes what they endorsed.
+ */
+function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
+  const targetId = post.id;
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const report = useReport();
+  const remove = useDeletePost();
   const gate = useGate();
   return (
     <div className="relative">
@@ -60,7 +81,12 @@ function ReportMenu({ targetId }: { targetId: string }) {
         aria-label="More options"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 text-grey-100 transition-colors hover:bg-white/10"
+        /* Node 236:4750 reports a transparent fill with a WHITE STROKE and no
+           weight — the zero-weight trap. The rendered node is the opaque
+           near-black lens `ws-glass-pill` paints, which is what the file shows:
+           a solid dark disc, not a hairline ring. Same control, same material,
+           as the gist room's circular buttons. */
+        className="ws-glass-pill flex h-[38px] w-[38px] items-center justify-center rounded-full text-grey-100 transition-opacity hover:opacity-90"
       >
         <IconMsMore className="h-6 w-6" />
       </button>
@@ -68,6 +94,29 @@ function ReportMenu({ targetId }: { targetId: string }) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="ws-popover absolute right-0 z-20 mt-1 w-56 rounded-2xl p-1.5">
+            {mine && (
+              <>
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    setEditing(true);
+                  }}
+                  className="block w-full rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
+                >
+                  Edit post
+                </button>
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    setConfirmDelete(true);
+                  }}
+                  className="block w-full rounded-xl px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-white/10"
+                >
+                  {post.kind === "story" ? "Delete story" : "Delete post"}
+                </button>
+                <span aria-hidden className="my-1 block h-px bg-white/10" />
+              </>
+            )}
             <p className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-meta">
               <IconFlag className="h-3.5 w-3.5" /> Report
             </p>
@@ -86,6 +135,77 @@ function ReportMenu({ targetId }: { targetId: string }) {
           </div>
         </>
       )}
+
+      <Sheet open={editing} onClose={() => setEditing(false)} title="Edit post">
+        <EditPostForm post={post} onDone={() => setEditing(false)} />
+      </Sheet>
+
+      <Sheet
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={post.kind === "story" ? "Delete this story?" : "Delete this post?"}
+      >
+        {/* This one IS final — unlike removing a chat, which only leaves your
+            own inbox — so it says so. */}
+        <p className="text-[13px] leading-5 text-body">
+          It comes off every timeline it appears on, along with its replies. This cannot be
+          undone.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={() => setConfirmDelete(false)}>
+            Keep it
+          </Button>
+          <Button
+            className="flex-1"
+            loading={remove.isPending}
+            onClick={() =>
+              gate(() =>
+                remove.mutate(targetId, { onSuccess: () => setConfirmDelete(false) })
+              )
+            }
+          >
+            Delete
+          </Button>
+        </div>
+      </Sheet>
+    </div>
+  );
+}
+
+/**
+ * The edit form — text only.
+ *
+ * Its own component so the draft starts fresh on every opening: the sheet is
+ * mounted only while open, so there is nothing stale to reset and no effect
+ * needed to reset it. The 2000-character cap is the service's own, applied here
+ * so a request cannot be rejected for length after the fact.
+ */
+function EditPostForm({ post, onDone }: { post: Post; onDone: () => void }) {
+  const [text, setText] = useState(post.text);
+  const edit = useEditPost(post.id);
+  const trimmed = text.trim();
+  const valid = trimmed.length > 0 && trimmed !== post.text.trim();
+  return (
+    <div>
+      <textarea
+        autoFocus
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        maxLength={2000}
+        rows={5}
+        className="ws-inset w-full resize-none px-4 py-3 text-[15px] leading-6 text-heading outline-none placeholder:text-meta"
+      />
+      <p className="mt-2 text-[11px] leading-4 text-meta">
+        Text only — a post&apos;s picture, quote and link stay as published.
+      </p>
+      <Button
+        className="mt-4 w-full"
+        disabled={!valid}
+        loading={edit.isPending}
+        onClick={() => edit.mutate(trimmed, { onSuccess: onDone })}
+      >
+        Save
+      </Button>
     </div>
   );
 }
@@ -109,7 +229,8 @@ function CountAction({
   count: number;
   active?: boolean;
   activeClass?: string;
-  onClick: () => void;
+  /** Absent for a tally that is only a fact — views have nothing to do. */
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -117,7 +238,7 @@ function CountAction({
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className="flex shrink-0 items-center gap-0.5 transition-colors"
+      className="flex shrink-0 items-center gap-0.5 transition-colors md:gap-[2px]"
     >
       <span
         className={cn(
@@ -127,7 +248,8 @@ function CountAction({
       >
         {children}
       </span>
-      <span className="tnum text-[12px] text-heading">{formatCount(count)}</span>
+      {/* 12/16 in `#FFFFFF` — node 236:4729. */}
+      <span className="tnum text-[12px] leading-4 text-white">{formatCount(count)}</span>
     </button>
   );
 }
@@ -198,7 +320,8 @@ function GlyphAction({
   label: string;
   active?: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  /** Absent for a tally that is only a fact — views have nothing to do. */
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -296,7 +419,15 @@ function RepostMenu({
  * composer — no media, no length ambitions. Anything longer than a line wants
  * the sheet, where the thread is readable.
  */
-function InlineComment({ postId, onOpenThread }: { postId: string; onOpenThread: () => void }) {
+function InlineComment({
+  postId,
+  onOpenThread,
+  className,
+}: {
+  postId: string;
+  onOpenThread: () => void;
+  className?: string;
+}) {
   const add = useAddComment(postId);
   const gate = useGate();
   const me = useMe();
@@ -331,8 +462,26 @@ function InlineComment({ postId, onOpenThread }: { postId: string; onOpenThread:
   };
 
   return (
-    <div className="ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2">
+    /*
+      NODE 236:4738 — the comment pill: `white/3` at a full round, 8.08 of
+      padding, a 24px glyph, then the field.
+
+      TWO DEPARTURES FROM THE FILE, both stated:
+
+      · The file leads with a comment GLYPH at 60% white and no avatar. This
+        keeps the reader's own avatar and puts the glyph beside it, because the
+        pill is a live field here rather than a placeholder — seeing whose reply
+        it will be is worth the 24px, and it is the same affordance every
+        composer in the app uses.
+      · The placeholder is the file's copy but NOT its colour. `236:4743` is
+        `#3C3C3C`, which reads on the white the mockup accidentally exported
+        (the page frame's fill is `visible: false`, so the PNG has no
+        background) and is very nearly invisible on the real `#0F0F0F` card.
+        The app's own placeholder grey is used instead.
+    */
+    <div className={cn("ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2", className)}>
       <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
+      <IconMsComment aria-hidden className="h-6 w-6 shrink-0 text-white/60" />
       {sent ? (
         // Says what happened AND offers the one thing a person wants next.
         <button
@@ -348,7 +497,7 @@ function InlineComment({ postId, onOpenThread }: { postId: string; onOpenThread:
           value={text}
           onChange={(event) => setText(event.target.value.slice(0, 500))}
           onKeyDown={(event) => event.key === "Enter" && submit()}
-          placeholder="Gist here..."
+          placeholder="Comment here..."
           aria-label="Write a reply"
           disabled={add.isPending}
           className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700 disabled:opacity-60"
@@ -407,6 +556,10 @@ export function PostCard({
   const repost = useRepostPost();
   const bookmark = useBookmarkPost();
   const gate = useGate();
+  // Who is reading, so the overflow menu can offer Edit and Delete to the
+  // author and to nobody else. COMPARED rather than assumed impossible — the
+  // same rule the follow control and the directory filter apply.
+  const me = useMe();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const author = post.author;
   // A button when the media can expand, a plain div when it cannot. Rendering
@@ -474,6 +627,18 @@ export function PostCard({
           <p className="truncate text-[12px] leading-4 text-white/50">
             {author ? `@${author.username}  •  ` : ""}
             {relativeTime(post.createdAt)}
+            {/*
+              EDITED, from `editedAt` alone.
+
+              Every edit stamps the field — there is no quiet window in which a
+              post can change without saying so — so the marker is read straight
+              off it rather than diffing anything. It carries a `title` with the
+              time, because "edited" without "when" invites the reader to
+              wonder whether it changed since THEY read it.
+            */}
+            {post.editedAt && (
+              <span title={`Edited ${relativeTime(post.editedAt)}`}>  •  edited</span>
+            )}
           </p>
         </div>
         {/* The design's action row: 26px tall, 8px between the two controls,
@@ -606,14 +771,21 @@ export function PostCard({
           Giving it a row of its own solves the geometry instead. */}
       <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
       <div className="flex items-center justify-between gap-3 md:contents">
+        {/*
+          THE TALLIES PILL — node 236:4725.
+
+          `white/3` at a full round, 8.08 of padding, and THREE items on a 17px
+          gap, each a 24px glyph beside its count at 12/16 in white.
+
+          WHICH three is the correction. It used to be comment · repost · like,
+          with views floating outside the pill behind an eye glyph. The file has
+          repost · like · STATS: the comment tally moved out to the "Comment
+          here…" pill beside it — which is where a reader actually replies — and
+          views came IN, as the bar chart, because a view is something that
+          happened to the post rather than something you can do to it, which is
+          exactly what the other two tallies are.
+        */}
         <div className="ws-action-pill flex h-10 shrink-0 items-center gap-3 px-2 md:gap-[17px]">
-          <CountAction
-            label="Comments"
-            count={post.commentCount}
-            onClick={() => setCommentsOpen(true)}
-          >
-            <IconMsComment className="h-[18px] w-[18px]" />
-          </CountAction>
           <RepostMenu
             post={post}
             onRepost={() =>
@@ -632,29 +804,27 @@ export function PostCard({
             activeClass="text-like"
             onClick={() => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }))}
           >
-            <IconMsLike className="h-[18px] w-[18px]" filled={post.likedByMe} />
+            <IconMsLike className="h-6 w-6" filled={post.likedByMe} />
           </CountAction>
+          {/* Rendered only when the payload carries a count — a confident
+              "0 views" on a service that does not count them yet is a lie the
+              reader cannot detect. The pill then holds two, which is what the
+              file's own geometry allows: its items are hug-width. */}
+          {post.viewCount !== undefined && (
+            <CountAction
+              label={`${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`}
+              count={post.viewCount}
+            >
+              <IconStats className="h-6 w-6" />
+            </CountAction>
+          )}
         </div>
 
-
-        {/* Views sit with the tallies, not the actions: they are something that
-            happened to the post, not something you can do to it. Rendered only
-            when the payload carries one — a confident "0 views" on a service
-            that does not count them yet is a lie the reader cannot detect. */}
-        {post.viewCount !== undefined && (
-          <span
-            className="tnum flex shrink-0 items-center gap-1.5 text-[13px] text-white/50"
-            title={`${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`}
-          >
-            <IconEye className="h-[18px] w-[18px]" />
-            {formatCount(post.viewCount)}
-          </span>
-        )}
-
-        <div className="flex shrink-0 items-center gap-3 md:gap-[17px]">
-          <div className="flex items-center gap-3">
+        {/* `md:order-3` — see the note on the row below. */}
+        <div className="flex shrink-0 items-center gap-3 md:order-3 md:gap-[17px]">
+          <div className="flex items-center gap-3 md:gap-3">
             <GlyphAction label="Share" onClick={share}>
-              <IconMsShare className="h-5 w-5" />
+              <IconMsShare className="h-6 w-6" />
             </GlyphAction>
             {/* Arkmark. While the endpoint is absent the control goes quiet
                 rather than pretending the save landed. */}
@@ -674,17 +844,38 @@ export function PostCard({
                 )
               }
             >
-              <IconMsBookmark className="h-5 w-5" filled={post.bookmarkedByMe} />
+              <IconMsBookmark className="h-6 w-6" filled={post.bookmarkedByMe} />
             </GlyphAction>
           </div>
-          <ReportMenu targetId={post.id} />
+          {/* `mine` gates Edit and Delete — the service refuses both for
+              anybody but the author, so offering them elsewhere would be a
+              control that can only fail. */}
+          <ReportMenu post={post} mine={Boolean(me.data && post.authorId === me.data.id)} />
         </div>
       </div>
 
-        {/* Second in the DOM so a keyboard reaches the actions first, and
-            `md:contents` above flattens the mobile wrapper on desktop so this
-            still lands between the tallies and the glyphs. */}
-        <InlineComment postId={post.id} onOpenThread={() => setCommentsOpen(true)} />
+        {/*
+          THE FIELD SITS IN THE MIDDLE, AND ORDER IS WHAT PUTS IT THERE.
+
+          Node 236:4723 lays the row out as: tallies pill, 24, comment pill,
+          then a wide gap, then share · bookmark · more hard against the right
+          edge. The field is second, and it is the thing that stretches.
+
+          It is second on screen but LAST in the DOM, so a keyboard reaches the
+          post's actions before a text input it may not want. `md:contents`
+          flattens the mobile wrapper into this row on desktop — and `contents`
+          preserves DOM order, which is precisely why this needs `order`:
+          without it the flatten produced tallies → share/bookmark/more →
+          field, putting the actions in the middle and the input at the far
+          right. `flex-1` then pushes the action group to the extreme end at
+          any card width, which is what the file's fixed 113px gap expresses at
+          its one width.
+        */}
+        <InlineComment
+          postId={post.id}
+          onOpenThread={() => setCommentsOpen(true)}
+          className="md:order-2"
+        />
       </div>
 
       <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />

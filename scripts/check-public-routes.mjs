@@ -227,6 +227,17 @@ function collectCalls(root) {
  * route ships. Anything not listed here fails the check.
  */
 const PENDING_ROUTES = {
+  // ── "Use my location" in the location sheet ────────────────────────────────
+  "post /geo/reverse": {
+    reason:
+      "Turns a device reading into a place NAME so the browser never ships a " +
+      "provider key and no coordinate reaches our database. It answers exactly " +
+      "{ city, region } and nothing else — that narrowness is the privacy " +
+      "property, not a convention. Not deployed yet: the button that calls it " +
+      "goes quiet on a 404 and the two typed fields work without it. DELETE " +
+      "THIS ENTRY when the route ships. See the reverse-geocode spec.",
+  },
+
   // ── the operations console ────────────────────────────────────────────────
   // `app/operations/page.tsx` renders this slice, and all three of its calls
   // 404 today: no `/operations/*` route exists in market-square's spec, and no

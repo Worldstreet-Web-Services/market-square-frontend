@@ -94,7 +94,24 @@ export function MakeSomeFriends() {
 
   // Three at a time: the one being decided about, and its two neighbours fanned
   // behind it. More than that is decoration nobody can read.
-  const window = [index - 1, index, index + 1];
+  const window = [index - 1, index, index + 1].filter((i) => items[i]);
+
+  /*
+    THE FAN IS RE-CENTRED WHEN IT IS NOT FULL.
+
+    The file draws three cards and places them by hand, slightly right of the
+    group's middle. That is fine at three. At the start of the list, or on a
+    square with only two people on it, one or both neighbours are missing and
+    the remaining cards sit off to one side of an empty row — which is what
+    this looked like on a two-person instance.
+
+    So when fewer than three render, the group shifts by the mean of the
+    offsets actually drawn. At three it shifts by nothing and the file's own
+    placement stands untouched.
+  */
+  const drawn = window.map((i) => DECK_PLACES[i - index]?.x ?? 0);
+  const recentre =
+    drawn.length < 3 ? -drawn.reduce((a, b) => a + b, 0) / drawn.length : 0;
 
   return (
     <section aria-label="People to meet" className="flex flex-col gap-6">
@@ -107,28 +124,30 @@ export function MakeSomeFriends() {
         </p>
       </div>
 
-      <div className="flex items-center justify-center gap-2">
-        <DeckArrow
-          direction="prev"
-          disabled={index === 0}
-          onClick={() => step(-1)}
-        />
+      {/*
+        The arrows sit BESIDE the deck, not at the column's edges. The file puts
+        them at x=90 and x=607 either side of a deck spanning 148 to 609 — their
+        centres 517 apart, which is the deck's own width plus a hair. Flexed to
+        the row's ends they drifted to wherever the column happened to end.
 
-        <div className="relative flex h-[270px] flex-1 items-center justify-center">
-          {window.map((position) => {
-            const profile = items[position];
-            if (!profile) return null;
-            const offset = position - index;
-            return (
-              <PersonCard
-                key={profile.id}
-                profile={profile}
-                offset={offset}
-                onPass={() => step(1)}
-                onWinked={() => step(1)}
-              />
-            );
-          })}
+        `min-w-0` and the horizontal scroll are for the narrow case: the deck is
+        a fixed 467 and the arrows 56 each, and a phone column is narrower than
+        that sum.
+      */}
+      <div className="flex items-center justify-center gap-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <DeckArrow direction="prev" disabled={index === 0} onClick={() => step(-1)} />
+
+        <div className="relative flex h-[272px] w-[467px] shrink-0 items-center justify-center">
+          {window.map((position) => (
+            <PersonCard
+              key={items[position]!.id}
+              profile={items[position]!}
+              offset={position - index}
+              shift={recentre}
+              onPass={() => step(1)}
+              onWinked={() => step(1)}
+            />
+          ))}
         </div>
 
         <DeckArrow
@@ -157,6 +176,11 @@ function DeckArrow({
       disabled={disabled}
       onClick={onClick}
       aria-label={direction === "prev" ? "Previous person" : "Next person"}
+      /* Both arrows hang BELOW the deck's centre in the file — 20.5 and 18.5 of
+         a 269-tall group — which is what lines them up with the tilted side
+         cards rather than the raised front one. Kept per-arrow; the 2px between
+         them is the file's own hand. */
+      style={{ transform: `translateY(${direction === "prev" ? 21 : 19}px)` }}
       className="ws-press flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-[0.68px] border-white/40 text-white shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-opacity hover:bg-white/5 disabled:opacity-30"
     >
       {/* One glyph, mirrored for `next` — the file draws the same
@@ -174,54 +198,61 @@ function DeckArrow({
  * identical rectangles does not. Their controls are inert and they are
  * `aria-hidden`, because only the front card is the thing being decided about
  * — a screen reader offered three winks would be offered two that do nothing.
+ *
+ * They are also fully OPAQUE. Every card carries the file's same
+ * white-to-#D0B3FF fill at full strength; depth comes from overlap, tilt and
+ * the front card being the largest, never from transparency.
  */
 /**
- * WHERE THE THREE CARDS SIT — the file's own numbers, not a formula.
+ * WHERE THE THREE CARDS SIT — the file's own numbers.
  *
  * Node 225:3374 draws exactly three cards and this deck renders exactly three
- * (`[index - 1, index, index + 1]`), so their positions are read off the file
- * rather than generated from an offset:
+ * (`[index - 1, index, index + 1]`), so their placement is read off the file
+ * rather than generated from a formula:
  *
- *   left  225:3388  x=0       y=8.21   205.55 x 256.35
- *   front 225:3401  x=124.73  y=0      183.70 x 250.01
- *   right 225:3375  x=253.24  y=11.24  207.76 x 257.78
+ *   left   225:3388  AABB (0, 8.21)      205.55 x 256.35   rot -9.27
+ *   front  225:3401  AABB (124.73, 0)    183.70 x 250.01   rot   0
+ *   right  225:3375  AABB (253.24, 11.24) 207.76 x 257.78  rot +9.90
  *
- * Two things in there are the opposite of what a generated fan assumes, and
- * both were wrong here:
+ * ─── THE AABB IS NOT THE CARD ───────────────────────────────────────────────
+ * This is the trap, and it was live here: those 205.55 and 207.76 are the
+ * bounding boxes of ROTATED cards, not the cards. Solve the rotation back and
+ * both come out 170.5 x 232 — the SAME card as the front one at 92.79%.
  *
- *   THE NEIGHBOURS ARE FULLY OPAQUE. They were rendered at `opacity: 0.55`,
- *   which washed the file's white-to-#D0B3FF card out to grey against the
- *   black page and made the deck look faded. Every card carries the same
- *   fill at full strength; depth comes from overlap and from the front card
- *   being raised, never from transparency.
+ * Read as sizes, they said the neighbours were LARGER than the card in front of
+ * them, which is backwards, and this deck was built that way: sides at 1.119
+ * and 1.131, upright. A fan whose back cards are bigger than its front card
+ * reads as three cards fighting rather than one card being offered.
  *
- *   NOTHING IS ROTATED. A `rotate(-4deg)` per step was invented here. The
- *   file's cards are upright.
+ * ─── AND THEY ARE ROTATED ───────────────────────────────────────────────────
+ * By -9.27 and +9.90 degrees. An earlier note here asserted the opposite —
+ * "nothing is rotated, the file's cards are upright" — which is simply wrong:
+ * every one of the three carries a `relativeTransform`, and two of them turn.
+ * The tilt is most of what makes this look like a deck.
  *
- * The neighbours are also LARGER than the front card (205.55 and 207.76
- * against 183.70), which reads as the front one being lifted toward you
- * rather than the sides being pushed back — again the reverse of the usual
- * scale-down fan.
- *
- * Values are CENTRE deltas, because the cards are centred in their container
- * and `scale()` grows from the centre; they are the file's numbers times
- * 186/183.7, our card being 186 wide. The left/right asymmetry (-115 against
- * +142) is the file's own hand placement and is kept rather than averaged.
+ * Positions are CENTRE deltas from the front card, because the cards are
+ * centred in their container and both `scale()` and `rotate()` work from the
+ * centre. They are the file's centres times 186/183.7, our card being 186 wide.
+ * The left/right asymmetry (-115 against +142) is the file's own hand placement
+ * and is kept rather than averaged.
  */
-const DECK_PLACES: Record<number, { x: number; y: number; scale: number }> = {
-  [-1]: { x: -115, y: 11, scale: 1.119 },
-  0: { x: 0, y: 0, scale: 1 },
-  1: { x: 142, y: 15, scale: 1.131 },
+const DECK_PLACES: Record<number, { x: number; y: number; scale: number; rot: number }> = {
+  [-1]: { x: -115.2, y: 11.5, scale: 0.9279, rot: -9.27 },
+  0: { x: 0, y: 0, scale: 1, rot: 0 },
+  1: { x: 142.3, y: 15.3, scale: 0.9279, rot: 9.9 },
 };
 
 function PersonCard({
   profile,
   offset,
+  shift,
   onPass,
   onWinked,
 }: {
   profile: Profile;
   offset: number;
+  /** Re-centring for a fan that is not full — see the note in the deck. */
+  shift: number;
   onPass: () => void;
   onWinked: () => void;
 }) {
@@ -251,7 +282,7 @@ function PersonCard({
         front ? "z-20" : "z-10"
       )}
       style={{
-        transform: `translate(${place.x}px, ${place.y}px) scale(${place.scale})`,
+        transform: `translate(${place.x + shift}px, ${place.y}px) rotate(${place.rot}deg) scale(${place.scale})`,
       }}
     >
       {/* The file's insets are NOT uniform, and `p-3` flattened them: the photo
@@ -311,7 +342,11 @@ function PersonCard({
           />
           {/* The file's bottom scrim: transparent to solid black, carrying the
               name and handle so they read over any photograph. */}
-          <span className="absolute inset-x-0 bottom-0 flex h-[74px] flex-col items-center justify-end bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,1)_100%)] px-2 pb-2">
+          {/* The file sets both lines in ROBOTO — 600 for the name, 400 for the
+              handle — not the product's Geist. These cards are the same
+              purple-gradient object the welcome screens use and the design
+              types them the same way. */}
+          <span className="absolute inset-x-0 bottom-0 flex h-[74px] flex-col items-center justify-end bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,1)_100%)] px-2 pb-2 font-[family-name:var(--font-roboto)]">
             <span className="w-full truncate text-center text-[12px] font-semibold leading-5 text-white">
               {name}
             </span>

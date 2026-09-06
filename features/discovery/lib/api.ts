@@ -56,16 +56,42 @@ export async function saveMyInterests(topics: string[]) {
  * itself, since sorting one loaded page is not sorting the list.
  */
 export async function fetchPeople(
-  params: { query?: string; sort?: PeopleSort; cursor?: string } = {}
+  params: {
+    query?: string;
+    sort?: PeopleSort;
+    cursor?: string;
+    /**
+     * The place and gender facets, matched SERVER-SIDE.
+     *
+     * `city`, `region` and `gender` are real parameters on `GET /profiles` now,
+     * case-insensitive and exact (`lagos` matches `Lagos`, `Lag` matches
+     * nothing). They compose with each other and with `q`.
+     *
+     * This replaces filtering the loaded page, which was always a stopgap and
+     * said so: narrowing thirty rows of a directory is not narrowing the
+     * directory, and no cursor can top a filtered page back up — a reader who
+     * picked a city got one short page and an empty scroll.
+     *
+     * There is deliberately NO coordinate, radius or distance here, and there
+     * must never be one. See `lib/people-filters.ts`.
+     */
+    city?: string;
+    region?: string;
+    gender?: string;
+  } = {}
 ) {
   const query = params.query?.trim() ?? "";
+  const city = params.city?.trim() ?? "";
+  const region = params.region?.trim() ?? "";
+  const gender = params.gender?.trim() ?? "";
   return PeoplePageSchema.parse(
     await msApi.get("/profiles", {
       ...(query ? { q: query } : {}),
-      // `q` and `sort` are the ONLY narrowing this route accepts — the spec
-      // documents four parameters and these are two of them. Location and
-      // gender are not among them and are not faked into `q`; see
-      // `lib/people-filters.ts` for what the backend still owes.
+      // Omitted when empty rather than sent blank: `city=` reads as "match the
+      // empty string", which is not the same request as "do not filter".
+      ...(city ? { city } : {}),
+      ...(region ? { region } : {}),
+      ...(gender ? { gender } : {}),
       sort: parsePeopleSort(params.sort),
       limit: 30,
       cursor: params.cursor,

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
-import { IconMsHandDeposit } from "@/components/ui/design-icons";
 import { IconDonate } from "@/components/ui/room-icons";
 import { TipSheet } from "@/features/tips/components/tip-sheet";
 import { useTippingUnavailable } from "@/features/tips/lib/availability";
@@ -99,8 +98,6 @@ export function TipButton({
             }
             className="ws-press flex h-10 shrink-0 items-center gap-2 rounded-full bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] px-3 text-[12px] font-medium leading-4 text-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1),0_1px_3px_0_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
           >
-            {/* `la:donate`, node 121:10998 — the room's own glyph, not the
-                timeline pill's `IconMsHandDeposit`. */}
             <IconDonate className="h-4 w-4" />
             Give a tip
           </button>
@@ -141,7 +138,17 @@ export function TipButton({
             "text-spotlight-chip-ink transition-colors hover:bg-spotlight/55"
           )}
         >
-          <IconMsHandDeposit className="h-4 w-4" />
+          {/*
+            `la:donate` — the file's OWN tip glyph, exported from node
+            121:10998.
+
+            It used to be `IconMsHandDeposit`, a hand-drawn coin-into-palm from
+            `design-icons.tsx`. The file does not contain that glyph anywhere;
+            the one tip control it draws uses `la:donate`, so both surfaces now
+            use it and there is a single tip mark in the product rather than
+            two that happen to mean the same thing.
+          */}
+          <IconDonate className="h-4 w-4" />
         </button>
       )}
 
