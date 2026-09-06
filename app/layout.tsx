@@ -3,6 +3,7 @@ import { Geist, Roboto } from "next/font/google";
 import Providers from "./providers";
 import { AppShell } from "@/components/layout/app-shell";
 import { SplashScreen } from "@/components/layout/splash-screen";
+import { SignInOverlay } from "@/components/layout/sign-in-overlay";
 import { WelcomeGate } from "@/components/layout/welcome/welcome-gate";
 import "./globals.css";
 
@@ -65,6 +66,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Under the splash, over the app: what a first-time, signed-out
               visitor to the front door sees once the boot sequence ends. */}
           <WelcomeGate />
+          {/* The app's one sign-in surface, opened from anywhere by
+              `useAuth().login`. Under the welcome, over everything else. */}
+          <SignInOverlay />
           <AppShell>{children}</AppShell>
         </Providers>
       </body>
