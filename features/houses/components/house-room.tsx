@@ -30,7 +30,11 @@ import {
   useStream,
 } from "@/features/streams/hooks/use-streams";
 import type { Ingest, Stream } from "@/features/streams/lib/types";
-import { RoomPeopleSection, type RoomPerson } from "@/features/houses/components/room-people";
+import {
+  GRID_CELLS,
+  RoomPeopleSection,
+  type RoomPerson,
+} from "@/features/houses/components/room-people";
 import { RoomRosterPanel } from "@/features/houses/components/room-roster-panel";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { Backstage } from "@/features/houses/components/backstage";
@@ -170,9 +174,6 @@ interface SlotProps {
 
 /** One frozen empty set, so an unresolved roster is not a new value per render. */
 const EMPTY_IDS: ReadonlySet<string> = new Set();
-
-/** Two rows of six — what 369:9221 draws before it stops and offers View all. */
-const GRID_TILES = 12;
 
 export function HouseRoom({
   houseId,
@@ -1209,7 +1210,7 @@ function LiveHouse({
              grid shows — a control that opens a panel identical to what you are
              already looking at is a control that lies about having more. */
           onViewAll={
-            audiencePeople.length > GRID_TILES
+            audiencePeople.length > GRID_CELLS
               ? () => openRoster("Audience", audiencePeople)
               : undefined
           }

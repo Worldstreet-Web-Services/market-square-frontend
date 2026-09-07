@@ -9,7 +9,7 @@
 // is from the identity on their room token, and never holds the whole object.
 
 import { useEffect } from "react";
-import { HouseRoom, RoomPeopleSection, type RoomPerson } from "@/features/houses";
+import { GRID_CELLS, HouseRoom, RoomPeopleSection, type RoomPerson } from "@/features/houses";
 import { useConversationMembers, useJoinGroup } from "@/features/messages";
 import { PersonQuickActions as QuickActions } from "@/features/profile";
 import { PersonFollow, PersonQuickActions, PersonSafetyRows } from "@/features/profile";
@@ -74,9 +74,6 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
  * slices never import each other, but the room is the only thing that can act
  * on it.
  */
-/** Two rows of six — what 369:9221 draws before it offers View all. */
-const GRID_TILES = 12;
-
 function HouseMembers({
   conversationId,
   speakerIds,
@@ -127,7 +124,7 @@ function HouseMembers({
       /* Only when there is more than the grid shows — see the note on the
          Audience's own View all. */
       onViewAll={
-        people.length > GRID_TILES
+        people.length > GRID_CELLS
           ? () => onViewAll("House Members", people)
           : undefined
       }

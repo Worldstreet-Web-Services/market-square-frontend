@@ -5,4 +5,4 @@ export { HouseRoom } from "./components/house-room";
 export { HousesStreet } from "./components/houses-street";
 export { OpenHouseSheet } from "./components/open-house-sheet";
 export { isHouse, housePath, HOUSE_CATEGORY } from "./lib/house";
-export { RoomPeopleSection, type RoomPerson } from "./components/room-people";
+export { RoomPeopleSection, GRID_CELLS, type RoomPerson } from "./components/room-people";

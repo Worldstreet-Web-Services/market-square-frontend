@@ -179,6 +179,16 @@ function PersonCard({ person }: { person: RoomPerson }) {
  * draws it on `House Members` and `Audience` but not on `Speakers`, which is
  * the top section and needs no separation from what is above it.
  */
+/**
+ * Two rows of six — what 369:9221 draws before it stops.
+ *
+ * Exported because the surfaces that decide whether to OFFER "View all" have to
+ * agree with the grid that renders it: a section capped at twelve here and
+ * gated at ten there would either hide people silently or offer a panel
+ * identical to the grid above it.
+ */
+export const GRID_CELLS = 12;
+
 export function RoomPeopleSection({
   title,
   people,
@@ -198,6 +208,21 @@ export function RoomPeopleSection({
   /** Ends the grid with the file's "View all" tile (169:13518). */
   onViewAll?: () => void;
 }) {
+  /*
+    TWO ROWS, AND THE TILE IS ONE OF THE TWELVE CELLS.
+
+    369:9221 draws six across and six again, with "View all" AS the last cell —
+    so eleven people and the tile, not twelve people and a thirteenth thing.
+    Without the slice the grid rendered every person it was given plus the tile,
+    which on sixteen members was three ragged rows: the cap decided whether the
+    tile APPEARED and truncated nothing.
+
+    Only when there is somewhere to go. With no `onViewAll` the list is
+    everything there is, and cutting it would hide people behind a control that
+    is not there.
+  */
+  const shown = onViewAll ? people.slice(0, GRID_CELLS - 1) : people;
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -216,7 +241,7 @@ export function RoomPeopleSection({
            room can hold more, and a horizontal scroller hides people behind a
            gesture nobody is told about. */
         <div className="flex flex-wrap gap-x-6 gap-y-4">
-          {people.map((person) => (
+          {shown.map((person) => (
             <PersonCard key={person.id} person={person} />
           ))}
           {onViewAll && <ViewAllTile onClick={onViewAll} />}
