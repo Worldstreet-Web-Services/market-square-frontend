@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { Spinner } from "@/components/ui/button";
@@ -20,12 +20,10 @@ import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
 import { TopicTabs, type TopicTab } from "@/features/feed/components/topic-tabs";
-import { IconLoadMore } from "@/components/ui/home-icons";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 
-/** The file draws three posts before "Load more" (229:4113). */
-const FIRST_PAGE = 3;
-/** What one press reveals. The file cannot say; three matches what it shows. */
-const STEP = 3;
+/** How many posts stand between the top of the feed and "Join a community". */
+const BEFORE_COMMUNITY = 1;
 
 /*
   Lanes filter the timeline, in the design's order.
@@ -172,24 +170,19 @@ export function FeedPage({
   */
   const [topic, setTopic] = useState<string | null>(null);
   /*
-    HOME SHOWS THREE POSTS AND A "LOAD MORE" — nodes 229:4113 and 242:4890.
+    THE TIMELINE RUNS ON, AND "JOIN A COMMUNITY" SITS INSIDE IT.
 
-    The file draws exactly three, then an `ep:refresh-left` row reading "Load
-    more", then "Join a community". That last part is why this matters and is
-    not a mockup convenience: with an infinitely scrolling timeline the
-    community grid sits below content that never ends, so it could never be
-    reached. An explicit control puts a floor under the feed and makes
-    everything after it reachable on the first screen.
+    It used to show three posts and stop at a "Load more" row (242:4890), for
+    one reason: the community grid came after the feed, and a grid placed under
+    a list that never ends can never be reached. Interleaving the grid instead
+    removes that constraint — it now sits after the first post, where it is on
+    the first screen whatever the feed does — so the floor under the feed came
+    out with it and the timeline pages itself as the reader scrolls.
 
-    It also matches what this product is. Home is an OVERVIEW — the rooms open
-    now, people to meet, a taste of the conversation, communities to join — not
-    an endless scroll. The endless scroll is Ark's.
-
-    STEP is the one number worth arguing about and the file cannot settle it:
-    three is what it draws, so three is what a press reveals. Change `STEP`
-    alone to make it bigger.
+    Nothing is held back any more: every post that has been fetched is on the
+    page, and reaching the end asks for the next page rather than waiting to be
+    asked.
   */
-  const [shown, setShown] = useState(FIRST_PAGE);
   const lane: Lane = "for-you";
   const [composerOpen, setComposerOpen] = useState(false);
   // The post being quoted, if the composer was opened from a repost menu.
@@ -210,17 +203,14 @@ export function FeedPage({
     () => feed.data?.pages.flatMap((page) => page.items) ?? [],
     [feed.data?.pages]
   );
-  const items = useMemo(() => loaded.slice(0, shown), [loaded, shown]);
-  /* More to reveal from what is already here, or another page to ask for. */
-  const canLoadMore = shown < loaded.length || Boolean(feed.hasNextPage);
-  const loadMore = () => {
-    setShown((current) => current + STEP);
-    // Fetch ahead only when the reveal is about to run past what we hold — a
-    // press should never leave the reader looking at the same three posts.
-    if (shown + STEP > loaded.length && feed.hasNextPage && !feed.isFetchingNextPage) {
-      void feed.fetchNextPage();
-    }
-  };
+  /* Everything that has been fetched. Nothing is withheld behind a control. */
+  const items = loaded;
+  const canLoadMore = Boolean(feed.hasNextPage);
+  /* The shared sentinel every other paged list in the app uses — 600px of
+     rootMargin, so the next page is asked for before the reader arrives. */
+  const sentinelRef = useInfiniteScroll(() => {
+    if (feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
+  }, canLoadMore);
 
   /**
    * What the full-screen viewer scrolls: every MEDIA post of the lane, photos
@@ -345,14 +335,7 @@ export function FeedPage({
           <TopicTabs
             tabs={tabs}
             active={topic}
-            // Choosing a topic starts a NEW list, so the reveal goes back to
-            // the first three. Reset in the handler rather than derived during
-            // render — a ref read while rendering is exactly the pattern that
-            // stops a component updating when you expect it to.
-            onSelect={(key) => {
-              setTopic(key);
-              setShown(FIRST_PAGE);
-            }}
+            onSelect={(key) => setTopic(key)}
           />
         </div>
 
@@ -386,61 +369,59 @@ export function FeedPage({
               }
             />
           )}
-          {items.map((item) => (
-            <div key={item.id} className="ws-enter">
-              <FeedItemCard
-                item={item}
-                followSlot={followSlot}
-                winkSlot={winkSlot}
-                onOpenMedia={openMedia}
-                tipSlot={tipSlot}
-                onQuote={(post) => {
-                  setQuoting(post);
-                  setComposerOpen(true);
-                }}
-              />
-            </div>
+          {items.map((item, index) => (
+            <Fragment key={item.id}>
+              <div className="ws-enter">
+                <FeedItemCard
+                  item={item}
+                  followSlot={followSlot}
+                  winkSlot={winkSlot}
+                  onOpenMedia={openMedia}
+                  tipSlot={tipSlot}
+                  onQuote={(post) => {
+                    setQuoting(post);
+                    setComposerOpen(true);
+                  }}
+                />
+              </div>
+              {/*
+                NODE 258:5545 — "Join a community", INSIDE the timeline rather
+                than under it.
+
+                It used to close the page, which only worked while the feed had
+                a floor: a grid below a list that pages forever is a grid nobody
+                reaches. One post above it puts it on the first screen, where
+                somebody who has just seen what the square sounds like is being
+                offered a room to say it in.
+
+                Rendered against the LAST post when the feed is shorter than the
+                cut, so a one-post lane still shows it rather than dropping it.
+                It sits in the list's own 38 rhythm and carries no padding of
+                its own.
+              */}
+              {communitySlot &&
+                index === Math.min(BEFORE_COMMUNITY - 1, items.length - 1) && (
+                  <div>{communitySlot}</div>
+                )}
+            </Fragment>
           ))}
         </div>
 
         {/*
-          NODE 242:4890 — a 16px `ep:refresh-left` glyph, an 8px gap, and
-          "Load more" at 12/16 in 60% white.
-
-          CENTRED. The node is a hug-width row, which reads as left-aligned
-          until you measure it: it sits at x=6244 and is 82 wide, so its centre
-          is 6285 against the feed block's 6268.5 — sixteen pixels off dead
-          centre, which is a hand-nudge rather than an alignment. A control that
-          ends a list belongs in the middle of it, the same place "You're all
-          caught up" already sits.
+          The end of the list asks for the next page itself — node 242:4890's
+          "Load more" row is gone. The sentinel sits 600px ahead of the reader
+          (`useInfiniteScroll`), so the next posts are usually already there by
+          the time they arrive; the spinner is what shows when they are not.
         */}
-        {canLoadMore && (
-          <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={loadMore}
-            disabled={feed.isFetchingNextPage}
-            className="ws-press flex items-center gap-2 text-[12px] leading-4 text-white/60 transition-colors hover:text-white disabled:opacity-50"
-          >
-            {feed.isFetchingNextPage ? (
-              <Spinner className="h-4 w-4" />
-            ) : (
-              <IconLoadMore className="h-4 w-4" />
-            )}
-            Load more
-          </button>
+        {canLoadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
+        {feed.isFetchingNextPage && (
+          <div className="flex justify-center py-6">
+            <Spinner className="h-4 w-4" />
           </div>
         )}
         {feed.isSuccess && !canLoadMore && items.length > 0 && (
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
         )}
-
-        {/* NODE 258:5545 — "Join a community" closes the page. It is the last
-            thing the file draws, and it is the right last thing: somebody who
-            reached the bottom of the timeline has run out of the square they
-            are in, and the answer is another one. Renders nothing until the
-            directory route exists. */}
-        {communitySlot && <div className="pt-2">{communitySlot}</div>}
 
         {/* The floating compose button used to live here, which is why it
             existed on home and nowhere else. AppShell owns it now and renders

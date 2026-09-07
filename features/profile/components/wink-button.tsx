@@ -44,11 +44,20 @@ export function WinkButton({
    * `sm` sits in a 24px list row; `md` sits beside Follow on a profile.
    *
    * `post` is node 496:13393 — the post header's, and the only FILLED one:
-   * a 40.7 disc carrying the purple ramp top to bottom (--color-create into
+   * a 33.26 disc carrying the purple ramp (--color-create into
    * --color-spotlight, which is exactly what the file's two stops measure) with
-   * the design's own white line-art face on it. It is filled because on a post
-   * header it stands beside a filled tip button and an outlined Follow, and it
-   * is the invitation of the three.
+   * the design's own white line-art face on it at 22.15. It is filled because
+   * on a post header it stands beside a filled tip button and an outlined
+   * Follow, and it is the invitation of the three.
+   *
+   * 33.26 AND NOT 40.73. The node is ROTATED 15°, and a rotated node's
+   * bounding box is not its size — 33.26 × (cos15 + sin15) = 40.73 is the box
+   * the tilt needs, not the disc. Built at the box it was half a control
+   * larger than the 34-tall tip button beside it, which the design draws the
+   * same height. Its face is rotated a further -17.77° inside it, so the face
+   * sits 2.77° off upright; on a 22px smiley that is invisible and is not
+   * drawn. The 15° IS carried, in the gradient: local top-to-bottom turned by
+   * the rotation is 195deg on the page.
    */
   size?: "sm" | "md" | "post";
 }) {
@@ -81,8 +90,8 @@ export function WinkButton({
         "ws-press flex shrink-0 items-center justify-center rounded-full transition-colors",
         size === "post"
           ? cn(
-              "h-[40.7px] w-[40.7px] text-white",
-              "bg-[linear-gradient(180deg,var(--color-create)_0%,var(--color-spotlight)_100%)]",
+              "h-[33.26px] w-[33.26px] text-white",
+              "bg-[linear-gradient(195deg,var(--color-create)_0%,var(--color-spotlight)_100%)]",
               // Sent: the same disc, dimmed, rather than a different colour.
               // The ramp IS the control here, so recolouring it would read as
               // a second kind of button rather than the same one already used.
@@ -102,7 +111,7 @@ export function WinkButton({
       )}
     >
       {size === "post" ? (
-        <IconMsWinkFace className="h-[23.2px] w-[23.2px]" />
+        <IconMsWinkFace className="h-[22.15px] w-[22.15px] shrink-0" />
       ) : (
         <IconWink className={size === "sm" ? "h-3.5 w-3.5" : "h-[18px] w-[18px]"} />
       )}
