@@ -25,6 +25,15 @@ import { useUnread } from "@/hooks/use-unread";
 import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark, Wordmark } from "@/components/ui/wordmark";
+import {
+  IconSbChat,
+  IconSbCreators,
+  IconSbExplore,
+  IconSbGistrooms,
+  IconSbHome,
+  IconSbLibrary,
+  IconSbLive,
+} from "@/components/ui/sidebar-icons";
 import { IconCaretDown, IconLocationPin, IconTopSearch } from "@/components/ui/topbar-icons";
 import { LocationSheet } from "@/components/layout/location-sheet";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
@@ -36,14 +45,8 @@ import { ConnectionBanner } from "@/components/layout/connection-banner";
 import {
   IconBell,
   IconChevronLeft,
-  IconBookmark,
   IconDots,
-  IconForCreators,
-  IconHome,
   IconChevronDown,
-  IconHouses,
-  IconLive,
-  IconMail,
   IconMore,
   IconMic,
   IconPlus,
@@ -134,8 +137,8 @@ interface NavItem {
   exist. The route still resolves.
 */
 const NAV: NavItem[] = [
-  { href: "/", label: "Home", icon: IconHome },
-  { href: "/discover", label: "Explore", icon: IconSearch },
+  { href: "/", label: "Home", icon: IconSbHome },
+  { href: "/discover", label: "Explore", icon: IconSbExplore },
   /*
     Houses is a row of its own after all.
 
@@ -153,9 +156,9 @@ const NAV: NavItem[] = [
     left the hallway on Home as the only door to every room but the three open
     now. The ROUTE is unchanged; nothing already linked breaks.
   */
-  { href: "/gist-rooms", label: "Gistrooms", icon: IconHouses, flag: "houses" },
+  { href: "/gist-rooms", label: "Gistrooms", icon: IconSbGistrooms, flag: "houses" },
   
-  { href: "/messages", label: "Chat", icon: IconMail, authed: true },
+  { href: "/messages", label: "Chat", icon: IconSbChat, authed: true },
   {
     href: "/notifications",
     label: "Notifications",
@@ -173,7 +176,7 @@ const NAV: NavItem[] = [
     */
     sidebar: false,
   },
-  { href: "/live", label: "Live", icon: IconLive, secondary: true },
+  { href: "/live", label: "Live", icon: IconSbLive, secondary: true },
   /*
     LIBRARY is the saved-posts surface — node 496:13107 draws it sixth, on a
     bookmark, between Live and For Creators. The route stays `/arkmarks` and the
@@ -182,7 +185,7 @@ const NAV: NavItem[] = [
     `/studio`. Signed-in only, because a shelf of your own saved things is not
     a thing a guest has.
   */
-  { href: "/arkmarks", label: "Library", icon: IconBookmark, authed: true },
+  { href: "/arkmarks", label: "Library", icon: IconSbLibrary, authed: true },
 // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
@@ -196,7 +199,7 @@ const NAV: NavItem[] = [
   {
     href: "/studio",
     label: "For Creators",
-    icon: IconForCreators,
+    icon: IconSbCreators,
     authed: true,
     secondary: true,
   },
@@ -769,18 +772,35 @@ function Sidebar({
         href="/"
         aria-label="Market Square home"
         title="Market Square"
-        className="ws-press mb-4 flex h-[var(--ws-crumb-h)] shrink-0 items-center justify-center border-b border-white/10 group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:px-2.5"
+        className="ws-press mb-4 flex h-[var(--ws-crumb-h)] shrink-0 items-center justify-center border-b border-white/10"
       >
-        {/* The icon rail wears the mark alone; the expanded sidebar wears the
-            full lockup. Heights are set so the TYPE inside the lockup reads at
-            roughly the size the old type-only wordmark did — the lockup is
-            ~3.3:1 where that asset was ~12.8:1, so matching the old height
-            would have shrunk the type to about 9px. */}
+        {/*
+          THE LOCKUP IS ASSEMBLED, NOT AN ASSET — node 496:13198.
+
+          The file draws a 60.9x44.6 mark and then sets " Square" beside it as
+          LIVE TYPE at Geist 900, 22.56/17.58. It was `/logo.svg`, a single
+          baked image at an arbitrary 30px, which is why the type came out at
+          neither the file's size nor its weight.
+
+          CENTRED, and that is measured rather than assumed: the group is 148.9
+          wide in a 224 header, sitting at 37.6 with 37.5 left over — the same
+          inset both sides. It used to be pushed to the left edge once the rail
+          was labelled.
+
+          `size` on LogoMark is its HEIGHT, so 44.6 gives the file's mark back
+          at 59.5 wide against its 60.9 — the asset's own ratio, a pixel and a
+          half narrower, and not worth distorting the artwork to close.
+        */}
         <LogoMark size={28} className="group-data-[rail=full]/rail:hidden" />
-        <Wordmark
-          height={30}
-          className="hidden group-data-[rail=full]/rail:block"
-        />
+        <span className="hidden items-center group-data-[rail=full]/rail:flex">
+          <LogoMark size={44.6} />
+          {/* The file's string carries a leading space, which is the gap
+              between mark and type; a space is not a layout instruction, so it
+              is a margin here and the word is just the word. */}
+          <span className="ml-[6px] text-[22.56px] font-black leading-[17.58px] tracking-[-0.01em] text-white">
+            Square
+          </span>
+        </span>
       </Link>
 
       {/* The explicit control. The drag edge is discoverable only once you

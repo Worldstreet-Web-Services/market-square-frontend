@@ -223,23 +223,42 @@ describe("the sidebar hides rows without removing their route", () => {
     assert.match(NAV, /href:\s*"\/gist-rooms"/, "the gist rooms route moved");
   });
 
+  it("draws the rows on the FILE'S glyphs, not the app's nearest equivalents", () => {
+    /*
+      Three of these were not near-misses. Explore was a MAGNIFIER where
+      496:13119 draws a GLOBE; Gistrooms was a house where 496:13126 draws a
+      MICROPHONE; Live was our own play badge where 496:13139 draws a framed
+      Video. A magnifier says "search" and a globe says "everything out there",
+      and only one of those is what Explore became.
+
+      Pinned by the icon a row is wired to, and by the glyph module being the
+      exported one — `sidebar-icons.tsx` holds the file's vectors verbatim with
+      the baked fills swapped for currentColor.
+    */
+    assert.match(NAV, /"\/"[^\n]*icon:\s*IconSbHome/, "Home is off the file's glyph");
+    assert.match(NAV, /"\/discover"[^\n]*icon:\s*IconSbExplore/, "Explore is not the file's globe");
+    assert.match(NAV, /"\/gist-rooms"[^\n]*icon:\s*IconSbGistrooms/, "Gistrooms is not the file's microphone");
+    assert.match(NAV, /"\/messages"[^\n]*icon:\s*IconSbChat/, "Chat is off the file's glyph");
+    assert.match(NAV, /"\/live"[^\n]*icon:\s*IconSbLive/, "Live is not the file's video");
+    assert.match(NAV, /"\/arkmarks"[^\n]*icon:\s*IconSbLibrary/, "Library is off the file's bookmark");
+  });
+
   it("carries LIBRARY on the saved-posts route, not a new one", () => {
     // 496:13107 draws it sixth, on a bookmark. The design renamed the
     // DESTINATION; the act of saving is still the Arkmark and the route is
     // still /arkmarks — the same relationship "For Creators" has with /studio.
     assert.match(NAV, /label:\s*"Library"/, "the library row is gone");
-    assert.match(
-      NAV,
-      /"\/arkmarks"[^\n]*icon:\s*IconBookmark/,
-      "library is not on the file's bookmark, or no longer points at /arkmarks"
-    );
+    assert.match(NAV, /href:\s*"\/arkmarks"/, "library no longer points at /arkmarks");
   });
 });
 
 describe("the creators entry is node 225:3252", () => {
   it("says For Creators, on the file's own glyph", () => {
     assert.match(NAV, /label:\s*"For Creators"/, "the label is no longer the design's");
-    assert.match(NAV, /icon:\s*IconForCreators/, "the entry is not on the design's icon");
+    // The glyph is the same MusicNotesPlus it always was — it now comes from
+    // `sidebar-icons.tsx`, exported from 496:13153 with the rest of the rail's
+    // set, rather than from the app's own copy of it.
+    assert.match(NAV, /icon:\s*IconSbCreators/, "the entry is not on the design's icon");
   });
 
   it("still points at /studio — a renamed entry is not a moved route", () => {
