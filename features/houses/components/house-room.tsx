@@ -1118,7 +1118,18 @@ function LiveHouse({
         </div>
       )}
 
-      <div className={cn("flex flex-col gap-6 px-4 pb-6 pt-10 xl:px-8", state === "failed" && "opacity-40")}>
+      {/*
+        30, NOT 32 — and the three pixels are the whole difference between six
+        tiles on a row and five.
+
+        Six cards is exactly 744: 6*104 plus 5*24 of gutter. The file gives the
+        left column 805 and the grid 744, which is a 30.5 inset either side.
+        `xl:px-8` is 32, leaving 741 — three short — so at 1440, the width the
+        file itself is drawn at, the sixth tile wrapped onto its own row and the
+        section read as a ragged two-and-a-bit rows instead of the two full ones
+        the design draws.
+      */}
+      <div className={cn("flex flex-col gap-6 px-4 pb-6 pt-10 xl:px-[30px]", state === "failed" && "opacity-40")}>
         <RoomPeopleSection
           title="Speakers"
           rule={false}
@@ -1152,7 +1163,7 @@ function LiveHouse({
         </div>
       )}
 
-      <div className="flex flex-col gap-6 px-4 pb-6 xl:px-8">
+      <div className="flex flex-col gap-6 px-4 pb-6 xl:px-[30px]">
         {/*
           HOUSE MEMBERS is the roster of the group this room belongs to, and it
           is genuinely a different list from the AUDIENCE: a member may not be
