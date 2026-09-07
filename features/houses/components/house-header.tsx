@@ -120,16 +120,25 @@ export function HouseHeader({
       className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-4 pb-6 pt-4 xl:px-8 xl:pt-6"
     >
       <div className="flex flex-col gap-6">
+        {/*
+          ── row 0: BACK, LABELLED, ON ITS OWN LINE ──
+
+          369:9158 draws a 20px arrow, 8, then the word "Back" at 16/24 in
+          white, above the house row rather than beside it. It was a bare
+          icon-only disc sharing row 1 — which is the same control saying less,
+          and it left the house's name starting 40px in from the column while
+          everything under it started at 0.
+        */}
+        <button
+          onClick={() => (canGoBack() ? router.back() : router.push("/gist-rooms"))}
+          className="ws-press flex w-fit items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
+        >
+          <IconArrowLeft className="h-5 w-5 shrink-0" />
+          Back
+        </button>
+
         {/* ── row 1 ── */}
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => (canGoBack() ? router.back() : router.push("/gist-rooms"))}
-            aria-label="Back"
-            className="ws-press -ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-heading transition-colors hover:bg-white/10"
-          >
-            <IconArrowLeft className="h-5 w-5" />
-          </button>
-
           {house && (
             <p className="flex min-w-0 items-center gap-2 text-[16px] leading-6 text-white/50">
               {/* Node 129:11891, the file's own 16px `profile-2user`, in `--color-spotlight` — which is the `#7E3BEB` it is painted with. */}
@@ -158,7 +167,12 @@ export function HouseHeader({
               onClick={join.onJoin}
               disabled={join.state === "pending" || join.reason !== null}
               title={join.reason ?? undefined}
-              className="ws-press shrink-0 rounded-full bg-spotlight px-3 py-1 text-[12px] font-semibold leading-4 text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              /* 369:9165 — the create RAMP, not the flat spotlight fill: the
+                 pill's own rectangle carries #9F65FD into #5B05E6, which is
+                 `ws-btn-welcome`'s 90deg ramp and needs no new colour. 85x24 on
+                 4/12 of padding, the label at 600 12/16. The older node painted
+                 it flat, which is what shipped. */
+              className="ws-press ws-btn-welcome shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold leading-4 text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               {join.state === "pending" ? "Asked to join" : "Join House"}
             </button>
@@ -187,16 +201,32 @@ export function HouseHeader({
               </button>
             )}
             {onLeave && (
-              // The render tints the logout glyph RED — it is the one
-              // destructive control in the header, and `--color-danger` is the
-              // token that already means exactly that.
+              /*
+                A LABELLED PILL, NOT A GLYPH — node 369:9177, 129x38.
+
+                It was a 38px disc carrying only the logout mark. Leaving a room
+                you are audible in is the one irreversible thing in this header,
+                and an unlabelled glyph is the wrong amount of warning for it.
+
+                NO BORDER: the node reports a #FF0B0B stroke at weight ZERO,
+                which renders nothing — the same trap as the share disc beside
+                it. What is real is the 13% red wash.
+
+                ONE RED, NOT THREE. The file paints the wash #FF0B0B, the glyph
+                #FF383C and the label #FF5454. #FF383C is `--color-danger`
+                exactly; the other two have no token, and this slice is asserted
+                to hold no hex literal and never to borrow `--color-live`. So
+                all three roles render from the one token that already means
+                "this destroys something" — a wash, a glyph and a label at the
+                same hue rather than three reds a pixel apart.
+              */
               <button
                 type="button"
                 onClick={onLeave}
-                aria-label="Leave this gist room"
-                className="ws-glass-pill ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-danger"
+                className="ws-press flex h-[38px] shrink-0 items-center gap-2 rounded-full bg-danger/[0.13] px-4 text-[15px] leading-6 text-danger transition-colors hover:bg-danger/20"
               >
-                <IconRoomLeave className="h-4 w-4" />
+                <IconRoomLeave className="h-4 w-4 shrink-0" />
+                Leave Room
               </button>
             )}
           </div>
