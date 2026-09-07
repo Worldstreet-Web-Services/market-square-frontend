@@ -1,18 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Avatar } from "@/components/ui/avatar";
-import {
-  IconDeckAdd,
-  IconDeckArrow,
-  IconDeckPass,
-  IconDeckWink,
-} from "@/components/ui/home-icons";
+import { IconDeckArrow } from "@/components/ui/home-icons";
+import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
-import { useFollow, useIsFollowing, useWink } from "@/features/profile";
-import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
 import { DeckDots } from "@/components/ui/deck-dots";
 import type { Profile } from "@/lib/api/schemas";
@@ -311,24 +303,15 @@ function PersonCard({
   onPass: () => void;
   onWinked: () => void;
 }) {
-  /*
-    The wink hook is per-PERSON, so it lives on the card rather than on the
-    deck. It is the app's one wink path, unchanged: it keeps the service's own
-    429 wording (the hourly budget and "already winked today" are different
-    refusals and only the service knows which applied) and goes quiet when the
-    route is not deployed.
-  */
-  const wink = useWink(profile);
-  const follow = useFollow(profile);
-  // The server's answer when it carries the edge, this session's own intent
-  // when it does not — never `profile.isFollowing` raw, which snaps back on
-  // refetch. `GET /profiles` does carry it, but the deck must not be the one
-  // surface that fabricates a state when a payload changes.
-  const isFollowing = useIsFollowing(profile);
-  const gate = useGate();
   const front = offset === 0;
   const place = DECK_PLACES[offset] ?? DECK_PLACES[0]!;
-  const name = profile.displayName || profile.username;
+  /*
+    The CARD itself is `PalCard`, shared with the "Suggested Pals" rail —
+    it is the same object drawn at two sizes, and two copies of that markup is
+    how a wink cooldown gets fixed on one surface and not the other. What
+    belongs to the DECK and stays here is the fan: where each card sits, how far
+    it is turned, and that only the front one can be reached.
+  */
   return (
     <div
       aria-hidden={!front}
@@ -340,117 +323,13 @@ function PersonCard({
         transform: `translate(${place.x + shift}px, ${place.y}px) rotate(${place.rot}deg) scale(${place.scale})`,
       }}
     >
-      {/* The file's insets are NOT uniform, and `p-3` flattened them: the photo
-            sits 11.94 from the sides but 15.92 from the top, and the band below
-            it is 66.31 (250.01 card less a photo ending at 183.7) rather than
-            the 56 of `pb-14`. x 186/183.7 gives 12 / 16 / 67. */}
-        <div className="relative w-[186px] rounded-[18.57px] bg-[linear-gradient(180deg,#FFFFFF_0%,#D0B3FF_100%)] px-3 pb-[67px] pt-4">
-        {/*
-          FOLLOW — node 225:3412, which is the `profile-add` component, not an
-          ornament. It was drawn as a bare glyph and did nothing: the deck
-          offered pass and wink as real buttons and the one control people
-          actually reach for was decoration.
-
-          It also sat OUTSIDE the card. The file puts it at x=137.28 in a
-          183.7-wide card — a 7.29px inset from the right edge, 7.29 from the
-          top — so it overlaps the photo's corner while staying within the
-          card. `-right-2` hung it 8px off the card's edge instead, which is
-          what makes it read as stuck onto the image rather than part of it.
-          At our 186px width that inset is 7px, and the badge is 39.13 → 40.
-
-          `z-10` IS LOAD BEARING. The badge deliberately overlaps the photo's
-          corner, and it sits before the photo's own `relative` wrapper in the
-          markup — two positioned elements at the same z-index paint in DOM
-          order, so without this the photo is painted OVER the badge and the
-          follow control disappears into the picture. It is not hidden by
-          overflow and not mispositioned; it is simply underneath, which is why
-          it looks like it is inside the image.
-        */}
-        <button
-          type="button"
-          disabled={!front || follow.isPending}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            gate(() => follow.mutate(!isFollowing));
-          }}
-          aria-label={isFollowing ? `Unfollow ${name}` : `Follow ${name}`}
-          className="ws-press absolute right-[7px] top-[7px] z-10 h-10 w-10 transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          {/* Following dims the badge rather than removing it: a control that
-              vanishes on success leaves no way back, and the deck moves on to
-              the next person anyway. */}
-          <IconDeckAdd className={cn("h-full w-full", isFollowing && "opacity-50")} />
-        </button>
-        <Link
-          href={`/u/${profile.username}`}
-          tabIndex={front ? undefined : -1}
-          className="relative block overflow-hidden rounded-[26.9px]"
-        >
-          <Avatar
-            name={name}
-            seed={profile.id}
-            src={profile.avatarUrl}
-            size={170}
-            sizeClassName="h-[170px] w-[162px]"
-            className="rounded-none border-0 object-cover"
-          />
-          {/* The file's bottom scrim: transparent to solid black, carrying the
-              name and handle so they read over any photograph. */}
-          {/* The file sets both lines in ROBOTO — 600 for the name, 400 for the
-              handle — not the product's Geist. These cards are the same
-              purple-gradient object the welcome screens use and the design
-              types them the same way. */}
-          <span className="absolute inset-x-0 bottom-0 flex h-[74px] flex-col items-center justify-end bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,1)_100%)] px-2 pb-2 font-[family-name:var(--font-roboto)]">
-            <span className="w-full truncate text-center text-[12px] font-semibold leading-5 text-white">
-              {name}
-            </span>
-            <span className="w-full truncate text-center text-[8px] leading-[13px] text-white/50">
-              @{profile.username}
-            </span>
-          </span>
-        </Link>
-      </div>
-
-      {/* The two controls straddle the shell's lower edge, as the file draws
-          them — outside the photo, on the gradient. */}
-      {/* The two boxes ABUT in the file — pass ends at 92.17 and wink starts at
-          92.18 — because each exported glyph carries its own ~4.7px of padding
-          around a 36.58 squircle, and that padding IS the gap you see. `gap-3`
-          added 12px on top of it and pushed them apart. 45.08 -> 46, and the
-          pair bottoms out 10.62 from the card's foot. */}
-      <div className="absolute inset-x-0 bottom-[11px] flex items-center justify-center gap-0">
-        <button
-          type="button"
-          disabled={!front}
-          onClick={onPass}
-          aria-label={`Skip ${name}`}
-          className="ws-press h-[46px] w-[46px] shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          <IconDeckPass className="h-full w-full" />
-        </button>
-        <button
-          type="button"
-          disabled={!front || wink.isPending || wink.unavailable || wink.refusal !== null}
-          /* `refusal` is the hook's OWN wording — the per-person cooldown, the
-             spent hourly budget, a block, or "this is you" — kept because only
-             it knows which of those applied. */
-          title={wink.refusal ?? undefined}
-          onClick={() =>
-            gate(() => {
-              wink.send();
-              onWinked();
-            })
-          }
-          aria-label={`Wink at ${name}`}
-          /* The file sets the wink 3.32px higher than the pass (190.99 against
-             194.31). Kept rather than levelled — it is what gives the pair its
-             slight lift to the right. */
-          className="ws-press h-[46px] w-[46px] shrink-0 -translate-y-[3px] transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          <IconDeckWink className={cn("h-full w-full", wink.winked && "opacity-60")} />
-        </button>
-      </div>
+      <PalCard
+        profile={profile}
+        geometry={DECK_CARD}
+        interactive={front}
+        onPass={onPass}
+        onWinked={onWinked}
+      />
     </div>
   );
 }

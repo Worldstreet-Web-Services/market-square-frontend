@@ -8,6 +8,7 @@ import { useTopics } from "@/features/discovery";
 import { JoinACommunity } from "@/components/layout/join-a-community";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { MakeSomeFriends } from "@/components/layout/make-some-friends";
+import { SuggestedPals } from "@/components/layout/suggested-pals";
 
 // Slices never import each other, so the follow control — which belongs to the
 // profile slice — is composed into the timeline here, the same way the stream
@@ -66,6 +67,7 @@ export function HomeScreen() {
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<MakeSomeFriends />}
       communitySlot={<JoinACommunity />}
+      palsSlot={<SuggestedPals />}
     />
   );
 }

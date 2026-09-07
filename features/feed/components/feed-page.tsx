@@ -24,6 +24,15 @@ import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 
 /** How many posts stand between the top of the feed and "Join a community". */
 const BEFORE_COMMUNITY = 1;
+/**
+ * ...and how many before "Suggested Pals" (540:19351).
+ *
+ * Far enough in that the reader has seen what the square sounds like before
+ * being asked to meet anybody, and not so far that it only exists for people
+ * who scroll. The file cannot settle it — it draws the rail on its own — so
+ * four is a judgement call, changed by this line alone.
+ */
+const BEFORE_PALS = 4;
 
 /*
   Lanes filter the timeline, in the design's order.
@@ -131,6 +140,7 @@ export function FeedPage({
   roomsSlot,
   friendsSlot,
   communitySlot,
+  palsSlot,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
   winkSlot?: (author: Profile) => React.ReactNode;
@@ -153,6 +163,8 @@ export function FeedPage({
   roomsSlot?: React.ReactNode;
   friendsSlot?: React.ReactNode;
   communitySlot?: React.ReactNode;
+  /** The pals rail (540:19351), dropped a few posts into the timeline. */
+  palsSlot?: React.ReactNode;
 }) {
   const compose = useQueryParam("compose");
   const prefill = useComposePrefill();
@@ -403,6 +415,12 @@ export function FeedPage({
                 index === Math.min(BEFORE_COMMUNITY - 1, items.length - 1) && (
                   <div>{communitySlot}</div>
                 )}
+              {/* NODE 540:19351 — the pals rail, deeper into the timeline than
+                  the community grid. Only when the feed is genuinely that long:
+                  unlike the grid it is not pinned to the last post, because a
+                  four-post cut that lands on post one puts two people-sections
+                  on the first screen. */}
+              {palsSlot && index === BEFORE_PALS - 1 && <div>{palsSlot}</div>}
             </Fragment>
           ))}
         </div>

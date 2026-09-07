@@ -109,19 +109,37 @@ export function usePeople(
    * filter, so changing one starts a new list rather than paging the old one
    * with a mismatched token.
    */
-  facets: { city?: string; region?: string; gender?: string } = {}
+  facets: {
+    city?: string;
+    region?: string;
+    gender?: string;
+    /** Server-side "not already followed" — see `fetchPeople`. */
+    excludeFollowing?: boolean;
+  } = {}
 ) {
   const trimmed = query.trim();
   const city = facets.city?.trim() ?? "";
   const region = facets.region?.trim() ?? "";
   const gender = facets.gender?.trim() ?? "";
+  const excludeFollowing = Boolean(facets.excludeFollowing);
   return useInfiniteQuery({
     // The sort is in the KEY, not applied to a loaded page. Re-ordering one
     // page would make page 1 look sorted while page 2 contradicted it; the
     // service's cursor encodes the sort key, so changing it starts a new list.
-    queryKey: ["ms", "people", trimmed, sort, city, region, gender],
+    // In the KEY for the same reason the facets are: the cursor encodes the
+    // filter, so changing it starts a new list rather than paging the old one
+    // with a token that no longer describes it.
+    queryKey: ["ms", "people", trimmed, sort, city, region, gender, excludeFollowing],
     queryFn: ({ pageParam }) =>
-      fetchPeople({ query: trimmed, sort, city, region, gender, cursor: pageParam ?? undefined }),
+      fetchPeople({
+        query: trimmed,
+        sort,
+        city,
+        region,
+        gender,
+        excludeFollowing,
+        cursor: pageParam ?? undefined,
+      }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     // Only the People tab needs this; every other tab would be paying for a

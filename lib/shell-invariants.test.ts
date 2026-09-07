@@ -277,16 +277,24 @@ describe("the partner card cannot hide its own call to action", () => {
 
 describe("the friends deck offers a real Follow", () => {
   const deck = stripComments(read("components/layout/make-some-friends.tsx"));
+  /*
+    The CARD is `PalCard`, shared with the "Suggested Pals" rail (540:19351) —
+    one object drawn at two sizes, because two copies of this markup is how a
+    wink cooldown gets fixed on one surface and not the other. So the badge, the
+    photo and the two controls are asserted there, and the FAN — placement,
+    tilt, scale, re-centring — is still asserted against the deck.
+  */
+  const card = stripComments(read("components/layout/pal-card.tsx"));
 
   it("is a button, not a decorative glyph", () => {
     // It shipped as a bare <IconDeckAdd/>: pass and wink were real buttons and
     // the one control people actually reach for was an ornament.
     assert.match(
-      deck,
+      card,
       /aria-label=\{isFollowing \? `Unfollow/,
       "the follow badge is not a labelled control any more"
     );
-    assert.match(deck, /follow\.mutate\(!isFollowing\)/, "the follow badge does nothing again");
+    assert.match(card, /follow\.mutate\(!isFollowing\)/, "the follow badge does nothing again");
   });
 
   it("sits INSIDE the card, as the file places it", () => {
@@ -294,11 +302,15 @@ describe("the friends deck offers a real Follow", () => {
     // hung 8px off the right edge, which is what made it read as stuck onto
     // the photo rather than part of the card.
     assert.doesNotMatch(
-      deck,
+      card,
       /-right-2/,
       "the follow badge hangs outside the card again"
     );
-    assert.match(deck, /right-\[7px\] top-\[7px\]/, "the badge lost the file's inset");
+    // The inset is a NUMBER now, not a class: the deck's card and the rail's
+    // place the badge at 7 and 6.77 in cards of different widths, so it is
+    // passed in with the rest of the geometry rather than hard-coded.
+    assert.match(card, /right: g\.badge\.inset/, "the badge lost the file's inset");
+    assert.match(deck.concat(card), /inset: 7\b/, "the deck's own 7px inset is gone");
   });
 
   it("paints ABOVE the photo it overlaps", () => {
@@ -308,7 +320,7 @@ describe("the friends deck offers a real Follow", () => {
     // the control vanishes into the picture — not clipped, not mispositioned,
     // just underneath. Nothing else in the build can see that.
     assert.match(
-      block(deck, "aria-label={isFollowing ?", "</button>"),
+      block(card, "aria-label={isFollowing ?", "</button>"),
       /\bz-10\b/,
       "the follow badge lost its z-index and is painted under the photo again"
     );
@@ -321,7 +333,7 @@ describe("the friends deck offers a real Follow", () => {
     // transparency in it belongs to the fills themselves — pass is #9F65FD at
     // 23% inside its own exported glyph.
     assert.doesNotMatch(
-      deck,
+      deck.concat(card),
       /opacity:\s*front \?/,
       "the deck dims its neighbouring cards again — the file draws all three opaque"
     );
@@ -366,7 +378,7 @@ describe("the friends deck offers a real Follow", () => {
   });
 
   it("reads the follow edge rather than the raw field", () => {
-    assert.match(deck, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
+    assert.match(card, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
   });
 });
 

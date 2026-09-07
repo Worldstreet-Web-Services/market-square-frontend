@@ -78,6 +78,24 @@ export async function fetchPeople(
     city?: string;
     region?: string;
     gender?: string;
+    /**
+     * Drop the people the viewer already follows — `?excludeFollowing=true`.
+     *
+     * Server-side, and it has to be: filtering the loaded page here costs a row
+     * per page that no cursor can top back up, so a long list silently runs
+     * short. The service pages AFTER excluding, and has a test saying a page of
+     * three comes back as three.
+     *
+     * ONE DIRECTION, by design: somebody who follows YOU is still suggested,
+     * because you have not followed them — which is exactly who a "people to
+     * follow" rail should surface. Signed out it is a no-op rather than an
+     * error, since a reader who follows nobody excludes nobody.
+     *
+     * A STRING, not a boolean. The parameter is a `"true" | "false"` enum
+     * upstream and anything else is a 400 — deliberately not a coerced boolean,
+     * which would read the string "false" as true.
+     */
+    excludeFollowing?: boolean;
   } = {}
 ) {
   const query = params.query?.trim() ?? "";
@@ -92,6 +110,9 @@ export async function fetchPeople(
       ...(city ? { city } : {}),
       ...(region ? { region } : {}),
       ...(gender ? { gender } : {}),
+      // Sent only when asked for: the default is "do not filter", and an
+      // explicit `excludeFollowing=false` is a different request to make.
+      ...(params.excludeFollowing ? { excludeFollowing: "true" } : {}),
       sort: parsePeopleSort(params.sort),
       limit: 30,
       cursor: params.cursor,
