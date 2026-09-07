@@ -36,3 +36,27 @@ export function allowsCompose(pathname: string): boolean {
   if (NO_COMPOSE_EXACT.includes(pathname)) return false;
   return !NO_COMPOSE_PREFIX.some((prefix) => pathname.startsWith(prefix));
 }
+
+/**
+ * Whether the SIDEBAR carries its Post gist button — which is a different
+ * question, and was wrongly answered by `allowsCompose` above.
+ *
+ * Every exception in that list is an argument about a FLOATING control: it
+ * holds the right edge of the viewport, so it lands over a live preview, over
+ * operator rows, or beside a message composer where the button under your hand
+ * would be the one that writes a public post. The rail's button is none of
+ * that. It sits on the far left, in chrome that is already there, overlapping
+ * nothing — and node 496:13107 draws it on the rail unconditionally.
+ *
+ * The symptom: on `/messages` the sidebar simply had no Post gist. Two thirds
+ * of the rail's own furniture vanished on one route for a reason that belonged
+ * to a control at the other side of the screen.
+ *
+ * `/auth` is the one real exception and it survives, for the reason it always
+ * had: there is nobody to post as yet. Everything else that hides the rail —
+ * `/live/:id` and `/studio/:id` render bare — hides this with it, so those need
+ * no entry here.
+ */
+export function allowsRailCompose(pathname: string): boolean {
+  return pathname !== "/auth";
+}

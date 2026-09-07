@@ -14,7 +14,7 @@ import {
   toggleRail,
 } from "@/lib/sidebar-rail";
 import { useRailState } from "@/lib/sidebar-rail-store";
-import { allowsCompose } from "@/lib/compose-surfaces";
+import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -1577,7 +1577,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!guest && (
         <Sidebar
           pathname={pathname}
-          onCompose={canCompose ? () => setComposeOpen(true) : undefined}
+          /* The RAIL's own rule, not the floating button's — see
+             `allowsRailCompose`. Sharing `canCompose` took Post gist off the
+             sidebar on /messages, /admin and /operations, none of which is a
+             reason the rail's button should go. */
+          onCompose={
+            authenticated && allowsRailCompose(pathname)
+              ? () => setComposeOpen(true)
+              : undefined
+          }
         />
       )}
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { allowsCompose } from "./compose-surfaces.ts";
+import { allowsCompose, allowsRailCompose } from "./compose-surfaces.ts";
 
 test("ordinary reading surfaces all carry a compose control", () => {
   for (const path of [
@@ -51,4 +51,32 @@ test("index routes are not their detail routes", () => {
   assert.equal(allowsCompose("/studio/abc"), false);
   assert.equal(allowsCompose("/live/abc"), false);
   assert.equal(allowsCompose("/gist-rooms/abc"), false);
+});
+
+/*
+  THE RAIL'S POST GIST IS NOT THE FLOATING BUTTON.
+
+  It used to share `allowsCompose`, so the sidebar lost its Post gist on
+  /messages, /admin and /operations. Every one of those exceptions is an
+  argument about a control anchored to the RIGHT edge of the viewport — over a
+  live preview, over operator rows, beside a message composer where the button
+  under your hand would be the one that writes a public post. The rail's button
+  is on the far left, in chrome that is already there, overlapping nothing, and
+  node 496:13107 draws it unconditionally.
+*/
+test("the rail keeps Post gist on every surface the rail itself is on", () => {
+  for (const path of ["/messages", "/admin", "/operations", "/", "/store", "/discover"]) {
+    assert.equal(allowsRailCompose(path), true, `${path} lost the rail's Post gist`);
+  }
+});
+
+test("the rail still has nobody to post as on /auth", () => {
+  assert.equal(allowsRailCompose("/auth"), false, "/auth offers a post button");
+});
+
+test("relaxing the rail does NOT relax the floating button", () => {
+  // The two predicates answer different questions; loosening one must never
+  // quietly loosen the other.
+  assert.equal(allowsCompose("/messages"), false, "the floating + is back on /messages");
+  assert.equal(allowsCompose("/admin/reports"), false, "the floating + is back on admin");
 });
