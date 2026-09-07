@@ -21,3 +21,6 @@ export { PostLikePill } from "./components/post-like-pill";
 export { useMediaFeed, mediaPostsOf, videoPostsOf } from "./hooks/use-feed";
 export { useBrowsePosts, postsOf } from "./hooks/use-feed";
 export type { Post } from "./lib/types";
+/** Home's topic row (225:3352), also used to head the gist rooms page — the one
+    row over the one shared vocabulary. Composed in from `components/layout`. */
+export { TopicTabs, type TopicTab } from "./components/topic-tabs";

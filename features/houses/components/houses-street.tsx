@@ -93,6 +93,7 @@ function HouseRow({ stream, onOpen }: { stream: Stream; onOpen: () => void }) {
 
 export function HousesStreet({
   roomCardSlot,
+  tabsSlot,
 }: {
   /**
    * The invite card for one open room, composed from OUTSIDE this slice.
@@ -104,11 +105,25 @@ export function HousesStreet({
    * inventing a second card.
    */
   roomCardSlot?: (stream: Stream) => React.ReactNode;
+  /**
+   * The topic row (407:17261), also composed from outside.
+   *
+   * It is `TopicTabs` — the SAME row and the same node family Home heads its
+   * timeline with — and it renders the shared vocabulary `GET /topics` serves,
+   * both of which live in slices this one may not import. The selection is
+   * owned here, because it is what the room query is keyed on.
+   */
+  tabsSlot?: (state: {
+    active: string | null;
+    onSelect: (key: string | null) => void;
+  }) => React.ReactNode;
 } = {}) {
   const gate = useGate();
   const router = useRouter();
   const [opening, setOpening] = useState(false);
   const [porch, setPorch] = useState<Stream | null>(null);
+  /** null is "For you" — every room, unfiltered. */
+  const [topic, setTopic] = useState<string | null>(null);
   /*
     Rooms, asked for by KIND.
 
@@ -121,8 +136,17 @@ export function HousesStreet({
     mostly broadcasts, so the street showed whatever handful of rooms survived
     ONE page rather than a page of rooms.
   */
-  const live = useStreamList("live", [], undefined, "room");
-  const scheduled = useStreamList("scheduled", [], undefined, "room");
+  /*
+    THE TOPIC NARROWS THE QUERY, SERVER-SIDE.
+
+    `GET /streams?topics=` is on the contract, so choosing a topic asks for a
+    page of rooms about it rather than filtering the page we happen to hold —
+    which would leave a topic looking empty because its rooms were on page two.
+    In the query key, so switching topics starts a new list.
+  */
+  const topicFilter = topic ? [topic] : [];
+  const live = useStreamList("live", topicFilter, undefined, "room");
+  const scheduled = useStreamList("scheduled", topicFilter, undefined, "room");
 
   const liveHouses = live.data?.items ?? [];
   const scheduledHouses = scheduled.data?.items ?? [];
@@ -159,6 +183,15 @@ export function HousesStreet({
         </Button>
       </header>
 
+      {/* The row is full-bleed — the file runs it 924 wide across an 806 page,
+          past the 32 the header sits in — so it is pulled out of the padding
+          and given it back as its own inset. */}
+      {tabsSlot && (
+        <div className="-mx-8 mt-6 px-8">
+          {tabsSlot({ active: topic, onSelect: setTopic })}
+        </div>
+      )}
+
       {live.isPending ? (
         <div className="flex justify-center py-10">
           <Spinner className="h-6 w-6 text-grey-600" />
@@ -189,8 +222,12 @@ export function HousesStreet({
               <IconRoomBadgeMic className="h-20 w-20" />
             </PlaceholderDisc>
           }
-          title="No gist rooms open"
-          body="A gist room is where people talk. Open one and name what it is about — anyone can walk in."
+          title={topic ? "No rooms on this topic" : "No gist rooms open"}
+          body={
+            topic
+              ? "Nobody is talking about this right now. Try another topic, or open the room yourself."
+              : "A gist room is where people talk. Open one and name what it is about — anyone can walk in."
+          }
           action={
             <Button size="sm" onClick={() => gate(() => setOpening(true))}>
               Open a gist room
