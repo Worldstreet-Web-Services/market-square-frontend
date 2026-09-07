@@ -14,41 +14,46 @@ import {
   toggleRail,
 } from "@/lib/sidebar-rail";
 import { useRailState } from "@/lib/sidebar-rail-store";
-import { allowsCompose } from "@/lib/compose-surfaces";
+import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
-import { ClaimUsernameGate } from "@/features/profile";
 import { InterestGate } from "@/features/discovery";
 import { useUnread } from "@/hooks/use-unread";
 import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark, Wordmark } from "@/components/ui/wordmark";
+import {
+  IconSbChat,
+  IconSbCreators,
+  IconSbExplore,
+  IconSbGistrooms,
+  IconSbHome,
+  IconSbLibrary,
+  IconSbLive,
+} from "@/components/ui/sidebar-icons";
+import { IconCaretDown, IconLocationPin, IconTopSearch } from "@/components/ui/topbar-icons";
+import { LocationSheet } from "@/components/layout/location-sheet";
+import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { RightRail } from "@/components/layout/right-rail";
 import { CreateFab } from "@/components/layout/create-fab";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
-import { Sheet } from "@/components/ui/sheet";
 import {
   IconBell,
-  IconBookmark,
-  IconCalendar,
   IconChevronLeft,
-  IconCamera,
   IconDots,
-  IconHome,
-  IconLive,
-  IconMail,
+  IconChevronDown,
   IconMore,
+  IconMic,
   IconPlus,
+  IconLogout,
   IconSearch,
-  IconSpark,
   IconShield,
   IconStore,
-  IconTicket,
   IconUser,
 } from "@/components/ui/icons";
 
@@ -62,6 +67,15 @@ interface NavItem {
   admin?: boolean;
   /** Folded into the "More" menu below xl, where vertical room runs out. */
   secondary?: boolean;
+  /**
+   * Promoted in the DESKTOP SIDEBAR. Defaults to true.
+   *
+   * Separate from `flag`, which hides an entry everywhere: this hides it from
+   * one surface while the mobile tab bar and drawer keep it. The sidebar sits
+   * under a breadcrumb bar that already carries a bell and an avatar, so an
+   * entry can be redundant there and still be the only door on a phone.
+   */
+  sidebar?: boolean;
   /**
    * Hidden unless this `MARKET_FLAGS` capability is on.
    *
@@ -82,43 +96,113 @@ interface NavItem {
 // One ordered list drives the sidebar at every breakpoint. Primary items are
 // always visible; secondary ones collapse into More on shorter rails.
 //
-// Spotlight has a nav entry because the right rail, which used to be its only
-// door, is `hidden lg:block` — so below lg there was no way to reach it at all.
-// The "second door to the same room" argument only holds where the first door
-// exists, and on a phone it does not.
+/*
+  FOUR primary rows, and everything else behind More.
+
+  The rail used to list every surface the app has, which turned the first
+  thing a reader sees into a directory. 2.0 does three things — talk in a
+  room, meet somebody, keep up with your people — and the rail now says so.
+
+  What moved is not gone: `secondary` folds an entry into More, so Tickets,
+  Studio, Arkmarks, Schedule, Spotlight and Store keep their routes, their
+  deep links and their behaviour. They stop costing a permanent slot for
+  something opened once a week.
+
+  Live went secondary rather than away. With video leaving Market Square, Live
+  and Houses are two names for "a room happening now", and two names is how a
+  reader learns to guess which one they want. Houses is not in the rail at all
+  any more: the hallway is the top of Home, and a nav row pointing at the same
+  rooms would be a second door to the room you are already looking at.
+
+  Spotlight has a nav entry because the right rail, which used to be its only
+  door, is `hidden lg:block` — so below lg there was no way to reach it at
+  all. The "second door to the same room" argument only holds where the first
+  door exists, and on a phone it does not.
+*/
+/*
+  Four more left the rail, and none of them were destinations.
+
+  Tickets and Arkmarks are RECORDS — what you bought, what you saved. They
+  belong to you, so they moved under your own avatar with View profile and
+  Log out, which is where a person looks for their own things.
+
+  Schedule merged into the job it is part of. Scheduling a stream is a studio
+  function, and it already has four real doors: the Live hub, your profile,
+  the arena block and the feed's empty state. A fifth in the rail was a
+  shortcut to a page nobody navigates to cold.
+
+  Spotlight is deferred rather than dropped. Status is the LAST thing 2.0
+  builds — it is only worth being seen once there is a room to be seen in —
+  and until then a permanent rail entry advertises a system that does not
+  exist. The route still resolves.
+*/
 const NAV: NavItem[] = [
-  { href: "/", label: "Home", icon: IconHome },
-  { href: "/discover", label: "Explore", icon: IconSearch },
-  { href: "/messages", label: "Messages", icon: IconMail, authed: true },
+  { href: "/", label: "Home", icon: IconSbHome },
+  { href: "/discover", label: "Explore", icon: IconSbExplore },
+  /*
+    Houses is a row of its own after all.
+
+    The hallway at the top of Home shows the three rooms open now, which is an
+    overview's job — but an overview is a summary, and a summary needs
+    somewhere to point. Without a row, the only door to every other room was a
+    "See all" that appears only when a fourth room exists.
+
+    `/gist-rooms/[id]` still resolves whatever the flag says: a link somebody was
+    sent has to work, and hiding an entry must never break a route.
+  */
+  /*
+    IN THE SIDEBAR, and spelled "Gistrooms" — node 496:13107 draws it third,
+    between Explore and Chat. It was `sidebar: false` on the older file, which
+    left the hallway on Home as the only door to every room but the three open
+    now. The ROUTE is unchanged; nothing already linked breaks.
+  */
+  { href: "/gist-rooms", label: "Gistrooms", icon: IconSbGistrooms, flag: "houses" },
+  
+  { href: "/messages", label: "Chat", icon: IconSbChat, authed: true },
   {
     href: "/notifications",
     label: "Notifications",
     icon: IconBell,
     authed: true,
+    /*
+      Off the SIDEBAR only, and deliberately not off the mobile bar.
+
+      On desktop the breadcrumb's bell is the same destination with the same
+      unread ring, so the row was the second of two doors to one place. On a
+      phone there is no breadcrumb — `--ws-crumb-h` is 0 below md — and the
+      mobile header carries no bell precisely because this entry exists. Take
+      it out of `NAV` outright and a phone has no route to notifications at
+      all, and no unread badge anywhere.
+    */
+    sidebar: false,
   },
-  { href: "/live", label: "Live", icon: IconLive },
-  { href: "/tickets", label: "Tickets", icon: IconTicket, authed: true },
-  // Arkmarks had a route and a save button on every post, and no way in: the
-  // only path to something you saved was typing the URL.
-  {
-    href: "/arkmarks",
-    label: "Arkmarks",
-    icon: IconBookmark,
-    authed: true,
-    secondary: true,
-  },
-  { href: "/spotlight", label: "Spotlight", icon: IconSpark, secondary: true },
-  // Reachable by URL, by deep link and from Explore's Products tab — just
+  { href: "/live", label: "Live", icon: IconSbLive, secondary: true },
+  /*
+    LIBRARY is the saved-posts surface — node 496:13107 draws it sixth, on a
+    bookmark, between Live and For Creators. The route stays `/arkmarks` and the
+    control on a post is still the Arkmark: the design renamed the DESTINATION
+    in the nav, not the act of saving, exactly as "For Creators" sits over
+    `/studio`. Signed-in only, because a shelf of your own saved things is not
+    a thing a guest has.
+  */
+  { href: "/arkmarks", label: "Library", icon: IconSbLibrary, authed: true },
+// Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
+  /*
+    Node 225:3252. The row's geometry was already this node's — 46px tall,
+    `px-3.5 py-2.5`, `gap-3`, `rounded-xl`, 12/16 bold — so the design changed
+    only what it says and what it shows: "For Creators", on the file's own
+    MusicNotesPlus. The ROUTE is untouched; /studio still resolves and every
+    link already sent to it still works.
+  */
   {
-    href: "/schedule",
-    label: "Schedule",
-    icon: IconCalendar,
+    href: "/studio",
+    label: "For Creators",
+    icon: IconSbCreators,
     authed: true,
     secondary: true,
   },
-  { href: "/studio", label: "Studio", icon: IconCamera, authed: true },
   {
     href: "/admin",
     label: "Admin",
@@ -153,9 +237,12 @@ function visibleNav(options: {
   authenticated: boolean;
   isAdmin: boolean;
   isOperator: boolean;
+  /** Which surface is asking. Only the sidebar drops `sidebar: false` rows. */
+  surface: "sidebar" | "mobile";
 }): NavItem[] {
   return NAV.filter(
     (item) =>
+      (options.surface !== "sidebar" || item.sidebar !== false) &&
       (!item.authed || options.authenticated) &&
       (!item.operator || options.isOperator) &&
       // Presentation only. Every /admin route is enforced server-side, so a
@@ -169,7 +256,19 @@ function visibleNav(options: {
 // it opens — so it needs the width a right rail would take. On a phone the
 // panes swap instead, which is why only the exact path is wide.
 const WIDE_EXACT = ["/store", "/operations", "/messages"];
-const WIDE_PREFIX = ["/store/", "/operations/", "/studio/"];
+/*
+  `/gist-rooms/:id` joins the wide set.
+
+  A gist room is TWO columns of its own — a 805 stage beside a 411 chat, per
+  node 129:11748 — so the shell's right rail is a third column competing for
+  the same width, and the room ends up squeezed into the centre while partner
+  cards sit beside it. The room is the destination; nothing should share the
+  screen with it.
+
+  The INDEX stays narrow: `/gist-rooms` is a list of rooms, which reads better
+  in the column with the rail beside it.
+*/
+const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
 
 function isWide(pathname: string): boolean {
   return (
@@ -480,13 +579,18 @@ function AccountChip() {
           onClick={toggle}
           aria-expanded={open}
           aria-label={`Account menu for @${me.data?.username ?? "you"}`}
-          className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 text-left transition-colors hover:bg-white/8"
+          /* Node 496:13158 to the pixel: 199x50, radius 12, 3% white behind a
+             10% hairline, 7 of padding and 11 between the avatar and the two
+             lines. `p-2` was 8. */
+          className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-[7px] text-left transition-colors hover:bg-white/8"
         >
           <Avatar
             name={me.data?.displayName ?? "Me"}
             seed={me.data?.id}
             src={me.data?.avatarUrl}
             size={34}
+            /* 34 behind the file's own 20% white ring — 496:13159. */
+            className="ring-1 ring-inset ring-white/20"
           />
           <span className="hidden min-w-0 flex-1 group-data-[rail=full]/rail:block">
             <span className="block truncate text-[12px] font-bold leading-4 text-white">
@@ -509,6 +613,33 @@ function AccountChip() {
           >
             View profile
           </Link>
+          {/*
+            What is YOURS lives under you.
+
+            Tickets and Arkmarks are records — what you bought, what you saved
+            — not places you navigate to. In the rail they each cost a
+            permanent row to serve something opened once a week; here they sit
+            where a person already looks for their own things, next to their
+            own name.
+          */}
+          {me.data && (
+            <>
+              <Link
+                href="/tickets"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Tickets
+              </Link>
+              <Link
+                href="/arkmarks"
+                onClick={close}
+                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+              >
+                Arkmarks
+              </Link>
+            </>
+          )}
           <button
             onClick={() => {
               close();
@@ -608,6 +739,7 @@ function Sidebar({
     authenticated,
     isAdmin: Boolean(me.data?.isAdmin),
     isOperator: me.data?.role === "worldstreet",
+    surface: "sidebar",
   });
 
   return (
@@ -624,26 +756,56 @@ function Sidebar({
     <aside
       data-rail={rail.mode}
       style={{ width: railWidth(rail) }}
-      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-[#0f0f0f] px-3 py-5 md:flex data-[rail=full]:items-stretch"
+      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-chrome px-3 pb-5 md:flex data-[rail=full]:items-stretch"
     >
       <RailHandle rail={rail} preview={preview} commit={commit} />
-      {/* The wordmark lockup sits over its own hairline. */}
+      {/*
+        THE WORDMARK BLOCK IS EXACTLY AS TALL AS THE BREADCRUMB BAR, so their
+        two hairlines are one continuous line across the top of the app.
+
+        It used to be `py-5` on the rail plus `pb-4` here, which put the rule at
+        66px against the bar's 76 — ten pixels adrift, and read as a broken join
+        rather than a deliberate offset. Node 129:11832 draws the rail's own
+        head at 76 with a bottom hairline, the same 76 the bar is.
+
+        `--ws-crumb-h` rather than a literal, so the two can never drift again;
+        the rail's top padding is gone for the same reason — the block is the
+        full height and centres its mark on 38, exactly as the bar centres its
+        breadcrumb.
+      */}
       <Link
         href="/"
         aria-label="Market Square home"
         title="Market Square"
-        className="ws-press mb-4 flex shrink-0 items-center justify-center border-b border-white/10 pb-4 group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:px-2.5"
+        className="ws-press mb-4 flex h-[var(--ws-crumb-h)] shrink-0 items-center justify-center border-b border-white/10"
       >
-        {/* The icon rail wears the mark alone; the expanded sidebar wears the
-            full lockup. Heights are set so the TYPE inside the lockup reads at
-            roughly the size the old type-only wordmark did — the lockup is
-            ~3.3:1 where that asset was ~12.8:1, so matching the old height
-            would have shrunk the type to about 9px. */}
+        {/*
+          THE LOCKUP IS ASSEMBLED, NOT AN ASSET — node 496:13198.
+
+          The file draws a 60.9x44.6 mark and then sets " Square" beside it as
+          LIVE TYPE at Geist 900, 22.56/17.58. It was `/logo.svg`, a single
+          baked image at an arbitrary 30px, which is why the type came out at
+          neither the file's size nor its weight.
+
+          CENTRED, and that is measured rather than assumed: the group is 148.9
+          wide in a 224 header, sitting at 37.6 with 37.5 left over — the same
+          inset both sides. It used to be pushed to the left edge once the rail
+          was labelled.
+
+          `size` on LogoMark is its HEIGHT, so 44.6 gives the file's mark back
+          at 59.5 wide against its 60.9 — the asset's own ratio, a pixel and a
+          half narrower, and not worth distorting the artwork to close.
+        */}
         <LogoMark size={28} className="group-data-[rail=full]/rail:hidden" />
-        <Wordmark
-          height={30}
-          className="hidden group-data-[rail=full]/rail:block"
-        />
+        <span className="hidden items-center group-data-[rail=full]/rail:flex">
+          <LogoMark size={44.6} />
+          {/* The file's string carries a leading space, which is the gap
+              between mark and type; a space is not a layout instruction, so it
+              is a margin here and the word is just the word. */}
+          <span className="ml-[6px] text-[22.56px] font-black leading-[17.58px] tracking-[-0.01em] text-white">
+            Square
+          </span>
+        </span>
       </Link>
 
       {/* The explicit control. The drag edge is discoverable only once you
@@ -704,19 +866,48 @@ function Sidebar({
         />
       </nav>
 
-      {/* Post is the primary act; going live is the one Market Square adds
-          next to it, so it sits directly underneath as the quiet twin.
-          It opens the composer in place — it used to link to `/?compose=1`,
-          which meant reaching for Post from anywhere threw the reader back to
-          home and lost their place. */}
-      <div className="mt-4 flex shrink-0 flex-col items-center gap-2 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-1">
+      {/*
+        THE TWO ACTS, IN THE FILE'S ORDER — node 496:13107.
+
+        Start Gistroom on the purple ramp at 38 tall, then Post gist in silver
+        directly under it, both 38. It used to be Post gist on top with an
+        OUTLINED "Go live" beneath: the file promotes starting a room to the
+        filled control and demotes posting to the quiet one, which is the
+        product saying what it is — a place to talk in a room first, a timeline
+        second.
+
+        `/studio` is still where both live-adjacent routes go, and the label is
+        the only thing that moved; every link already sent still resolves.
+      */}
+      <div className="mt-4 flex shrink-0 flex-col items-center gap-4 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-3">
+        <Link
+          href="/studio"
+          /* 90deg, not `ws-btn-create`'s 155: node 496:13280's handles run
+             (0,0.5) to (1,0.5), which is straight across. Same two stops —
+             --color-create into --color-create-deep — so this is the ramp the
+             welcome screens already use rather than a new one. */
+          className="ws-press ws-btn-welcome flex h-12 w-12 items-center justify-center gap-2 rounded-full text-[15px] font-medium transition-opacity hover:opacity-90 group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
+          aria-label="Start a gistroom"
+        >
+          <IconMic className="h-4 w-4 shrink-0" />
+          <span className="hidden items-center gap-1 group-data-[rail=full]/rail:flex">
+            Start Gistroom
+            {/* The file draws a chevron, so the control reads as opening a
+                choice. It goes to the room composer, which IS that choice —
+                a menu here would be a second one over the same page. */}
+            <IconChevronDown className="h-[14px] w-[14px] shrink-0" />
+          </span>
+        </Link>
         {authenticated && onCompose && (
           <button
             onClick={onCompose}
-            // Square while the rail is icons — the button has no label to give it
-            // width there, so a full-height pill came out 22px wide and read as
-            // a squashed sliver. It takes the rail's full width once labelled.
-            className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:w-full group-data-[rail=full]/rail:text-[17px]"
+            /* Square while the rail is icons — with no label to give it width
+               a full-height pill came out 22px wide and read as a sliver. It
+               takes the rail's width once labelled.
+               `ws-btn-postgist` is node 407:17029 in full: the silver face, the
+               4px ring that fades to near-black along the bottom, and DARK type
+               on it. 16/22 at Geist 600 on -0.112 of tracking. */
+            className="ws-press ws-btn-postgist flex h-12 w-12 items-center justify-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.112px] transition-opacity hover:opacity-90 group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
             aria-label="Post gist"
           >
             <IconPlus className="h-6 w-6 group-data-[rail=full]/rail:hidden" />
@@ -725,16 +916,6 @@ function Sidebar({
             </span>
           </button>
         )}
-        <Link
-          href="/studio"
-          className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:w-full"
-          aria-label="Go live"
-        >
-          <IconCamera className="h-5 w-5" />
-          <span className="hidden group-data-[rail=full]/rail:block">
-            Go live
-          </span>
-        </Link>
       </div>
 
       <div className="mt-4 w-full shrink-0 border-t border-white/10 pt-4">
@@ -755,7 +936,7 @@ const CRUMB: Array<[RegExp, string]> = [
   [/^\/$/, "Market Square"],
   [/^\/discover/, "Discover"],
   [/^\/arkmarks/, "Arkmarks"],
-  [/^\/messages/, "Messages"],
+  [/^\/messages/, "Chat"],
   [/^\/notifications/, "Notifications"],
   [/^\/live\b/, "Live"],
   [/^\/tickets/, "Tickets"],
@@ -770,18 +951,221 @@ const CRUMB: Array<[RegExp, string]> = [
   [/^\/auth/, "Sign in"],
 ];
 
+/**
+ * The bar above the columns.
+ *
+ * Node 15:1302's own numbers: 76 tall, #121214 behind a 6px backdrop blur, a
+ * 10% hairline underneath, 24px gutters, and the crumb pushed against the
+ * right-hand cluster by `justify-between`.
+ *
+ * TWO things changed from the earlier build and both were wrong rather than
+ * merely different. The bar was 69px and painted #0f0f0f — the same colour as
+ * the page it sits on, so it read as part of the column instead of as chrome.
+ * And the whole crumb was #979797, which made the page you are ON the same
+ * weight as the ecosystem you are in; the file whitens the leaf.
+ */
 function Breadcrumb({ pathname }: { pathname: string }) {
   const leaf =
     CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Market Square";
   return (
-    <div className="ws-hair hidden h-[69px] shrink-0 items-center border-b bg-[#0f0f0f] px-6 md:flex">
-      <nav aria-label="Breadcrumb" className="text-[16px] text-[#979797]">
-        <Link href="/" className="hover:text-body">
+    <div className="ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-center gap-6 border-b bg-chrome px-6 backdrop-blur-[6px] md:flex">
+      {/* Geist Medium 16/21.75. The trailing space belongs to the grey run in
+          the file — "Ark Ecosystem/ " — so the slash hugs the root and the gap
+          before the leaf is part of the dim text, not the bright text. */}
+      {/* The crumb keeps the left edge and the account cluster the right; the
+          search field and the location pill sit between them. `mr-auto` rather
+          than `justify-between`, which with four children would spread all four
+          and pull the pair apart. */}
+      <nav
+        aria-label="Breadcrumb"
+        className="min-w-0 shrink truncate text-[16px] font-medium leading-[21.75px] text-[#979797]"
+      >
+        <Link href="/" className="transition-colors hover:text-body">
           Ark Ecosystem
         </Link>
         <span aria-hidden>/ </span>
-        <span aria-current="page">{leaf}</span>
+        <span aria-current="page" className="text-white">
+          {leaf}
+        </span>
       </nav>
+
+      {/* NODE 225:3641 puts two more controls between the crumb and the
+          account cluster: a search field and the reader's current location. */}
+      <TopBarSearch />
+      <TopBarLocation />
+
+      <div className="ml-auto shrink-0">
+        <TopBarActions />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * THE TOP BAR'S SEARCH — node 225:3681.
+ *
+ * A 298x38 field at a full round: transparent (`white/0.2%` is nothing), a
+ * `rgba(255,255,255,0.4)` stroke at 0.68px and the file's two-layer shadow —
+ * the same outlined material the stories rail's "Your Story" tile and the
+ * people deck's step buttons carry. Inside, the 16px
+ * `vuesax/linear/search-normal` and the word "Search" at Geist Medium 16/22
+ * with -0.007em, in `#7A7A7A`.
+ *
+ * It is a LINK, not an input. Search already has a surface with its own field,
+ * its filters and its result tabs; a second box that duplicates the query state
+ * is how the two drift apart. This is the door to it, which is what a field in
+ * a top bar is for.
+ */
+function TopBarSearch() {
+  return (
+    <Link
+      href="/discover"
+      className="ws-press hidden h-[38px] w-[298px] shrink-0 items-center gap-2 rounded-full border-[0.68px] border-white/40 px-2 text-[#7A7A7A] shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors hover:text-body lg:flex"
+    >
+      <IconTopSearch className="h-4 w-4 shrink-0" />
+      <span className="text-[16px] font-medium leading-[22px] tracking-[-0.007em]">Search</span>
+    </Link>
+  );
+}
+
+/**
+ * THE CURRENT LOCATION — node 225:3684.
+ *
+ * A 293x38 pill at `rgba(151,151,151,0.05)` holding a 32px mark, then a
+ * two-line column at gap -7 — the label at Roboto 11/16.5 in `#A1A1AA`
+ * over the place itself at Geist SemiBold 16/25.85 in `#D9D9D9` — and a caret
+ * at the right edge.
+ *
+ * ─── IT IS LIVE ──────────────────────────────────────────────────────────────
+ * `city` and `region` are on `PublicProfile`, and `PATCH /me` writes them, so
+ * this reads what the person has published and the caret opens the two fields
+ * that set it. With nothing set it says "Set location" — an invitation rather
+ * than a placeholder, and never a street nobody supplied.
+ *
+ * ─── A NAMED PLACE, NOT A POSITION ───────────────────────────────────────────
+ * The words are the reader's own and they can clear them in one press. This is
+ * deliberately not a device reading: `lib/api/schemas.ts` drops any `latitude`,
+ * `longitude` or `distanceKm` a backend sends, and the sheet behind the caret
+ * has no "detect me" button. A place somebody published is a fact they chose; a
+ * position is recomputed every time a stranger looks.
+ *
+ * The design draws "108 Opebi Ikeja, Lagos" — a door number. The service
+ * deliberately stores city and region only, so this renders "Ikeja, Lagos".
+ * That precision is one migration away if product asks for it, WITH a rule
+ * about who may read it; it is not something to acquire by accident.
+ */
+function TopBarLocation() {
+  const me = useMe();
+  const { authenticated } = useAuth();
+  const [open, setOpen] = useState(false);
+  const place = [me.data?.city, me.data?.region].filter(Boolean).join(", ");
+
+  if (!authenticated) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={place ? `Your location: ${place}. Change it.` : "Set your location"}
+        className="ws-press hidden h-[38px] w-[293px] shrink-0 items-center gap-[5px] rounded-full bg-[rgba(151,151,151,0.05)] pl-[5px] pr-4 text-left transition-colors hover:bg-[rgba(151,151,151,0.09)] xl:flex"
+      >
+        <IconLocationPin className="h-8 w-8 shrink-0 text-white/70" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          {/*
+            "LOCATION", not the file's "Current location".
+
+            The data is a place somebody named once and can leave for months —
+            "current" is a promise it cannot keep, and a profile reading Lagos
+            while the person is in Abuja is worse than one that just says where
+            they are from. The word is the only part of this pill that is not
+            the file's, and it is changed deliberately rather than by omission.
+          */}
+          <span className="truncate text-[11px] leading-[16.5px] text-[#A1A1AA]">
+            Location
+          </span>
+          {/* -7 of leading between the two lines is the file's; it is what makes
+              the pair read as one label rather than two stacked sentences. */}
+          <span className="-mt-[7px] truncate text-[16px] font-semibold leading-[25.85px] text-[#D9D9D9]">
+            {place || "Set location"}
+          </span>
+        </span>
+        <IconCaretDown className="h-1.5 w-2 shrink-0 text-white" />
+      </button>
+
+      {/* Keyed on the opening so the fields are seeded from the CURRENT profile
+          each time — a draft abandoned last time must not come back. */}
+      {open && <LocationSheet key={String(open)} open onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function TopBarActions() {
+  const { ready, authenticated, login } = useAuth();
+  const me = useMe();
+  const unread = useUnread();
+  const notifications = unread.data?.notifications ?? 0;
+
+  /*
+    A GUEST'S WAY IN LIVES HERE, because the sidebar that used to hold it is
+    not rendered for them (see the note at the `Sidebar` call site). Top-right
+    of the chrome is where every product in this category puts it, and it is
+    the one piece of furniture a signed-out visitor still has.
+
+    Nothing at all while Privy is settling: a Sign in button that appears for
+    half a second and is replaced by an avatar is worse than a moment of
+    nothing.
+  */
+  if (ready && !authenticated) {
+    return (
+      <button
+        type="button"
+        onClick={login}
+        className="ws-press flex h-9 shrink-0 items-center rounded-full bg-white px-4 text-[14px] font-semibold text-ink transition-colors hover:bg-white/90"
+      >
+        Sign in
+      </button>
+    );
+  }
+
+  if (!authenticated) return null;
+
+  return (
+    <div className="flex shrink-0 items-center gap-[11px]">
+      <Link
+        href="/notifications"
+        aria-label={
+          notifications > 0
+            ? `Notifications, ${notifications} unread`
+            : "Notifications"
+        }
+        // GLASS in the file: a translucent fill over the blurred bar rather
+        // than a flat chip.
+        className="ws-press relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-body backdrop-blur-[6px] transition-colors hover:bg-white/12 hover:text-white"
+      >
+        <IconBell className="h-6 w-6" />
+        {notifications > 0 && (
+          /* 7px, ringed in #F4F4F4 over the bar's own #0F0F0F — a ring, not a
+             filled dot, which is what keeps it legible against the glyph. */
+          <span
+            aria-hidden
+            className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full border-2 border-[#F4F4F4] bg-chrome"
+          />
+        )}
+      </Link>
+
+      <Link
+        href={me.data ? `/u/${me.data.username}` : "/auth"}
+        aria-label="Your profile"
+        className="ws-press flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10"
+      >
+        <Avatar
+          name={me.data?.displayName ?? "Me"}
+          seed={me.data?.id}
+          src={me.data?.avatarUrl}
+          size={32}
+        />
+      </Link>
     </div>
   );
 }
@@ -796,16 +1180,46 @@ function Breadcrumb({ pathname }: { pathname: string }) {
  * drawer is that entry point, listing the same items the sidebar does under
  * the same visibility rules.
  */
+/**
+ * THE SIDEBAR, ON A PHONE.
+ *
+ * It used to be a two-column grid of chips inside a centred `Sheet` — the same
+ * destinations, drawn as a completely different object. So the nav a person
+ * learned on the desktop was not the nav they met on their phone: different
+ * shape, different order, no badges, no active treatment, and Go live missing
+ * entirely.
+ *
+ * This is the sidebar. Literally: the rows are `NavLink`, the same component
+ * the rail renders, with the same active tint, the same unread badges from
+ * `BADGE_FOR`, the same primary/secondary split, and the same Go live and
+ * account footer. Wrapping the panel in `group/rail` with `data-rail="full"` is
+ * what makes those rows render in their LABELLED state — the identical class
+ * hook the expanded rail sets — so there is one nav component in the app and no
+ * second copy to drift.
+ *
+ * ─── WHY A LEFT DRAWER AND NOT A SHEET ───────────────────────────────────────
+ * A nav that slides from the left is where every reader's hand already expects
+ * it, and it matches the side the sidebar occupies on a wider screen. The old
+ * `Sheet` arrived from the centre, which reads as a dialog interrupting you
+ * rather than a panel you opened.
+ *
+ * It closes on a route change, on Escape, and on the scrim. The body is
+ * scroll-locked while it is open, or the page behind it moves under the panel.
+ */
 function MobileMenu({
   open,
   onClose,
   items,
   pathname,
+  unread,
+  onCompose,
 }: {
   open: boolean;
   onClose: () => void;
   items: NavItem[];
   pathname: string;
+  unread: { messages: number; notifications: number } | undefined;
+  onCompose?: () => void;
 }) {
   const { ready, authenticated, login } = useAuth();
   const me = useMe();
@@ -817,89 +1231,132 @@ function MobileMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- close on navigation only
   }, [pathname]);
 
-  return (
-    <Sheet open={open} onClose={onClose} title="Menu">
-      <div className="space-y-4">
-        {ready && !authenticated ? (
-          <button
-            onClick={() => {
-              onClose();
-              login();
-            }}
-            className="ws-press flex w-full items-center justify-center rounded-full bg-accent px-6 py-3 font-bold text-ink"
-          >
-            Sign in
-          </button>
-        ) : (
-          <Link
-            href={me.data ? `/u/${me.data.username}` : "/auth"}
-            onClick={onClose}
-            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:bg-white/8"
-          >
-            <Avatar
-              name={me.data?.displayName ?? "Me"}
-              seed={me.data?.id}
-              src={me.data?.avatarUrl}
-              size={40}
-            />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-bold text-heading">
-                {me.data?.displayName ?? "You"}
-              </span>
-              <span className="block truncate text-xs text-meta">
-                @{me.data?.username ?? "…"}
-              </span>
-            </span>
-            <span className="shrink-0 text-xs text-meta">View profile</span>
-          </Link>
-        )}
+  // Escape closes it, and the page behind stops scrolling while it is open —
+  // otherwise a drag on the scrim moves the timeline under the panel.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [open, onClose]);
 
-        <nav aria-label="All sections" className="grid grid-cols-2 gap-2">
-          {items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              {...(item.external
-                ? { target: "_blank", rel: "noopener noreferrer" }
-                : {})}
-              onClick={onClose}
-              aria-current={isActive(pathname, item.href) ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-2xl border px-3 py-3 text-sm font-semibold transition-colors",
-                isActive(pathname, item.href)
-                  ? "border-white/15 bg-white/10 text-heading"
-                  : "border-white/10 text-body hover:bg-white/[0.06]",
-              )}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          ))}
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] lg:hidden">
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-black/60"
+      />
+
+      {/* `data-rail="full"` is the whole trick: `NavLink` reads it to decide
+          whether it is a labelled row or a bare glyph, so the sidebar's own
+          rows render here unchanged. */}
+      <div
+        data-rail="full"
+        className="group/rail ws-hair absolute inset-y-0 left-0 flex w-[85%] max-w-[300px] flex-col border-r bg-chrome px-3 pb-5"
+      >
+        <div className="flex h-[76px] shrink-0 items-center border-b border-white/10 px-2.5">
+          <Wordmark height={30} />
+        </div>
+
+        <nav
+          aria-label="Primary"
+          className="mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {items
+            .filter((item) => !item.secondary)
+            .map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={isActive(pathname, item.href)}
+                badge={BADGE_FOR[item.href]?.(unread) ?? 0}
+              />
+            ))}
+          {/* Secondary rows are folded away on the icon rail for width. A
+              drawer has the width, so they are simply listed. */}
+          {items
+            .filter((item) => item.secondary)
+            .map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={isActive(pathname, item.href)}
+              />
+            ))}
         </nav>
 
-        {authenticated && (
-          <Link
-            href="/studio"
-            onClick={onClose}
-            className="ws-press flex w-full items-center justify-center gap-2 rounded-full border border-white/20 py-3 font-bold text-body transition-colors hover:bg-white/8"
-          >
-            <IconCamera className="h-5 w-5" /> Go live
-          </Link>
-        )}
+        <div className="mt-4 flex shrink-0 flex-col gap-2">
+          {authenticated && onCompose && (
+            <button
+              onClick={() => {
+                onClose();
+                onCompose();
+              }}
+              className="ws-press flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-bold text-ink transition-colors hover:bg-white"
+            >
+              <IconPlus className="h-4 w-4" />
+              Post gist
+            </button>
+          )}
 
-        {authenticated && (
-          <button
-            onClick={() => {
-              onClose();
-              void logout();
-            }}
-            className="w-full rounded-full border border-white/10 py-3 text-sm font-semibold text-body transition-colors hover:bg-white/8"
-          >
-            Log out{me.data?.username ? ` @${me.data.username}` : ""}
-          </button>
-        )}
+          {ready && !authenticated ? (
+            <button
+              onClick={() => {
+                onClose();
+                login();
+              }}
+              className="ws-press flex h-11 w-full items-center justify-center rounded-full border border-white/15 text-[14px] font-semibold text-white"
+            >
+              Sign in
+            </button>
+          ) : (
+            <div className="ws-hair flex items-center gap-2 border-t pt-3">
+              <Link
+                href={me.data ? `/u/${me.data.username}` : "/auth"}
+                onClick={onClose}
+                className="ws-press flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-white/[0.06]"
+              >
+                <Avatar
+                  name={me.data?.displayName ?? "Me"}
+                  seed={me.data?.id}
+                  src={me.data?.avatarUrl}
+                  size={34}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-bold text-heading">
+                    {me.data?.displayName ?? "You"}
+                  </span>
+                  <span className="block truncate text-[11px] text-meta">
+                    @{me.data?.username ?? "…"}
+                  </span>
+                </span>
+              </Link>
+              <button
+                onClick={() => {
+                  onClose();
+                  void logout();
+                }}
+                aria-label="Sign out"
+                className="ws-press shrink-0 rounded-full p-2 text-meta transition-colors hover:bg-white/10 hover:text-body"
+              >
+                <IconLogout className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </Sheet>
+    </div>
   );
 }
 
@@ -1040,7 +1497,7 @@ function MobileBar({
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useTrackNavHistory();
-  const { authenticated } = useAuth();
+  const { ready, authenticated } = useAuth();
   const me = useMe();
   const unread = useUnread();
   const broadcast = useBroadcastStatus();
@@ -1057,12 +1514,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     authenticated,
     isAdmin: Boolean(me.data?.isAdmin),
     isOperator: me.data?.role === "worldstreet",
+    surface: "mobile",
   });
 
   // One piece of local state drives every compose entry point in the shell —
   // sidebar Post, the desktop floating button and the mobile one. They all sit
   // inside this component, so a prop is enough; no context store required.
   const canCompose = authenticated && allowsCompose(pathname);
+  /** Somebody looking around: settled, and not signed in. */
+  const guest = ready && !authenticated;
 
   // The stream room owns its whole viewport; the shell stays out of the way
   // there (no rails over the player, no bars).
@@ -1079,10 +1539,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             one page is a control nobody trusts. It draws nothing until one is
             tapped. */}
         <TickerSheet />
-        {/* No interest prompt here: the stream room owns the whole viewport,
-            and a modal over a live broadcast is an interruption, not an
-            onboarding. It waits until the reader leaves. */}
-        <ClaimUsernameGate />
+        {/* NOTHING here. The bare routes are the live room and the cockpit:
+            they own the whole viewport, and a four-screen onboarding over a
+            broadcast is not an onboarding, it is an interruption that can end
+            somebody's stream. The old username gate was mounted here for the
+            same reason it was everywhere — it was a small sheet. This is not,
+            and it waits until the reader leaves. */}
       </>
     );
   }
@@ -1093,10 +1555,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // the app looked left-aligned on the screens with the most room to give.
     // The cap is gone and the timeline takes the extra width from xl up.
     <div className="flex w-full">
-      <Sidebar
-        pathname={pathname}
-        onCompose={canCompose ? () => setComposeOpen(true) : undefined}
-      />
+      {/*
+        GUESTS GET NO SIDEBAR.
+
+        Signed out, every row in it either leads somewhere that immediately
+        asks you to sign in or is a control you cannot use — so the rail was
+        260px of the widest thing on screen spent on a menu of refusals, with
+        the reader's actual business squeezed beside it. Somebody looking around
+        should just be looking at the square.
+
+        Gated on `ready && !authenticated`, not on `!authenticated` alone: while
+        Privy is still settling, `authenticated` is false for everyone, and
+        hiding the rail on that would pull the whole layout sideways under a
+        signed-in reader and then push it back. Boot happens under the splash,
+        so nobody sees the rail appear.
+
+        The way IN moves to the breadcrumb — see `TopBarActions`. Removing the
+        rail without moving it would leave a guest on desktop with no sign-in
+        anywhere.
+      */}
+      {!guest && (
+        <Sidebar
+          pathname={pathname}
+          /* The RAIL's own rule, not the floating button's — see
+             `allowsRailCompose`. Sharing `canCompose` took Post gist off the
+             sidebar on /messages, /admin and /operations, none of which is a
+             reason the rail's button should go. */
+          onCompose={
+            authenticated && allowsRailCompose(pathname)
+              ? () => setComposeOpen(true)
+              : undefined
+          }
+        />
+      )}
 
       {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
           and the two things worth reaching from anywhere on the right.
@@ -1144,9 +1635,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* The breadcrumb spans the column and the rail together, so both live
-          inside one flex-column beside the sidebar. */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/*
+        The breadcrumb spans the column and the rail together, so both live
+        inside one flex-column beside the sidebar.
+
+        THE GROUND IS PAINTED HERE, on everything right of the sidebar —
+        `--color-chrome` (`#121214`) at FULL opacity, the same value the rail
+        and the breadcrumb bar carry, so the whole frame is one surface. It was on Home's own column first and then on `main`,
+        and both left a SEAM: the right rail carries no background of its own,
+        so a lighter pane beside it drew a visible edge down the page. One
+        ground under the bar, the column and the rail is the only place it
+        cannot show a join.
+
+        `--color-ground` stays `#000` for the app at large; this is the shell's
+        content frame, not a palette change.
+      */}
+      <div className="flex min-w-0 flex-1 flex-col bg-chrome">
         <Breadcrumb pathname={pathname} />
         {/* justify-START, not center. Centering the column+rail group inside
             the leftover width of the 1600px shell split that slack in two and
@@ -1176,7 +1680,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               // black at 1440, 197px at 1512, 445px at 1920, always parked on
               // the right, where it reads as the whole product shoved to one
               // side. Every pane flexes to the window it is in instead.
-              "ws-hair min-h-dvh min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+              // `100dvh` MINUS the breadcrumb, not `min-h-dvh`. The bar is a
+              // sibling above this in the same flex column, so a full-viewport
+              // minimum made the document exactly one bar taller than the
+              // window and every short route grew a scrollbar with 76px of
+              // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
+              // bar is `hidden md:flex`, so this is identical there.
+              "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
             )}
           >
             {children}
@@ -1219,10 +1729,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onClose={() => setMenuOpen(false)}
         items={mobileNav}
         pathname={pathname}
+        unread={unread.data}
+        onCompose={canCompose ? () => setComposeOpen(true) : undefined}
       />
 
-      {/* First-load claim-username prompt for freshly created profiles. */}
-      <ClaimUsernameGate />
+      {/*
+        ONBOARDING — and it REPLACES the bare username gate.
+
+        `ClaimUsernameGate` was step 2 of this flow on its own: a sheet that
+        asked for a name and nothing else. The four screens the file draws
+        (107:1821, 122:2906, 125:3616, 126:3769) carry that same claim plus the
+        welcome, the permissions and the people, so the gate is folded in rather
+        than shown alongside it — two things asking for a username, one stacked
+        over the other, in somebody's first ten seconds.
+      */}
+      <OnboardingFlow />
       {/* ...then, once the account has a name, what they want to see. Ordered,
           not stacked — see the note in InterestGate. */}
       <InterestGate />

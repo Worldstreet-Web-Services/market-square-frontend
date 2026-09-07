@@ -787,6 +787,29 @@ const moderationCaseStatus = new Map<string, "open" | "resolved" | "dismissed">(
 const blockedProfiles = new Map<string, Set<string>>();
 const analyticsEvents: Array<Record<string, unknown>> = [];
 
+/**
+ * Winks sent, per sender. The service-side half of the rate limit.
+ *
+ * The browser has its own copy of these rules (`lib/winks.ts`) so a refusal is
+ * instant and specific, but that copy is a courtesy — anyone can clear
+ * localStorage or post the route by hand. This is where the limit actually
+ * holds, and the real service needs the same ledger for the same reason.
+ */
+const sentWinks = new Map<string, Array<{ targetId: string; at: number }>>();
+/** Twelve winks an hour, and one per person per day. Mirrors `lib/winks.ts`. */
+const WINK_BUDGET = 12;
+const WINK_WINDOW_MS = 60 * 60 * 1000;
+const WINK_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function winksFrom(userId: string): Array<{ targetId: string; at: number }> {
+  let rows = sentWinks.get(userId);
+  if (!rows) {
+    rows = [];
+    sentWinks.set(userId, rows);
+  }
+  return rows;
+}
+
 function blocksFor(userId: string): Set<string> {
   let set = blockedProfiles.get(userId);
   if (!set) {
@@ -801,15 +824,22 @@ function blocksFor(userId: string): Set<string> {
 const fixtureNotifications: Array<{
   id: string;
   kind: string;
+  /**
+   * WHO IT IS FOR. The seeds are all addressed to the demo user because that
+   * is who reads them, but a wink sent to somebody else has to land in THEIR
+   * list and not in the sender's — a notification with no recipient would show
+   * the sender their own wink, which is the opposite of what a wink is.
+   */
+  toUserId: string;
   actorId: string;
   postId: string | null;
   streamId: string | null;
   createdAt: string;
 }> = [
-  { id: "nt_live", kind: "stream_live", actorId: profiles[1]?.id ?? ME_ID, postId: null, streamId: streams[0]?.id ?? null, createdAt: new Date(Date.now() - 8 * 60_000).toISOString() },
-  { id: "nt_like", kind: "like", actorId: profiles[2]?.id ?? ME_ID, postId: posts[0]?.id ?? null, streamId: null, createdAt: new Date(Date.now() - 42 * 60_000).toISOString() },
-  { id: "nt_repost", kind: "repost", actorId: profiles[3]?.id ?? ME_ID, postId: posts[0]?.id ?? null, streamId: null, createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString() },
-  { id: "nt_follow", kind: "follow", actorId: profiles[1]?.id ?? ME_ID, postId: null, streamId: null, createdAt: new Date(Date.now() - 7 * 60 * 60_000).toISOString() },
+  { id: "nt_live", toUserId: ME_ID, kind: "stream_live", actorId: profiles[1]?.id ?? ME_ID, postId: null, streamId: streams[0]?.id ?? null, createdAt: new Date(Date.now() - 8 * 60_000).toISOString() },
+  { id: "nt_like", toUserId: ME_ID, kind: "like", actorId: profiles[2]?.id ?? ME_ID, postId: posts[0]?.id ?? null, streamId: null, createdAt: new Date(Date.now() - 42 * 60_000).toISOString() },
+  { id: "nt_repost", toUserId: ME_ID, kind: "repost", actorId: profiles[3]?.id ?? ME_ID, postId: posts[0]?.id ?? null, streamId: null, createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString() },
+  { id: "nt_follow", toUserId: ME_ID, kind: "follow", actorId: profiles[1]?.id ?? ME_ID, postId: null, streamId: null, createdAt: new Date(Date.now() - 7 * 60 * 60_000).toISOString() },
 ];
 
 function notificationDto(item: (typeof fixtureNotifications)[number]) {
@@ -1153,8 +1183,9 @@ export function handleFixture(
         messages: conversations
           .filter((c) => c.participants.includes(userId!))
           .reduce((total, c) => total + unreadIn(c, userId!), 0),
-        notifications: fixtureNotifications.filter((item) => !readNotifications.has(item.id))
-          .length,
+        notifications: fixtureNotifications.filter(
+          (item) => item.toUserId === userId && !readNotifications.has(item.id)
+        ).length,
       });
     }
 
@@ -1178,7 +1209,8 @@ export function handleFixture(
 
     // GET /me/notifications → a cursor page plus the global unread tally.
     if (p[1] === "notifications" && p.length === 2 && method === "GET") {
-      const sorted = [...fixtureNotifications].sort(
+      const mine = fixtureNotifications.filter((item) => item.toUserId === userId);
+      const sorted = [...mine].sort(
         (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)
       );
       const { page, nextCursor } = paginate(
@@ -1187,21 +1219,18 @@ export function handleFixture(
         Math.min(Number(search.get("limit")) || 30, 30)
       );
       // Counted across everything, not just this page.
-      const unreadCount = fixtureNotifications.filter(
-        (item) => !readNotifications.has(item.id)
-      ).length;
+      const unreadCount = mine.filter((item) => !readNotifications.has(item.id)).length;
       return ok({ items: page, unreadCount, nextCursor });
     }
 
     // POST /me/notifications/read { ids? } — omitting ids marks all read.
     if (p[1] === "notifications" && p[2] === "read" && method === "POST") {
       const ids = Array.isArray(body.ids) ? (body.ids as string[]) : null;
-      for (const item of fixtureNotifications) {
+      const mine = fixtureNotifications.filter((item) => item.toUserId === userId);
+      for (const item of mine) {
         if (!ids || ids.includes(item.id)) readNotifications.add(item.id);
       }
-      const unreadCount = fixtureNotifications.filter(
-        (item) => !readNotifications.has(item.id)
-      ).length;
+      const unreadCount = mine.filter((item) => !readNotifications.has(item.id)).length;
       return ok({ unreadCount });
     }
 
@@ -2099,6 +2128,142 @@ export function handleFixture(
 
   // ---- profiles ----
   if (p[0] === "profiles") {
+    /*
+      GET /profiles — the public people directory, Explore's resting state.
+
+      Mirrors the documented contract exactly, including the three things it
+      deliberately OMITS:
+        1. the authenticated caller — your own row cannot offer a Follow
+           button, so it reads as broken. Done in the "query", which is why an
+           anonymous page and a signed-in page have different totals.
+        2. profiles with no username — a row is auto-created on first
+           authenticated call, and a directory of blank cards is worse than a
+           shorter directory.
+        3. nothing else. House accounts, unverified citizens and zero-follower
+           profiles all appear; hiding low-follower rows would turn a directory
+           into a leaderboard.
+
+      No `city`, `gender` or facet parameters, because the real route has none.
+      Adding them here would make fixture mode disagree with production about
+      the one thing this slice is blocked on, and the disagreement would only
+      surface after somebody shipped a filter that does nothing.
+    */
+    if (p.length === 1 && method === "GET") {
+      const query = (search.get("q") ?? "").trim().toLowerCase();
+      const sort = search.get("sort") === "recent" ? "recent" : "followers";
+      const rows = profiles
+        .filter((x) => x.username && x.id !== userId)
+        .filter(
+          (x) =>
+            !query ||
+            x.username.toLowerCase().includes(query) ||
+            x.displayName.toLowerCase().includes(query)
+        );
+      // `followers` is most-followed first. `recent` is most recently active
+      // first — the fixture has no activity timestamp, so it stands in with
+      // reverse insertion order; what matters is that the two orders DIFFER,
+      // so a client that quietly re-sorted one loaded page would be visible.
+      const ordered =
+        sort === "recent"
+          ? [...rows].reverse()
+          : [...rows].sort((a, b) => b.followerCount - a.followerCount);
+      const { page, nextCursor } = paginate(
+        ordered,
+        search.get("cursor"),
+        Math.min(Number(search.get("limit")) || 30, 30)
+      );
+      return ok({ items: page.map((x) => publicProfile(x, userId)), nextCursor });
+    }
+
+    /*
+      POST /profiles/:id/wink — a one-tap signal of interest.
+
+      NOT DEPLOYED UPSTREAM. This is the fixture's implementation of a route
+      the service still owes (see PENDING_ROUTES in
+      scripts/check-public-routes.mjs), written here so the whole flow —
+      refusal, limit, delivery — is real end to end rather than a button that
+      toasts. The four rules below are the ones the real service has to carry,
+      and they are the reason the route exists at all:
+
+        SELF      refused outright. A self-wink notifies nobody.
+        BLOCKED,  refused with a reason. The sender set this block and knows
+        BY ME     about it, so telling them is not a leak.
+        BLOCKED,  accepted and then DROPPED, silently, indistinguishable from
+        BY THEM   a delivered wink. This is the important one. A distinct
+                  error here would let anyone probe whether they have been
+                  blocked, which is precisely the fact blocking exists to
+                  withhold — so the wink "succeeds" and simply never arrives.
+        LIMIT     twelve an hour, one per person per day, 429 with the
+                  documented details shape so the client can say how long.
+    */
+    if (p[2] === "wink" && method === "POST") {
+      const denied = requireAuth(userId);
+      if (denied) return denied;
+      const target = profiles.find((x) => x.id === p[1] || x.username === p[1]);
+      if (!target) return fail(404, "NOT_FOUND", "Profile not found");
+      if (target.id === userId) return fail(422, "VALIDATION", "You can't wink yourself.");
+      if (blocksFor(userId!).has(target.id))
+        return fail(422, "VALIDATION", "Unblock them before sending a wink.");
+
+      const now = Date.now();
+      const mine = winksFrom(userId!);
+      const last = mine.filter((w) => w.targetId === target.id).map((w) => w.at).pop();
+      if (last !== undefined && now - last < WINK_COOLDOWN_MS) {
+        return {
+          status: 429,
+          body: {
+            success: false,
+            error: {
+              code: "RATE_LIMITED",
+              message: "You've already winked them today.",
+              details: {
+                action: "wink",
+                limit: 1,
+                windowSeconds: WINK_COOLDOWN_MS / 1000,
+                retryAfterSeconds: Math.ceil((WINK_COOLDOWN_MS - (now - last)) / 1000),
+              },
+            },
+          },
+        };
+      }
+      const inWindow = mine.filter((w) => now - w.at < WINK_WINDOW_MS);
+      if (inWindow.length >= WINK_BUDGET) {
+        const oldest = Math.min(...inWindow.map((w) => w.at));
+        return {
+          status: 429,
+          body: {
+            success: false,
+            error: {
+              code: "RATE_LIMITED",
+              message: "That's your winks for now.",
+              details: {
+                action: "wink",
+                limit: WINK_BUDGET,
+                windowSeconds: WINK_WINDOW_MS / 1000,
+                retryAfterSeconds: Math.ceil((WINK_WINDOW_MS - (now - oldest)) / 1000),
+              },
+            },
+          },
+        };
+      }
+
+      mine.push({ targetId: target.id, at: now });
+      // Dropped at DELIVERY when the recipient has blocked the sender: the
+      // sender gets the same 200 they would get otherwise, and nothing lands.
+      if (!blocksFor(target.id).has(userId!)) {
+        fixtureNotifications.push({
+          id: nextId("nt"),
+          toUserId: target.id,
+          kind: "wink",
+          actorId: userId!,
+          postId: null,
+          streamId: null,
+          createdAt: new Date(now).toISOString(),
+        });
+      }
+      return ok({ winked: true, createdAt: new Date(now).toISOString() });
+    }
+
     if (p[2] === "block") {
       const denied = requireAuth(userId);
       if (denied) return denied;

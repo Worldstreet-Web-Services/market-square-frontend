@@ -20,7 +20,21 @@
  * comfortable tap target — so the visible edge inset is the frame inset plus
  * 9.10256px.
  */
-export function CreateFab({ onClick }: { onClick: () => void }) {
+export function CreateFab({
+  onClick,
+  label = "Create post",
+}: {
+  onClick: () => void;
+  /**
+   * What this corner does on THIS surface.
+   *
+   * The gist rooms page (407:17286) draws the same circle in the same corner
+   * and it opens a ROOM, not a post — so the shape is shared and the act is
+   * the caller's. Only the accessible name changes: the glyph is a plus in
+   * both, because the file draws a plus in both.
+   */
+  label?: string;
+}) {
   return (
     <div
       // Bottom inset differs by breakpoint for one reason only: the mobile tab
@@ -34,7 +48,7 @@ export function CreateFab({ onClick }: { onClick: () => void }) {
     >
       <button
         onClick={onClick}
-        aria-label="Create post"
+        aria-label={label}
         className="ws-btn-fab ws-press flex h-[52.79487px] w-[52.79487px] items-center justify-center rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-opacity hover:opacity-90"
       >
         {/*

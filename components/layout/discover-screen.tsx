@@ -12,10 +12,18 @@ import {
   type ExploreTab,
 } from "@/lib/explore-tabs";
 import { useQueryParam } from "@/hooks/use-query-param";
+import {
+  EMPTY_PEOPLE_FILTER,
+  filterPeople,
+  parsePeopleSort,
+  type PeopleFilter,
+  type PeopleSort,
+} from "@/lib/people-filters";
 import { EcosystemPartnersRail } from "@/components/layout/ecosystem-partners-rail";
 import {
   DiscoveryPage,
   ExploreCategoriesRail,
+  PeopleFilters,
   useDiscovery,
   usePeople,
 } from "@/features/discovery";
@@ -23,10 +31,8 @@ import type { ExploreItem } from "@/features/discovery";
 import { videoMorphName } from "@/features/discovery";
 import { useStreamList } from "@/features/streams";
 import { CitizenSpotlightRail, PersonRow } from "@/features/profile";
-import { useMe } from "@/hooks/use-me";
-import { excludeViewer } from "@/lib/people-directory";
 import { useMediaFeed, mediaPostsOf, videoPostsOf, VideoViewer } from "@/features/feed";
-import { PostLikePill, ReelsFeed } from "@/features/feed";
+import { PostLikePill } from "@/features/feed";
 import { useStoreItems, StoreItemCard } from "@/features/store";
 
 /**
@@ -50,6 +56,7 @@ export function DiscoverScreen() {
   const seedQuery = useQueryParam("q");
   const seedTab = useQueryParam("tab");
   const seedVideo = useQueryParam("v");
+  const seedSort = useQueryParam("sort");
 
   const [typed, setTyped] = useState<string | null>(null);
   const query = typed ?? seedQuery ?? "";
@@ -58,6 +65,23 @@ export function DiscoverScreen() {
   // pure and live in `lib/explore-tabs.ts`.
   const [tab, setTab] = useState<ExploreTab>(() => parseExploreTab(seedTab));
   const [openVideoId, setOpenVideoId] = useState<string | null>(seedVideo);
+  /*
+    The people selection, split by WHERE IT IS ANSWERED and not by how it looks.
+
+    `sort` is a request parameter, so it lives in the query key and a change
+    starts a new paged list from the service in that order — a client-side
+    re-sort of one loaded page would make page 1 look ordered while page 2
+    contradicted it.
+
+    `filter` is matched over the pages already loaded, because `GET /profiles`
+    accepts no facet parameters at all. That is a stopgap and it is labelled as
+    one on the surface itself; `lib/people-filters.ts` carries the contract
+    check and the exact list of what the backend still owes.
+
+    Both seed from the URL so a filtered directory is a link somebody can send.
+  */
+  const [peopleSort, setPeopleSort] = useState<PeopleSort>(() => parsePeopleSort(seedSort));
+  const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>(EMPTY_PEOPLE_FILTER);
 
   const deferredQuery = useDeferredValue(query);
   const hasQuery = deferredQuery.trim().length > 0;
@@ -73,34 +97,87 @@ export function DiscoverScreen() {
   const live = useStreamList("live", topics);
   // `Streams` browses live broadcasts only — a stream tab that folded in
   // recorded clips would stop meaning "streams".
-  // The Posts tab is reels, and reels are the recorded videos, so it feeds
-  // from the same media query the grid does.
-  const media = useMediaFeed(topics, !hasQuery && (exploreTabShowsVideos(tab) || tab === "posts"));
+  // The grid's media. The Posts tab used to feed from this too — it was the
+  // endless reel — and went with the rest of them.
+  const media = useMediaFeed(topics, !hasQuery && exploreTabShowsVideos(tab));
   const search = useDiscovery(deferredQuery, searchType, topics);
   // The People tab is its own paged directory, populated on arrival and
   // narrowed by the query — never a blank tab waiting to be searched.
   // Each browsing tab pages its own endpoint, and only the active one runs —
   // the others would be paying for a list nobody is looking at.
-  const people = usePeople(tab === "people" ? deferredQuery : "", tab === "people");
+  const people = usePeople(
+    tab === "people" ? deferredQuery : "",
+    peopleSort,
+    tab === "people",
+    /*
+      PLACE AND GENDER GO TO THE SERVICE NOW.
+
+      `GET /profiles` takes `city`, `region` and `gender` — case-insensitive,
+      exact, composing with each other and with `q` — so the directory is
+      narrowed where it lives instead of on the thirty rows that happened to be
+      loaded. That stopgap could never work: a filtered page came back short and
+      its cursor topped it up with rows that were then filtered away too, so
+      picking a city produced a stub list and a scroll that went nowhere.
+
+      One free-text box feeds BOTH place parameters, because the reader types a
+      place and does not know whether we file it as a city or a region. The
+      service matches either.
+    */
+    {
+      city: peopleFilter.location,
+      region: peopleFilter.location,
+      gender: peopleFilter.gender,
+    }
+  );
   // `/feed` and `/store/items` take no `q`, so on those tabs a query falls
   // through to /search rather than narrowing this list. See the report.
   const storeItems = useStoreItems(undefined, tab === "products" && !hasQuery);
 
   /**
-   * The directory, minus the viewer — you are not someone you can discover.
+   * The directory as the SERVICE returns it. You are not someone you can
+   * discover, and `GET /profiles` now excludes the authenticated caller — so
+   * the client-side filter that used to stand here is gone, along with
+   * `lib/people-directory.ts` and its test.
    *
-   * TEMPORARY: this belongs on the server (`GET /profiles` excluding the
-   * caller, requested). Filtering here costs a row per page that the cursor
-   * cannot top up. Delete this and `lib/people-directory.ts` together once the
-   * backend excludes you — see that module for why both layers must not
-   * survive. `PersonRow`'s own-row guard is NOT part of this and stays: it
-   * protects search results and followers lists, where you legitimately appear
-   * and still must not be offered a Follow button on yourself.
+   * It was always a stopgap and said so: filtering the loaded page costs a row
+   * per page that no cursor can top back up, so a long scroll drifted one short
+   * each time. The service's own e2e asserts both halves of the claim — the
+   * same id absent for a signed-in caller and present for an anonymous one —
+   * which is the distinction no request from here could show, and the reason
+   * this waited for evidence rather than for an assurance.
+   *
+   * `PersonRow`'s own-row guard is NOT this and stays: it suppresses the Follow
+   * button wherever you legitimately appear — search results, followers lists —
+   * which is a different rule about a different surface.
    */
-  const me = useMe();
+  const loadedPeople = useMemo(
+    () => people.data?.pages.flatMap((page) => page.items) ?? [],
+    [people.data?.pages]
+  );
+  /*
+    ROLE AND VERIFICATION are still applied here, and only those two.
+
+    They are on every row by contract and the service takes no parameter for
+    either, so narrowing the loaded page is the only place they can be applied
+    — and it is honest for them in a way it never was for place: a role is
+    carried by every profile, so a filtered page is short but not WRONG, and
+    paging tops it up with more rows that also carry it.
+
+    Place and gender have moved to the service (see `usePeople` above) and are
+    deliberately NOT re-applied here. Doing both would be the "two layers doing
+    one job" that makes the server-side filter unverifiable — if this ever
+    starts hiding a row the service returned, that is a bug in the service worth
+    seeing rather than papering over.
+
+    Kept SEPARATE from `loadedPeople` on purpose: the filter bar reads the
+    unfiltered rows to decide which facets the payload can even answer
+    (`facetAvailability`), and feeding it the filtered list would make a control
+    vanish the moment it excluded everything that carried the field it was
+    filtering on.
+  */
   const directoryPeople = useMemo(
-    () => excludeViewer(people.data?.pages.flatMap((page) => page.items) ?? [], me.data?.id),
-    [people.data?.pages, me.data?.id]
+    () => filterPeople(loadedPeople, { ...peopleFilter, location: "", gender: "" }),
+    [loadedPeople, peopleFilter]
   );
 
   // The grid: LIVE first — it is the only thing on the square that expires
@@ -223,17 +300,14 @@ export function DiscoverScreen() {
           query: people,
           items: directoryPeople,
         }}
-        // Posts is the reels surface: video only, one per screen, no ending.
-        // It is the feed slice's, composed in here because discovery never
-        // imports it. The pager is the SAME media query the grid browses, so
-        // scrolling reels pages exactly as the grid would.
-        postsSlot={
-          <ReelsFeed
-            items={browseVideos}
-            isPending={media.isPending}
-            hasNextPage={Boolean(media.hasNextPage)}
-            isFetchingNextPage={media.isFetchingNextPage}
-            fetchNextPage={() => void media.fetchNextPage()}
+        peopleFiltersSlot={
+          <PeopleFilters
+            /* The UNFILTERED rows — see the note on `directoryPeople`. */
+            people={loadedPeople}
+            filter={peopleFilter}
+            onFilterChange={setPeopleFilter}
+            sort={peopleSort}
+            onSortChange={setPeopleSort}
           />
         }
         products={{

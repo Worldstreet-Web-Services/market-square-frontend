@@ -27,18 +27,37 @@ import {
   uploadPostMedia,
   searchMentions,
   reportTarget,
+  deletePost,
+  editPost,
 } from "@/features/feed/lib/api";
 import type { FeedPage, Lane, Mention, Post } from "@/features/feed/lib/types";
+import { invalidateContentSurfaces } from "@/lib/api/invalidate";
 import {
   invalidatePostLists,
   patchPostEverywhere,
   reconcilePost,
 } from "@/features/feed/lib/cache";
 
-export function useFeed(lane: Lane) {
+/**
+ * The timeline.
+ *
+ * `topics` narrows the lane to the shared vocabulary's keys — what the Home
+ * design's tab row selects (node 225:3352: For you · Tech · Entertainment ·
+ * Crypto & Web3 · …). `GET /feed?topics=` is a real parameter on the contract,
+ * so the row filters SERVER-SIDE; the alternative — filtering one loaded page
+ * in the client — is the thing this repo bans, because a page of thirty
+ * mixed items yields almost nothing for a narrow topic.
+ *
+ * The topics are IN THE QUERY KEY, so each tab caches and pages independently.
+ * Sharing one key would replay the previous tab's posts under the new tab's
+ * name until the refetch landed, and page with a cursor minted for a different
+ * filter.
+ */
+export function useFeed(lane: Lane, topics: readonly string[] = []) {
+  const key = topics.join(",");
   return useInfiniteQuery({
-    queryKey: ["ms", "feed", lane],
-    queryFn: ({ pageParam }) => fetchFeed(lane, pageParam ?? undefined),
+    queryKey: ["ms", "feed", lane, key],
+    queryFn: ({ pageParam }) => fetchFeed(lane, pageParam ?? undefined, [...topics]),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
@@ -399,5 +418,46 @@ export function useReport() {
     mutationFn: reportTarget,
     onSuccess: () => toast.success("Report received — thank you."),
     onError: (error) => toast.error(errorMessage(error, "Couldn't send the report.")),
+  });
+}
+
+/**
+ * Edit a post's text — `PATCH /posts/:id`.
+ *
+ * The answer is the WHOLE updated post, so it is written into every cache that
+ * draws this post rather than only invalidated: a reader who edits a typo
+ * should see the fix on the card they are looking at, not two seconds later.
+ * `editedAt` comes back stamped, which is what turns the "edited" marker on.
+ */
+export function useEditPost(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => editPost(postId, { text }),
+    onSuccess: (updated) => {
+      patchPostEverywhere(queryClient, postId, () => updated as Post);
+      toast.success("Post updated");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't save that edit.")),
+    onSettled: () => reconcilePost(queryClient, postId),
+  });
+}
+
+/**
+ * Delete a post or story — `DELETE /posts/:id`.
+ *
+ * Every list that could carry it is invalidated rather than patched: a deleted
+ * post has no shape to write back, and the timeline, the profile grid, the
+ * stories rail and the bookmarks can each hold a copy.
+ */
+export function useDeletePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deletePost,
+    onSuccess: () => {
+      invalidateContentSurfaces(queryClient);
+      invalidatePostLists(queryClient);
+      toast.success("Post deleted");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't delete that post.")),
   });
 }

@@ -20,6 +20,18 @@ export const NotificationKindSchema = z
      * event, and the one that matters most to get right.
      */
     "tip_received",
+    /**
+     * Somebody winked at you — a one-tap signal of interest, addressed to you
+     * rather than to something you posted.
+     *
+     * Listed here BEFORE the service sends one, and that ordering is the
+     * point: `.catch("follow")` turns any kind this enum has not heard of into
+     * "followed you". That is exactly how `tip_received` shipped as a lie for
+     * a while — a creator who had been paid was told they had a new follower.
+     * A wink misreported as a follow would be the same bug with worse
+     * consequences, because a follow is a public act and a wink is not.
+     */
+    "wink",
     "stream_live",
     "verification_resolved",
     "role_resolved",

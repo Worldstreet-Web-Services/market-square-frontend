@@ -3,7 +3,12 @@
 import { getAccessToken } from "@privy-io/react-auth";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { apiError } from "@/lib/api/envelope";
-import { getAuthSnapshot, markSessionExpired, waitForAuthReady } from "@/lib/session";
+import {
+  getAuthSnapshot,
+  hasHeldSession,
+  markSessionExpired,
+  waitForAuthReady,
+} from "@/lib/session";
 import {
   circuitAllows,
   recordCircuitFailure,
@@ -54,8 +59,29 @@ export async function apiFetch(
     if (!accessToken) {
       const { ready, authenticated } = getAuthSnapshot();
       if (ready && !authenticated) {
-        markSessionExpired();
-        throw apiError("SESSION_EXPIRED", "Session expired — sign in again.", 401);
+        /*
+          AN EXPIRY AND A GUEST LOOK IDENTICAL HERE, and they are not the same
+          thing. Both read `{ ready: true, authenticated: false }`; only the
+          session's history separates them.
+
+          Treating every gated 401 as an expiry meant a signed-out visitor was
+          told "Session expired — sign in again" — untrue, they never had one —
+          and the guard then pushed them to /auth off whatever public page they
+          were reading. Since the first gated poll fires within a second of
+          load, that made the front door unreachable while signed out, which
+          this app explicitly supports.
+
+          A reader who never had a session gets `UNAUTHORIZED`, which already
+          means "Sign in to continue": `isAuthError` still treats it as an auth
+          failure so surfaces render their sign-in state, but nothing is
+          announced and nothing navigates. Gated ACTIONS still route through
+          `useGate`, which is where a sign-in prompt belongs.
+        */
+        if (hasHeldSession()) {
+          markSessionExpired();
+          throw apiError("SESSION_EXPIRED", "Session expired — sign in again.", 401);
+        }
+        throw apiError("UNAUTHORIZED", "Sign in to continue.", 401);
       }
       // Ready-but-no-token (cold refresh race) or still not ready after the
       // wait: retryable, and queries will retry it silently.

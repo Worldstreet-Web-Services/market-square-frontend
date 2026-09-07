@@ -160,3 +160,355 @@ describe("the mobile tab bar reserves the create button's footprint", () => {
     );
   });
 });
+
+/**
+ * What the sidebar promotes, and what only the sidebar drops.
+ *
+ * `NAV` feeds three surfaces — the desktop sidebar, the mobile tab bar and the
+ * mobile drawer — so "remove it from the sidebar" and "remove it" are
+ * different edits with very different consequences, and the difference is not
+ * visible from the list alone.
+ */
+describe("the sidebar hides rows without removing their route", () => {
+  it("asks visibleNav WHICH surface is filtering", () => {
+    // Without the surface argument the filter cannot tell the sidebar from the
+    // mobile bar, and `sidebar: false` silently applies to both.
+    assert.match(
+      shell,
+      /surface:\s*"sidebar"/,
+      "the sidebar no longer identifies itself to visibleNav"
+    );
+    assert.match(
+      shell,
+      /surface:\s*"mobile"/,
+      "the mobile nav no longer identifies itself to visibleNav"
+    );
+    assert.match(
+      shell,
+      /options\.surface !== "sidebar" \|\| item\.sidebar !== false/,
+      "visibleNav stopped scoping `sidebar: false` to the sidebar"
+    );
+  });
+
+  it("KEEPS notifications in NAV, because a phone has no other door to it", () => {
+    // The desktop breadcrumb carries a bell; below md there is no breadcrumb
+    // (`--ws-crumb-h` is 0) and the mobile header deliberately carries no bell
+    // because this entry exists. Deleting the row — the obvious way to "finish"
+    // hiding it — leaves a phone with no route to notifications and no unread
+    // badge anywhere in the app.
+    assert.match(
+      NAV,
+      /href:\s*"\/notifications"/,
+      "the notifications entry was deleted from NAV, not just hidden from the sidebar"
+    );
+    assert.match(
+      NAV,
+      /"\/notifications"[\s\S]{0,400}?sidebar:\s*false/,
+      "notifications is no longer hidden from the sidebar"
+    );
+  });
+
+  it("puts gist rooms IN the sidebar, spelled the design's way", () => {
+    // It was `sidebar: false` against the older file, on the argument that the
+    // hallway at the top of Home was door enough. Node 496:13107 draws the row
+    // third, between Explore and Chat — a summary needs somewhere to point, and
+    // the hallway only ever showed the rooms open right now.
+    assert.match(NAV, /label:\s*"Gistrooms"/, "the row lost the file's spelling");
+    assert.doesNotMatch(
+      NAV,
+      /"\/gist-rooms"[^\n]*sidebar:\s*false/,
+      "gist rooms is hidden from the sidebar again"
+    );
+    // A renamed row is not a moved route.
+    assert.match(NAV, /href:\s*"\/gist-rooms"/, "the gist rooms route moved");
+  });
+
+  it("draws the rows on the FILE'S glyphs, not the app's nearest equivalents", () => {
+    /*
+      Three of these were not near-misses. Explore was a MAGNIFIER where
+      496:13119 draws a GLOBE; Gistrooms was a house where 496:13126 draws a
+      MICROPHONE; Live was our own play badge where 496:13139 draws a framed
+      Video. A magnifier says "search" and a globe says "everything out there",
+      and only one of those is what Explore became.
+
+      Pinned by the icon a row is wired to, and by the glyph module being the
+      exported one — `sidebar-icons.tsx` holds the file's vectors verbatim with
+      the baked fills swapped for currentColor.
+    */
+    assert.match(NAV, /"\/"[^\n]*icon:\s*IconSbHome/, "Home is off the file's glyph");
+    assert.match(NAV, /"\/discover"[^\n]*icon:\s*IconSbExplore/, "Explore is not the file's globe");
+    assert.match(NAV, /"\/gist-rooms"[^\n]*icon:\s*IconSbGistrooms/, "Gistrooms is not the file's microphone");
+    assert.match(NAV, /"\/messages"[^\n]*icon:\s*IconSbChat/, "Chat is off the file's glyph");
+    assert.match(NAV, /"\/live"[^\n]*icon:\s*IconSbLive/, "Live is not the file's video");
+    assert.match(NAV, /"\/arkmarks"[^\n]*icon:\s*IconSbLibrary/, "Library is off the file's bookmark");
+  });
+
+  it("carries LIBRARY on the saved-posts route, not a new one", () => {
+    // 496:13107 draws it sixth, on a bookmark. The design renamed the
+    // DESTINATION; the act of saving is still the Arkmark and the route is
+    // still /arkmarks — the same relationship "For Creators" has with /studio.
+    assert.match(NAV, /label:\s*"Library"/, "the library row is gone");
+    assert.match(NAV, /href:\s*"\/arkmarks"/, "library no longer points at /arkmarks");
+  });
+});
+
+describe("the creators entry is node 225:3252", () => {
+  it("says For Creators, on the file's own glyph", () => {
+    assert.match(NAV, /label:\s*"For Creators"/, "the label is no longer the design's");
+    // The glyph is the same MusicNotesPlus it always was — it now comes from
+    // `sidebar-icons.tsx`, exported from 496:13153 with the rest of the rail's
+    // set, rather than from the app's own copy of it.
+    assert.match(NAV, /icon:\s*IconSbCreators/, "the entry is not on the design's icon");
+  });
+
+  it("still points at /studio — a renamed entry is not a moved route", () => {
+    // Every link already sent to /studio has to keep working; the design
+    // changed what the row says, not where it goes.
+    assert.match(
+      NAV,
+      /href:\s*"\/studio"/,
+      "the creators entry no longer points at /studio"
+    );
+    assert.doesNotMatch(NAV, /label:\s*"Studio"/, "the old label is back");
+  });
+});
+
+/**
+ * Two things that were CLIPPED or INERT, and could be again.
+ *
+ * Both failed silently. The partner card looked finished while its call to
+ * action was cut in half, and the deck's follow badge looked like a control
+ * while doing nothing at all — neither produces an error, a warning or a
+ * failing test on its own.
+ */
+describe("the partner card cannot hide its own call to action", () => {
+  it("uses a MINIMUM height, never a fixed one", () => {
+    // `h-[156px]` is the height the file draws, and it holds only while the
+    // headline is two lines. "One Platform. Every Currency. Every Asset."
+    // wraps to three at the rail's real width.
+    assert.doesNotMatch(
+      rail,
+      // Negative lookbehind, or this matches the `h-[156px]` inside
+      // `min-h-[156px]` and fails on the fix itself.
+      /(?<!min-)h-\[156px\]/,
+      "the partner card is back on a fixed height — a longer headline will push Join now out of it"
+    );
+    assert.match(rail, /min-h-\[156px\]/, "the card lost its minimum height");
+  });
+
+  it("does not clip its overflow", () => {
+    // With a floor and flowing children nothing should overflow; if something
+    // does, it must be visible rather than quietly cut off.
+    assert.doesNotMatch(
+      rail,
+      /overflow-hidden/,
+      "overflow-hidden is back on the partner card — that is what made the clipped Join now invisible"
+    );
+  });
+
+  it("lets the headline column shrink instead of pinning its width", () => {
+    // Without min-w-0 a flex child refuses to go below its longest word, and
+    // the text pushes into the logo again.
+    assert.match(rail, /min-w-0/, "the headline column can no longer rewrap");
+  });
+});
+
+describe("the friends deck offers a real Follow", () => {
+  const deck = stripComments(read("components/layout/make-some-friends.tsx"));
+  /*
+    The CARD is `PalCard`, shared with the "Suggested Pals" rail (540:19351) —
+    one object drawn at two sizes, because two copies of this markup is how a
+    wink cooldown gets fixed on one surface and not the other. So the badge, the
+    photo and the two controls are asserted there, and the FAN — placement,
+    tilt, scale, re-centring — is still asserted against the deck.
+  */
+  const card = stripComments(read("components/layout/pal-card.tsx"));
+
+  it("is a button, not a decorative glyph", () => {
+    // It shipped as a bare <IconDeckAdd/>: pass and wink were real buttons and
+    // the one control people actually reach for was an ornament.
+    assert.match(
+      card,
+      /aria-label=\{isFollowing \? `Unfollow/,
+      "the follow badge is not a labelled control any more"
+    );
+    assert.match(card, /follow\.mutate\(!isFollowing\)/, "the follow badge does nothing again");
+  });
+
+  it("sits INSIDE the card, as the file places it", () => {
+    // Node 225:3412 is at x=137.28 in a 183.7 card — a 7.29px inset. The badge
+    // hung 8px off the right edge, which is what made it read as stuck onto
+    // the photo rather than part of the card.
+    assert.doesNotMatch(
+      card,
+      /-right-2/,
+      "the follow badge hangs outside the card again"
+    );
+    // The inset is a NUMBER now, not a class: the deck's card and the rail's
+    // place the badge at 7 and 6.77 in cards of different widths, so it is
+    // passed in with the rest of the geometry rather than hard-coded.
+    assert.match(card, /right: g\.badge\.inset/, "the badge lost the file's inset");
+    assert.match(deck.concat(card), /inset: 7\b/, "the deck's own 7px inset is gone");
+  });
+
+  it("paints ABOVE the photo it overlaps", () => {
+    // The badge is `absolute` and sits before the photo's own `relative`
+    // wrapper in the markup. Two positioned elements at the same z-index paint
+    // in DOM order, so without an explicit lift the photo covers the badge and
+    // the control vanishes into the picture — not clipped, not mispositioned,
+    // just underneath. Nothing else in the build can see that.
+    assert.match(
+      block(card, "aria-label={isFollowing ?", "</button>"),
+      /\bz-10\b/,
+      "the follow badge lost its z-index and is painted under the photo again"
+    );
+  });
+
+  it("draws every card at FULL strength — the file's fills carry their own alpha", () => {
+    // The neighbours were rendered at `opacity: 0.55`, which washed the
+    // white-to-#D0B3FF card out to grey against the black page. Depth in this
+    // deck comes from overlap and from the front card being raised; the only
+    // transparency in it belongs to the fills themselves — pass is #9F65FD at
+    // 23% inside its own exported glyph.
+    assert.doesNotMatch(
+      deck.concat(card),
+      /opacity:\s*front \?/,
+      "the deck dims its neighbouring cards again — the file draws all three opaque"
+    );
+  });
+
+  it("ROTATES the two neighbours — node 225:3374 tilts them", () => {
+    // This test used to assert the exact opposite, and it was wrong. Every one
+    // of the three cards carries a `relativeTransform`, and two of them turn:
+    // -9.27 and +9.90 degrees. The tilt is most of what makes the group read as
+    // a deck rather than three overlapping rectangles.
+    assert.match(deck, /rot: -9\.27/, "the left card lost the file's tilt");
+    assert.match(deck, /rot: 9\.9/, "the right card lost the file's tilt");
+    assert.match(deck, /rotate\(\$\{place\.rot\}deg\)/, "the tilt is no longer applied");
+  });
+
+  it("draws the neighbours SMALLER than the card in front — not larger", () => {
+    /*
+      The trap this pins. The file's neighbours report 205.55 and 207.76 wide
+      against the front card's 183.70, which reads as "the back cards are
+      bigger". Those are the bounding boxes of ROTATED cards. Solve the rotation
+      out and both are 170.5 — the same card at 92.79%.
+
+      Built from the AABBs, this deck had its neighbours at 1.119 and 1.131, so
+      the back cards were larger than the one being offered.
+    */
+    const scales = [...deck.matchAll(/scale: ([\d.]+)/g)].map((m) => Number(m[1]));
+    assert.ok(scales.length >= 3, "the deck stopped declaring its scales");
+    for (const scale of scales) {
+      assert.ok(scale <= 1, `a neighbour is scaled to ${scale} — larger than the front card`);
+    }
+    assert.match(deck, /scale: 0\.9279/, "the neighbours lost the file's 92.79%");
+  });
+
+  it("re-centres a fan that is not full", () => {
+    // The file draws three. With one or two people on the square the remaining
+    // cards sat off to one side of an empty row.
+    assert.match(deck, /drawn\.length < 3/, "a short deck is lopsided again");
+  });
+
+  it("places the three cards from the file rather than a formula", () => {
+    assert.match(deck, /DECK_PLACES/, "the deck is generating positions again");
+  });
+
+  it("reads the follow edge rather than the raw field", () => {
+    assert.match(card, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
+  });
+});
+
+/**
+ * A room with no cover shows NO COVER.
+ *
+ * The design fills a 741x200 rectangle white because it is drawing a room that
+ * HAS a picture. An empty tinted slab in its place is our stand-in for
+ * something that does not exist, and it reads as an image that failed to load
+ * rather than as a room that never had one — while pushing everything below it
+ * 216px down the page to make room for nothing.
+ */
+describe("the gist room hides its cover rather than faking one", () => {
+  const room = stripComments(read("features/houses/components/house-room.tsx"));
+
+  it("renders the cover only when there is one", () => {
+    assert.match(
+      room,
+      /\{stream\.thumbnailUrl && \(/,
+      "the cover is no longer conditional on there being a cover"
+    );
+  });
+
+  it("keeps no empty panel to stand in for it", () => {
+    // The placeholder was `<div className="h-[200px] w-full rounded-3xl
+    // bg-white/[0.06]" />`. Nothing should hold that space open.
+    assert.doesNotMatch(
+      room,
+      /h-\[200px\][^"]*bg-white/,
+      "the empty cover placeholder is back"
+    );
+  });
+});
+
+/**
+ * A MENU OPENED IN A FEED ITEM MUST PAINT OVER THE ITEM BELOW IT.
+ *
+ * `ws-enter` animates a transform and holds it with `both`, so every feed item
+ * carries one permanently — and a transform creates a stacking context. The
+ * post's overflow menu is `z-20`, but that only orders it INSIDE its own post;
+ * against the next post, a sibling stacking context, DOM order wins. The menu
+ * opened in exactly the right place and the following post painted over it,
+ * with the next author's Follow button sitting on top of "Scam or fraud".
+ *
+ * `Sheet` hit the same transform and was portalled, but that was a different
+ * failure: a `position: fixed` overlay anchors to the transformed ancestor
+ * rather than the viewport, which no z-index can repair. An absolute dropdown
+ * is positioned correctly here — only its paint order is wrong.
+ */
+describe("a feed item that owns an open popover", () => {
+  const css = read("app/globals.css");
+
+  it("lifts above the items after it", () => {
+    assert.match(
+      css,
+      /\.ws-enter:has\(\.ws-popover\)\s*\{[^}]*z-index:\s*\d+/,
+      "a popover in a feed card can be painted over by the next card again"
+    );
+  });
+
+  it("is POSITIONED, or the z-index does nothing", () => {
+    // `ws-enter` is `position: static`, and z-index has no effect on a static
+    // element outside a flex or grid parent — the feed is a plain block list.
+    assert.match(
+      css,
+      /\.ws-enter:has\(\.ws-popover\)\s*\{[^}]*position:\s*relative/,
+      "the lift lost its positioning and is inert"
+    );
+  });
+
+  it("stays STRICTLY under the breadcrumb bar", () => {
+    /*
+      Read the breadcrumb's own z-index rather than hard-coding one, because
+      this is a RELATIONSHIP and the number on either side may move.
+
+      The first attempt set the lift to 30, which is exactly what the breadcrumb
+      carries. Equal z-index is broken by DOM order and the feed comes later, so
+      the post won: its author row, avatar and Follow button printed over
+      "Ark Ecosystem / Market Square" and the search field.
+    */
+    const shell = read("components/layout/app-shell.tsx");
+    const crumb = shell.match(/sticky top-0 z-(\d+)[^"]*h-\[76px\]|h-\[76px\][^"]*sticky top-0 z-(\d+)/);
+    const crumbZ = Number(crumb?.[1] ?? crumb?.[2] ?? 0);
+    assert.ok(crumbZ > 0, "could not find the breadcrumb bar's z-index in the shell");
+
+    const lift = css.match(/\.ws-enter:has\(\.ws-popover\)\s*\{[^}]*\}/)?.[0] ?? "";
+    const z = Number(lift.match(/z-index:\s*(\d+)/)?.[1] ?? 0);
+
+    assert.ok(z > 0, "the lift must beat its sibling feed items");
+    assert.ok(
+      z < crumbZ,
+      `the lift is z-${z} and the breadcrumb is z-${crumbZ}; a tie or a win means a post paints over the chrome`
+    );
+  });
+});

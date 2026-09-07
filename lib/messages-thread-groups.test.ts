@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   dayLabel,
   formatClockTime,
+  groupBySender,
   groupMessagesByDay,
 } from "../features/messages/lib/thread-groups.ts";
 
@@ -105,4 +106,49 @@ test("a message with an unreadable timestamp still gets rendered somewhere", () 
     groups[0].messages.map((message) => message.id),
     ["a"]
   );
+});
+
+// ── Sender runs ──────────────────────────────────────────────────────────────
+// The river's rhythm is two numbers, not one: 16px inside a run of consecutive
+// messages from one person, 24px between runs and under the day separator.
+
+const from = (senderId: string, id: string) => ({ id, senderId });
+
+test("consecutive messages from one sender are one run", () => {
+  const runs = groupBySender([
+    from("a", "m1"),
+    from("a", "m2"),
+    from("b", "m3"),
+    from("a", "m4"),
+  ]);
+
+  assert.deepEqual(
+    runs.map((run) => [run.senderId, run.messages.map((m) => m.id)]),
+    [
+      ["a", ["m1", "m2"]],
+      ["b", ["m3"]],
+      // NOT merged back into the first run: two things A said either side of
+      // B's reply are two turns, and bucketing by sender would reorder the
+      // conversation to put them together.
+      ["a", ["m4"]],
+    ]
+  );
+});
+
+test("a run is keyed on its first message, not on an index", () => {
+  // The thread refetches every 5 seconds; an index key remounts every run
+  // whenever a message lands at the top of the day.
+  assert.deepEqual(
+    groupBySender([from("a", "m1"), from("b", "m2")]).map((run) => run.key),
+    ["m1", "m2"]
+  );
+});
+
+test("an empty thread has no runs, and a missing sender id is still a run", () => {
+  assert.deepEqual(groupBySender([]), []);
+  // The schema defaults `senderId` to "" for a payload that omits it. That
+  // must degrade to one long run rather than throwing.
+  const runs = groupBySender([from("", "m1"), from("", "m2")]);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].messages.length, 2);
 });
