@@ -60,11 +60,13 @@ function CommentComposer({ postId }: { postId: string }) {
 export function PostDetailPage({
   postId,
   followSlot,
+  winkSlot,
   tipSlot,
 }: {
   postId: string;
   /** Composed from outside the slice — feed never imports profile. */
   followSlot?: (author: Profile) => React.ReactNode;
+  winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
@@ -115,6 +117,7 @@ export function PostDetailPage({
           post={data}
           full
           followSlot={followSlot}
+          winkSlot={winkSlot}
           tipSlot={tipSlot}
           onQuote={(target) => setQuoting(target)}
         />

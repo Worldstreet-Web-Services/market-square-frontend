@@ -1,7 +1,7 @@
 "use client";
 
 import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/feed";
-import { FollowPill } from "@/features/profile";
+import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
 import { useTopics } from "@/features/discovery";
@@ -27,10 +27,18 @@ const followSlot = (author: Parameters<typeof FollowPill>[0]["profile"]) => (
 // where there is no wallet or no engine, which is the honest answer.
 const balanceSlot = (amountKash: string | null) => <KashBalance amountKash={amountKash} />;
 
+// The wink sits between the tip and the follow on every post header — node
+// 496:13389 draws all three. It belongs to the profile slice, which owns the
+// rate limit and the refusal copy, so it arrives the same way the other two do.
+const winkSlot = (author: Parameters<typeof WinkButton>[0]["profile"]) => (
+  <WinkButton profile={author} size="post" />
+);
+
 const tipSlot = (post: Post) => (
   <TipButton
     target={{ kind: "post", id: post.id, recipient: post.author }}
     balance={balanceSlot}
+    variant="post"
   />
 );
 
@@ -52,6 +60,7 @@ export function HomeScreen() {
   return (
     <FeedPage
       followSlot={followSlot}
+      winkSlot={winkSlot}
       tipSlot={tipSlot}
       topicTabs={(topics.data ?? []).map((topic) => ({ key: topic.key, label: topic.label }))}
       roomsSlot={<LiveGistRooms />}
@@ -62,9 +71,16 @@ export function HomeScreen() {
 }
 
 export function ArkmarksScreen() {
-  return <ArkmarksPage followSlot={followSlot} tipSlot={tipSlot} />;
+  return <ArkmarksPage followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />;
 }
 
 export function PostScreen({ postId }: { postId: string }) {
-  return <PostDetailPage postId={postId} followSlot={followSlot} tipSlot={tipSlot} />;
+  return (
+    <PostDetailPage
+      postId={postId}
+      followSlot={followSlot}
+      winkSlot={winkSlot}
+      tipSlot={tipSlot}
+    />
+  );
 }

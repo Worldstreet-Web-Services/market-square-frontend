@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { IconWink } from "@/components/ui/icons";
+import { IconMsWinkFace } from "@/components/ui/design-icons";
 import type { Profile } from "@/lib/api/schemas";
 import { useWink } from "@/features/profile/hooks/use-profile";
 
@@ -39,8 +40,17 @@ export function WinkButton({
   size = "sm",
 }: {
   profile: Profile;
-  /** `sm` sits in a 24px list row; `md` sits beside Follow on a profile. */
-  size?: "sm" | "md";
+  /**
+   * `sm` sits in a 24px list row; `md` sits beside Follow on a profile.
+   *
+   * `post` is node 496:13393 — the post header's, and the only FILLED one:
+   * a 40.7 disc carrying the purple ramp top to bottom (--color-create into
+   * --color-spotlight, which is exactly what the file's two stops measure) with
+   * the design's own white line-art face on it. It is filled because on a post
+   * header it stands beside a filled tip button and an outlined Follow, and it
+   * is the invitation of the three.
+   */
+  size?: "sm" | "md" | "post";
 }) {
   const gate = useGate();
   const me = useMe();
@@ -68,18 +78,34 @@ export function WinkButton({
       disabled={refused || wink.isPending}
       onClick={() => gate(() => wink.send())}
       className={cn(
-        "ws-press flex shrink-0 items-center justify-center rounded-full border transition-colors",
-        size === "sm" ? "h-6 w-6" : "h-8 w-8",
-        wink.winked
-          ? "border-create/40 bg-create/12 text-create"
-          : "border-white/20 text-body hover:bg-white/10 hover:text-heading",
+        "ws-press flex shrink-0 items-center justify-center rounded-full transition-colors",
+        size === "post"
+          ? cn(
+              "h-[40.7px] w-[40.7px] text-white",
+              "bg-[linear-gradient(180deg,var(--color-create)_0%,var(--color-spotlight)_100%)]",
+              // Sent: the same disc, dimmed, rather than a different colour.
+              // The ramp IS the control here, so recolouring it would read as
+              // a second kind of button rather than the same one already used.
+              wink.winked && "opacity-60"
+            )
+          : cn(
+              "border",
+              size === "sm" ? "h-6 w-6" : "h-8 w-8",
+              wink.winked
+                ? "border-create/40 bg-create/12 text-create"
+                : "border-white/20 text-body hover:bg-white/10 hover:text-heading"
+            ),
         // A refusal that is not "already winked" stays neutral and dimmed —
         // colouring it would read as a state the reader had reached rather
         // than a door that is shut.
         refused && !wink.winked && "cursor-not-allowed opacity-40"
       )}
     >
-      <IconWink className={size === "sm" ? "h-3.5 w-3.5" : "h-[18px] w-[18px]"} />
+      {size === "post" ? (
+        <IconMsWinkFace className="h-[23.2px] w-[23.2px]" />
+      ) : (
+        <IconWink className={size === "sm" ? "h-3.5 w-3.5" : "h-[18px] w-[18px]"} />
+      )}
     </button>
   );
 }

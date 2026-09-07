@@ -23,6 +23,7 @@ import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconFlag, IconFullscreen, IconQuote, IconSend } from "@/components/ui/icons";
 import {
   IconMsBookmark,
+  IconMsChart,
   IconMsComment,
   IconMsLike,
   IconMsMore,
@@ -30,7 +31,6 @@ import {
   IconMsShare,
 } from "@/components/ui/design-icons";
 import { formatCount } from "@/lib/format";
-import { IconStats } from "@/components/ui/icons";
 import {
   useAddComment,
   useBookmarkPost,
@@ -479,7 +479,19 @@ function InlineComment({
         background) and is very nearly invisible on the real `#0F0F0F` card.
         The app's own placeholder grey is used instead.
     */
-    <div className={cn("ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2", className)}>
+    /*
+      220 wide at node 496:13434, not a field that grows: the file spends the
+      leftover on the gap before share/Arkmark/more instead, which is what
+      holds those three against the card's right edge. `flex-1` with the cap
+      keeps that at the design's width and still fills a narrower card rather
+      than leaving the row short.
+    */
+    <div
+      className={cn(
+        "ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2 md:max-w-[220px]",
+        className
+      )}
+    >
       <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
       <IconMsComment aria-hidden className="h-6 w-6 shrink-0 text-white/60" />
       {sent ? (
@@ -526,6 +538,7 @@ export function PostCard({
   post,
   repostedBy,
   followSlot,
+  winkSlot,
   tipSlot,
   onOpenMedia,
   onQuote,
@@ -546,6 +559,9 @@ export function PostCard({
   repostedBy?: Profile | null;
   /** Composed from outside the slice — feed never imports profile. */
   followSlot?: (author: Profile) => React.ReactNode;
+  /** The wink, from the profile slice, between the tip and the follow — node
+   *  496:13389 draws all three and they are three different acts. */
+  winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control belongs to the tips
    *  slice, and it takes the POST because a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
@@ -586,7 +602,26 @@ export function PostCard({
   };
 
   return (
-    <article ref={viewRef} className="ws-post p-4">
+    /*
+      THE SLAB — node 496:13361.
+
+      759 wide, 16.5 radius, a 1px hairline at 10% white over no fill, and two
+      black/10 shadows (in `ws-post`). Its content sits in a 680.92 column
+      centred in it: 39 either side. Vertically the file gets its top inset the
+      long way round — 16 of padding, then a 57-tall gradient plate on a -49
+      gap — which nets to 24 above the header and leaves 16 below the actions.
+      Written here as the padding it works out to.
+
+      THE GRADIENT PLATE ITSELF IS NOT DRAWN. It fades #0F0F0F to transparent,
+      and the page under this card is #0F0F0F, so it composites to exactly
+      nothing; it is only visible in an isolated export, over the white that
+      Figma substitutes for the missing page fill. What it contributes to the
+      real card is its 8px of layout, which is above.
+
+      The design has no phone frame, so the 39 is desktop-only — at 360 it
+      would spend a fifth of the screen on margins.
+    */
+    <article ref={viewRef} className="ws-post p-4 md:px-[39px] md:pb-4 md:pt-6">
       {/* Repost attribution. The card still belongs to the original author —
           this line only says who passed it along. */}
       {repostedBy && (
@@ -599,22 +634,41 @@ export function PostCard({
         </p>
       )}
 
-      {/* Identity row: author, role badge, timestamp, follow state. */}
-      <header className="flex items-center gap-2.5">
+      {/*
+        IDENTITY ROW — node 496:13366, 43.85 tall.
+
+        A 39.2 avatar behind a 1.8px ring at 20% white, 12 of gap, then the
+        name at 14.8/14.1 bold with the org lockup 7 to its right, and the
+        handle under it at 12.1/16.2 in 50% white. The three controls at the
+        far end are all centred on the row's own middle line, which is what
+        lets them be 34, 40.7 and 38 tall without the row looking ragged.
+      */}
+      <header className="flex items-center gap-3 md:h-[43.9px]">
         {author ? (
           <TransitionLink href={`/u/${author.username}`} className="shrink-0">
-            <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={39} />
+            <Avatar
+              name={author.displayName}
+              seed={author.id}
+              src={author.avatarUrl}
+              size={39}
+              className="ring-[1.8px] ring-inset ring-white/20"
+            />
           </TransitionLink>
         ) : (
-          <Avatar name="?" seed={post.authorId} size={39} />
+          <Avatar
+            name="?"
+            seed={post.authorId}
+            size={39}
+            className="ring-[1.8px] ring-inset ring-white/20"
+          />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-1.5">
+          <div className="flex flex-wrap items-center gap-x-[7px]">
             {author && (
               <>
                 <Link
                   href={`/u/${author.username}`}
-                  className="truncate text-[14px] font-bold leading-5 text-white hover:underline"
+                  className="truncate text-[14.8px] font-bold leading-[14.1px] text-white hover:underline"
                 >
                   {author.displayName}
                 </Link>
@@ -624,7 +678,7 @@ export function PostCard({
               </>
             )}
           </div>
-          <p className="truncate text-[12px] leading-4 text-white/50">
+          <p className="mt-[2.8px] truncate text-[12.1px] leading-[16.2px] text-white/50">
             {author ? `@${author.username}  •  ` : ""}
             {relativeTime(post.createdAt)}
             {/*
@@ -641,17 +695,35 @@ export function PostCard({
             )}
           </p>
         </div>
-        {/* The design's action row: 26px tall, 8px between the two controls,
-            tip first. The row exists even with one control in it so the
-            header's right edge does not shift when tipping goes quiet. */}
+        {/*
+          THE HEADER'S CONTROLS — node 496:13389: tip, wink, follow, in that
+          order, 8 apart, each centred on the row rather than aligned to a
+          shared height. The row exists even when one of them goes quiet, so
+          the header's right edge does not shift between posts.
+
+          The wink is the middle one and it is NOT the tip in another colour:
+          tipping sends money, winking says you are interested. Both belong to
+          slices the feed may not import, so both arrive as slots.
+        */}
         {author && (
-          <div className="flex h-[26px] shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {tipSlot?.(post)}
+            {winkSlot?.(author)}
             {followSlot?.(author)}
           </div>
         )}
       </header>
 
+      {/*
+        THE RULE UNDER THE HEADER — node 496:13397, a #222222 hairline 18
+        below the identity row and 18 above whatever the post is.
+
+        The file draws it 674 wide inside a 681 column, stopping 7 short on the
+        right and nowhere else; a rule that misses one end of a symmetric
+        column by 1% reads as a mistake rather than a measurement, so it spans
+        the content.
+      */}
+      <hr className="ws-post-rule my-[18px] border-t" />
 
 
       {/* mediaUrl carries both images and clips; the upload endpoint only
@@ -676,7 +748,7 @@ export function PostCard({
             // below rather than a clickable div it cannot reach.
             <div
               onClick={() => onOpenMedia(post)}
-              className="ws-press relative mt-4 block h-[420px] w-full cursor-pointer overflow-hidden rounded-xl"
+              className="ws-press relative block h-[420px] w-full cursor-pointer overflow-hidden rounded-xl"
               style={{ viewTransitionName: `media-${post.id}` }}
             >
               <InlineVideo
@@ -700,7 +772,7 @@ export function PostCard({
             <InlineVideo
               src={post.mediaUrl}
               poster={post.thumbnailUrl}
-              className="mt-4 h-[420px] w-full rounded-xl"
+              className="h-[420px] w-full rounded-xl"
             />
           )
         ) : (
@@ -717,7 +789,7 @@ export function PostCard({
                 }
               : {})}
             className={cn(
-              "mt-4 block h-[420px] w-full",
+              "block h-[420px] w-full",
               onOpenMedia && "ws-press cursor-pointer"
             )}
             style={{ viewTransitionName: `media-${post.id}` }}
@@ -736,10 +808,21 @@ export function PostCard({
           </Tag>
         ))}
 
+      {/*
+        13.83/22.97 at 90% white — node 496:13414 — sitting 12 under the media.
+
+        With NO media it sits directly under the rule, on the rule's own 18,
+        which is what the file's second card does (its caption block starts
+        exactly 18 below the hairline, the same distance the media does on the
+        first). So the 12 belongs to the media, not to the text.
+      */}
       <PostText
         text={post.text}
         mentions={post.mentions}
-        className="mt-3 text-[13.8px] leading-[23px] text-white/90"
+        className={cn(
+          "text-[13.8px] leading-[23px] text-white/90",
+          post.mediaUrl && "mt-3"
+        )}
         clampLines={full ? undefined : 6}
       />
       {/* The coins the post names, with today's move — the row Ark draws. */}
@@ -772,20 +855,31 @@ export function PostCard({
       <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
       <div className="flex items-center justify-between gap-3 md:contents">
         {/*
-          THE TALLIES PILL — node 236:4725.
+          THE TALLIES PILL — node 496:13417.
 
-          `white/3` at a full round, 8.08 of padding, and THREE items on a 17px
+          `white/3` at a full round, 40.15 tall, 8.08 of padding, items on a 17
           gap, each a 24px glyph beside its count at 12/16 in white.
 
-          WHICH three is the correction. It used to be comment · repost · like,
-          with views floating outside the pill behind an eye glyph. The file has
-          repost · like · STATS: the comment tally moved out to the "Comment
-          here…" pill beside it — which is where a reader actually replies — and
-          views came IN, as the bar chart, because a view is something that
-          happened to the post rather than something you can do to it, which is
-          exactly what the other two tallies are.
+          FOUR items now, and the first one is the COMMENT COUNT. The older
+          node (236:4725) held three and pushed replies out to the field beside
+          it; this file puts the tally back at the head of the row and leaves
+          the field as the place you type. Both readings are defensible — the
+          count is a fact about the post, the field is an action — and the
+          current file settles it, so the count is here and the field keeps the
+          placeholder only.
+
+          Tapping it opens the thread, which is the one thing a reply count is
+          for. The bar chart at the end is views: something that happened TO
+          the post rather than something you can do to it.
         */}
         <div className="ws-action-pill flex h-10 shrink-0 items-center gap-3 px-2 md:gap-[17px]">
+          <CountAction
+            label="Comments"
+            count={post.commentCount}
+            onClick={() => setCommentsOpen(true)}
+          >
+            <IconMsComment className="h-6 w-6" />
+          </CountAction>
           <RepostMenu
             post={post}
             onRepost={() =>
@@ -815,13 +909,17 @@ export function PostCard({
               label={`${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`}
               count={post.viewCount}
             >
-              <IconStats className="h-6 w-6" />
+              <IconMsChart className="h-6 w-6" />
             </CountAction>
           )}
         </div>
 
-        {/* `md:order-3` — see the note on the row below. */}
-        <div className="flex shrink-0 items-center gap-3 md:order-3 md:gap-[17px]">
+        {/* `md:order-3` — see the note on the row below. `md:ml-auto` is what
+            holds these three against the card's right edge now that the field
+            no longer stretches: node 496:13415 is `space-between` over a fixed
+            516 of tallies-plus-field and a 115 tail, and an auto margin is the
+            same statement for a row whose middle child is capped. */}
+        <div className="flex shrink-0 items-center gap-3 md:order-3 md:ml-auto md:gap-[17px]">
           <div className="flex items-center gap-3 md:gap-3">
             <GlyphAction label="Share" onClick={share}>
               <IconMsShare className="h-6 w-6" />

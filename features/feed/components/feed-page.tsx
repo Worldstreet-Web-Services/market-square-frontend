@@ -127,6 +127,7 @@ function PostSkeleton() {
 // Mobile Home stays the vertical snap feed; desktop is the card timeline.
 export function FeedPage({
   followSlot,
+  winkSlot,
   tipSlot,
   topicTabs = [],
   roomsSlot,
@@ -134,6 +135,7 @@ export function FeedPage({
   communitySlot,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
+  winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
@@ -362,7 +364,10 @@ export function FeedPage({
         {/* NODES 225:3526 + 225:3374 — "Make some friends". */}
         {friendsSlot && <div className="mb-6">{friendsSlot}</div>}
 
-        <div className="space-y-4">
+        {/* 38 between cards, measured between the two slabs' outer edges in
+            the Home frame (496:13048). It was 16, which read as a stack rather
+            than as separate objects — and these are objects, not rows. */}
+        <div className="space-y-4 md:space-y-[38px]">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
             <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
@@ -386,6 +391,7 @@ export function FeedPage({
               <FeedItemCard
                 item={item}
                 followSlot={followSlot}
+                winkSlot={winkSlot}
                 onOpenMedia={openMedia}
                 tipSlot={tipSlot}
                 onQuote={(post) => {

@@ -23,9 +23,11 @@ import type { Profile } from "@/lib/api/schemas";
  */
 export function ArkmarksPage({
   followSlot,
+  winkSlot,
   tipSlot,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
+  winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
@@ -105,6 +107,7 @@ export function ArkmarksPage({
                 <FeedItemCard
                   item={item}
                   followSlot={followSlot}
+                  winkSlot={winkSlot}
                   tipSlot={tipSlot}
                   onQuote={setQuoting}
                 />

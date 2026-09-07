@@ -6,6 +6,9 @@ export { VerificationCard } from "./components/verification-card";
 export { ClaimUsernameGate } from "./components/claim-username-gate";
 export { CreatorCard } from "./components/creator-card";
 export { FollowPill } from "./components/follow-pill";
+// The wink, for the surfaces that compose it in from outside the slice — the
+// post header does, through `winkSlot`.
+export { WinkButton } from "./components/wink-button";
 // The one row for listing people. Composed into Explore's People results
 // through a route slot — slices never import each other.
 export { PersonRow } from "./components/person-row";

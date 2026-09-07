@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { IconDonate } from "@/components/ui/room-icons";
+import { IconMsGift } from "@/components/ui/design-icons";
 import { TipSheet } from "@/features/tips/components/tip-sheet";
 import { useTippingUnavailable } from "@/features/tips/lib/availability";
 import { useTipCapability } from "@/features/tips/hooks/use-tips";
@@ -42,6 +43,12 @@ export function TipButton({
   /**
    * "icon" is the timeline's 42×26 glyph pill described above.
    *
+   * "post" is the timeline card's own, node 496:13390 — 38×34 around a 24px
+   * GIFT, in the same fill and rim as "icon". The current file draws tipping
+   * on a post as a gift rather than as a coin into a palm, and larger, so it
+   * balances the 40.7 wink and the 38 Following pill beside it. "icon" keeps
+   * the older 42×26 for the surfaces measured against that node.
+   *
    * "dock" is the LABELLED pill node 121:10996 draws in a gist room's bottom
    * bar — the same purple ramp as `Record Gist` beside it, 40 tall, with the
    * `la:donate` glyph and the words "Give a tip". A bar with one labelled
@@ -49,7 +56,7 @@ export function TipButton({
    * one. Every guard above still applies: on your own room, on a 404, or where
    * the capability refuses the recipient, it still renders nothing.
    */
-  variant?: "icon" | "dock";
+  variant?: "icon" | "post" | "dock";
 }) {
   const [open, setOpen] = useState(false);
   // Counts openings. It does two jobs: zero means the sheet has never been
@@ -133,9 +140,16 @@ export function TipButton({
            measured #7E3BEB and #C27AFF are exactly --color-spotlight and
            --color-spotlight-chip-ink, so no third purple is introduced. */
           className={cn(
-            "ws-press flex h-[26px] w-[42px] shrink-0 items-center justify-center rounded-full",
-            "border border-spotlight-chip-ink bg-spotlight/35 px-3 py-1",
-            "text-spotlight-chip-ink transition-colors hover:bg-spotlight/55"
+            "ws-press flex shrink-0 items-center justify-center rounded-full",
+            "border border-spotlight-chip-ink bg-spotlight/35 px-3 py-1 transition-colors",
+            "hover:bg-spotlight/55",
+            variant === "post"
+              // 496:13390: 38×34, and the glyph is --color-create rather than
+              // the rim's lighter ink. The file measures #9F5AFF there, which
+              // is --color-create to within a hair (ΔE ≈ 3, on a 24px line
+              // glyph); the token is used so no third purple enters the ramp.
+              ? "h-[34px] w-[38px] text-create"
+              : "h-[26px] w-[42px] text-spotlight-chip-ink"
           )}
         >
           {/*
@@ -148,7 +162,11 @@ export function TipButton({
             use it and there is a single tip mark in the product rather than
             two that happen to mean the same thing.
           */}
-          <IconDonate className="h-4 w-4" />
+          {variant === "post" ? (
+            <IconMsGift className="h-6 w-6" />
+          ) : (
+            <IconDonate className="h-4 w-4" />
+          )}
         </button>
       )}
 

@@ -341,7 +341,27 @@ body {
   .ws-enter {
     animation: ws-enter-in linear both;
     animation-timeline: view();
-    animation-range: entry 0% entry 40%;
+    /*
+      A LENGTH, NOT A PERCENTAGE — and this is the whole bug.
+
+      The `entry` range is exactly as long as the element is tall, so `entry
+      40%` meant "40% of this card's own height". On a 634px post card that is
+      254px of scrolling: the second card in the timeline sat at 75% opacity
+      and 8px below its own layout position while a quarter of it was already
+      on screen, and only settled once its top had climbed most of the way up
+      the window. Beside a first card that had long since finished, it read as
+      a card that had not drawn properly.
+
+      Worse at rest: `both` holds the FROM state, so anything below the fold is
+      opacity 0 until the timeline advances. That is right for something
+      genuinely off-screen, but it means any render that does not scroll — a
+      full-page capture, a print — shows one card and then nothing.
+
+      160px is a fixed distance, so every card fades in over the same short
+      travel whatever its height, and is fully settled about a fifth of a
+      window after its top edge appears.
+    */
+    animation-range: entry 0% entry 160px;
   }
 }
 
@@ -705,6 +725,14 @@ body {
   border-radius: 16.5px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  /* Node 496:13361's own two drop shadows, both black at 10%. They lift the
+     slab off the page by about one and a half levels of grey — a black shadow
+     on a near-black ground can do no more than that, and the design asks for
+     no more. Kept because the card IS a detached object and the border alone
+     gives it no ground. */
+  box-shadow:
+    0 5.5px 6.87px -4.12px rgba(0, 0, 0, 0.1),
+    0 13.75px 17.19px -3.44px rgba(0, 0, 0, 0.1);
   transition: border-color 0.15s ease;
 }
 .ws-post:hover {
