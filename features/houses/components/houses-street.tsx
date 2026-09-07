@@ -4,10 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
-import { Button, Spinner } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
-import { PanePlaceholder, PlaceholderDisc } from "@/components/ui/pane-placeholder";
-import { IconRoomBadgeMic } from "@/components/ui/room-icons";
+import { EmptyPanel, EmptyPanelAction } from "@/components/ui/empty-panel";
+import { IconVoiceMode } from "@/components/ui/room-icons";
 import { useGate } from "@/hooks/use-gate";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
@@ -222,22 +222,23 @@ export function HousesStreet({
         </div>
       ) : liveHouses.length === 0 && scheduledHouses.length === 0 ? (
         /*
-          THE PANE'S OWN EMPTY STATE, the one chat uses — `PanePlaceholder`.
+          THE DESIGNER'S EMPTY STATE — node 543:45867, which they named for this
+          page specifically.
 
-          It was the small `EmptyState`: a lozenge character over two short
-          lines, which is sized to sit INSIDE a column between other things.
-          Nothing else is on this page when it fires, so it read as a gap
-          between two sections rather than as the whole surface being empty.
-          A microphone in the same 200px disc chat's illustration is built on,
-          because an inbox tray on a page of voice rooms would be borrowing the
-          shape and the subject.
+          It replaced two earlier answers of mine. First the small `EmptyState`,
+          a lozenge over two short lines, which is sized to sit INSIDE a column
+          and so read as a gap between sections on a page that has nothing else
+          on it. Then chat's `PanePlaceholder`, which was the right SHAPE and
+          the wrong one for here: 543:45867 is its own component — a 120
+          illustration rather than 200, a 20/23.44 title rather than 24/32, and
+          a primary action built into it.
+
+          The action is "Start Gistroom", worded as the rail's button is, on the
+          same waveform the Join control carries. The copy is ours: the node
+          reads "No badges earned yet" because the designer built it from the
+          badges screen, and it is the component being reused, not the words.
         */
-        <PanePlaceholder
-          art={
-            <PlaceholderDisc>
-              <IconRoomBadgeMic className="h-20 w-20" />
-            </PlaceholderDisc>
-          }
+        <EmptyPanel
           title={topic ? "No rooms on this topic" : "No gist rooms open"}
           body={
             topic
@@ -245,9 +246,12 @@ export function HousesStreet({
               : "A gist room is where people talk. Open one and name what it is about — anyone can walk in."
           }
           action={
-            <Button size="sm" onClick={() => gate(() => setOpening(true))}>
-              Open a gist room
-            </Button>
+            <EmptyPanelAction
+              onClick={() => gate(() => setOpening(true))}
+              icon={<IconVoiceMode className="h-6 w-6" />}
+            >
+              Start Gistroom
+            </EmptyPanelAction>
           }
         />
       ) : (
