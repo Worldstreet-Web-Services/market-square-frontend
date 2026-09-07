@@ -31,8 +31,6 @@ import type { ExploreItem } from "@/features/discovery";
 import { videoMorphName } from "@/features/discovery";
 import { useStreamList } from "@/features/streams";
 import { CitizenSpotlightRail, PersonRow } from "@/features/profile";
-import { useMe } from "@/hooks/use-me";
-import { excludeViewer } from "@/lib/people-directory";
 import { useMediaFeed, mediaPostsOf, videoPostsOf, VideoViewer } from "@/features/feed";
 import { PostLikePill } from "@/features/feed";
 import { useStoreItems, StoreItemCard } from "@/features/store";
@@ -136,20 +134,25 @@ export function DiscoverScreen() {
   const storeItems = useStoreItems(undefined, tab === "products" && !hasQuery);
 
   /**
-   * The directory, minus the viewer — you are not someone you can discover.
+   * The directory as the SERVICE returns it. You are not someone you can
+   * discover, and `GET /profiles` now excludes the authenticated caller — so
+   * the client-side filter that used to stand here is gone, along with
+   * `lib/people-directory.ts` and its test.
    *
-   * TEMPORARY: this belongs on the server (`GET /profiles` excluding the
-   * caller, requested). Filtering here costs a row per page that the cursor
-   * cannot top up. Delete this and `lib/people-directory.ts` together once the
-   * backend excludes you — see that module for why both layers must not
-   * survive. `PersonRow`'s own-row guard is NOT part of this and stays: it
-   * protects search results and followers lists, where you legitimately appear
-   * and still must not be offered a Follow button on yourself.
+   * It was always a stopgap and said so: filtering the loaded page costs a row
+   * per page that no cursor can top back up, so a long scroll drifted one short
+   * each time. The service's own e2e asserts both halves of the claim — the
+   * same id absent for a signed-in caller and present for an anonymous one —
+   * which is the distinction no request from here could show, and the reason
+   * this waited for evidence rather than for an assurance.
+   *
+   * `PersonRow`'s own-row guard is NOT this and stays: it suppresses the Follow
+   * button wherever you legitimately appear — search results, followers lists —
+   * which is a different rule about a different surface.
    */
-  const me = useMe();
   const loadedPeople = useMemo(
-    () => excludeViewer(people.data?.pages.flatMap((page) => page.items) ?? [], me.data?.id),
-    [people.data?.pages, me.data?.id]
+    () => people.data?.pages.flatMap((page) => page.items) ?? [],
+    [people.data?.pages]
   );
   /*
     ROLE AND VERIFICATION are still applied here, and only those two.

@@ -31,6 +31,12 @@ const BEFORE_COMMUNITY = 1;
  * being asked to meet anybody, and not so far that it only exists for people
  * who scroll. The file cannot settle it — it draws the rail on its own — so
  * four is a judgement call, changed by this line alone.
+ *
+ * A CEILING, NOT A THRESHOLD. Both this and BEFORE_COMMUNITY fall back to the
+ * last post when the feed is shorter, so neither section disappears on a young
+ * square. On a one-post feed that stacks the community grid and the pals rail
+ * after the same post, in that order; both are invitations to go somewhere
+ * else, and showing them is better than showing neither.
  */
 const BEFORE_PALS = 4;
 
@@ -416,11 +422,13 @@ export function FeedPage({
                   <div>{communitySlot}</div>
                 )}
               {/* NODE 540:19351 — the pals rail, deeper into the timeline than
-                  the community grid. Only when the feed is genuinely that long:
-                  unlike the grid it is not pinned to the last post, because a
-                  four-post cut that lands on post one puts two people-sections
-                  on the first screen. */}
-              {palsSlot && index === BEFORE_PALS - 1 && <div>{palsSlot}</div>}
+                  the community grid, and pinned to the LAST post when the feed
+                  is shorter than the cut. A young square has three posts in it,
+                  and a section that only exists once there are four would be
+                  missing exactly when meeting people matters most. */}
+              {palsSlot && index === Math.min(BEFORE_PALS - 1, items.length - 1) && (
+                <div>{palsSlot}</div>
+              )}
             </Fragment>
           ))}
         </div>
