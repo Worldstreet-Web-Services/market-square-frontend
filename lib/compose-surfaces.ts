@@ -14,6 +14,12 @@
  *   - `/admin/**`, `/operations/**` — dense operator tables where a floating
  *     control overlaps row actions, and where posting is not the task.
  *   - `/auth` — there is no one to post as yet.
+ *   - `/gist-rooms` — same shape of reason as `/messages`. Node 407:17286 draws
+ *     a `+` in that corner and it opens a ROOM, which is what the page is for.
+ *     The shell's circle is the same size in the same place and writes a POST,
+ *     so both on screen would be two identical buttons doing different things,
+ *     and the one under the reader's hand would be the wrong one. The page
+ *     mounts its own; `/gist-rooms/:id` is already excluded by prefix.
  *   - `/messages` — the chat surface has its own `+`, INSIDE the conversation
  *     column, where node 15:1302 draws it and where a `+` means "start a new
  *     conversation". The shell's button holds the right edge of the VIEWPORT,
@@ -29,7 +35,7 @@
  * prefix rules with a trailing slash rather than plain `startsWith` on the
  * section name.
  */
-const NO_COMPOSE_EXACT = ["/auth", "/operations", "/messages"];
+const NO_COMPOSE_EXACT = ["/auth", "/operations", "/messages", "/gist-rooms"];
 const NO_COMPOSE_PREFIX = ["/live/", "/studio/", "/admin", "/operations/", "/gist-rooms/"];
 
 export function allowsCompose(pathname: string): boolean {

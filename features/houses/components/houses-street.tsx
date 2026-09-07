@@ -8,7 +8,6 @@ import { Button, Spinner } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
 import { PanePlaceholder, PlaceholderDisc } from "@/components/ui/pane-placeholder";
 import { IconRoomBadgeMic } from "@/components/ui/room-icons";
-import { IconPlus } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
@@ -94,6 +93,7 @@ function HouseRow({ stream, onOpen }: { stream: Stream; onOpen: () => void }) {
 export function HousesStreet({
   roomCardSlot,
   tabsSlot,
+  createSlot,
 }: {
   /**
    * The invite card for one open room, composed from OUTSIDE this slice.
@@ -117,6 +117,14 @@ export function HousesStreet({
     active: string | null;
     onSelect: (key: string | null) => void;
   }) => React.ReactNode;
+  /**
+   * The corner circle (407:17286), given the handler that opens the sheet.
+   *
+   * `CreateFab` is the composition layer's, like everything else here — a
+   * feature reaching up into `components/layout` is the same violation as
+   * reaching sideways into another slice.
+   */
+  createSlot?: (onOpen: () => void) => React.ReactNode;
 } = {}) {
   const gate = useGate();
   const router = useRouter();
@@ -168,19 +176,27 @@ export function HousesStreet({
         one of those and putting a second here would be two purple circles on
         one screen, which is the thing the compose rules exist to prevent.
       */}
-      <header className="flex items-start justify-between gap-4 pt-10">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[24px] font-medium leading-[31.2px] text-white">
-            Happening Now!
-          </h1>
-          <p className="text-[14px] leading-5 text-white/50">
-            Join the ongoing conversations and meet new people with similar interests.
-          </p>
-        </div>
-        <Button size="sm" className="shrink-0" onClick={() => gate(() => setOpening(true))}>
-          <IconPlus className="h-4 w-4" />
-          Open a gist room
-        </Button>
+      <header className="flex flex-col gap-1 pt-10">
+        {/*
+          TWO-TONE, and the file says so per CHARACTER — `characterStyleOverrides`
+          splits "Happening " from "Now!". Both runs override the text node's own
+          500 to Geist 600, so the heading is SemiBold throughout; only the fill
+          differs, and "Now!" carries a left-to-right gradient whose first stop
+          sits at 84.6% — so it is `--color-create` almost all the way across and
+          only darkens into #5F3C97 over the last sixth.
+
+          Reading the node's own `style` alone gives a flat white 500 heading,
+          which is what shipped first and is why the purple was missing.
+        */}
+        <h1 className="text-[24px] font-semibold leading-[31.2px] text-white">
+          Happening{" "}
+          <span className="bg-[linear-gradient(90deg,var(--color-create)_84.6%,#5F3C97_100%)] bg-clip-text text-transparent">
+            Now!
+          </span>
+        </h1>
+        <p className="text-[14px] leading-5 text-white/50">
+          Join the ongoing conversations and meet new people with similar interests.
+        </p>
       </header>
 
       {/* The row is full-bleed — the file runs it 924 wide across an 806 page,
@@ -264,6 +280,12 @@ export function HousesStreet({
           )}
         </>
       )}
+
+      {/* The file's own create control — 407:17286, the same 52.79 circle on the
+          same ramp the shell uses, in the same corner. It is here rather than in
+          the header because the file draws no button up there, and the shell's
+          circle is suppressed on this route so there is exactly one. */}
+      {createSlot?.(() => gate(() => setOpening(true)))}
 
       {porch && (
         <PorchSheet

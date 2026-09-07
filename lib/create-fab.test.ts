@@ -50,10 +50,40 @@ describe("the create button is rendered once, fixed, in the shell", () => {
         `${path} drew its own compose control — that is how the button drifted between pages`
       );
     }
+    /*
+      TWO COMPOSE CONTROLS, BOTH IN THE SHELL — the desktop corner and the
+      phone's tab row. The corner one now names itself from a `label` prop
+      defaulting to "Create post", because 407:17286 draws the same circle on
+      the gist rooms page where it opens a ROOM. So the count is the shell's
+      literal plus `CreateFab`'s default, not two literals.
+    */
     const inShell =
       (stripComments(shell).match(/aria-label="Create post"/g) ?? []).length +
-      (fabCode.match(/aria-label="Create post"/g) ?? []).length;
+      (fabCode.match(/label = "Create post"/g) ?? []).length;
     assert.equal(inShell, 2, "one for the desktop corner, one for the phone's tab row");
+  });
+
+  it("lets a route borrow the SHAPE only where the shell's is suppressed", () => {
+    /*
+      The gist rooms page mounts `CreateFab` itself, and that is not the drift
+      this suite exists to catch: it is the same circle in the same corner
+      performing the act that page is for. What would be drift is two of them —
+      so any route that mounts its own must be excluded from `allowsCompose`,
+      which is what keeps exactly one on screen.
+    */
+    const surfaces = read("lib/compose-surfaces.ts");
+    const screen = read("components/layout/gist-rooms-screen.tsx");
+    assert.match(screen, /<CreateFab\b/, "the rooms page stopped drawing the file's circle");
+    assert.match(
+      screen,
+      /label="Open a gist room"/,
+      "the rooms page's circle no longer says what it does"
+    );
+    assert.match(
+      surfaces,
+      /NO_COMPOSE_EXACT[^\]]*"\/gist-rooms"/,
+      "the rooms page mounts its own circle while the shell still draws one too"
+    );
   });
 
   it("shows exactly one of the two at any width", () => {

@@ -47,10 +47,28 @@ test("index routes are not their detail routes", () => {
   // immersive surfaces, so only they lose the control.
   assert.equal(allowsCompose("/studio"), true);
   assert.equal(allowsCompose("/live"), true);
-  assert.equal(allowsCompose("/gist-rooms"), true);
   assert.equal(allowsCompose("/studio/abc"), false);
   assert.equal(allowsCompose("/live/abc"), false);
   assert.equal(allowsCompose("/gist-rooms/abc"), false);
+});
+
+test("/gist-rooms is an EXACT exception, not a prefix one", () => {
+  /*
+    The index is excluded here where /studio and /live are not, and for a
+    different reason than its own detail route. 407:17286 draws a `+` in the
+    page's bottom-right corner and it opens a ROOM; the shell's circle is the
+    same size in the same place and writes a POST. Both on screen would be two
+    identical buttons doing different things, with the wrong one under the
+    reader's hand. The page mounts its own.
+
+    /gist-rooms/:id is still excluded by the prefix rule, for the older reason:
+    it is a two-pane room and the viewport's right edge lands on the chat
+    composer.
+  */
+  assert.equal(allowsCompose("/gist-rooms"), false, "the shell's + is back on the rooms index");
+  assert.equal(allowsCompose("/gist-rooms/abc"), false);
+  // ...and the RAIL's Post gist is untouched by that: it is not this button.
+  assert.equal(allowsRailCompose("/gist-rooms"), true, "the rail lost Post gist on the rooms page");
 });
 
 /*

@@ -4,6 +4,7 @@ import { HousesStreet } from "@/features/houses";
 import { TopicTabs } from "@/features/feed";
 import { useTopics } from "@/features/discovery";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
+import { CreateFab } from "@/components/layout/create-fab";
 
 /**
  * The gist rooms page, composed — node 407:17074.
@@ -39,6 +40,7 @@ export function GistRoomsScreen() {
           onSelect={onSelect}
         />
       )}
+      createSlot={(onOpen) => <CreateFab label="Open a gist room" onClick={onOpen} />}
       roomCardSlot={(stream) => (
         <GistRoomCard
           fluid
