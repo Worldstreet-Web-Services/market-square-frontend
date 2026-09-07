@@ -550,6 +550,31 @@ function LiveHouse({
     []
   );
   const closeRoster = useCallback(() => setRoster(null), []);
+  const rosterRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+    BRING IT INTO VIEW WHERE THE THIRD COLUMN IS NOT A COLUMN.
+
+    From `xl` the roster takes the chat's column and is already on screen, so
+    this does nothing. Below it the aside stacks UNDER the people grid — a
+    laptop at 1279 or a tablet — and "View all" opened a panel a screen and a
+    half further down. The reader pressed a control and nothing appeared to
+    happen, which reads as broken rather than as scrolled.
+
+    Guarded on the breakpoint rather than run always: scrolling a panel that is
+    already beside you yanks the page for no reason. `smooth` unless the reader
+    has asked for less motion, in which case it jumps.
+  */
+  useEffect(() => {
+    if (!roster) return;
+    const stacked = window.matchMedia("(max-width: 1279px)").matches;
+    if (!stacked) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    rosterRef.current?.scrollIntoView({
+      block: "start",
+      behavior: still ? "auto" : "smooth",
+    });
+  }, [roster]);
 
   const houseMembers = stream.houseConversationId
     ? (houseSlot?.(stream.houseConversationId, {
@@ -1267,7 +1292,7 @@ function LiveHouse({
           position and its poll survive being covered.
         */}
         {roster && (
-          <div className="min-h-0 flex-1 p-6">
+          <div ref={rosterRef} className="min-h-0 flex-1 p-6 xl:scroll-mt-0">
             <RoomRosterPanel
               title={roster.title}
               people={roster.people}
