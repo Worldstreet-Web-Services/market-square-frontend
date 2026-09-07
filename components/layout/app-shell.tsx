@@ -579,13 +579,18 @@ function AccountChip() {
           onClick={toggle}
           aria-expanded={open}
           aria-label={`Account menu for @${me.data?.username ?? "you"}`}
-          className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-2 text-left transition-colors hover:bg-white/8"
+          /* Node 496:13158 to the pixel: 199x50, radius 12, 3% white behind a
+             10% hairline, 7 of padding and 11 between the avatar and the two
+             lines. `p-2` was 8. */
+          className="flex w-full items-center gap-[11px] rounded-xl border border-white/10 bg-white/[0.03] p-[7px] text-left transition-colors hover:bg-white/8"
         >
           <Avatar
             name={me.data?.displayName ?? "Me"}
             seed={me.data?.id}
             src={me.data?.avatarUrl}
             size={34}
+            /* 34 behind the file's own 20% white ring — 496:13159. */
+            className="ring-1 ring-inset ring-white/20"
           />
           <span className="hidden min-w-0 flex-1 group-data-[rail=full]/rail:block">
             <span className="block truncate text-[12px] font-bold leading-4 text-white">
@@ -877,7 +882,11 @@ function Sidebar({
       <div className="mt-4 flex shrink-0 flex-col items-center gap-4 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-3">
         <Link
           href="/studio"
-          className="ws-press ws-btn-create flex h-12 w-12 items-center justify-center gap-2 rounded-full text-[15px] font-medium text-white transition-opacity hover:opacity-90 group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
+          /* 90deg, not `ws-btn-create`'s 155: node 496:13280's handles run
+             (0,0.5) to (1,0.5), which is straight across. Same two stops —
+             --color-create into --color-create-deep — so this is the ramp the
+             welcome screens already use rather than a new one. */
+          className="ws-press ws-btn-welcome flex h-12 w-12 items-center justify-center gap-2 rounded-full text-[15px] font-medium transition-opacity hover:opacity-90 group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
           aria-label="Start a gistroom"
         >
           <IconMic className="h-4 w-4 shrink-0" />
@@ -886,7 +895,7 @@ function Sidebar({
             {/* The file draws a chevron, so the control reads as opening a
                 choice. It goes to the room composer, which IS that choice —
                 a menu here would be a second one over the same page. */}
-            <IconChevronDown className="h-4 w-4 shrink-0" />
+            <IconChevronDown className="h-[14px] w-[14px] shrink-0" />
           </span>
         </Link>
         {authenticated && onCompose && (
@@ -895,10 +904,10 @@ function Sidebar({
             /* Square while the rail is icons — with no label to give it width
                a full-height pill came out 22px wide and read as a sliver. It
                takes the rail's width once labelled.
-               `#979797` at 18% is the file's fill: a silver wash rather than
-               the solid accent, which is what makes it the quieter of the two
-               now that Start Gistroom carries the ramp. */
-            className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full bg-[#979797]/[0.18] text-[15px] font-medium text-white transition-colors hover:bg-[#979797]/[0.28] group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
+               `ws-btn-postgist` is node 407:17029 in full: the silver face, the
+               4px ring that fades to near-black along the bottom, and DARK type
+               on it. 16/22 at Geist 600 on -0.112 of tracking. */
+            className="ws-press ws-btn-postgist flex h-12 w-12 items-center justify-center gap-2 text-[16px] font-semibold leading-[22px] tracking-[-0.112px] transition-opacity hover:opacity-90 group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
             aria-label="Post gist"
           >
             <IconPlus className="h-6 w-6 group-data-[rail=full]/rail:hidden" />
