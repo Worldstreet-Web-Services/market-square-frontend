@@ -36,14 +36,16 @@ import { ConnectionBanner } from "@/components/layout/connection-banner";
 import {
   IconBell,
   IconChevronLeft,
-  IconCamera,
+  IconBookmark,
   IconDots,
   IconForCreators,
   IconHome,
+  IconChevronDown,
   IconHouses,
   IconLive,
   IconMail,
   IconMore,
+  IconMic,
   IconPlus,
   IconLogout,
   IconSearch,
@@ -145,7 +147,13 @@ const NAV: NavItem[] = [
     `/gist-rooms/[id]` still resolves whatever the flag says: a link somebody was
     sent has to work, and hiding an entry must never break a route.
   */
-  { href: "/gist-rooms", label: "Gist rooms", icon: IconHouses, flag: "houses", sidebar: false },
+  /*
+    IN THE SIDEBAR, and spelled "Gistrooms" — node 496:13107 draws it third,
+    between Explore and Chat. It was `sidebar: false` on the older file, which
+    left the hallway on Home as the only door to every room but the three open
+    now. The ROUTE is unchanged; nothing already linked breaks.
+  */
+  { href: "/gist-rooms", label: "Gistrooms", icon: IconHouses, flag: "houses" },
   
   { href: "/messages", label: "Chat", icon: IconMail, authed: true },
   {
@@ -166,6 +174,15 @@ const NAV: NavItem[] = [
     sidebar: false,
   },
   { href: "/live", label: "Live", icon: IconLive, secondary: true },
+  /*
+    LIBRARY is the saved-posts surface — node 496:13107 draws it sixth, on a
+    bookmark, between Live and For Creators. The route stays `/arkmarks` and the
+    control on a post is still the Arkmark: the design renamed the DESTINATION
+    in the nav, not the act of saving, exactly as "For Creators" sits over
+    `/studio`. Signed-in only, because a shelf of your own saved things is not
+    a thing a guest has.
+  */
+  { href: "/arkmarks", label: "Library", icon: IconBookmark, authed: true },
 // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
@@ -824,19 +841,44 @@ function Sidebar({
         />
       </nav>
 
-      {/* Post is the primary act; going live is the one Market Square adds
-          next to it, so it sits directly underneath as the quiet twin.
-          It opens the composer in place — it used to link to `/?compose=1`,
-          which meant reaching for Post from anywhere threw the reader back to
-          home and lost their place. */}
-      <div className="mt-4 flex shrink-0 flex-col items-center gap-2 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-1">
+      {/*
+        THE TWO ACTS, IN THE FILE'S ORDER — node 496:13107.
+
+        Start Gistroom on the purple ramp at 38 tall, then Post gist in silver
+        directly under it, both 38. It used to be Post gist on top with an
+        OUTLINED "Go live" beneath: the file promotes starting a room to the
+        filled control and demotes posting to the quiet one, which is the
+        product saying what it is — a place to talk in a room first, a timeline
+        second.
+
+        `/studio` is still where both live-adjacent routes go, and the label is
+        the only thing that moved; every link already sent still resolves.
+      */}
+      <div className="mt-4 flex shrink-0 flex-col items-center gap-4 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-3">
+        <Link
+          href="/studio"
+          className="ws-press ws-btn-create flex h-12 w-12 items-center justify-center gap-2 rounded-full text-[15px] font-medium text-white transition-opacity hover:opacity-90 group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
+          aria-label="Start a gistroom"
+        >
+          <IconMic className="h-4 w-4 shrink-0" />
+          <span className="hidden items-center gap-1 group-data-[rail=full]/rail:flex">
+            Start Gistroom
+            {/* The file draws a chevron, so the control reads as opening a
+                choice. It goes to the room composer, which IS that choice —
+                a menu here would be a second one over the same page. */}
+            <IconChevronDown className="h-4 w-4 shrink-0" />
+          </span>
+        </Link>
         {authenticated && onCompose && (
           <button
             onClick={onCompose}
-            // Square while the rail is icons — the button has no label to give it
-            // width there, so a full-height pill came out 22px wide and read as
-            // a squashed sliver. It takes the rail's full width once labelled.
-            className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full bg-accent font-bold text-ink transition-colors hover:bg-white group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:w-full group-data-[rail=full]/rail:text-[17px]"
+            /* Square while the rail is icons — with no label to give it width
+               a full-height pill came out 22px wide and read as a sliver. It
+               takes the rail's width once labelled.
+               `#979797` at 18% is the file's fill: a silver wash rather than
+               the solid accent, which is what makes it the quieter of the two
+               now that Start Gistroom carries the ramp. */
+            className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full bg-[#979797]/[0.18] text-[15px] font-medium text-white transition-colors hover:bg-[#979797]/[0.28] group-data-[rail=full]/rail:h-[38px] group-data-[rail=full]/rail:w-full"
             aria-label="Post gist"
           >
             <IconPlus className="h-6 w-6 group-data-[rail=full]/rail:hidden" />
@@ -845,16 +887,6 @@ function Sidebar({
             </span>
           </button>
         )}
-        <Link
-          href="/studio"
-          className="ws-press flex h-12 w-12 items-center justify-center gap-2 rounded-full border border-white/20 font-bold text-body transition-colors hover:bg-white/8 group-data-[rail=full]/rail:h-13 group-data-[rail=full]/rail:w-full"
-          aria-label="Go live"
-        >
-          <IconCamera className="h-5 w-5" />
-          <span className="hidden group-data-[rail=full]/rail:block">
-            Go live
-          </span>
-        </Link>
       </div>
 
       <div className="mt-4 w-full shrink-0 border-t border-white/10 pt-4">

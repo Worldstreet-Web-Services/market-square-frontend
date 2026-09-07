@@ -208,11 +208,30 @@ describe("the sidebar hides rows without removing their route", () => {
     );
   });
 
-  it("hides gist rooms from the sidebar and leaves the route alone", () => {
-    assert.match(
+  it("puts gist rooms IN the sidebar, spelled the design's way", () => {
+    // It was `sidebar: false` against the older file, on the argument that the
+    // hallway at the top of Home was door enough. Node 496:13107 draws the row
+    // third, between Explore and Chat — a summary needs somewhere to point, and
+    // the hallway only ever showed the rooms open right now.
+    assert.match(NAV, /label:\s*"Gistrooms"/, "the row lost the file's spelling");
+    assert.doesNotMatch(
       NAV,
       /"\/gist-rooms"[^\n]*sidebar:\s*false/,
-      "the gist rooms entry is back in the sidebar"
+      "gist rooms is hidden from the sidebar again"
+    );
+    // A renamed row is not a moved route.
+    assert.match(NAV, /href:\s*"\/gist-rooms"/, "the gist rooms route moved");
+  });
+
+  it("carries LIBRARY on the saved-posts route, not a new one", () => {
+    // 496:13107 draws it sixth, on a bookmark. The design renamed the
+    // DESTINATION; the act of saving is still the Arkmark and the route is
+    // still /arkmarks — the same relationship "For Creators" has with /studio.
+    assert.match(NAV, /label:\s*"Library"/, "the library row is gone");
+    assert.match(
+      NAV,
+      /"\/arkmarks"[^\n]*icon:\s*IconBookmark/,
+      "library is not on the file's bookmark, or no longer points at /arkmarks"
     );
   });
 });
