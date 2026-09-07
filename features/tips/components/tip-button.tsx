@@ -141,15 +141,22 @@ export function TipButton({
            --color-spotlight-chip-ink, so no third purple is introduced. */
           className={cn(
             "ws-press flex shrink-0 items-center justify-center rounded-full",
-            "border border-spotlight-chip-ink bg-spotlight/35 px-3 py-1 transition-colors",
+            "border border-spotlight-chip-ink bg-spotlight/35 transition-colors",
             "hover:bg-spotlight/55",
             variant === "post"
               // 496:13390: 38×34, and the glyph is --color-create rather than
               // the rim's lighter ink. The file measures #9F5AFF there, which
               // is --color-create to within a hair (ΔE ≈ 3, on a 24px line
               // glyph); the token is used so no third purple enters the ramp.
+              //
+              // NO PADDING. The file states 4/12 on this button and then fixes
+              // it at 38 wide around a 24 glyph, which leaves 7 — the width
+              // wins, and the stated padding is what the frame was before it
+              // was resized. Carried over literally it squeezed the glyph to
+              // 12×24: 38 less 24 of padding leaves 14, and an SVG that is not
+              // shrink-0 gives up the difference in width alone.
               ? "h-[34px] w-[38px] text-create"
-              : "h-[26px] w-[42px] text-spotlight-chip-ink"
+              : "h-[26px] w-[42px] px-3 py-1 text-spotlight-chip-ink"
           )}
         >
           {/*
@@ -163,7 +170,7 @@ export function TipButton({
             two that happen to mean the same thing.
           */}
           {variant === "post" ? (
-            <IconMsGift className="h-6 w-6" />
+            <IconMsGift className="h-6 w-6 shrink-0" />
           ) : (
             <IconDonate className="h-4 w-4" />
           )}
