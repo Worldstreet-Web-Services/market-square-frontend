@@ -103,7 +103,11 @@ export function TipButton({
                 setOpen(true);
               })
             }
-            className="ws-press flex h-10 shrink-0 items-center gap-2 rounded-full bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] px-3 text-[12px] font-medium leading-4 text-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1),0_1px_3px_0_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
+            /* 32, not 40 — node 369:9468 is 98x32: 12 and 8 of padding around
+               a 16 glyph, 8 of gap, and a 50-wide label, which comes to exactly
+               98. At 40 the pill stood taller than the 40px circles beside it
+               read as, and the bar had two different button heights in it. */
+            className="ws-press flex h-8 shrink-0 items-center gap-2 rounded-full bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] px-3 text-[12px] font-medium leading-4 text-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1),0_1px_3px_0_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
           >
             <IconDonate className="h-4 w-4" />
             Give a tip

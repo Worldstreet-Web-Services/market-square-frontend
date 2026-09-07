@@ -81,6 +81,12 @@ export function RoomDock({
         // The file paints the bar `#101012`; `--color-raised` is `#0f0f11`,
         // one value per channel away, and a fifth near-black token for a
         // difference nobody can see is how a palette stops being a palette.
+        //
+        // 369:9467 stacks a SECOND fill on it — white at 3% — which composites
+        // to about (23,23,25) against this (15,15,17). Eight levels, on a bar
+        // that already separates itself from the page with a hairline, and the
+        // slice may hold no raw colour to express it. Left as the token, and
+        // stated so the next person does not read it as an oversight.
         "flex h-20 shrink-0 items-center justify-between gap-4 border-t border-white/10 bg-raised px-6",
         className
       )}
