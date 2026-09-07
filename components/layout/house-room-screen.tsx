@@ -9,7 +9,7 @@
 // is from the identity on their room token, and never holds the whole object.
 
 import { useEffect } from "react";
-import { HouseRoom, RoomPeopleSection } from "@/features/houses";
+import { HouseRoom, RoomPeopleSection, type RoomPerson } from "@/features/houses";
 import { useConversationMembers, useJoinGroup } from "@/features/messages";
 import { PersonQuickActions as QuickActions } from "@/features/profile";
 import { PersonFollow, PersonQuickActions, PersonSafetyRows } from "@/features/profile";
@@ -23,7 +23,9 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
       followSlot={(username) => <PersonFollow username={username} />}
       safetySlot={(username, mute) => <PersonSafetyRows username={username} mute={mute} />}
       // The wink + follow pair on every person card in the room (169:13368).
-      personActionsSlot={(username) => <PersonQuickActions username={username} />}
+      personActionsSlot={(username, variant) => (
+        <PersonQuickActions username={username} variant={variant} />
+      )}
       // "Give a tip" — the audience's pill in the room's bottom bar
       // (121:10996). Composed here because tipping is the tips slice's flow
       // and slices never import each other; the room owns where it sits, the
@@ -42,6 +44,7 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
           conversationId={conversationId}
           speakerIds={stage.speakerIds}
           onRoster={stage.onRoster}
+          onViewAll={stage.onViewAll}
         />
       )}
       // "Join House" — `POST /conversations/:id/join`. The room decides whether
@@ -71,14 +74,20 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
  * slices never import each other, but the room is the only thing that can act
  * on it.
  */
+/** Two rows of six — what 369:9221 draws before it offers View all. */
+const GRID_TILES = 12;
+
 function HouseMembers({
   conversationId,
   speakerIds,
   onRoster,
+  onViewAll,
 }: {
   conversationId: string;
   speakerIds: ReadonlySet<string>;
   onRoster: (ids: ReadonlySet<string>) => void;
+  /** Hands the whole roster up so the ROOM can open it over the chat column. */
+  onViewAll: (title: string, people: RoomPerson[]) => void;
 }) {
   const members = useConversationMembers(conversationId, true);
   const items = members.data?.items;
@@ -99,6 +108,12 @@ function HouseMembers({
             id: member.profile.id,
             name: member.profile.displayName || member.profile.username,
             avatarUrl: member.profile.avatarUrl,
+            /* The roster half of the room DOES know these — a membership
+               carries a whole Profile — so the panel can link to them, address
+               a follow to them and print the count the file draws. The audience
+               half knows neither and says so. */
+            username: member.profile.username,
+            followerCount: member.profile.followerCount,
             actions: <QuickActions username={member.profile.username} />,
           },
         ]
@@ -109,6 +124,13 @@ function HouseMembers({
     <RoomPeopleSection
       title="House Members"
       people={people}
+      /* Only when there is more than the grid shows — see the note on the
+         Audience's own View all. */
+      onViewAll={
+        people.length > GRID_TILES
+          ? () => onViewAll("House Members", people)
+          : undefined
+      }
       empty="Everyone in this house is on the stage."
     />
   );

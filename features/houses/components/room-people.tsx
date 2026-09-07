@@ -43,6 +43,18 @@ export interface RoomPerson {
   userId?: string;
   name: string;
   avatarUrl?: string | null;
+  /**
+   * Their handle, where the list that built this knew it.
+   *
+   * The house roster does — it is a conversation membership carrying a whole
+   * Profile. The AUDIENCE does not: it is built from LiveKit identities, and a
+   * room learns who somebody is from their room token. So this is optional and
+   * the roster panel degrades rather than inventing one — no link to a profile
+   * it cannot name, and no follow control for somebody it cannot address.
+   */
+  username?: string;
+  /** Same story: the file prints one, and only the roster half can supply it. */
+  followerCount?: number;
   /** Speaking right now: the plate gets the live ring. */
   speaking?: boolean;
   /**

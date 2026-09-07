@@ -5,6 +5,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { useFollow, useProfile, useWink } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
+import { IconMsWinkFace } from "@/components/ui/design-icons";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -28,13 +29,34 @@ import type { Profile } from "@/lib/api/schemas";
  * disappears entirely when the service says the route does not exist, rather
  * than sitting there failing — `useWink` reports that as `unavailable`.
  */
-export function PersonQuickActions({ username }: { username: string }) {
+export function PersonQuickActions({
+  username,
+  variant = "compact",
+}: {
+  username: string;
+  /**
+   * `compact` is the 24px pair on a person's tile in the room (169:13368).
+   *
+   * `labelled` is the roster panel's (369:8774): a bare "Follow" at 50x24 and a
+   * "Wink" pill at 62x24 on the create ramp, or — once you follow them — the
+   * 78x26 "Following" pill with the wink beside it as a 26 disc. Same two acts
+   * and the same guards; only the geometry and the labels differ, which is why
+   * this is a variant rather than a second component that could drift.
+   */
+  variant?: "compact" | "labelled";
+}) {
   const profile = useProfile(username);
   if (!profile.data) return null;
-  return <Actions profile={profile.data} />;
+  return <Actions profile={profile.data} variant={variant} />;
 }
 
-function Actions({ profile }: { profile: Profile }) {
+function Actions({
+  profile,
+  variant,
+}: {
+  profile: Profile;
+  variant: "compact" | "labelled";
+}) {
   const gate = useGate();
   const me = useMe();
   const wink = useWink(profile);
@@ -47,6 +69,74 @@ function Actions({ profile }: { profile: Profile }) {
   if (me.data?.id === profile.id) return null;
 
   const name = profile.displayName || profile.username;
+
+  const winkAction = () => gate(() => wink.send());
+  const followAction = () => gate(() => follow.mutate(!isFollowing));
+  const winkTitle = wink.refusal ?? undefined;
+  const winkLabel = wink.winked ? `Already winked at ${name}` : `Wink at ${name}`;
+  const winkOff = wink.winked || wink.refusal !== null || wink.isPending;
+
+  if (variant === "labelled") {
+    return (
+      /* 369:8774 — the pair is 120 wide on an 8 gap, and it swaps shape rather
+         than colour once you follow: Follow is bare text at 11/16 and Wink
+         carries the ramp, but Following is the outlined 78x26 pill and the wink
+         shrinks to a 26 disc beside it. */
+      <span className="flex items-center gap-2">
+        {isFollowing ? (
+          <button
+            type="button"
+            aria-label={`Unfollow ${name}`}
+            disabled={follow.isPending}
+            onClick={(event) => {
+              event.stopPropagation();
+              followAction();
+            }}
+            className="ws-press flex h-[26px] w-[78px] items-center justify-center rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[12px] leading-4 text-white/90 transition-colors hover:bg-white/10 disabled:opacity-40"
+          >
+            Following
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label={`Follow ${name}`}
+            disabled={follow.isPending}
+            onClick={(event) => {
+              event.stopPropagation();
+              followAction();
+            }}
+            className="ws-press flex h-6 w-[50px] items-center justify-center rounded-full px-2 py-1 text-[11px] font-medium leading-4 text-white transition-colors hover:bg-white/10 disabled:opacity-40"
+          >
+            Follow
+          </button>
+        )}
+        {!wink.unavailable && (
+          <button
+            type="button"
+            title={winkTitle}
+            aria-label={winkLabel}
+            disabled={winkOff}
+            onClick={(event) => {
+              event.stopPropagation();
+              winkAction();
+            }}
+            className={cn(
+              "ws-press flex items-center justify-center rounded-full bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] text-white transition-opacity hover:opacity-90 disabled:opacity-40",
+              // Following leaves no room for the word, so the file drops it and
+              // keeps the face — the act is unchanged, the label moves to the
+              // accessible name.
+              isFollowing ? "h-[26px] w-[26px]" : "h-6 w-[62px] gap-1 px-2 py-1"
+            )}
+          >
+            <IconMsWinkFace className="h-3.5 w-3.5 shrink-0" />
+            {!isFollowing && (
+              <span className="text-[11px] font-semibold leading-4">Wink</span>
+            )}
+          </button>
+        )}
+      </span>
+    );
+  }
 
   return (
     <span className="flex h-6 items-center gap-2">

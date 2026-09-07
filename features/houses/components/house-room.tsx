@@ -31,6 +31,7 @@ import {
 } from "@/features/streams/hooks/use-streams";
 import type { Ingest, Stream } from "@/features/streams/lib/types";
 import { RoomPeopleSection, type RoomPerson } from "@/features/houses/components/room-people";
+import { RoomRosterPanel } from "@/features/houses/components/room-roster-panel";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { Backstage } from "@/features/houses/components/backstage";
 import { CaptionRail } from "@/features/houses/components/caption-rail";
@@ -124,13 +125,25 @@ interface SlotProps {
        * of this house. Without it a member who is listening appears twice.
        */
       onRoster: (ids: ReadonlySet<string>) => void;
+      /**
+       * Opens the roster panel (369:8741) over the chat column with this list.
+       *
+       * The panel lives in the ROOM, because it takes the room's right column —
+       * but House Members is the slot's list and the room never sees it. So the
+       * slot hands the people up when its "View all" is pressed, rather than
+       * the room reaching down for a roster it is not allowed to fetch.
+       */
+      onViewAll: (title: string, people: RoomPerson[]) => void;
     }
   ) => React.ReactNode;
   /**
    * The wink + follow pair on a person's card (node 169:13368). A slot, because
    * both are the profile slice's actions and slices never import each other.
    */
-  personActionsSlot?: (username: string) => React.ReactNode;
+  personActionsSlot?: (
+    username: string,
+    variant?: "compact" | "labelled"
+  ) => React.ReactNode;
   /**
    * "Give a tip" — node 121:10996, the AUDIENCE's left-hand pill in the bottom
    * bar, where the host has Record Gist.
@@ -157,6 +170,9 @@ interface SlotProps {
 
 /** One frozen empty set, so an unresolved roster is not a new value per render. */
 const EMPTY_IDS: ReadonlySet<string> = new Set();
+
+/** Two rows of six — what 369:9221 draws before it stops and offers View all. */
+const GRID_TILES = 12;
 
 export function HouseRoom({
   houseId,
@@ -518,10 +534,28 @@ function LiveHouse({
     room opened from the street, which belongs to no house.
   */
   const house = stream.house;
+  /*
+    WHICH ROSTER IS OPEN OVER THE CHAT — node 369:8741.
+
+    One piece of state for both lists, because the panel takes the same column
+    and only one can be in it. Holding the PEOPLE rather than a discriminator
+    is what lets House Members — a list this component is not allowed to fetch —
+    open the same panel as the Audience.
+  */
+  const [roster, setRoster] = useState<{ title: string; people: RoomPerson[] } | null>(
+    null
+  );
+  const openRoster = useCallback(
+    (title: string, people: RoomPerson[]) => setRoster({ title, people }),
+    []
+  );
+  const closeRoster = useCallback(() => setRoster(null), []);
+
   const houseMembers = stream.houseConversationId
     ? (houseSlot?.(stream.houseConversationId, {
         speakerIds,
         onRoster: setHouseMemberIds,
+        onViewAll: openRoster,
       }) ?? null)
     : null;
 
@@ -1134,6 +1168,15 @@ function LiveHouse({
         <RoomPeopleSection
           title="Audience"
           people={audiencePeople}
+          /* The file ends a full grid with "View all" (369:9337) and opens the
+             roster over the chat. It appears only when there IS more than the
+             grid shows — a control that opens a panel identical to what you are
+             already looking at is a control that lies about having more. */
+          onViewAll={
+            audiencePeople.length > GRID_TILES
+              ? () => openRoster("Audience", audiencePeople)
+              : undefined
+          }
           empty={
             house
               ? "Nobody from outside the house is listening yet."
@@ -1203,6 +1246,26 @@ function LiveHouse({
         chat is the only way somebody without a seat can say anything.
       */}
       <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
+        {/*
+          THE ROSTER TAKES THIS COLUMN WHILE IT IS OPEN — 369:8740.
+
+          Not a dialog: the stage keeps playing beside it and the room is still
+          audible, which is the whole reason the file puts it here rather than
+          over the middle. Closing puts the chat back exactly as it was, because
+          the chat is not unmounted by this — it is `hidden`, so its scroll
+          position and its poll survive being covered.
+        */}
+        {roster && (
+          <div className="min-h-0 flex-1 p-6">
+            <RoomRosterPanel
+              title={roster.title}
+              people={roster.people}
+              onClose={closeRoster}
+              actionsSlot={(username) => personActionsSlot?.(username, "labelled")}
+            />
+          </div>
+        )}
+        <div className={cn("flex min-h-0 flex-1 flex-col", roster && "hidden")}>
         {/* SPEAKER REQUEST — node 129:12809, host only, above the chat. It used
             to be the tray SHEET mounted here, which renders nothing until it
             opens, so the band the file draws was simply a 48px hole. */}
@@ -1225,6 +1288,7 @@ function LiveHouse({
           <div className="min-h-0 flex-1">
             <ChatPanel stream={stream} variant="room" />
           </div>
+        </div>
         </div>
       </aside>
 
