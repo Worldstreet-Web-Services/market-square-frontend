@@ -7,7 +7,6 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button, Spinner } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { IconPlus } from "@/components/ui/icons";
-import { ColumnHeader } from "@/components/layout/column-header";
 import { useGate } from "@/hooks/use-gate";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
@@ -16,16 +15,28 @@ import { PorchSheet } from "@/features/houses/components/porch-sheet";
 import { housePath } from "@/features/houses/lib/house";
 
 /**
- * The street: a LIST of houses, and deliberately nothing more.
+ * The street — node 407:17074, "Happening Now!".
  *
- * Not a grid of live tiles. Discord shipped exactly that — a browsable
- * directory of live stages — found it did not connect people to audio they
- * cared about, and killed it inside six months. A tile grid also has to fill
- * itself with something, and in an audio product the only thing it can fill
- * itself with is decoration.
+ * A two-column grid of the SAME card the home rail carries (`GistRoomCard`,
+ * 225:3873), 24 apart, under a 24/31.2 heading and a 14/20 line at 50% white.
  *
- * So: `ws-row`s, a topic, who is hosting, how many people are in there. The
- * street is a list. The product is the room.
+ * ─── THIS USED TO ARGUE AGAINST A GRID, AND THE ARGUMENT WAS NOT WRONG ──────
+ * The note here said: not a grid of live tiles, because Discord shipped exactly
+ * that, found it did not connect people to audio they cared about, and killed
+ * it inside six months — and because a tile grid has to fill itself with
+ * something, which in an audio product can only be decoration.
+ *
+ * The design answers that rather than ignoring it. These are not tiles: each
+ * cell is the invite card, carrying the room's title, its topics, who is
+ * already inside and a Join control — the same object that works in a thread,
+ * at the same size. There is no artwork in it and nothing to pad it out. What
+ * the grid buys is that a page of rooms reads as a page of rooms instead of a
+ * column you scroll past four at a time.
+ *
+ * `HouseRow` stays, for the rooms that have not opened yet. The file draws only
+ * the live grid, and a scheduled room has no roster to show and nothing to join
+ * — a card promising both would be the dead promise the card was built to
+ * avoid.
  */
 function HouseRow({ stream, onOpen }: { stream: Stream; onOpen: () => void }) {
   const host = stream.owner;
@@ -78,7 +89,20 @@ function HouseRow({ stream, onOpen }: { stream: Stream; onOpen: () => void }) {
   );
 }
 
-export function HousesStreet() {
+export function HousesStreet({
+  roomCardSlot,
+}: {
+  /**
+   * The invite card for one open room, composed from OUTSIDE this slice.
+   *
+   * `GistRoomCard` reads the room (streams), the topic vocabulary (discovery)
+   * and the group's roster (messages), and slices never import each other — so
+   * it is assembled in `components/layout` and handed down, exactly as the home
+   * rail already does. Absent, the grid renders empty cells rather than
+   * inventing a second card.
+   */
+  roomCardSlot?: (stream: Stream) => React.ReactNode;
+} = {}) {
   const gate = useGate();
   const router = useRouter();
   const [opening, setOpening] = useState(false);
@@ -102,17 +126,36 @@ export function HousesStreet() {
   const scheduledHouses = scheduled.data?.items ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-[600px]">
-      <ColumnHeader
-        title="Gist rooms"
-        subtitle="Rooms you can talk in. Voice only."
-        action={
-          <Button size="sm" onClick={() => gate(() => setOpening(true))}>
-            <IconPlus className="h-4 w-4" />
-            Open a gist room
-          </Button>
-        }
-      />
+    <div className="w-full px-8">
+      {/*
+        NODE 407:17283 — the page's own head, 32 in from the edge and 40 down,
+        two lines on a 4 gap: "Happening Now!" at 24/31.2 and the invitation
+        under it at 14/20 in 50% white.
+
+        It replaced a `ColumnHeader` reading "Gist rooms" over "Rooms you can
+        talk in. Voice only." — the route's name and a definition. The file
+        heads the page with what is true right now instead, which is the reason
+        to be on it.
+
+        The create action stays in the head. The file draws it as a floating
+        circle at the page's bottom-right corner; the shell already owns exactly
+        one of those and putting a second here would be two purple circles on
+        one screen, which is the thing the compose rules exist to prevent.
+      */}
+      <header className="flex items-start justify-between gap-4 pt-10">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[24px] font-medium leading-[31.2px] text-white">
+            Happening Now!
+          </h1>
+          <p className="text-[14px] leading-5 text-white/50">
+            Join the ongoing conversations and meet new people with similar interests.
+          </p>
+        </div>
+        <Button size="sm" className="shrink-0" onClick={() => gate(() => setOpening(true))}>
+          <IconPlus className="h-4 w-4" />
+          Open a gist room
+        </Button>
+      </header>
 
       {live.isPending ? (
         <div className="flex justify-center py-10">
@@ -142,16 +185,19 @@ export function HousesStreet() {
       ) : (
         <>
           {liveHouses.length > 0 && (
-            <section>
-              <h2 className="ws-meta px-4 pb-2 pt-4">Open now</h2>
+            /* Two columns 24 apart — the file's grid is 742 wide holding 359s.
+               One column below `md`, where two 359s cannot both fit and the
+               card would have to shrink past the point its title wraps
+               sensibly. */
+            <section aria-label="Gist rooms open now" className="grid gap-6 pt-6 md:grid-cols-2">
               {liveHouses.map((stream) => (
-                <HouseRow key={stream.id} stream={stream} onOpen={() => setPorch(stream)} />
+                <div key={stream.id}>{roomCardSlot?.(stream)}</div>
               ))}
             </section>
           )}
           {scheduledHouses.length > 0 && (
             <section>
-              <h2 className="ws-meta px-4 pb-2 pt-5">Not open yet</h2>
+              <h2 className="ws-meta pb-2 pt-8">Not open yet</h2>
               {scheduledHouses.map((stream) => (
                 // A house that has not opened has nothing to listen to yet, so
                 // there is no threshold to pause on — go straight to the page,

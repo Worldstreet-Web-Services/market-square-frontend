@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { HousesStreet } from "@/features/houses";
+import { GistRoomsScreen } from "@/components/layout/gist-rooms-screen";
 
 export const metadata: Metadata = { title: "Gist rooms" };
 
 export default function Page() {
-  return <HousesStreet />;
+  return <GistRoomsScreen />;
 }

@@ -60,9 +60,20 @@ const LIVE_POLL = ["while-live", 60_000] as const;
 export function GistRoomCard({
   streamId,
   conversationId,
+  fluid = false,
 }: {
   streamId: string;
   conversationId: string;
+  /**
+   * Fill the cell instead of holding 338.
+   *
+   * The rail is a horizontal scroller, so its cards are a FIXED width — that is
+   * what makes a short title and a long one occupy the same space and the row
+   * read as a row. The gist rooms PAGE (407:17074) lays the same card out in a
+   * two-column grid at 359, and the file's own two instances differ by exactly
+   * that, so the width belongs to the surface rather than to the card.
+   */
+  fluid?: boolean;
 }) {
   /*
     POLLED WHILE THE ROOM IS LIVE, and not otherwise.
@@ -135,7 +146,12 @@ export function GistRoomCard({
       `max-w-full` still caps it, because this same card is composed into a
       message thread whose column can be narrower than 338.
     */
-    <div className="w-[338px] max-w-full shrink-0 rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 backdrop-blur-[7px]">
+    <div
+      className={cn(
+        "max-w-full rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 backdrop-blur-[7px]",
+        fluid ? "w-full" : "w-[338px] shrink-0"
+      )}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           {/*
