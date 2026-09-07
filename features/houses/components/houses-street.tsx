@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { Button, Spinner } from "@/components/ui/button";
-import { EmptyState, ErrorState } from "@/components/ui/states";
+import { ErrorState } from "@/components/ui/states";
+import { PanePlaceholder, PlaceholderDisc } from "@/components/ui/pane-placeholder";
+import { IconRoomBadgeMic } from "@/components/ui/room-icons";
 import { IconPlus } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
@@ -170,18 +172,31 @@ export function HousesStreet({
           />
         </div>
       ) : liveHouses.length === 0 && scheduledHouses.length === 0 ? (
-        <div className="px-4 py-10">
-          <EmptyState
-            glyph="◇"
-            title="No gist rooms open"
-            body="A gist room is where people talk. Open one and name what it is about — anyone can walk in."
-            action={
-              <Button size="sm" onClick={() => gate(() => setOpening(true))}>
-                Open a gist room
-              </Button>
-            }
-          />
-        </div>
+        /*
+          THE PANE'S OWN EMPTY STATE, the one chat uses — `PanePlaceholder`.
+
+          It was the small `EmptyState`: a lozenge character over two short
+          lines, which is sized to sit INSIDE a column between other things.
+          Nothing else is on this page when it fires, so it read as a gap
+          between two sections rather than as the whole surface being empty.
+          A microphone in the same 200px disc chat's illustration is built on,
+          because an inbox tray on a page of voice rooms would be borrowing the
+          shape and the subject.
+        */
+        <PanePlaceholder
+          art={
+            <PlaceholderDisc>
+              <IconRoomBadgeMic className="h-20 w-20" />
+            </PlaceholderDisc>
+          }
+          title="No gist rooms open"
+          body="A gist room is where people talk. Open one and name what it is about — anyone can walk in."
+          action={
+            <Button size="sm" onClick={() => gate(() => setOpening(true))}>
+              Open a gist room
+            </Button>
+          }
+        />
       ) : (
         <>
           {liveHouses.length > 0 && (
