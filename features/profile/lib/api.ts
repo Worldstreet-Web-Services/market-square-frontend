@@ -173,8 +173,20 @@ export async function applyForCreator(note?: string) {
  * place a person can read, edit and delete. There is no `distanceKm` here and
  * there must never be one — see `lib/people-filters.ts`.
  *
- * NOT YET DEPLOYED. Recorded in `PENDING_ROUTES`; a 404 means the button that
- * calls this goes quiet rather than failing in front of somebody.
+ * LIVE, and GATED — a POST, so `needsAuth` in the BFF covers it and
+ * `isPublicGet` never sees it.
+ *
+ * A 404 FROM HERE IS AN ANSWER, NOT AN OUTAGE: the provider was asked and
+ * recognised no place at that point — mid-ocean, a spot with no locality. 502
+ * is "we could not ask" (or no provider configured on this deployment), which
+ * is the one that should quiet the control; 400 is not-a-coordinate, refused
+ * here rather than forwarded to somebody else's service; 429 is the per-user
+ * budget, because one tap is one request to a third party we neither pay for
+ * nor control.
+ *
+ * IT WRITES NOTHING. The place comes back, the person reads it, and the form
+ * saves it with `PATCH /me` — which keeps this a convenience button rather
+ * than the app recording where somebody is.
  */
 export async function reverseGeocode(input: { latitude: number; longitude: number }) {
   return ReverseGeocodeSchema.parse(await msApi.post("/geo/reverse", input));

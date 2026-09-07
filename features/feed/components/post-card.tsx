@@ -726,8 +726,28 @@ export function PostCard({
       <hr className="ws-post-rule my-[18px] border-t" />
 
 
-      {/* mediaUrl carries both images and clips; the upload endpoint only
-          issues mp4/webm for video, so extension sniffing is enough. */}
+      {/*
+        MEDIA IS LEFT-ALIGNED AND KEEPS ITS OWN WIDTH — 496:13599 against
+        496:13662.
+
+        The file draws a picture that fills the column at the full 718 (13662)
+        and one that does not at 383.31, hard against the content column's LEFT
+        edge (13599). Not centred, and never letterboxed: the media box is the
+        media's own size, capped at the column's width and at 420 tall.
+
+        This replaces a fixed `h-[420px] w-full` frame with `object-contain`,
+        which centred everything and gave a portrait clip a black margin on
+        either side as wide as the clip itself. `MediaFrame`'s ambient blur went
+        with it, for the same reason: it exists to fill leftover space beside
+        contained media, and hugging the media means there is none. It still
+        does that job in the immersive viewer, where a full-viewport slide has
+        leftover space and the fill is the whole point.
+
+        The cost is that the box's width is not known until the media loads, so
+        a card can settle once on first paint. `mediaWidth`/`mediaHeight` on the
+        post payload would remove it — asked for; `MessageMedia` already carries
+        both, so the service is storing them somewhere.
+      */}
       {post.mediaUrl &&
         (isVideoPost(post) ? (
           // A tap goes FULL SCREEN, the way it does in Reels and TikTok. The
@@ -748,14 +768,10 @@ export function PostCard({
             // below rather than a clickable div it cannot reach.
             <div
               onClick={() => onOpenMedia(post)}
-              className="ws-press relative block h-[420px] w-full cursor-pointer overflow-hidden rounded-xl"
+              className="ws-press relative block w-fit max-w-full cursor-pointer overflow-hidden rounded-xl"
               style={{ viewTransitionName: `media-${post.id}` }}
             >
-              <InlineVideo
-                src={post.mediaUrl}
-                poster={post.thumbnailUrl}
-                className="h-full w-full"
-              />
+              <InlineVideo fit src={post.mediaUrl} poster={post.thumbnailUrl} />
               <button
                 type="button"
                 onClick={(event) => {
@@ -769,11 +785,7 @@ export function PostCard({
               </button>
             </div>
           ) : (
-            <InlineVideo
-              src={post.mediaUrl}
-              poster={post.thumbnailUrl}
-              className="h-[420px] w-full rounded-xl"
-            />
+            <InlineVideo fit src={post.mediaUrl} poster={post.thumbnailUrl} />
           )
         ) : (
           // A photo expands too. It is contained in the card, so a tall shot
@@ -789,22 +801,18 @@ export function PostCard({
                 }
               : {})}
             className={cn(
-              "block h-[420px] w-full",
+              "block w-fit max-w-full",
               onOpenMedia && "ws-press cursor-pointer"
             )}
             style={{ viewTransitionName: `media-${post.id}` }}
           >
-            {/* Same height as InlineVideo so the timeline keeps one rhythm,
-                and contained so a tall photo is not cropped to fit it. */}
-            <MediaFrame backdrop={post.mediaUrl} className="h-full w-full rounded-xl">
-              {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
-              <img
-                src={post.mediaUrl}
-                alt=""
-                decoding="async"
-                className="absolute inset-0 h-full w-full object-contain"
-              />
-            </MediaFrame>
+            {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+            <img
+              src={post.mediaUrl}
+              alt=""
+              decoding="async"
+              className="block h-auto max-h-[420px] w-auto max-w-full rounded-xl object-contain"
+            />
           </Tag>
         ))}
 
