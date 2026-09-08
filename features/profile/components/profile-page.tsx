@@ -462,9 +462,20 @@ export function ProfilePage({
       {isMe && housesSlot && <div className="px-8 pt-9">{housesSlot}</div>}
 
       {/* Own-profile business: creator application and verification live above
-          the tabs, where they read as account state rather than content. */}
+          the tabs, where they read as account state rather than content.
+
+          NO RULE ABOVE IT. It carried a full-width `border-t`, which drew a
+          line straight across the page between the houses rail and the Creator
+          card — the one divider on a page that is otherwise a stack of
+          outlined cards on open ground. Both cards already have their own
+          border, so the rule was separating things that were separated, and it
+          cut the column at a point the file draws nothing.
+
+          `px-8` to match, not `px-4`: every other block on this page — the
+          cover, the bio, the houses — is inset 32, so these two cards hung 16px
+          wider than the rail directly above them. */}
       {isMe && (
-        <div className="ws-hair space-y-3 border-t px-4 py-4">
+        <div className="space-y-3 px-8 pb-4 pt-9">
           <CreatorCard role={data.role} />
           <VerificationCard />
         </div>
