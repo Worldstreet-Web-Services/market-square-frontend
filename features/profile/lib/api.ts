@@ -184,7 +184,7 @@ export async function applyForCreator(note?: string) {
  * budget, because one tap is one request to a third party we neither pay for
  * nor control.
  *
- * ─── THAT 404 IS AMBIGUOUS ON A DEPLOYMENT THAT LACKS THE ROUTE ─────────────
+ * ─── THE 404 IS NO LONGER AMBIGUOUS: BRANCH ON THE CODE, NOT THE STATUS ────
  * The paragraph above is true wherever the route exists, and WRONG where it
  * does not: an absent route is also a 404, so the domain answer ("no place
  * there") and the transport answer ("no such endpoint") arrive wearing one
@@ -193,16 +193,25 @@ export async function applyForCreator(note?: string) {
  * staging while production deploys from main. So in production this reports
  * "we could not name that spot" about a route nobody ever called.
  *
- * DELIBERATELY NOT PATCHED HERE. Telling the two apart from the client means
- * probing for the route's existence, which is a client-side workaround for a
- * server-side ambiguity — the exact thing we do not do. The backend owns it
- * and has queued the fix: the no-place answer gets its own error CODE
- * (`NO_PLACE_FOUND`) so this switches on the code and the status stops
- * mattering, which is correct on a behind deployment too rather than only
- * once the deploy catches up. Wire that code here when it lands; until then
- * the string stays as it is, by agreement — on a deployment without the route
- * the honest sentence is nearer "not available here" than either branch we
- * currently have.
+ * FIXED SERVER-SIDE, WHICH IS WHERE IT BELONGED. The no-place answer now
+ * carries its own code — 404 `NO_PLACE_FOUND` — and only a provider that
+ * actually answered can produce it. So the caller switches on the CODE and
+ * the status stops mattering, which is correct on a deployment that is behind
+ * rather than only once the deploy catches up. No client-side probe for the
+ * route's existence was added, and none is needed.
+ *
+ *   404 NO_PLACE_FOUND       the provider knew no place there — a fact about
+ *                            the spot; the control still works
+ *   404 NOT_FOUND            the route is absent, renamed or misproxied — a
+ *                            fault, and never a claim about where somebody is
+ *   502 SERVICE_UNAVAILABLE  we could not ask; a retry, not a location
+ *
+ * `components/layout/location-sheet.tsx` branches on exactly those.
+ *
+ * NOT ON :8094 YET — committed on the backend and deliberately not deployed,
+ * so the running service still answers the old bare NOT_FOUND. That falls into
+ * the route-fault branch, which quiets the control rather than lying about a
+ * location, so the behaviour is safe in the meantime.
  *
  * IT WRITES NOTHING. The place comes back, the person reads it, and the form
  * saves it with `PATCH /me` — which keeps this a convenience button rather

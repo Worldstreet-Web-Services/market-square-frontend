@@ -82,7 +82,32 @@ export function LocationSheet({ open, onClose }: { open: boolean; onClose: () =>
       if (place.region) setRegion(place.region);
     },
     onError: (error) => {
-      if (errorCode(error) === "NOT_FOUND") {
+      const code = errorCode(error);
+      /*
+        TWO DIFFERENT 404s, AND THEY USED TO BE THE SAME ONE.
+
+        "The provider recognised no place at that point" and "this route does
+        not exist here" were byte-identical on the wire — both a bare 404 with
+        NOT_FOUND — so a misproxied or undeployed endpoint rendered to the
+        reader as a statement about their own city. The service now gives the
+        geography answer its own CODE, and only a provider that actually
+        answered can produce it.
+
+        So: `NO_PLACE_FOUND` is a fact about the SPOT — mid-ocean, a place with
+        no locality — and the control keeps working, because it did work.
+      */
+      if (code === "NO_PLACE_FOUND") {
+        toast("We couldn't name that area — type it in.");
+        return;
+      }
+      /*
+        Any OTHER 404 is the ROUTE, not the location: not deployed here,
+        renamed, or misproxied. The control goes quiet rather than raising an
+        alarm about a capability this deployment simply lacks — the same rule
+        the Arkmark and the houses directory follow — and it never says
+        anything about where the reader is.
+      */
+      if (code === "NOT_FOUND") {
         setGeoUnavailable(true);
         return;
       }
