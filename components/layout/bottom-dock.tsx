@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { LogoMark } from "@/components/ui/wordmark";
+import { SquareMark, type SquareMarkPalette } from "@/components/ui/square-mark";
 import { useUnread } from "@/hooks/use-unread";
 
 /**
@@ -38,6 +38,27 @@ import { useUnread } from "@/hooks/use-unread";
  * `--color-spotlight-chip-ink`, which are the ramp's own two stops rather than
  * a new purple.
  */
+
+/**
+ * THE MARK'S OWN PALETTE IN THIS DOCK — 748:15725, and it is NOT the brand one.
+ *
+ * `SQUARE_MARK_BRAND` runs the card `#7E3BEB` -> `#472185` over a `#7E3BEB`
+ * side. The dock's copy runs it the other way and lighter — `#C19CFE` ->
+ * `#7E3BEB` — and its side is `#2D2D2E`, a near-black grey rather than purple.
+ * Read off the node rather than assumed, because `LogoMark` was rendering the
+ * brand palette here and the difference is plain at a glance: the file's mark
+ * is a pale violet face on a dark edge, ours was a saturated one on a purple
+ * edge.
+ *
+ * The bubble is white over `#D9D9D9`, which is the mark's own two greys.
+ */
+const DOCK_MARK: SquareMarkPalette = {
+  cardA: "#C19CFE",
+  cardB: "#7E3BEB",
+  bubbleA: "#D9D9D9",
+  bubbleB: "#FFFFFF",
+  ink: "#2D2D2E",
+};
 
 interface DockItem {
   href: string;
@@ -92,9 +113,17 @@ export function BottomDock({
       <div className="pointer-events-auto flex items-center gap-2">
         {/* 748:15722 — `#141416` at 47%, fully round, behind a heavy backdrop
             blur and the file's own deep shadow. */}
+        {/* `ws-glass` — the app's own material, not a second one invented here.
+            It is `rgba(20,20,22,0.7)` behind a 16px blur with a 10% white
+            hairline and an inset top highlight, and `#141416` is exactly the
+            colour the file gives this pill. The file's 47% against the
+            utility's 70% is the one difference, and the utility wins: it is
+            what every other floating surface in the app is made of, and a
+            dock a shade more solid than the rest is a new material nobody
+            asked for. */}
         <nav
           aria-label="Primary"
-          className="flex h-[72px] items-center gap-[14px] rounded-full bg-[#141416]/[0.47] px-[18px] shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+          className="ws-glass flex h-[72px] items-center gap-[14px] rounded-full px-[18px] shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)]"
         >
           {items.map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -114,10 +143,36 @@ export function BottomDock({
                   {item.href === "/" ? (
                     // Home is the product's own mark, which we already have as
                     // a component — not a second copy of it as an asset.
-                    <LogoMark className="h-[22px] w-[22px]" />
+                    <SquareMark width={26} palette={DOCK_MARK} className="h-auto w-[26px]" />
                   ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.glyph} alt="" aria-hidden className="h-[25px] w-[25px]" />
+                    /*
+                      MASKED, NOT AN <img>.
+
+                      The exported glyphs carry the file's grey as
+                      `currentColor` so one asset can serve both states — but an
+                      SVG loaded through `<img src>` is a SEPARATE DOCUMENT and
+                      cannot see this page's `color`, so `currentColor` resolved
+                      to its own default and both icons rendered BLACK on a dark
+                      dock. Painting them as a mask puts the colour back under
+                      CSS's control: the shape comes from the file, the ink from
+                      the link's own `text-…`, which is `#9B9B9B` at rest and
+                      white when it is the current page — exactly what 748:15734
+                      and 748:15739 specify.
+                    */
+                    <span
+                      aria-hidden
+                      className="block h-[25px] w-[25px] bg-current"
+                      style={{
+                        maskImage: `url(${item.glyph})`,
+                        WebkitMaskImage: `url(${item.glyph})`,
+                        maskSize: "contain",
+                        WebkitMaskSize: "contain",
+                        maskRepeat: "no-repeat",
+                        WebkitMaskRepeat: "no-repeat",
+                        maskPosition: "center",
+                        WebkitMaskPosition: "center",
+                      }}
+                    />
                   )}
                   {/* 748:15735 — the badge, drawn only when there is a real
                       number behind it. */}
