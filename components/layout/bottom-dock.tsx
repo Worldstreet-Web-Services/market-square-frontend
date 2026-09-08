@@ -94,8 +94,12 @@ export function BottomDock({
       that something is waiting, so an invented one is the worst kind of
       decoration — it sends somebody looking for news that does not exist.
       It appears the day a count does.
+
+      IT POINTS AT THE DECK, NOT AT EXPLORE. The glyph promises deciding about
+      one person at a time; Explore is a directory you scan. `/pals` is the
+      same `MakeSomeFriends` the timeline carries, given a page of its own.
     */
-    { href: "/discover", label: "Pals", glyph: "/notifications/dock-pals.svg", badge: null },
+    { href: "/pals", label: "Pals", glyph: "/notifications/dock-pals.svg", badge: null },
     {
       href: "/messages",
       label: "Chat",
