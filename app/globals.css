@@ -814,29 +814,32 @@ body {
      inside the feed — and they had already drifted apart: the tab bar is a
      69px row, so the shell's 64px bottom padding left content five pixels
      under it on every column surface. */
-  /* THE SHELL'S OUTER CAP — the whole product, sidebar included, and CENTRED.
-     X's frame, and for X's reason: past a point, extra width stops being room
-     and starts being distance. A timeline that keeps widening turns every post
-     into a long line the eye has to track back across, and the right rail
-     drifts away from the column it annotates.
+  /* THE SHELL'S OUTER CAP — X's frame, and centred.
 
-     It was capped at 1600 once and the cap was removed, but the note left
-     behind says why it failed: the slack was "always parked on the right,
-     where it reads as the whole product shoved to one side". That is what a
-     cap with no centring does. The fix is not to stop capping — it is
-     `mx-auto`, so the leftover splits evenly and the frame sits in the middle
-     of the screen instead of against its left edge.
+     Past a point extra width stops being room and becomes distance: a
+     timeline that keeps widening turns every post into a long line the eye
+     has to track back across, and the right rail drifts away from the column
+     it annotates. It was capped at 1600 once and the cap removed, and the note
+     left behind says why that failed — the slack was "always parked on the
+     right". That is what a cap with no centring does. `mx-auto` is the fix.
 
-     1400 is derived, not picked: the profile's own content frame is 805 wide
-     (node 534:16948), the right rail is 371, and the sidebar's default is 224
-     — 805 + 371 + 224 = 1400. So at the default rail every designed surface
-     gets exactly the width it was drawn at, and a wider monitor adds gutters
-     rather than stretching the page. Below 1400 nothing changes at all.
+     1265 IS X's NUMBER, chosen deliberately by ogazboiz over the 1400 this
+     started at, and the difference is worth recording rather than rounding
+     away. X composes 275 + 600 + 350. We compose 224 + column + 371, and our
+     Figma draws its content column at 741 (805 with insets) against X's 600 —
+     so sized to our own design this frame would be 1400, and at 1265 the
+     column lands at 670 instead. Every page built to the file is therefore
+     about a sixth narrower than the frame it was drawn in.
 
-     Published as a variable because the fixed create button has to track the
-     same edge: it is positioned from the viewport, so without this it would
-     sit out in the gutter, detached from the frame it belongs to. */
-  --ws-shell-max: 1400px;
+     That is survivable because almost everything here is FLUID: the profile
+     cover is an aspect ratio, the notification rows and gift grid reflow, and
+     the fixed-width pieces that cannot shrink (the 427 house cards) already
+     live in horizontally scrolling rails. What it costs is that measurements
+     taken from the file will not match a ruler held to the screen.
+
+     Published as a variable because the fixed create button tracks the same
+     edge — measured from the viewport it would sit out in the gutter. */
+  --ws-shell-max: 1265px;
   --ws-topbar-h: 48px;
   /* The desktop breadcrumb bar's height — 76px in node 15:1302, and 0 on a
      phone where the bar is `hidden md:flex`.
