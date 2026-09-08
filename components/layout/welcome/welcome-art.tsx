@@ -98,7 +98,7 @@ export function WelcomeStage({
   /** Rendered in the stage's own 1440x1024 space, over the flat pieces. */
   children?: React.ReactNode;
 }) {
-  return (
+    return (
     /*
       NOT `overflow-hidden`. Clipping here cuts the artwork at the FRAME's edge,
       and the frame is contain-fitted — so on any window wider than 1.41:1 the

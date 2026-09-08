@@ -184,6 +184,44 @@ export async function applyForCreator(note?: string) {
  * budget, because one tap is one request to a third party we neither pay for
  * nor control.
  *
+ * ─── THE 404 IS NO LONGER AMBIGUOUS: BRANCH ON THE CODE, NOT THE STATUS ────
+ * The paragraph above is true wherever the route exists, and WRONG where it
+ * does not: an absent route is also a 404, so the domain answer ("no place
+ * there") and the transport answer ("no such endpoint") arrive wearing one
+ * signal. It is live today — `POST /geo/reverse` is on the service at :8094
+ * and absent from the deployed spec, because the PR that added it merged to
+ * staging while production deploys from main. So in production this reports
+ * "we could not name that spot" about a route nobody ever called.
+ *
+ * FIXED SERVER-SIDE, WHICH IS WHERE IT BELONGED. The no-place answer now
+ * carries its own code — 404 `NO_PLACE_FOUND` — and only a provider that
+ * actually answered can produce it. So the caller switches on the CODE and
+ * the status stops mattering, which is correct on a deployment that is behind
+ * rather than only once the deploy catches up. No client-side probe for the
+ * route's existence was added, and none is needed.
+ *
+ *   404 NO_PLACE_FOUND       the provider knew no place there — a fact about
+ *                            the spot; the control still works
+ *   404 NOT_FOUND            the route is absent, renamed or misproxied — a
+ *                            fault, and never a claim about where somebody is
+ *   502 SERVICE_UNAVAILABLE  we could not ask; a retry, not a location
+ *
+ * `components/layout/location-sheet.tsx` branches on exactly those.
+ *
+ * NOT ON :8094 YET — committed on the backend and deliberately not deployed,
+ * so the running service still answers the old bare NOT_FOUND for BOTH cases.
+ *
+ * THE FAILURE INVERTED RATHER THAN DISAPPEARED, and it is worth knowing which
+ * way round it currently is. Against the old build a genuine no-place also
+ * arrives as bare NOT_FOUND, so it takes the route-fault branch: drop a pin
+ * mid-ocean and the control goes QUIET, instead of saying "type it in". That
+ * is the better way round — it declines to answer rather than telling somebody
+ * a falsehood about their own city — but it is not the finished behaviour.
+ *
+ * So: a dead location control against a no-place pin, before the backend
+ * rebuild, is the OLD build's ambiguity and not a defect in this branch. It
+ * resolves itself the moment the service ships the code, with no change here.
+ *
  * IT WRITES NOTHING. The place comes back, the person reads it, and the form
  * saves it with `PATCH /me` — which keeps this a convenience button rather
  * than the app recording where somebody is.

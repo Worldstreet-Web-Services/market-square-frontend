@@ -39,6 +39,16 @@ const RawProfileSchema = z.object({
   displayName: z.string().nullable().optional().default(null),
   bio: z.string().nullable().optional().default(null),
   avatarUrl: z.string().nullable().optional().default(null),
+  /**
+   * The cover photograph behind the profile header — node 435:27500.
+   *
+   * Optional and nullable because the two environments disagree today: it is
+   * on `PublicProfile` at `:8094` and NOT on the deployed spec, so a client
+   * that required it would fail to parse every profile in production. When it
+   * is absent the cover falls back to the seeded artwork, which is what
+   * shipped before the field existed.
+   */
+  coverUrl: z.string().nullable().optional().default(null),
   role: RoleSchema,
   verification: VerificationSchema,
   orgBadge: OrgBadgeSchema.optional().default(null),
@@ -70,14 +80,13 @@ const RawProfileSchema = z.object({
   /*
     Self-declared place and gender — Explore's people filters.
 
-    NOT ON THE CONTRACT YET. `PublicProfile` carries none of these three today
-    (checked against api.tsionark.com and localhost:8080; the two documents are
-    identical), so they parse to null on every real payload and the filter
-    controls that need them are not rendered at all — `facetAvailability` in
-    `lib/people-filters.ts` reads that from the DATA, so the day the service
-    sends a city the control appears with no code change here. Optional with a
-    null default is the same forward-compatible shape `orgBadge` uses; it is
-    not a claim that the field exists.
+    ON THE CONTRACT NOW, AND THE ENVIRONMENTS DISAGREE. `PublicProfile` carries
+    city, region and gender at :8094, and does NOT on the deployed spec at
+    api.tsionark.com — the PR that added them merged to staging while
+    production deploys from main. So these stay optional with a null default:
+    required, they would fail to parse every profile in production. That is the
+    same forward-compatible shape `orgBadge` uses, and it is not a claim about
+    which environment you are talking to.
 
     THE SHAPE IS THE SAFETY DECISION, and it is deliberate. City and region are
     STRINGS a person typed about themselves. There is no `latitude`, no

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/ui/states";
 import { EmptyPanel, EmptyPanelAction } from "@/components/ui/empty-panel";
 import { IconVoiceMode } from "@/components/ui/room-icons";
 import { useGate } from "@/hooks/use-gate";
+import { useQueryParam } from "@/hooks/use-query-param";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
@@ -129,6 +130,28 @@ export function HousesStreet({
   const gate = useGate();
   const router = useRouter();
   const [opening, setOpening] = useState(false);
+
+  /*
+    `?open=1` OPENS THE SHEET ON ARRIVAL.
+
+    The shell's "Start Gistroom" pointed at `/studio` — the CREATOR studio,
+    which is where you go live, not where you open a room. A gist room needs
+    no creator role and no house to belong to: "anyone can walk in" is what the
+    empty state on this very page promises. So the button lands here and starts
+    one, which is what its label says it does.
+
+    `useQueryParam`, never `useSearchParams`: that one forces a Suspense
+    boundary and delays hydration of this subtree. Fired ONCE via a ref rather
+    than on every render the param survives, so dismissing the sheet does not
+    immediately reopen it while the URL still carries the flag.
+  */
+  const openParam = useQueryParam("open");
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (openParam !== "1" || autoOpened.current) return;
+    autoOpened.current = true;
+    gate(() => setOpening(true));
+  }, [openParam, gate]);
   const [porch, setPorch] = useState<Stream | null>(null);
   /** null is "For you" — every room, unfiltered. */
   const [topic, setTopic] = useState<string | null>(null);

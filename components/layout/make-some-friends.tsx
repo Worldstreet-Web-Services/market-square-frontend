@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
+import { useSwipeCard } from "@/hooks/use-swipe-card";
+import { useFollow, useIsFollowing } from "@/features/profile";
+import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
 import { DeckDots } from "@/components/ui/deck-dots";
 import type { Profile } from "@/lib/api/schemas";
@@ -67,6 +70,30 @@ export function MakeSomeFriends() {
   const me = useMe();
   const people = usePeople("", "followers", true);
   const [index, setIndex] = useState(0);
+
+  /*
+    HOW MUCH ROOM THE FAN ACTUALLY HAS.
+
+    The deck is a fixed 467 and a phone column is around 358, so it used to
+    live in a horizontal scroll. Measured rather than guessed at a breakpoint,
+    because the column's width depends on the shell cap, the sidebar's
+    user-set width and the rail — none of which a media query knows. Capped at
+    1 so it never grows past the file's own size.
+  */
+  const fitRef = useRef<HTMLDivElement | null>(null);
+  const [deckScale, setDeckScale] = useState(1);
+  useEffect(() => {
+    const el = fitRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const room = el.clientWidth;
+      if (room > 0) setDeckScale(Math.min(1, room / 467));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (profile) => profile.id !== me.data?.id
@@ -150,10 +177,41 @@ export function MakeSomeFriends() {
         a fixed 467 and the arrows 56 each, and a phone column is narrower than
         that sum.
       */}
-      <div className="flex items-center justify-center gap-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <DeckArrow direction="prev" disabled={index === 0} onClick={() => step(-1)} />
+      {/*
+        SAME FAN EVERYWHERE — the phone just decides with a HAND.
 
-        <div className="relative flex h-[273px] w-[467px] shrink-0 items-center justify-center">
+        The stack, its placement and its rotations are unchanged; what changes
+        below `md` is that the FRONT card is draggable and the arrows are gone.
+        Right follows, left passes. The two cards behind stay exactly where the
+        file puts them, so the deck still reads as a stack with somewhere to go
+        rather than one card that vanishes.
+
+        THE FAN IS SCALED TO FIT rather than scrolled. It is a fixed 467 and a
+        phone column is ~358, so it used to sit in a horizontal scroll — you
+        scrolled sideways to reach controls the front card was covering.
+        `deckScale` measures the room actually available and shrinks the whole
+        group, which keeps the file's geometry intact instead of rebuilding the
+        fan at a second set of numbers.
+      */}
+      <div ref={fitRef} className="flex items-center justify-center gap-0">
+        <DeckArrow
+          direction="prev"
+          disabled={index === 0}
+          onClick={() => step(-1)}
+          className="hidden md:flex"
+        />
+
+        <div
+          className="relative flex shrink-0 items-center justify-center"
+          style={{
+            width: 467 * deckScale,
+            height: 273 * deckScale,
+          }}
+        >
+         <div
+          className="absolute flex h-[273px] w-[467px] items-center justify-center"
+          style={{ transform: `scale(${deckScale})` }}
+         >
           {window.map((position) => (
             <PersonCard
               key={items[position]!.id}
@@ -162,14 +220,19 @@ export function MakeSomeFriends() {
               shift={recentre}
               onPass={() => step(1)}
               onWinked={() => step(1)}
+              /* Either way the deck moves on: the FOLLOW is sent by the card
+                 itself, and a pass has nothing to send. */
+              onSwipeDecision={() => step(1)}
             />
           ))}
+         </div>
         </div>
 
         <DeckArrow
           direction="next"
           disabled={index >= items.length - 1}
           onClick={() => step(1)}
+          className="hidden md:flex"
         />
       </div>
 
@@ -186,11 +249,14 @@ export function MakeSomeFriends() {
         `-mt-*` because the section's own `gap-6` is the rhythm between the
         heading and the deck, not between the deck and this.
       */}
+      {/* Desktop only: the pills report the ARROWS' position. The swipe deck
+          moves one way and has no "back", so a progress row there would be
+          reporting a journey the reader cannot retrace. */}
       {items.length > 1 && (
         <DeckDots
           count={3}
           active={Math.round((index / (items.length - 1)) * 2)}
-          className="-mt-[18px]"
+          className="-mt-[18px] hidden md:flex"
         />
       )}
     </section>
@@ -202,10 +268,13 @@ function DeckArrow({
   direction,
   disabled,
   onClick,
+  className,
 }: {
   direction: "prev" | "next";
   disabled: boolean;
   onClick: () => void;
+  /** `hidden md:flex` on a phone: the fan is decided with a finger there. */
+  className?: string;
 }) {
   return (
     <button
@@ -218,7 +287,10 @@ function DeckArrow({
          cards rather than the raised front one. Kept per-arrow; the 2px between
          them is the file's own hand. */
       style={{ transform: `translateY(${direction === "prev" ? 21 : 19}px)` }}
-      className="ws-press flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-[0.68px] border-white/40 text-white shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-opacity hover:bg-white/5 disabled:opacity-30"
+      className={cn(
+        "ws-press flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-[0.68px] border-white/40 text-white shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-opacity hover:bg-white/5 disabled:opacity-30",
+        className
+      )}
     >
       {/* One glyph, mirrored for `next` — the file draws the same
           `arrow-left-01-round` in both buttons. */}
@@ -295,6 +367,7 @@ function PersonCard({
   shift,
   onPass,
   onWinked,
+  onSwipeDecision,
 }: {
   profile: Profile;
   offset: number;
@@ -302,9 +375,36 @@ function PersonCard({
   shift: number;
   onPass: () => void;
   onWinked: () => void;
+  /** Fired after a committed drag, once the card has flown. */
+  onSwipeDecision?: (decision: "follow" | "pass") => void;
 }) {
   const front = offset === 0;
   const place = DECK_PLACES[offset] ?? DECK_PLACES[0]!;
+
+  const follow = useFollow(profile);
+  const isFollowing = useIsFollowing(profile);
+  const gate = useGate();
+
+  /*
+    ONLY THE FRONT CARD IS DRAGGABLE. The two behind are `aria-hidden` and
+    already unreachable; giving them a gesture would let somebody follow a
+    person whose face is half-covered by the card in front.
+
+    A FOLLOW IS A REAL ACT AND A PASS IS NOT. Right sends `useFollow` behind
+    the sign-in gate, guarded by `isFollowing` so swiping right on somebody you
+    already follow cannot toggle them OFF — which `mutate(!isFollowing)` would
+    have done. Left tells the service nothing: there is no "dismiss a person"
+    route, and a preference stored in this tab alone is one that lies the
+    moment you open another.
+  */
+  const swipe = useSwipeCard({
+    width: DECK_CARD.width,
+    disabled: !front,
+    onDecide: (decision) => {
+      if (decision === "follow" && !isFollowing) gate(() => follow.mutate(true));
+      onSwipeDecision?.(decision);
+    },
+  });
   /*
     The CARD itself is `PalCard`, shared with the "Suggested Pals" rail —
     it is the same object drawn at two sizes, and two copies of that markup is
@@ -315,12 +415,23 @@ function PersonCard({
   return (
     <div
       aria-hidden={!front}
+      {...(front ? swipe.handlers : {})}
       className={cn(
-        "absolute transition-all duration-300 motion-reduce:transition-none",
+        "absolute",
+        // `pan-y` hands vertical scrolling back to the browser, so the deck can
+        // never trap the timeline it sits inside.
+        front && "touch-pan-y select-none",
+        // No transition WHILE a finger is down, or the card lags the hand.
+        swipe.dragging
+          ? "transition-none"
+          : "transition-all duration-300 motion-reduce:transition-none",
         front ? "z-20" : "z-10"
       )}
       style={{
-        transform: `translate(${place.x + shift}px, ${place.y}px) rotate(${place.rot}deg) scale(${place.scale})`,
+        // The swipe is prepended so it moves in SCREEN space, on top of the
+        // fan's own placement rather than inside it.
+        transform: `${front ? swipe.transform : ""} translate(${place.x + shift}px, ${place.y}px) rotate(${place.rot}deg) scale(${place.scale})`,
+        opacity: swipe.committing ? 0 : 1,
       }}
     >
       <PalCard

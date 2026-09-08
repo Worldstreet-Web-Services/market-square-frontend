@@ -4,7 +4,6 @@ import { cn } from "@/lib/cn";
 import { IconWink } from "@/components/ui/icons";
 import {
   PEOPLE_SORTS,
-  facetAvailability,
   facetValues,
   filterScopeNotes,
   toggleRole,
@@ -25,10 +24,15 @@ import {
  * greyed-out "Location" chip is not honesty, it is an invitation to keep
  * tapping; and a chip that returns nothing is worse still, because a reader
  * who filters for women in Lagos and sees an empty list concludes there are
- * none rather than that nobody was ever asked. So the facets the payload
- * cannot answer are not controls at all — they are one sentence underneath,
- * saying so. `facetAvailability` decides that from the DATA, so the day
- * `PublicProfile` carries a city these appear on their own.
+ * none rather than that nobody was ever asked.
+ *
+ * THAT IS SETTLED NOW: `city`, `region` and `gender` are real parameters on
+ * `GET /profiles` — free text, matched case-insensitively and exactly — so
+ * place and gender are narrowed by the SERVICE and their fields are always
+ * offered. They used to be gated on a loaded profile happening to carry the
+ * value, which hid them exactly when the square was young, and told a reader
+ * who wanted people in Lagos that the square could not narrow by place — never
+ * true of the route.
  *
  * SORT IS SERVER-SIDE and is a different kind of control from the rest, which
  * is why it is a segmented pair rather than another chip: re-sorting one
@@ -69,7 +73,7 @@ function Chip({
         "ws-press h-8 shrink-0 rounded-full border px-3 text-[12px] font-bold leading-4 transition-colors",
         selected
           ? "border-white/60 bg-white/10 text-white"
-          : "border-white/15 text-white/50 hover:border-white/30 hover:text-white/80"
+          : "border-white/15 text-white/50 hover:border-white/30 hover:text-white/80",
       )}
     >
       {children}
@@ -91,9 +95,18 @@ export function PeopleFilters({
   sort: PeopleSort;
   onSortChange: (sort: PeopleSort) => void;
 }) {
-  const available = facetAvailability(people);
-  const genders = available.gender ? facetValues(people, "gender") : [];
-  const notes = filterScopeNotes(available, filter);
+  /*
+    The derived gender values are QUICK PICKS, not the vocabulary.
+
+    `gender` is free text on the service — "self-declared facet, free text
+    rather than an enum" — so there is no list to fetch and a hardcoded one
+    here would be a second source of truth that silently drops anybody whose
+    answer is not on it. What the loaded rows DO carry is offered as chips
+    because tapping beats typing; the field beside them is what makes the facet
+    usable when nothing loaded carries a value yet.
+  */
+  const genders = facetValues(people, "gender");
+  const notes = filterScopeNotes(filter);
 
   return (
     <div className="border-b border-white/8 px-4 pb-3 pt-1">
@@ -120,7 +133,9 @@ export function PeopleFilters({
               onClick={() => onSortChange(entry)}
               className={cn(
                 "ws-press h-7 rounded-full px-3 text-[12px] font-bold leading-4 transition-colors",
-                sort === entry ? "bg-white text-black" : "text-white/50 hover:text-white/80"
+                sort === entry
+                  ? "bg-white text-black"
+                  : "text-white/50 hover:text-white/80",
               )}
             >
               {SORT_LABEL[entry]}
@@ -140,50 +155,88 @@ export function PeopleFilters({
 
         <Chip
           selected={filter.verifiedOnly}
-          onClick={() => onFilterChange({ ...filter, verifiedOnly: !filter.verifiedOnly })}
+          onClick={() =>
+            onFilterChange({ ...filter, verifiedOnly: !filter.verifiedOnly })
+          }
         >
           Verified
         </Chip>
 
         {/*
-          LOCATION and GENDER appear here only when a loaded profile actually
-          carries them. Today `PublicProfile` carries neither, so neither is
-          drawn and the sentence below says why. Nothing in this block needs
-          editing when the backend ships the fields.
+          THE GENDER QUICK PICKS — whatever the loaded rows actually carry.
+
+          These were gated on `available.gender`, so the control vanished
+          whenever no loaded profile had answered — which is most of the time
+          on a young square, and is exactly when somebody might want to narrow.
+          The FIELD below is always there; these are the shortcut.
         */}
-        {available.gender &&
-          genders.map((value) => (
-            <Chip
-              key={value}
-              selected={filter.gender.toLowerCase() === value.toLowerCase()}
-              onClick={() =>
-                onFilterChange({
-                  ...filter,
-                  gender: filter.gender.toLowerCase() === value.toLowerCase() ? "" : value,
-                })
-              }
-            >
-              {value}
-            </Chip>
-          ))}
+        {genders.map((value) => (
+          <Chip
+            key={value}
+            selected={filter.gender.toLowerCase() === value.toLowerCase()}
+            onClick={() =>
+              onFilterChange({
+                ...filter,
+                gender:
+                  filter.gender.toLowerCase() === value.toLowerCase()
+                    ? ""
+                    : value,
+              })
+            }
+          >
+            {value}
+          </Chip>
+        ))}
       </div>
 
-      {available.location && (
-        <label className="ws-field mt-2 flex h-9 items-center gap-2 px-3.5">
+      {/*
+        PLACE AND GENDER ARE ALWAYS OFFERED, because the SERVICE answers them.
+
+        Both were gated on a loaded profile happening to carry the field, so
+        both disappeared exactly when the square was young — and a reader who
+        wanted people in Lagos was told the square could not narrow by place,
+        which was never true of the route. `GET /profiles` takes `city`,
+        `region` and `gender` as free text, matched case-insensitively and
+        exactly, composing with each other and with `q`.
+
+        Free text is why these are FIELDS rather than a fixed set of chips: the
+        vocabulary belongs to the service and to the person describing
+        themselves, and a list written here would silently drop anyone whose
+        answer is not on it.
+      */}
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <label className="ws-field flex h-9 flex-1 items-center gap-2 px-3.5">
           <span className="sr-only">Filter people by city or region</span>
           <input
             value={filter.location}
-            onChange={(event) => onFilterChange({ ...filter, location: event.target.value })}
+            onChange={(event) =>
+              onFilterChange({ ...filter, location: event.target.value })
+            }
             /* City or region, never a distance. See `lib/people-filters.ts`. */
             placeholder="City or region"
             autoComplete="off"
             className="min-w-0 flex-1 bg-transparent text-[13px] text-heading outline-none"
           />
         </label>
-      )}
+
+        <label className="ws-field flex h-9 flex-1 items-center gap-2 px-3.5">
+          <span className="sr-only">Filter people by gender</span>
+          <input
+            value={filter.gender}
+            onChange={(event) =>
+              onFilterChange({ ...filter, gender: event.target.value })
+            }
+            placeholder="Gender"
+            autoComplete="off"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-heading outline-none"
+          />
+        </label>
+      </div>
 
       {notes.length > 0 && (
-        <p className="pt-2 text-[11px] leading-4 text-meta">{notes.join(" ")}</p>
+        <p className="pt-2 text-[11px] leading-4 text-meta">
+          {notes.join(" ")}
+        </p>
       )}
     </div>
   );

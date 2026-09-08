@@ -170,10 +170,9 @@ export function DiscoverScreen() {
     seeing rather than papering over.
 
     Kept SEPARATE from `loadedPeople` on purpose: the filter bar reads the
-    unfiltered rows to decide which facets the payload can even answer
-    (`facetAvailability`), and feeding it the filtered list would make a control
-    vanish the moment it excluded everything that carried the field it was
-    filtering on.
+    UNFILTERED rows to build its gender quick-picks, and feeding it the
+    filtered list would make a chip vanish the moment it excluded everything
+    that carried the value it was filtering on.
   */
   const directoryPeople = useMemo(
     () => filterPeople(loadedPeople, { ...peopleFilter, location: "", gender: "" }),

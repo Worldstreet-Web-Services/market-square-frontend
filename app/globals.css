@@ -814,6 +814,32 @@ body {
      inside the feed — and they had already drifted apart: the tab bar is a
      69px row, so the shell's 64px bottom padding left content five pixels
      under it on every column surface. */
+  /* THE SHELL'S OUTER CAP — X's frame, and centred.
+
+     Past a point extra width stops being room and becomes distance: a
+     timeline that keeps widening turns every post into a long line the eye
+     has to track back across, and the right rail drifts away from the column
+     it annotates. It was capped at 1600 once and the cap removed, and the note
+     left behind says why that failed — the slack was "always parked on the
+     right". That is what a cap with no centring does. `mx-auto` is the fix.
+
+     1265 IS X's NUMBER, chosen deliberately by ogazboiz over the 1400 this
+     started at, and the difference is worth recording rather than rounding
+     away. X composes 275 + 600 + 350. We compose 224 + column + 371, and our
+     Figma draws its content column at 741 (805 with insets) against X's 600 —
+     so sized to our own design this frame would be 1400, and at 1265 the
+     column lands at 670 instead. Every page built to the file is therefore
+     about a sixth narrower than the frame it was drawn in.
+
+     That is survivable because almost everything here is FLUID: the profile
+     cover is an aspect ratio, the notification rows and gift grid reflow, and
+     the fixed-width pieces that cannot shrink (the 427 house cards) already
+     live in horizontally scrolling rails. What it costs is that measurements
+     taken from the file will not match a ruler held to the screen.
+
+     Published as a variable because the fixed create button tracks the same
+     edge — measured from the viewport it would sit out in the gutter. */
+  --ws-shell-max: 1265px;
   --ws-topbar-h: 48px;
   /* The desktop breadcrumb bar's height — 76px in node 15:1302, and 0 on a
      phone where the bar is `hidden md:flex`.
@@ -832,7 +858,10 @@ body {
      one. Declared here so anything reading it renders correctly before that
      component has mounted, and after it unmounts. */
   --ws-house-head-h: 0px;
-  --ws-nav-h: calc(env(safe-area-inset-bottom, 0px) + 69px);
+  /* ROOM FOR THE DOCK on a phone. It was 69 for the tab bar that used to live
+     here; `BottomDock` is 72 tall, sits 24 above the safe area, and wants 16
+     of air under the last post. */
+  --ws-nav-h: calc(env(safe-area-inset-bottom, 0px) + 112px);
   --ws-fab-bottom: calc(env(safe-area-inset-bottom, 0px) + 81px);
   /* Clear of the create button entirely: its 71px hit frame sits on top of
      --ws-fab-bottom, so anything sharing the right edge starts above that.
@@ -851,7 +880,13 @@ body {
     --ws-home-reels-chrome: 134px;
     --ws-topbar-h: 0px;
     --ws-crumb-h: 76px;
-    --ws-nav-h: 0px;
+    /* ROOM FOR THE DOCK. This was 0 because desktop had no bottom chrome — the
+       nav was a sidebar. `BottomDock` (748:15721) floats over the foot of every
+       page now, so without this the last post on a scrolled page sits
+       underneath it and cannot be read or reached.
+
+       72 for the dock, 24 for its inset from the bottom, and 16 of air. */
+    --ws-nav-h: 112px;
     --ws-fab-bottom: 33px;
     --ws-fab-clearance: 33px;
   }
@@ -1090,7 +1125,19 @@ body {
   animation: ws-splash-palette 3.3s forwards;
 }
 
+/* THE MARK MUST FIT THE PHONE IT IS ON.
+
+   It rendered at a flat 583.54px, which is 50% wider than a 390px handset —
+   and the splash is `overflow-hidden`, so the logo was simply CROPPED at full
+   scale on every phone. The first thing anybody sees, cut off at both edges.
+
+   `min()` keeps the design's width wherever there is room for it and falls
+   back to a share of the viewport where there is not. 78vw rather than 100
+   because the mark is a logo with air around it, not a banner. The animation
+   is untouched: it scales a transform, so it works against whatever width
+   this resolves to. */
 .ws-splash-mark {
+  width: min(583.54px, 78vw);
   animation: ws-splash-mark 3.3s forwards;
   transform: scale(0.30166);
   will-change: transform;
@@ -1126,9 +1173,143 @@ body {
   top: 50%;
   translate: -50% -50%;
   width: 100%;
-  min-width: calc(100dvh * 1440 / 1024);
+  /* COVER, BUT NOT AT ANY PRICE.
+
+     `calc(100dvh * 1440/1024)` is the width a full-height 1440x1024 picture
+     needs, and on a wide window it is smaller than the window so `width: 100%`
+     wins and nothing happens. On a TALL, NARROW one it is enormous: a 390x844
+     phone asks for 1187px, a stage 204% wider than the screen, so the card
+     that is the subject of screen one gets cropped through the middle — a face
+     half off the left edge and the last chip cut off the right.
+
+     Cover was reasoned about as though the subject sat in the middle and only
+     scatter reached the rim. That is not what screen one is: `GistCard` is
+     `absolute inset-0`, so it IS the stage rather than something inside it,
+     and any overflow at all crops it through the middle — a face half off the
+     left edge and the last chip cut off the right.
+
+     So the stage may bleed vertically but never horizontally. Capped at 100vw
+     it is exactly as wide as the window, which is the widest it can be with
+     the whole subject on screen.
+
+     Desktop is untouched where it was already correct: at 1440x900 the cover
+     width is 1266 and at 1280x700 it is 984, both smaller than the window, so
+     `width: 100%` already won and `min()` changes nothing. What DOES change is
+     a tall desktop window — 1440x1200 asked for 1688 and cropped the card the
+     same way a phone did. */
+  min-width: min(calc(100dvh * 1440 / 1024), 100vw);
   aspect-ratio: 1440 / 1024;
 }
+
+/* The stepper-to-headline gap. The file's own number wherever the frame is
+   scaled; capped on a phone by the media query above. */
+.ws-welcome-head {
+  margin-top: var(--ws-dots-gap, 0px);
+}
+
+/* The art band. Flexible where the frame scales (it is the only give the
+   design has), fixed where it reflows. */
+.ws-welcome-art-gap {
+  min-height: 180px;
+  flex: 1 1 0%;
+}
+
+/* Holds the two buttons at the foot on a reflowed screen. Absent otherwise:
+   on a scaled frame the art gap above is already the flexible one, and a
+   second spring would fight it for the same pixels. */
+.ws-welcome-spring {
+  display: none;
+}
+
+/* ─── THE REFLOWED (TALL) LAYOUT ──────────────────────────────────────────────
+   These three rules apply on exactly the screens `WelcomeFrame` does NOT scale
+   — anything taller than the design's own 1440:1024 — which is a phone, a
+   tablet upright, and nothing else. Matched on the aspect ratio rather than a
+   width, for the same reason the frame is: the failure was never about width.
+
+   WHAT THEY FIX. The column is lockup, a flexible gap, then stepper, headline,
+   copy and buttons. On a tall screen that ONE flexible gap took every spare
+   pixel, so a phone showed the wordmark, then ~450px of nothing, then
+   everything else crammed into the bottom half — and the artwork, which is
+   centred on the viewport, sat marooned in the middle of the emptiness.
+
+   So on those screens the spare space moves to the FOOT of the column: the art
+   gap becomes a fixed band, the content packs up under it, and a spring before
+   the buttons holds them against the bottom edge where they were. The stage
+   rises with the content it belongs to. */
+@media (max-aspect-ratio: 1440 / 1024) {
+  :root {
+    /* THE ART BAND, MEASURED RATHER THAN GUESSED.
+       All three numbers below come from measuring the rendered stage at 390,
+       because the stage and the PICTURE INSIDE IT are not the same size: the
+       artwork occupies 64% of the stage's width and 44% of its height, sitting
+       slightly above centre. Sizing the band to the STAGE (which is what the
+       first attempt did) therefore reserved half a screen of empty margin and
+       pushed the copy miles below the card.
+
+       --ws-stage-w  how wide the picture is allowed to get. 130vw makes the
+                     card 83% of the screen instead of 52%. The ceiling is
+                     ~135vw: past that the artwork's left edge crosses zero and
+                     starts cropping again, which is the bug this all began
+                     with. 130 leaves a little room and is not a coincidence.
+       0.55          the band's share of the stage height — comfortably more
+                     than the art's own 44%, so the scatter around the card
+                     still has somewhere to be.
+       0.087         how far the art's centre sits ABOVE the stage's. Without
+                     this the picture rides up out of the band and touches the
+                     wordmark. */
+    --ws-stage-w: min(calc(100dvh * 1440 / 1024), 130vw);
+    --ws-stage-h: calc(var(--ws-stage-w) / 1.40625);
+    /* The column's pt-10 (40) + the wordmark (54), then 84 of air so the card
+       sits clearly below the header rather than under its shoulders. The two
+       numbers below must stay in step: this one centres the STAGE on the band,
+       and the band's own `margin-top` is what actually creates the gap. */
+    --ws-art-band-top: 178px;
+    /* A share of the stage height, NOT the measured picture.
+
+       It was measured for a while, and that is what broke screen two: the fan
+       of pals is drawn 188% of the stage wide because THE FILE RUNS THOSE
+       CARDS OFF THE EDGE ON PURPOSE. Measuring it and then shrinking the stage
+       until it fitted turned a deliberate full-bleed arc into a row of
+       thumbnails. A composition that is meant to overflow must be allowed to.
+       0.55 is comfortably more than the 44% screen one's card occupies. */
+    --ws-art-band-h: calc(var(--ws-stage-h) * 0.55);
+  }
+  .ws-welcome-stage {
+    min-width: var(--ws-stage-w);
+    /* NOT scaled to fit. The stage may be wider than the phone and the art may
+       bleed past both edges — that is the design on screen two, and the screen
+       wrapper clips it. What the width cap above guarantees is only that
+       screen one's CARD, which is the subject rather than scatter, is not cut
+       through the middle. */
+    top: calc(
+      var(--ws-art-band-top) + var(--ws-art-band-h) / 2 + var(--ws-stage-h) * 0.087
+    );
+  }
+  .ws-welcome-art-gap {
+    flex: 0 0 auto;
+    min-height: var(--ws-art-band-h);
+    /* Air between the wordmark and the picture. The band's own top comes from
+       flow — the column's pt-10 plus the wordmark — so this is what actually
+       creates the gap, and `--ws-art-band-top` above carries the same 84 so
+       the stage stays centred on the band it was given. */
+    margin-top: 84px;
+  }
+  .ws-welcome-spring {
+    display: block;
+    flex: 1 1 0%;
+  }
+  /* The file's gap between the stepper and the headline, capped. Screen 2 sets
+     82 against screen 1's 23 and screen 3's 14 — at the design's own scale that
+     is deliberate air, but on a phone the artwork above has already shrunk to
+     fit and the same 82 becomes a hole. Capped rather than replaced, so the
+     two screens already under the cap keep the file's number exactly. */
+  .ws-welcome-head {
+    margin-top: min(var(--ws-dots-gap, 0px), 30px);
+  }
+}
+
+
 
 /* The primary CTA. Its stops are the purple ramp's two ends — the SAME tokens
    ws-btn-create uses — but the file gives this control 90deg where the compose
@@ -1165,6 +1346,26 @@ body {
   background-origin: border-box;
   background-clip: padding-box, border-box;
   color: #3c3c3c;
+}
+
+/* THE KASH BALANCE CARD — node 432:25745.
+
+   GOLD, and this is the one meaning gold is allowed to carry. The standing
+   rule is that `--color-coin` is the only gold left and that it means MONEY;
+   this card is a KASH balance, so it is precisely the sanctioned case rather
+   than an exception to it. It is a utility so the gradient cannot be pasted
+   onto a surface that is not currency.
+
+   Three stops, the file's own: `#AC6803` -> `#F7D535` at 32.5% -> `#AD6803`.
+   The handles run (0, 0.084) to (1, 0.921) across a 741x112 box, which is 97deg
+   in CSS terms, not the 90 it looks like.
+
+   The file lays a 5% tiled texture over it as a third fill. It is not drawn:
+   the asset is a repeating noise tile whose entire contribution at 5% on a
+   gold ground is invisible at this size, and carrying an image for it would
+   cost a request to render nothing. */
+@utility ws-kash-card {
+  background: linear-gradient(97deg, #ac6803 0%, #f7d535 32.5%, #ad6803 100%);
 }
 
 @utility ws-btn-welcome {

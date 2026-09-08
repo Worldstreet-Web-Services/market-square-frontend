@@ -112,7 +112,10 @@ export function SplashScreen() {
         Loading Market Square
       </span>
       <div aria-hidden className="ws-splash-mark">
-        <SquareMark width={583.54} palette={SPLASH_PALETTE} />
+        {/* `w-full h-auto` so the CSS width above wins over the SVG's own
+            width/height attributes and the viewBox keeps the ratio. The number
+            stays as the intrinsic size for the case where it fits. */}
+        <SquareMark width={583.54} palette={SPLASH_PALETTE} className="h-auto w-full" />
       </div>
     </div>
   );

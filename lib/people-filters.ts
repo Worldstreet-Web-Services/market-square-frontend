@@ -18,13 +18,14 @@
  *                       PAGES ALREADY LOADED. Say so at the call site; a
  *                       reader who thinks they filtered the whole directory
  *                       and got four people has been misled.
- *   NOT SHIPPED         location and gender. They are not rendered as
- *                       controls, because a control that cannot act is worse
- *                       than an admitted gap — it teaches the reader the
- *                       square has no women in Lagos when it has never been
- *                       asked. `facetAvailability` decides that at RUNTIME
- *                       from the data, so the day the backend adds the fields
- *                       the controls appear with no code change here.
+ *   SERVER-SIDE         location and gender, and `q`. `GET /profiles` takes
+ *                       `city`, `region` and `gender` as FREE TEXT, matched
+ *                       case-insensitively and exactly, composing with each
+ *                       other. They were once gated on a loaded profile
+ *                       carrying the value, which hid them exactly when the
+ *                       square was young and told a reader who wanted people
+ *                       in Lagos that it could not narrow by place — never
+ *                       true of the route. Their fields are always offered.
  *
  * WHAT THE BACKEND NEEDS, precisely:
  *   1. `PublicProfile.city: string | null` and `PublicProfile.region: string
@@ -79,24 +80,6 @@ export const EMPTY_PEOPLE_FILTER: PeopleFilter = {
 
 const norm = (value: string | null | undefined) => (value ?? "").trim().toLowerCase();
 
-/**
- * Which facets the loaded rows can actually answer.
- *
- * Derived from the DATA, not from a feature flag, so this file never has to be
- * edited again when the backend catches up: the first payload carrying a
- * `city` turns the location control on by itself. Role and verification are on
- * every row by contract, so they are always available — including for an empty
- * list, where hiding the controls would make an empty result look like a
- * broken page rather than an empty one.
- */
-export function facetAvailability(people: FilterablePerson[]): Record<PeopleFacet, boolean> {
-  return {
-    role: true,
-    verified: true,
-    location: people.some((person) => norm(person.city) !== "" || norm(person.region) !== ""),
-    gender: people.some((person) => norm(person.gender) !== ""),
-  };
-}
 
 /**
  * The distinct values present for a facet, sorted, for building chips.
@@ -178,30 +161,30 @@ export function toggleRole(filter: PeopleFilter, role: string): PeopleFilter {
 /**
  * The sentence under the controls.
  *
- * Two separate admissions, and neither may be dropped for being wordy:
- *   - what we CANNOT filter by at all, named so the reader does not go looking
- *   - that what we CAN filter by only sees the pages loaded so far
- * Returns the parts rather than a formatted string so the caller can style the
- * two halves; an empty array means there is nothing to admit.
+ * ONE admission now, not two, and the one that went is the interesting part.
+ *
+ * It used to lead with what could not be filtered at all — "gender isn't on a
+ * profile yet, so the square can't narrow by it" — a claim about the SCHEMA
+ * drawn from an observation about VALUES: it could only see whether the loaded
+ * rows carried a gender, and "nobody has filled this in" is a different fact
+ * from "the service has no such field".
+ *
+ * Both are now moot: `city`, `region` and `gender` are real parameters on
+ * `GET /profiles` — free text, matched case-insensitively and exactly — so
+ * place and gender are narrowed by the SERVICE and their controls are always
+ * offered. There is nothing left to apologise for on that front.
+ *
+ * What remains true is that ROLE and VERIFIED are matched here, over the pages
+ * loaded so far, because the route has no parameter for either. So the note
+ * fires for those and only those: saying "these narrow the people already
+ * loaded" while the active filter is a server-side one would be describing a
+ * limitation that does not apply to it.
  */
-export function filterScopeNotes(
-  available: Record<PeopleFacet, boolean>,
-  filter: PeopleFilter
-): string[] {
-  const notes: string[] = [];
-  const missing = [
-    available.location ? null : "Location",
-    available.gender ? null : "gender",
-  ].filter(Boolean) as string[];
-  if (missing.length > 0) {
-    notes.push(
-      `${missing.join(" and ")} ${missing.length > 1 ? "aren't" : "isn't"} on a profile yet, so the square can't narrow by ${missing.length > 1 ? "them" : "it"}.`
-    );
-  }
-  if (isFiltering(filter)) {
-    notes.push("These narrow the people already loaded — keep scrolling for more.");
-  }
-  return notes;
+export function filterScopeNotes(filter: PeopleFilter): string[] {
+  const clientSide = filter.roles.length > 0 || filter.verifiedOnly;
+  return clientSide
+    ? ["Role and Verified narrow the people already loaded — keep scrolling for more."]
+    : [];
 }
 
 /** The two orderings `GET /profiles` documents. Never a client-side re-sort. */

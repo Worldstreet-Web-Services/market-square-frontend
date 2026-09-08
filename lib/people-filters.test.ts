@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
   EMPTY_PEOPLE_FILTER,
   activeFilterCount,
-  facetAvailability,
   facetValues,
   filterPeople,
   filterScopeNotes,
@@ -99,40 +98,8 @@ test("gender matches exactly, not as a substring", () => {
   assert.equal(matchesPeopleFilter(woman, { ...EMPTY_PEOPLE_FILTER, gender: "man" }), false);
 });
 
-test("facet availability is read from the data, not from a flag", () => {
-  // Today's PublicProfile carries neither field, so both are unavailable and
-  // the controls are not rendered at all. The day a payload carries a city,
-  // this turns the control on with no code change.
-  const today = [person(), person({ role: "creator" })];
-  assert.deepEqual(facetAvailability(today), {
-    role: true,
-    verified: true,
-    location: false,
-    gender: false,
-  });
 
-  const tomorrow = [person({ city: "Lagos" }), person({ gender: "Woman" })];
-  assert.deepEqual(facetAvailability(tomorrow), {
-    role: true,
-    verified: true,
-    location: true,
-    gender: true,
-  });
-});
 
-test("blank strings do not count as a facet arriving", () => {
-  // A backend that adds the column and sends "" for everyone has not shipped
-  // the feature, and an empty control would be worse than none.
-  assert.equal(facetAvailability([person({ city: "  ", region: "", gender: "" })]).location, false);
-  assert.equal(facetAvailability([person({ gender: "  " })]).gender, false);
-});
-
-test("role and verification stay available for an empty list", () => {
-  // Hiding the controls when nothing loaded would make an empty result look
-  // like a broken page rather than an empty one.
-  assert.equal(facetAvailability([]).role, true);
-  assert.equal(facetAvailability([]).verified, true);
-});
 
 test("gender chips come from the values that actually arrived", () => {
   // No vocabulary is written down here: the service's values are the only
@@ -154,30 +121,46 @@ test("toggling a role adds then removes it", () => {
   assert.deepEqual(toggleRole(once, "creator").roles, []);
 });
 
-test("the scope note names what is missing and that filtering is page-scoped", () => {
-  const none = { role: true, verified: true, location: false, gender: false };
-  assert.deepEqual(filterScopeNotes(none, EMPTY_PEOPLE_FILTER), [
-    "Location and gender aren't on a profile yet, so the square can't narrow by them.",
+test("the scope note fires only for the CLIENT-SIDE facets", () => {
+  /*
+    Role and Verified have no parameter on GET /profiles, so they are matched
+    over the pages loaded so far and the reader has to be told. Place and
+    gender do have parameters — free text, matched server-side — so saying
+    "these narrow the people already loaded" while one of THOSE is active would
+    describe a limitation that does not apply to it.
+  */
+  assert.deepEqual(filterScopeNotes(EMPTY_PEOPLE_FILTER), []);
+  assert.deepEqual(filterScopeNotes({ ...EMPTY_PEOPLE_FILTER, verifiedOnly: true }), [
+    "Role and Verified narrow the people already loaded — keep scrolling for more.",
   ]);
-  assert.deepEqual(filterScopeNotes(none, { ...EMPTY_PEOPLE_FILTER, verifiedOnly: true }), [
-    "Location and gender aren't on a profile yet, so the square can't narrow by them.",
-    "These narrow the people already loaded — keep scrolling for more.",
-  ]);
-});
-
-test("the missing-facet note disappears when the backend ships the fields", () => {
-  const all = { role: true, verified: true, location: true, gender: true };
-  assert.deepEqual(filterScopeNotes(all, EMPTY_PEOPLE_FILTER), []);
-  assert.deepEqual(filterScopeNotes(all, { ...EMPTY_PEOPLE_FILTER, location: "Lagos" }), [
-    "These narrow the people already loaded — keep scrolling for more.",
+  assert.deepEqual(filterScopeNotes({ ...EMPTY_PEOPLE_FILTER, roles: ["creator"] }), [
+    "Role and Verified narrow the people already loaded — keep scrolling for more.",
   ]);
 });
 
-test("one missing facet reads as singular", () => {
-  const half = { role: true, verified: true, location: true, gender: false };
-  assert.deepEqual(filterScopeNotes(half, EMPTY_PEOPLE_FILTER), [
-    "gender isn't on a profile yet, so the square can't narrow by it.",
-  ]);
+test("a server-side facet alone says nothing about loaded pages", () => {
+  assert.deepEqual(filterScopeNotes({ ...EMPTY_PEOPLE_FILTER, location: "Lagos" }), []);
+  assert.deepEqual(filterScopeNotes({ ...EMPTY_PEOPLE_FILTER, gender: "female" }), []);
+});
+
+test("no note ever claims the service lacks a field it has", () => {
+  /*
+    The sentence this replaced read "gender isn't on a profile yet, so the
+    square can't narrow by it" — a claim about the SCHEMA inferred from whether
+    the loaded rows carried a value. PublicProfile carries `gender` and
+    /profiles accepts it, so that was telling readers the product lacked
+    something it has.
+  */
+  const everything = {
+    ...EMPTY_PEOPLE_FILTER,
+    roles: ["creator"],
+    verifiedOnly: true,
+    location: "Lagos",
+    gender: "female",
+  };
+  for (const note of filterScopeNotes(everything)) {
+    assert.doesNotMatch(note, /isn't on a profile|aren't on a profile|can't narrow/);
+  }
 });
 
 test("sort accepts only the two orderings the route documents", () => {

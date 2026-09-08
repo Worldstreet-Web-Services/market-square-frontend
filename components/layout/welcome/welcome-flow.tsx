@@ -125,8 +125,54 @@ function Headline({
         ...style,
       }}
     >
-      <span className="[-webkit-text-fill-color:#fff]">{white}</span>
-      {accent}
+      {/*
+        THE SEAM BETWEEN THE TWO COLOURS MUST NOT BREAK.
+
+        Screen one is white "Join live Gist " followed by accent
+        "Rooms\nConversations", and the file sets its box at 468. On a 390
+        phone "Join live Gist Rooms" does not fit, so the line broke at the
+        last space that did — between "Gist" and "Rooms" — and the product's
+        own name came out as "Join live Gist / Rooms / Conversations", split
+        down the middle across a colour change.
+
+        The words either side of that seam belong together on every screen, not
+        just this one: "Gist Rooms", "Real Pals". So the last word of the white
+        part and the first word of the accent are welded into one `nowrap`
+        span, and the line breaks BEFORE the pair instead of through it. The
+        two keep their own colours inside it.
+
+        Skipped when the accent opens with the file's own newline (screen 3),
+        because there the break is deliberate and there is no seam to protect.
+      */}
+      {(() => {
+        const joins = !accent.startsWith("\n");
+        if (!joins) {
+          return (
+            <>
+              <span className="[-webkit-text-fill-color:#fff]">{white}</span>
+              {accent}
+            </>
+          );
+        }
+        // `white` ends in a space, so the last word is the one before it.
+        const whiteWords = white.split(" ");
+        const lastWhite = whiteWords.filter(Boolean).pop() ?? "";
+        const whiteHead = white.slice(0, white.lastIndexOf(lastWhite));
+        const breakAt = accent.indexOf("\n");
+        const firstAccentEnd = accent.indexOf(" ") === -1 ? breakAt : Math.min(...[accent.indexOf(" "), breakAt].filter((n) => n > -1));
+        const firstAccent = firstAccentEnd > -1 ? accent.slice(0, firstAccentEnd) : accent;
+        const accentTail = firstAccentEnd > -1 ? accent.slice(firstAccentEnd) : "";
+        return (
+          <>
+            <span className="[-webkit-text-fill-color:#fff]">{whiteHead}</span>
+            <span className="whitespace-nowrap">
+              <span className="[-webkit-text-fill-color:#fff]">{lastWhite} </span>
+              {firstAccent}
+            </span>
+            {accentTail}
+          </>
+        );
+      })()}
     </h1>
   );
 }
@@ -352,10 +398,11 @@ export function WelcomeScreen({
           style={{ ["--ws-pad-b" as string]: `${screen.padBottom}px` }}
         >
           <SquareLockup className="[--lockup-mark:72px] @lg:[--lockup-mark:103.1px]" />
-          {/* The artwork lives in this gap. It is the only flexible space on the
-              screen, so the bottom stack keeps the file's rhythm at every
-              height instead of drifting with the viewport. */}
-          <div className="min-h-[180px] flex-1" />
+          {/* The artwork lives in this gap. On a scaled frame it is the only
+              flexible space, so the bottom stack keeps the file's rhythm at
+              every height; on a reflowed one it is a fixed band and the give
+              moves to `ws-welcome-spring` below. See globals.css. */}
+          <div className="ws-welcome-art-gap" />
           <Stepper step={step} />
           {/* `whitespace-pre-line` because the file's own line breaks are part
               of the headline and the copy — screen 3 breaks its two clauses
@@ -364,8 +411,13 @@ export function WelcomeScreen({
             white={screen.headline[0]}
             accent={screen.headline[1]}
             boxWidth={screen.headWidth}
-            className={screen.headlineClass}
-            style={{ marginTop: screen.dotsGap }}
+            className={cn("ws-welcome-head", screen.headlineClass)}
+            /* The file's own gap under the stepper, CAPPED on a phone — see
+               `.ws-welcome-head` in globals.css. Screen 2's is 82 against
+               screen 1's 23 and screen 3's 14, and at desktop scale that reads
+               as deliberate air; at phone scale it is a hole between the dots
+               and the headline. */
+            style={{ ["--ws-dots-gap" as string]: `${screen.dotsGap}px` }}
           />
           <p
             className={cn(SUB, "whitespace-pre-line")}
@@ -373,6 +425,9 @@ export function WelcomeScreen({
           >
             {screen.sub}
           </p>
+          {/* Reflowed screens only — holds the pair against the bottom edge
+              while everything above packs up under the wordmark. */}
+          <div className="ws-welcome-spring" />
           <div
             className="flex w-full max-w-[440px] flex-col gap-[13px]"
             style={{ marginTop: screen.buttonsGap }}
