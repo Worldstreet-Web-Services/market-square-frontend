@@ -148,11 +148,22 @@ describe("the create button is rendered once, fixed, in the shell", () => {
     }
   });
 
-  it("is mounted OUTSIDE <main>, so no route's content can move it", () => {
+  it("the shell's desktop compose is mounted OUTSIDE <main>", () => {
+    /*
+      This asserted `<CreateFab` specifically. The desktop compose control is
+      the DOCK's circle now — `BottomDock` (748:15721) replaced both the
+      sidebar and the floating button, because two plus buttons a few pixels
+      apart is what mounting both would be.
+
+      The invariant is unchanged and is the one that mattered: whatever carries
+      compose must sit outside `<main>`, or it inherits that element's
+      containing block and a route's content can move it. That was the original
+      bug — a `sticky` copy inside `<main>` that stranded on short routes.
+    */
     const code = stripComments(shell);
-    const mount = code.indexOf("<CreateFab");
+    const mount = code.indexOf("<BottomDock");
     const mainClose = code.indexOf("</main>");
-    assert.ok(mount > -1, "the shell must mount it");
+    assert.ok(mount > -1, "the shell must mount the dock");
     assert.ok(
       mount > mainClose,
       "mounted inside <main> it inherits that element's containing block again"

@@ -877,7 +877,13 @@ body {
     --ws-home-reels-chrome: 134px;
     --ws-topbar-h: 0px;
     --ws-crumb-h: 76px;
-    --ws-nav-h: 0px;
+    /* ROOM FOR THE DOCK. This was 0 because desktop had no bottom chrome — the
+       nav was a sidebar. `BottomDock` (748:15721) floats over the foot of every
+       page now, so without this the last post on a scrolled page sits
+       underneath it and cannot be read or reached.
+
+       72 for the dock, 24 for its inset from the bottom, and 16 of air. */
+    --ws-nav-h: 112px;
     --ws-fab-bottom: 33px;
     --ws-fab-clearance: 33px;
   }

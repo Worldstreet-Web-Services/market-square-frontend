@@ -14,7 +14,7 @@ import {
   toggleRail,
 } from "@/lib/sidebar-rail";
 import { useRailState } from "@/lib/sidebar-rail-store";
-import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
+import { allowsCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -42,7 +42,7 @@ import {
 import { LocationSheet } from "@/components/layout/location-sheet";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { RightRail } from "@/components/layout/right-rail";
-import { CreateFab } from "@/components/layout/create-fab";
+import { BottomDock } from "@/components/layout/bottom-dock";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
@@ -732,7 +732,16 @@ function RailHandle({
   );
 }
 
-function Sidebar({
+/**
+ * THE LABELLED DESKTOP RAIL — kept, and no longer mounted.
+ *
+ * `BottomDock` replaced it outright on desktop (748:15721). This is exported
+ * rather than deleted because the decision is a product one and reversible in
+ * a line: mount it back in `AppShell` and the eleven destinations return. Its
+ * behaviour — the drag-to-resize, the icon collapse, the unread badges — is
+ * intact and tested.
+ */
+export function Sidebar({
   pathname,
   onCompose,
 }: {
@@ -1622,20 +1631,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         rail without moving it would leave a guest on desktop with no sign-in
         anywhere.
       */}
-        {!guest && (
-          <Sidebar
-            pathname={pathname}
-            /* The RAIL's own rule, not the floating button's — see
-             `allowsRailCompose`. Sharing `canCompose` took Post gist off the
-             sidebar on /messages, /admin and /operations, none of which is a
-             reason the rail's button should go. */
-            onCompose={
-              authenticated && allowsRailCompose(pathname)
-                ? () => setComposeOpen(true)
-                : undefined
-            }
-          />
-        )}
+        {/*
+          NO SIDEBAR ON DESKTOP — replaced outright by `BottomDock`
+          (748:15721), at ogazboiz's instruction and with the consequence
+          accepted: the rail carried ELEVEN destinations and the dock carries
+          three.
+
+          Gistrooms, Notifications, Live, Library, Store, Studio, Admin and
+          Operations are no longer linked from any desktop screen. Every route
+          still works and every deep link still resolves — nothing was deleted
+          — and a phone still lists the whole nav in the tab bar's More drawer.
+          Putting `Sidebar` back here is the whole of the reversal.
+        */}
 
         {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
           and the two things worth reaching from anywhere on the right.
@@ -1755,7 +1762,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           so it holds the same viewport corner on every surface. */}
         {/* Desktop only: on a phone the create button rides in the tab bar's
           row, where it cannot land on top of the bar or the composer. */}
-        {canCompose && <CreateFab onClick={() => setComposeOpen(true)} />}
+        {/* Desktop compose is the dock's own circle now — the floating
+            `CreateFab` was the same act in the same corner, and two plus
+            buttons a few pixels apart is what mounting both would be. */}
+        <BottomDock
+          guest={guest}
+          onCompose={canCompose && !guest ? () => setComposeOpen(true) : undefined}
+        />
 
         <ComposeSheet
           open={composeOpen}
