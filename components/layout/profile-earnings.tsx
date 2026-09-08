@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { IconMic } from "@/components/ui/icons";
+import { IconLive, IconMic, IconQuote } from "@/components/ui/icons";
+import { Avatar } from "@/components/ui/avatar";
 import { formatKash, relativeTime } from "@/lib/format";
 import { LIVE_GIFTS } from "@/lib/gifts";
 import { useKashAccount, KashBuySheet } from "@/features/kash";
-import { useReceivedTips } from "@/features/tips";
+import { useReceivedTips, type ReceivedTip } from "@/features/tips";
 
 /**
  * THE EARNINGS PANEL — nodes 492:46239 (empty) and 492:46539 (populated).
@@ -23,22 +24,27 @@ import { useReceivedTips } from "@/features/tips";
  * "the caller's confirmed tips received (earnings)". This is the route that
  * panel was always going to need, and it already existed.
  *
- * THE FILE'S ROW NAMES THE SENDER — "Ellaine gifted you Tscion car!" — AND WE
- * CANNOT. A tip carries `fromUserId` and nothing else about the person, and
- * there is no route that turns a user id into a profile: `/profiles/{username}`
- * is keyed on the USERNAME, and the whole spec has no id lookup. So the row
- * says what is true — which gift arrived, what it was worth, when — and names
- * nobody. Inventing "Ellaine", or hydrating a face from an id we cannot
- * resolve, would put a stranger's name on somebody's money.
+ * THE ROW NAMES THE SENDER, NOW THAT THE SERVICE CAN SAY WHO IT WAS. The tip
+ * used to carry `fromUserId` and nothing else about the person, with no route
+ * anywhere to turn an id into a profile — `/profiles/{username}` is keyed on
+ * the USERNAME. Asked for and built: `GET /me/tips/received` answers
+ * `TipWithContext`, an allOf over Tip adding `fromUser` and `source`, resolved
+ * in three batched reads per page rather than one per row.
  *
- * For the same reason the row's source line ("Daily Devotion: Where Spiritual
- * Intelligence Begin") is absent: a tip carries `postId` at most, gifts sent
- * from a live room carry no post at all, and a title per row would be a fetch
- * per row for a string the payload does not have.
+ * BOTH ARE NULLABLE AND BOTH NULLS ARE REAL STATES, not loading:
+ *  · `fromUser` is null when the account that sent it is gone — a tip outlives
+ *    the sender, because the money moved. The row then keeps the amount and
+ *    the gift and says it in the passive; it never prints a placeholder name.
+ *  · `source` is null when the tip was aimed at a PERSON rather than a thing,
+ *    and `source.title` is null for a picture-only post (a post's title is its
+ *    own opening text) or a room with no topic. No source line rather than an
+ *    invented one.
  *
- * Requested from the service: `fromUser` hydrated onto a tip, or a
- * profile-by-id route. The moment either lands the row gains its face and its
- * name and nothing else here changes.
+ * NOT YET VERIFIABLE. The fields are committed on the backend and NOT deployed
+ * to :8094 — deliberately, so a rebuild does not move under a test in
+ * progress. Everything here is optional as well as nullable, so today every
+ * tip parses without them and the row renders exactly as it did before. This
+ * has been read against the agreed shape, not against a live response.
  */
 
 /** The gift a tip carried, resolved from the catalogue both send paths use. */
@@ -46,49 +52,87 @@ function giftOf(giftId: string | null) {
   return giftId ? (LIVE_GIFTS.find((gift) => gift.id === giftId) ?? null) : null;
 }
 
+/**
+ * WHICH GLYPH THE SOURCE LINE CARRIES — the service's `kind`, not a guess.
+ *
+ * A gist room is a stream with category 'house', and the backend resolves that
+ * server-side precisely so the client does not infer it. A room is audio, so
+ * it keeps the design's mic; a broadcast gets the live mark; a post gets the
+ * quote, because a post's "title" IS its opening text.
+ */
+const SOURCE_ICON = { room: IconMic, stream: IconLive, post: IconQuote } as const;
+
 /** 435:27558 — 741x62 at a 15 radius, 3% white behind a 10% hairline. */
-function EarnedRow({
-  amountKash,
-  giftId,
-  createdAt,
-}: {
-  amountKash: string;
-  giftId: string | null;
-  createdAt: string | null;
-}) {
+function EarnedRow({ tip }: { tip: ReceivedTip }) {
+  const { amountKash, giftId, createdAt, fromUser, source } = tip;
   const gift = giftOf(giftId);
+  const sender = fromUser?.displayName || fromUser?.username || null;
+  const SourceIcon = source ? SOURCE_ICON[source.kind] : null;
   return (
     <li className="relative flex items-center gap-4 rounded-[15px] border border-white/10 bg-white/[0.03] px-4 py-[11px]">
       {/*
-        THE DISC HOLDS THE GIFT, NOT A FACE.
+        THE SENDER'S FACE WHEN THERE IS ONE, THE GIFT WHEN THERE IS NOT.
 
-        The file puts the sender's photograph here; we do not know who they
-        are (see the module note), and a seeded avatar keyed on an
-        unresolvable id would be a made-up face beside a real payment. The
-        gift IS the thing that arrived, and we know exactly which one — so the
-        disc carries it, and a plain tip with no gift stays empty rather than
-        borrowing a picture.
+        The file draws the sender's photograph here. `fromUser` is nullable by
+        design — a tip outlives the account that sent it, because the money
+        moved — so the fallback is not a loading state, it is a permanent and
+        correct one. It stays exactly what shipped before the field existed:
+        the gift that arrived, which is the thing we always know.
       */}
-      <span className="grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-full border border-white/20 bg-white/10">
-        {gift && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={gift.art} alt="" aria-hidden className="h-full w-full object-contain p-1" />
-        )}
-      </span>
+      {fromUser ? (
+        <Avatar
+          name={sender ?? "Someone"}
+          seed={fromUser.id}
+          src={fromUser.avatarUrl}
+          size={34}
+          className="shrink-0 rounded-full border border-white/20"
+        />
+      ) : (
+        <span className="grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+          {gift && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={gift.art} alt="" aria-hidden className="h-full w-full object-contain p-1" />
+          )}
+        </span>
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* The file's sentence names the sender; ours does only when the
+            service hydrated one. Never "Someone gifted you" — an unnamed
+            sender is said in the passive rather than given a placeholder. */}
         <p className="truncate text-[12px] font-bold leading-4 text-white">
-          {gift ? `You were gifted a ${gift.name}` : "You received a tip"}
+          {sender
+            ? gift
+              ? `${sender} gifted you a ${gift.name}`
+              : `${sender} tipped you`
+            : gift
+              ? `You were gifted a ${gift.name}`
+              : "You received a tip"}
         </p>
         {/* The amount and the file's own coin. The 18px node between this and
             the source line is an EMPTY text node — a spacer, drawn as
             nothing, which is why there is no separator character here. */}
-        <span className="flex items-center gap-1">
-          <span className="tnum text-[12px] leading-5 text-white/50">
-            {formatKash(amountKash)}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="flex shrink-0 items-center gap-1">
+            <span className="tnum text-[12px] leading-5 text-white/50">
+              {formatKash(amountKash)}
+            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/gifts/coin-stack.svg" alt="" aria-hidden className="h-3 w-3 shrink-0" />
           </span>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/gifts/coin-stack.svg" alt="" aria-hidden className="h-3 w-3 shrink-0" />
+
+          {/* 435:27602 — the source, and ONLY when the service gave us one.
+              A null title is three real states (a picture-only post, a room
+              with no topic, a tip aimed at a person rather than a thing), so
+              the line is absent rather than invented. Already truncated to
+              140 upstream, so `truncate` here is for the column, not the
+              text. */}
+          {SourceIcon && source?.title && (
+            <span className="flex min-w-0 items-center gap-2">
+              <SourceIcon className="h-3 w-3 shrink-0 text-white" />
+              <span className="truncate text-[12px] leading-5 text-white/50">{source.title}</span>
+            </span>
+          )}
         </span>
       </div>
 
@@ -211,12 +255,7 @@ export function ProfileEarnings() {
           <h3 className="text-[16px] leading-6 text-white/50">Recently earned</h3>
           <ul className="flex flex-col gap-4">
             {earned.map((tip) => (
-              <EarnedRow
-                key={tip.id}
-                amountKash={tip.amountKash}
-                giftId={tip.giftId}
-                createdAt={tip.createdAt}
-              />
+              <EarnedRow key={tip.id} tip={tip} />
             ))}
           </ul>
         </section>
