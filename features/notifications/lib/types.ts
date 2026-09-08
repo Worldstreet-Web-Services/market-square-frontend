@@ -92,11 +92,24 @@ export const NotificationSchema = z.object({
   /**
    * Which bucket this row belongs to, decided by the SERVICE.
    *
-   * Optional here only because the deployed environment is behind; on the
-   * running service it is never null. It exists precisely so the client never
-   * re-derives a kind-to-group map — a client-composed mapping silently drops
-   * every kind added after it ships, which is the failure we already hit in
-   * the other direction when four kinds rendered as follows.
+   * It exists precisely so the client never re-derives a kind-to-group map — a
+   * client-composed mapping silently drops every kind added after it ships,
+   * which is the failure we already hit in the other direction when four kinds
+   * rendered as follows.
+   *
+   * ─── SERVED BUT NOT DOCUMENTED. DO NOT DELETE THIS ON THE SPEC'S WORD ─────
+   * `subject` and `group` above are both set on every row by the service and
+   * are absent from `Notification` in the published `openapi.json`: the backend
+   * documented the `group` QUERY PARAMETER and never touched the RESPONSE
+   * shape. Confirmed by grepping the compiled build, not by reading the
+   * document — and the fix (their PR #190) is open, not merged, because the
+   * commit that would have carried it missed #189.
+   *
+   * So a reader who checks the spec will conclude these two fields do not
+   * exist, and anyone regenerating types from it will drop them. They are
+   * real. Read them off the row, which is what this schema does. Optional and
+   * nullable because the DEPLOYED environment is genuinely behind — required,
+   * they would fail to parse production — not because they are speculative.
    */
   group: z.enum(["social", "money", "rooms", "chat", "account"]).nullable().optional().default(null),
   // Null until the notification has been read.
