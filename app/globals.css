@@ -1190,6 +1190,26 @@ body {
   color: #3c3c3c;
 }
 
+/* THE KASH BALANCE CARD — node 432:25745.
+
+   GOLD, and this is the one meaning gold is allowed to carry. The standing
+   rule is that `--color-coin` is the only gold left and that it means MONEY;
+   this card is a KASH balance, so it is precisely the sanctioned case rather
+   than an exception to it. It is a utility so the gradient cannot be pasted
+   onto a surface that is not currency.
+
+   Three stops, the file's own: `#AC6803` -> `#F7D535` at 32.5% -> `#AD6803`.
+   The handles run (0, 0.084) to (1, 0.921) across a 741x112 box, which is 97deg
+   in CSS terms, not the 90 it looks like.
+
+   The file lays a 5% tiled texture over it as a third fill. It is not drawn:
+   the asset is a repeating noise tile whose entire contribution at 5% on a
+   gold ground is invisible at this size, and carrying an image for it would
+   cost a request to render nothing. */
+@utility ws-kash-card {
+  background: linear-gradient(97deg, #ac6803 0%, #f7d535 32.5%, #ad6803 100%);
+}
+
 @utility ws-btn-welcome {
   background: linear-gradient(90deg, var(--color-create) 0%, var(--color-create-deep) 100%);
   color: #ffffff;

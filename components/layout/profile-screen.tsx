@@ -7,6 +7,7 @@ import { ProfilePage } from "@/features/profile";
 import { ProfileHouses } from "@/components/layout/profile-houses";
 import { ProfileKashChip } from "@/components/layout/profile-kash-chip";
 import { ProfileGiftGallery } from "@/components/layout/profile-gift-gallery";
+import { ProfileEarnings } from "@/components/layout/profile-earnings";
 import { PostCard, VideoViewer } from "@/features/feed";
 import { useOpenConversation } from "@/features/messages";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
@@ -87,6 +88,7 @@ export function ProfileScreen({ username }: { username: string }) {
          messages slice and is joined here rather than imported across. */
       housesSlot={<ProfileHouses />}
       giftGallerySlot={<ProfileGiftGallery />}
+      earningsSlot={<ProfileEarnings />}
       /* 435:27523 — the balance chip on the cover. The kash slice's, and the
          profile may not import it. */
       kashSlot={<ProfileKashChip />}

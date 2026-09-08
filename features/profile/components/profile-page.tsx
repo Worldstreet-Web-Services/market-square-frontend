@@ -327,6 +327,7 @@ export function ProfilePage({
   kashSlot,
   housesSlot,
   giftGallerySlot,
+  earningsSlot,
   composeSlot,
   postSlot,
   mediaViewerSlot,
@@ -347,6 +348,12 @@ export function ProfilePage({
    * tips never import each other.
    */
   giftGallerySlot?: React.ReactNode;
+  /**
+   * The earnings panel — nodes 492:46239 (empty) and 492:46539 (populated).
+   * It reads the KASH engine and the tips ledger, two slices the profile may
+   * not import, so it arrives as a slot like the rest.
+   */
+  earningsSlot?: React.ReactNode;
   /** The balance chip on the cover (435:27523) — the kash slice's, own profile
    *  only, because there is no route for anybody else's balance and there
    *  should not be. */
@@ -372,7 +379,7 @@ export function ProfilePage({
    * are different questions and must not share one value. Gift Gallery is the
    * one the file draws active and the only one with a panel behind it.
    */
-  const [accountTab, setAccountTab] = useState<AccountTab>("gifts");
+  const [accountTab, setAccountTab] = useState<AccountTab>("earnings");
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
   const isMe = Boolean(
@@ -614,13 +621,10 @@ export function ProfilePage({
         and the KASH engine) are `/me` routes. The same frame in the file also
         carries "Add new house" and "Edit Profile", which are only ever yours.
 
-        THREE OF THE FOUR TABS ARE INERT, and each for a different, checked
-        reason rather than because they were awkward:
+        TWO OF THE FOUR TABS ARE INERT, and each for a checked reason rather
+        than because it was awkward. Earnings is live: nodes 492:46239 and
+        492:46539 draw both its states and `GET /me/tips/received` backs them.
 
-         · Earnings — `GET /me/tips/received` EXISTS and is real (it is what
-           feeds the gallery's counts). What does not exist is a design for the
-           panel: this node draws the gift grid, not an earnings view, so the
-           tab is held rather than filled with something invented.
          · Badges — no route at all. The served spec's only badge path is
            `/admin/profiles/{id}/org-badge`, which ASSIGNS one; there is
            nothing that lists what somebody has earned.
@@ -656,6 +660,7 @@ export function ProfilePage({
             value={accountTab}
             onChange={setAccountTab}
           />
+          {accountTab === "earnings" && earningsSlot}
           {accountTab === "gifts" && giftGallerySlot}
         </div>
       )}
