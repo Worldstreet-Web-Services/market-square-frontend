@@ -42,6 +42,35 @@ describe("the create button is rendered once, fixed, in the shell", () => {
   // and the phone's, which rides in the tab bar's row so it cannot land on top
   // of the bar. They are mutually exclusive by breakpoint — see the test below
   // — so a reader still only ever sees one.
+  it("ONE compose control, and it is the dock", () => {
+    /*
+      This used to assert two — the desktop floating circle and the phone's tab
+      bar — and to count `aria-label="Create post"` inside `app-shell.tsx`. Both
+      premises are gone: `BottomDock` (748:15721) replaced the sidebar, then the
+      tab bar, so it is the app's only bottom navigation at every width and its
+      circle is the only compose entry the shell offers.
+
+      The count in the shell is now ZERO and that matters, because `MobileBar`
+      is still DEFINED in that file — exported, unmounted, kept for
+      reversibility. A test that counted literals there would have gone on
+      passing off dead code, which is worse than failing.
+    */
+    const shellCode = stripComments(shell);
+    assert.equal(
+      (shellCode.match(/<MobileBar\b/g) ?? []).length,
+      0,
+      "the phone's tab bar is mounted again — there would be two bottom bars"
+    );
+    assert.match(shellCode, /<BottomDock\b/, "the shell must mount the dock");
+
+    const dock = stripComments(read("components/layout/bottom-dock.tsx"));
+    assert.equal(
+      (dock.match(/aria-label="Create post"/g) ?? []).length,
+      1,
+      "the dock carries exactly one compose control"
+    );
+  });
+
   it("is drawn only by the shell, never by a route", () => {
     for (const path of SOURCES.filter((source) => !source.startsWith("components/layout/"))) {
       assert.equal(
@@ -50,17 +79,6 @@ describe("the create button is rendered once, fixed, in the shell", () => {
         `${path} drew its own compose control — that is how the button drifted between pages`
       );
     }
-    /*
-      TWO COMPOSE CONTROLS, BOTH IN THE SHELL — the desktop corner and the
-      phone's tab row. The corner one now names itself from a `label` prop
-      defaulting to "Create post", because 407:17286 draws the same circle on
-      the gist rooms page where it opens a ROOM. So the count is the shell's
-      literal plus `CreateFab`'s default, not two literals.
-    */
-    const inShell =
-      (stripComments(shell).match(/aria-label="Create post"/g) ?? []).length +
-      (fabCode.match(/label = "Create post"/g) ?? []).length;
-    assert.equal(inShell, 2, "one for the desktop corner, one for the phone's tab row");
   });
 
   it("lets a route borrow the SHAPE only where the shell's is suppressed", () => {
@@ -86,13 +104,18 @@ describe("the create button is rendered once, fixed, in the shell", () => {
     );
   });
 
-  it("shows exactly one of the two at any width", () => {
-    // Both are unconditional within their breakpoint, so overlap would be
-    // permanent rather than intermittent: the desktop circle is hidden below
-    // md, and the phone's bar is hidden from md up.
-    assert.match(fabCode, /\bhidden\b[^"]*\bmd:flex\b/, "the corner button is desktop-only");
-    const mobileBar = stripComments(shell).slice(stripComments(shell).indexOf("function MobileBar"));
-    assert.match(mobileBar.slice(0, 2000), /md:hidden/, "the phone's bar is mobile-only");
+  it("the dock is shown at EVERY width, not swapped at a breakpoint", () => {
+    /*
+      There used to be two bottom controls that had to be mutually exclusive by
+      breakpoint, and this test existed to prove they never overlapped. There is
+      one now, so the invariant inverts: the dock must NOT be hidden at any
+      width, or a phone or a laptop ends up with no navigation at all.
+    */
+    const dock = stripComments(read("components/layout/bottom-dock.tsx"));
+    const wrapper = dock.match(/className="[^"]*fixed[^"]*"/)?.[0] ?? "";
+    assert.notEqual(wrapper, "", "the dock's fixed wrapper must be findable");
+    assert.doesNotMatch(wrapper, /\bhidden\b/, "the dock must not be hidden at any width");
+    assert.doesNotMatch(wrapper, /\bmd:/, "the dock must not swap in at a breakpoint");
   });
 
   it("is position:fixed, never sticky or absolute", () => {

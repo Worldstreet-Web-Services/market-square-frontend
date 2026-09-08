@@ -858,7 +858,10 @@ body {
      one. Declared here so anything reading it renders correctly before that
      component has mounted, and after it unmounts. */
   --ws-house-head-h: 0px;
-  --ws-nav-h: calc(env(safe-area-inset-bottom, 0px) + 69px);
+  /* ROOM FOR THE DOCK on a phone. It was 69 for the tab bar that used to live
+     here; `BottomDock` is 72 tall, sits 24 above the safe area, and wants 16
+     of air under the last post. */
+  --ws-nav-h: calc(env(safe-area-inset-bottom, 0px) + 112px);
   --ws-fab-bottom: calc(env(safe-area-inset-bottom, 0px) + 81px);
   /* Clear of the create button entirely: its 71px hit frame sits on top of
      --ws-fab-bottom, so anything sharing the right edge starts above that.

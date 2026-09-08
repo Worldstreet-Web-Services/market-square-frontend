@@ -1388,7 +1388,21 @@ function MobileMenu({
   );
 }
 
-function MobileBar({
+/**
+ * THE PHONE'S TAB BAR — kept, and no longer mounted.
+ *
+ * `BottomDock` (748:15721) is the app's only bottom navigation now, at every
+ * width: it replaced the desktop sidebar first and this second, so a phone and
+ * a laptop no longer carry two different bottom bars. Exported rather than
+ * deleted for the same reason `Sidebar` is — the decision is a product one and
+ * reversible by mounting it back.
+ *
+ * WHAT THE PHONE LOSES WITH IT: Explore and Gistrooms, which were two of its
+ * four tabs and are not among the dock's three. Both routes still work, and the
+ * drawer behind the top strip's avatar still lists the entire nav, which is the
+ * same door the removed "More" tab used to open.
+ */
+export function MobileBar({
   pathname,
   items,
   unread,
@@ -1782,12 +1796,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           reason: tapping a coin must never cost the reader their page. */}
         <TickerSheet />
 
-        <MobileBar
-          pathname={pathname}
-          items={mobileNav}
-          unread={unread.data}
-          onCompose={canCompose ? () => setComposeOpen(true) : undefined}
-        />
+        {/* The phone's tab bar is gone — `BottomDock` above serves every
+            width now. See the note on `MobileBar`. */}
         <MobileMenu
           open={menuOpen}
           onClose={() => setMenuOpen(false)}

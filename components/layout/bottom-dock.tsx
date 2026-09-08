@@ -113,7 +113,14 @@ export function BottomDock({
   const items = guest ? all.filter((item) => item.href !== "/messages") : all;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 hidden justify-center md:flex">
+    /* EVERY WIDTH, not just desktop. It replaced the sidebar first and the
+       phone's tab bar second, so it is the app's only bottom navigation now.
+       The inset clears the home indicator on a phone and is the file's 24
+       everywhere else. */
+    <div
+      className="pointer-events-none fixed inset-x-0 z-40 flex justify-center"
+      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
+    >
       <div className="pointer-events-auto flex items-center gap-2">
         {/* 748:15722 — `#141416` at 47%, fully round, behind a heavy backdrop
             blur and the file's own deep shadow. */}
