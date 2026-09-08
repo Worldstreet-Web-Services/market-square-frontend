@@ -9,6 +9,7 @@ import { useSwipeCard } from "@/hooks/use-swipe-card";
 import { useFollow, useIsFollowing } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
+import { deckShift } from "@/lib/deck-centring";
 import { DeckDots } from "@/components/ui/deck-dots";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -198,17 +199,17 @@ export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
   */
   const drawn = window.map((i) => DECK_PLACES[slotOf(i)]?.x ?? 0);
   /*
-    NOT RECENTRED WHEN FILLING, and the two cases genuinely differ.
+    WHAT GETS CENTRED DEPENDS ON WHETHER THE FAN FITS — the decision itself is
+    `deckShift`, which is pure and pinned in `lib/deck-centring.test.ts`.
 
     In the feed the whole fan is on screen, so a fan that is not full has to
     shift or it sits off to one side of an empty row. Filling, the fan is
-    deliberately WIDER than the column and its outer cards bleed — so the thing
-    that must be centred is the FRONT card, which is already at x=0. Applying
-    the group's mean there dragged the card being decided about off to the
-    left and left dead space on the other side.
+    deliberately WIDER than the column and its outer cards bleed, so the thing
+    that must be centred is the FRONT card — and the front card is NOT at x=0.
+    The file puts it at -14.09, which at the 1.45 fill scale left it ~20px left
+    of the column's centre on every phone. See the note in `deck-centring.ts`.
   */
-  const recentre =
-    fill || drawn.length >= 3 ? 0 : -drawn.reduce((a, b) => a + b, 0) / drawn.length;
+  const recentre = deckShift({ fill, offsets: drawn, frontX: DECK_PLACES[0]!.x });
 
   return (
     <section aria-label="People to meet" className="flex flex-col gap-6">

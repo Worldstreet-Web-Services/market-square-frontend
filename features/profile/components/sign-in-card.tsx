@@ -14,7 +14,8 @@ import { cn } from "@/lib/cn";
  * The page this replaces had a button reading "Continue with Privy" and a line
  * under it explaining what Privy was. Privy is our auth vendor; it is not a
  * thing the reader has, wants, or should have to understand. It is now entirely
- * behind the two controls the design draws — Continue with Google, and an email
+ * behind the two controls the design draws — Continue with your Ark account, and
+ * an email
  * — via the HEADLESS hooks (`useLoginWithOAuth`, `useLoginWithEmail`) rather
  * than `usePrivy().login()`, which opens Privy's own branded modal on top of
  * this card. That modal is the whole reason those hooks exist, and it is the
@@ -231,7 +232,7 @@ function PrivyForm() {
           className="ws-press flex h-[54px] w-full max-w-[346px] items-center justify-center gap-2.5 rounded-[34px] border border-black/[0.12] bg-black/20 text-[16px] font-semibold tracking-[-0.01em] text-[#8E8E93] transition-colors hover:bg-black/30 disabled:opacity-60"
         >
           {oauthLoading ? <Spinner className="h-5 w-5" /> : <GoogleMark />}
-          Continue with Google
+          Continue with your Ark account
         </button>
       </div>
 
