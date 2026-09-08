@@ -1192,6 +1192,67 @@ body {
   aspect-ratio: 1440 / 1024;
 }
 
+/* The art band. Flexible where the frame scales (it is the only give the
+   design has), fixed where it reflows. */
+.ws-welcome-art-gap {
+  min-height: 180px;
+  flex: 1 1 0%;
+}
+
+/* Holds the two buttons at the foot on a reflowed screen. Absent otherwise:
+   on a scaled frame the art gap above is already the flexible one, and a
+   second spring would fight it for the same pixels. */
+.ws-welcome-spring {
+  display: none;
+}
+
+/* ─── THE REFLOWED (TALL) LAYOUT ──────────────────────────────────────────────
+   These three rules apply on exactly the screens `WelcomeFrame` does NOT scale
+   — anything taller than the design's own 1440:1024 — which is a phone, a
+   tablet upright, and nothing else. Matched on the aspect ratio rather than a
+   width, for the same reason the frame is: the failure was never about width.
+
+   WHAT THEY FIX. The column is lockup, a flexible gap, then stepper, headline,
+   copy and buttons. On a tall screen that ONE flexible gap took every spare
+   pixel, so a phone showed the wordmark, then ~450px of nothing, then
+   everything else crammed into the bottom half — and the artwork, which is
+   centred on the viewport, sat marooned in the middle of the emptiness.
+
+   So on those screens the spare space moves to the FOOT of the column: the art
+   gap becomes a fixed band, the content packs up under it, and a spring before
+   the buttons holds them against the bottom edge where they were. The stage
+   rises with the content it belongs to. */
+@media (max-aspect-ratio: 1440 / 1024) {
+  :root {
+    /* WHERE THE ART BAND STARTS, and how tall it is. Stated once because two
+       rules below have to agree about it — the band reserves the space and the
+       stage is centred in it, and a disagreement between those two is exactly
+       what put the headline on top of the artwork.
+
+       94 is the column's own `pt-10` (40) plus the wordmark, measured at 54.
+       The height is the stage's REAL height: it is `aspect-ratio: 1440/1024`
+       and, since the width cap above pins it to the viewport, that is
+       100vw / 1.40625 — 277px on a 390 phone, against the 180 the band used to
+       reserve. Reserving less than the picture is what let the two overlap. */
+    --ws-art-band-top: 94px;
+    --ws-art-band-h: calc(100vw / 1.40625);
+  }
+  .ws-welcome-stage {
+    /* Centred in the band rather than in the viewport, so the artwork travels
+       with the content instead of sitting marooned in the middle. */
+    top: calc(var(--ws-art-band-top) + var(--ws-art-band-h) / 2);
+  }
+  .ws-welcome-art-gap {
+    flex: 0 0 auto;
+    min-height: var(--ws-art-band-h);
+  }
+  .ws-welcome-spring {
+    display: block;
+    flex: 1 1 0%;
+  }
+}
+
+
 /* The primary CTA. Its stops are the purple ramp's two ends — the SAME tokens
    ws-btn-create uses — but the file gives this control 90deg where the compose
    button uses 155deg, so it is its own utility rather than a second angle
