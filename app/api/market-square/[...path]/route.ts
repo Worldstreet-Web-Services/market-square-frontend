@@ -3,6 +3,7 @@ import { verifyRequest, verifyRequestDetailed } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
 import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
 import { forwardToUpstream } from "@/lib/server/proxy";
+import { cacheControlFor } from "@/lib/server/cache-policy";
 import { FALLBACK_LIMITS } from "@/lib/upload-rules";
 
 // BFF proxy for Market Square. Verifies the Privy session server-side and
@@ -232,12 +233,27 @@ async function forward(req: NextRequest, path: string[], method: string) {
     answer 204 — leaving a group and declining a chat request — so both were
     unusable through the proxy while both were succeeding upstream.
   */
+  /*
+    SAY WHAT MAY BE CACHED, ALWAYS — see lib/server/cache-policy.ts.
+
+    Nothing said `Cache-Control` before, which let an intermediary guess a
+    freshness lifetime for bodies that include somebody's inbox. Anonymous
+    public GETs become shared-cacheable so identical polls collapse; every
+    other response is explicitly `private, no-store`.
+  */
+  const cacheControl = cacheControlFor({
+    method,
+    status: result.status,
+    isPublic: method === "GET" && isPublicGet(path),
+    hasAuthorization: Boolean(req.headers.get("authorization")),
+  });
+
   return new NextResponse(NULL_BODY_STATUSES.has(result.status) ? null : result.body, {
     status: result.status,
     // A bodyless response must not claim a content type either.
     headers: NULL_BODY_STATUSES.has(result.status)
-      ? undefined
-      : { "content-type": result.contentType },
+      ? { "cache-control": cacheControl }
+      : { "content-type": result.contentType, "cache-control": cacheControl },
   });
 }
 
