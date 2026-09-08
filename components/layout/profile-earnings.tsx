@@ -5,7 +5,7 @@ import { useState } from "react";
 import { IconMic } from "@/components/ui/icons";
 import { formatKash, relativeTime } from "@/lib/format";
 import { LIVE_GIFTS } from "@/lib/gifts";
-import { useKashAccount, useKashStatus, KashBuySheet } from "@/features/kash";
+import { useKashAccount, KashBuySheet } from "@/features/kash";
 import { useReceivedTips } from "@/features/tips";
 
 /**
@@ -106,7 +106,6 @@ function EarnedRow({
 }
 
 export function ProfileEarnings() {
-  const status = useKashStatus();
   const account = useKashAccount();
   const tips = useReceivedTips(true);
   const [buyOpen, setBuyOpen] = useState(false);
@@ -118,8 +117,23 @@ export function ProfileEarnings() {
     .filter((tip) => tip.status === "confirmed")
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
+  /*
+    THE STATUS ENDPOINT DOES NOT GET A VOTE ON THIS NUMBER.
+
+    This read `!account.wallet || status.isError || account.isError`, so a
+    failing `GET /kash/status` blanked a balance the account query had already
+    answered with. Those are different questions: status carries the ENGINE'S
+    PARAMETERS — the token address, the price, whether the desk is open — which
+    matter for BUYING and say nothing about whether a balance we hold is real.
+    `KashBalance` has always read the account alone; this now matches it.
+
+    Still absent rather than zero when the account itself cannot answer: "0
+    KASH+" on a balance that failed to load is a claim about somebody's money
+    the client cannot make, and an em-dash is the null the rest of the app
+    already uses for a count it does not have.
+  */
   const balance = account.data?.balance ?? null;
-  const engineDown = !account.wallet || status.isError || account.isError;
+  const engineDown = !account.wallet || account.isError;
 
   return (
     <div className="flex flex-col gap-6 px-8 py-6">
