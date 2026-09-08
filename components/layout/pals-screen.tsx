@@ -1,38 +1,29 @@
 "use client";
 
-import { PalsDeck } from "@/components/layout/pals-deck";
+import { MakeSomeFriends } from "@/components/layout/make-some-friends";
 
 /**
- * THE PALS SURFACE — the friends deck on a page of its own.
+ * THE PALS SURFACE — the deck on a page of its own, at the size a page allows.
  *
- * The dock's second destination (748:15734) used to point at Explore. It
- * points here instead, because the act the glyph promises is deciding about
- * ONE PERSON AT A TIME — swipe right to follow, left to pass — and Explore is
- * a directory you scan. The deck already existed and already did that; what it
- * lacked was anywhere to go and be the whole screen.
+ * The dock's second destination points here rather than at Explore, because
+ * the act its glyph promises is deciding about ONE PERSON AT A TIME — the fan,
+ * its pass and its wink — and Explore is a directory you scan.
  *
- * It renders `PalsDeck`, NOT the home timeline's compact fan. The fan is right
- * where it sits inside a feed and wrong as a whole screen: a 186px card
- * floating in the middle of a phone with most of the page empty under it. A
- * card you decide from has to carry enough to decide on, so this one is
- * full-width and holds the face, the name, the bio and the follower counts.
+ * It is the SAME `MakeSomeFriends` the home timeline renders, not a second
+ * copy and not a second card: one component means the swipe, the wink
+ * cooldown and the already-following guard cannot be fixed on one surface and
+ * left broken on the other.
  *
- * Both still share `useSwipeCard` and `useFollow`, so the gesture and the
- * follow behaviour cannot drift between the two surfaces.
+ * WHAT IS DIFFERENT HERE IS ONLY THE SIZE. Inside the feed the deck is one
+ * block among many and sits at the file's own scale. As a whole screen that
+ * left a 186px card marooned in the middle of a phone with the page empty
+ * under it, so here it is told to FILL — same fan, same cards, same controls,
+ * just drawn as large as the column allows.
  */
 export function PalsScreen() {
   return (
-    /* The column claims the viewport minus the chrome, so the deck below has a
-       height to fill. Without it the card is content-tall and the page is the
-       sparse thing this replaced. */
-    <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col gap-6 px-4 py-6 lg:px-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-[22px] font-medium leading-7 text-white">Make some friends</h1>
-        <p className="text-[13px] leading-5 text-white/40">
-          Follow cool people and watch your feed go from boring to elite ✨
-        </p>
-      </div>
-      <PalsDeck />
+    <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col justify-center px-4 py-6 lg:px-6">
+      <MakeSomeFriends fill />
     </div>
   );
 }
