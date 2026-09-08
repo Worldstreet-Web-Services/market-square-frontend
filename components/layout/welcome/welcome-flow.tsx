@@ -411,8 +411,13 @@ export function WelcomeScreen({
             white={screen.headline[0]}
             accent={screen.headline[1]}
             boxWidth={screen.headWidth}
-            className={screen.headlineClass}
-            style={{ marginTop: screen.dotsGap }}
+            className={cn("ws-welcome-head", screen.headlineClass)}
+            /* The file's own gap under the stepper, CAPPED on a phone — see
+               `.ws-welcome-head` in globals.css. Screen 2's is 82 against
+               screen 1's 23 and screen 3's 14, and at desktop scale that reads
+               as deliberate air; at phone scale it is a hole between the dots
+               and the headline. */
+            style={{ ["--ws-dots-gap" as string]: `${screen.dotsGap}px` }}
           />
           <p
             className={cn(SUB, "whitespace-pre-line")}

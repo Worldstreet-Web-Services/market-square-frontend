@@ -1192,6 +1192,12 @@ body {
   aspect-ratio: 1440 / 1024;
 }
 
+/* The stepper-to-headline gap. The file's own number wherever the frame is
+   scaled; capped on a phone by the media query above. */
+.ws-welcome-head {
+  margin-top: var(--ws-dots-gap, 0px);
+}
+
 /* The art band. Flexible where the frame scales (it is the only give the
    design has), fixed where it reflows. */
 .ws-welcome-art-gap {
@@ -1283,6 +1289,14 @@ body {
   .ws-welcome-spring {
     display: block;
     flex: 1 1 0%;
+  }
+  /* The file's gap between the stepper and the headline, capped. Screen 2 sets
+     82 against screen 1's 23 and screen 3's 14 — at the design's own scale that
+     is deliberate air, but on a phone the artwork above has already shrunk to
+     fit and the same 82 becomes a hole. Capped rather than replaced, so the
+     two screens already under the cap keep the file's number exactly. */
+  .ws-welcome-head {
+    margin-top: min(var(--ws-dots-gap, 0px), 30px);
   }
 }
 
