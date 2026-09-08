@@ -38,7 +38,20 @@ export function ProfileCover({
   profile: Profile;
   /** Edit Profile on your own, follow/wink/message on somebody else's. */
   actions?: React.ReactNode;
-  /** The row under the handle — the balance chip and "Who viewed my profile". */
+  /**
+   * The row beside the handle — node 435:27521.
+   *
+   * The file draws two things here: a balance chip and a "Who viewed my
+   * profile" pill on the create ramp. Only the chip is passed, and only on your
+   * own profile.
+   *
+   * WHO VIEWED MY PROFILE IS NOT DRAWN. It is a whole capability, not a style:
+   * it needs somewhere that records a profile view and somewhere that lists
+   * them back, and the service has neither — `/posts/:id/views` counts POST
+   * views and is the only view route on the contract. A pill that opens
+   * nothing, or opens an empty list, is a promise the product cannot keep, so
+   * it is absent until the routes exist rather than shipped dead. Requested.
+   */
   meta?: React.ReactNode;
 }) {
   const router = useRouter();

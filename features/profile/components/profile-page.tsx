@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { IconLocationPin } from "@/components/ui/topbar-icons";
+import { IconMsEdit } from "@/components/ui/design-icons";
+import { IconRoomShare } from "@/components/ui/room-icons";
 import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
@@ -227,6 +230,7 @@ function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) 
 export function ProfilePage({
   username,
   messageSlot,
+  kashSlot,
   housesSlot,
   composeSlot,
   postSlot,
@@ -242,6 +246,10 @@ export function ProfilePage({
    * to, so a visitor gets no rail rather than an empty one.
    */
   housesSlot?: React.ReactNode;
+  /** The balance chip on the cover (435:27523) — the kash slice's, own profile
+   *  only, because there is no route for anybody else's balance and there
+   *  should not be. */
+  kashSlot?: React.ReactNode;
   /** Composed from outside — profile never imports the feed slice. */
   composeSlot?: React.ReactNode;
   postSlot: (post: Post) => React.ReactNode;
@@ -286,6 +294,24 @@ export function ProfilePage({
 
   const data = profile.data;
 
+  /*
+    Share the PROFILE — the same shape the post card uses: the platform sheet
+    where there is one, the clipboard where there is not, and a dismissed sheet
+    is not an error.
+  */
+  const onShare = async () => {
+    const url = `${window.location.origin}/u/${data.username}`;
+    try {
+      if (navigator.share) await navigator.share({ text: data.displayName, url });
+      else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied");
+      }
+    } catch {
+      /* dismissed share sheets are not errors */
+    }
+  };
+
   return (
     <>
       {/*
@@ -304,11 +330,37 @@ export function ProfilePage({
       <div className="px-8 pt-6">
         <ProfileCover
           profile={data}
+          /* 435:27521 — the row beside the handle. The balance chip is the
+             kash slice's and arrives as a slot; "Who viewed my profile" is not
+             drawn, see the note on `ProfileCover`. */
+          meta={isMe ? kashSlot : null}
           actions={
             isMe ? (
-              <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
-                Edit profile
-              </Button>
+              <>
+                {/*
+                  435:27531 and 435:27534 — a 38.4 disc and a 129x38 pill, and
+                  BOTH report a white stroke at weight ZERO, which renders
+                  nothing. The material is `ws-glass-pill`, the same recessed
+                  lens the room's header and the post's more-menu use, not a
+                  hairline ring.
+                */}
+                <button
+                  type="button"
+                  onClick={onShare}
+                  aria-label="Share this profile"
+                  className="ws-glass-pill ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-white"
+                >
+                  <IconRoomShare className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className="ws-glass-pill ws-press flex h-[38px] items-center gap-2 rounded-full px-4 text-[15px] leading-6 text-white transition-opacity hover:opacity-90"
+                >
+                  <IconMsEdit className="h-4 w-4 shrink-0" />
+                  Edit Profile
+                </button>
+              </>
             ) : (
               <>
                 <PersonMoreMenu profile={data} size="md" />
