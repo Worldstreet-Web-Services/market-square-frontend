@@ -7,11 +7,10 @@ import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
-import { Avatar } from "@/components/ui/avatar";
-import { LiveBadge, OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { LiveBadge, Pill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconCalendar } from "@/components/ui/icons";
-import { GradientThumb } from "@/components/ui/gradient-thumb";
+import { ProfileCover } from "@/features/profile/components/profile-cover";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -281,74 +280,48 @@ export function ProfilePage({
 
   return (
     <>
-      {/* X's profile header: a back arrow with the identity beside it, then a
-          banner the avatar hangs off. The banner has no upload yet, so it is
-          the same seeded gradient the rest of the square uses for artwork. */}
-      <ColumnHeader
-        title={data.displayName}
-        subtitle={`${formatCount(data.followerCount)} followers`}
-        back
-      />
+      {/*
+        NODE 435:27500 — ONE CARD, not three bands.
 
-      <GradientThumb seed={data.username} className="h-32 w-full sm:h-44" />
+        It was X's shape: a ColumnHeader naming the person, a full-bleed banner
+        under it, then an avatar hanging off the banner's lower edge into the
+        content. The file draws a single 741x473 card at a 20 radius with the
+        photograph filling it and the identity laid over its foot — so the name,
+        the handle and the actions sit ON the cover rather than in a strip above
+        it and a row below it.
 
-      <div className="px-4 pb-3">
-        <div className="flex items-start justify-between gap-3">
-          {/* `relative z-10` is what makes it VISIBLE, not decoration. The
-              cover above is `relative` (positioned), and within one stacking
-              context positioned elements paint above in-flow block boxes — so
-              an unpositioned avatar pulled up over the cover had its top half
-              painted over by it.
-
-              88px on a phone, 112 from `sm` up: at 112 the disc plus its ring
-              ate 120 of ~343px of content width and squeezed the action row
-              into the right edge. Sized by class, not by `size`, because the
-              inline width/height `size` writes would beat the breakpoint. */}
-          <div className="relative z-10 -mt-11 rounded-full border-4 border-black sm:-mt-16">
-            <Avatar
-              name={data.displayName}
-              seed={data.id}
-              src={data.avatarUrl}
-              size={112}
-              sizeClassName="h-22 w-22 sm:h-28 sm:w-28"
-            />
-          </div>
-          {/* `flex-wrap` with `justify-end` is the last-resort escape: a long
-              Message label or a future action drops onto a second line rather
-              than shrinking every pill into its own text. */}
-          <div className="flex flex-wrap items-center justify-end gap-2 pt-3">
-            {isMe ? (
+        `ProfileCover` owns the card; the actions and the meta row are passed in
+        because who you are looking at decides both.
+      */}
+      <div className="px-8 pt-6">
+        <ProfileCover
+          profile={data}
+          actions={
+            isMe ? (
               <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
                 Edit profile
               </Button>
             ) : (
               <>
-                {/* The wink sits with the other things a visitor came to
-                    do, not behind the menu: it is the light action and the
-                    one this slice is for. Safety stays behind the disc — the
-                    two actions nobody reaches for on a normal visit. */}
                 <PersonMoreMenu profile={data} size="md" />
                 <WinkButton profile={data} size="md" />
                 {messageSlot?.(data)}
                 <FollowButton profile={data} />
               </>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
+      </div>
 
-        <div className="mt-3">
-          <h1 className="ws-display flex flex-wrap items-center gap-x-2 text-xl">
-            <span className="min-w-0 break-words">{data.displayName}</span>
-            <VerifiedBadge verification={data.verification} className="h-5 w-5" />
-            <OrgBadgeChip orgBadge={data.orgBadge} />
-            <RoleChip role={data.role} />
-          </h1>
-          {/* An unclaimed member's username is their Privy DID — 40-odd
-              unbroken characters. Without a wrap rule it runs past the column
-              on a phone; `break-all` is the only break this string offers. */}
-          <p className="break-all text-[15px] text-meta">@{data.username}</p>
-        </div>
+      {/*
+        WHAT THE COVER DOES NOT CARRY.
 
+        The name, the handle, the badges and the actions moved ONTO the card
+        (435:27503) — this block used to draw all of them a second time, under
+        it. What is left is the part 414:24935 puts below the cover: the bio,
+        the place, and the two counts.
+      */}
+      <div className="px-8 pb-3 pt-6">
         {data.bio && <p className="mt-3 text-[15px] leading-normal text-body">{data.bio}</p>}
 
         {/*
