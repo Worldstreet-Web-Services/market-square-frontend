@@ -426,10 +426,28 @@ describe("the friends deck offers a real Follow", () => {
     assert.match(deck, /scale: 0\.9279/, "the neighbours lost the file's 92.79%");
   });
 
-  it("re-centres a fan that is not full", () => {
-    // The file draws three. With one or two people on the square the remaining
-    // cards sat off to one side of an empty row.
-    assert.match(deck, /drawn\.length < 3/, "a short deck is lopsided again");
+  it("re-centres a fan that is not full, EXCEPT when it is filling", () => {
+    /*
+      The file draws three. With one or two people on the square the remaining
+      cards sat off to one side of an empty row, so a short fan shifts by the
+      mean of the offsets actually drawn.
+
+      Filling (`/pals`) is the one exception and it is not an oversight: there
+      the fan is deliberately WIDER than the column and its outer cards bleed,
+      so the thing that must be centred is the FRONT card, which already sits
+      at x=0. Applying the group's mean there drags the card being decided
+      about off to one side and leaves dead space on the other.
+
+      Asserted on the behaviour rather than on one spelling of the condition —
+      the previous version matched the literal `drawn.length < 3` and broke the
+      moment the same rule was written the other way round.
+    */
+    assert.match(deck, /drawn\.length/, "the short-fan re-centring is gone entirely");
+    assert.match(
+      deck,
+      /const recentre =\s*\n?\s*fill \|\| drawn\.length >= 3 \? 0 :/,
+      "a short deck is lopsided again, or filling lost its exception"
+    );
   });
 
   it("places the three cards from the file rather than a formula", () => {
