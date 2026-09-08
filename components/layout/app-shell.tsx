@@ -1550,11 +1550,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    // Full width. The shell used to cap at 1600px, so a wider monitor drew the
-    // whole product in a 1600px band with the slack parked at the right edge —
-    // the app looked left-aligned on the screens with the most room to give.
-    // The cap is gone and the timeline takes the extra width from xl up.
-    <div className="flex w-full">
+    // CAPPED AND CENTRED — `--ws-shell-max`, which carries the derivation.
+    //
+    // This read "Full width" and gave the reason the old 1600px cap was
+    // removed: the slack was "parked at the right edge — the app looked
+    // left-aligned on the screens with the most room to give". That diagnosis
+    // was right and the remedy was wrong. A cap parks its leftover on one side
+    // only when nothing centres it; `mx-auto` splits it, which is why X can cap
+    // its frame and still look centred on any monitor.
+    //
+    // Uncapped, the timeline kept widening with the window — at 2560 the
+    // column ran past 1900px and a post became a line the eye has to track all
+    // the way back across, while the right rail drifted away from the column
+    // it annotates. `justify-start` below stays correct: the slack now falls
+    // OUTSIDE this frame, so there is no dead band left inside it to collect.
+    <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
       {/*
         GUESTS GET NO SIDEBAR.
 

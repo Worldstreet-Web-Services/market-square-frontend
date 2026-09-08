@@ -96,13 +96,48 @@ describe("the create button is rendered once, fixed, in the shell", () => {
   });
 
   it("is position:fixed, never sticky or absolute", () => {
-    assert.match(fabCode, /className="fixed /, "fixed is what pins it to the viewport corner");
+    // Matched as a WORD, not as the literal start of the attribute. It used to
+    // assert `className="fixed `, which broke the day another utility was
+    // added ahead of it — the position is the invariant, not its place in the
+    // class string.
+    assert.match(fabCode, /className="[^"]*\bfixed\b/, "fixed is what pins it while scrolling");
     assert.doesNotMatch(
       fabCode,
       /\bsticky\b/,
       "sticky only pins while the containing block is in view — that was the bug"
     );
-    assert.doesNotMatch(fabCode, /className="absolute /);
+    assert.doesNotMatch(fabCode, /className="[^"]*\babsolute\b/);
+  });
+
+  it("tracks the SHELL's right edge, not the window's", () => {
+    /*
+      The shell is capped at `--ws-shell-max` and centred, so on a monitor
+      wider than the cap the window's right edge and the frame's are different
+      places — and a button measured from the window sits out in the gutter,
+      orphaned from the column it composes into.
+
+      It stays `fixed` (above), so the fix is the same cap plus the same
+      `mx-auto` on the fixed strip: `inset-x-0` gives `mx-auto` something to
+      centre within. All three have to agree, which is why all three are
+      asserted together here rather than trusted to stay in step.
+    */
+    assert.match(fabCode, /max-w-\[var\(--ws-shell-max\)\]/, "the button lost the shell's cap");
+    assert.match(fabCode, /\bmx-auto\b/, "a capped fixed strip must be centred to sit on the frame");
+    assert.match(fabCode, /\binset-x-0\b/, "mx-auto centres nothing without a left/right basis");
+    assert.match(
+      stripComments(shell),
+      /mx-auto flex w-full max-w-\[var\(--ws-shell-max\)\]/,
+      "the shell frame itself must be the capped, centred one"
+    );
+    assert.match(read("app/globals.css"), /--ws-shell-max:\s*\d+px;/, "the cap must be published");
+  });
+
+  it("does not swallow clicks across the width it now spans", () => {
+    // The strip is as wide as the frame, so it lies over the foot of every
+    // page. Without this it would be an invisible bar eating every click in
+    // its band — the cost of widening the element to position it.
+    assert.match(fabCode, /pointer-events-none/, "the full-width strip must be click-through");
+    assert.match(fabCode, /pointer-events-auto/, "…and the button must take them back");
   });
 
   it("no compose control anywhere is sticky-positioned", () => {
@@ -127,7 +162,8 @@ describe("the create button is rendered once, fixed, in the shell", () => {
   it("carries no route-conditional styling", () => {
     // Its class list must be a constant. A pathname-dependent class is exactly
     // how "identical on every route" would rot.
-    const classAttr = fabCode.match(/className="fixed [^"]*"/)?.[0] ?? "";
+    const classAttr = fabCode.match(/className="[^"]*\bfixed\b[^"]*"/)?.[0] ?? "";
+    assert.notEqual(classAttr, "", "the position class list must be findable for this to mean anything");
     assert.doesNotMatch(classAttr, /\$\{/, "the position classes must not interpolate");
     assert.doesNotMatch(fabCode, /pathname/, "the button must not know which route it is on");
   });
