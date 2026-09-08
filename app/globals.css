@@ -1116,7 +1116,19 @@ body {
   animation: ws-splash-palette 3.3s forwards;
 }
 
+/* THE MARK MUST FIT THE PHONE IT IS ON.
+
+   It rendered at a flat 583.54px, which is 50% wider than a 390px handset —
+   and the splash is `overflow-hidden`, so the logo was simply CROPPED at full
+   scale on every phone. The first thing anybody sees, cut off at both edges.
+
+   `min()` keeps the design's width wherever there is room for it and falls
+   back to a share of the viewport where there is not. 78vw rather than 100
+   because the mark is a logo with air around it, not a banner. The animation
+   is untouched: it scales a transform, so it works against whatever width
+   this resolves to. */
 .ws-splash-mark {
+  width: min(583.54px, 78vw);
   animation: ws-splash-mark 3.3s forwards;
   transform: scale(0.30166);
   will-change: transform;
