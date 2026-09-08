@@ -111,11 +111,29 @@ describe("the create button is rendered once, fixed, in the shell", () => {
       one now, so the invariant inverts: the dock must NOT be hidden at any
       width, or a phone or a laptop ends up with no navigation at all.
     */
+    /*
+      Read from the cn() BASE string, not a literal `className="…"` attribute.
+      The wrapper takes an optional class from the call site now, so the
+      attribute is an expression; matching the attribute form silently stopped
+      finding anything the moment that changed.
+    */
     const dock = stripComments(read("components/layout/bottom-dock.tsx"));
-    const wrapper = dock.match(/className="[^"]*fixed[^"]*"/)?.[0] ?? "";
-    assert.notEqual(wrapper, "", "the dock's fixed wrapper must be findable");
-    assert.doesNotMatch(wrapper, /\bhidden\b/, "the dock must not be hidden at any width");
-    assert.doesNotMatch(wrapper, /\bmd:/, "the dock must not swap in at a breakpoint");
+    const base = dock.match(/"pointer-events-none fixed[^"]*"/)?.[0] ?? "";
+    assert.notEqual(base, "", "the dock's fixed wrapper must be findable");
+    assert.doesNotMatch(base, /\bhidden\b/, "the dock must not be hidden at any width");
+    assert.doesNotMatch(base, /\bmd:/, "the dock must not swap in at a breakpoint");
+
+    /*
+      The ONE thing allowed to hide it is the sidebar switch, and only on
+      desktop, because the rail takes navigation back there. Asserted at the
+      call site so the exception cannot quietly grow into the component.
+    */
+    const shellDock = stripComments(shell);
+    assert.match(
+      shellDock,
+      /MARKET_FLAGS\.sidebar && !guest \? "md:hidden" : undefined/,
+      "the dock may only step aside when the rail is ACTUALLY shown — flag AND signed in"
+    );
   });
 
   it("is position:fixed, never sticky or absolute", () => {

@@ -14,7 +14,7 @@ import {
   toggleRail,
 } from "@/lib/sidebar-rail";
 import { useRailState } from "@/lib/sidebar-rail-store";
-import { allowsCompose } from "@/lib/compose-surfaces";
+import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -1646,17 +1646,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         anywhere.
       */}
         {/*
-          NO SIDEBAR ON DESKTOP — replaced outright by `BottomDock`
-          (748:15721), at ogazboiz's instruction and with the consequence
-          accepted: the rail carried ELEVEN destinations and the dock carries
-          three.
+          NO SIDEBAR BY DEFAULT — replaced by `BottomDock` (748:15721), which
+          carries three destinations against the rail's eleven. Gistrooms,
+          Notifications, Live, Library, Store, Studio, Admin and Operations are
+          not linked from the dock; every route still works, every deep link
+          still resolves, and the drawer behind the top strip's avatar still
+          lists the entire nav.
 
-          Gistrooms, Notifications, Live, Library, Store, Studio, Admin and
-          Operations are no longer linked from any desktop screen. Every route
-          still works and every deep link still resolves — nothing was deleted
-          — and a phone still lists the whole nav in the tab bar's More drawer.
-          Putting `Sidebar` back here is the whole of the reversal.
+          BEHIND A SWITCH, so it is one environment variable rather than a
+          rebuild: `NEXT_PUBLIC_MS_SIDEBAR_ENABLED=true` brings the rail back
+          on desktop with everything it had, and the dock steps back to phones
+          only — the two must never both claim the navigation.
         */}
+        {MARKET_FLAGS.sidebar && !guest && (
+          <Sidebar
+            pathname={pathname}
+            onCompose={
+              authenticated && allowsRailCompose(pathname)
+                ? () => setComposeOpen(true)
+                : undefined
+            }
+          />
+        )}
 
         {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
           and the two things worth reaching from anywhere on the right.
@@ -1781,6 +1792,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             buttons a few pixels apart is what mounting both would be. */}
         <BottomDock
           guest={guest}
+          /*
+            Phones only when the rail is ACTUALLY on screen, which is the flag
+            AND a signed-in reader — guests never get a sidebar. Keyed on the
+            flag alone, a signed-out visitor on desktop got neither: the rail
+            was suppressed for being a guest and the dock was hidden for the
+            rail's benefit, leaving no navigation at all. Found by turning the
+            switch on and looking, which is the only way that shows up.
+          */
+          className={MARKET_FLAGS.sidebar && !guest ? "md:hidden" : undefined}
           onCompose={canCompose && !guest ? () => setComposeOpen(true) : undefined}
         />
 

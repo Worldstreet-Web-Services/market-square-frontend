@@ -31,6 +31,23 @@ export const MARKET_FLAGS = {
    */
   storeNav: process.env.NEXT_PUBLIC_MS_STORE_NAV_ENABLED === "true",
   /**
+   * The labelled desktop SIDEBAR, instead of the bottom dock.
+   *
+   * Off by default, which is the shipped design: `BottomDock` (748:15721)
+   * replaced the sidebar on desktop and the tab bar on a phone, so the dock is
+   * the app's only bottom navigation. This is the way back.
+   *
+   * IT IS A LAYOUT SWITCH, NOT A CAPABILITY, so it does NOT follow the
+   * visible-and-inert rule the other flags do — there is nothing to grey out.
+   * On, the sidebar returns on desktop with its eleven destinations, its
+   * drag-to-resize and its unread badges, and the dock steps back to phones
+   * only so the two never both claim the navigation.
+   *
+   * `NEXT_PUBLIC_MS_SIDEBAR_ENABLED=true` and restart.
+   */
+  sidebar: process.env.NEXT_PUBLIC_MS_SIDEBAR_ENABLED === "true",
+
+  /**
    * Houses: audio-only rooms where anyone can open a table and raise a hand.
    *
    * This gates PROMOTION, never the room. `/gist-rooms/[id]` always resolves — a

@@ -72,8 +72,16 @@ interface DockItem {
 export function BottomDock({
   onCompose,
   guest = false,
+  className,
 }: {
   onCompose?: () => void;
+  /**
+   * Only ever `md:hidden`, and only when `MARKET_FLAGS.sidebar` is on — the
+   * rail takes desktop navigation back and the dock stays on phones. It lives
+   * at the call site rather than here so this component has no opinion about
+   * a flag it does not read.
+   */
+  className?: string;
   /**
    * Signed out. Chat is dropped rather than shown leading to a sign-in wall —
    * the same judgement the sidebar made when it hid itself entirely from
@@ -118,7 +126,7 @@ export function BottomDock({
        The inset clears the home indicator on a phone and is the file's 24
        everywhere else. */
     <div
-      className="pointer-events-none fixed inset-x-0 z-40 flex justify-center"
+      className={cn("pointer-events-none fixed inset-x-0 z-40 flex justify-center", className)}
       style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
     >
       <div className="pointer-events-auto flex items-center gap-2">
