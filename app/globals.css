@@ -1224,33 +1224,61 @@ body {
    rises with the content it belongs to. */
 @media (max-aspect-ratio: 1440 / 1024) {
   :root {
-    /* WHERE THE ART BAND STARTS, and how tall it is. Stated once because two
-       rules below have to agree about it — the band reserves the space and the
-       stage is centred in it, and a disagreement between those two is exactly
-       what put the headline on top of the artwork.
+    /* THE ART BAND, MEASURED RATHER THAN GUESSED.
+       All three numbers below come from measuring the rendered stage at 390,
+       because the stage and the PICTURE INSIDE IT are not the same size: the
+       artwork occupies 64% of the stage's width and 44% of its height, sitting
+       slightly above centre. Sizing the band to the STAGE (which is what the
+       first attempt did) therefore reserved half a screen of empty margin and
+       pushed the copy miles below the card.
 
-       94 is the column's own `pt-10` (40) plus the wordmark, measured at 54.
-       The height is the stage's REAL height: it is `aspect-ratio: 1440/1024`
-       and, since the width cap above pins it to the viewport, that is
-       100vw / 1.40625 — 277px on a 390 phone, against the 180 the band used to
-       reserve. Reserving less than the picture is what let the two overlap. */
-    --ws-art-band-top: 94px;
-    --ws-art-band-h: calc(100vw / 1.40625);
+       --ws-stage-w  how wide the picture is allowed to get. 130vw makes the
+                     card 83% of the screen instead of 52%. The ceiling is
+                     ~135vw: past that the artwork's left edge crosses zero and
+                     starts cropping again, which is the bug this all began
+                     with. 130 leaves a little room and is not a coincidence.
+       0.55          the band's share of the stage height — comfortably more
+                     than the art's own 44%, so the scatter around the card
+                     still has somewhere to be.
+       0.087         how far the art's centre sits ABOVE the stage's. Without
+                     this the picture rides up out of the band and touches the
+                     wordmark. */
+    --ws-stage-w: min(calc(100dvh * 1440 / 1024), 130vw);
+    --ws-stage-h: calc(var(--ws-stage-w) / 1.40625);
+    /* The column's pt-10 (40) + the wordmark (54), then 44 of air so the card
+       is not sitting on the wordmark's shoulders. */
+    --ws-art-band-top: 138px;
+    /* The MEASURED height of the picture, published by `WelcomeStage`. The
+       fallback is only for the frame before measurement. */
+    --ws-art-band-h: var(--ws-art-fit-h, calc(var(--ws-stage-h) * 0.55));
   }
   .ws-welcome-stage {
-    /* Centred in the band rather than in the viewport, so the artwork travels
-       with the content instead of sitting marooned in the middle. */
-    top: calc(var(--ws-art-band-top) + var(--ws-art-band-h) / 2);
+    min-width: var(--ws-stage-w);
+    /* Shrunk only when the composition is wider than the phone — screen two's
+       fan is 188% of the stage and needs it; screens one and three do not and
+       get 1. */
+    scale: var(--ws-art-fit, 1);
+    /* The band's middle, corrected by however far this screen's art sits from
+       the stage's own middle. Both measured; neither is per-screen guesswork. */
+    top: calc(
+      var(--ws-art-band-top) + var(--ws-art-band-h) / 2 - var(--ws-art-dy, 0px)
+    );
   }
   .ws-welcome-art-gap {
     flex: 0 0 auto;
     min-height: var(--ws-art-band-h);
+    /* Air between the wordmark and the picture. The band's own top comes from
+       flow — the column's pt-10 plus the wordmark — so this is what actually
+       creates the gap, and `--ws-art-band-top` above carries the same 44 so
+       the stage stays centred on the band it was given. */
+    margin-top: 44px;
   }
   .ws-welcome-spring {
     display: block;
     flex: 1 1 0%;
   }
 }
+
 
 
 /* The primary CTA. Its stops are the purple ramp's two ends — the SAME tokens
