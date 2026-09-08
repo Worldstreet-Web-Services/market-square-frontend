@@ -32,6 +32,8 @@ import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
 import { WinkButton } from "@/features/profile/components/wink-button";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import { CreatorCard } from "@/features/profile/components/creator-card";
+import { AccountTabs, type AccountTab } from "@/features/profile/components/account-tabs";
+import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
 
 /*
@@ -232,6 +234,7 @@ export function ProfilePage({
   messageSlot,
   kashSlot,
   housesSlot,
+  giftGallerySlot,
   composeSlot,
   postSlot,
   mediaViewerSlot,
@@ -246,6 +249,12 @@ export function ProfilePage({
    * to, so a visitor gets no rail rather than an empty one.
    */
   housesSlot?: React.ReactNode;
+  /**
+   * The gift gallery — node 492:41810. It counts the viewer's own received
+   * tips, so it lives in the tips slice and arrives as a slot; profile and
+   * tips never import each other.
+   */
+  giftGallerySlot?: React.ReactNode;
   /** The balance chip on the cover (435:27523) — the kash slice's, own profile
    *  only, because there is no route for anybody else's balance and there
    *  should not be. */
@@ -262,6 +271,12 @@ export function ProfilePage({
   const profile = useProfile(username);
   const me = useMe();
   const [tab, setTab] = useState<Tab>("posts");
+  /**
+   * The ACCOUNT strip's selection, separate from `tab` above — the two strips
+   * are different questions and must not share one value. Gift Gallery is the
+   * one the file draws active and the only one with a panel behind it.
+   */
+  const [accountTab, setAccountTab] = useState<AccountTab>("gifts");
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
   const isMe = Boolean(profile.data && me.data && profile.data.id === me.data.id);
@@ -478,6 +493,53 @@ export function ProfilePage({
         <div className="space-y-3 px-8 pb-4 pt-9">
           <CreatorCard role={data.role} />
           <VerificationCard />
+        </div>
+      )}
+
+      {/*
+        NODE 492:47030 — the ACCOUNT strip and its panel.
+
+        Own-profile only, and every tab is the reason why: earnings, badges,
+        gifts received and your own replays are all statements about your
+        account, and the two routes behind any of them (`/me/tips/received`,
+        and the KASH engine) are `/me` routes. The same frame in the file also
+        carries "Add new house" and "Edit Profile", which are only ever yours.
+
+        THREE OF THE FOUR TABS ARE INERT, and each for a different, checked
+        reason rather than because they were awkward:
+
+         · Earnings — `GET /me/tips/received` EXISTS and is real (it is what
+           feeds the gallery's counts). What does not exist is a design for the
+           panel: this node draws the gift grid, not an earnings view, so the
+           tab is held rather than filled with something invented.
+         · Badges — no route at all. The served spec's only badge path is
+           `/admin/profiles/{id}/org-badge`, which ASSIGNS one; there is
+           nothing that lists what somebody has earned.
+         · Replays — `MARKET_FLAGS.replays`, off because LiveKit egress and a
+           storage bucket are not provisioned, so `replayUrl` is null on every
+           stream. The flag makes the surface reappear; it cannot make the
+           recordings exist.
+
+        Visible and disabled, per the standing rule — deleting them loses the
+        roadmap, leaving them live tells the reader a lie.
+      */}
+      {isMe && giftGallerySlot && (
+        <div className="pt-6">
+          <AccountTabs
+            tabs={[
+              { value: "earnings", label: "Earnings", disabledReason: "No panel for this yet" },
+              { value: "badges", label: "Badges", disabledReason: "Not available yet" },
+              { value: "gifts", label: "Gift Gallery" },
+              {
+                value: "replays",
+                label: "Replays",
+                disabledReason: MARKET_FLAGS.replays ? undefined : "Soon",
+              },
+            ]}
+            value={accountTab}
+            onChange={setAccountTab}
+          />
+          {accountTab === "gifts" && giftGallerySlot}
         </div>
       )}
 

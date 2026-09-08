@@ -16,6 +16,46 @@ export async function fetchTipCapability() {
 }
 
 /**
+ * THE TIPS THIS PERSON HAS BEEN PAID — `GET /me/tips/received`.
+ *
+ * The service's own summary for it is "the caller's confirmed tips received
+ * (earnings)", and `/me` is the whole scope: there is no route that answers
+ * what SOMEBODY ELSE has been paid, and there should not be — another
+ * person's income is not a fact their profile publishes.
+ *
+ * Parsed as the service's row (`Tip` in the served spec), not the receipt
+ * shape the rest of this slice renders: this is a list of ledger entries, and
+ * nothing here is hydrated with a profile. `amountKash` stays a string.
+ *
+ * `limit` is the only parameter the route takes — no cursor, so this is a
+ * recent-window read rather than a pageable history. 200 is what the gift
+ * gallery needs to count honestly; it is not a claim to have every tip ever.
+ */
+const ReceivedTipSchema = z.object({
+  id: z.string(),
+  amountKash: z.string(),
+  // Same `catch` reasoning as `TipResponseSchema`: an unknown status must not
+  // fail a list, and it degrades to the one that asserts nothing.
+  status: z.enum(["pending", "confirmed", "failed"]).catch("pending"),
+  giftId: z.string().nullable().optional().default(null),
+  fromUserId: z.string().nullable().optional().default(null),
+  createdAt: z.string().nullable().optional().default(null),
+});
+
+const ReceivedTipsSchema = z.object({
+  items: z.array(ReceivedTipSchema).optional().default([]),
+});
+
+export type ReceivedTip = z.infer<typeof ReceivedTipSchema>;
+
+export async function fetchReceivedTips(): Promise<ReceivedTip[]> {
+  const page = ReceivedTipsSchema.parse(
+    await msApi.authedGet("/me/tips/received", { limit: 200 })
+  );
+  return page.items;
+}
+
+/**
  * The service answers with its OWN tip row — ids, both party ids, a rail
  * reference — not with the receipt shape this slice renders. Adapting here
  * keeps the boundary in one place: components stay written against `Tip`, and

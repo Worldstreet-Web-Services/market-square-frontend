@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ProfilePage } from "@/features/profile";
 import { ProfileHouses } from "@/components/layout/profile-houses";
 import { ProfileKashChip } from "@/components/layout/profile-kash-chip";
+import { ProfileGiftGallery } from "@/components/layout/profile-gift-gallery";
 import { PostCard, VideoViewer } from "@/features/feed";
 import { useOpenConversation } from "@/features/messages";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
@@ -85,6 +86,7 @@ export function ProfileScreen({ username }: { username: string }) {
       /* 534:15577 — a house is a group CONVERSATION, so the rail reads the
          messages slice and is joined here rather than imported across. */
       housesSlot={<ProfileHouses />}
+      giftGallerySlot={<ProfileGiftGallery isMe />}
       /* 435:27523 — the balance chip on the cover. The kash slice's, and the
          profile may not import it. */
       kashSlot={<ProfileKashChip />}
