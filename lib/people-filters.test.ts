@@ -157,10 +157,10 @@ test("toggling a role adds then removes it", () => {
 test("the scope note names what is missing and that filtering is page-scoped", () => {
   const none = { role: true, verified: true, location: false, gender: false };
   assert.deepEqual(filterScopeNotes(none, EMPTY_PEOPLE_FILTER), [
-    "Location and gender aren't on a profile yet, so the square can't narrow by them.",
+    "Nobody loaded here has added a location or a gender yet, so there's nothing to narrow by.",
   ]);
   assert.deepEqual(filterScopeNotes(none, { ...EMPTY_PEOPLE_FILTER, verifiedOnly: true }), [
-    "Location and gender aren't on a profile yet, so the square can't narrow by them.",
+    "Nobody loaded here has added a location or a gender yet, so there's nothing to narrow by.",
     "These narrow the people already loaded — keep scrolling for more.",
   ]);
 });
@@ -176,7 +176,7 @@ test("the missing-facet note disappears when the backend ships the fields", () =
 test("one missing facet reads as singular", () => {
   const half = { role: true, verified: true, location: true, gender: false };
   assert.deepEqual(filterScopeNotes(half, EMPTY_PEOPLE_FILTER), [
-    "gender isn't on a profile yet, so the square can't narrow by it.",
+    "Nobody loaded here has added a gender yet, so there's nothing to narrow by.",
   ]);
 });
 

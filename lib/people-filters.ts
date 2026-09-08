@@ -179,10 +179,25 @@ export function toggleRole(filter: PeopleFilter, role: string): PeopleFilter {
  * The sentence under the controls.
  *
  * Two separate admissions, and neither may be dropped for being wordy:
- *   - what we CANNOT filter by at all, named so the reader does not go looking
+ *   - what there is nothing to narrow BY, named so the reader does not go
+ *     looking for a control that is not there
  *   - that what we CAN filter by only sees the pages loaded so far
  * Returns the parts rather than a formatted string so the caller can style the
  * two halves; an empty array means there is nothing to admit.
+ *
+ * ─── IT SPEAKS ABOUT THE DATA, NOT ABOUT THE SERVICE ────────────────────────
+ * It used to read "gender isn't on a profile yet, so the square can't narrow by
+ * it" — a claim about the SCHEMA, drawn from an observation about VALUES.
+ * `facetAvailability` can only see whether the loaded rows carry a gender, and
+ * "nobody has filled this in" is a completely different fact from "the service
+ * has no such field".
+ *
+ * That distinction stopped being academic: `PublicProfile` now carries `gender`
+ * and `GET /profiles` accepts it as a facet — checked against the live contract
+ * — so the sentence was telling readers the product lacked something it has,
+ * on the evidence that the handful of people loaded had not answered it.
+ *
+ * So it says the observable thing instead, which stays true either way.
  */
 export function filterScopeNotes(
   available: Record<PeopleFacet, boolean>,
@@ -190,12 +205,12 @@ export function filterScopeNotes(
 ): string[] {
   const notes: string[] = [];
   const missing = [
-    available.location ? null : "Location",
-    available.gender ? null : "gender",
+    available.location ? null : "a location",
+    available.gender ? null : "a gender",
   ].filter(Boolean) as string[];
   if (missing.length > 0) {
     notes.push(
-      `${missing.join(" and ")} ${missing.length > 1 ? "aren't" : "isn't"} on a profile yet, so the square can't narrow by ${missing.length > 1 ? "them" : "it"}.`
+      `Nobody loaded here has added ${missing.join(" or ")} yet, so there's nothing to narrow by.`
     );
   }
   if (isFiltering(filter)) {
