@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Post } from "@/lib/api/schemas";
 import { useRouter } from "next/navigation";
 import { ProfilePage } from "@/features/profile";
+import { ProfileHouses } from "@/components/layout/profile-houses";
 import { PostCard, VideoViewer } from "@/features/feed";
 import { useOpenConversation } from "@/features/messages";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
@@ -80,6 +81,9 @@ export function ProfileScreen({ username }: { username: string }) {
     <ProfilePage
       username={username}
       messageSlot={(profile) => <MessageButton profile={profile} />}
+      /* 534:15577 — a house is a group CONVERSATION, so the rail reads the
+         messages slice and is joined here rather than imported across. */
+      housesSlot={<ProfileHouses />}
       composeSlot={<ComposeCta />}
       // The same card the timeline and Explore render. The profile used to
       // draw its own stripped row, whose heart was a <span> with no handler,

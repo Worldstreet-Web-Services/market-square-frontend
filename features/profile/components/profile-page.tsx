@@ -227,6 +227,7 @@ function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) 
 export function ProfilePage({
   username,
   messageSlot,
+  housesSlot,
   composeSlot,
   postSlot,
   mediaViewerSlot,
@@ -234,6 +235,13 @@ export function ProfilePage({
   username: string;
   /** Composed from outside — profile never imports the messages slice. */
   messageSlot?: (profile: Profile) => React.ReactNode;
+  /**
+   * The Houses rail (534:15577), also the messages slice's — a house IS a group
+   * conversation. Own profile only: `GET /me/conversations` is the only route
+   * that answers this, and there is none for the houses somebody ELSE belongs
+   * to, so a visitor gets no rail rather than an empty one.
+   */
+  housesSlot?: React.ReactNode;
   /** Composed from outside — profile never imports the feed slice. */
   composeSlot?: React.ReactNode;
   postSlot: (post: Post) => React.ReactNode;
@@ -321,42 +329,85 @@ export function ProfilePage({
         it. What is left is the part 414:24935 puts below the cover: the bio,
         the place, and the two counts.
       */}
-      <div className="px-8 pb-3 pt-6">
-        {data.bio && <p className="mt-3 text-[15px] leading-normal text-body">{data.bio}</p>}
+      {/*
+        NODE 414:24935 — bio, counts, place. 741 wide on a 16 rhythm.
+
+        The name, handle, badges and actions moved ONTO the cover (435:27503);
+        this block used to draw all of them a second time underneath. What the
+        file leaves here is three lines.
+      */}
+      <div className="flex flex-col gap-4 px-8 pt-6">
+        {/*
+          THE FILE PRINTS A LINE WHEN THERE IS NO BIO — "Bio not updated" at
+          50% white, where a written one is the same size in full white. Empty
+          is a state worth showing on your OWN profile, because it is a thing to
+          go and fix; on somebody else's it is just a fact about them. Either
+          way it is the person's own words or the absence of them, never a
+          placeholder pretending to be either.
+        */}
+        <p
+          className={
+            data.bio
+              ? "text-[15px] leading-5 text-white"
+              : "text-[15px] leading-5 text-white/50"
+          }
+        >
+          {data.bio || "Bio not updated"}
+        </p>
+
+        {/* 414:24943 — the count at Geist 600 15/20 in #F7F9F9, its label at
+            400 in 50% white, 4 between them and 16 between the pair. The
+            separator is the file's own, not a bullet we invented. */}
+        <p className="tnum flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px] leading-5">
+          <span className="flex items-center gap-1">
+            <span className="font-semibold text-grey-100">
+              {formatCount(data.followingCount)}
+            </span>
+            <span className="text-white/50">Following</span>
+          </span>
+          <span aria-hidden className="text-grey-100">
+            ·
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-semibold text-grey-100">
+              {formatCount(data.followerCount)}
+            </span>
+            <span className="text-white/50">Followers</span>
+          </span>
+        </p>
 
         {/*
-          THE PLACE AND GENDER THIS PERSON PUBLISHED.
+          THE PLACE THIS PERSON PUBLISHED — 418:25221, a 24px glyph and the
+          text at 15/20 in FULL white, not the 13px meta line it was. The file
+          gives it the same weight as the bio above it, which is right: it is
+          something they said about themselves rather than a caption.
 
-          Rendered only when they said something — null means "hasn't said",
-          which is not a blank to fill with an em-dash or a guess. Both are the
-          person's own words, and they are the fields Explore's People filters
-          match on, so the profile is where a reader confirms what they matched.
+          Rendered only when they said something. Null means "hasn't said",
+          which is not a blank to fill with an em-dash or a guess.
 
-          A place, never a distance: there is no "3 km away" here and there is
-          no field for one. See `lib/people-filters.ts`.
+          A place, never a distance: there is no "3 km away" here and no field
+          for one. See `lib/people-filters.ts`.
+
+          NO LINK ROW. 418:25223 draws a website beside the place, and
+          `PublicProfile` carries no URL of any kind — checked against the live
+          contract. Requested; the row appears when the field does.
         */}
         {(data.city || data.region || data.gender) && (
-          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-meta">
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] leading-5 text-white">
             {(data.city || data.region) && (
-              <span className="flex items-center gap-1.5">
-                <IconLocationPin className="h-4 w-4 shrink-0" />
+              <span className="flex items-center gap-2">
+                <IconLocationPin className="h-6 w-6 shrink-0 text-create" />
                 {/* "Ikeja, Lagos" from whichever halves they gave. */}
                 {[data.city, data.region].filter(Boolean).join(", ")}
               </span>
             )}
-            {data.gender && <span>{data.gender}</span>}
+            {data.gender && <span className="text-white/50">{data.gender}</span>}
           </p>
         )}
-
-        <p className="tnum mt-3 flex gap-4 text-[15px] text-meta">
-          <span>
-            <span className="font-bold text-heading">{formatCount(data.followingCount)}</span> Following
-          </span>
-          <span>
-            <span className="font-bold text-heading">{formatCount(data.followerCount)}</span> Followers
-          </span>
-        </p>
       </div>
+
+      {/* 534:15577 — the houses this person keeps, 38 under the block above. */}
+      {isMe && housesSlot && <div className="px-8 pt-9">{housesSlot}</div>}
 
       {/* Own-profile business: creator application and verification live above
           the tabs, where they read as account state rather than content. */}
