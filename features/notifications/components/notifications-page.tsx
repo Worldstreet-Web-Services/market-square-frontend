@@ -2,13 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { relativeTime } from "@/lib/format";
+import { inboxTime } from "@/lib/inbox-time";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
-import { ColumnHeader } from "@/components/layout/column-header";
 import { Avatar } from "@/components/ui/avatar";
-import { IconWink } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -18,57 +16,118 @@ import {
 } from "@/features/notifications/hooks/use-notifications";
 import type { MarketNotification } from "@/features/notifications/lib/types";
 
-// One glyph per kind. Unknown kinds coerce to "follow" at the schema boundary,
-// so this map is total.
-const GLYPHS: Record<MarketNotification["kind"], string> = {
-  follow: "◎",
-  like: "♥",
-  comment: "◇",
-  repost: "⇄",
-  bookmark: "▱",
-  ticket_purchased: "▣",
-  tip_received: "◆",
-  // The one kind whose glyph is a real icon rather than a geometric mark: a
-  // wink is a face, and no dingbat in this set reads as one. Rendered by the
-  // row, which is why this entry is empty — see `Row`.
-  wink: "",
-  stream_live: "◉",
-  verification_resolved: "✓",
-  role_resolved: "○",
+/**
+ * ONE GLYPH PER KIND, AND EVERY ONE IS THE FILE'S OWN — node 742:15341.
+ *
+ * The row does NOT lead with the actor's photograph. It leads with a 48px disc
+ * on 10% white holding a KIND glyph, which is easy to miss because the disc's
+ * layer in the file is named after a person ("Fatima Bello") while its only
+ * child is a vector group. Checked the child rather than assuming a face went
+ * there.
+ *
+ * These were dingbats — "◎", "♥", "⇄" — standing in for art nobody had
+ * exported. They are exported now, from this node, as real SVGs in
+ * `public/notifications/`. Multi-colour art keeps its own fills (the wink is a
+ * two-tone gradient with `#7E3BEB` and `#6F23EB` accents), so these are files
+ * rather than `currentColor` icon components.
+ *
+ * WHAT THE FILE DRAWS, AND WHAT IT DOES NOT. It gives five glyphs — a wink, a
+ * follow, a trending mark, a mention and a post. Our contract has eleven kinds.
+ * The extra ones are mapped to the file's own art by what they are ABOUT rather
+ * than given invented glyphs: everything that happens to a post takes the post
+ * mark, and the two money kinds take the coin already exported for the earnings
+ * panel. The two admin resolutions get no glyph at all — there is none in the
+ * file and none of the five means "an operator answered you" — so those rows
+ * fall back to the actor's avatar, which is at least true.
+ */
+const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
+  wink: "/notifications/notif-wink.svg",
+  follow: "/notifications/notif-follow.svg",
+  stream_live: "/notifications/notif-trending.svg",
+  comment: "/notifications/notif-mention.svg",
+  like: "/notifications/notif-post.svg",
+  repost: "/notifications/notif-post.svg",
+  bookmark: "/notifications/notif-post.svg",
+  tip_received: "/gifts/coin-stack.svg",
+  ticket_purchased: "/gifts/coin-stack.svg",
 };
+
+/**
+ * THE ROW IS A TITLE AND A BODY, not one sentence — 742:15859 and 742:15860.
+ *
+ * A bold 16/16 headline that says what KIND of thing happened, then a 14/16.5
+ * line at 50% white that says who and what. The old row was a single "{name}
+ * followed you" string, which is the same information with none of the
+ * scanning value: the headline is what lets somebody read a column of these
+ * without reading any of them.
+ *
+ * The file's own copy is used verbatim where it gives it — "Someone is
+ * interested in you!", "New Follower", "Happening Now! 🔥" — because the
+ * wording IS the design. The rest is written in the same voice, and the two
+ * standing rules survive: a wink says what happened and never what it obliges,
+ * and a tip says what arrived rather than what it was worth, because the
+ * payload carries no amount.
+ */
+function headline(item: MarketNotification): string {
+  switch (item.kind) {
+    case "wink":
+      return "Someone is interested in you!";
+    case "follow":
+      return "New Follower";
+    case "stream_live":
+      return "Happening Now! 🔥";
+    case "comment":
+      return "New comment";
+    case "like":
+      return "New like";
+    case "repost":
+      return "Reposted";
+    case "bookmark":
+      return "Saved to Arkmarks";
+    case "tip_received":
+      return "You were tipped";
+    case "ticket_purchased":
+      return "Ticket sold";
+    case "verification_resolved":
+      return "Verification resolved";
+    case "role_resolved":
+      return "Role resolved";
+  }
+}
 
 // The service sends structured events, not prose — the copy lives here so it
 // stays in the product's voice.
 function describe(item: MarketNotification): string {
+  const who = item.actor?.displayName || item.actor?.username || "Someone";
   switch (item.kind) {
     case "follow":
-      return "followed you";
+      return `${who} started following you on Square.`;
     case "like":
-      return "liked your post";
+      return `${who} liked your post.`;
     case "comment":
-      return "commented on your post";
+      return `${who} commented on your post.`;
     case "repost":
-      return "reposted your post";
+      return `${who} reposted your post.`;
     case "bookmark":
-      return "saved your post to their Arkmarks";
+      return `${who} saved your post to their Arkmarks.`;
     case "ticket_purchased":
-      return "bought a ticket to your stream";
+      return `${who} bought a ticket to your stream.`;
     case "tip_received":
       // What ARRIVED, not what it was worth. The notification payload carries
       // no amount or gift, so this says the true general thing and the tips
       // list (Earnings) carries the detail.
-      return "sent you a tip";
+      return `${who} sent you a tip.`;
     case "wink":
       // Says what happened and nothing about what it obliges. A wink is an
       // opening, not a request, and copy that implies otherwise ("wants to
       // meet you") puts the recipient on a spot they did not step onto.
-      return "winked at you";
+      return `${who} just winked at you. Wink back at them now to kick things off.`;
     case "stream_live":
-      return "is live now";
+      return `${who} is live right now. Tune in.`;
     case "verification_resolved":
-      return "resolved your verification request";
+      return "Your verification request has been resolved.";
     case "role_resolved":
-      return "resolved your role request";
+      return "Your role request has been resolved.";
   }
 }
 
@@ -81,53 +140,89 @@ function hrefFor(item: MarketNotification): string | null {
   return null;
 }
 
-function Row({ item, onMarkRead }: { item: MarketNotification; onMarkRead: (id: string) => void }) {
+function Row({
+  item,
+  onMarkRead,
+  actionSlot,
+}: {
+  item: MarketNotification;
+  onMarkRead: (id: string) => void;
+  actionSlot?: (item: MarketNotification) => React.ReactNode;
+}) {
   const href = hrefFor(item);
   const unread = !item.readAt;
+  const glyph = GLYPHS[item.kind];
+  const action = actionSlot?.(item);
 
   const body = (
     <>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center text-xl text-create">
-        {item.kind === "wink" ? <IconWink className="h-5 w-5" /> : GLYPHS[item.kind]}
+      {/* 742:15857 — 48 at a full round on 10% white. The glyph is the file's
+          own art; where the file draws none, the actor's face stands in. */}
+      <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-white/10">
+        {glyph ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={glyph} alt="" aria-hidden className="h-6 w-6" />
+        ) : item.actor ? (
+          <Avatar
+            name={item.actor.displayName || item.actor.username}
+            seed={item.actor.id}
+            src={item.actor.avatarUrl}
+            size={48}
+          />
+        ) : null}
       </span>
-      {item.actor ? (
-        <Avatar name={item.actor.displayName} seed={item.actor.id} src={item.actor.avatarUrl} size={36} />
-      ) : null}
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] leading-normal text-body">
-          <span className="font-bold text-heading">
-            {item.actor?.displayName ?? "Someone"}
-          </span>{" "}
+
+      {/* 742:15858 — 8 between the headline and the line under it. */}
+      <span className="flex min-w-0 flex-1 flex-col gap-2">
+        <span className="truncate text-[16px] font-bold leading-4 text-white">
+          {headline(item)}
+        </span>
+        <span className="line-clamp-2 text-[14px] leading-[16.5px] text-white/50">
           {describe(item)}
         </span>
+      </span>
+
+      {/* 742:15884 — the action and the stamp, 16 apart, held at the right.
+          The stamp is `inboxTime`, not `relativeTime`: the file shows "11:39",
+          "Yesterday", "2d", "3d" — a clock inside today and an age past it,
+          which is exactly what that helper already produces for the inbox. */}
+      <span className="flex shrink-0 items-center gap-4">
+        {action}
         {item.createdAt && (
-          <span className="mt-1 block text-[13px] text-meta">{relativeTime(item.createdAt)}</span>
+          <time
+            dateTime={item.createdAt}
+            className="shrink-0 text-[10px] leading-[15px] text-white/50"
+          >
+            {inboxTime(item.createdAt)}
+          </time>
+        )}
+        {/* The unread dot is the per-row acknowledgement. `useMarkNotificationsRead`
+            has always taken ids; the UI only ever passed `undefined`, so a reader
+            could clear everything or nothing. */}
+        {unread && (
+          <button
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onMarkRead(item.id);
+            }}
+            aria-label="Mark as read"
+            title="Mark as read"
+            className="ws-press shrink-0 rounded-full p-1.5 transition-colors hover:bg-white/10"
+          >
+            <span className="block h-2 w-2 rounded-full bg-create" />
+          </button>
         )}
       </span>
-      {/* The unread dot is the per-row acknowledgement. `useMarkNotificationsRead`
-          has always taken ids; the UI only ever passed `undefined`, so a reader
-          could clear everything or nothing. */}
-      {unread && (
-        <button
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onMarkRead(item.id);
-          }}
-          aria-label="Mark as read"
-          title="Mark as read"
-          className="ws-press shrink-0 rounded-full p-1.5 transition-colors hover:bg-white/10"
-        >
-          <span className="block h-2 w-2 rounded-full bg-create" />
-        </button>
-      )}
     </>
   );
 
+  /* 742:15855 — 97 tall, 32 in from the left, 16 between the three groups, and
+     NO divider: the rows are separated by an unread wash and nothing else. An
+     unread row is `#FFFFFF` at 3%; a read one has no fill at all. */
   const className = cn(
-    "ws-row flex items-start gap-3 px-4 py-3",
-    // Unread rows carry a faint silver wash, the way X tints new items.
-    unread && "bg-white/4"
+    "flex min-h-[97px] items-center gap-4 px-8 py-6 transition-colors",
+    unread ? "bg-white/[0.03] hover:bg-white/[0.06]" : "hover:bg-white/[0.03]"
   );
 
   if (!href) return <div className={className}>{body}</div>;
@@ -138,7 +233,17 @@ function Row({ item, onMarkRead }: { item: MarketNotification; onMarkRead: (id: 
   );
 }
 
-export function NotificationsPage() {
+export function NotificationsPage({
+  actionSlot,
+}: {
+  /**
+   * The per-row action — "Wink back" (742:15885) and "Follow back"
+   * (742:15901). Both are the PROFILE slice's mutations, and slices never
+   * import each other, so they arrive through a route slot composed in
+   * `components/layout/notifications-screen.tsx`.
+   */
+  actionSlot?: (item: MarketNotification) => React.ReactNode;
+} = {}) {
   const { ready, authenticated, login } = useAuth();
   const notifications = useNotifications();
   const markRead = useMarkNotificationsRead();
@@ -161,7 +266,44 @@ export function NotificationsPage() {
 
   return (
     <>
-      <ColumnHeader title="Notifications" subtitle="Activity from across the square" />
+      {/*
+        742:15830 — the page's own head, not a `ColumnHeader`.
+
+        It was `ColumnHeader` with the subtitle "Activity from across the
+        square", which the file does not have: node 742:15830 is a
+        SPACE_BETWEEN row carrying the title at Geist 500 24/31.2 and a filter
+        pill opposite it, and nothing else. The subtitle was ours.
+      */}
+      <div className="flex items-center justify-between gap-4 px-8 pb-2 pt-6">
+        <h1 className="text-[24px] font-medium leading-[31.2px] text-white">Notifications</h1>
+
+        {/*
+          742:15825 — 145x44 at a full round on `#979797` at 5%, the label at
+          Geist 500 14/20 and the file's own chevron beside it.
+
+          IT IS INERT, AND VISIBLY SO. The file draws a filter, and
+          `GET /me/notifications` takes only `limit` and `cursor` — there is no
+          `kind` parameter to narrow on, so there is nothing to switch between
+          and every option would answer the same list. Rendering it live would
+          be a control that changes nothing; rendering it `disabled` says what
+          is true. The same rule the chat inbox's three inert tabs follow.
+        */}
+        <button
+          type="button"
+          disabled
+          title="Filtering notifications isn't available yet"
+          className="flex h-11 shrink-0 cursor-not-allowed items-center gap-2.5 rounded-full bg-[#979797]/5 px-4 text-[14px] font-medium leading-5 text-white opacity-60"
+        >
+          All notification
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/notifications/notif-chevron.svg"
+            alt=""
+            aria-hidden
+            className="h-[3.5px] w-[7px] shrink-0"
+          />
+        </button>
+      </div>
 
       {ready && !authenticated && (
         <div className="p-4">
@@ -204,7 +346,12 @@ export function NotificationsPage() {
           )}
 
           {items.map((item) => (
-            <Row key={item.id} item={item} onMarkRead={(id) => markRead.mutate([id])} />
+            <Row
+              key={item.id}
+              item={item}
+              onMarkRead={(id) => markRead.mutate([id])}
+              actionSlot={actionSlot}
+            />
           ))}
 
           <div ref={sentinel} />
