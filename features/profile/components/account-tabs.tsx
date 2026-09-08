@@ -53,7 +53,22 @@ export function AccountTabs({
   onChange: (value: AccountTab) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 bg-[#0F0F0F] py-[4px]">
+    /*
+      NO BACKGROUND, AND NO PADDING — both were mine and both were wrong.
+
+      The frame reports a `#0F0F0F` fill, which is the PAGE's own colour in
+      that file: composited on its own ground it is invisible, and the file
+      draws no band here at all. Our column sits on `--color-chrome` `#121214`,
+      so painting the reported fill drew a darker strip across the page that
+      the design does not have. Same trap as the post card's
+      `#0F0F0F`-to-transparent plate, which is deliberately not drawn either —
+      keep the layout a node contributes, drop a fill that only matches the
+      ground it was measured against.
+
+      The 48 height is exactly its contents: 38 of tabs, the 8 gap, the 2 rule.
+      There is no slack in it to pad.
+    */
+    <div className="flex flex-col gap-2">
       {/* 468:35621 — 32 of left inset, 32 between. */}
       <div className="flex items-center gap-8 overflow-x-auto pl-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab) => {
