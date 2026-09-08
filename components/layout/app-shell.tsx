@@ -34,7 +34,11 @@ import {
   IconSbLibrary,
   IconSbLive,
 } from "@/components/ui/sidebar-icons";
-import { IconCaretDown, IconLocationPin, IconTopSearch } from "@/components/ui/topbar-icons";
+import {
+  IconCaretDown,
+  IconLocationPin,
+  IconTopSearch,
+} from "@/components/ui/topbar-icons";
 import { LocationSheet } from "@/components/layout/location-sheet";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { RightRail } from "@/components/layout/right-rail";
@@ -156,8 +160,13 @@ const NAV: NavItem[] = [
     left the hallway on Home as the only door to every room but the three open
     now. The ROUTE is unchanged; nothing already linked breaks.
   */
-  { href: "/gist-rooms", label: "Gistrooms", icon: IconSbGistrooms, flag: "houses" },
-  
+  {
+    href: "/gist-rooms",
+    label: "Gistrooms",
+    icon: IconSbGistrooms,
+    flag: "houses",
+  },
+
   { href: "/messages", label: "Chat", icon: IconSbChat, authed: true },
   {
     href: "/notifications",
@@ -186,7 +195,7 @@ const NAV: NavItem[] = [
     a thing a guest has.
   */
   { href: "/arkmarks", label: "Library", icon: IconSbLibrary, authed: true },
-// Reachable by URL, by deep link and from Explore's Products tab — just
+  // Reachable by URL, by deep link and from Explore's Products tab — just
   // not promoted in the nav while `storeNav` is off.
   { href: "/store", label: "Store", icon: IconStore, flag: "storeNav" },
   /*
@@ -451,7 +460,8 @@ function RailMenu({
     place();
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    const onKey = (event: KeyboardEvent) =>
+      event.key === "Escape" && setOpen(false);
     document.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("scroll", place, true);
@@ -467,7 +477,10 @@ function RailMenu({
         at &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+            <div
+              className="fixed inset-0 z-[60]"
+              onClick={() => setOpen(false)}
+            />
             <div
               role="menu"
               aria-label={label}
@@ -483,7 +496,7 @@ function RailMenu({
               {children(() => setOpen(false))}
             </div>
           </>,
-          document.body
+          document.body,
         )}
     </div>
   );
@@ -1023,7 +1036,9 @@ function TopBarSearch() {
       className="ws-press hidden h-[38px] w-[298px] shrink-0 items-center gap-2 rounded-full border-[0.68px] border-white/40 px-2 text-[#7A7A7A] shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors hover:text-body lg:flex"
     >
       <IconTopSearch className="h-4 w-4 shrink-0" />
-      <span className="text-[16px] font-medium leading-[22px] tracking-[-0.007em]">Search</span>
+      <span className="text-[16px] font-medium leading-[22px] tracking-[-0.007em]">
+        Search
+      </span>
     </Link>
   );
 }
@@ -1067,7 +1082,9 @@ function TopBarLocation() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={place ? `Your location: ${place}. Change it.` : "Set your location"}
+        aria-label={
+          place ? `Your location: ${place}. Change it.` : "Set your location"
+        }
         className="ws-press hidden h-[38px] w-[293px] shrink-0 items-center gap-[5px] rounded-full bg-[rgba(151,151,151,0.05)] pl-[5px] pr-4 text-left transition-colors hover:bg-[rgba(151,151,151,0.09)] xl:flex"
       >
         <IconLocationPin className="h-8 w-8 shrink-0 text-white/70" />
@@ -1095,7 +1112,9 @@ function TopBarLocation() {
 
       {/* Keyed on the opening so the fields are seeded from the CURRENT profile
           each time — a draft abandoned last time must not come back. */}
-      {open && <LocationSheet key={String(open)} open onClose={() => setOpen(false)} />}
+      {open && (
+        <LocationSheet key={String(open)} open onClose={() => setOpen(false)} />
+      )}
     </>
   );
 }
@@ -1564,8 +1583,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // the way back across, while the right rail drifted away from the column
     // it annotates. `justify-start` below stays correct: the slack now falls
     // OUTSIDE this frame, so there is no dead band left inside it to collect.
-    <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
-      {/*
+    /*
+      THE GUTTERS RHYME WITH THE FRAME.
+
+      Capping the shell created a seam nobody had before it: `body` is `#000`
+      and the frame is `--color-chrome` `#121214`, so on any screen wider than
+      the cap the leftover painted pure black either side of a lighter panel —
+      a hard vertical edge down both sides of the app.
+
+      Painted on a FULL-WIDTH wrapper rather than on `body`, deliberately. The
+      live room renders OUTSIDE this shell (`/live/:id` returns early above)
+      and its stage is meant to sit on pure black; moving the page colour would
+      have lightened the ground behind every video without anyone asking. This
+      way the chrome reaches the window's edges exactly where the shell is on
+      screen, and nowhere else.
+
+      `min-h-dvh` so a short route does not leave the ground stopping partway
+      down with black beneath it.
+    */
+    <div className="min-h-dvh w-full bg-chrome">
+      <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
+        {/*
         GUESTS GET NO SIDEBAR.
 
         Signed out, every row in it either leads somewhere that immediately
@@ -1584,68 +1622,68 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         rail without moving it would leave a guest on desktop with no sign-in
         anywhere.
       */}
-      {!guest && (
-        <Sidebar
-          pathname={pathname}
-          /* The RAIL's own rule, not the floating button's — see
+        {!guest && (
+          <Sidebar
+            pathname={pathname}
+            /* The RAIL's own rule, not the floating button's — see
              `allowsRailCompose`. Sharing `canCompose` took Post gist off the
              sidebar on /messages, /admin and /operations, none of which is a
              reason the rail's button should go. */
-          onCompose={
-            authenticated && allowsRailCompose(pathname)
-              ? () => setComposeOpen(true)
-              : undefined
-          }
-        />
-      )}
+            onCompose={
+              authenticated && allowsRailCompose(pathname)
+                ? () => setComposeOpen(true)
+                : undefined
+            }
+          />
+        )}
 
-      {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
+        {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
           and the two things worth reaching from anywhere on the right.
           The avatar is the door to everything the sidebar holds on desktop —
           it opens the same drawer the "More" tab does, so the account you are
           posting as is both visible and the way in, which is the arrangement
           every phone app in this category uses. */}
-      <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center px-4 md:hidden">
-        <button
-          onClick={() => setMenuOpen(true)}
-          aria-label="Open menu"
-          aria-expanded={menuOpen}
-          className="ws-press -ml-1 shrink-0 rounded-full p-1"
-        >
-          {authenticated ? (
-            <Avatar
-              name={me.data?.displayName ?? "Me"}
-              seed={me.data?.id}
-              src={me.data?.avatarUrl}
-              size={28}
-            />
-          ) : (
-            <IconUser className="h-6 w-6 text-meta" />
-          )}
-        </button>
+        <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center px-4 md:hidden">
+          <button
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            className="ws-press -ml-1 shrink-0 rounded-full p-1"
+          >
+            {authenticated ? (
+              <Avatar
+                name={me.data?.displayName ?? "Me"}
+                seed={me.data?.id}
+                src={me.data?.avatarUrl}
+                size={28}
+              />
+            ) : (
+              <IconUser className="h-6 w-6 text-meta" />
+            )}
+          </button>
 
-        {/* Absolutely centred, so the mark sits on the middle of the SCREEN
+          {/* Absolutely centred, so the mark sits on the middle of the SCREEN
             rather than the middle of whatever space the two sides leave —
             those change with the live pill and the signed-in state. */}
-        <Wordmark
-          height={26}
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2"
-        />
+          <Wordmark
+            height={26}
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+          />
 
-        <div className="ml-auto flex items-center gap-3">
-          {broadcast.live && (
-            <OnAirPill streamId={broadcast.streamId} compact />
-          )}
-          {/* Search only. Notifications live in the bottom tab bar, where they
+          <div className="ml-auto flex items-center gap-3">
+            {broadcast.live && (
+              <OnAirPill streamId={broadcast.streamId} compact />
+            )}
+            {/* Search only. Notifications live in the bottom tab bar, where they
               carry their unread badge — the bell here was the same
               destination a second time, without the count. */}
-          <Link href="/discover" className="text-meta" aria-label="Explore">
-            <IconSearch className="h-5 w-5" />
-          </Link>
+            <Link href="/discover" className="text-meta" aria-label="Explore">
+              <IconSearch className="h-5 w-5" />
+            </Link>
+          </div>
         </div>
-      </div>
 
-      {/*
+        {/*
         The breadcrumb spans the column and the rail together, so both live
         inside one flex-column beside the sidebar.
 
@@ -1660,90 +1698,93 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         `--color-ground` stays `#000` for the app at large; this is the shell's
         content frame, not a palette change.
       */}
-      <div className="flex min-w-0 flex-1 flex-col bg-chrome">
-        <Breadcrumb pathname={pathname} />
-        {/* justify-START, not center. Centering the column+rail group inside
+        <div className="flex min-w-0 flex-1 flex-col bg-chrome">
+          <Breadcrumb pathname={pathname} />
+          {/* justify-START, not center. Centering the column+rail group inside
             the leftover width of the 1600px shell split that slack in two and
             left a dead band between the sidebar and the column — the column
             read as floating away from the nav that selects it. Packed left,
             the column sits against the sidebar and the slack collects once, at
             the outer edge, where the shell's own mx-auto already balances it. */}
-        <div className="flex min-w-0 flex-1 justify-start">
-          <main
-            className={cn(
-              // Padding, not margin, and from the shared chrome vars rather
-              // than hand-matched numbers: pb-16 was 64px against a 69px tab
-              // bar, so the last five pixels of every column surface sat
-              // underneath it.
-              // overflow-x-clip is a BACKSTOP, not the fix: a single child with
-              // an intrinsic minimum wider than a phone (a fixed-width CTA, a
-              // row of shrink-0 groups) drags the whole page sideways, and the
-              // reader then has to scroll horizontally to reach the right edge
-              // of every other surface. Clip contains that blast radius to the
-              // offending row. Rails that are MEANT to scroll set their own
-              // overflow-x-auto and are unaffected, and anything that needs a
-              // horizontal scrollbar must still opt into one explicitly.
-              //
-              // No max-width. The column had one (720px on home, 600px
-              // elsewhere) and the shell had another (1600px), so the layout
-              // stopped growing while the window kept going — 125px of dead
-              // black at 1440, 197px at 1512, 445px at 1920, always parked on
-              // the right, where it reads as the whole product shoved to one
-              // side. Every pane flexes to the window it is in instead.
-              // `100dvh` MINUS the breadcrumb, not `min-h-dvh`. The bar is a
-              // sibling above this in the same flex column, so a full-viewport
-              // minimum made the document exactly one bar taller than the
-              // window and every short route grew a scrollbar with 76px of
-              // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
-              // bar is `hidden md:flex`, so this is identical there.
-              "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
-            )}
-          >
-            {children}
-          </main>
+          <div className="flex min-w-0 flex-1 justify-start">
+            <main
+              className={cn(
+                // Padding, not margin, and from the shared chrome vars rather
+                // than hand-matched numbers: pb-16 was 64px against a 69px tab
+                // bar, so the last five pixels of every column surface sat
+                // underneath it.
+                // overflow-x-clip is a BACKSTOP, not the fix: a single child with
+                // an intrinsic minimum wider than a phone (a fixed-width CTA, a
+                // row of shrink-0 groups) drags the whole page sideways, and the
+                // reader then has to scroll horizontally to reach the right edge
+                // of every other surface. Clip contains that blast radius to the
+                // offending row. Rails that are MEANT to scroll set their own
+                // overflow-x-auto and are unaffected, and anything that needs a
+                // horizontal scrollbar must still opt into one explicitly.
+                //
+                // No max-width. The column had one (720px on home, 600px
+                // elsewhere) and the shell had another (1600px), so the layout
+                // stopped growing while the window kept going — 125px of dead
+                // black at 1440, 197px at 1512, 445px at 1920, always parked on
+                // the right, where it reads as the whole product shoved to one
+                // side. Every pane flexes to the window it is in instead.
+                // `100dvh` MINUS the breadcrumb, not `min-h-dvh`. The bar is a
+                // sibling above this in the same flex column, so a full-viewport
+                // minimum made the document exactly one bar taller than the
+                // window and every short route grew a scrollbar with 76px of
+                // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
+                // bar is `hidden md:flex`, so this is identical there.
+                "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+              )}
+            >
+              {children}
+            </main>
 
-          {!wide && <RightRail />}
+            {!wide && <RightRail />}
+          </div>
         </div>
-      </div>
 
-      {/* Mobile compose: a floating silver core, the one elevated control.
+        {/* Mobile compose: a floating silver core, the one elevated control.
           It opens the composer where you stand — it used to link to
           `/?compose=1`, so posting from `/store` meant losing the page you
           were on. The offset clears the bottom tab bar plus the home
           indicator. The design's mobile frames do not draw a compose button at
           all, so this placement is ours, not the file's. */}
 
-      {/* The one create button. Fixed, mounted here rather than in any route,
+        {/* The one create button. Fixed, mounted here rather than in any route,
           so it holds the same viewport corner on every surface. */}
-      {/* Desktop only: on a phone the create button rides in the tab bar's
+        {/* Desktop only: on a phone the create button rides in the tab bar's
           row, where it cannot land on top of the bar or the composer. */}
-      {canCompose && <CreateFab onClick={() => setComposeOpen(true)} />}
+        {canCompose && <CreateFab onClick={() => setComposeOpen(true)} />}
 
-      <ComposeSheet open={composeOpen} onClose={() => setComposeOpen(false)} />
+        <ComposeSheet
+          open={composeOpen}
+          onClose={() => setComposeOpen(false)}
+        />
 
-      {/* The one ticker sheet for the whole app. A `$BTC` in a caption is
+        {/* The one ticker sheet for the whole app. A `$BTC` in a caption is
           tappable on every surface that renders a post body, so the sheet is
           mounted once here and opened in place through `lib/ticker-store.ts`
           — the same arrangement the composer above uses, and for the same
           reason: tapping a coin must never cost the reader their page. */}
-      <TickerSheet />
+        <TickerSheet />
 
-      <MobileBar
-        pathname={pathname}
-        items={mobileNav}
-        unread={unread.data}
-        onCompose={canCompose ? () => setComposeOpen(true) : undefined}
-      />
-      <MobileMenu
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        items={mobileNav}
-        pathname={pathname}
-        unread={unread.data}
-        onCompose={canCompose ? () => setComposeOpen(true) : undefined}
-      />
+        <MobileBar
+          pathname={pathname}
+          items={mobileNav}
+          unread={unread.data}
+          onCompose={canCompose ? () => setComposeOpen(true) : undefined}
+        />
+        <MobileMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          items={mobileNav}
+          pathname={pathname}
+          unread={unread.data}
+          onCompose={canCompose ? () => setComposeOpen(true) : undefined}
+        />
 
-      {/*
+        {/*
         ONBOARDING — and it REPLACES the bare username gate.
 
         `ClaimUsernameGate` was step 2 of this flow on its own: a sheet that
@@ -1753,15 +1794,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         than shown alongside it — two things asking for a username, one stacked
         over the other, in somebody's first ten seconds.
       */}
-      <OnboardingFlow />
-      {/* ...then, once the account has a name, what they want to see. Ordered,
+        <OnboardingFlow />
+        {/* ...then, once the account has a name, what they want to see. Ordered,
           not stacked — see the note in InterestGate. */}
-      <InterestGate />
-      {/* Session-expiry watchdog: logs out properly instead of half-stuck. */}
-      <SessionGuard />
-      {/* One sentence for the whole app when the backend is unreachable —
+        <InterestGate />
+        {/* Session-expiry watchdog: logs out properly instead of half-stuck. */}
+        <SessionGuard />
+        {/* One sentence for the whole app when the backend is unreachable —
           see the note in the component for why it is not forty. */}
-      <ConnectionBanner />
+        <ConnectionBanner />
+      </div>
     </div>
   );
 }

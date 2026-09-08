@@ -235,12 +235,33 @@ describe("the sidebar hides rows without removing their route", () => {
       exported one — `sidebar-icons.tsx` holds the file's vectors verbatim with
       the baked fills swapped for currentColor.
     */
-    assert.match(NAV, /"\/"[^\n]*icon:\s*IconSbHome/, "Home is off the file's glyph");
-    assert.match(NAV, /"\/discover"[^\n]*icon:\s*IconSbExplore/, "Explore is not the file's globe");
-    assert.match(NAV, /"\/gist-rooms"[^\n]*icon:\s*IconSbGistrooms/, "Gistrooms is not the file's microphone");
-    assert.match(NAV, /"\/messages"[^\n]*icon:\s*IconSbChat/, "Chat is off the file's glyph");
-    assert.match(NAV, /"\/live"[^\n]*icon:\s*IconSbLive/, "Live is not the file's video");
-    assert.match(NAV, /"\/arkmarks"[^\n]*icon:\s*IconSbLibrary/, "Library is off the file's bookmark");
+    /*
+      Matched WITHIN the row's own object literal, not on one line.
+
+      These were `/"\/gist-rooms"[^\n]*icon:/` — `[^\n]*` forbids a newline, so
+      the assertion held only while the whole entry fitted on one line. A
+      formatter wrapping a single entry broke a suite about ICONS, which is the
+      same brittleness as asserting `className="fixed ` by its position in a
+      string. The invariant is "this row is wired to this glyph"; where the
+      line breaks is not part of it.
+    */
+    const rowFor = (href: string) => {
+      const at = NAV.indexOf(`href: "${href}"`);
+      assert.notEqual(at, -1, `no NAV row for ${href}`);
+      const end = NAV.indexOf("}", at);
+      return NAV.slice(at, end === -1 ? undefined : end);
+    };
+    const wiredTo: Array<[string, string, string]> = [
+      ["/", "IconSbHome", "Home is off the file's glyph"],
+      ["/discover", "IconSbExplore", "Explore is not the file's globe"],
+      ["/gist-rooms", "IconSbGistrooms", "Gistrooms is not the file's microphone"],
+      ["/messages", "IconSbChat", "Chat is off the file's glyph"],
+      ["/live", "IconSbLive", "Live is not the file's video"],
+      ["/arkmarks", "IconSbLibrary", "Library is off the file's bookmark"],
+    ];
+    for (const [href, icon, why] of wiredTo) {
+      assert.match(rowFor(href), new RegExp(`icon:\\s*${icon}\\b`), why);
+    }
   });
 
   it("carries LIBRARY on the saved-posts route, not a new one", () => {
