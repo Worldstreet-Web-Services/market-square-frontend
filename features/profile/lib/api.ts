@@ -184,6 +184,26 @@ export async function applyForCreator(note?: string) {
  * budget, because one tap is one request to a third party we neither pay for
  * nor control.
  *
+ * ─── THAT 404 IS AMBIGUOUS ON A DEPLOYMENT THAT LACKS THE ROUTE ─────────────
+ * The paragraph above is true wherever the route exists, and WRONG where it
+ * does not: an absent route is also a 404, so the domain answer ("no place
+ * there") and the transport answer ("no such endpoint") arrive wearing one
+ * signal. It is live today — `POST /geo/reverse` is on the service at :8094
+ * and absent from the deployed spec, because the PR that added it merged to
+ * staging while production deploys from main. So in production this reports
+ * "we could not name that spot" about a route nobody ever called.
+ *
+ * DELIBERATELY NOT PATCHED HERE. Telling the two apart from the client means
+ * probing for the route's existence, which is a client-side workaround for a
+ * server-side ambiguity — the exact thing we do not do. The backend owns it
+ * and has queued the fix: the no-place answer gets its own error CODE
+ * (`NO_PLACE_FOUND`) so this switches on the code and the status stops
+ * mattering, which is correct on a behind deployment too rather than only
+ * once the deploy catches up. Wire that code here when it lands; until then
+ * the string stays as it is, by agreement — on a deployment without the route
+ * the honest sentence is nearer "not available here" than either branch we
+ * currently have.
+ *
  * IT WRITES NOTHING. The place comes back, the person reads it, and the form
  * saves it with `PATCH /me` — which keeps this a convenience button rather
  * than the app recording where somebody is.
