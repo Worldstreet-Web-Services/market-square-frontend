@@ -66,10 +66,22 @@ function AddGiftButton({ name, reason }: { name: string; reason: string }) {
  */
 const NO_PROFILE_GIFTS = "Sending a gift straight to a profile isn't available yet";
 
-export function ProfileGiftGallery({ isMe }: { isMe: boolean }) {
-  // `/me/tips/received` is about the caller, so it is only asked when the
-  // caller is who we are looking at.
-  const tips = useReceivedTips(isMe);
+export function ProfileGiftGallery() {
+  /*
+    NO `isMe` PROP, DELIBERATELY.
+
+    It took one, and the call site passed a hardcoded `isMe` — a value that was
+    only true because the profile page already refuses to mount this anywhere
+    but your own profile. That is a lie waiting to come true: move the slot
+    outside that gate and the prop still says "yes", so the component would ask
+    `/me/tips/received` on a stranger's page and print YOUR gift counts under
+    THEIR name.
+
+    The gate belongs in one place, and it is the one that knows: the page,
+    which compares the viewer's id to the profile's. Here the question is
+    settled by construction, so the query is simply on.
+  */
+  const tips = useReceivedTips(true);
 
   const counts = new Map<string, number>();
   for (const tip of tips.data ?? []) {

@@ -86,7 +86,7 @@ export function ProfileScreen({ username }: { username: string }) {
       /* 534:15577 — a house is a group CONVERSATION, so the rail reads the
          messages slice and is joined here rather than imported across. */
       housesSlot={<ProfileHouses />}
-      giftGallerySlot={<ProfileGiftGallery isMe />}
+      giftGallerySlot={<ProfileGiftGallery />}
       /* 435:27523 — the balance chip on the cover. The kash slice's, and the
          profile may not import it. */
       kashSlot={<ProfileKashChip />}
