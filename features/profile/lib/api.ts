@@ -209,9 +209,18 @@ export async function applyForCreator(note?: string) {
  * `components/layout/location-sheet.tsx` branches on exactly those.
  *
  * NOT ON :8094 YET — committed on the backend and deliberately not deployed,
- * so the running service still answers the old bare NOT_FOUND. That falls into
- * the route-fault branch, which quiets the control rather than lying about a
- * location, so the behaviour is safe in the meantime.
+ * so the running service still answers the old bare NOT_FOUND for BOTH cases.
+ *
+ * THE FAILURE INVERTED RATHER THAN DISAPPEARED, and it is worth knowing which
+ * way round it currently is. Against the old build a genuine no-place also
+ * arrives as bare NOT_FOUND, so it takes the route-fault branch: drop a pin
+ * mid-ocean and the control goes QUIET, instead of saying "type it in". That
+ * is the better way round — it declines to answer rather than telling somebody
+ * a falsehood about their own city — but it is not the finished behaviour.
+ *
+ * So: a dead location control against a no-place pin, before the backend
+ * rebuild, is the OLD build's ambiguity and not a defect in this branch. It
+ * resolves itself the moment the service ships the code, with no change here.
  *
  * IT WRITES NOTHING. The place comes back, the person reads it, and the form
  * saves it with `PATCH /me` — which keeps this a convenience button rather
