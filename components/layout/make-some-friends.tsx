@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { usePeople } from "@/features/discovery";
