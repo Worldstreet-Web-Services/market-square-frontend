@@ -536,20 +536,28 @@ export function ProfilePage({
           {data.bio || "Bio not updated"}
         </p>
 
-        {/* 414:24943 — the count at Geist 600 15/20 in #F7F9F9, its label at
-            400 in 50% white, 4 between them and 16 between the pair. The
-            separator is the file's own, not a bullet we invented. */}
-        <p className="tnum flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px] leading-5">
-          <span className="flex items-center gap-1">
+        {/*
+          468:35601 — the count at Geist 600 15/20 in `#F7F9F9`, its label at
+          400 in 50% white, 4 between them and BASELINE-aligned so a big number
+          and its word sit on one line rather than centring against each other.
+
+          THERE IS NO BULLET. The comment here used to say the separator was
+          "the file's own, not a bullet we invented" — it was exactly a bullet
+          we invented. Node 468:35605 between the two groups is a TEXT node
+          with no characters at all: a 23px spacer, drawn as nothing. Same
+          trick as the empty node in the earnings row.
+
+          So the separation is space, and the file's own: 16 either side of a
+          23px void is a 55px gap.
+        */}
+        <p className="tnum flex flex-wrap items-baseline gap-x-[55px] gap-y-1 text-[15px] leading-5">
+          <span className="flex items-baseline gap-1">
             <span className="font-semibold text-grey-100">
               {formatCount(data.followingCount)}
             </span>
             <span className="text-white/50">Following</span>
           </span>
-          <span aria-hidden className="text-grey-100">
-            ·
-          </span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-baseline gap-1">
             <span className="font-semibold text-grey-100">
               {formatCount(data.followerCount)}
             </span>
@@ -569,11 +577,22 @@ export function ProfilePage({
           A place, never a distance: there is no "3 km away" here and no field
           for one. See `lib/people-filters.ts`.
 
-          NO LINK ROW. 418:25223 draws a website beside the place, and
-          `PublicProfile` carries no URL of any kind — checked against the live
-          contract. Requested; the row appears when the field does.
+          GENDER IS NOT DRAWN HERE, and it was. Node 468:35609 is the whole
+          meta row and it holds exactly two things — the place, and a website —
+          with no gender anywhere in the frame: dumping every text node in
+          534:16948 turns up the bio, the two counts, "108 Opebi Ikeja, Lagos"
+          and a URL, and nothing else. It is still on the profile and still
+          editable; the design simply does not print it on the page, so neither
+          do we.
+
+          NO LINK ROW YET. 468:35614 draws `akar-icons:link-chain` at 24 and
+          the URL at 15/20 in full white, 8 apart, 16 after the place. There is
+          no URL field of any kind on `PublicProfile` — re-checked against the
+          live contract at :8094, where `avatarUrl` and `coverUrl` are the only
+          `*url` keys. Requested; the row appears when the field does, and it
+          is one `<a>` in the row that already exists.
         */}
-        {(data.city || data.region || data.gender) && (
+        {(data.city || data.region) && (
           <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] leading-5 text-white">
             {(data.city || data.region) && (
               <span className="flex items-center gap-2">
@@ -581,9 +600,6 @@ export function ProfilePage({
                 {/* "Ikeja, Lagos" from whichever halves they gave. */}
                 {[data.city, data.region].filter(Boolean).join(", ")}
               </span>
-            )}
-            {data.gender && (
-              <span className="text-white/50">{data.gender}</span>
             )}
           </p>
         )}
