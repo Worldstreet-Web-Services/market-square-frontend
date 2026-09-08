@@ -47,7 +47,25 @@ import { useReceivedTips, type ReceivedTip } from "@/features/tips";
  * has been read against the agreed shape, not against a live response.
  */
 
-/** The gift a tip carried, resolved from the catalogue both send paths use. */
+/**
+ * The gift a tip carried, resolved from the catalogue both send paths use.
+ *
+ * ─── AN UNRESOLVED ID IS A DESIGNED STATE, NOT A GAP ────────────────────────
+ * The service validates `giftId` as a SHAPE only — `/^[a-z0-9][a-z0-9-]{0,31}$/`,
+ * with no allowlist, no catalogue and no price — because the namespace is the
+ * CLIENT's. That is deliberate twice over: our catalogue can grow without a
+ * backend deploy, and a server-side allowlist would reject a gift the sender
+ * was legitimately shown by a build newer than the service's. It is unpriced
+ * for a sharper reason still — the moment an id could select a price, a client
+ * posting `lion` would be charged whatever the server thinks a lion costs
+ * rather than the amount the sender actually agreed to.
+ *
+ * So there is no list to reconcile against and asking for one would be asking
+ * the service to own a namespace that is ours. An id we do not carry is
+ * PERMANENTLY reachable — an older client, a newer client, a hand-rolled POST
+ * — and the row below treats it as a terminal state to be rendered well, not
+ * a defect to be eliminated.
+ */
 function giftOf(giftId: string | null) {
   return giftId ? (LIVE_GIFTS.find((gift) => gift.id === giftId) ?? null) : null;
 }
@@ -66,6 +84,13 @@ const SOURCE_ICON = { room: IconMic, stream: IconLive, post: IconQuote } as cons
 function EarnedRow({ tip }: { tip: ReceivedTip }) {
   const { amountKash, giftId, createdAt, fromUser, source } = tip;
   const gift = giftOf(giftId);
+  /*
+    THREE STATES, NOT TWO. A tip with no `giftId` is a plain typed amount; a
+    tip whose id we do not carry is still A GIFT, and saying "you received a
+    tip" about it loses the one thing we do know. They shared a branch and
+    read identically, which made the second look like the first having failed.
+  */
+  const unknownGift = Boolean(giftId) && !gift;
   const sender = fromUser?.displayName || fromUser?.username || null;
   const SourceIcon = source ? SOURCE_ICON[source.kind] : null;
   return (
@@ -89,9 +114,16 @@ function EarnedRow({ tip }: { tip: ReceivedTip }) {
         />
       ) : (
         <span className="grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-full border border-white/20 bg-white/10">
-          {gift && (
+          {gift ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={gift.art} alt="" aria-hidden className="h-full w-full object-contain p-1" />
+          ) : (
+            /* A gift whose art we do not have still moved money, so the disc
+               carries the coin rather than sitting empty — deliberate, not a
+               picture that failed to load. A plain tip gets it too: the coin
+               is true of both. */
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/gifts/coin-stack.svg" alt="" aria-hidden className="h-4 w-4" />
           )}
         </span>
       )}
@@ -104,10 +136,14 @@ function EarnedRow({ tip }: { tip: ReceivedTip }) {
           {sender
             ? gift
               ? `${sender} gifted you a ${gift.name}`
-              : `${sender} tipped you`
+              : unknownGift
+                ? `${sender} sent you a gift`
+                : `${sender} tipped you`
             : gift
               ? `You were gifted a ${gift.name}`
-              : "You received a tip"}
+              : unknownGift
+                ? "You were sent a gift"
+                : "You received a tip"}
         </p>
         {/* The amount and the file's own coin. The 18px node between this and
             the source line is an EMPTY text node — a spacer, drawn as
