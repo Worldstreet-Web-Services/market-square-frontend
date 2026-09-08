@@ -118,8 +118,18 @@ export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
           That bleed is the fan, not a bug: their inner halves stay visible and
           the front card is the one you decide about.
         */
+        /*
+          CAPPED AT 1.45, NOT AT THE ROOM. Filling the column edge to edge
+          (1.9 on a 390 phone) blows the card's own furniture up with it — the
+          40px add badge becomes 76 and reads as a sticker stuck on the corner
+          — and it pushes the neighbours so far out that the fan stops looking
+          like a fan and starts looking like one enormous card. 1.45 puts the
+          card at 270 against the file's 186, keeps the badge at a believable
+          58, and still leaves ~126px of the next card showing, which is the
+          thing that says there is somebody after this one.
+        */
         const cardRatio = room / DECK_CARD.width;
-        setDeckScale(fill ? Math.min(1.9, cardRatio) : Math.min(1, ratio));
+        setDeckScale(fill ? Math.min(1.45, cardRatio) : Math.min(1, ratio));
       };
       measure();
       const ro = new ResizeObserver(measure);
