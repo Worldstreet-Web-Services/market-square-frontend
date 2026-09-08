@@ -14,8 +14,7 @@ import { cn } from "@/lib/cn";
  * The page this replaces had a button reading "Continue with Privy" and a line
  * under it explaining what Privy was. Privy is our auth vendor; it is not a
  * thing the reader has, wants, or should have to understand. It is now entirely
- * behind the two controls the design draws — Continue with your Ark account, and
- * an email
+ * behind the two controls the design draws — the Ark button, and an email
  * — via the HEADLESS hooks (`useLoginWithOAuth`, `useLoginWithEmail`) rather
  * than `usePrivy().login()`, which opens Privy's own branded modal on top of
  * this card. That modal is the whole reason those hooks exist, and it is the
@@ -45,30 +44,45 @@ import { cn } from "@/lib/cn";
  *   is what a reader actually navigates by.
  */
 
-/** `google` — the file's own four-path mark, at its offsets inside the 20x20 box. */
-function GoogleMark() {
+/**
+ * THE ARK LOCKUP — the button's mark, replacing Google's.
+ *
+ * Ark and Market Square run on ONE Privy app id, so the account somebody signs
+ * in with here IS their Ark account: a balance earned in one is spendable in
+ * the other, and this button is the door to both. Naming Google on it named our
+ * identity vendor rather than the thing the reader gets — the same objection
+ * the note above makes to ever saying "Privy" on this card.
+ *
+ * ─── IT IS A WORDMARK, AND THAT DECIDES THE COPY ────────────────────────────
+ * There is NO icon-only Ark mark. Every piece of Ark artwork in either repo is
+ * the full lockup — `ark-logo.svg` at 186x37, `ark-logo-dark.png` at 3352x668,
+ * `market-logo.png` at 520x84 — all of them about 5:1. So it cannot sit in the
+ * 20x20 slot the Google `G` occupied, and, more to the point, it already SAYS
+ * "ARK". The label is therefore "Continue with your account": the mark carries
+ * the brand, the words carry the action, and the button reads "Continue with
+ * your ARK account" without printing the name twice.
+ *
+ * The vectors are `ark-logo.svg`'s own paths, inlined rather than fetched —
+ * the same treatment `org-badge-glyphs.tsx` gives the MARKET and ARK badge
+ * lockups, and for the same reason: brand artwork keeps its own fills instead
+ * of being recoloured to `currentColor`. That is also why it reads brighter
+ * than the #8E8E93 label, exactly as the full-colour Google mark did.
+ *
+ * ─── WHAT DID NOT CHANGE ────────────────────────────────────────────────────
+ * The FLOW. This is still `initOAuth({ provider: "google" })` and pressing it
+ * still opens Google's account chooser. That is not a mismatch being papered
+ * over: Google is how you prove who you are, Ark is the account you land in.
+ * If a second provider is ever added, this button becomes the one that offers
+ * the choice and nothing else on this card has to move.
+ */
+function ArkMark({ className }: { className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        transform="translate(10 8.5)"
-        fill="#EA4335"
-        d="M0 0L0 3.25L4.58333 3.25C4.49413 3.77075 4.30048 4.26807 4.01406 4.71203C3.72763 5.15599 3.35435 5.53741 2.91667 5.83333L2.91667 8L5.66667 8C7.25 6.5 8.16667 4.33333 8.16667 1.75C8.16667 1.16667 8.08333 0.583334 8 0.0833336L0 0Z"
-      />
-      <path
-        transform="translate(2.6 11.5)"
-        fill="#34A853"
-        d="M7.41667 6.83333C9.66667 6.83333 11.5 6.08333 12.9167 4.83333L10.1667 2.66667C9.41667 3.16667 8.5 3.41667 7.41667 3.41667C5.25 3.41667 3.5 2 2.83333 0L0 0L0 2.16667C0.680938 3.55652 1.73548 4.72929 3.04544 5.55353C4.3554 6.37778 5.86902 6.82093 7.41667 6.83333Z"
-      />
-      <path
-        transform="translate(1.7 6.3)"
-        fill="#FBBC05"
-        d="M3.68335 5.16667C3.37628 4.19024 3.37628 3.14309 3.68335 2.16667L3.68335 0L0.850018 0C0.290755 1.1414 0 2.39561 0 3.66667C0 4.93772 0.290755 6.19193 0.850018 7.33333L3.68335 5.16667Z"
-      />
-      <path
-        transform="translate(2.6 1.9)"
-        fill="#4285F4"
-        d="M7.41667 3.35756C8.66667 3.35756 9.75 3.77423 10.5833 4.60756L13 2.19089C12.0608 1.32982 10.9367 0.695573 9.71402 0.336926C8.49136 -0.0217214 7.20274 -0.0952203 5.94722 0.12208C4.69171 0.33938 3.50275 0.841691 2.47175 1.5904C1.44074 2.3391 0.595159 3.31426 0 4.44089L2.83333 6.60756C3.5 4.77423 5.25 3.35756 7.41667 3.35756Z"
-      />
+    <svg viewBox="0 0 186 37" fill="none" aria-hidden className={className}>
+      <path d="M138.141 21.491L130.497 26.0329L146.117 36.7785H159.078L138.141 21.491Z" fill="white" />
+      <path d="M112.994 37V25.1467C129.301 13.3599 168.236 3.47106 185.665 0C155.71 8.24192 130.719 22.7834 121.967 29.024V37H112.994Z" fill="white" />
+      <path d="M113.216 22.3773V4.54193H121.967V17.503L113.216 22.3773Z" fill="white" />
+      <path d="M59.488 36.7785H67.9072V10.1916H89.9521C92.3382 10.1916 94.2724 12.1259 94.2724 14.512C94.2724 16.8981 92.3382 18.8323 89.9521 18.8323H72.6707L95.1587 36.7785H106.015L89.8413 24.3713H93.9955C99.41 24.3713 103.799 19.9819 103.799 14.5674V14.2904C103.799 9.02885 99.534 4.76349 94.2724 4.76349H59.488V36.7785Z" fill="white" />
+      <path d="M10.4132 36.7785L27.1407 12.7395L37.1108 26.4761H19.2754L41.8742 33.012L45.0868 36.7785H54.503L30.4641 4.87427H23.1527L0 36.7785H10.4132Z" fill="white" />
     </svg>
   );
 }
@@ -231,8 +245,14 @@ function PrivyForm() {
           disabled={oauthLoading}
           className="ws-press flex h-[54px] w-full max-w-[346px] items-center justify-center gap-2.5 rounded-[34px] border border-black/[0.12] bg-black/20 text-[16px] font-semibold tracking-[-0.01em] text-[#8E8E93] transition-colors hover:bg-black/30 disabled:opacity-60"
         >
-          {oauthLoading ? <Spinner className="h-5 w-5" /> : <GoogleMark />}
-          Continue with your Ark account
+          {/* 14px tall, so the 5:1 lockup lands at ~70 wide and the pair still
+              fits the 346 button on the narrowest phone. */}
+          {oauthLoading ? (
+            <Spinner className="h-5 w-5" />
+          ) : (
+            <ArkMark className="h-[14px] w-[70px] shrink-0" />
+          )}
+          Continue with your account
         </button>
       </div>
 
