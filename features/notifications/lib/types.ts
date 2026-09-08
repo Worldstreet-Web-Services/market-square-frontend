@@ -65,10 +65,49 @@ export const NotificationSchema = z.object({
   actor: ProfileSchema.nullable().optional().default(null),
   postId: z.string().nullable().optional().default(null),
   streamId: z.string().nullable().optional().default(null),
+  /**
+   * WHAT THE NOTIFICATION IS ABOUT — the same shape as a tip's `source`, and
+   * resolved by the same code upstream so the two can never disagree about
+   * what a gist room is (a stream with category 'house', reported as `room`).
+   *
+   * Two nulls, both real states rather than gaps:
+   *  · `subject` null — the row is about a PERSON, not a thing: follow, wink,
+   *    message. Render no subject line.
+   *  · `title` null — the thing has no words to show, such as a picture-only
+   *    post, or a room with no topic set. Same treatment; never fall back to
+   *    the id or to "a post".
+   *
+   * Titles arrive truncated at 140 with an ellipsis already applied, so
+   * nothing here clamps again expecting the full text.
+   */
+  subject: z
+    .object({
+      kind: z.enum(["post", "stream", "room"]).catch("post"),
+      id: z.string().nullable().optional().default(null),
+      title: z.string().nullable().optional().default(null),
+    })
+    .nullable()
+    .optional()
+    .default(null),
+  /**
+   * Which bucket this row belongs to, decided by the SERVICE.
+   *
+   * Optional here only because the deployed environment is behind; on the
+   * running service it is never null. It exists precisely so the client never
+   * re-derives a kind-to-group map — a client-composed mapping silently drops
+   * every kind added after it ships, which is the failure we already hit in
+   * the other direction when four kinds rendered as follows.
+   */
+  group: z.enum(["social", "money", "rooms", "chat", "account"]).nullable().optional().default(null),
   // Null until the notification has been read.
   readAt: z.string().nullable().optional().default(null),
   createdAt: z.string().optional().default(""),
 });
+
+/** The service's own buckets. No `all` member: omitting the parameter IS all,
+    and an enum carrying both gives a client two ways to say one thing. */
+export const NOTIFICATION_GROUPS = ["social", "money", "rooms", "chat", "account"] as const;
+export type NotificationGroup = (typeof NOTIFICATION_GROUPS)[number];
 
 export const NotificationPageSchema = z.object({
   items: z.array(NotificationSchema),

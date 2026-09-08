@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { inboxTime } from "@/lib/inbox-time";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { Avatar } from "@/components/ui/avatar";
+import { IconLive, IconMic, IconQuote } from "@/components/ui/icons";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -14,7 +15,11 @@ import {
   useMarkNotificationsRead,
   useNotifications,
 } from "@/features/notifications/hooks/use-notifications";
-import type { MarketNotification } from "@/features/notifications/lib/types";
+import {
+  NOTIFICATION_GROUPS,
+  type MarketNotification,
+  type NotificationGroup,
+} from "@/features/notifications/lib/types";
 
 /**
  * ONE GLYPH PER KIND, AND EVERY ONE IS THE FILE'S OWN — node 742:15341.
@@ -40,6 +45,16 @@ import type { MarketNotification } from "@/features/notifications/lib/types";
  * file and none of the five means "an operator answered you" — so those rows
  * fall back to the actor's avatar, which is at least true.
  */
+/**
+ * The glyph beside a subject line, chosen by the SERVICE's `kind`.
+ *
+ * A gist room is a stream with category 'house', and the service draws that
+ * distinction on purpose so the client does not infer it: a room is audio and
+ * keeps the mic, a broadcast gets the live mark, and a post gets the quote
+ * because a post's "title" IS its opening text.
+ */
+const SOURCE_ICON = { room: IconMic, stream: IconLive, post: IconQuote } as const;
+
 const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   wink: "/notifications/notif-wink.svg",
   follow: "/notifications/notif-follow.svg",
@@ -159,6 +174,15 @@ function describe(item: MarketNotification): string {
 
 // Where a notification points. Nulls are real — a like on a deleted post has
 // no post to open — so the row stays unclickable rather than linking nowhere.
+/** Our words for the service's buckets — the MAPPING stays server-side. */
+const GROUP_LABEL: Record<NotificationGroup, string> = {
+  social: "Social",
+  money: "Money",
+  rooms: "Rooms",
+  chat: "Chat",
+  account: "Account",
+};
+
 function hrefFor(item: MarketNotification): string | null {
   // A chat event has no post and no stream, so without this it fell through to
   // the sender's PROFILE — which is not where the message is.
@@ -209,6 +233,27 @@ function Row({
         <span className="line-clamp-2 text-[14px] leading-[16.5px] text-white/50">
           {describe(item)}
         </span>
+
+        {/*
+          742:27602 — what the row is ABOUT, when it is about a thing.
+
+          Absent for a row about a PERSON (follow, wink, message), and absent
+          when the thing has no words to show — a picture-only post, a room
+          with no topic. Never a fallback to the id or to "a post": the file's
+          line names the subject or it is not there. Already truncated to 140
+          upstream, so `truncate` here is for the column, not the text.
+        */}
+        {item.subject?.title && (
+          <span className="flex min-w-0 items-center gap-2">
+            {(() => {
+              const Glyph = SOURCE_ICON[item.subject.kind];
+              return <Glyph className="h-3 w-3 shrink-0 text-white" />;
+            })()}
+            <span className="truncate text-[12px] leading-4 text-white/50">
+              {item.subject.title}
+            </span>
+          </span>
+        )}
       </span>
 
       {/* 742:15884 — the action and the stamp, 16 apart, held at the right.
@@ -274,7 +319,9 @@ export function NotificationsPage({
   actionSlot?: (item: MarketNotification) => React.ReactNode;
 } = {}) {
   const { ready, authenticated, login } = useAuth();
-  const notifications = useNotifications();
+  /* Omitted entirely for "everything" — the enum has no `all`. */
+  const [group, setGroup] = useState<NotificationGroup | "">("");
+  const notifications = useNotifications(group || undefined);
   const markRead = useMarkNotificationsRead();
   const sentinel = useInfiniteScroll(
     () => notifications.fetchNextPage(),
@@ -282,6 +329,13 @@ export function NotificationsPage({
   );
 
   const items = notifications.data?.pages.flatMap((page) => page.items) ?? [];
+  /*
+    GLOBAL, AND NOT THE COUNT FOR THIS TAB. `unreadCount` counts what is
+    waiting for the person, not what is on screen — the service does not filter
+    it by group, deliberately. It drives the mark-as-read effect below and
+    must never be rendered as "N unread in Money", which would empty somebody's
+    messages badge because they opened a different bucket.
+  */
   const unread = notifications.data?.pages[0]?.unreadCount ?? 0;
 
   // Mark-as-read on view: opening the surface is the acknowledgement, so it
@@ -310,28 +364,46 @@ export function NotificationsPage({
           742:15825 — 145x44 at a full round on `#979797` at 5%, the label at
           Geist 500 14/20 and the file's own chevron beside it.
 
-          IT IS INERT, AND VISIBLY SO. The file draws a filter, and
-          `GET /me/notifications` takes only `limit` and `cursor` — there is no
-          `kind` parameter to narrow on, so there is nothing to switch between
-          and every option would answer the same list. Rendering it live would
-          be a control that changes nothing; rendering it `disabled` says what
-          is true. The same rule the chat inbox's three inert tabs follow.
+          IT IS A REAL FILTER NOW. It shipped `disabled` because
+          `GET /me/notifications` took only `limit` and `cursor`; the service
+          has since added `group`, so there is something to switch between and
+          the control does what it looks like it does.
+
+          THE BUCKETS ARE THE SERVICE'S, NOT OURS. The client never maps a kind
+          to a group — a client-composed mapping silently drops every kind
+          added after it ships, which is exactly the failure we hit in the
+          other direction when four kinds rendered as follows. The enum has no
+          `all` member either: omitting the parameter IS everything, and a
+          value meaning the same as sending nothing is a second way to say one
+          thing.
+
+          A native `<select>` rather than a popover: it is one control, it is
+          keyboard-operable and screen-reader-announced for free, and on a
+          phone it opens the platform's own picker. The pill is the styling
+          around it.
         */}
-        <button
-          type="button"
-          disabled
-          title="Filtering notifications isn't available yet"
-          className="flex h-11 shrink-0 cursor-not-allowed items-center gap-2.5 rounded-full bg-[#979797]/5 px-4 text-[14px] font-medium leading-5 text-white opacity-60"
-        >
-          All notification
+        <label className="relative flex h-11 shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/5 px-4 text-[14px] font-medium leading-5 text-white">
+          <span className="sr-only">Filter notifications</span>
+          <select
+            value={group}
+            onChange={(event) => setGroup(event.target.value as NotificationGroup | "")}
+            className="cursor-pointer appearance-none bg-transparent pr-1 outline-none [&>option]:bg-[#121214]"
+          >
+            <option value="">All notification</option>
+            {NOTIFICATION_GROUPS.map((value) => (
+              <option key={value} value={value}>
+                {GROUP_LABEL[value]}
+              </option>
+            ))}
+          </select>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/notifications/notif-chevron.svg"
             alt=""
             aria-hidden
-            className="h-[3.5px] w-[7px] shrink-0"
+            className="pointer-events-none h-[3.5px] w-[7px] shrink-0"
           />
-        </button>
+        </label>
       </div>
 
       {ready && !authenticated && (
