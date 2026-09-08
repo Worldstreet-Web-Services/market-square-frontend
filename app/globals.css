@@ -1245,23 +1245,30 @@ body {
                      wordmark. */
     --ws-stage-w: min(calc(100dvh * 1440 / 1024), 130vw);
     --ws-stage-h: calc(var(--ws-stage-w) / 1.40625);
-    /* The column's pt-10 (40) + the wordmark (54), then 44 of air so the card
-       is not sitting on the wordmark's shoulders. */
-    --ws-art-band-top: 138px;
-    /* The MEASURED height of the picture, published by `WelcomeStage`. The
-       fallback is only for the frame before measurement. */
-    --ws-art-band-h: var(--ws-art-fit-h, calc(var(--ws-stage-h) * 0.55));
+    /* The column's pt-10 (40) + the wordmark (54), then 84 of air so the card
+       sits clearly below the header rather than under its shoulders. The two
+       numbers below must stay in step: this one centres the STAGE on the band,
+       and the band's own `margin-top` is what actually creates the gap. */
+    --ws-art-band-top: 178px;
+    /* A share of the stage height, NOT the measured picture.
+
+       It was measured for a while, and that is what broke screen two: the fan
+       of pals is drawn 188% of the stage wide because THE FILE RUNS THOSE
+       CARDS OFF THE EDGE ON PURPOSE. Measuring it and then shrinking the stage
+       until it fitted turned a deliberate full-bleed arc into a row of
+       thumbnails. A composition that is meant to overflow must be allowed to.
+       0.55 is comfortably more than the 44% screen one's card occupies. */
+    --ws-art-band-h: calc(var(--ws-stage-h) * 0.55);
   }
   .ws-welcome-stage {
     min-width: var(--ws-stage-w);
-    /* Shrunk only when the composition is wider than the phone — screen two's
-       fan is 188% of the stage and needs it; screens one and three do not and
-       get 1. */
-    scale: var(--ws-art-fit, 1);
-    /* The band's middle, corrected by however far this screen's art sits from
-       the stage's own middle. Both measured; neither is per-screen guesswork. */
+    /* NOT scaled to fit. The stage may be wider than the phone and the art may
+       bleed past both edges — that is the design on screen two, and the screen
+       wrapper clips it. What the width cap above guarantees is only that
+       screen one's CARD, which is the subject rather than scatter, is not cut
+       through the middle. */
     top: calc(
-      var(--ws-art-band-top) + var(--ws-art-band-h) / 2 - var(--ws-art-dy, 0px)
+      var(--ws-art-band-top) + var(--ws-art-band-h) / 2 + var(--ws-stage-h) * 0.087
     );
   }
   .ws-welcome-art-gap {
@@ -1269,9 +1276,9 @@ body {
     min-height: var(--ws-art-band-h);
     /* Air between the wordmark and the picture. The band's own top comes from
        flow — the column's pt-10 plus the wordmark — so this is what actually
-       creates the gap, and `--ws-art-band-top` above carries the same 44 so
+       creates the gap, and `--ws-art-band-top` above carries the same 84 so
        the stage stays centred on the band it was given. */
-    margin-top: 44px;
+    margin-top: 84px;
   }
   .ws-welcome-spring {
     display: block;

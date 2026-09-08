@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 /**
  * THE WELCOME SCREENS' ARTWORK — Desktop 35, 33, 36 and 34.
@@ -98,92 +98,7 @@ export function WelcomeStage({
   /** Rendered in the stage's own 1440x1024 space, over the flat pieces. */
   children?: React.ReactNode;
 }) {
-  /*
-    FIT THE PICTURE TO THE PHONE — measured, because the three screens do not
-    agree about how big their artwork is relative to the stage.
-
-    Screen one's card occupies 65% of the stage's width. Screen two's fan of
-    pals occupies 188% of it — the file runs those cards off the edge on
-    purpose — and screen three about 70%. A single hand-tuned stage width
-    therefore cannot serve all three: tuned on screen one it made screen two
-    956px wide inside a 390px phone, with the outer cards a third of a screen
-    off each side and the whole fan lying across the headline.
-
-    So on the reflowed (tall) layout the union of the pieces is measured and
-    the stage is scaled until that union fits, and the measured height is
-    published for the band above to reserve. Nothing is hardcoded per screen,
-    so a fourth screen with a wider composition needs no new number.
-
-    Skipped entirely where `WelcomeFrame` scales — there the whole design is
-    one picture already and this would be a second, competing fit.
-  */
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    const root = document.documentElement;
-    const fit = () => {
-      const reflowed = window.innerWidth / window.innerHeight < 1440 / 1024;
-      if (!reflowed) {
-        stage.style.removeProperty("--ws-art-fit");
-        stage.style.removeProperty("--ws-art-dy");
-        root.style.removeProperty("--ws-art-fit-h");
-        return;
-      }
-      // Measure UNSCALED, or each pass would compound the last one's shrink.
-      stage.style.setProperty("--ws-art-fit", "1");
-      let left = Infinity;
-      let right = -Infinity;
-      let top = Infinity;
-      let bottom = -Infinity;
-      for (const el of stage.querySelectorAll("img")) {
-        const b = el.getBoundingClientRect();
-        if (b.width < 4 || b.height < 4) continue;
-        left = Math.min(left, b.left);
-        right = Math.max(right, b.right);
-        top = Math.min(top, b.top);
-        bottom = Math.max(bottom, b.bottom);
-      }
-      if (!Number.isFinite(left) || right <= left) return;
-      // 24 of air either side, so the outermost card never touches the bezel.
-      const scale = Math.min(1, (window.innerWidth - 48) / (right - left));
-      /*
-        SET ON THE STAGE, NOT ON :root — because the line above writes
-        `--ws-art-fit: 1` onto the stage to take an unscaled measurement, and an
-        element's own inline custom property SHADOWS the inherited one. Writing
-        the result to the root left that `1` standing, so the scale was
-        computed correctly every time and never applied: screen two's fan stayed
-        956px wide inside a 390px phone.
-      */
-      stage.style.setProperty("--ws-art-fit", String(scale));
-      root.style.setProperty("--ws-art-fit-h", `${Math.round((bottom - top) * scale)}px`);
-      /*
-        HOW FAR THE PICTURE'S MIDDLE SITS FROM THE STAGE'S.
-
-        They are not the same point and the difference is per-screen: screen
-        one's card rides above centre, screen two's fan spreads around it. The
-        band positions the stage, so without this the art lands wherever its
-        own composition happens to put it — which is how the fan ended up
-        across the headline. Published so the CSS can subtract it.
-      */
-      const box = stage.getBoundingClientRect();
-      const dy = ((top + bottom) / 2 - (box.top + box.bottom) / 2) * scale;
-      stage.style.setProperty("--ws-art-dy", `${Math.round(dy)}px`);
-    };
-    fit();
-    // Images arrive after first paint and change the union as they do.
-    const imgs = [...stage.querySelectorAll("img")];
-    imgs.forEach((el) => el.addEventListener("load", fit));
-    window.addEventListener("resize", fit);
-    window.addEventListener("orientationchange", fit);
-    return () => {
-      imgs.forEach((el) => el.removeEventListener("load", fit));
-      window.removeEventListener("resize", fit);
-      window.removeEventListener("orientationchange", fit);
-    };
-  }, [pieces]);
-
-  return (
+    return (
     /*
       NOT `overflow-hidden`. Clipping here cuts the artwork at the FRAME's edge,
       and the frame is contain-fitted — so on any window wider than 1.41:1 the
@@ -193,7 +108,7 @@ export function WelcomeStage({
       fill that ground. The screen wrapper clips instead.
     */
     <div aria-hidden className="pointer-events-none absolute inset-0">
-      <div ref={stageRef} className="ws-welcome-stage">
+      <div className="ws-welcome-stage">
         {pieces.map((p) => (
           // eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size
           <img
