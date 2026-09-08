@@ -60,19 +60,31 @@ export function ProfileCover({
   return (
     <div className="relative aspect-[741/473] w-full overflow-hidden rounded-[20px]">
       {/*
-        THE COVER IS THE SEEDED ARTWORK, because there is no photograph to show.
+        THE COVER PHOTOGRAPH, AND THE FALLBACK IT KEEPS.
 
-        `PublicProfile` carries `avatarUrl` and nothing else pictorial —
-        checked against the live contract, not assumed — so a cover IMAGE has
-        no field to come from and this card would otherwise be a hole where the
-        file draws a photograph. Requested from the service; the moment a URL
-        exists this becomes an `<img>` over the same box and nothing else here
-        changes.
+        `coverUrl` was requested when `PublicProfile` carried `avatarUrl` and
+        nothing else pictorial, and the service has since added it — confirmed
+        on the live contract at `:8094`, where it is on both `Profile` and
+        `PublicProfile`.
 
-        Seeded on the username so it is the same picture on every visit rather
-        than a new one each render.
+        THE SEEDED ARTWORK STAYS AS THE FALLBACK, and not merely for
+        tidiness: the deployed spec does NOT carry the field yet, so in
+        production every profile still answers without it. Absent, this is the
+        same `GradientThumb` that shipped before — seeded on the username, so
+        it is the same picture on every visit rather than a new one each
+        render — and it is also what a person who has set no cover gets.
       */}
-      <GradientThumb seed={profile.username} className="absolute inset-0 h-full w-full" />
+      {profile.coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={profile.coverUrl}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <GradientThumb seed={profile.username} className="absolute inset-0 h-full w-full" />
+      )}
 
       {/* 108 of 473 at the top, 215 at the foot — see the note above for why
           these are vertical and why the alphas are not the stops' 1.0. */}

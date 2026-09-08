@@ -39,6 +39,16 @@ const RawProfileSchema = z.object({
   displayName: z.string().nullable().optional().default(null),
   bio: z.string().nullable().optional().default(null),
   avatarUrl: z.string().nullable().optional().default(null),
+  /**
+   * The cover photograph behind the profile header — node 435:27500.
+   *
+   * Optional and nullable because the two environments disagree today: it is
+   * on `PublicProfile` at `:8094` and NOT on the deployed spec, so a client
+   * that required it would fail to parse every profile in production. When it
+   * is absent the cover falls back to the seeded artwork, which is what
+   * shipped before the field existed.
+   */
+  coverUrl: z.string().nullable().optional().default(null),
   role: RoleSchema,
   verification: VerificationSchema,
   orgBadge: OrgBadgeSchema.optional().default(null),
