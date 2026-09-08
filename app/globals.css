@@ -1258,13 +1258,40 @@ body {
        0.087         how far the art's centre sits ABOVE the stage's. Without
                      this the picture rides up out of the band and touches the
                      wordmark. */
-    --ws-stage-w: min(calc(100dvh * 1440 / 1024), 130vw);
+    /* AND CAPPED BY THE ROOM THE BAND ACTUALLY HAS — `--ws-band-cap`.
+
+       130vw is the width the art WANTS, and on a phone the design was tuned
+       for (390x844) it gets it. On a SHORT viewport it does not fit: the
+       column's fixed content — wordmark, stepper, headline, copy and the two
+       buttons — is about 506px, so a 553-tall phone with the browser's own
+       chrome showing had 47px left for a band asking for 191. The Skip button
+       ended up 143px below the fold, which is what ogazboiz hit on a real
+       phone.
+
+       `--ws-band-cap` is MEASURED and published by `WelcomeFrame` (see
+       welcome-art.tsx): the room genuinely left over, converted back into the
+       stage width that would fill it. It only ever bites when it is smaller
+       than 130vw, so every phone that already fits keeps the file's own
+       composition to the pixel — verified at 390x844 and 412x915, where the
+       band stays 198 and 209 exactly as before.
+
+       The floor is 60vw. Past that the art has stopped being artwork, and the
+       gate's own scroll is the better failure — see welcome-gate.tsx. */
+    --ws-stage-w: max(
+      60vw,
+      min(calc(100dvh * 1440 / 1024), 130vw, var(--ws-band-cap, 200vw))
+    );
     --ws-stage-h: calc(var(--ws-stage-w) / 1.40625);
     /* The column's pt-10 (40) + the wordmark (54), then 84 of air so the card
        sits clearly below the header rather than under its shoulders. The two
        numbers below must stay in step: this one centres the STAGE on the band,
        and the band's own `margin-top` is what actually creates the gap. */
-    --ws-art-band-top: 178px;
+    /* 178 = the column's pt-10 (40) + the wordmark (54) + 84 of air. Two of
+       those three now scale with `--ws-air`, so the constant became a sum —
+       the wordmark is the only part of it that is a fixed object. Written out
+       rather than measured because every term is known exactly, and because
+       the stage must be positioned in the SAME pass that sizes it. */
+    --ws-art-band-top: calc(124px * var(--ws-air, 1) + 54px);
     /* A share of the stage height, NOT the measured picture.
 
        It was measured for a while, and that is what broke screen two: the fan
@@ -1290,10 +1317,28 @@ body {
     flex: 0 0 auto;
     min-height: var(--ws-art-band-h);
     /* Air between the wordmark and the picture. The band's own top comes from
-       flow — the column's pt-10 plus the wordmark — so this is what actually
-       creates the gap, and `--ws-art-band-top` above carries the same 84 so
-       the stage stays centred on the band it was given. */
-    margin-top: 84px;
+       flow — the column's padding-top plus the wordmark — so this is what
+       actually creates the gap, and `--ws-art-band-top` above carries the same
+       84 so the stage stays centred on the band it was given. */
+    margin-top: calc(84px * var(--ws-air, 1));
+  }
+
+  /* ─── THE AIR SHRINKS BEFORE THE CONTENT DOES ─────────────────────────────
+     `--ws-air` is 1 on a viewport 844 tall or taller — the phone the design
+     was tuned for — and falls to a floor of 0.55 below it. `WelcomeFrame`
+     publishes it, because CSS cannot divide a length by a length to get the
+     bare number this needs.
+
+     ONLY AIR IS ON THIS FACTOR. Type keeps its size, both buttons keep their
+     height, and the wordmark keeps its 54: shrinking a tap target or body copy
+     to win a layout argument is how a screen becomes unusable rather than
+     merely tight. What gives is the padding at both ends of the column, the
+     gap above the picture, the gap under the stepper and the gap above the
+     buttons — 200px of it at the design's scale, and about 131 on a 553-tall
+     phone, which is where the room for the band comes from. */
+  .ws-welcome-bottom {
+    padding-top: calc(40px * var(--ws-air, 1));
+    padding-bottom: calc(32px * var(--ws-air, 1));
   }
   .ws-welcome-spring {
     display: block;
@@ -1305,7 +1350,7 @@ body {
      fit and the same 82 becomes a hole. Capped rather than replaced, so the
      two screens already under the cap keep the file's number exactly. */
   .ws-welcome-head {
-    margin-top: min(var(--ws-dots-gap, 0px), 30px);
+    margin-top: calc(min(var(--ws-dots-gap, 0px), 30px) * var(--ws-air, 1));
   }
 }
 
