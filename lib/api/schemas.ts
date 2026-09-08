@@ -80,14 +80,13 @@ const RawProfileSchema = z.object({
   /*
     Self-declared place and gender — Explore's people filters.
 
-    NOT ON THE CONTRACT YET. `PublicProfile` carries none of these three today
-    (checked against api.tsionark.com and localhost:8080; the two documents are
-    identical), so they parse to null on every real payload and the filter
-    controls that need them are not rendered at all — `facetAvailability` in
-    `lib/people-filters.ts` reads that from the DATA, so the day the service
-    sends a city the control appears with no code change here. Optional with a
-    null default is the same forward-compatible shape `orgBadge` uses; it is
-    not a claim that the field exists.
+    ON THE CONTRACT NOW, AND THE ENVIRONMENTS DISAGREE. `PublicProfile` carries
+    city, region and gender at :8094, and does NOT on the deployed spec at
+    api.tsionark.com — the PR that added them merged to staging while
+    production deploys from main. So these stay optional with a null default:
+    required, they would fail to parse every profile in production. That is the
+    same forward-compatible shape `orgBadge` uses, and it is not a claim about
+    which environment you are talking to.
 
     THE SHAPE IS THE SAFETY DECISION, and it is deliberate. City and region are
     STRINGS a person typed about themselves. There is no `latitude`, no
