@@ -32,7 +32,10 @@ import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
 import { WinkButton } from "@/features/profile/components/wink-button";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import { CreatorCard } from "@/features/profile/components/creator-card";
-import { AccountTabs, type AccountTab } from "@/features/profile/components/account-tabs";
+import {
+  AccountTabs,
+  type AccountTab,
+} from "@/features/profile/components/account-tabs";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
 
@@ -91,11 +94,22 @@ function PostsTab({
   postSlot: (post: Post) => React.ReactNode;
 }) {
   const posts = useProfilePosts(username);
-  if (posts.isPending) return <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>;
+  if (posts.isPending)
+    return (
+      <>
+        {[0, 1, 2].map((i) => (
+          <RowSkeleton key={i} />
+        ))}
+      </>
+    );
   if (posts.isError)
     return (
       <div className="p-4">
-        <ErrorState error={posts.error} fallback="Couldn't load posts." onRetry={() => posts.refetch()} />
+        <ErrorState
+          error={posts.error}
+          fallback="Couldn't load posts."
+          onRetry={() => posts.refetch()}
+        />
       </div>
     );
   if (posts.data.items.length === 0)
@@ -111,7 +125,13 @@ function PostsTab({
           }
           // Opens the composer in place when the shell supplies it; the
           // link is the signed-out/unslotted fallback and still works.
-          action={isMe ? (composeSlot ?? <TabCta href="/?compose=1" label="Create a post" />) : undefined}
+          action={
+            isMe
+              ? (composeSlot ?? (
+                  <TabCta href="/?compose=1" label="Create a post" />
+                ))
+              : undefined
+          }
         />
       </div>
     );
@@ -131,11 +151,22 @@ function PostsTab({
 
 function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
   const streams = useProfileStreams(username);
-  if (streams.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
+  if (streams.isPending)
+    return (
+      <>
+        {[0, 1].map((i) => (
+          <RowSkeleton key={i} />
+        ))}
+      </>
+    );
   if (streams.isError)
     return (
       <div className="p-4">
-        <ErrorState error={streams.error} fallback="Couldn't load streams." onRetry={() => streams.refetch()} />
+        <ErrorState
+          error={streams.error}
+          fallback="Couldn't load streams."
+          onRetry={() => streams.refetch()}
+        />
       </div>
     );
   if (streams.data.items.length === 0)
@@ -157,9 +188,14 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
     <ul>
       {streams.data.items.map((stream) => (
         <li key={stream.id}>
-          <Link href={`/live/${stream.id}`} className="ws-row flex items-center gap-3 px-4 py-3">
+          <Link
+            href={`/live/${stream.id}`}
+            className="ws-row flex items-center gap-3 px-4 py-3"
+          >
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-bold text-heading">{stream.title}</p>
+              <p className="truncate text-[15px] font-bold text-heading">
+                {stream.title}
+              </p>
               <p className="mt-0.5 flex items-center gap-2 text-[13px] text-meta">
                 {stream.status === "live" ? (
                   <LiveBadge className="px-2 py-0 text-[9px]" />
@@ -167,10 +203,16 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
                   <span className="capitalize">{stream.status}</span>
                 )}
                 {stream.category && <span>· {stream.category}</span>}
-                {stream.scheduledAt && <span>· {formatDateTime(stream.scheduledAt)}</span>}
+                {stream.scheduledAt && (
+                  <span>· {formatDateTime(stream.scheduledAt)}</span>
+                )}
               </p>
             </div>
-            <Pill>{stream.ticketPriceKash ? formatKash(stream.ticketPriceKash) : "Free"}</Pill>
+            <Pill>
+              {stream.ticketPriceKash
+                ? formatKash(stream.ticketPriceKash)
+                : "Free"}
+            </Pill>
           </Link>
         </li>
       ))}
@@ -178,13 +220,30 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
   );
 }
 
-function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) {
+function ActivitiesTab({
+  username,
+  isMe,
+}: {
+  username: string;
+  isMe: boolean;
+}) {
   const activities = useProfileActivities(username);
-  if (activities.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
+  if (activities.isPending)
+    return (
+      <>
+        {[0, 1].map((i) => (
+          <RowSkeleton key={i} />
+        ))}
+      </>
+    );
   if (activities.isError)
     return (
       <div className="p-4">
-        <ErrorState error={activities.error} fallback="Couldn't load activities." onRetry={() => activities.refetch()} />
+        <ErrorState
+          error={activities.error}
+          fallback="Couldn't load activities."
+          onRetry={() => activities.refetch()}
+        />
       </div>
     );
   if (activities.data.items.length === 0)
@@ -198,7 +257,9 @@ function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) 
               ? "Schedule a stream or an event and it appears here for your followers."
               : "Scheduled games, streams and events show here."
           }
-          action={isMe ? <TabCta href="/schedule" label="Schedule one" /> : undefined}
+          action={
+            isMe ? <TabCta href="/schedule" label="Schedule one" /> : undefined
+          }
         />
       </div>
     );
@@ -207,18 +268,26 @@ function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) 
       {activities.data.items.map((activity) => {
         const cta = resolveCta(activity.deepLink);
         return (
-          <li key={activity.id} className="ws-row flex items-center gap-3 px-4 py-3">
+          <li
+            key={activity.id}
+            className="ws-row flex items-center gap-3 px-4 py-3"
+          >
             <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body">
               <IconCalendar className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-bold text-heading">{activity.title}</p>
+              <p className="truncate text-[15px] font-bold text-heading">
+                {activity.title}
+              </p>
               <p className="text-[13px] text-meta">
                 {activity.type} · {formatDateTime(activity.startsAt)}
               </p>
             </div>
             {cta && (
-              <Link href={cta.href} className="shrink-0 text-[13px] font-semibold text-accent hover:underline">
+              <Link
+                href={cta.href}
+                className="shrink-0 text-[13px] font-semibold text-accent hover:underline"
+              >
                 {cta.label} →
               </Link>
             )}
@@ -228,6 +297,29 @@ function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) 
     </ul>
   );
 }
+
+/**
+ * THE POSTS / MEDIA / STREAMS / ACTIVITIES STRIP IS HIDDEN, NOT DELETED.
+ *
+ * Node 534:16948 is the whole profile body, and dumping every text node in it
+ * turns up no "Posts", "Media", "Streams" or "Activities" anywhere — the only
+ * strip the design draws is the account one (Earnings / Badges / Gift Gallery
+ * / Replays). So the page matches the file.
+ *
+ * A CONSTANT RATHER THAN A DELETION, because nothing about the capability
+ * changed. All four tabs are backed by live routes — `/profiles/:username/
+ * posts`, `/streams`, `/activities` — and every one of them still works; what
+ * changed is only whether this page offers them. Deleting the components would
+ * turn "the design does not show these" into "somebody has to rebuild these",
+ * and those are very different costs. One line puts the strip back.
+ *
+ * WORTH KNOWING WHILE IT IS OFF: the account strip above is `/me`-only, and so
+ * is Houses, so a visitor to somebody else's profile now sees the cover, the
+ * bio and the counts and nothing beneath them. Giving a stranger's profile
+ * content again means either this strip back on or a design for what replaces
+ * it.
+ */
+const SHOW_CONTENT_TABS = false;
 
 export function ProfilePage({
   username,
@@ -266,7 +358,11 @@ export function ProfilePage({
    * The full-screen swipeable viewer, composed by the route: profile never
    * imports the feed slice, and the viewer lives there.
    */
-  mediaViewerSlot: (items: Post[], openId: string, onClose: () => void) => React.ReactNode;
+  mediaViewerSlot: (
+    items: Post[],
+    openId: string,
+    onClose: () => void,
+  ) => React.ReactNode;
 }) {
   const profile = useProfile(username);
   const me = useMe();
@@ -279,8 +375,14 @@ export function ProfilePage({
   const [accountTab, setAccountTab] = useState<AccountTab>("gifts");
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
-  const isMe = Boolean(profile.data && me.data && profile.data.id === me.data.id);
-  useMarketView("profile_viewed", { surface: "profile", entityType: "profile", entityId: profile.data?.id }, Boolean(profile.data));
+  const isMe = Boolean(
+    profile.data && me.data && profile.data.id === me.data.id,
+  );
+  useMarketView(
+    "profile_viewed",
+    { surface: "profile", entityType: "profile", entityId: profile.data?.id },
+    Boolean(profile.data),
+  );
 
   if (profile.isPending) {
     return (
@@ -301,7 +403,11 @@ export function ProfilePage({
       <>
         <ColumnHeader title="Profile" back />
         <div className="p-4">
-          <ErrorState error={profile.error} fallback="Couldn't load this profile." onRetry={() => profile.refetch()} />
+          <ErrorState
+            error={profile.error}
+            fallback="Couldn't load this profile."
+            onRetry={() => profile.refetch()}
+          />
         </div>
       </>
     );
@@ -317,7 +423,8 @@ export function ProfilePage({
   const onShare = async () => {
     const url = `${window.location.origin}/u/${data.username}`;
     try {
-      if (navigator.share) await navigator.share({ text: data.displayName, url });
+      if (navigator.share)
+        await navigator.share({ text: data.displayName, url });
       else {
         await navigator.clipboard.writeText(url);
         toast.success("Link copied");
@@ -468,7 +575,9 @@ export function ProfilePage({
                 {[data.city, data.region].filter(Boolean).join(", ")}
               </span>
             )}
-            {data.gender && <span className="text-white/50">{data.gender}</span>}
+            {data.gender && (
+              <span className="text-white/50">{data.gender}</span>
+            )}
           </p>
         )}
       </div>
@@ -527,8 +636,16 @@ export function ProfilePage({
         <div className="pt-6">
           <AccountTabs
             tabs={[
-              { value: "earnings", label: "Earnings", disabledReason: "No panel for this yet" },
-              { value: "badges", label: "Badges", disabledReason: "Not available yet" },
+              {
+                value: "earnings",
+                label: "Earnings",
+                disabledReason: "No panel for this yet",
+              },
+              {
+                value: "badges",
+                label: "Badges",
+                disabledReason: "Not available yet",
+              },
               { value: "gifts", label: "Gift Gallery" },
               {
                 value: "replays",
@@ -543,34 +660,55 @@ export function ProfilePage({
         </div>
       )}
 
-      {/* Two stickies on one page: the header above pins first, so the tabs
-          have to pin BELOW it — the shell's fixed top strip plus the header's
-          own measured height. At `top-0` with a lower z-index they stuck
-          straight underneath both and vanished, so a scrolled profile had no
-          way left to switch tab. */}
-      <div className="ws-hair sticky top-[calc(var(--ws-topbar-h)_+_var(--ws-colhead-h))] z-20 border-b bg-chrome">
-        <ColumnTabs
-          tabs={[
-            { value: "posts" as Tab, label: "Posts" },
-            { value: "media" as Tab, label: "Media" },
-            { value: "streams" as Tab, label: "Streams" },
-            { value: "activities" as Tab, label: "Activities" },
-          ]}
-          value={tab}
-          onChange={setTab}
+      {SHOW_CONTENT_TABS && (
+        <>
+          {/* Two stickies on one page: the header above pins first, so the tabs
+            have to pin BELOW it — the shell's fixed top strip plus the header's
+            own measured height. At `top-0` with a lower z-index they stuck
+            straight underneath both and vanished, so a scrolled profile had no
+            way left to switch tab. */}
+          <div className="ws-hair sticky top-[calc(var(--ws-topbar-h)_+_var(--ws-colhead-h))] z-20 border-b bg-chrome">
+            <ColumnTabs
+              tabs={[
+                { value: "posts" as Tab, label: "Posts" },
+                { value: "media" as Tab, label: "Media" },
+                { value: "streams" as Tab, label: "Streams" },
+                { value: "activities" as Tab, label: "Activities" },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
+          </div>
+
+          {tab === "posts" && (
+            <PostsTab
+              username={username}
+              isMe={isMe}
+              composeSlot={composeSlot}
+              postSlot={postSlot}
+            />
+          )}
+          {tab === "media" && (
+            <MediaTab
+              username={username}
+              isMe={isMe}
+              viewerSlot={mediaViewerSlot}
+            />
+          )}
+          {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
+          {tab === "activities" && (
+            <ActivitiesTab username={username} isMe={isMe} />
+          )}
+        </>
+      )}
+
+      {isMe && (
+        <EditProfileSheet
+          me={data}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
         />
-      </div>
-
-      {tab === "posts" && (
-        <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
       )}
-      {tab === "media" && (
-        <MediaTab username={username} isMe={isMe} viewerSlot={mediaViewerSlot} />
-      )}
-      {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
-      {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}
-
-      {isMe && <EditProfileSheet me={data} open={editOpen} onClose={() => setEditOpen(false)} />}
     </>
   );
 }
