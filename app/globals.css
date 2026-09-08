@@ -1164,7 +1164,31 @@ body {
   top: 50%;
   translate: -50% -50%;
   width: 100%;
-  min-width: calc(100dvh * 1440 / 1024);
+  /* COVER, BUT NOT AT ANY PRICE.
+
+     `calc(100dvh * 1440/1024)` is the width a full-height 1440x1024 picture
+     needs, and on a wide window it is smaller than the window so `width: 100%`
+     wins and nothing happens. On a TALL, NARROW one it is enormous: a 390x844
+     phone asks for 1187px, a stage 204% wider than the screen, so the card
+     that is the subject of screen one gets cropped through the middle — a face
+     half off the left edge and the last chip cut off the right.
+
+     Cover was reasoned about as though the subject sat in the middle and only
+     scatter reached the rim. That is not what screen one is: `GistCard` is
+     `absolute inset-0`, so it IS the stage rather than something inside it,
+     and any overflow at all crops it through the middle — a face half off the
+     left edge and the last chip cut off the right.
+
+     So the stage may bleed vertically but never horizontally. Capped at 100vw
+     it is exactly as wide as the window, which is the widest it can be with
+     the whole subject on screen.
+
+     Desktop is untouched where it was already correct: at 1440x900 the cover
+     width is 1266 and at 1280x700 it is 984, both smaller than the window, so
+     `width: 100%` already won and `min()` changes nothing. What DOES change is
+     a tall desktop window — 1440x1200 asked for 1688 and cropped the card the
+     same way a phone did. */
+  min-width: min(calc(100dvh * 1440 / 1024), 100vw);
   aspect-ratio: 1440 / 1024;
 }
 
