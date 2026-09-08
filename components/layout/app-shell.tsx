@@ -898,12 +898,16 @@ export function Sidebar({
         product saying what it is — a place to talk in a room first, a timeline
         second.
 
-        `/studio` is still where both live-adjacent routes go, and the label is
-        the only thing that moved; every link already sent still resolves.
+        IT NO LONGER GOES TO `/studio`. That is the CREATOR studio — where you
+        go live — and starting a gist room needs no creator role and no house
+        to belong to. The empty state on the rooms page says so in as many
+        words: "anyone can walk in". Sending the button there put a role gate
+        in front of an act that has none, so it goes to `/gist-rooms?open=1`,
+        which opens the same sheet the rooms page's own control opens.
       */}
       <div className="mt-4 flex shrink-0 flex-col items-center gap-4 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-3">
         <Link
-          href="/studio"
+          href="/gist-rooms?open=1"
           /* 90deg, not `ws-btn-create`'s 155: node 496:13280's handles run
              (0,0.5) to (1,0.5), which is straight across. Same two stops —
              --color-create into --color-create-deep — so this is the ramp the
