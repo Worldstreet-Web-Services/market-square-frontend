@@ -52,6 +52,32 @@ describe("the profile's account section is own-profile only", () => {
     assert.doesNotMatch(screen, /ProfileGiftGallery isMe/, "no hardcoded ownership at the slot");
   });
 
+  it("never ships a tab that HAS a panel as disabled", () => {
+    /*
+      THE BUG THIS EXISTS FOR. Earnings was left with a `disabledReason` after
+      its panel was built, so it rendered first (it is the default), looked
+      fine, and the moment you switched to Gift Gallery you could not get back
+      — the button was genuinely `disabled`. It survived typecheck, lint, 974
+      tests and a build, because nothing in any of those knows that a tab with
+      a panel behind it must be reachable.
+
+      The rule is the one the flagged-capability convention already implies:
+      `disabled` means "there is nothing behind this", so a tab the page
+      renders a panel for may never carry it.
+    */
+    const panelled = [...page.matchAll(/accountTab === "(\w+)" &&/g)].map((m) => m[1]);
+    assert.ok(panelled.length >= 2, "expected the earnings and gifts panels to be found");
+    for (const tab of panelled) {
+      const entry = page.match(new RegExp(`\\{[^{}]*value: "${tab}"[^{}]*\\}`));
+      assert.ok(entry, `no tab entry found for the "${tab}" panel`);
+      assert.doesNotMatch(
+        entry[0],
+        /disabledReason/,
+        `"${tab}" renders a panel but its tab is disabled — it cannot be reached`
+      );
+    }
+  });
+
   it("reads the caller's OWN tips and nothing else", () => {
     const api = stripComments(read("features/tips/lib/api.ts"));
     assert.match(api, /"\/me\/tips\/received"/, "the counts must come from the /me route");

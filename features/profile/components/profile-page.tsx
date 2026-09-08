@@ -640,11 +640,7 @@ export function ProfilePage({
         <div className="pt-6">
           <AccountTabs
             tabs={[
-              {
-                value: "earnings",
-                label: "Earnings",
-                disabledReason: "No panel for this yet",
-              },
+              { value: "earnings", label: "Earnings" },
               {
                 value: "badges",
                 label: "Badges",
