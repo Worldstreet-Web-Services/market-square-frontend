@@ -394,7 +394,7 @@ export function WelcomeScreen({
         </div>
       ) : (
         <div
-          className="ws-welcome-bottom relative z-10 flex flex-1 flex-col items-center px-5 pt-10 pb-8 @md:pt-[79px]"
+          className="ws-welcome-bottom relative z-10 flex min-h-0 flex-1 flex-col items-center px-5 pt-10 pb-8 @md:pt-[79px]"
           style={{ ["--ws-pad-b" as string]: `${screen.padBottom}px` }}
         >
           <SquareLockup className="[--lockup-mark:72px] @lg:[--lockup-mark:103.1px]" />
@@ -421,7 +421,12 @@ export function WelcomeScreen({
           />
           <p
             className={cn(SUB, "whitespace-pre-line")}
-            style={{ maxWidth: screen.subWidth, marginTop: screen.subGap }}
+            style={{
+              maxWidth: screen.subWidth,
+              /* The file's gap, on the air factor — see `fitReflowedColumn`. An
+                 inline style beats the stylesheet, so it is applied here. */
+              marginTop: `calc(${screen.subGap}px * var(--ws-air, 1))`,
+            }}
           >
             {screen.sub}
           </p>
@@ -430,7 +435,7 @@ export function WelcomeScreen({
           <div className="ws-welcome-spring" />
           <div
             className="flex w-full max-w-[440px] flex-col gap-[13px]"
-            style={{ marginTop: screen.buttonsGap }}
+            style={{ marginTop: `calc(${screen.buttonsGap}px * var(--ws-air, 1))` }}
           >
             <Continue onClick={onContinue} />
             <Skip onClick={onSkip} />

@@ -426,10 +426,35 @@ describe("the friends deck offers a real Follow", () => {
     assert.match(deck, /scale: 0\.9279/, "the neighbours lost the file's 92.79%");
   });
 
-  it("re-centres a fan that is not full", () => {
-    // The file draws three. With one or two people on the square the remaining
-    // cards sat off to one side of an empty row.
-    assert.match(deck, /drawn\.length < 3/, "a short deck is lopsided again");
+  it("re-centres a fan that is not full, EXCEPT when it is filling", () => {
+    /*
+      THE ARITHMETIC MOVED OUT, and this assertion moved with it. Which thing
+      gets centred — the group in the feed, the FRONT card on `/pals` — is now
+      `deckShift` in `lib/deck-centring.ts`, checked numerically in
+      `lib/deck-centring.test.ts` against the file's own offsets.
+
+      Two spellings of this rule have now shipped wrong from this very file,
+      because a regex over source can only ever say the code LOOKS like the
+      last version that worked. The second one asserted `fill || drawn.length
+      >= 3 ? 0 :` on the written belief that the front card "already sits at
+      x=0"; it sits at -14.09, so every phone put the card being decided about
+      ~20px left of centre and this test held it there.
+
+      So what stays here is only the wiring a unit test cannot see: that the
+      deck delegates rather than re-deriving the shift inline, and that it
+      passes the front card's REAL offset rather than a literal.
+    */
+    assert.match(deck, /drawn\.length|offsets: drawn/, "the short-fan re-centring is gone entirely");
+    assert.match(
+      deck,
+      /const recentre = deckShift\(/,
+      "the deck re-derives its own centring again — the rule lives in lib/deck-centring.ts"
+    );
+    assert.match(
+      deck,
+      /frontX: DECK_PLACES\[0\]!?\.x/,
+      "the front card's offset is hard-coded at the call site and will drift from DECK_PLACES"
+    );
   });
 
   it("places the three cards from the file rather than a formula", () => {
@@ -530,6 +555,120 @@ describe("a feed item that owns an open popover", () => {
     assert.ok(
       z < crumbZ,
       `the lift is z-${z} and the breadcrumb is z-${crumbZ}; a tie or a win means a post paints over the chrome`
+    );
+  });
+});
+
+/**
+ * THE WELCOME SEQUENCE HAS TO FIT THE PHONE IT IS ON.
+ *
+ * Measured on a real device by ogazboiz and then reproduced here: on any
+ * viewport shorter than ~750 — which is every ordinary phone once the browser's
+ * own chrome is showing — the Skip button sat below the fold. 143px over at
+ * 375x553, 85 at 390x664, 69 at 360x620, on all three carousel screens.
+ *
+ * The arithmetic lives in `lib/welcome-fit.ts` and is checked numerically in
+ * its own tests. What is asserted here is the WIRING that lets it work at all,
+ * because each piece is one careless edit from silently undoing the fix and
+ * none of them looks load-bearing:
+ */
+describe("the welcome sequence fits a short phone", () => {
+  const frame = stripComments(read("components/layout/welcome/welcome-art.tsx"));
+  const flow = stripComments(read("components/layout/welcome/welcome-flow.tsx"));
+  const css = read("app/globals.css");
+
+  it("gives the reflowed frame a DEFINITE height", () => {
+    /*
+      `min-h-dvh` says "at least the viewport" and then lets the content push
+      past it — which is exactly what it was doing. Flexbox can only take space
+      away from a child when the container's height is definite, so this single
+      word is what makes every other part of the fix function.
+    */
+    assert.match(
+      frame,
+      /@container relative flex h-dvh w-full flex-col/,
+      "the reflowed frame is back on min-h-dvh, so nothing can shrink and Skip falls off the bottom again"
+    );
+  });
+
+  it("lets the column shrink inside it", () => {
+    /*
+      A flex item defaults to `min-height: auto`, i.e. "never smaller than my
+      content". Without `min-h-0` the column reports the room it WANTS rather
+      than the room it has, the fit pass measures that inflated figure, and the
+      band is sized against space that does not exist.
+    */
+    assert.match(
+      flow,
+      /ws-welcome-bottom[^"]*\bmin-h-0\b/,
+      "the welcome column can grow past the frame again — the fit pass will measure room it does not have"
+    );
+  });
+
+  it("measures the column rather than the artwork", () => {
+    /*
+      The distinction that keeps screen two intact: the file runs the fan of
+      pals 188% of the stage wide ON PURPOSE. Fitting the PICTURE to the
+      viewport turned that deliberate bleed into a row of thumbnails once
+      before. The fit pass measures what the TEXT needs and gives the picture
+      what is left.
+    */
+    assert.match(frame, /querySelector<HTMLElement>\("\.ws-welcome-bottom"\)/);
+    assert.match(
+      frame,
+      /--ws-band-cap/,
+      "the band is no longer capped by the room left, so a short phone overflows again"
+    );
+  });
+
+  it("publishes the fit on :root, where the derived vars are computed", () => {
+    /*
+      A custom property resolves where it is USED. `--ws-stage-w`,
+      `--ws-art-band-h` and `--ws-art-band-top` are all derived on `:root` in
+      globals.css, so a value set on the frame — a descendant — would be
+      invisible to that computation and every one of them would fall back.
+    */
+    assert.match(
+      frame,
+      /document\.documentElement\.style/,
+      "the fit is being published somewhere the :root derivations cannot see it"
+    );
+  });
+
+  it("re-fits after every render, not only on resize", () => {
+    // Continuing to the finale swaps the whole branch away without changing
+    // the frame's size, so no ResizeObserver entry is delivered.
+    assert.match(
+      frame,
+      /useLayoutEffect\(\(\) => \{\s*if \(root\.current\) fitReflowedColumn\(root\.current\);\s*\}\);/,
+      "a step change no longer re-fits — the finale inherits the previous screen's band"
+    );
+  });
+
+  it("scales only GAPS, never type or tap targets", () => {
+    /*
+      `--ws-air` multiplies padding and margins. If it ever reaches a
+      font-size, a button height or the lockup, the screen stops overflowing by
+      becoming unreadable instead — which is not a fix.
+    */
+    const air = css.match(/\.ws-welcome-bottom \{[^}]*\}/g)?.join("\n") ?? "";
+    assert.match(air, /padding-top: calc\(40px \* var\(--ws-air, 1\)\)/);
+    for (const banned of ["font-size", "height:", "line-height"]) {
+      assert.ok(
+        !new RegExp(`${banned}[^;]*--ws-air`).test(css),
+        `--ws-air reached ${banned}; it may only scale gaps`
+      );
+    }
+  });
+
+  it("leaves the phone the design was tuned for untouched", () => {
+    // welcomeAir(844) === 1 is pinned in lib/welcome-fit.test.ts; this is the
+    // other half of it — the stylesheet must still ask for the file's 130vw
+    // whenever the cap is not the smaller number.
+    assert.match(
+      css,
+      /--ws-stage-w:\s*max\(\s*60vw,\s*min\(calc\(100dvh \* 1440 \/ 1024\), 130vw, var\(--ws-band-cap, 200vw\)\)\s*\)/,
+      "the stage no longer prefers the file's 130vw when there is room for it"
     );
   });
 });

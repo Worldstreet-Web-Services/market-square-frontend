@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
-import { useLayoutEffect, useState } from "react";
+import { bandCapWidth, welcomeAir } from "@/lib/welcome-fit";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * THE WELCOME SCREENS' ARTWORK — Desktop 35, 33, 36 and 34.
@@ -238,8 +239,133 @@ export function WelcomeWash() {
  */
 const DESIGN_ASPECT = DESIGN_W / DESIGN_H;
 
+/**
+ * THE REFLOWED COLUMN'S FIT PASS — what makes the phone screens FIT.
+ *
+ * ─── THE PROBLEM ────────────────────────────────────────────────────────────
+ * The reflowed column is: wordmark, a fixed art band, stepper, headline, copy,
+ * a spring, then Continue and Skip. Everything except the band and the spring
+ * is fixed, and together they come to about 506px. The band asks for 191 more.
+ * On a phone showing the browser's own chrome — 375x553, 390x664, 360x620, all
+ * of them ordinary — that overflows, and what falls off the bottom is Skip.
+ * Measured before this existed: 143px over at 375x553, 85 at 390x664, 69 at
+ * 360x620, on all three carousel screens.
+ *
+ * `min-h-dvh` cannot fix this. It says "at least the viewport" and then lets
+ * the content push past it, which is precisely what was happening.
+ *
+ * ─── WHAT THIS PUBLISHES, AND WHY IT IS TWO THINGS ──────────────────────────
+ * · `--ws-air` — a 0.55..1 factor on every GAP in the column (its two
+ *   paddings, the space above the picture, under the stepper and above the
+ *   buttons). 1 at 844 and above, which is the phone the design was tuned for,
+ *   so nothing that fits today moves by a pixel. It is computed here rather
+ *   than in CSS because CSS cannot divide a length by a length to get the bare
+ *   number `calc()` needs to multiply a px value by.
+ *
+ * · `--ws-band-cap` — the room GENUINELY left for the art band once that
+ *   trimmed column is laid out, converted back into the stage width that would
+ *   fill it. The stylesheet takes the smaller of it and the design's 130vw, so
+ *   it only ever bites on a screen that could not have fitted anyway.
+ *
+ * THE ART IS NOT FITTED TO THE VIEWPORT, and that distinction is the whole
+ * reason this measures the COLUMN instead. Screen two's fan of pals is drawn
+ * 188% of the stage wide because the file runs those cards off both edges on
+ * purpose; measuring the picture and shrinking until it fitted turned that
+ * deliberate bleed into a row of thumbnails once before. What is measured here
+ * is the space the TEXT needs — the picture then gets what is left, and is
+ * still free to bleed off both edges inside it.
+ *
+ * ─── WHY :root AND NOT THE FRAME ────────────────────────────────────────────
+ * The stylesheet derives `--ws-stage-w`, `--ws-stage-h`, `--ws-art-band-h` and
+ * `--ws-art-band-top` from these two on `:root`. A custom property is resolved
+ * where it is USED, so a value set on the frame — a descendant — would be
+ * invisible to that computation and every derived var would silently fall back.
+ * Nothing else in the app declares either name, so there is no shadowing here;
+ * they are cleared on unmount so they cannot outlive the overlay.
+ *
+ * A ResizeObserver rather than a `resize` listener, because the column's height
+ * also changes when the STEP does — a two-line headline and a three-line one
+ * are 44px apart — and a step change fires no window event.
+ */
+function fitReflowedColumn(root: HTMLElement) {
+  const air = welcomeAir(window.innerHeight);
+  const style = document.documentElement.style;
+  // Set FIRST, then measure: the paddings and margins below are multiplied by
+  // it, and reading a rect after a style write forces the layout that applies
+  // it. Measuring before would size the band against gaps about to change.
+  style.setProperty("--ws-air", String(air));
+
+  const col = root.querySelector<HTMLElement>(".ws-welcome-bottom");
+  // The finale (Desktop 34) has no column and no band — it must not inherit a
+  // cap measured from the screen before it.
+  if (!col) {
+    style.removeProperty("--ws-band-cap");
+    return;
+  }
+
+  const cs = getComputedStyle(col);
+  let room =
+    col.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+
+  for (const el of Array.from(col.children) as HTMLElement[]) {
+    const k = getComputedStyle(el);
+    const margins = (parseFloat(k.marginTop) || 0) + (parseFloat(k.marginBottom) || 0);
+    // The band is what is being solved for, so only its margin is spent here.
+    if (el.classList.contains("ws-welcome-art-gap")) {
+      room -= margins;
+      continue;
+    }
+    // The spring is the give that already collapsed to nothing.
+    if (el.classList.contains("ws-welcome-spring")) continue;
+    room -= el.getBoundingClientRect().height + margins;
+  }
+
+  style.setProperty("--ws-band-cap", `${bandCapWidth(room)}px`);
+}
+
 export function WelcomeFrame({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState<number | null>(null);
+
+  /*
+    A CALLBACK REF, for the same reason the friends deck uses one: the reflow
+    branch is not always what renders, so an effect keyed on anything but the
+    node itself can run against nothing and never fire again when the node
+    arrives.
+  */
+  const root = useRef<HTMLDivElement | null>(null);
+  const observer = useRef<ResizeObserver | null>(null);
+  const fitRef = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el) {
+      document.documentElement.style.removeProperty("--ws-air");
+      document.documentElement.style.removeProperty("--ws-band-cap");
+      return;
+    }
+    if (typeof ResizeObserver === "undefined") return;
+    const run = () => fitReflowedColumn(el);
+    run();
+    const ro = new ResizeObserver(run);
+    ro.observe(el);
+    const col = el.querySelector(".ws-welcome-bottom");
+    if (col) ro.observe(col);
+    observer.current = ro;
+    root.current = el;
+  }, []);
+
+  /*
+    AND AFTER EVERY RENDER, because a step change is not a resize.
+
+    The observer is bound to the nodes present when the ref fired. Continuing
+    from the last carousel screen to the finale swaps the whole branch — the
+    column with the art band disappears — and nothing about that changes the
+    frame's size, so no ResizeObserver entry is delivered. Without this the
+    finale inherited the previous screen's `--ws-band-cap` and positioned its
+    artwork against a band that is no longer on the page.
+  */
+  useLayoutEffect(() => {
+    if (root.current) fitReflowedColumn(root.current);
+  });
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -261,7 +387,19 @@ export function WelcomeFrame({ children }: { children: React.ReactNode }) {
   // that is correct at ANY size, so the frame before measurement is never
   // broken — only unscaled.
   if (scale === null) {
-    return <div className="@container relative flex min-h-dvh w-full flex-col">{children}</div>;
+    /*
+      `h-dvh`, not `min-h-dvh`, and `min-h-0` on the column inside it: the fit
+      pass below needs a DEFINITE height to subtract from, and a flex item's
+      `min-height: auto` would otherwise let the column grow to its content and
+      report the room it wants rather than the room it has. Overflow past this
+      is not clipped — the gate around it scrolls — so an extreme viewport
+      degrades to the behaviour it had before rather than losing a button.
+    */
+    return (
+      <div ref={fitRef} className="@container relative flex h-dvh w-full flex-col">
+        {children}
+      </div>
+    );
   }
 
   return (

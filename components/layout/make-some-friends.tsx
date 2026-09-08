@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { usePeople } from "@/features/discovery";
@@ -9,6 +9,7 @@ import { useSwipeCard } from "@/hooks/use-swipe-card";
 import { useFollow, useIsFollowing } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
+import { deckShift } from "@/lib/deck-centring";
 import { DeckDots } from "@/components/ui/deck-dots";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -66,7 +67,7 @@ import type { Profile } from "@/lib/api/schemas";
  * not persisted, because a preference stored only in this tab is a preference
  * that lies the moment you open another one.
  */
-export function MakeSomeFriends() {
+export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
   const me = useMe();
   const people = usePeople("", "followers", true);
   const [index, setIndex] = useState(0);
@@ -80,20 +81,64 @@ export function MakeSomeFriends() {
     user-set width and the rail — none of which a media query knows. Capped at
     1 so it never grows past the file's own size.
   */
-  const fitRef = useRef<HTMLDivElement | null>(null);
+  /*
+    A CALLBACK REF, NOT `useRef` + `useEffect`, and the difference was a live
+    bug: the deck returns `null` while the directory is loading, so on mount
+    there is no node to measure. An effect keyed on anything but the node
+    itself runs once against `null`, returns early, and never fires again when
+    the fan finally renders — leaving `deckScale` at its initial 1 and the
+    467px deck overflowing both edges of a 390px phone. Measured: scale 1,
+    cards spanning -38..429.
+
+    A callback ref fires WHEN THE NODE ARRIVES, which is the only moment that
+    matters here.
+  */
   const [deckScale, setDeckScale] = useState(1);
-  useEffect(() => {
-    const el = fitRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => {
-      const room = el.clientWidth;
-      if (room > 0) setDeckScale(Math.min(1, room / 467));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const observer = useRef<ResizeObserver | null>(null);
+  const fitRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      observer.current?.disconnect();
+      observer.current = null;
+      if (!el || typeof ResizeObserver === "undefined") return;
+      const measure = () => {
+        const room = el.clientWidth;
+        if (room <= 0) return;
+        const ratio = room / 467;
+        /*
+          TWO DIFFERENT THINGS ARE BEING FITTED, and that is the whole point.
+
+          In the feed the fan is one block among many, so the FAN is what has
+          to fit: scale by the deck's full 467 and all three cards stay on
+          screen at the file's own size or smaller.
+
+          On `/pals` the deck IS the screen, and what has to fill it is the
+          FRONT CARD. Scaling by 467 there kept the card at 186 x 0.76 — a
+          thumbnail marooned in a phone, which is the emptiness this page had.
+          Scaling by the CARD's own 186 makes it fill the column, and the two
+          behind it run off the edges exactly as the welcome screen's fan does.
+          That bleed is the fan, not a bug: their inner halves stay visible and
+          the front card is the one you decide about.
+        */
+        /*
+          CAPPED AT 1.45, NOT AT THE ROOM. Filling the column edge to edge
+          (1.9 on a 390 phone) blows the card's own furniture up with it — the
+          40px add badge becomes 76 and reads as a sticker stuck on the corner
+          — and it pushes the neighbours so far out that the fan stops looking
+          like a fan and starts looking like one enormous card. 1.45 puts the
+          card at 270 against the file's 186, keeps the badge at a believable
+          58, and still leaves ~126px of the next card showing, which is the
+          thing that says there is somebody after this one.
+        */
+        const cardRatio = room / DECK_CARD.width;
+        setDeckScale(fill ? Math.min(1.45, cardRatio) : Math.min(1, ratio));
+      };
+      measure();
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      observer.current = ro;
+    },
+    [fill]
+  );
 
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (profile) => profile.id !== me.data?.id
@@ -153,8 +198,18 @@ export function MakeSomeFriends() {
     placement stands untouched.
   */
   const drawn = window.map((i) => DECK_PLACES[slotOf(i)]?.x ?? 0);
-  const recentre =
-    drawn.length < 3 ? -drawn.reduce((a, b) => a + b, 0) / drawn.length : 0;
+  /*
+    WHAT GETS CENTRED DEPENDS ON WHETHER THE FAN FITS — the decision itself is
+    `deckShift`, which is pure and pinned in `lib/deck-centring.test.ts`.
+
+    In the feed the whole fan is on screen, so a fan that is not full has to
+    shift or it sits off to one side of an empty row. Filling, the fan is
+    deliberately WIDER than the column and its outer cards bleed, so the thing
+    that must be centred is the FRONT card — and the front card is NOT at x=0.
+    The file puts it at -14.09, which at the 1.45 fill scale left it ~20px left
+    of the column's centre on every phone. See the note in `deck-centring.ts`.
+  */
+  const recentre = deckShift({ fill, offsets: drawn, frontX: DECK_PLACES[0]!.x });
 
   return (
     <section aria-label="People to meet" className="flex flex-col gap-6">
@@ -202,9 +257,15 @@ export function MakeSomeFriends() {
         />
 
         <div
-          className="relative flex shrink-0 items-center justify-center"
+          className={cn(
+            "relative flex items-center justify-center",
+            // Filling means the fan is WIDER than the column and its outer
+            // cards bleed; the box must not grow to the fan's width or it
+            // would push the page sideways.
+            fill ? "w-full overflow-hidden" : "shrink-0"
+          )}
           style={{
-            width: 467 * deckScale,
+            width: fill ? undefined : 467 * deckScale,
             height: 273 * deckScale,
           }}
         >
