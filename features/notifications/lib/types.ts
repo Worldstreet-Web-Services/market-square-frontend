@@ -35,6 +35,26 @@ export const NotificationKindSchema = z
     "stream_live",
     "verification_resolved",
     "role_resolved",
+    /**
+     * FOUR KINDS THE SERVICE HAS BEEN SENDING ALL ALONG, and this enum did not
+     * list — so `.catch("follow")` rendered every one of them as "New
+     * Follower · X started following you on Square."
+     *
+     * This is the third time the same hole has bitten (see `tip_received` and
+     * `wink` above), and it was live: the service's enum carries fifteen kinds
+     * against our eleven, and the local database holds six `message`, six
+     * `speaker_request` and three `group_added` rows right now — every one of
+     * them being shown to somebody as a follow that never happened.
+     *
+     * Verified against the served contract at :8094 rather than guessed. The
+     * lesson the two earlier notes drew is the right one and was not applied
+     * widely enough: list a kind BEFORE the service sends it, and re-read the
+     * enum whenever notifications change.
+     */
+    "message",
+    "chat_request",
+    "group_added",
+    "speaker_request",
   ])
   .catch("follow");
 

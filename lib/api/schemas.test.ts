@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ProfileSchema } from "./schemas.ts";
+import { readFileSync } from "node:fs";
 
 // A minimal ProfileSummary as the service hydrates it.
 const base = {
@@ -84,5 +85,75 @@ describe("ProfileSchema.verification", () => {
     }) as Record<string, unknown>;
     assert.equal(parsed.paidThrough, undefined);
     assert.equal(parsed.daysRemaining, undefined);
+  });
+});
+
+/**
+ * THE NOTIFICATION ENUM MUST COVER WHAT THE SERVICE SENDS.
+ *
+ * `NotificationKindSchema` ends in `.catch("follow")`, which is right — an
+ * unknown future kind must not fail the whole page. But it means every kind
+ * this enum has NOT heard of renders as "New Follower · X started following
+ * you on Square", which is a lie about a thing that did not happen.
+ *
+ * It has now bitten three times: `tip_received` told a paid creator they had a
+ * new follower, `wink` was listed pre-emptively for the same reason, and then
+ * `message`, `chat_request`, `group_added` and `speaker_request` were all
+ * being sent by the service and shown as follows — six, six and three rows of
+ * it sitting in the local database.
+ *
+ * Read from SOURCE rather than imported: the notifications slice imports
+ * through the `@/` alias, which Node's test runner does not resolve, which is
+ * why every other cross-slice invariant in this repo is source-read too.
+ *
+ * Pins the served contract's list (:8094, checked 2026-09-08). When
+ * notifications change upstream, re-read the enum and update BOTH.
+ */
+describe("notification kinds cover the served contract", () => {
+  const SERVED = [
+    "follow",
+    "like",
+    "comment",
+    "repost",
+    "bookmark",
+    "ticket_purchased",
+    "stream_live",
+    "verification_resolved",
+    "role_resolved",
+    "message",
+    "speaker_request",
+    "tip_received",
+    "wink",
+    "chat_request",
+    "group_added",
+  ];
+
+  const source = readFileSync(
+    new URL("../../features/notifications/lib/types.ts", import.meta.url),
+    "utf8"
+  );
+  /*
+    Sliced on the enum's OWN brackets, not on `.catch("follow")`.
+
+    The first attempt ended the slice at `indexOf('.catch("follow")')` — and
+    the comments in that file quote that exact string while explaining the bug,
+    so the block was truncated inside prose and `stream_live` read as missing.
+    A test that fails for the wrong reason is barely better than one that
+    passes for the wrong reason.
+  */
+  const start = source.indexOf(".enum([", source.indexOf("NotificationKindSchema"));
+  const enumBlock = source.slice(start, source.indexOf("])", start));
+
+  it("lists every kind the service sends, so none renders as a follow", () => {
+    for (const kind of SERVED) {
+      assert.ok(
+        enumBlock.includes(`"${kind}"`),
+        `"${kind}" is missing — .catch("follow") would render it as a follow that never happened`
+      );
+    }
+  });
+
+  it("still degrades an unknown future kind rather than failing the page", () => {
+    assert.match(source, /\.catch\("follow"\)/);
   });
 });

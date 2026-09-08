@@ -50,6 +50,14 @@ const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   bookmark: "/notifications/notif-post.svg",
   tip_received: "/gifts/coin-stack.svg",
   ticket_purchased: "/gifts/coin-stack.svg",
+  // Chat-shaped events take the file's mention mark, which is the glyph it
+  // draws on "Mentioned in Gistroom chat".
+  message: "/notifications/notif-mention.svg",
+  chat_request: "/notifications/notif-mention.svg",
+  // Being added to a house is a fact about people, not about a post.
+  group_added: "/notifications/notif-follow.svg",
+  // A raised hand belongs to a live room, so it takes the trending mark.
+  speaker_request: "/notifications/notif-trending.svg",
 };
 
 /**
@@ -92,6 +100,14 @@ function headline(item: MarketNotification): string {
       return "Verification resolved";
     case "role_resolved":
       return "Role resolved";
+    case "message":
+      return "New message";
+    case "chat_request":
+      return "Message request";
+    case "group_added":
+      return "Added to a house";
+    case "speaker_request":
+      return "Speaker request";
   }
 }
 
@@ -128,12 +144,25 @@ function describe(item: MarketNotification): string {
       return "Your verification request has been resolved.";
     case "role_resolved":
       return "Your role request has been resolved.";
+    case "message":
+      return `${who} sent you a message.`;
+    case "chat_request":
+      // A request is not yet a conversation, and the copy must not imply the
+      // reader has agreed to one.
+      return `${who} wants to start a chat with you.`;
+    case "group_added":
+      return `${who} added you to a house.`;
+    case "speaker_request":
+      return `${who} asked to speak in your room.`;
   }
 }
 
 // Where a notification points. Nulls are real — a like on a deleted post has
 // no post to open — so the row stays unclickable rather than linking nowhere.
 function hrefFor(item: MarketNotification): string | null {
+  // A chat event has no post and no stream, so without this it fell through to
+  // the sender's PROFILE — which is not where the message is.
+  if (item.kind === "message" || item.kind === "chat_request") return "/messages";
   if (item.streamId) return `/live/${item.streamId}`;
   if (item.postId) return `/p/${item.postId}`;
   if (item.actor) return `/u/${item.actor.username}`;
