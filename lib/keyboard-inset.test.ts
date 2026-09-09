@@ -90,9 +90,52 @@ describe("the thread is glued to the keyboard, not to the window", () => {
     }
   });
 
-  it("mounts the hook that publishes it", () => {
+  it("mounts the hook in the SHELL, so one window has one measurement", () => {
+    /*
+      It lived in the messages page first, which left `main` and the SIDEBAR
+      still measuring the same window in `100dvh` while the chat pane measured
+      it in `--ws-vvh`. Two units for one window is the bug: disagree by a
+      pixel and `main` grows past its min-height, the document scrolls, and the
+      full-height sidebar stops short — the black band under the WHOLE app.
+    */
+    const shell = read("components/layout/app-shell.tsx");
+    assert.match(shell, /useKeyboardInset\(\)/, "nothing publishes --ws-vvh, so everything falls back to dvh");
     const page = read("features/messages/components/messages-page.tsx");
-    assert.match(page, /useKeyboardInset\(\)/, "nothing publishes --ws-vvh, so the pane falls back to dvh forever");
+    assert.doesNotMatch(page, /useKeyboardInset/, "the page publishes it a second time");
+  });
+
+  it("sizes the sidebar and main from the SAME source as the pane", () => {
+    const shell = read("components/layout/app-shell.tsx");
+    assert.doesNotMatch(
+      shell,
+      /sticky top-0 z-40 hidden h-dvh/,
+      "the sidebar measures the window in dvh again while the pane uses --ws-vvh"
+    );
+    assert.match(
+      shell,
+      /min-h-\[calc\(var\(--ws-vvh,100dvh\)-var\(--ws-crumb-h\)\)\]/,
+      "main measures the window in dvh again while the pane uses --ws-vvh"
+    );
+  });
+
+  it("stops the PAGE scrolling while a thread is open", () => {
+    /*
+      Sizing alone cannot guarantee it — every element has to agree to the
+      pixel and one rounded half-pixel puts the scrollbar back. The route's
+      contract is simpler and worth stating outright: with a thread open the
+      message list scrolls and nothing else does.
+    */
+    const shell = read("components/layout/app-shell.tsx");
+    assert.match(
+      shell,
+      /if \(!chatOpen\) return;[\s\S]{0,200}document\.body\.style\.overflow = "hidden"/,
+      "the page can scroll behind an open thread again"
+    );
+    assert.match(
+      shell,
+      /document\.body\.style\.overflow = previous/,
+      "the scroll lock is never released"
+    );
   });
 
   it("listens to scroll as well as resize", () => {

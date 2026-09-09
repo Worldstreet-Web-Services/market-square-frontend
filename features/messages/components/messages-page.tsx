@@ -6,7 +6,6 @@ import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
-import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { InboxFilters, InboxSearch } from "@/features/messages/components/inbox-chrome";
 import { NewChatMenu } from "@/features/messages/components/new-chat-menu";
@@ -310,15 +309,6 @@ export function MessagesPage({
   }) => React.ReactNode;
 } = {}) {
   const { ready, authenticated, login } = useAuth();
-  /*
-    Publishes `--ws-kb`, which the pane's height subtracts below. This is what
-    glues the composer to the top of the on-screen keyboard on iOS, where
-    `interactive-widget=resizes-content` is not implemented and the layout
-    viewport therefore does not move when the keyboard opens. It costs nothing
-    on Chromium, where the same measurement comes out zero because the layout
-    viewport shrank along with the visual one.
-  */
-  useKeyboardInset();
   const [open, setOpen] = useState<Conversation | null>(null);
   // Tell the shell a thread is open so the dock leaves the composer alone —
   // see lib/chat-open-store. Cleared on close and on leaving the page.
