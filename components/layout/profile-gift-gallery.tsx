@@ -104,7 +104,7 @@ export function ProfileGiftGallery() {
       as a grid hanging off one side. `justify-center` splits the slack, so
       the rows sit under the middle of the strip above them.
     */
-    <div className="grid grid-cols-[repeat(auto-fill,129px)] justify-center gap-6 px-8 py-6">
+    <div className="grid grid-cols-[repeat(auto-fill,129px)] justify-center gap-6 px-4 py-6 md:px-8">
       {LIVE_GIFTS.map((gift) => {
         const received = counts.get(gift.id) ?? null;
         return (

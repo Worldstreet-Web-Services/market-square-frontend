@@ -74,7 +74,7 @@ export function ProfileReplays({ username }: { username: string }) {
             /* 545:47750 sits 27 in from the card's left, 15 down, 306 wide —
                so the insets are 27/25 and 15/15 rather than the invite's 16,
                and the row is CENTRED, which is what puts the faces mid-card. */
-            <RoomCardShell key={room.id} className="h-[120px] w-[359px] shrink-0 p-[15px_25px_15px_27px]">
+            <RoomCardShell key={room.id} className="h-[120px] w-[min(359px,100%)] shrink-0 p-[15px_25px_15px_27px]">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex h-8 gap-2">

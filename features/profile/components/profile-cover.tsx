@@ -57,7 +57,14 @@ export function ProfileCover({
   const name = profile.displayName || profile.username;
 
   return (
-    <div className="relative aspect-[741/473] w-full overflow-hidden rounded-[20px]">
+    /*
+      The file's 741x473 holds on desktop. On a phone that ratio gives a
+      218px card into which a 72 avatar, a name, a handle and three controls
+      cannot fit side by side — the handle ended up one letter per line down
+      the left edge. So the phone cover is 300 tall and stacks the identity
+      above the actions; `md:` returns the file's frame.
+    */
+    <div className="relative h-[300px] w-full overflow-hidden rounded-[20px] md:aspect-[741/473] md:h-auto">
       {/*
         THE COVER PHOTOGRAPH, AND THE FALLBACK IT KEEPS.
 
@@ -140,8 +147,8 @@ export function ProfileCover({
       {/* 545:47576 (the identity, y=377..449) and 545:47603 (the actions,
           y=394..432): the actions are CENTRED on the identity row, not hung
           from its foot. */}
-      <div className="absolute inset-x-6 bottom-6 z-10 flex items-center gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
+      <div className="absolute inset-x-4 bottom-4 z-10 flex flex-col items-start gap-3 md:inset-x-6 md:bottom-6 md:flex-row md:items-center md:gap-4">
+        <div className="flex w-full min-w-0 items-center gap-4 md:w-auto md:flex-1">
           {/* 72 at a 16.36 radius behind a 2.18 ring in #15202B at 40%. A
               ROUNDED SQUARE, not the circle every other avatar in the app is:
               the file draws the profile's own portrait differently from the one
@@ -178,7 +185,7 @@ export function ProfileCover({
           </div>
         </div>
 
-        {actions && <div className="flex shrink-0 items-center gap-4">{actions}</div>}
+        {actions && <div className="flex w-full shrink-0 items-center gap-3 md:w-auto md:gap-4">{actions}</div>}
       </div>
     </div>
   );

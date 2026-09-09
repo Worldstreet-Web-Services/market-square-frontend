@@ -451,7 +451,7 @@ export function ProfilePage({
         `ProfileCover` owns the card; the actions and the meta row are passed in
         because who you are looking at decides both.
       */}
-      <div className="px-8 pt-6">
+      <div className="px-4 pt-6 md:px-8">
         <ProfileCover
           profile={data}
           /* 435:27521 — the row beside the handle. The balance chip is the
@@ -526,7 +526,7 @@ export function ProfilePage({
         this block used to draw all of them a second time underneath. What the
         file leaves here is three lines.
       */}
-      <div className="flex flex-col gap-4 px-8 pt-6">
+      <div className="flex flex-col gap-4 px-4 pt-6 md:px-8">
         {/*
           THE FILE PRINTS A LINE WHEN THERE IS NO BIO — "Bio not updated" at
           50% white, where a written one is the same size in full white. Empty
@@ -639,7 +639,7 @@ export function ProfilePage({
       </div>
 
       {/* 534:15577 — the houses this person keeps, 38 under the block above. */}
-      {isMe && housesSlot && <div className="px-8 pt-9">{housesSlot}</div>}
+      {isMe && housesSlot && <div className="px-4 pt-9 md:px-8">{housesSlot}</div>}
 
       {/*
         545:47615 — what a STRANGER's profile carries under the bio block, in
@@ -648,7 +648,7 @@ export function ProfilePage({
         to show, so a profile with none of the three ends at the bio block.
       */}
       {!isMe && (
-        <div className="flex flex-col gap-6 px-8 pt-6">
+        <div className="flex flex-col gap-6 px-4 pt-6 md:px-8">
           {!badges.unavailable && badges.data && <BadgesSection badges={badges.data.items} />}
           {housesOfSlot?.(data)}
           {replaysSlot?.(data)}
@@ -669,7 +669,7 @@ export function ProfilePage({
           cover, the bio, the houses — is inset 32, so these two cards hung 16px
           wider than the rail directly above them. */}
       {isMe && (
-        <div className="space-y-3 px-8 pb-4 pt-9">
+        <div className="space-y-3 px-4 pb-4 pt-9 md:px-8">
           <CreatorCard role={data.role} />
           <VerificationCard />
         </div>
