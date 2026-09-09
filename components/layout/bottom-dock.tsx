@@ -113,7 +113,7 @@ export function BottomDock({
 
       IT POINTS AT THE DECK, NOT AT EXPLORE. The glyph promises deciding about
       one person at a time; Explore is a directory you scan. `/pals` is the
-      same `MakeSomeFriends` the timeline carries, given a page of its own.
+      same `FriendsDeck` the timeline carries, given a page of its own.
     */
     { href: "/pals", label: "Pals", glyph: "/notifications/dock-pals.svg", badge: null },
     {

@@ -30,12 +30,20 @@ import {
 export function useSwipeCard({
   width,
   onDecide,
+  canCommit,
   disabled = false,
   settleMs = 180,
 }: {
   /** The card's own width — the threshold is a fraction of it. */
   width: number;
   onDecide: (decision: Exclude<SwipeDecision, null>) => void;
+  /**
+   * Asked once a drag has crossed the threshold, BEFORE the card flies. False
+   * springs it back instead — for a deck browsing with the gesture, where a
+   * swipe past the first or last person has nowhere to go and a card that
+   * flew out and slid back in would read as a decision being undone.
+   */
+  canCommit?: (decision: Exclude<SwipeDecision, null>) => boolean;
   disabled?: boolean;
   settleMs?: number;
 }) {
@@ -95,6 +103,8 @@ export function useSwipeCard({
       const velocity = (event.clientX - (prev?.x ?? event.clientX)) / elapsed;
       const decision = swipeDecision({ dx, dy, width, velocity });
       if (!decision) return release();
+      // Past the threshold but with nowhere to go: spring back, never fly.
+      if (canCommit && !canCommit(decision)) return release();
 
       setCommitting(decision);
       start.current = null;
@@ -107,7 +117,7 @@ export function useSwipeCard({
         onDecide(decision);
       }, settleMs);
     },
-    [committing, dx, dy, onDecide, release, settleMs, width]
+    [canCommit, committing, dx, dy, onDecide, release, settleMs, width]
   );
 
   const offset = committing ? exitOffset(committing, width) : dx;
