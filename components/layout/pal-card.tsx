@@ -54,6 +54,7 @@ export function PalCard({
   interactive = true,
   onPass,
   onWinked,
+  onFollowed,
 }: {
   profile: Profile;
   geometry: PalCardGeometry;
@@ -65,6 +66,13 @@ export function PalCard({
   interactive?: boolean;
   onPass?: () => void;
   onWinked?: () => void;
+  /**
+   * Fired when the badge FOLLOWS (never on an unfollow), after the follow is
+   * sent. The deck steps on it: once you have followed somebody the card has
+   * done its job, and on desktop — where there is no swipe to fling it away —
+   * a card that stayed put after Follow read as the action not landing.
+   */
+  onFollowed?: () => void;
 }) {
   /*
     Both hooks are per-PERSON, so they live on the card and not on whatever is
@@ -107,7 +115,11 @@ export function PalCard({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          gate(() => follow.mutate(!isFollowing));
+          gate(() => {
+            follow.mutate(!isFollowing);
+            // A follow moves the deck on; an unfollow leaves the card where it is.
+            if (!isFollowing) onFollowed?.();
+          });
         }}
         aria-label={isFollowing ? `Unfollow ${name}` : `Follow ${name}`}
         className="ws-press absolute z-10 transition-opacity hover:opacity-90 disabled:opacity-60"

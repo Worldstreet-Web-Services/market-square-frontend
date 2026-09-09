@@ -66,6 +66,17 @@ const RawProfileSchema = z.object({
   // every /admin route is enforced server-side, so hiding the UI is a courtesy
   // to non-admins, never the access control.
   isAdmin: z.boolean().optional().default(false),
+  /**
+   * HAS THE VIEWER AN ACTIVE WINK AT THIS PERSON — asked of the backend for
+   * the "now friends" popup (647:16628), which must tell a wink-back from a
+   * first wink. Optional WITHOUT a default: undefined means the payload does
+   * not carry it, which is not "no" — the same rule as `isFollowing`. Until
+   * the field ships, every wink reads as a first wink and offers "Wink back",
+   * which is the honest fallback (the service refuses a duplicate).
+   */
+  winkedByMe: z.boolean().optional(),
+  /** THIS PERSON has an active wink at the viewer. Same rules: omitted is unknown. */
+  winkedMe: z.boolean().optional(),
   followerCount: z.number().optional().default(0),
   followingCount: z.number().optional().default(0),
   // Deliberately NOT defaulted. `undefined` means "this payload does not

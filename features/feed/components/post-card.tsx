@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
@@ -43,6 +42,7 @@ import {
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
 import { MentionPicker } from "@/features/feed/components/mention-picker";
+import { ShareSheet } from "@/features/feed/components/share-sheet";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -585,19 +585,13 @@ export function PostCard({
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
   // Share the POST, not its author's profile — a reader following the link
-  // has to land on the thing they were shown.
-  const share = async () => {
-    const url = `${window.location.origin}/p/${post.id}`;
-    try {
-      if (navigator.share) await navigator.share({ text: post.text, url });
-      else {
-        await navigator.clipboard.writeText(url);
-        toast.success("Link copied");
-      }
-    } catch {
-      /* dismissed share sheets are not errors */
-    }
-  };
+  // has to land on the thing they were shown. The sheet offers WhatsApp, X,
+  // Facebook, Telegram, the clipboard and the device's own sheet, each
+  // carrying the post's words and its link (`ShareSheet`). It used to be one
+  // tap that copied the link on any browser without a native sheet, which is
+  // most desktops — so a post could not be put into a WhatsApp group at all.
+  const [sharing, setSharing] = useState(false);
+  const share = () => setSharing(true);
 
   return (
     /*
@@ -991,6 +985,17 @@ export function PostCard({
           <ReportMenu post={post} mine={Boolean(me.data && post.authorId === me.data.id)} />
         </div>
       </div>
+
+      {sharing && (
+        <ShareSheet
+          open
+          onClose={() => setSharing(false)}
+          payload={{
+            text: post.text,
+            url: `${window.location.origin}/p/${post.id}`,
+          }}
+        />
+      )}
 
         {/*
           THE FIELD SITS IN THE MIDDLE, AND ORDER IS WHAT PUTS IT THERE.

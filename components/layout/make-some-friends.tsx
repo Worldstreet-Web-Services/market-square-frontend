@@ -358,6 +358,10 @@ export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
               shift={recentre}
               onPass={() => step(1)}
               onWinked={() => step(1)}
+              /* A follow moves the deck on too, the way a wink and a pass do:
+                 on desktop there is no swipe to carry the card away, and a
+                 card that stayed after Follow read as nothing happening. */
+              onFollowed={() => step(1)}
               /* Either way the deck moves on: the FOLLOW is sent by the card
                  itself, and a pass has nothing to send. */
               onSwipeDecision={() => step(1)}
@@ -505,6 +509,7 @@ function PersonCard({
   shift,
   onPass,
   onWinked,
+  onFollowed,
   onSwipeDecision,
 }: {
   profile: Profile;
@@ -513,6 +518,7 @@ function PersonCard({
   shift: number;
   onPass: () => void;
   onWinked: () => void;
+  onFollowed: () => void;
   /** Fired after a committed drag, once the card has flown. */
   onSwipeDecision?: (decision: "follow" | "pass") => void;
 }) {
@@ -578,6 +584,7 @@ function PersonCard({
         interactive={front}
         onPass={onPass}
         onWinked={onWinked}
+        onFollowed={onFollowed}
       />
     </div>
   );

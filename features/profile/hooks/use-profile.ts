@@ -222,11 +222,22 @@ export function useWink(profile: Profile) {
     return () => window.clearInterval(timer);
   }, [waiting]);
 
+  /*
+    THE SERVICE'S OWN ANSWER, when it carries one. `winkedByMe` on a profile
+    says the viewer has an active wink at this person — inside the cooldown
+    that refuses a second one — resolved server-side, so it survives a new
+    browser where this tab's memory of sent winks does not. Present, it is
+    the truth about "already winked"; absent (an anonymous reader, an older
+    payload), the local memory stands in. Never defaulted: undefined is not
+    "no".
+  */
+  const winkedOnServer = profile.winkedByMe === true;
+
   return {
     /** Gone entirely once the service has answered "no such route". */
     unavailable,
     /** True while this viewer's wink is inside its per-person cooldown. */
-    winked: hasWinked(sent, profile.id, now),
+    winked: winkedOnServer || hasWinked(sent, profile.id, now),
     /**
      * Null when a wink may be sent right now.
      *
@@ -236,7 +247,9 @@ export function useWink(profile: Profile) {
     refusal: throttled
       ? serverRefusal!.text
       : eligibility.ok
-        ? null
+        ? winkedOnServer
+          ? `You already winked at ${profile.displayName || profile.username}`
+          : null
         : describeWinkRefusal(eligibility.reason, eligibility.retryAfterMs),
     isPending: mutation.isPending,
     send: () => {
