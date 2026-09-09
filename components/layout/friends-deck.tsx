@@ -41,6 +41,12 @@ import type { Profile } from "@/lib/api/schemas";
  * guard and the swipe cannot be fixed on one and left broken on the other.
  * `/pals` (node 844:18511) is this deck given a page of its own.
  *
+ * ─── NOTHING IS CUT ─────────────────────────────────────────────────────────
+ * `deckLayout` picks the one scale at which the WHOLE fan — both back cards
+ * and, from `md`, both discs — fits the column, so no card is ever clipped
+ * at its edge. On a phone that means a smaller front card than the column
+ * could hold; the owner's rule is that nothing is cut, and it is one rule.
+ *
  * ─── SWIPE BROWSES, ICONS ACT ───────────────────────────────────────────────
  * Dragging the front card LEFT goes to the next person and RIGHT to the
  * previous — the same navigation as the two discs, and nothing else: no follow,
@@ -101,10 +107,11 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     observer.current = ro;
   }, []);
   const wide = useMediaQuery(WIDE);
-  // Node 844:18440 puts the deck 89 under the heading block on `/pals`; Home's
-  // own file keeps its 24.
-  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[89px]" : "gap-6");
-  const layout = deckLayout({ room: room || FALLBACK_ROOM, wide });
+  // Node 844:18440 puts the deck 89 under the heading block on `/pals`; the
+  // heading is drawn at 0.68 of the node here (see its note), and so is the
+  // gap — 60. Home's own file keeps its 24.
+  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "gap-6");
+  const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: wide });
 
 
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
@@ -117,7 +124,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
 
   const filterPill = (
     <FriendsFilter
-      className={heading === "pals" ? "ml-auto md:absolute md:right-0 md:top-[10px] md:ml-0" : "-mt-[3px]"}
+      className={heading === "pals" ? "ml-auto md:absolute md:right-0 md:top-[3px] md:ml-0" : "-mt-[3px]"}
       value={filter}
       onChange={changeFilter}
       viewerCity={me.data?.city?.trim() || null}
@@ -135,33 +142,33 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         top is 9 above the block's and the pill's 10 below it — each centred on
         the title line rather than on the two-line block.
 
-        THE TITLE IS 36 / 40.4, NOT THE NODE'S 41.3 / 46.38. The node's column
-        is 915 wide; ours is 550. The row's fixed parts — 64 disc, 16, and the
-        136 pill — leave 334 beside the disc, and "Make some friends" at 41.3
-        measures 350: it truncated to "Make some frie…". 36 keeps the node's
-        line-height ratio and ends 29 short of the pill. The pill is taken out
-        of the flow so the 12px subtitle (351 wide) can run its full length
-        under the pill's bottom edge rather than wrapping.
+        THE ROW IS THE NODE'S AT 0.68, NOT AT 1. The node's column is 915
+        wide; ours is 550. At the node's own 64 disc and 41.3 title the row's
+        fixed parts left 334 for a 350 title: it truncated, and even at 36 the
+        title ran to within a few pixels of the pill where the file leaves 349
+        of air. So the heading block is scaled the way the deck under it is —
+        the disc 44, the title 28 / 32, the subtitle 11 / 16 (the node's 12 is
+        kept where the phone has the full width), the block padded clear of
+        the pill — which puts the same proportion of space between the title
+        and the pill that the file has. The disc and the pill are centred on
+        the title line, as in the file.
 
-        No phone frame was given: below `md` the disc (44) and the pill share
-        the first row and the title block (28 / 32) takes the full width
-        beneath them — the disc, the pill and the title cannot share 356.
+        No phone frame was given: below `md` the disc and the pill share the
+        first row and the title block takes the full width beneath them.
       */
       <div className="relative flex flex-wrap items-start gap-x-4 gap-y-3 md:flex-nowrap">
         <button
           type="button"
           onClick={() => (canGoBack() ? router.back() : router.push("/"))}
           aria-label="Back"
-          className="ws-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-md transition-colors hover:bg-white/25 md:h-16 md:w-16"
+          className="ws-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/16 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md transition-colors hover:bg-white/25"
         >
-          <IconDeckArrow className="h-[18px] w-[18px] md:h-6 md:w-6" />
+          <IconDeckArrow className="h-[18px] w-[18px]" />
         </button>
         {filterPill}
-        <div className="flex min-w-0 basis-full flex-col gap-px font-[family-name:var(--font-roboto)] md:basis-auto md:flex-1 md:pt-[9px]">
-          <h1 className="truncate text-[28px] font-normal leading-8 text-white md:pr-[152px] md:text-[36px] md:leading-[40.4px]">
-            Make some friends
-          </h1>
-          <p className="text-[12px] font-bold leading-4 text-white/40">
+        <div className="flex min-w-0 basis-full flex-col gap-px font-[family-name:var(--font-roboto)] md:basis-auto md:flex-1 md:pr-[152px] md:pt-[6px]">
+          <h1 className="truncate text-[28px] font-normal leading-8 text-white">Make some friends</h1>
+          <p className="text-[12px] font-bold leading-4 text-white/40 md:text-[11px]">
             Follow cool people and watch your feed go from boring to elite ✨
           </p>
         </div>
@@ -265,10 +272,8 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
       {/*
         THE DECK BOX is the column's width and the front card's height, the
         cards absolutely placed in it in file units and scaled about their
-        centres by `k`. `overflow-x-clip` clips the two outer cards where they
-        bleed past the column — the file fades the right one into the rail —
-        without clipping the front card's rim or a dragged card's tilt above
-        and below.
+        centres by `k` — a `k` chosen so the WHOLE fan fits and nothing is
+        cut. `overflow-x-clip` only catches a card mid-swipe flying out.
       */}
       <div className="relative w-full overflow-x-clip" style={{ height: layout.height }}>
         {window.map((position) => (
@@ -286,12 +291,16 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         ))}
 
         {/*
-          The `<` `>` discs, 844:22642 and 844:22639: 64 glass discs on the
-          column's edges, their centres 29 below the front card's. The left
-          one is black at 20% with a `#979797` chevron, the right white at
-          16% with a white chevron — the file's own two, kept rather than
-          mirrored. Their 32px inner ring has a zero-weight stroke and is not
-          drawn. Desktop only: on a phone the fan is browsed by hand.
+          The `<` `>` discs, 844:22642 and 844:22639: 64 glass discs, their
+          centres 29 below the front card's at -444.55 and +408.45 — the left
+          one on the column's edge, the right one INSIDE the fan over the
+          right card. They are NOT a mirrored pair: the left is black at 20%
+          with a `#979797` chevron, the right white at 16% with a white
+          chevron — read node by node. Figma's GLASS effect is a backdrop blur
+          with a lit rim; the rim is an inset highlight here. Their 32px inner
+          ring has a zero-weight stroke and is not drawn. An inert disc keeps
+          its strength — the file draws both at full — and is a real
+          `disabled`. Desktop only: on a phone the fan is browsed by hand.
         */}
         {wide && (
           <>
@@ -300,6 +309,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
               disabled={!canStep(-1)}
               onClick={() => step(-1)}
               size={arrowSize}
+              left={layout.frontX + (DECK_NODE.arrow.leftDx - DECK_NODE.arrow.size / 2) * layout.k}
               top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
             />
             <DeckArrow
@@ -307,6 +317,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
               disabled={!canStep(1)}
               onClick={() => step(1)}
               size={arrowSize}
+              left={layout.frontX + (DECK_NODE.arrow.rightDx - DECK_NODE.arrow.size / 2) * layout.k}
               top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
             />
           </>
@@ -326,12 +337,14 @@ function DeckArrow({
   disabled,
   onClick,
   size,
+  left,
   top,
 }: {
   direction: "prev" | "next";
   disabled: boolean;
   onClick: () => void;
   size: number;
+  left: number;
   top: number;
 }) {
   return (
@@ -341,10 +354,10 @@ function DeckArrow({
       onClick={onClick}
       aria-label={direction === "prev" ? "Previous person" : "Next person"}
       className={cn(
-        "ws-press absolute z-30 flex items-center justify-center rounded-full backdrop-blur-md transition-opacity disabled:opacity-30",
-        direction === "prev" ? "left-0 bg-black/20 text-[#979797]" : "right-0 bg-white/16 text-white"
+        "ws-press absolute z-30 flex items-center justify-center rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md transition-opacity disabled:cursor-default disabled:opacity-70",
+        direction === "prev" ? "bg-black/20 text-[#979797]" : "bg-white/16 text-white"
       )}
-      style={{ width: size, height: size, top }}
+      style={{ width: size, height: size, left, top }}
     >
       {/* One glyph, mirrored for `next` — 844:22641 is 844:22644 flipped. Its 24 box is 3/8 of the disc. */}
       <IconDeckArrow

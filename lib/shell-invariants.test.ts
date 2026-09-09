@@ -408,6 +408,7 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
 
   it("scales the whole fan by ONE factor from lib/deck-layout, never inline", () => {
     assert.match(deck, /deckLayout\(\{ room/, "the deck computes its own scale again");
+    assert.doesNotMatch(deck, /(left|right)-0 bg-(black|white)/, "a step disc is pinned to the column edge instead of the file's own position");
     assert.doesNotMatch(deck, /\/ 917|\/ 543/, "a file span is divided inline in the deck");
   });
 

@@ -16,7 +16,8 @@ import { useAuth } from "@/hooks/use-auth";
  * title, the Location pill — and the deck 89 under that, at the column's full
  * width with the two step discs on its edges. So the page is `StoriesRow`
  * from the feed slice over `FriendsDeck` with its `/pals` heading, stacked
- * from the top at the node's own gaps rather than centred in the viewport.
+ * from the top. The heading is drawn at 0.68 of the node to fit this column
+ * (its own note says why), and the 47 above it is scaled the same — 32.
  *
  * It is the SAME `FriendsDeck` the home timeline renders, not a second copy
  * and not a second card: one component means the wink cooldown, the
@@ -29,7 +30,7 @@ export function PalsScreen() {
   // the same gate Home puts on it.
   const { authenticated } = useAuth();
   return (
-    <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col gap-6 px-4 py-6 md:gap-[47px] lg:px-6">
+    <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col gap-6 px-4 py-6 md:gap-8 lg:px-6">
       {authenticated && <StoriesRow />}
       <FriendsDeck heading="pals" />
     </div>

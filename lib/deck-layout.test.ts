@@ -43,19 +43,32 @@ describe("the back cards' sizes are solved from their rotated boxes", () => {
   });
 });
 
-describe("deckLayout, wide", () => {
+describe("deckLayout, with the step discs", () => {
   const room = 552;
-  const layout = deckLayout({ room, wide: true });
+  const layout = deckLayout({ room, arrows: true });
+  const edge = (dx: number, halfBox: number, side: 1 | -1) => layout.frontX + (dx + side * halfBox) * layout.k;
 
-  it("fits the file's 917 span to the column", () => {
-    close(layout.k, room / 917, 1e-9, "k");
+  it("fits the whole extent — the left disc to the right card's box edge — in the column", () => {
+    close(layout.k, room / 954, 1e-9, "k");
+    close(edge(DECK_NODE.arrow.leftDx, DECK_NODE.arrow.size / 2, -1), 0, 1e-6, "left disc's outer edge");
+    // 0.1: the boxes here are the file's two-decimal readings.
+    close(edge(RIGHT.place.dx, RIGHT.box.width / 2, 1), room, 0.1, "right card's box edge");
   });
 
-  it("lands the step discs on the column's edges with the front card where the file puts it", () => {
-    close(layout.frontX + DECK_NODE.span.left * layout.k, 0, 1e-6, "left disc's outer edge");
-    close(layout.frontX + DECK_NODE.span.right * layout.k, room, 1e-6, "right disc's outer edge");
-    // 11 file units right of the middle — the file's hand, not a formula.
-    assert.ok(layout.frontX > room / 2, "the front card lost the file's placement in the span");
+  it("cuts nothing: every card and disc lies inside the box", () => {
+    for (const [dx, half] of [
+      [LEFT.place.dx, LEFT.box.width / 2],
+      [RIGHT.place.dx, RIGHT.box.width / 2],
+      [0, FRONT.width / 2],
+      [DECK_NODE.arrow.leftDx, DECK_NODE.arrow.size / 2],
+      [DECK_NODE.arrow.rightDx, DECK_NODE.arrow.size / 2],
+    ] as const) {
+      assert.ok(edge(dx, half, -1) >= -0.1 && edge(dx, half, 1) <= room + 0.1, `something at dx ${dx} runs past the column`);
+    }
+  });
+
+  it("keeps the right disc INSIDE the fan, over the right card, as the file draws it", () => {
+    assert.ok(edge(DECK_NODE.arrow.rightDx, DECK_NODE.arrow.size / 2, 1) < room, "the right disc was pushed to the column's edge");
   });
 
   it("is as tall as the front card, and the tilted cards fit inside that", () => {
@@ -66,22 +79,13 @@ describe("deckLayout, wide", () => {
   });
 });
 
-describe("deckLayout, phone", () => {
-  const room = 358;
-  const layout = deckLayout({ room, wide: false });
-  const frontLeft = layout.frontX - (FRONT.width / 2) * layout.k;
-  const frontRight = layout.frontX + (FRONT.width / 2) * layout.k;
+describe("deckLayout, without the step discs (phone)", () => {
+  const room = 356;
+  const layout = deckLayout({ room, arrows: false });
 
-  it("gives the front card its share of the column, centred", () => {
-    close(frontRight - frontLeft, DECK_NODE.phoneFrontShare * room, 1e-6, "front card width");
-    close(layout.frontX, room / 2, 1e-9, "centre");
-  });
-
-  it("keeps both back cards peeking beside the front card and bleeding off the edges", () => {
-    const leftOuter = layout.frontX + (LEFT.place.dx - LEFT.box.width / 2) * layout.k;
-    const rightOuter = layout.frontX + (RIGHT.place.dx + RIGHT.box.width / 2) * layout.k;
-    assert.ok(leftOuter < 0, "the left card no longer bleeds off the column");
-    assert.ok(rightOuter > room, "the right card no longer bleeds off the column");
-    assert.ok(frontLeft > 0 && frontRight < room, "nothing is left beside the front card to peek in");
+  it("fits the fan alone — both back cards' box edges on the column's edges", () => {
+    close(layout.k, room / 943, 1e-9, "k");
+    close(layout.frontX + (LEFT.place.dx - LEFT.box.width / 2) * layout.k, 0, 0.1, "left card's box edge");
+    close(layout.frontX + (RIGHT.place.dx + RIGHT.box.width / 2) * layout.k, room, 0.1, "right card's box edge");
   });
 });
