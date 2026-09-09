@@ -98,8 +98,13 @@ export function ProfileGiftGallery() {
       to 78 wide under a 160 height, and the gallery read as a row of purple
       slivers. `auto-fill` keeps the file's tile and its 24 gap and lets the
       count per row follow the width — three here, five at the file's.
+
+      CENTRED. The file's five fill its 741 exactly, so there is no slack to
+      place; three of ours leave 53 in a 488 column, and packed left that read
+      as a grid hanging off one side. `justify-center` splits the slack, so
+      the rows sit under the middle of the strip above them.
     */
-    <div className="grid grid-cols-[repeat(auto-fill,129px)] gap-6 px-8 py-6">
+    <div className="grid grid-cols-[repeat(auto-fill,129px)] justify-center gap-6 px-8 py-6">
       {LIVE_GIFTS.map((gift) => {
         const received = counts.get(gift.id) ?? null;
         return (
@@ -114,7 +119,12 @@ export function ProfileGiftGallery() {
               <img
                 src={gift.art}
                 alt={gift.name}
-                className="h-full w-full object-contain p-2"
+                // 543:42114 — the artwork is 98x119 on the 121x120 plate: one
+                // pixel short of the plate's full height, centred, and NOT
+                // inset. It shipped with 8px of padding on every side, which
+                // shrank every gift by a fifth and left a ring of plate around
+                // it that the file does not draw.
+                className="h-[119px] w-auto max-w-full object-contain"
                 loading="lazy"
               />
             </div>
