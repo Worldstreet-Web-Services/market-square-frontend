@@ -47,12 +47,20 @@ import { useStream } from "@/features/streams";
  *
  *  2. **WHOSE FACES ARE IN THE STACK.** The file draws three portraits and
  *     cannot say who they are. The service has no participant list on a stream
- *     (the payload carries `viewerCount` and `owner`, nothing else), so rather
- *     than invent one the stack shows up to three members OF THIS HOUSE GROUP —
- *     the people the invite is actually addressed to. If the roster has not
- *     resolved, the stack is simply absent rather than filled with placeholders.
- *     A `participants` array on `GET /streams/:id` would let this say what the
- *     file means; it is asked for in the backend notes.
+ *     (the payload carries `viewerCount` and `owner`, nothing else; who is
+ *     actually in the room exists only as LiveKit presence, which needs a
+ *     connection to read), so rather than invent one the stack shows the HOST
+ *     first — the one person certainly in the room, hydrated on every stream
+ *     surface — then up to two members OF THIS HOUSE GROUP, the people the
+ *     invite is addressed to.
+ *
+ *     The host leading is what makes a room opened WITHOUT a house show a face
+ *     at all. Such a room has no `houseConversationId`, so there is no roster
+ *     to read, and the card used to render an empty stack beside "Join
+ *     Gistroom" — a room that looked like nobody was in it, including the
+ *     person who had just opened it. What it still cannot show is who JOINED:
+ *     a `participants` sample on `GET /streams` would let this say what the
+ *     file means, and it is asked for in the backend notes.
  */
 /** 60s, and only while the room is live — see the note at the call site. */
 const LIVE_POLL = ["while-live", 60_000] as const;
@@ -129,9 +137,19 @@ export function GistRoomCard({
     return { key, label: match?.label ?? key, Icon: TOPIC_ICONS[key] ?? IconSpark };
   });
 
-  const faces = (members.data?.items ?? [])
-    .flatMap((member) => (member.profile ? [member.profile] : []))
-    .slice(0, 3);
+  /*
+    Host first, then the house roster minus the host (a host is usually a
+    member of their own house, and a face drawn twice reads as a bug). Three at
+    most — the file's cluster has three tiles.
+  */
+  const roster = (members.data?.items ?? []).flatMap((member) =>
+    member.profile ? [member.profile] : []
+  );
+  const host = room?.owner ?? null;
+  const faces = [
+    ...(host ? [host] : []),
+    ...roster.filter((profile) => profile.id !== host?.id),
+  ].slice(0, 3);
 
   return (
     /*
