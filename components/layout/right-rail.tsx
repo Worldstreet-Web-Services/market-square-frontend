@@ -1,55 +1,62 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { IconSearch } from "@/components/ui/icons";
 import { EcosystemPartnersRail } from "@/components/layout/ecosystem-partners-rail";
-import { TrendingDiscussions } from "@/features/discovery";
+import { LiveNowRail, TicketsRail } from "@/features/streams";
 import { CitizenSpotlightRail } from "@/features/profile";
+import { ExploreCategoriesRail, TrendingDiscussions } from "@/features/discovery";
 
+function RailSearch() {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        router.push(query.trim() ? `/discover?q=${encodeURIComponent(query.trim())}` : "/discover");
+      }}
+      role="search"
+      className="flex h-[38px] items-center gap-2 rounded-full border border-white/40 px-2"
+    >
+      <IconSearch className="h-4 w-4 shrink-0 text-[#6D6D6D]" />
+      <label className="sr-only" htmlFor="rail-search">
+        Search Market Square
+      </label>
+      <input
+        id="rail-search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search"
+        className="min-w-0 flex-1 bg-transparent text-[15px] tracking-[-0.01em] text-heading outline-none placeholder:text-grey-500"
+      />
+    </form>
+  );
+}
 
+// Rail order follows the design: search, the featured citizen, then the
+// category index. Live and tickets keep their modules underneath — they are
+// the two things on the square that expire, and the design's category list
+// links to them rather than replacing them.
 export function RightRail() {
   return (
     <aside className="hidden w-[371px] shrink-0 pl-4 pr-6 lg:block">
       <div className="sticky top-0 flex max-h-dvh flex-col gap-4 overflow-y-auto py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/*
-          THREE blocks, not seven.
-
-          The rail was drawn for a product with fourteen nav rows and a reels
-          lane. It carried a search field, a spotlight, partners, discussions,
-          categories, live-now and tickets — seven pieces of furniture beside a
-          page whose product does three things. "Don't put a lot of things in
-          there" was said about exactly this.
-
-          What went, and why each one rather than "it was crowded":
-
-          RailSearch — Explore is a nav row and a whole page. A second search
-          box beside it teaches a reader there are two searches.
-
-          ExploreCategoriesRail — a shelf somebody arranged, pointing at the
-          page it was arranged for. Explore browses categories better than a
-          rail summarising them.
-
-          LiveNowRail — the hallway at the top of Home is this, with more room
-          and the host's face. Two lists of the same rooms is how a reader
-          learns to distrust both.
-
-          TicketsRail — "my stuff", and it moved to More with the rest of it.
-
-          What stayed earns its place: a discussion is what the square is doing
-          right now, which is the whole thesis; the spotlight is who is doing
-          it, which is the other half of the same answer; and the partners are
-          a commitment to somebody outside this codebase.
-
-          The spotlight was cut once, on the argument that status is only worth
-          seeing when there is a room to be seen in. There is one now, and it
-          is asked for. It sits between the two because the order is what the
-          square is doing, then who is doing it, then who we are doing it with
-          — and because it costs NOTHING when there is nobody to show: the
-          board renders null on an empty list rather than holding a panel open.
-        */}
-        <TrendingDiscussions limit={5} />
+        <RailSearch />
         <CitizenSpotlightRail />
+        {/* The products around the square, under the person of the moment and
+            above what the square itself is doing — it is an invitation, not
+            news, so it sits with the other curated blocks rather than over
+            the live ones. */}
         <EcosystemPartnersRail />
+        {/* Above the curated categories on purpose: a category is a shelf
+            somebody arranged, a discussion is what the room is doing now. */}
+        <TrendingDiscussions limit={5} />
+        <ExploreCategoriesRail />
+        <LiveNowRail />
+        <TicketsRail />
       </div>
     </aside>
   );
 }
-

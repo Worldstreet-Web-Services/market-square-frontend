@@ -82,14 +82,6 @@ export function isPublicGet(path: string[]): boolean {
   if (head === "posts" && second) {
     return path.length === 2 || (path.length === 3 && third === "comments");
   }
-  // One comment, and a thread's replies, read like the comments they hang
-  // under: public with optional auth, so `likedByMe` resolves for a signed-in
-  // reader. `/replies` is documented so; `GET /comments/{id}` answers 200 to
-  // an anonymous curl on :8080 (2026-09-09) while the spec document has not
-  // caught up with it — see PENDING_ROUTES.
-  if (head === "comments" && second) {
-    return path.length === 2 || (path.length === 3 && third === "replies");
-  }
 
   // Stream reads are public at three EXACT shapes only: the list, one stream,
   // and its chat. Matching on the head alone let anything under /streams
@@ -102,22 +94,6 @@ export function isPublicGet(path: string[]): boolean {
   }
 
   if (head === "verification" && second === "rule") return true;
-
-  // The PUBLIC HOUSE DIRECTORY, and only that exact shape. Home's "Join a
-  // community" grid renders for signed-out visitors, so gating it would give
-  // them a 401 on content the service serves to anyone who asks — the same
-  // failure `categories`, `search` and `topics` each shipped with. Every other
-  // /conversations route needs a session and stays behind the predicate below:
-  // this one answers for people who are not members, and it deliberately
-  // carries no message, unread count or last activity.
-  if (head === "conversations" && second === "discover" && path.length === 2) return true;
-
-  // The trending hashtag rail. Public upstream and public here: it is a
-  // DISCOVERY surface that renders for signed-out visitors, and gating it gave
-  // them a 401 on content the service was serving to anyone who asked. Only
-  // this exact shape — every other /hashtags route stays behind the predicate
-  // below.
-  if (head === "hashtags" && second === "trending" && path.length === 2) return true;
 
   // The tip capability probe, and only that exact shape. A signed-out reader
   // has to see the same tip control a signed-in one does, so the sign-in

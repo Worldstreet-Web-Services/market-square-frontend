@@ -39,26 +39,6 @@ const RawProfileSchema = z.object({
   displayName: z.string().nullable().optional().default(null),
   bio: z.string().nullable().optional().default(null),
   avatarUrl: z.string().nullable().optional().default(null),
-  /**
-   * The cover photograph behind the profile header — node 435:27500.
-   *
-   * Optional and nullable because the two environments disagree today: it is
-   * on `PublicProfile` at `:8094` and NOT on the deployed spec, so a client
-   * that required it would fail to parse every profile in production. When it
-   * is absent the cover falls back to the seeded artwork, which is what
-   * shipped before the field existed.
-   */
-  coverUrl: z.string().nullable().optional().default(null),
-  /**
-   * THE LINK ROW — node 545:47631 draws `akar-icons:link-chain` and a URL at
-   * 15/20 under the place. LIVE on `PublicProfile` and `PATCH /me` at :8080
-   * (null clears, absent leaves alone; the service accepts http(s) only).
-   * Optional with a null default because the deployed spec lags :8080, as
-   * `coverUrl` did. Rendered as an anchor only when it is an http(s) URL — the
-   * client re-checks rather than trusting the write-side rule, because a
-   * public page must never carry a `javascript:` href.
-   */
-  website: z.string().nullable().optional().default(null),
   role: RoleSchema,
   verification: VerificationSchema,
   orgBadge: OrgBadgeSchema.optional().default(null),
@@ -77,50 +57,6 @@ const RawProfileSchema = z.object({
   // absent field falls back to the session's own intent instead of a lie.
   isFollowing: z.boolean().optional(),
   isBlocked: z.boolean().optional().default(false),
-  /**
-   * Whether this account has been through onboarding. PRIVATE — it is on
-   * `GET /me` and deliberately absent from `PublicProfile`, because whether
-   * somebody finished a product tour is nobody else's business.
-   *
-   * Defaulted TRUE, and the direction matters: absent means a payload that does
-   * not carry the field, and the safe reading of that is "do not take over
-   * somebody's screen". A missing field must never produce an onboarding flow.
-   */
-  hasOnboarded: z.boolean().optional().default(true),
-  /*
-    Self-declared place and gender — Explore's people filters.
-
-    ON THE CONTRACT NOW, AND THE ENVIRONMENTS DISAGREE. `PublicProfile` carries
-    city, region and gender at :8094, and does NOT on the deployed spec at
-    api.tsionark.com — the PR that added them merged to staging while
-    production deploys from main. So these stay optional with a null default:
-    required, they would fail to parse every profile in production. That is the
-    same forward-compatible shape `orgBadge` uses, and it is not a claim about
-    which environment you are talking to.
-
-    THE SHAPE IS THE SAFETY DECISION, and it is deliberate. City and region are
-    STRINGS a person typed about themselves. There is no `latitude`, no
-    `longitude`, no `distanceKm`, and there must never be one: a place somebody
-    named is a fact they chose to publish, while a distance to a stranger is
-    their position, recomputed every time you look. If a backend ever starts
-    sending coordinates, this schema drops them on the floor — which is the
-    correct outcome and the reason the fields are enumerated rather than passed
-    through.
-  */
-  city: z.string().nullable().optional().default(null),
-  region: z.string().nullable().optional().default(null),
-  gender: z.string().nullable().optional().default(null),
-  /*
-    When this person was last seen, for the chat thread's "Active 20m ago".
-
-    NULL IS A REAL ANSWER AND MUST STAY ONE. Presence is the field most often
-    absent — a `ProfileSummary` embedded in a conversation may carry it while
-    the same person's `PublicProfile` does not, and an account can legitimately
-    have never been seen. `lastActiveLabel` returns null for a null, and the
-    thread header then renders the handle alone rather than "Active recently",
-    which would be a claim nobody made.
-  */
-  lastSeenAt: z.string().nullable().optional().default(null),
 });
 
 // "Member ·A1B2" beats "Someone": derived from the tail of the Privy DID so
@@ -187,79 +123,9 @@ export const StreamSchema = z.object({
   id: z.string(),
   ownerId: z.string(),
   owner: ProfileSchema.nullable().optional().default(null),
-  /**
-   * WHO IS IN THE ROOM — a sample of up to three people currently connected,
-   * host first, then the most recent joiners. GIST ROOMS ONLY, by the
-   * backend's own privacy call: on a room you join, being seen is the point;
-   * on a broadcast, the same field would publish who is WATCHING by name and
-   * face to everyone, and nobody watching has been told they are visible.
-   * Broadcasts carry no field at all.
-   *
-   * Two things a reader must not do with it: derive "and N others" from
-   * `viewerCount` minus its length (presence counts SESSIONS, and a signed-out
-   * viewer has no profile to resolve, so the sample is routinely shorter than
-   * the count while a room is busy), and treat an empty array as "nobody is
-   * here" (it can also mean nobody RESOLVABLE is here). Defaulted to empty so
-   * a payload without it and a room without a resolvable soul render alike.
-   */
-  participants: z.array(ProfileSchema).optional().default([]),
   title: z.string(),
   description: z.string().nullable().optional().default(null),
   category: z.string().optional().default("other"),
-  /**
-   * Shared-vocabulary topic keys, as chosen in the composer. The service has
-   * always returned them; the schema simply never modelled them, so the gist
-   * room's invite card had no way to draw the topic chips node 225:3887 puts
-   * on it. Defaulted to empty rather than optional — "no topics" and "this
-   * payload does not carry topics" render identically here, and an array is
-   * the shape every reader wants.
-   */
-  topics: z.array(z.string()).optional().default([]),
-  /**
-   * WHERE THIS ROOM BELONGS, and who may see it (migrations 039/041).
-   *
-   * `houseConversationId` is the house GROUP a gist room was opened from; it
-   * feeds the room's own header ("Hacker House Maestros '26"), its partner
-   * count and its House Members grid — all three read the same group. Null for
-   * a room opened from the street, which belongs to no house.
-   *
-   * All optional with a default, the forward-compatible shape `orgBadge` uses:
-   * a backend that has not shipped them parses exactly as it does today.
-   */
-  audience: z.enum(["public", "private"]).optional().default("public").catch("public"),
-  houseConversationId: z.string().nullable().optional().default(null),
-  /**
-   * THE HOUSE GROUP THIS ROOM BELONGS TO, inline on the room.
-   *
-   * The room used to carry only `houseConversationId`, so naming the house
-   * meant reading the CONVERSATION — which is membership-gated. The header
-   * therefore worked only for people already inside, and "Join House" had
-   * nothing to name for exactly the person it is aimed at.
-   *
-   * `viewerIsMember` is the whole decision: draw Join House or do not. It is
-   * `false` for a signed-out reader too, so there is no third state to handle.
-   * `visibility` decides whether joining is even possible —
-   * `POST /conversations/:id/join` succeeds on a public group and refuses a
-   * private one, so a private house shows the name without the invitation.
-   *
-   * A DOORPLATE, not a conversation: no roster, no messages, no last activity.
-   * `GET /streams/:id` only — never on a list card, so nothing may build a grid
-   * that expects it. Null when the room has no house, and null (not a 404) when
-   * the house has been deleted.
-   */
-  house: z
-    .object({
-      id: z.string(),
-      title: z.string().nullable().optional().default(null),
-      imageUrl: z.string().nullable().optional().default(null),
-      memberCount: z.number().nullable().optional().default(null),
-      visibility: z.enum(["public", "private"]).optional().default("private").catch("private"),
-      viewerIsMember: z.boolean().optional().default(false),
-    })
-    .nullable()
-    .optional()
-    .default(null),
-  chatAccess: z.enum(["open", "followers"]).optional().default("open").catch("open"),
   // Ark broadcasts a casino game to Market Square as a stream, and carries the
   // way back into Ark here: { kind: "game", ref: "<game>:<id>" }. The service
   // has always sent this field; the schema dropped it, so the link never
@@ -321,14 +187,6 @@ export const PostSchema = z.object({
   deepLink: DeepLinkSchema.nullable().optional().default(null),
   storyExpiresAt: z.string().nullable().optional().default(null),
   createdAt: z.string(),
-  /**
-   * When the author last edited this post. Null means never.
-   *
-   * Every edit stamps it — there is no quiet window in which a post can change
-   * without saying so — which is what makes it safe to render an "edited"
-   * marker straight from the field rather than diffing anything.
-   */
-  editedAt: z.string().nullable().optional().default(null),
   likeCount: z.number(),
   commentCount: z.number(),
   repostCount: z.number().optional().default(0),
@@ -340,14 +198,6 @@ export const PostSchema = z.object({
    * is a lie the reader cannot detect.
    */
   viewCount: z.number().optional(),
-  /**
-   * HOW MANY PEOPLE ARKMARKED IT — on the contract beside `viewCount`, and
-   * like it a number only: WHO saved a post is nobody's business but theirs
-   * (`GET /me/bookmarks` is the reader's own list and there is no route for
-   * anyone else's). Optional for the same reason `viewCount` is — a payload
-   * without it draws no count, never a fabricated "0".
-   */
-  bookmarkCount: z.number().optional(),
   repostedByMe: z.boolean().optional().default(false),
   // The quoted original, hydrated one level deep only — a quote of a quote
   // shows the inner card's text, never a third nested frame. When the original

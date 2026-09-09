@@ -63,12 +63,6 @@ const PUBLIC: string[][] = [
   ["streams", "st_1"],
   ["streams", "st_1", "chat"],
   ["verification", "rule"],
-  // Home's "Join a community" grid renders signed out, so the directory it
-  // reads has to answer signed out. This exact shape only.
-  ["conversations", "discover"],
-  // Public upstream and public here: the trending rail is a discovery surface
-  // that renders signed out.
-  ["hashtags", "trending"],
   // Whether tipping works at all, and the amount band. Read before drawing the
   // control, by signed-out readers too.
   ["tips", "capability"],
@@ -170,12 +164,6 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["posts", "post_1", "comments"]), true);
     });
 
-    it("allows one comment, a thread's replies, and nothing else under /comments", () => {
-      assert.equal(isPublicGet(["comments", "c_1", "replies"]), true);
-      assert.equal(isPublicGet(["comments", "c_1"]), true);
-      assert.equal(isPublicGet(["comments", "c_1", "like"]), false);
-    });
-
     it("does not open anything else under /posts", () => {
       // These are writes, so the handler never consults the predicate for
       // them — but the predicate must not claim them either.
@@ -203,27 +191,6 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["tips"]), false);
       assert.equal(isPublicGet(["tips", "capability", "extra"]), false);
       assert.equal(isPublicGet(["tips", "received"]), false);
-    });
-
-    it("opens exactly /hashtags/trending and nothing else under /hashtags", () => {
-      assert.equal(isPublicGet(["hashtags", "trending"]), true);
-      assert.equal(isPublicGet(["hashtags"]), false);
-      assert.equal(isPublicGet(["hashtags", "trending", "extra"]), false);
-      // A hashtag's own feed is served by /feed?hashtag=, which is already
-      // public on its own head — this head must not open a second door.
-      assert.equal(isPublicGet(["hashtags", "solana"]), false);
-    });
-
-    it("opens the house directory and NOTHING else under /conversations", () => {
-      // The directory answers for people who are not members and carries no
-      // message, unread or last activity. Every other conversation route is a
-      // membership-gated read and must stay behind a session — letting the
-      // head through would expose whole threads.
-      assert.equal(isPublicGet(["conversations", "discover"]), true);
-      assert.equal(isPublicGet(["conversations"]), false);
-      assert.equal(isPublicGet(["conversations", "cv_1"]), false);
-      assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
-      assert.equal(isPublicGet(["conversations", "discover", "anything"]), false);
     });
 
     it("gates /verification unless it is the rule", () => {

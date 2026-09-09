@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { previewConstraints } from "@/features/streams/lib/capture-plan";
 
 export interface MediaDeviceOption {
   deviceId: string;
@@ -38,20 +37,8 @@ const PREVIEW_AUDIO: MediaTrackConstraints = {
 // and a live mic meter, so nobody goes live blind. Independent of LiveKit —
 // the chosen deviceIds are handed to the publisher at go-live.
 export function useDeviceCheck(
-  videoRef: React.RefObject<HTMLVideoElement | null> | null,
-  /**
-   * Houses. With `audioOnly` set, `getUserMedia` is called with no `video` key
-   * at all, `cameras` stays empty, and no `videoRef` is required.
-   *
-   * The reason this is not just "ignore the video track we get": a
-   * `getUserMedia({ video: true })` shows the browser's own camera permission
-   * prompt, and a prompt naming a device on a screen that says "no camera,
-   * ever" contradicts the product's one promise louder than any copy can
-   * repair.
-   */
-  options: { audioOnly?: boolean } = {}
+  videoRef: React.RefObject<HTMLVideoElement | null>
 ): DeviceCheck {
-  const audioOnly = options.audioOnly === true;
   const [status, setStatus] = useState<DeviceCheck["status"]>("idle");
   const [cameras, setCameras] = useState<MediaDeviceOption[]>([]);
   const [mics, setMics] = useState<MediaDeviceOption[]>([]);
@@ -98,13 +85,10 @@ export function useDeviceCheck(
         return;
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(
-          previewConstraints({
-            audio: micId ? { ...PREVIEW_AUDIO, deviceId: { exact: micId } } : PREVIEW_AUDIO,
-            audioOnly,
-            cameraId,
-          })
-        );
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: cameraId ? { deviceId: { exact: cameraId } } : true,
+          audio: micId ? { ...PREVIEW_AUDIO, deviceId: { exact: micId } } : PREVIEW_AUDIO,
+        });
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
           return;
@@ -112,7 +96,7 @@ export function useDeviceCheck(
         streamRef.current = stream;
         setResolvedCameraId(stream.getVideoTracks()[0]?.getSettings().deviceId ?? "");
         setResolvedMicId(stream.getAudioTracks()[0]?.getSettings().deviceId ?? "");
-        if (videoRef?.current) {
+        if (videoRef.current) {
           videoRef.current.srcObject = stream;
           void videoRef.current.play().catch(() => {});
         }
@@ -120,15 +104,10 @@ export function useDeviceCheck(
         // Device labels only populate after permission is granted.
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (!cancelled) {
-          // An audio-only check never enumerates cameras. Offering a picker for
-          // a device this session cannot use is the same contradiction as
-          // prompting for it.
           setCameras(
-            audioOnly
-              ? []
-              : devices
-                  .filter((d) => d.kind === "videoinput")
-                  .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }))
+            devices
+              .filter((d) => d.kind === "videoinput")
+              .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }))
           );
           setMics(
             devices
@@ -169,7 +148,7 @@ export function useDeviceCheck(
       cancelled = true;
       stop();
     };
-  }, [wanted, cameraId, micId, videoRef, audioOnly]);
+  }, [wanted, cameraId, micId, videoRef]);
 
   return {
     status,

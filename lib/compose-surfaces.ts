@@ -14,55 +14,16 @@
  *   - `/admin/**`, `/operations/**` — dense operator tables where a floating
  *     control overlaps row actions, and where posting is not the task.
  *   - `/auth` — there is no one to post as yet.
- *   - `/gist-rooms` — same shape of reason as `/messages`. Node 407:17286 draws
- *     a `+` in that corner and it opens a ROOM, which is what the page is for.
- *     The shell's circle is the same size in the same place and writes a POST,
- *     so both on screen would be two identical buttons doing different things,
- *     and the one under the reader's hand would be the wrong one. The page
- *     mounts its own; `/gist-rooms/:id` is already excluded by prefix.
- *   - `/messages` — the chat surface has its own `+`, INSIDE the conversation
- *     column, where node 15:1302 draws it and where a `+` means "start a new
- *     conversation". The shell's button holds the right edge of the VIEWPORT,
- *     which on this two-pane route lands it over the thread beside a message
- *     composer — so both would be on screen at once, in the wrong order of
- *     prominence, and the one under the reader's hand would be the one that
- *     writes a public post. Suppressed here so exactly one purple circle is
- *     visible and it does what its position implies.
  *
- * The INDEX routes deliberately keep it: `/studio` is a list of streams,
- * `/live` is a directory and `/gist-rooms` is a list of rooms — none of them a
- * broadcast or two-pane surface. That distinction is the whole reason these are
- * prefix rules with a trailing slash rather than plain `startsWith` on the
- * section name.
+ * The two INDEX routes deliberately keep it: `/studio` is a list of streams
+ * and `/live` is a directory, neither of which is a broadcast surface. That
+ * distinction is the whole reason these are prefix rules with a trailing
+ * slash rather than plain `startsWith` on the section name.
  */
-const NO_COMPOSE_EXACT = ["/auth", "/operations", "/messages", "/gist-rooms"];
-const NO_COMPOSE_PREFIX = ["/live/", "/studio/", "/admin", "/operations/", "/gist-rooms/"];
+const NO_COMPOSE_EXACT = ["/auth", "/operations"];
+const NO_COMPOSE_PREFIX = ["/live/", "/studio/", "/admin", "/operations/"];
 
 export function allowsCompose(pathname: string): boolean {
   if (NO_COMPOSE_EXACT.includes(pathname)) return false;
   return !NO_COMPOSE_PREFIX.some((prefix) => pathname.startsWith(prefix));
-}
-
-/**
- * Whether the SIDEBAR carries its Post gist button — which is a different
- * question, and was wrongly answered by `allowsCompose` above.
- *
- * Every exception in that list is an argument about a FLOATING control: it
- * holds the right edge of the viewport, so it lands over a live preview, over
- * operator rows, or beside a message composer where the button under your hand
- * would be the one that writes a public post. The rail's button is none of
- * that. It sits on the far left, in chrome that is already there, overlapping
- * nothing — and node 496:13107 draws it on the rail unconditionally.
- *
- * The symptom: on `/messages` the sidebar simply had no Post gist. Two thirds
- * of the rail's own furniture vanished on one route for a reason that belonged
- * to a control at the other side of the screen.
- *
- * `/auth` is the one real exception and it survives, for the reason it always
- * had: there is nobody to post as yet. Everything else that hides the rail —
- * `/live/:id` and `/studio/:id` render bare — hides this with it, so those need
- * no entry here.
- */
-export function allowsRailCompose(pathname: string): boolean {
-  return pathname !== "/auth";
 }

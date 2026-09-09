@@ -97,35 +97,21 @@ export function EcosystemPartnersRail() {
 
       {/* The card's top edge sits 49px down the block: 17 of inset, a 20px
           heading, 12 of gap. */}
-      {/*
-        MIN height, not a fixed one, and the children FLOW.
-
-        This was `h-[156px] overflow-hidden` with both columns absolutely
-        positioned at `top-6`. 156 is the height the file draws, and it holds
-        only while the headline is two lines: "One Platform. Every Currency.
-        Every Asset." wraps to THREE in the rail's real width, which pushed the
-        block past the card and `overflow-hidden` cut "Join now" in half. The
-        card looked fine and the call to action was the thing that disappeared.
-
-        A fixed height plus absolute children cannot report that it does not
-        fit — it just hides the overflow, silently, and only at some rail
-        widths and for some copy. So the height is a floor, the columns are a
-        flex row, and a longer headline makes the card taller instead of eating
-        the link. `overflow-hidden` is gone with it: nothing should be able to
-        be clipped here without somebody choosing it.
-      */}
-      <div className="relative mt-3 flex min-h-[156px] gap-4 rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 pt-6 backdrop-blur-[7px]">
+      <div className="relative mt-3 h-[156px] overflow-hidden rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] backdrop-blur-[7px]">
         {/*
-          Takes the room the art does not, at every rail width.
+          Bounded by BOTH edges, not by a fixed width.
 
-          The text box was a fixed 195px with the art pinned off the right —
-          fine on the 347px card the design was drawn at, six pixels of gutter
-          at the rail's real 331px, so the headline read as if it were touching
-          the logo. As a flex child it simply gets what is left after the art's
-          96px and the row's 16px gap, and `min-w-0` is what lets it actually
-          rewrap rather than refusing to shrink below its longest word.
+          The text box was 195px wide with the art pinned 112px off the right
+          (16 inset + 96 of art). That leaves 24px of air on the 347px card the
+          design was drawn at — and the rail is not always 347: at its real
+          331px the same numbers leave SIX pixels, so the headline reads as if
+          it is touching the logo.
+
+          `right-32` reserves the art's 112px plus a 16px gutter, so the gap is
+          the same at every rail width and the headline rewraps instead of
+          closing on the art.
         */}
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="absolute left-4 right-32 top-6 flex flex-col gap-4">
           <div>
             <p className="whitespace-pre-line text-[18px] font-bold leading-6 tracking-[-0.008em] text-white">
               {slide.headline.lead}
@@ -155,10 +141,10 @@ export function EcosystemPartnersRail() {
           </a>
         </div>
 
-        {/* The art column: 96 of mark plus the dots under it. `shrink-0` so a
-            long headline takes the card taller rather than squeezing the
-            logo — the row's padding gives it the file's 16px inset. */}
-        <div className="flex w-24 shrink-0 flex-col items-center gap-2">
+        {/* x=235 in a 347 card is 16 from the RIGHT edge. Anchored to that
+            edge rather than the left one, so a rail that is not exactly 347
+            keeps the art's inset instead of pushing it off. */}
+        <div className="absolute right-4 top-6 flex w-24 flex-col items-center gap-2">
           <Image
             src={slide.art}
             alt={slide.alt}

@@ -7,15 +7,13 @@ import { Sheet } from "@/components/ui/sheet";
 import { InlineError } from "@/components/ui/states";
 import { UploadField } from "@/components/ui/upload-field";
 import { useCreateStream } from "@/features/streams/hooks/use-streams";
-import { BROADCAST_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
+import { STREAM_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
 import { MARKET_FLAGS } from "@/lib/market-config";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-grey-600";
 
-// Keyed on the BROADCAST set, so a house can never acquire a label here and
-// slip into the Go Live dropdown by accident.
-const CATEGORY_LABEL: Record<Exclude<StreamCategory, "house">, string> = {
+const CATEGORY_LABEL: Record<StreamCategory, string> = {
   worldstreet: "WorldStreet",
   music: "Music",
   podcast: "Podcast",
@@ -104,7 +102,7 @@ export function CreateStreamSheet({
             onChange={(e) => set("category", e.target.value as StreamCategory)}
             className={inputClass}
           >
-            {BROADCAST_CATEGORIES.map((value) => (
+            {STREAM_CATEGORIES.map((value) => (
               <option key={value} value={value} className="bg-sheet">
                 {CATEGORY_LABEL[value]}
               </option>

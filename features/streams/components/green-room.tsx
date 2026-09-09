@@ -5,17 +5,14 @@ import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
-import { IconCamera, IconCopy, IconLink } from "@/components/ui/icons";
-// Both lifted into components/ui when Houses' backstage needed the same two
-// controls. One meter, one checklist row — a second copy drifts.
-import { ChecklistRow, MicMeter } from "@/components/ui/mic-meter";
+import { IconCamera, IconCheck, IconCopy, IconLink } from "@/components/ui/icons";
 import { InlineError } from "@/components/ui/states";
 import { UploadField } from "@/components/ui/upload-field";
 import { useDeviceCheck } from "@/features/streams/hooks/use-device-check";
 import { useGoLive, useUpdateStream } from "@/features/streams/hooks/use-streams";
 import { streamPriceLabel } from "@/features/streams/components/stream-card";
 import {
-  BROADCAST_CATEGORIES,
+  STREAM_CATEGORIES,
   type Ingest,
   type Stream,
   type StreamCategory,
@@ -24,6 +21,33 @@ import { MARKET_FLAGS } from "@/lib/market-config";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-grey-600";
+
+function ChecklistRow({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <li className="flex items-center gap-2 text-xs">
+      <span
+        className={cn(
+          "flex h-4 w-4 items-center justify-center rounded-full",
+          ok ? "bg-up/20 text-up" : "border border-white/20 text-grey-600"
+        )}
+      >
+        {ok ? <IconCheck className="h-2.5 w-2.5" /> : null}
+      </span>
+      <span className={ok ? "text-body" : "text-meta"}>{label}</span>
+    </li>
+  );
+}
+
+function MicMeter({ level }: { level: number }) {
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10" aria-label="Microphone level">
+      <div
+        className="h-full rounded-full bg-accent transition-[width] duration-75 motion-reduce:transition-none"
+        style={{ width: `${Math.round(level * 100)}%` }}
+      />
+    </div>
+  );
+}
 
 function StreamInfoCard({
   stream,
@@ -38,7 +62,7 @@ function StreamInfoCard({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(stream.title);
   const [category, setCategory] = useState<StreamCategory>(
-    (BROADCAST_CATEGORIES as readonly string[]).includes(stream.category)
+    (STREAM_CATEGORIES as readonly string[]).includes(stream.category)
       ? (stream.category as StreamCategory)
       : "other"
   );
@@ -66,7 +90,7 @@ function StreamInfoCard({
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={inputClass} aria-label="Title" />
           <div className="grid grid-cols-2 gap-2">
             <select value={category} onChange={(e) => setCategory(e.target.value as StreamCategory)} className={inputClass} aria-label="Category">
-              {BROADCAST_CATEGORIES.map((c) => (
+              {STREAM_CATEGORIES.map((c) => (
                 <option key={c} value={c} className="bg-sheet capitalize">
                   {c}
                 </option>

@@ -1,19 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { Post } from "@/lib/api/schemas";
 import { useRouter } from "next/navigation";
 import { ProfilePage } from "@/features/profile";
-import { ProfileHouses } from "@/components/layout/profile-houses";
-import { ProfileKashChip } from "@/components/layout/profile-kash-chip";
-import { ProfileGiftGallery } from "@/components/layout/profile-gift-gallery";
-import { ProfileEarnings } from "@/components/layout/profile-earnings";
-import { PostCard, VideoViewer } from "@/features/feed";
+import { PostCard } from "@/features/feed";
 import { useOpenConversation } from "@/features/messages";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
-import { IconProfileSms } from "@/components/ui/profile-icons";
-import { ProfileHousesOf } from "@/components/layout/profile-houses-of";
-import { ProfileReplays } from "@/components/layout/profile-replays";
+import { Button } from "@/components/ui/button";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -26,24 +19,14 @@ function MessageButton({ profile }: { profile: Profile }) {
   const open = useOpenConversation();
   const router = useRouter();
   return (
-    /*
-      545:47607 — a 38.37 disc with the file's `sms` glyph at 16. Its fill is
-      white at alpha zero and its stroke white at weight ZERO, which renders
-      nothing; the render shows Figma's GLASS effect over the photograph —
-      translucent, rimmed — which is `ws-glass-clear` (see globals.css for the
-      samples). It replaced a labelled secondary Button that the file does not
-      draw.
-    */
-    <button
-      type="button"
-      aria-label={`Message ${profile.displayName || profile.username}`}
-      title="Message"
+    <Button
+      variant="secondary"
+      size="sm"
       disabled={open.isPending}
       onClick={() => open.mutate(profile.id, { onSuccess: () => router.push("/messages") })}
-      className="ws-glass-clear ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-50"
     >
-      <IconProfileSms className="h-4 w-4" />
-    </button>
+      Message
+    </Button>
   );
 }
 
@@ -70,61 +53,16 @@ function ComposeCta() {
   );
 }
 
-/** Holds the active slide, so sliding changes which item is open. */
-function ProfileMediaViewer({
-  items,
-  openId,
-  onClose,
-}: {
-  items: Post[];
-  openId: string;
-  onClose: () => void;
-}) {
-  const [activeId, setActiveId] = useState(openId);
-  return (
-    <VideoViewer
-      items={items}
-      activeId={activeId}
-      onActiveChange={setActiveId}
-      onClose={onClose}
-    />
-  );
-}
-
 export function ProfileScreen({ username }: { username: string }) {
   return (
     <ProfilePage
       username={username}
       messageSlot={(profile) => <MessageButton profile={profile} />}
-      /* 534:15577 — a house is a group CONVERSATION, so the rail reads the
-         messages slice and is joined here rather than imported across. */
-      housesSlot={<ProfileHouses />}
-      /* 545:47653 and 545:47746 — the houses somebody ELSE belongs to and
-         their ended gist rooms. Both read across slices (joining a house is
-         the messages slice's, the topic vocabulary is discovery's), so both
-         are composed here. */
-      housesOfSlot={(profile) => <ProfileHousesOf username={profile.username} />}
-      replaysSlot={(profile) => <ProfileReplays username={profile.username} />}
-      giftGallerySlot={<ProfileGiftGallery />}
-      earningsSlot={<ProfileEarnings />}
-      /* 435:27523 — the balance chip on the cover. The kash slice's, and the
-         profile may not import it. */
-      kashSlot={<ProfileKashChip />}
       composeSlot={<ComposeCta />}
       // The same card the timeline and Explore render. The profile used to
       // draw its own stripped row, whose heart was a <span> with no handler,
       // so a like from a profile silently did nothing.
       postSlot={(post) => <PostCard post={post} />}
-      /*
-        The same full-screen viewer the timeline promotes a video into,
-        composed in here because profile never imports the feed slice. It is
-        given the gallery in grid order, so sliding moves through exactly what
-        was on screen — which is the whole point of "go to their profile and
-        slide".
-      */
-      mediaViewerSlot={(items, openId, onClose) => (
-        <ProfileMediaViewer items={items} openId={openId} onClose={onClose} />
-      )}
     />
   );
 }

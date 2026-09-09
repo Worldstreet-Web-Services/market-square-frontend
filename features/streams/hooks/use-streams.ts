@@ -15,7 +15,6 @@ import { clearHeldPayment, heldPayment, holdPayment } from "@/lib/payment-store"
 import { useEmbeddedWallet } from "@/hooks/use-wallet";
 import { useEvmSend } from "@/hooks/use-evm-send";
 import { useKashStatus } from "@/hooks/use-kash-status";
-import { isHouse } from "@/features/houses/lib/house";
 import {
   banFromChat,
   cancelActivity,
@@ -41,7 +40,7 @@ import {
   fetchSpeakerRequests,
   resolveSpeakerRequest,
 } from "@/features/streams/lib/api";
-import type { Stream, StreamCategory, StreamKind, TicketTier } from "@/features/streams/lib/types";
+import type { Stream, TicketTier } from "@/features/streams/lib/types";
 import {
   createReactionBuffer,
   type ReactionBuffer,
@@ -65,41 +64,15 @@ function invalidateStreamSurfaces(queryClient: ReturnType<typeof useQueryClient>
 // ended, so replays are ended streams with a replayUrl.
 export function useStreamList(
   section: "live" | "scheduled" | "replay",
-  topics: string[] = [],
-  /**
-   * Narrow to one category SERVER-SIDE — `GET /streams?category=` is on the
-   * contract. Home's gist-room carousel wants houses and nothing else, and
-   * loading every live stream to throw most of them away would make a page of
-   * broadcasts yield two rooms.
-   */
-  category?: StreamCategory,
-  /**
-   * BROADCASTS or GIST ROOMS — `GET /streams?kind=` on the contract.
-   *
-   * A gist room IS a stream, distinguished only by `category: "house"`, so a
-   * live list asks for every one of them by default. That put audio rooms on
-   * Live beside video broadcasts: something offered to watch with nothing to
-   * watch, and its own page to join instead.
-   *
-   * `category` cannot express it, because the filter needed is the NEGATIVE —
-   * "not a house" is not a taxonomy value. Hence a separate axis, and hence
-   * server-side: filtering here would make a page of broadcasts yield the two
-   * that were not rooms.
-   */
-  kind?: StreamKind
+  topics: string[] = []
 ) {
   const status = section === "replay" ? "ended" : section;
   // Sorted so the same selection always produces the same cache key.
   const key = [...topics].sort().join(",");
   return useQuery({
-    queryKey: ["ms", "streams", section, key, category ?? "all", kind ?? "any"],
+    queryKey: ["ms", "streams", section, key],
     queryFn: async () => {
-      const page = await fetchStreams({
-        status,
-        topics,
-        ...(category ? { category } : {}),
-        ...(kind ? { kind } : {}),
-      });
+      const page = await fetchStreams({ status, topics });
       if (section !== "replay") return page;
       return { ...page, items: page.items.filter((stream) => stream.replayUrl !== null) };
     },
@@ -109,30 +82,11 @@ export function useStreamList(
 
 // The room polls the detail to refresh viewerCount and status. Pass a number
 // for a custom interval (the cockpit polls at 5 s per spec).
-/**
- * One stream.
- *
- * `poll` is `false` (never), `true` (10s), a millisecond interval, or the
- * tuple `["while-live", ms]` — which polls at `ms` only while the stream is
- * actually live and STOPS once it ends. A surface that outlives the broadcast
- * needs that last one: the gist-room invite card sits in a group thread for
- * ever, and the only transition it cares about is live -> ended, after which
- * polling a finished room for the rest of the session is pure waste.
- */
-export function useStream(
-  id: string,
-  poll: boolean | number | readonly ["while-live", number] = false
-) {
+export function useStream(id: string, poll: boolean | number = false) {
   return useQuery({
     queryKey: ["ms", "stream", id],
     queryFn: () => fetchStream(id),
-    refetchInterval: Array.isArray(poll)
-      ? (query) => (query.state.data?.status === "live" ? poll[1] : false)
-      : poll === false
-        ? false
-        : poll === true
-          ? 10_000
-          : (poll as number),
+    refetchInterval: poll === false ? false : poll === true ? 10_000 : poll,
   });
 }
 
@@ -339,15 +293,9 @@ export function useCreateStream() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createStream,
-    onSuccess: (stream) => {
+    onSuccess: () => {
       invalidateStreamSurfaces(queryClient);
-      /*
-        A house is not a stream, and the person who just opened one should not
-        be told it is. One mutation creates both — a house IS a stream with
-        `category: "house"` — so the confirmation reads off what was actually
-        made rather than off the function that made it.
-      */
-      toast.success(isHouse(stream) ? "Gist room opened" : "Stream created");
+      toast.success("Stream created");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't create the stream.")),
   });

@@ -8,9 +8,6 @@ import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 import { captureErrorMessage as errorMessage, classifyCaptureError } from "@/lib/media-errors";
 import type { Ingest } from "@/features/streams/lib/types";
 import { registerRoom, unregisterRoom } from "@/features/streams/lib/live-room";
-// The camera decision is made HERE, once, by a pure function — see
-// features/streams/lib/capture-plan.ts for why it is not an inline ternary.
-import { capturePlan, planHasVideo } from "@/features/streams/lib/capture-plan";
 
 // Speech capture profile for a talking host. These are stated explicitly
 // rather than left to the browser for three reasons:
@@ -85,10 +82,6 @@ export interface PublisherControls {
    * True when the camera could not be acquired but the mic could, so we joined
    * with audio alone rather than failing the whole join. `toggleCam` can still
    * bring video up later if the device frees.
-   *
-   * On an `audioOnly` publisher (a house) this stays FALSE. Audio-only is not a
-   * degraded state there, it is the product, and telling a host their camera is
-   * unavailable would be describing a failure that never happened.
    */
   audioOnly: boolean;
   /** The underlying message for `failed`; null for the classified states. */
@@ -111,7 +104,6 @@ export function usePublisher({
   ingest,
   enabled,
   streamId,
-  audioOnly: audioOnlyMode = false,
   preferredCamera,
   preferredMic,
   previewRef,
@@ -119,15 +111,6 @@ export function usePublisher({
   ingest: Ingest | null;
   enabled: boolean;
   streamId: string;
-  /**
-   * Publish a microphone and NOTHING else, permanently.
-   *
-   * Houses. Not a fallback and not a preference: with this set the camera
-   * branch below is not entered, `createLocalTracks` is handed an object with
-   * no `video` key, `camOn` is pinned false, and `toggleCam`/`switchCamera`
-   * refuse. The stream path is untouched.
-   */
-  audioOnly?: boolean;
   preferredCamera?: string;
   preferredMic?: string;
   /**
@@ -143,9 +126,7 @@ export function usePublisher({
   const [state, setState] = useState<PublisherState>("idle");
   const [quality, setQuality] = useState<ConnectionQuality>("unknown");
   const [micOn, setMicOn] = useState(true);
-  // Audio-only starts with the camera OFF and never leaves. Every read of this
-  // below goes through `camOn` so there is one place the pin can be seen.
-  const [camOn, setCamOn] = useState(!audioOnlyMode);
+  const [camOn, setCamOn] = useState(true);
   const [micLevel, setMicLevel] = useState(0);
   const [audioOnly, setAudioOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,31 +267,17 @@ export function usePublisher({
           });
 
         let joinedAudioOnly = false;
-        // The one place the camera decision is made. On an audio-only publisher
-        // `plan` has no `video` key at all, so there is nothing for
-        // createLocalTracks to acquire a camera from — and the fallback branch
-        // below is unreachable, because there is no camera failure to fall back
-        // FROM.
-        const plan = capturePlan({
-          audio: audioCapture,
-          audioOnly: audioOnlyMode,
-          preferredCamera,
-        });
         try {
-          tracks = await createLocalTracks(plan);
-        } catch (captureError) {
-          const captureFailure = classifyCaptureError(captureError);
-          if (!planHasVideo(plan)) {
-            // Audio only: the mic IS the join. There is no quieter thing left
-            // to try, and pretending otherwise would show a house host a
-            // camera remedy for a microphone problem.
-            settle(captureFailure, errorMessage(captureError));
-            return;
-          }
+          tracks = await createLocalTracks({
+            audio: audioCapture,
+            video: preferredCamera ? { deviceId: preferredCamera } : true,
+          });
+        } catch (cameraError) {
           // The camera failed — but a guest usually cares about being HEARD.
           // Before failing the whole join, try audio alone. This is the exact
           // shape of the reported bug: two browser profiles on one laptop, the
           // host holding the camera, the guest perfectly able to speak.
+          const cameraFailure = classifyCaptureError(cameraError);
           try {
             tracks = await createLocalTracks({ audio: audioCapture });
             joinedAudioOnly = true;
@@ -320,9 +287,9 @@ export function usePublisher({
             // generally; otherwise the camera's classification is the story.
             const audioFailure = classifyCaptureError(audioError);
             settle(
-              audioFailure === "failed" ? captureFailure : audioFailure,
-              audioFailure === "failed" && captureFailure === "failed"
-                ? errorMessage(captureError)
+              audioFailure === "failed" ? cameraFailure : audioFailure,
+              audioFailure === "failed" && cameraFailure === "failed"
+                ? errorMessage(cameraError)
                 : null
             );
             return;
@@ -370,7 +337,7 @@ export function usePublisher({
       roomRef.current = null;
       setBroadcastLive(null);
     };
-  }, [active, url, token, streamId, audioOnlyMode, preferredCamera, preferredMic, previewRef, attempt]);
+  }, [active, url, token, streamId, preferredCamera, preferredMic, previewRef, attempt]);
 
   // Leave-guards while on air: tab close/reload asks first; in-app link
   // clicks (except new-tab links) require an explicit confirm.
@@ -414,13 +381,6 @@ export function usePublisher({
   const toggleCam = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
-    if (audioOnlyMode) {
-      // Not a silent no-op: a caller reaching for this on a house has a camera
-      // affordance on screen that must not be there, and the console line is
-      // how that is found before anyone taps it.
-      console.warn("usePublisher: audio-only session — there is no camera to toggle.");
-      return;
-    }
     const next = !camOn;
     try {
       await room.localParticipant.setCameraEnabled(next);
@@ -443,27 +403,20 @@ export function usePublisher({
               : errorMessage(cameraError)
       );
     }
-  }, [camOn, audioOnlyMode]);
+  }, [camOn]);
 
   const retry = useCallback(() => {
     setError(null);
     setAudioOnly(false);
-    setCamOn(!audioOnlyMode);
+    setCamOn(true);
     setMicOn(true);
     setState("idle");
     setAttempt((n) => n + 1);
-  }, [audioOnlyMode]);
+  }, []);
 
-  const switchCamera = useCallback(
-    async (deviceId: string) => {
-      if (audioOnlyMode) {
-        console.warn("usePublisher: audio-only session — there is no camera to switch.");
-        return;
-      }
-      await roomRef.current?.switchActiveDevice("videoinput", deviceId);
-    },
-    [audioOnlyMode]
-  );
+  const switchCamera = useCallback(async (deviceId: string) => {
+    await roomRef.current?.switchActiveDevice("videoinput", deviceId);
+  }, []);
 
   const switchMic = useCallback(async (deviceId: string) => {
     await roomRef.current?.switchActiveDevice("audioinput", deviceId);
@@ -475,13 +428,8 @@ export function usePublisher({
     state: effectiveState,
     quality,
     micOn,
-    // Pinned, not merely initialised false: nothing on the audio-only path can
-    // publish video, so reporting `camOn` from state would be reporting a
-    // possibility that does not exist.
-    camOn: audioOnlyMode ? false : camOn,
-    // See the interface: on a house this is permanently false. "Camera
-    // unavailable" is a sentence about a camera somebody wanted.
-    audioOnly: audioOnlyMode ? false : active && audioOnly,
+    camOn,
+    audioOnly: active && audioOnly,
     error: active ? error : null,
     micLevel: micOn ? micLevel : 0,
     retry,

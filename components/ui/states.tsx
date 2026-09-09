@@ -134,11 +134,9 @@ export function SignInInline({ className }: { className?: string }) {
  * an invitation to sign in, not a failure, and it has to leave them exactly
  * where they were.
  *
- * `login()` opens the app's OWN sign-in card in place (see
- * `lib/signin-store.ts`), so the reader keeps their scroll position and the
- * page they were on, and never sees the auth vendor named. The `/auth` link
- * beside it is the full-page route to the same card, carrying returnTo so that
- * path lands back here too.
+ * `login()` opens Privy in place, so the reader keeps their scroll position
+ * and the page they were on; the `/auth` link is the fallback for when the
+ * modal cannot open, and carries returnTo so that path lands back here too.
  */
 export function SignInPrompt({
   title = "Sign in to continue",

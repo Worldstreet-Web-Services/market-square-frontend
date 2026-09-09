@@ -6,13 +6,10 @@ import { DEMO_AUTH } from "@/lib/auth-mode";
 import { apiError, errorCode } from "@/lib/api/envelope";
 import {
   PROXY_MAX_BYTES,
-  UploadResultSchema,
   formatBytes,
   shouldUploadDirect,
   uploadKind,
   validateUpload,
-  type UploadAccept,
-  type UploadResult,
 } from "@/lib/upload-rules";
 import { ensureUploadLimits } from "@/lib/upload-limits";
 
@@ -25,18 +22,21 @@ import { ensureUploadLimits } from "@/lib/upload-limits";
  */
 if (typeof window !== "undefined") void ensureUploadLimits();
 
-// `UploadResultSchema` and `UploadResult` now live in lib/upload-rules.ts so
-// they are testable without this module's client-only dependencies. Re-exported
-// below so every existing import site is unchanged.
+export const UploadResultSchema = z.object({
+  url: z.string(),
+  kind: z.enum(["image", "video"]).catch("image"),
+  contentType: z.string().optional().default(""),
+  bytes: z.number().optional().default(0),
+});
+
+export type UploadResult = z.infer<typeof UploadResultSchema>;
 
 // The pure rules live in lib/upload-rules.ts so they can be unit-tested
 // without this module's client-only dependencies. Re-exported so existing
 // call sites keep one import.
 export {
-  ACCEPT_ATTACHMENT,
   ACCEPT_IMAGE,
   ACCEPT_MEDIA,
-  AUDIO_TYPES,
   IMAGE_TYPES,
   VIDEO_TYPES,
   // The caps are no longer constants: the backend owns them and publishes them
@@ -53,8 +53,7 @@ export {
   validateVideoDuration,
 } from "@/lib/upload-rules";
 export { readVideoDuration } from "@/lib/video-duration";
-export type { UploadLimits, UploadAccept, UploadResult } from "@/lib/upload-rules";
-export { UploadResultSchema };
+export type { UploadLimits } from "@/lib/upload-rules";
 export { ensureUploadLimits } from "@/lib/upload-limits";
 
 // ---------------------------------------------------------------- presign
@@ -263,11 +262,7 @@ function uploadProxied(file: File, onProgress?: (fraction: number) => void): Pro
 export async function uploadFile(
   file: File,
   onProgress?: (fraction: number) => void,
-  // Defaults to `media` (image + video) because that is what posts, avatars
-  // and covers take. A CHAT attachment must pass "attachment" — audio is a
-  // message but never a post, so widening the default would quietly let a
-  // voice note be uploaded as somebody's avatar.
-  accept: UploadAccept = "media"
+  accept: "image" | "media" = "media"
 ): Promise<UploadResult> {
   // Belt and braces: call sites validate at PICK time (that is where the user
   // gets an instant error), but this is the only door every upload goes

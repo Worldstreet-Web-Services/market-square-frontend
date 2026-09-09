@@ -2,54 +2,108 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
-import { IconProfileGlobePin, IconProfileLink } from "@/components/ui/profile-icons";
-import { IconMsEdit } from "@/components/ui/design-icons";
-import { IconRoomShare } from "@/components/ui/room-icons";
 import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
+import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
-import { LiveBadge, Pill } from "@/components/ui/badge";
-import { IconCalendar } from "@/components/ui/icons";
-import { ProfileCover } from "@/features/profile/components/profile-cover";
+import { Avatar } from "@/components/ui/avatar";
+import { LiveBadge, OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { IconCalendar, IconFlag, IconShield } from "@/components/ui/icons";
+import { IconMsMore } from "@/components/ui/design-icons";
+import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { MediaTab } from "@/features/profile/components/media-tab";
 import type { Post, Profile } from "@/lib/api/schemas";
 import {
+  useFollow,
   useProfile,
   useProfileActivities,
-  useProfileBadges,
   useProfilePosts,
   useProfileStreams,
+  useProfileSafety,
 } from "@/features/profile/hooks/use-profile";
-import { BadgesPanel, BadgesSection } from "@/features/profile/components/badges";
-import { isHttpUrl } from "@/lib/http-url";
+import { useIsFollowing } from "@/features/profile/lib/follow-state";
 import { EditProfileSheet } from "@/features/profile/components/edit-profile-sheet";
-import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
-import { WinkButton } from "@/features/profile/components/wink-button";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import { CreatorCard } from "@/features/profile/components/creator-card";
-import {
-  AccountTabs,
-  type AccountTab,
-} from "@/features/profile/components/account-tabs";
-import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
 
-/*
-  Media is a tab, not a section inside Posts.
+type Tab = "posts" | "streams" | "activities";
 
-  It is the replacement for the reels, and it only works if it is somewhere a
-  person GOES: "if you need to see someone's picture, you have to go to their
-  profile, and then you can slide". Buried under a timeline it would be a
-  scroll away and nobody would find it.
+function FollowButton({ profile }: { profile: Profile }) {
+  const follow = useFollow(profile);
+  const gate = useGate();
+  const isFollowing = useIsFollowing(profile);
+  return (
+    <Button
+      variant={isFollowing ? "secondary" : "primary"}
+      size="sm"
+      aria-pressed={isFollowing}
+      onClick={() => gate(() => follow.mutate(!isFollowing))}
+    >
+      {isFollowing ? "Following" : "Follow"}
+    </Button>
+  );
+}
 
-  Second, not first. A profile answers "who is this" before "what have they
-  posted", and Posts carries the words that answer it.
-*/
-type Tab = "posts" | "media" | "streams" | "activities";
+/**
+ * Report and block, behind the same "more" disc a post uses.
+ *
+ * They were two full-width text buttons in the header row, which on a phone
+ * left four actions and a 112px avatar fighting over ~343px of content width —
+ * Follow ended up jammed against the right edge. Safety actions are also the
+ * two nobody is reaching for on a normal visit, so the row keeps the actions a
+ * visitor came to use (Message, Follow) and puts these behind the menu.
+ */
+function SafetyActions({ profile }: { profile: Profile }) {
+  const [open, setOpen] = useState(false);
+  const safety = useProfileSafety(profile);
+  const gate = useGate();
+  const blockDisabled = safety.blockUnavailable || safety.block.isPending;
+  return (
+    <div className="relative">
+      <button
+        aria-label="More options"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="ws-press flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-white/5 text-grey-100 transition-colors hover:bg-white/10"
+      >
+        <IconMsMore className="h-5 w-5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="ws-popover ws-popover-enter absolute right-0 z-20 mt-1 w-48 rounded-2xl p-1.5">
+            <button
+              onClick={() => {
+                setOpen(false);
+                gate(() => safety.report.mutate());
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
+            >
+              <IconFlag className="h-4 w-4" /> Report
+            </button>
+            {/* Once the service has answered "no such route", the entry stops
+                offering an action it cannot perform. */}
+            <button
+              disabled={blockDisabled}
+              title={safety.blockUnavailable ? "Blocking isn't available yet" : undefined}
+              onClick={() => {
+                setOpen(false);
+                gate(() => safety.block.mutate(!profile.isBlocked));
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-down transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <IconShield className="h-4 w-4" /> {profile.isBlocked ? "Unblock" : "Block"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /** The action under an empty profile tab — own profile only. */
 function TabCta({ href, label }: { href: string; label: string }) {
@@ -77,22 +131,11 @@ function PostsTab({
   postSlot: (post: Post) => React.ReactNode;
 }) {
   const posts = useProfilePosts(username);
-  if (posts.isPending)
-    return (
-      <>
-        {[0, 1, 2].map((i) => (
-          <RowSkeleton key={i} />
-        ))}
-      </>
-    );
+  if (posts.isPending) return <>{[0, 1, 2].map((i) => <RowSkeleton key={i} />)}</>;
   if (posts.isError)
     return (
       <div className="p-4">
-        <ErrorState
-          error={posts.error}
-          fallback="Couldn't load posts."
-          onRetry={() => posts.refetch()}
-        />
+        <ErrorState error={posts.error} fallback="Couldn't load posts." onRetry={() => posts.refetch()} />
       </div>
     );
   if (posts.data.items.length === 0)
@@ -108,13 +151,7 @@ function PostsTab({
           }
           // Opens the composer in place when the shell supplies it; the
           // link is the signed-out/unslotted fallback and still works.
-          action={
-            isMe
-              ? (composeSlot ?? (
-                  <TabCta href="/?compose=1" label="Create a post" />
-                ))
-              : undefined
-          }
+          action={isMe ? (composeSlot ?? <TabCta href="/?compose=1" label="Create a post" />) : undefined}
         />
       </div>
     );
@@ -134,22 +171,11 @@ function PostsTab({
 
 function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
   const streams = useProfileStreams(username);
-  if (streams.isPending)
-    return (
-      <>
-        {[0, 1].map((i) => (
-          <RowSkeleton key={i} />
-        ))}
-      </>
-    );
+  if (streams.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
   if (streams.isError)
     return (
       <div className="p-4">
-        <ErrorState
-          error={streams.error}
-          fallback="Couldn't load streams."
-          onRetry={() => streams.refetch()}
-        />
+        <ErrorState error={streams.error} fallback="Couldn't load streams." onRetry={() => streams.refetch()} />
       </div>
     );
   if (streams.data.items.length === 0)
@@ -171,14 +197,9 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
     <ul>
       {streams.data.items.map((stream) => (
         <li key={stream.id}>
-          <Link
-            href={`/live/${stream.id}`}
-            className="ws-row flex items-center gap-3 px-4 py-3"
-          >
+          <Link href={`/live/${stream.id}`} className="ws-row flex items-center gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-bold text-heading">
-                {stream.title}
-              </p>
+              <p className="truncate text-[15px] font-bold text-heading">{stream.title}</p>
               <p className="mt-0.5 flex items-center gap-2 text-[13px] text-meta">
                 {stream.status === "live" ? (
                   <LiveBadge className="px-2 py-0 text-[9px]" />
@@ -186,16 +207,10 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
                   <span className="capitalize">{stream.status}</span>
                 )}
                 {stream.category && <span>· {stream.category}</span>}
-                {stream.scheduledAt && (
-                  <span>· {formatDateTime(stream.scheduledAt)}</span>
-                )}
+                {stream.scheduledAt && <span>· {formatDateTime(stream.scheduledAt)}</span>}
               </p>
             </div>
-            <Pill>
-              {stream.ticketPriceKash
-                ? formatKash(stream.ticketPriceKash)
-                : "Free"}
-            </Pill>
+            <Pill>{stream.ticketPriceKash ? formatKash(stream.ticketPriceKash) : "Free"}</Pill>
           </Link>
         </li>
       ))}
@@ -203,30 +218,13 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
   );
 }
 
-function ActivitiesTab({
-  username,
-  isMe,
-}: {
-  username: string;
-  isMe: boolean;
-}) {
+function ActivitiesTab({ username, isMe }: { username: string; isMe: boolean }) {
   const activities = useProfileActivities(username);
-  if (activities.isPending)
-    return (
-      <>
-        {[0, 1].map((i) => (
-          <RowSkeleton key={i} />
-        ))}
-      </>
-    );
+  if (activities.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
   if (activities.isError)
     return (
       <div className="p-4">
-        <ErrorState
-          error={activities.error}
-          fallback="Couldn't load activities."
-          onRetry={() => activities.refetch()}
-        />
+        <ErrorState error={activities.error} fallback="Couldn't load activities." onRetry={() => activities.refetch()} />
       </div>
     );
   if (activities.data.items.length === 0)
@@ -240,9 +238,7 @@ function ActivitiesTab({
               ? "Schedule a stream or an event and it appears here for your followers."
               : "Scheduled games, streams and events show here."
           }
-          action={
-            isMe ? <TabCta href="/schedule" label="Schedule one" /> : undefined
-          }
+          action={isMe ? <TabCta href="/schedule" label="Schedule one" /> : undefined}
         />
       </div>
     );
@@ -251,26 +247,18 @@ function ActivitiesTab({
       {activities.data.items.map((activity) => {
         const cta = resolveCta(activity.deepLink);
         return (
-          <li
-            key={activity.id}
-            className="ws-row flex items-center gap-3 px-4 py-3"
-          >
+          <li key={activity.id} className="ws-row flex items-center gap-3 px-4 py-3">
             <span className="ws-inset flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-body">
               <IconCalendar className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-bold text-heading">
-                {activity.title}
-              </p>
+              <p className="truncate text-[15px] font-bold text-heading">{activity.title}</p>
               <p className="text-[13px] text-meta">
                 {activity.type} · {formatDateTime(activity.startsAt)}
               </p>
             </div>
             {cta && (
-              <Link
-                href={cta.href}
-                className="shrink-0 text-[13px] font-semibold text-accent hover:underline"
-              >
+              <Link href={cta.href} className="shrink-0 text-[13px] font-semibold text-accent hover:underline">
                 {cta.label} →
               </Link>
             )}
@@ -281,110 +269,26 @@ function ActivitiesTab({
   );
 }
 
-/**
- * THE POSTS / MEDIA / STREAMS / ACTIVITIES STRIP IS HIDDEN, NOT DELETED.
- *
- * Node 534:16948 is the whole profile body, and dumping every text node in it
- * turns up no "Posts", "Media", "Streams" or "Activities" anywhere — the only
- * strip the design draws is the account one (Earnings / Badges / Gift Gallery
- * / Replays). So the page matches the file.
- *
- * A CONSTANT RATHER THAN A DELETION, because nothing about the capability
- * changed. All four tabs are backed by live routes — `/profiles/:username/
- * posts`, `/streams`, `/activities` — and every one of them still works; what
- * changed is only whether this page offers them. Deleting the components would
- * turn "the design does not show these" into "somebody has to rebuild these",
- * and those are very different costs. One line puts the strip back.
- *
- * WORTH KNOWING WHILE IT IS OFF: the account strip above is `/me`-only, and so
- * is Houses, so a visitor to somebody else's profile now sees the cover, the
- * bio and the counts and nothing beneath them. Giving a stranger's profile
- * content again means either this strip back on or a design for what replaces
- * it.
- */
-const SHOW_CONTENT_TABS = false;
-
 export function ProfilePage({
   username,
   messageSlot,
-  kashSlot,
-  housesSlot,
-  housesOfSlot,
-  replaysSlot,
-  giftGallerySlot,
-  earningsSlot,
   composeSlot,
   postSlot,
-  mediaViewerSlot,
 }: {
   username: string;
   /** Composed from outside — profile never imports the messages slice. */
   messageSlot?: (profile: Profile) => React.ReactNode;
-  /**
-   * The Houses rail (534:15577), also the messages slice's — a house IS a group
-   * conversation. Own profile only: `GET /me/conversations` is the only route
-   * that answers this, and there is none for the houses somebody ELSE belongs
-   * to, so a visitor gets no rail rather than an empty one.
-   */
-  housesSlot?: React.ReactNode;
-  /**
-   * The rails on somebody ELSE's profile — 545:47653 (their houses) and
-   * 545:47746 (their ended gist rooms). Both read other slices, so both arrive
-   * as slots; each renders nothing until its route answers.
-   */
-  housesOfSlot?: (profile: Profile) => React.ReactNode;
-  replaysSlot?: (profile: Profile) => React.ReactNode;
-  /**
-   * The gift gallery — node 492:41810. It counts the viewer's own received
-   * tips, so it lives in the tips slice and arrives as a slot; profile and
-   * tips never import each other.
-   */
-  giftGallerySlot?: React.ReactNode;
-  /**
-   * The earnings panel — nodes 492:46239 (empty) and 492:46539 (populated).
-   * It reads the KASH engine and the tips ledger, two slices the profile may
-   * not import, so it arrives as a slot like the rest.
-   */
-  earningsSlot?: React.ReactNode;
-  /** The balance chip on the cover (435:27523) — the kash slice's, own profile
-   *  only, because there is no route for anybody else's balance and there
-   *  should not be. */
-  kashSlot?: React.ReactNode;
   /** Composed from outside — profile never imports the feed slice. */
   composeSlot?: React.ReactNode;
   postSlot: (post: Post) => React.ReactNode;
-  /**
-   * The full-screen swipeable viewer, composed by the route: profile never
-   * imports the feed slice, and the viewer lives there.
-   */
-  mediaViewerSlot: (
-    items: Post[],
-    openId: string,
-    onClose: () => void,
-  ) => React.ReactNode;
 }) {
   const profile = useProfile(username);
   const me = useMe();
   const [tab, setTab] = useState<Tab>("posts");
-  /**
-   * The ACCOUNT strip's selection, separate from `tab` above — the two strips
-   * are different questions and must not share one value. Gift Gallery is the
-   * one the file draws active and the only one with a panel behind it.
-   */
-  const [accountTab, setAccountTab] = useState<AccountTab>("earnings");
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
-  const isMe = Boolean(
-    profile.data && me.data && profile.data.id === me.data.id,
-  );
-  // Asked once the profile is known; a 404 is "not deployed" and keeps both
-  // badge surfaces absent — see `useProfileBadges`.
-  const badges = useProfileBadges(username, Boolean(profile.data));
-  useMarketView(
-    "profile_viewed",
-    { surface: "profile", entityType: "profile", entityId: profile.data?.id },
-    Boolean(profile.data),
-  );
+  const isMe = Boolean(profile.data && me.data && profile.data.id === me.data.id);
+  useMarketView("profile_viewed", { surface: "profile", entityType: "profile", entityId: profile.data?.id }, Boolean(profile.data));
 
   if (profile.isPending) {
     return (
@@ -405,11 +309,7 @@ export function ProfilePage({
       <>
         <ColumnHeader title="Profile" back />
         <div className="p-4">
-          <ErrorState
-            error={profile.error}
-            fallback="Couldn't load this profile."
-            onRetry={() => profile.refetch()}
-          />
+          <ErrorState error={profile.error} fallback="Couldn't load this profile." onRetry={() => profile.refetch()} />
         </div>
       </>
     );
@@ -417,366 +317,116 @@ export function ProfilePage({
 
   const data = profile.data;
 
-  /*
-    Share the PROFILE — the same shape the post card uses: the platform sheet
-    where there is one, the clipboard where there is not, and a dismissed sheet
-    is not an error.
-  */
-  const onShare = async () => {
-    const url = `${window.location.origin}/u/${data.username}`;
-    try {
-      if (navigator.share)
-        await navigator.share({ text: data.displayName, url });
-      else {
-        await navigator.clipboard.writeText(url);
-        toast.success("Link copied");
-      }
-    } catch {
-      /* dismissed share sheets are not errors */
-    }
-  };
-
   return (
     <>
-      {/*
-        NODE 435:27500 — ONE CARD, not three bands.
+      {/* X's profile header: a back arrow with the identity beside it, then a
+          banner the avatar hangs off. The banner has no upload yet, so it is
+          the same seeded gradient the rest of the square uses for artwork. */}
+      <ColumnHeader
+        title={data.displayName}
+        subtitle={`${formatCount(data.followerCount)} followers`}
+        back
+      />
 
-        It was X's shape: a ColumnHeader naming the person, a full-bleed banner
-        under it, then an avatar hanging off the banner's lower edge into the
-        content. The file draws a single 741x473 card at a 20 radius with the
-        photograph filling it and the identity laid over its foot — so the name,
-        the handle and the actions sit ON the cover rather than in a strip above
-        it and a row below it.
+      <GradientThumb seed={data.username} className="h-32 w-full sm:h-44" />
 
-        `ProfileCover` owns the card; the actions and the meta row are passed in
-        because who you are looking at decides both.
-      */}
-      <div className="px-8 pt-6">
-        <ProfileCover
-          profile={data}
-          /* 435:27521 — the row beside the handle. The balance chip is the
-             kash slice's and arrives as a slot; "Who viewed my profile" is not
-             drawn, see the note on `ProfileCover`. */
-          meta={isMe ? kashSlot : null}
-          actions={
-            isMe ? (
-              <>
-                {/*
-                  435:27531 and 435:27534 — a 38.4 disc and a 129x38 pill, and
-                  BOTH report a white stroke at weight ZERO, which renders
-                  nothing. The material is Figma's GLASS over the photograph —
-                  translucent, one bright rim — sampled from the render as
-                  `ws-glass-clear`. It was `ws-glass-pill`, the opaque dark
-                  lens the room's header uses, which on a light cover is a
-                  black coin the file does not draw.
-                */}
-                <button
-                  type="button"
-                  onClick={onShare}
-                  aria-label="Share this profile"
-                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-white"
-                >
-                  <IconRoomShare className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditOpen(true)}
-                  className="ws-glass-clear ws-press flex h-[38px] items-center gap-2 rounded-full px-4 text-[15px] leading-6 text-white transition-opacity hover:opacity-90"
-                >
-                  <IconMsEdit className="h-4 w-4 shrink-0" />
-                  Edit Profile
-                </button>
-              </>
+      <div className="px-4 pb-3">
+        <div className="flex items-start justify-between gap-3">
+          {/* `relative z-10` is what makes it VISIBLE, not decoration. The
+              cover above is `relative` (positioned), and within one stacking
+              context positioned elements paint above in-flow block boxes — so
+              an unpositioned avatar pulled up over the cover had its top half
+              painted over by it.
+
+              88px on a phone, 112 from `sm` up: at 112 the disc plus its ring
+              ate 120 of ~343px of content width and squeezed the action row
+              into the right edge. Sized by class, not by `size`, because the
+              inline width/height `size` writes would beat the breakpoint. */}
+          <div className="relative z-10 -mt-11 rounded-full border-4 border-black sm:-mt-16">
+            <Avatar
+              name={data.displayName}
+              seed={data.id}
+              src={data.avatarUrl}
+              size={112}
+              sizeClassName="h-22 w-22 sm:h-28 sm:w-28"
+            />
+          </div>
+          {/* `flex-wrap` with `justify-end` is the last-resort escape: a long
+              Message label or a future action drops onto a second line rather
+              than shrinking every pill into its own text. */}
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-3">
+            {isMe ? (
+              <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+                Edit profile
+              </Button>
             ) : (
               <>
-                {/*
-                  545:47603 — Wink, message, more, 16 apart, held to the right,
-                  and NOTHING ELSE: the file draws no Follow on this cover.
-
-                  A Follow pill was added ahead of Wink and it broke the frame
-                  — the identity column lost the width it needs and the name's
-                  chip wrapped under it, three rows against the file's two. So
-                  Follow moved into the more menu as its first row (see
-                  `PersonMoreMenu`) rather than being deleted: the act is one
-                  tap further away, not gone, and the cover is the file's.
-                  Whether it deserves a pill of its own is the designer's
-                  question, and it is asked.
-                */}
-                <WinkButton profile={data} size="cover" />
+                <SafetyActions profile={data} />
                 {messageSlot?.(data)}
-                <PersonMoreMenu profile={data} size="cover" />
+                <FollowButton profile={data} />
               </>
-            )
-          }
-        />
-      </div>
-
-      {/*
-        WHAT THE COVER DOES NOT CARRY.
-
-        The name, the handle, the badges and the actions moved ONTO the card
-        (435:27503) — this block used to draw all of them a second time, under
-        it. What is left is the part 414:24935 puts below the cover: the bio,
-        the place, and the two counts.
-      */}
-      {/*
-        NODE 414:24935 — bio, counts, place. 741 wide on a 16 rhythm.
-
-        The name, handle, badges and actions moved ONTO the cover (435:27503);
-        this block used to draw all of them a second time underneath. What the
-        file leaves here is three lines.
-      */}
-      <div className="flex flex-col gap-4 px-8 pt-6">
-        {/*
-          THE FILE PRINTS A LINE WHEN THERE IS NO BIO — "Bio not updated" at
-          50% white, where a written one is the same size in full white. Empty
-          is a state worth showing on your OWN profile, because it is a thing to
-          go and fix; on somebody else's it is just a fact about them. Either
-          way it is the person's own words or the absence of them, never a
-          placeholder pretending to be either.
-        */}
-        <p
-          className={
-            data.bio
-              ? "text-[15px] leading-5 text-white"
-              : "text-[15px] leading-5 text-white/50"
-          }
-        >
-          {data.bio || "Bio not updated"}
-        </p>
-
-        {/*
-          468:35601 — the count at Geist 600 15/20 in `#F7F9F9`, its label at
-          400 in 50% white, 4 between them and BASELINE-aligned so a big number
-          and its word sit on one line rather than centring against each other.
-
-          THERE IS NO BULLET. The comment here used to say the separator was
-          "the file's own, not a bullet we invented" — it was exactly a bullet
-          we invented. Node 468:35605 between the two groups is a TEXT node
-          with no characters at all: a 23px spacer, drawn as nothing. Same
-          trick as the empty node in the earnings row.
-
-          So the separation is space, and the file's own: 16 either side of a
-          23px void is a 55px gap.
-        */}
-        <p className="tnum flex flex-wrap items-baseline gap-x-[55px] gap-y-1 text-[15px] leading-5">
-          <span className="flex items-baseline gap-1">
-            <span className="font-semibold text-grey-100">
-              {formatCount(data.followingCount)}
-            </span>
-            <span className="text-white/50">Following</span>
-          </span>
-          <span className="flex items-baseline gap-1">
-            <span className="font-semibold text-grey-100">
-              {formatCount(data.followerCount)}
-            </span>
-            <span className="text-white/50">Followers</span>
-          </span>
-        </p>
-
-        {/*
-          THE PLACE THIS PERSON PUBLISHED — 418:25221, a 24px glyph and the
-          text at 15/20 in FULL white, not the 13px meta line it was. The file
-          gives it the same weight as the bio above it, which is right: it is
-          something they said about themselves rather than a caption.
-
-          Rendered only when they said something. Null means "hasn't said",
-          which is not a blank to fill with an em-dash or a guess.
-
-          A place, never a distance: there is no "3 km away" here and no field
-          for one. See `lib/people-filters.ts`.
-
-          GENDER IS NOT DRAWN HERE, and it was. Node 468:35609 is the whole
-          meta row and it holds exactly two things — the place, and a website —
-          with no gender anywhere in the frame: dumping every text node in
-          534:16948 turns up the bio, the two counts, "108 Opebi Ikeja, Lagos"
-          and a URL, and nothing else. It is still on the profile and still
-          editable; the design simply does not print it on the page, so neither
-          do we.
-
-          NO LINK ROW YET. 468:35614 draws `akar-icons:link-chain` at 24 and
-          the URL at 15/20 in full white, 8 apart, 16 after the place. There is
-          no URL field of any kind on `PublicProfile` — re-checked against the
-          live contract at :8094, where `avatarUrl` and `coverUrl` are the only
-          `*url` keys. Requested; the row appears when the field does, and it
-          is one `<a>` in the row that already exists.
-        */}
-        {/*
-          545:47626 — the place and the website on one row, 16 apart, each a
-          24px glyph 8 from its text at 15/20 in full white. The glyphs are the
-          file's own (the globe pin, `akar-icons:link-chain`), drawn in
-          `#7E3BEB` there and in `--color-create` here: purple ink on the dark
-          ground takes the ramp's light stop for contrast (CLAUDE.md), and the
-          previous pin already followed that rule.
-
-          THE WEBSITE IS LIVE on `PublicProfile` at :8080 (null today for
-          everyone; the edit sheet can set it). It is an anchor only when it
-          is an http(s) URL — a public page must never carry a `javascript:`
-          href somebody typed about themselves.
-        */}
-        {(data.city || data.region || isHttpUrl(data.website)) && (
-          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] leading-5 text-white">
-            {(data.city || data.region) && (
-              <span className="flex items-center gap-2">
-                <IconProfileGlobePin className="h-6 w-6 shrink-0 text-create" />
-                {/* "Ikeja, Lagos" from whichever halves they gave. */}
-                {[data.city, data.region].filter(Boolean).join(", ")}
-              </span>
             )}
-            {isHttpUrl(data.website) && (
-              <a
-                href={data.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80"
-              >
-                <IconProfileLink className="h-6 w-6 shrink-0 text-create" />
-                <span className="min-w-0 truncate">{data.website}</span>
-              </a>
-            )}
-          </p>
-        )}
-      </div>
-
-      {/* 534:15577 — the houses this person keeps, 38 under the block above. */}
-      {isMe && housesSlot && <div className="px-8 pt-9">{housesSlot}</div>}
-
-      {/*
-        545:47615 — what a STRANGER's profile carries under the bio block, in
-        the file's order and on its 24 rhythm: Badges, House, Replays. Each
-        section is absent — heading included — until it has something real
-        to show, so a profile with none of the three ends at the bio block.
-      */}
-      {!isMe && (
-        <div className="flex flex-col gap-6 px-8 pt-6">
-          {!badges.unavailable && badges.data && <BadgesSection badges={badges.data.items} />}
-          {housesOfSlot?.(data)}
-          {replaysSlot?.(data)}
+          </div>
         </div>
-      )}
+
+        <div className="mt-3">
+          <h1 className="ws-display flex flex-wrap items-center gap-x-2 text-xl">
+            <span className="min-w-0 break-words">{data.displayName}</span>
+            <VerifiedBadge verification={data.verification} className="h-5 w-5" />
+            <OrgBadgeChip orgBadge={data.orgBadge} />
+            <RoleChip role={data.role} />
+          </h1>
+          {/* An unclaimed member's username is their Privy DID — 40-odd
+              unbroken characters. Without a wrap rule it runs past the column
+              on a phone; `break-all` is the only break this string offers. */}
+          <p className="break-all text-[15px] text-meta">@{data.username}</p>
+        </div>
+
+        {data.bio && <p className="mt-3 text-[15px] leading-normal text-body">{data.bio}</p>}
+
+        <p className="tnum mt-3 flex gap-4 text-[15px] text-meta">
+          <span>
+            <span className="font-bold text-heading">{formatCount(data.followingCount)}</span> Following
+          </span>
+          <span>
+            <span className="font-bold text-heading">{formatCount(data.followerCount)}</span> Followers
+          </span>
+        </p>
+      </div>
 
       {/* Own-profile business: creator application and verification live above
-          the tabs, where they read as account state rather than content.
-
-          NO RULE ABOVE IT. It carried a full-width `border-t`, which drew a
-          line straight across the page between the houses rail and the Creator
-          card — the one divider on a page that is otherwise a stack of
-          outlined cards on open ground. Both cards already have their own
-          border, so the rule was separating things that were separated, and it
-          cut the column at a point the file draws nothing.
-
-          `px-8` to match, not `px-4`: every other block on this page — the
-          cover, the bio, the houses — is inset 32, so these two cards hung 16px
-          wider than the rail directly above them. */}
+          the tabs, where they read as account state rather than content. */}
       {isMe && (
-        <div className="space-y-3 px-8 pb-4 pt-9">
+        <div className="ws-hair space-y-3 border-t px-4 py-4">
           <CreatorCard role={data.role} />
           <VerificationCard />
         </div>
       )}
 
-      {/*
-        NODE 492:47030 — the ACCOUNT strip and its panel.
-
-        Own-profile only, and every tab is the reason why: earnings, badges,
-        gifts received and your own replays are all statements about your
-        account, and the two routes behind any of them (`/me/tips/received`,
-        and the KASH engine) are `/me` routes. The same frame in the file also
-        carries "Add new house" and "Edit Profile", which are only ever yours.
-
-        TWO OF THE FOUR TABS ARE INERT, and each for a checked reason rather
-        than because it was awkward. Earnings is live: nodes 492:46239 and
-        492:46539 draw both its states and `GET /me/tips/received` backs them.
-
-         · Badges — `GET /profiles/:username/badges` is asked for and built
-           against (543:40148, `BadgesPanel`), but the backend holds it until
-           the earning rules are decided, so it 404s and the tab stays inert.
-         · Replays — `MARKET_FLAGS.replays`, off because LiveKit egress and a
-           storage bucket are not provisioned, so `replayUrl` is null on every
-           stream. The flag makes the surface reappear; it cannot make the
-           recordings exist.
-
-        Visible and disabled, per the standing rule — deleting them loses the
-        roadmap, leaving them live tells the reader a lie.
-      */}
-      {isMe && giftGallerySlot && (
-        <div className="pt-6">
-          <AccountTabs
-            tabs={[
-              { value: "earnings", label: "Earnings" },
-              {
-                value: "badges",
-                label: "Badges",
-                // Live the moment `GET /profiles/:username/badges` answers;
-                // inert with the reason while it 404s — see `useProfileBadges`.
-                disabledReason:
-                  badges.unavailable || !badges.data ? "Not available yet" : undefined,
-              },
-              { value: "gifts", label: "Gift Gallery" },
-              {
-                value: "replays",
-                label: "Replays",
-                disabledReason: MARKET_FLAGS.replays ? undefined : "Soon",
-              },
-            ]}
-            value={accountTab}
-            onChange={setAccountTab}
-          />
-          {accountTab === "earnings" && earningsSlot}
-          {accountTab === "badges" && badges.data && <BadgesPanel badges={badges.data.items} />}
-          {accountTab === "gifts" && giftGallerySlot}
-        </div>
-      )}
-
-      {SHOW_CONTENT_TABS && (
-        <>
-          {/* Two stickies on one page: the header above pins first, so the tabs
-            have to pin BELOW it — the shell's fixed top strip plus the header's
-            own measured height. At `top-0` with a lower z-index they stuck
-            straight underneath both and vanished, so a scrolled profile had no
-            way left to switch tab. */}
-          <div className="ws-hair sticky top-[calc(var(--ws-topbar-h)_+_var(--ws-colhead-h))] z-20 border-b bg-chrome">
-            <ColumnTabs
-              tabs={[
-                { value: "posts" as Tab, label: "Posts" },
-                { value: "media" as Tab, label: "Media" },
-                { value: "streams" as Tab, label: "Streams" },
-                { value: "activities" as Tab, label: "Activities" },
-              ]}
-              value={tab}
-              onChange={setTab}
-            />
-          </div>
-
-          {tab === "posts" && (
-            <PostsTab
-              username={username}
-              isMe={isMe}
-              composeSlot={composeSlot}
-              postSlot={postSlot}
-            />
-          )}
-          {tab === "media" && (
-            <MediaTab
-              username={username}
-              isMe={isMe}
-              viewerSlot={mediaViewerSlot}
-            />
-          )}
-          {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
-          {tab === "activities" && (
-            <ActivitiesTab username={username} isMe={isMe} />
-          )}
-        </>
-      )}
-
-      {isMe && (
-        <EditProfileSheet
-          me={data}
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
+      {/* Two stickies on one page: the header above pins first, so the tabs
+          have to pin BELOW it — the shell's fixed top strip plus the header's
+          own measured height. At `top-0` with a lower z-index they stuck
+          straight underneath both and vanished, so a scrolled profile had no
+          way left to switch tab. */}
+      <div className="ws-hair sticky top-[calc(var(--ws-topbar-h)_+_var(--ws-colhead-h))] z-20 border-b bg-ground">
+        <ColumnTabs
+          tabs={[
+            { value: "posts" as Tab, label: "Posts" },
+            { value: "streams" as Tab, label: "Streams" },
+            { value: "activities" as Tab, label: "Activities" },
+          ]}
+          value={tab}
+          onChange={setTab}
         />
+      </div>
+
+      {tab === "posts" && (
+        <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
       )}
+      {tab === "streams" && <StreamsTab username={username} isMe={isMe} />}
+      {tab === "activities" && <ActivitiesTab username={username} isMe={isMe} />}
+
+      {isMe && <EditProfileSheet me={data} open={editOpen} onClose={() => setEditOpen(false)} />}
     </>
   );
 }

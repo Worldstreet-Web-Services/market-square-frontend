@@ -7,10 +7,9 @@ import { useMe } from "@/hooks/use-me";
 import { Button, Spinner } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
 import { Wordmark } from "@/components/ui/wordmark";
-import { SignInCard } from "./sign-in-card";
 
 export function AuthPage() {
-  const { ready, authenticated, logout } = useAuth();
+  const { ready, authenticated, login, logout } = useAuth();
   const me = useMe();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,12 +17,6 @@ export function AuthPage() {
   // Where an expired session should land the user again after signing in.
   const rawReturnTo = searchParams.get("returnTo");
   const returnTo = rawReturnTo?.startsWith("/") ? rawReturnTo : null;
-
-  /* Signed out, this route IS the design's sign-in card (Desktop 40) — the
-     same one the welcome sequence ends on, so an expired session and a first
-     visit land on one surface rather than two that drift. The column below is
-     only ever the SIGNED-IN state: where to go next, and how to sign out. */
-  if (ready && !authenticated) return <SignInCard />;
 
   return (
     <div className="flex min-h-[80dvh] items-center justify-center px-6">
@@ -44,6 +37,15 @@ export function AuthPage() {
           <div className="flex justify-center py-4">
             <Spinner className="h-6 w-6 text-grey-500" />
           </div>
+        )}
+
+        {ready && !authenticated && (
+          <>
+            <Button size="lg" className="w-full" onClick={login}>
+              Continue with Privy
+            </Button>
+            <p className="text-[13px] text-meta">Google, Twitter, or email — one tap, no seed phrases.</p>
+          </>
         )}
 
         {ready && authenticated && (

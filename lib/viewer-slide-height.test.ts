@@ -21,6 +21,7 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 
 const slide = read("features/feed/components/post-slide.tsx");
 const viewer = read("features/feed/components/video-viewer.tsx");
+const reels = read("features/feed/components/reels-feed.tsx");
 
 describe("slide height chain", () => {
   it("PostSlide fills its container rather than the viewport", () => {
@@ -43,4 +44,7 @@ describe("slide height chain", () => {
     assert.match(viewer, /h-dvh w-full snap-y snap-mandatory/);
   });
 
+  it("the reels container sets its own height too", () => {
+    assert.match(reels, /height: `calc\(100dvh/);
+  });
 });
