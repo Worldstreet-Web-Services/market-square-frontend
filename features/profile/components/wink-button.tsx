@@ -99,7 +99,8 @@ export function WinkButton({
         "ws-press flex shrink-0 items-center justify-center rounded-full transition-colors",
         size === "cover" &&
           cn(
-            "ws-btn-welcome h-[38px] w-[91px] gap-[10.1px] p-[8.08px] text-[14.94px] leading-[25.61px] text-white",
+            // Icon only below md: the phone row has no room for the label.
+            "ws-btn-welcome h-[38px] w-[38px] p-[8.08px] text-[14.94px] leading-[25.61px] text-white md:w-[91px] md:gap-[10.1px]",
             wink.winked && "opacity-60"
           ),
         size === "post" &&
@@ -128,7 +129,7 @@ export function WinkButton({
       {size === "cover" ? (
         <>
           <IconProfileWink className="h-4 w-4 shrink-0" />
-          Wink
+          <span className="hidden md:inline">Wink</span>
         </>
       ) : size === "post" ? (
         <IconMsWinkFace className="h-[22.15px] w-[22.15px] shrink-0" />

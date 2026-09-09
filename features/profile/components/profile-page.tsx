@@ -481,10 +481,13 @@ export function ProfilePage({
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
-                  className="ws-glass-clear ws-press flex h-[38px] items-center gap-2 rounded-full px-4 text-[15px] leading-6 text-white transition-opacity hover:opacity-90"
+                  aria-label="Edit profile"
+                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-[15px] leading-6 text-white transition-opacity hover:opacity-90 md:w-auto md:gap-2 md:px-4"
                 >
                   <IconMsEdit className="h-4 w-4 shrink-0" />
-                  Edit Profile
+                  {/* The label is the file's on desktop; on a phone the disc's
+                      icon is the whole control, like the discs beside it. */}
+                  <span className="hidden md:inline">Edit Profile</span>
                 </button>
               </>
             ) : (

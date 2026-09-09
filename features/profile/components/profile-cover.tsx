@@ -147,8 +147,12 @@ export function ProfileCover({
       {/* 545:47576 (the identity, y=377..449) and 545:47603 (the actions,
           y=394..432): the actions are CENTRED on the identity row, not hung
           from its foot. */}
-      <div className="absolute inset-x-4 bottom-4 z-10 flex flex-col items-start gap-3 md:inset-x-6 md:bottom-6 md:flex-row md:items-center md:gap-4">
-        <div className="flex w-full min-w-0 items-center gap-4 md:w-auto md:flex-1">
+      {/* ONE ROW AT EVERY WIDTH — identity on the left, controls on the right.
+          On a phone the controls are icons only (the Wink pill and Edit Profile
+          drop their labels below md) and the avatar and name step down a size,
+          so the row fits 358 with the name still readable. */}
+      <div className="absolute inset-x-4 bottom-4 z-10 flex items-center gap-3 md:inset-x-6 md:bottom-6 md:gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
           {/* 72 at a 16.36 radius behind a 2.18 ring in #15202B at 40%. A
               ROUNDED SQUARE, not the circle every other avatar in the app is:
               the file draws the profile's own portrait differently from the one
@@ -158,6 +162,7 @@ export function ProfileCover({
             seed={profile.id}
             src={profile.avatarUrl}
             size={72}
+            sizeClassName="h-14 w-14 md:h-[72px] md:w-[72px]"
             className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
           />
           {/* `flex-1` as well as `min-w-0`: without it the column sizes to
@@ -170,7 +175,7 @@ export function ProfileCover({
                 where the file draws one, so the chips WRAP under the name
                 when they must. The name itself never truncates: it is the
                 person's, and "og…" is not a name. */}
-            <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-[24px] font-bold leading-8 text-white">
+            <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-[20px] font-bold leading-7 text-white md:text-[24px] md:leading-8">
               <span className="min-w-0 break-words">{name}</span>
               <VerifiedBadge verification={profile.verification} className="h-5 w-5" />
               <OrgBadgeChip orgBadge={profile.orgBadge} />
@@ -180,7 +185,7 @@ export function ProfileCover({
               {/* An unclaimed member's username is their Privy DID — forty-odd
                   unbroken characters — and `break-all` is the only break it
                   offers. */}
-              <span className="break-all text-[16px] leading-6 text-white/50">
+              <span className="break-all text-[14px] leading-5 text-white/50 md:text-[16px] md:leading-6">
                 @{profile.username}
               </span>
               {meta}
@@ -188,7 +193,7 @@ export function ProfileCover({
           </div>
         </div>
 
-        {actions && <div className="flex w-full shrink-0 items-center gap-3 md:w-auto md:gap-4">{actions}</div>}
+        {actions && <div className="flex shrink-0 items-center gap-2 md:gap-4">{actions}</div>}
       </div>
     </div>
   );
