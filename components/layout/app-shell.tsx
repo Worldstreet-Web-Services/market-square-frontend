@@ -16,6 +16,7 @@ import {
 import { useRailState } from "@/lib/sidebar-rail-store";
 import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { toast } from "sonner";
 import { useChatOpen } from "@/lib/chat-open-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -72,6 +73,17 @@ interface NavItem {
   admin?: boolean;
   /** Folded into the "More" menu below xl, where vertical room runs out. */
   secondary?: boolean;
+  /**
+   * COMING SOON, and not shown at all — on any surface. The route still
+   * resolves; only its door is gone until the product is ready to open it.
+   */
+  hidden?: boolean;
+  /**
+   * COMING SOON, and SHOWN — faded, inert, and answering a tap with this
+   * message rather than the page. For the one entry ogazboiz wanted people to
+   * see is on its way ("seen but disabled, as if faded, but they tap it").
+   */
+  soon?: string;
   /**
    * Promoted in the DESKTOP SIDEBAR. Defaults to true.
    *
@@ -143,7 +155,8 @@ interface NavItem {
 */
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconSbHome },
-  { href: "/discover", label: "Explore", icon: IconSbExplore },
+  // Hidden for now — coming soon, per ogazboiz. The route still resolves.
+  { href: "/discover", label: "Explore", icon: IconSbExplore, hidden: true },
   /*
     Houses is a row of its own after all.
 
@@ -186,7 +199,8 @@ const NAV: NavItem[] = [
     */
     sidebar: false,
   },
-  { href: "/live", label: "Live", icon: IconSbLive, secondary: true },
+  // Hidden for now — coming soon, per ogazboiz. The route still resolves.
+  { href: "/live", label: "Live", icon: IconSbLive, secondary: true, hidden: true },
   /*
     LIBRARY is the saved-posts surface — node 496:13107 draws it sixth, on a
     bookmark, between Live and For Creators. The route stays `/arkmarks` and the
@@ -212,6 +226,8 @@ const NAV: NavItem[] = [
     icon: IconSbCreators,
     authed: true,
     secondary: true,
+    // Seen, faded, and a tap says so — not a door yet.
+    soon: "For Creators is coming soon",
   },
   {
     href: "/admin",
@@ -252,6 +268,7 @@ function visibleNav(options: {
 }): NavItem[] {
   return NAV.filter(
     (item) =>
+      !item.hidden &&
       (options.surface !== "sidebar" || item.sidebar !== false) &&
       (!item.authed || options.authenticated) &&
       (!item.operator || options.isOperator) &&
@@ -347,11 +364,26 @@ function NavLink({
         ? { target: "_blank", rel: "noopener noreferrer" }
         : {})}
       aria-label={
-        item.external
-          ? `${item.label} (opens in a new tab)`
-          : badge > 0
-            ? `${item.label}, ${badge} unread`
-            : item.label
+        item.soon
+          ? `${item.label} — ${item.soon}`
+          : item.external
+            ? `${item.label} (opens in a new tab)`
+            : badge > 0
+              ? `${item.label}, ${badge} unread`
+              : item.label
+      }
+      aria-disabled={item.soon ? true : undefined}
+      title={item.soon}
+      // A coming-soon entry stays where it is and says so; it never
+      // navigates. Not `disabled` on a link (links have no such state), so
+      // the tap is caught and answered instead.
+      onClick={
+        item.soon
+          ? (event) => {
+              event.preventDefault();
+              toast.info(item.soon!);
+            }
+          : undefined
       }
       aria-current={active ? "page" : undefined}
       // Geometry is the design's and is identical in both states — only the
@@ -367,6 +399,8 @@ function NavLink({
             // the existing token instead.
             "border border-create/30 bg-create/[0.11] text-white shadow-[0px_1px_3px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]"
           : "border border-transparent text-body hover:bg-white/[0.06]",
+        // Faded: the row is present and not yet a door.
+        item.soon && "opacity-40 hover:bg-transparent",
       )}
     >
       <span
@@ -628,32 +662,12 @@ function AccountChip() {
             View profile
           </Link>
           {/*
-            What is YOURS lives under you.
-
-            Tickets and Arkmarks are records — what you bought, what you saved
-            — not places you navigate to. In the rail they each cost a
-            permanent row to serve something opened once a week; here they sit
-            where a person already looks for their own things, next to their
-            own name.
+            View profile and Log out, and nothing else — ogazboiz's call
+            ("it should only be view profile and logout here"). Tickets and
+            Arkmarks sat here for a while as "what is yours"; both routes still
+            resolve (/tickets, /arkmarks) and the profile's own tabs are the
+            door to them now.
           */}
-          {me.data && (
-            <>
-              <Link
-                href="/tickets"
-                onClick={close}
-                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-              >
-                Tickets
-              </Link>
-              <Link
-                href="/arkmarks"
-                onClick={close}
-                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-              >
-                Arkmarks
-              </Link>
-            </>
-          )}
           <button
             onClick={() => {
               close();
