@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParam } from "@/hooks/use-query-param";
 import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed, useFeedHead } from "@/features/feed/hooks/use-feed";
+import { useLaneSignal } from "@/features/feed/hooks/use-lane-signal";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
 import { TrendingDiscussions } from "@/features/discovery";
@@ -230,6 +231,9 @@ export function FeedPage({
     what is "new"; that is the hold's job, against what the reader has seen.
   */
   const head = useFeedHead(lane, topics, feed.isSuccess);
+  // The ws-gateway's "head changed" frame re-asks that same head at once —
+  // when a gateway is configured; otherwise the tick above is the whole story.
+  useLaneSignal(lane, topics, feed.isSuccess);
   const loaded = useMemo(() => {
     const paged = feed.data?.pages.flatMap((page) => page.items) ?? [];
     const have = new Set(paged.map((item) => item.id));

@@ -60,6 +60,18 @@ export const MARKET_FLAGS = {
    * needs legal sign-off.
    */
   houses: process.env.NEXT_PUBLIC_MS_HOUSES_ENABLED === "true",
+  /**
+   * The ws-gateway, for a realtime "the lane's head changed" signal.
+   *
+   * A URL rather than a boolean, because the address IS the switch: absent
+   * means no socket is ever constructed and the feed keeps its 30-second
+   * head check alone, which stays as the floor either way. Set it to the
+   * gateway's origin (`wss://<host>/`) to layer the signal on top. Public
+   * lanes only — `following` is per-reader and never subscribes.
+   *
+   * `NEXT_PUBLIC_MS_WS_GATEWAY_URL=wss://…` and rebuild (inlined at build).
+   */
+  wsGatewayUrl: process.env.NEXT_PUBLIC_MS_WS_GATEWAY_URL ?? "",
   moneyLinkedGames: false,
   predictions: false,
   staking: false,
