@@ -270,11 +270,6 @@ const PENDING_ROUTES = {
       "list for everyone). Both badge surfaces are built and absent while it 404s. " +
       "See features/profile/components/badges.tsx.",
   },
-  "get /comments/{}": {
-    reason:
-      "One comment by id, for a permalink opened on it. Live on the service " +
-      "and absent from its spec document. See features/feed/lib/api.ts.",
-  },
 
   "get /conversations/{}/members": {
     reason:
