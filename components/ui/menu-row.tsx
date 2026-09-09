@@ -20,11 +20,20 @@ import { cn } from "@/lib/cn";
  * `disabled`, with the reason on it, rather than hidden (which loses the
  * roadmap) or live (which lies). It renders as the button's `title`, so it
  * costs no height and never changes the row's geometry.
+ *
+ * `size="compact"` is THIS ROW AT 74.46% — the "Make some friends" filter menu
+ * (node 651:18441) is the DM menu's rows resized as a group: 23.83 tall, an
+ * 8.935 radius, 5.957 of padding and gap, the label at 8.935/11.913, with a
+ * 14px glyph box. Every number is that scale of the row above, so it is one
+ * row with two sizes rather than a second row. `trailing` is the chevron the
+ * file puts on its right edge; the default row has none.
  */
 export function MenuRow({
   icon,
   label,
   tone = "default",
+  size = "default",
+  trailing,
   disabled,
   hint,
   onClick,
@@ -32,11 +41,16 @@ export function MenuRow({
   icon: React.ReactNode;
   label: string;
   tone?: "default" | "danger";
+  /** `compact` is the row at the friends filter's 74.46% — see above. */
+  size?: "default" | "compact";
+  /** Drawn against the row's right edge, after the label. */
+  trailing?: React.ReactNode;
   disabled?: boolean;
   /** Why this row cannot act. Shown as the title; also marks it disabled. */
   hint?: string;
   onClick?: () => void;
 }) {
+  const compact = size === "compact";
   const off = disabled || Boolean(hint) || !onClick;
   return (
     <button
@@ -46,7 +60,10 @@ export function MenuRow({
       title={hint}
       onClick={onClick}
       className={cn(
-        "ws-press flex h-8 w-full items-center gap-2 rounded-xl bg-white/[0.03] px-2 text-left text-[12px] font-medium leading-4 transition-colors",
+        "ws-press flex w-full items-center bg-white/[0.03] text-left font-medium transition-colors",
+        compact
+          ? "h-[23.83px] gap-[5.957px] rounded-[8.935px] px-[5.957px] text-[8.935px] leading-[11.913px]"
+          : "h-8 gap-2 rounded-xl px-2 text-[12px] leading-4",
         // The file gives a destructive row `#FF3B30`; `--color-danger` is
         // `#ff383c`, which is the same red to within two values per channel and
         // is already what every other destructive control in the app uses.
@@ -54,8 +71,16 @@ export function MenuRow({
         off ? "cursor-not-allowed opacity-40" : "hover:bg-white/[0.08]"
       )}
     >
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center",
+          compact ? "h-3.5 w-3.5" : "h-4 w-4"
+        )}
+      >
+        {icon}
+      </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
+      {trailing && <span className="flex shrink-0 items-center">{trailing}</span>}
     </button>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
+import { FriendsFilter } from "@/components/layout/friends-filter";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
@@ -213,13 +214,24 @@ export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
 
   return (
     <section aria-label="People to meet" className="flex flex-col gap-6">
-      {/* gap 1px, per node 225:3526 — the two lines are one block, not a
-          heading with a caption under it. */}
-      <div className="flex flex-col gap-px">
-        <h2 className="text-[22px] font-medium leading-7 text-white">Make some friends</h2>
-        <p className="text-[12px] font-bold leading-4 text-white/40">
-          Follow cool people and watch your feed go from boring to elite ✨
-        </p>
+      {/*
+        THE HEADING ROW — node 647:16342 on the left, the filter pill
+        (647:17482) on the right. The pill is FLUSH with the column's right
+        edge (both end at x=-1016 in the Home frame) and sits 3px ABOVE the
+        heading's top (49817 against 49820), which centres it on the 22/28
+        title line rather than on the two-line block. `min-w-0` on the heading
+        so the caption wraps under a pill that does not shrink.
+      */}
+      <div className="flex items-start justify-between gap-4">
+        {/* gap 1px, per node 225:3526 — the two lines are one block, not a
+            heading with a caption under it. */}
+        <div className="flex min-w-0 flex-col gap-px">
+          <h2 className="text-[22px] font-medium leading-7 text-white">Make some friends</h2>
+          <p className="text-[12px] font-bold leading-4 text-white/40">
+            Follow cool people and watch your feed go from boring to elite ✨
+          </p>
+        </div>
+        <FriendsFilter className="-mt-[3px]" />
       </div>
 
       {/*
