@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { Spinner } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParam } from "@/hooks/use-query-param";
 import { useComposePrefill } from "@/hooks/use-compose-prefill";
-import { useFeed } from "@/features/feed/hooks/use-feed";
+import { useFeed, useFeedHead } from "@/features/feed/hooks/use-feed";
+import { useLaneSignal } from "@/features/feed/hooks/use-lane-signal";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
 import { TrendingDiscussions } from "@/features/discovery";
@@ -220,10 +221,25 @@ export function FeedPage({
     [topicTabs]
   );
 
-  const loaded = useMemo(
-    () => feed.data?.pages.flatMap((page) => page.items) ?? [],
-    [feed.data?.pages]
-  );
+  /*
+    THE HEAD CHECK (`useFeedHead`) runs every 30 seconds while the tab is
+    visible and the timeline has loaded. Anything it returns that the
+    timeline does not already have is put IN FRONT of the loaded list, by
+    id — the timeline's own order for what it has, the head's for what is
+    new. From there `useNewPosts` holds the new items behind the pill while
+    the reader is scrolled, and merges them at the top. Nothing here decides
+    what is "new"; that is the hold's job, against what the reader has seen.
+  */
+  const head = useFeedHead(lane, topics, feed.isSuccess);
+  // The ws-gateway's "head changed" frame re-asks that same head at once —
+  // when a gateway is configured; otherwise the tick above is the whole story.
+  useLaneSignal(lane, topics, feed.isSuccess);
+  const loaded = useMemo(() => {
+    const paged = feed.data?.pages.flatMap((page) => page.items) ?? [];
+    const have = new Set(paged.map((item) => item.id));
+    const fresh = (head.data?.items ?? []).filter((item) => !have.has(item.id));
+    return fresh.length > 0 ? [...fresh, ...paged] : paged;
+  }, [feed.data?.pages, head.data?.items]);
   /*
     Everything that has been fetched — except what arrived ABOVE the reader
     while they were scrolled, which waits behind the "N new posts" pill until
@@ -237,6 +253,7 @@ export function FeedPage({
     meId: me.data?.id ?? null,
   });
   const items = fresh.shown;
+  const listRef = useRef<HTMLDivElement>(null);
   const canLoadMore = Boolean(feed.hasNextPage);
   /* The shared sentinel every other paged list in the app uses — 600px of
      rootMargin, so the next page is asked for before the reader arrives. */
@@ -382,10 +399,13 @@ export function FeedPage({
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
             than as separate objects — and these are objects, not rows. */}
-        <div className="space-y-4 md:space-y-[38px]">
-          {fresh.count > 0 && (
-            <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} />
-          )}
+        {/* Floats over the column, fixed under the top bars, only while the
+            reader is scrolled away from the head — at the top the held posts
+            merge in place and there is nothing to announce. */}
+        {fresh.pinned && (
+          <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
+        )}
+        <div ref={listRef} className="space-y-4 md:space-y-[38px]">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
             <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />

@@ -129,7 +129,7 @@ export function BadgesPanel({ badges }: { badges: Badge[] }) {
   return (
     <div
       ref={panel}
-      className="flex flex-wrap items-start gap-6 px-8 pt-8"
+      className="flex flex-wrap items-start gap-6 px-4 pt-8 md:px-8"
       onKeyDown={(event) => {
         if (event.key === "Escape") setOpenKey(null);
       }}

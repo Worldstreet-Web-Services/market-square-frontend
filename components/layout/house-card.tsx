@@ -103,7 +103,7 @@ export function HouseCard({
   const pill =
     "ws-btn-welcome ws-press flex h-[26px] shrink-0 items-center justify-center rounded-full px-4 text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40";
   return (
-    <div className={cn(HOUSE_CARD, "flex h-[112px] w-[427px] items-center gap-4 px-4 py-3")}>
+    <div className={cn(HOUSE_CARD, "flex h-[112px] w-[min(427px,100%)] items-center gap-4 px-4 py-3")}>
       {/* 534:16957 / 545:47657 — 81x88 at a 20 radius, and it CLIPS: the
           artwork inside it is 132 wide against the frame's 81, so the picture
           is cropped by the frame rather than squashed into it. */}

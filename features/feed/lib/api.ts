@@ -28,12 +28,14 @@ export async function fetchFeed(
   cursor?: string,
   topics: string[] = [],
   /** One discussion. Replaces the lane rather than narrowing it. */
-  hashtag?: string
+  hashtag?: string,
+  /** The timeline pages at 30; the head check that looks for new posts asks for fewer. */
+  limit = 30
 ) {
   return FeedPageSchema.parse(
     await msApi.get("/feed", {
       lane,
-      limit: 30,
+      limit,
       cursor,
       ...(topics.length > 0 ? { topics: topics.join(",") } : {}),
       ...(hashtag ? { hashtag } : {}),

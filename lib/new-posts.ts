@@ -54,14 +54,23 @@ export function isOwnItem(item: FeedLike, meId: string | null): boolean {
 export function splitHeld<T extends FeedLike>(
   items: readonly T[],
   anchorId: string | null,
-  meId: string | null
+  meId: string | null,
+  /**
+   * Every item id the reader has ALREADY been shown. On a ranked lane a
+   * refetch reshuffles: cards the reader scrolled past come back above the
+   * anchor, and counting them said "4 new posts" to somebody who had seen all
+   * four. A card is new only if it has never been on their screen; a head
+   * with nothing new in it is a reshuffle, and a reshuffle holds nothing.
+   */
+  seen: ReadonlySet<string> = new Set()
 ): HeldSplit<T> {
   if (!anchorId) return { shown: [...items], held: [] };
   const index = items.findIndex((item) => item.id === anchorId);
   if (index <= 0) return { shown: [...items], held: [] };
   const head = items.slice(0, index);
   const own = head.filter((item) => isOwnItem(item, meId));
-  const held = head.filter((item) => !isOwnItem(item, meId));
+  const held = head.filter((item) => !isOwnItem(item, meId) && !seen.has(item.id));
+  if (held.length === 0) return { shown: [...items], held: [] };
   return { shown: [...own, ...items.slice(index)], held };
 }
 

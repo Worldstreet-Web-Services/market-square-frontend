@@ -70,7 +70,7 @@ export function AccountTabs({
     */
     <div className="flex flex-col gap-2">
       {/* 468:35621 — 32 of left inset, 32 between. */}
-      <div className="flex items-center gap-8 overflow-x-auto pl-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex items-center gap-8 overflow-x-auto pl-4 md:pl-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab) => {
           const active = tab.value === value;
           return (

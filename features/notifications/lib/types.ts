@@ -16,6 +16,11 @@ export const NotificationKindSchema = z
     // there is one; a person who is both the thread's author and named in
     // the same reply gets ONE row, the comment_reply — the service dedupes.
     "mention",
+    // Somebody liked a comment of yours — to the comment's author only, one
+    // row per (actor, comment) that a re-like replaces. Built on the service
+    // (PR #199), not on the served spec yet; listed ahead of it, per the
+    // rule above, so it never lands as "followed you".
+    "comment_like",
     "repost",
     "bookmark",
     "ticket_purchased",

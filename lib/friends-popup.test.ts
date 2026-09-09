@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { friendsMomentCopy, pickFriendsMoment, type FriendsMomentInput } from "./friends-popup.ts";
+import { friendsMomentCopy, pickFriendsMoment, pickFriendsMoments, type FriendsMomentInput } from "./friends-popup.ts";
 
 const fola = { id: "u2", username: "fola", displayName: "Fola", avatarUrl: null };
 const row = (over: Partial<FriendsMomentInput> & { kind: string }): FriendsMomentInput => ({
@@ -58,4 +58,22 @@ test("the copy follows the file for friends and changes the button on a mutual w
   const wink = friendsMomentCopy({ kind: "wink", actor: fola, notificationIds: [] }, "Fola");
   assert.equal(wink.primary, "wink-back");
   assert.equal(wink.faces, "theirs");
+});
+
+test("the fan is one card per person, best moment first, rows of the family gathered", () => {
+  const ade = { id: "u3", username: "ade", displayName: "Ade", avatarUrl: null };
+  const fan = pickFriendsMoments([
+    row({ id: "w1", kind: "wink", actor: ade }),
+    row({ id: "f1", kind: "follow", actor: { ...fola, isFollowing: true } }),
+    row({ id: "w2", kind: "wink", actor: { ...fola, winkedByMe: true } }),
+    row({ id: "f2", kind: "follow", actor: { ...ade, isFollowing: false } }),
+  ]);
+  assert.deepEqual(
+    fan.map((m) => [m.actor.id, m.kind, m.notificationIds]),
+    [
+      ["u2", "friends", ["f1"]],
+      ["u3", "wink", ["w1"]],
+    ]
+  );
+  assert.equal(pickFriendsMoment([]), null);
 });

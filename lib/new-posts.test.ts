@@ -76,3 +76,24 @@ test("singular and plural", () => {
   assert.equal(newPostsLabel(1), "1 new post");
   assert.equal(newPostsLabel(4), "4 new posts");
 });
+
+test("a reshuffle of cards the reader has already seen holds nothing and counts nothing", () => {
+  const a = { id: "a", post: { id: "pa", authorId: "u1", author: person("u1") } };
+  const b = { id: "b", post: { id: "pb", authorId: "u2", author: person("u2") } };
+  const c = { id: "c", post: { id: "pc", authorId: "u3", author: person("u3") } };
+  // The reader saw a, b, c with `a` at the head; the lane re-ranked to c, b, a.
+  const seen = new Set(["a", "b", "c"]);
+  const split = splitHeld([c, b, a], "a", null, seen);
+  assert.deepEqual(split.held, []);
+  assert.deepEqual(split.shown.map((i) => i.id), ["c", "b", "a"]);
+  assert.equal(countNew(split.held, split.shown), 0);
+});
+
+test("only cards never shown are held above the anchor", () => {
+  const a = { id: "a", post: { id: "pa", authorId: "u1", author: person("u1") } };
+  const b = { id: "b", post: { id: "pb", authorId: "u2", author: person("u2") } };
+  const fresh = { id: "n", post: { id: "pn", authorId: "u4", author: person("u4") } };
+  const split = splitHeld([fresh, b, a], "a", null, new Set(["a", "b"]));
+  assert.deepEqual(split.held.map((i) => i.id), ["n"]);
+  assert.equal(countNew(split.held, split.shown), 1);
+});

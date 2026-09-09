@@ -9,7 +9,8 @@ import { IconFriendsClose, IconProfileWink } from "@/components/ui/profile-icons
 import { useFollow, useWink } from "@/features/profile";
 import { useMarkNotificationsRead, useNotifications } from "@/features/notifications";
 import { useOpenConversation } from "@/features/messages";
-import { friendsMomentCopy, pickFriendsMoment, type FriendsMoment } from "@/lib/friends-popup";
+import { friendsMomentCopy, pickFriendsMoments, type FriendsMoment } from "@/lib/friends-popup";
+import { useSwipeCard } from "@/hooks/use-swipe-card";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -60,57 +61,72 @@ export function FriendsPopup() {
   const me = useMe();
   const notifications = useNotifications("social");
   const markRead = useMarkNotificationsRead();
-  const [moment, setMoment] = useState<FriendsMoment | null>(null);
+  const [fan, setFan] = useState<FriendsMoment[]>([]);
+  const [index, setIndex] = useState(0);
   // Rows this session has already put in front of the reader, so a poll
   // that returns them again (before the read lands) cannot re-open them.
   const shown = useRef(new Set<string>());
 
   /*
-    ON ENTERING, AND WHILE THEY ARE HERE. The first answer from the social
-    list shows whatever arrived since they were last in; every later answer
-    (the list polls every 30s) is checked again for rows this session has not
-    shown, so a wink or a follow-back that lands while they are reading
-    appears then, not on their next sign-in. One popup at a time: a second
-    moment waits until the first is closed, and is picked up on the next
-    answer. Realtime delivery through the ws-gateway would cut the 30s; the
-    rule here does not change when it does.
+    ON ENTERING, AND WHILE THEY ARE HERE — AS ONE FAN, NOT ONE POPUP EACH.
+    The first answer from the social list gathers everything that arrived
+    since they were last in into a single popup: the front card is the best
+    moment, the rest peek behind it and the reader swipes through — "so it
+    will not just be popping up every time, they can see these are them".
+    Every later answer (the list polls every 30s) is checked for people this
+    session has not shown, so a wink or a follow-back that lands while they
+    are reading appears then. A new fan waits until the open one is closed.
   */
   useEffect(() => {
-    if (moment || !notifications.data) return;
+    if (fan.length > 0 || !notifications.data) return;
     const rows = notifications.data.pages
       .flatMap((page) => page.items)
       .filter((row) => !shown.current.has(row.id));
-    const next = pickFriendsMoment(
+    const next = pickFriendsMoments(
       rows.map((row) => ({ id: row.id, kind: row.kind, readAt: row.readAt, actor: row.actor }))
     );
-    if (!next) return;
-    for (const id of next.notificationIds) shown.current.add(id);
-    setMoment(next);
-  }, [notifications.data, moment]);
+    if (next.length === 0) return;
+    for (const moment of next) for (const id of moment.notificationIds) shown.current.add(id);
+    setFan(next);
+    setIndex(0);
+  }, [notifications.data, fan.length]);
 
-  if (!moment || !me.data) return null;
-  return (
-    <FriendsDialog
-      moment={moment}
-      viewer={me.data}
-      onClose={() => {
-        setMoment(null);
-        markRead.mutate(moment.notificationIds);
-      }}
-    />
-  );
+  if (fan.length === 0 || !me.data) return null;
+
+  // Closing reads what was SEEN — the cards up to the front one — and leaves
+  // the rest unread, so a fan closed halfway comes back next time rather than
+  // being silently lost.
+  const close = () => {
+    const seen = fan.slice(0, index + 1).flatMap((moment) => moment.notificationIds);
+    setFan([]);
+    setIndex(0);
+    if (seen.length > 0) markRead.mutate(seen);
+  };
+  const next = () => {
+    if (index + 1 >= fan.length) close();
+    else setIndex(index + 1);
+  };
+
+  return <FriendsDialog fan={fan} index={index} viewer={me.data} onNext={next} onClose={close} />;
 }
 
 function FriendsDialog({
-  moment,
+  fan,
+  index,
   viewer,
+  onNext,
   onClose,
 }: {
-  moment: FriendsMoment;
+  fan: FriendsMoment[];
+  index: number;
   viewer: Profile;
+  onNext: () => void;
   onClose: () => void;
 }) {
   const router = useRouter();
+  const moment = fan[index]!;
+  const behind = fan.slice(index + 1, index + 3);
+  const remaining = fan.length - index - 1;
   const other = moment.actor as unknown as Profile;
   const name = other.displayName || other.username;
   const copy = friendsMomentCopy(moment, name);
@@ -123,17 +139,25 @@ function FriendsDialog({
     dialog.current?.focus();
   }, []);
 
+  /*
+    THE FRONT CARD SWIPES — the deck's own gesture (`useSwipeCard`), either
+    direction meaning "next", because here a swipe is turning a page rather
+    than passing judgement. A tap on the card's actions advances too: once you
+    have winked or followed back, that card has done its job.
+  */
+  const swipe = useSwipeCard({ width: 139.9, onDecide: () => onNext() });
+
   const startGisting = () => {
     onClose();
     chat.mutate(other.id, { onSuccess: () => router.push("/messages") });
   };
   const winkBack = () => {
     wink.send();
-    onClose();
+    onNext();
   };
   const followBack = () => {
     follow.mutate(true);
-    onClose();
+    onNext();
   };
 
   const primaryLabel =
@@ -187,6 +211,17 @@ function FriendsDialog({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/friends/hug.svg" alt="" aria-hidden className="absolute" style={{ left: 159, top: 43, width: 124, height: 107 }} />
 
+        {/* How many more are in the fan — beside the close, only when there
+            are any. Not in the file, which draws one person. */}
+        {remaining > 0 && (
+          <span
+            className="ws-glass-clear absolute flex h-[26px] items-center rounded-full px-3 text-[11px] font-bold leading-none text-white"
+            style={{ left: 375 - 12 - 78, top: 33 }}
+          >
+            {remaining} more
+          </span>
+        )}
+
         {/* 647:16667 — the close disc. */}
         <button
           type="button"
@@ -200,20 +235,64 @@ function FriendsDialog({
 
         {/* The portraits — 647:16646 (you, left, -7.35°) and 647:16642 (them,
             right, +9.02°). A first wink shows theirs alone, centred. */}
-        {copy.faces === "both" ? (
-          <>
-            <div className={card} style={{ left: 93.8, top: 155.2, width: 136.6, height: 145.6, transform: "rotate(-7.35deg)" }}>
-              {face(viewer, 146)}
-            </div>
-            <div className={card} style={{ left: 207.6, top: 155.2, width: 139.9, height: 148.5, transform: "rotate(9.02deg)" }}>
-              {face(other, 149)}
-            </div>
-          </>
-        ) : (
-          <div className={card} style={{ left: 150.6, top: 155.2, width: 139.9, height: 148.5, transform: "rotate(9.02deg)" }}>
-            {face(other, 149)}
-          </div>
-        )}
+        {/* THE FAN. The people still to come peek out behind the other
+            person's card, each a step further right and a few degrees more
+            turned, a shade smaller — the friends deck's own arrangement at
+            the popup's scale. Not in the file, which draws one person. */}
+        {(() => {
+          const otherLeft = copy.faces === "both" ? 207.6 : 150.6;
+          return (
+            <>
+              {behind.map((peek, depth) => {
+                const person = peek.actor as unknown as Profile;
+                const step = depth + 1;
+                return (
+                  <div
+                    key={person.id}
+                    aria-hidden
+                    className={card}
+                    style={{
+                      left: otherLeft,
+                      top: 155.2,
+                      width: 139.9,
+                      height: 148.5,
+                      zIndex: 5 - step,
+                      transform: `translate(${step * 14}px, ${-step * 6}px) rotate(${9.02 + step * 5}deg) scale(${1 - step * 0.05})`,
+                      opacity: 1 - step * 0.25,
+                    }}
+                  >
+                    {face(person, 149)}
+                  </div>
+                );
+              })}
+              {copy.faces === "both" && (
+                <div className={card} style={{ left: 93.8, top: 155.2, width: 136.6, height: 145.6, transform: "rotate(-7.35deg)", zIndex: 6 }}>
+                  {face(viewer, 146)}
+                </div>
+              )}
+              <div
+                {...(fan.length > 1 ? swipe.handlers : {})}
+                aria-label={remaining > 0 ? `${name} — swipe for the next` : name}
+                className={cn(
+                  card,
+                  fan.length > 1 && "touch-pan-y cursor-grab select-none active:cursor-grabbing",
+                  swipe.dragging ? "transition-none" : "transition-all duration-300 motion-reduce:transition-none"
+                )}
+                style={{
+                  left: otherLeft,
+                  top: 155.2,
+                  width: 139.9,
+                  height: 148.5,
+                  zIndex: 7,
+                  transform: `${swipe.transform} rotate(9.02deg)`,
+                  opacity: swipe.committing ? 0 : 1,
+                }}
+              >
+                {face(other, 149)}
+              </div>
+            </>
+          );
+        })()}
 
         {/* 647:16649 — the two lines, run for run. */}
         <p
