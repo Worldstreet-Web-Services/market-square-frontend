@@ -6,8 +6,7 @@ import {
   groupThread,
   locateComment,
   patchCommentIn,
-  replyParentOf,
-  replyPrefill,
+  threadOf,
   type ThreadComment,
 } from "./comment-thread.ts";
 
@@ -37,16 +36,17 @@ test("liking twice counts once, and an unlike never goes below zero", () => {
   assert.equal(applyCommentLike(lagging, false).likeCount, 0);
 });
 
-test("a reply to a reply files under the top-level comment", () => {
-  assert.equal(replyParentOf({ id: "top", parentId: null }), "top");
-  assert.equal(replyParentOf({ id: "reply", parentId: "top" }), "top");
+test("a reply lands in the tapped comment's thread", () => {
+  assert.equal(threadOf({ id: "top", parentId: null }), "top");
+  assert.equal(threadOf({ id: "reply", parentId: "top" }), "top");
 });
 
-test("the reply prefill is the handle and a space, or nothing", () => {
-  assert.equal(replyPrefill("ada"), "@ada ");
-  assert.equal(replyPrefill("  ada "), "@ada ");
-  assert.equal(replyPrefill(null), "");
-  assert.equal(replyPrefill(""), "");
+test("an unknown likedByMe toggles as a like, not an unlike", () => {
+  const anon = { ...at("2026-09-09T00:00:00Z", "c1"), likeCount: 2, likedByMe: undefined };
+  const liked = applyCommentLike(anon, true);
+  assert.equal(liked.likeCount, 3);
+  assert.equal(liked.likedByMe, true);
+  assert.equal(applyCommentLike(anon, false), anon);
 });
 
 test("top-level newest first, replies oldest first", () => {

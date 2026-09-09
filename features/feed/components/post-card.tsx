@@ -13,7 +13,7 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { PostText } from "@/components/ui/post-text";
 import { CoinChips } from "@/components/ui/coin-chips";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
-import { useRecordView } from "@/features/feed/hooks/use-record-view";
+import { reportView, useRecordView } from "@/features/feed/hooks/use-record-view";
 import { useGate } from "@/hooks/use-gate";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -582,8 +582,10 @@ export function PostCard({
   // an inert button would announce a control to a screen reader that does
   // nothing when activated.
   const Tag = onOpenMedia ? "button" : "div";
-  // Recorded on dwell, not on mount: see useRecordView.
-  const viewRef = useRecordView(post.id);
+  // Recorded on dwell, not on mount: see useRecordView. A CLIP is the
+  // exception — its view is the play, reported by the player below.
+  const video = isVideoPost(post);
+  const viewRef = useRecordView(post.id, !video);
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
   // Share the POST, not its author's profile — a reader following the link
@@ -771,7 +773,12 @@ export function PostCard({
               className="ws-press relative block w-fit max-w-full cursor-pointer overflow-hidden rounded-xl"
               style={{ viewTransitionName: `media-${post.id}` }}
             >
-              <InlineVideo fit src={post.mediaUrl} poster={post.thumbnailUrl} />
+              <InlineVideo
+                fit
+                src={post.mediaUrl}
+                poster={post.thumbnailUrl}
+                onFirstPlay={() => reportView(post.id)}
+              />
               <button
                 type="button"
                 onClick={(event) => {
@@ -785,7 +792,12 @@ export function PostCard({
               </button>
             </div>
           ) : (
-            <InlineVideo fit src={post.mediaUrl} poster={post.thumbnailUrl} />
+            <InlineVideo
+              fit
+              src={post.mediaUrl}
+              poster={post.thumbnailUrl}
+              onFirstPlay={() => reportView(post.id)}
+            />
           )
         ) : (
           // A photo expands too. It is contained in the card, so a tall shot
@@ -914,7 +926,11 @@ export function PostCard({
               file's own geometry allows: its items are hug-width. */}
           {post.viewCount !== undefined && (
             <CountAction
-              label={`${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`}
+              label={
+                video
+                  ? `${post.viewCount} ${post.viewCount === 1 ? "play" : "plays"}`
+                  : `${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`
+              }
               count={post.viewCount}
             >
               <IconMsChart className="h-6 w-6" />
@@ -934,24 +950,39 @@ export function PostCard({
             </GlyphAction>
             {/* Arkmark. While the endpoint is absent the control goes quiet
                 rather than pretending the save landed. */}
-            <GlyphAction
-              label={
-                bookmark.unavailable
-                  ? "Arkmarks aren't available yet"
-                  : post.bookmarkedByMe
-                    ? "Remove from Arkmarks"
-                    : "Save to Arkmarks"
-              }
-              active={post.bookmarkedByMe}
-              disabled={bookmark.unavailable}
-              onClick={() =>
-                gate(() =>
-                  bookmark.mutate({ postId: post.id, bookmark: !post.bookmarkedByMe })
-                )
-              }
-            >
-              <IconMsBookmark className="h-6 w-6" filled={post.bookmarkedByMe} />
-            </GlyphAction>
+            {/* The glyph, then HOW MANY saved it — a number only, in the
+                pill's own 12/16 tally style, drawn only when the payload
+                carries `bookmarkCount`. Who saved it is nobody's business but
+                theirs; the count is the post's. Asked for by name ("number of
+                arkmark, no need to know who"). */}
+            <span className="flex items-center gap-0.5 md:gap-[2px]">
+              <GlyphAction
+                label={
+                  bookmark.unavailable
+                    ? "Arkmarks aren't available yet"
+                    : post.bookmarkedByMe
+                      ? "Remove from Arkmarks"
+                      : "Save to Arkmarks"
+                }
+                active={post.bookmarkedByMe}
+                disabled={bookmark.unavailable}
+                onClick={() =>
+                  gate(() =>
+                    bookmark.mutate({ postId: post.id, bookmark: !post.bookmarkedByMe })
+                  )
+                }
+              >
+                <IconMsBookmark className="h-6 w-6" filled={post.bookmarkedByMe} />
+              </GlyphAction>
+              {post.bookmarkCount !== undefined && (
+                <span
+                  aria-label={`${post.bookmarkCount} ${post.bookmarkCount === 1 ? "Arkmark" : "Arkmarks"}`}
+                  className="tnum text-[12px] leading-4 text-white"
+                >
+                  {formatCount(post.bookmarkCount)}
+                </span>
+              )}
+            </span>
           </div>
           {/* `mine` gates Edit and Delete — the service refuses both for
               anybody but the author, so offering them elsewhere would be a

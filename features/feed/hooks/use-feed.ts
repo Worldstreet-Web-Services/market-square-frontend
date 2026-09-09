@@ -337,10 +337,16 @@ export function useBookmarkPost() {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
 
+  // The count moves with the flag — optimistically, and only when the
+  // payload carries one, so a post without a count never gains a fabricated
+  // "1". `reconcilePost` on settle replaces both with the service's truth.
   const applyBookmark = (postId: string, bookmarked: boolean) =>
     patchPostEverywhere(queryClient, postId, (post) => ({
       ...post,
       bookmarkedByMe: bookmarked,
+      ...(post.bookmarkCount !== undefined && post.bookmarkedByMe !== bookmarked
+        ? { bookmarkCount: Math.max(0, post.bookmarkCount + (bookmarked ? 1 : -1)) }
+        : {}),
     }));
 
   const mutation = useMutation({

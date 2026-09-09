@@ -21,7 +21,8 @@ export interface ThreadComment {
   createdAt: string;
   replyCount: number;
   likeCount: number;
-  likedByMe: boolean;
+  /** Undefined for an anonymous reader — unknown, not false. */
+  likedByMe?: boolean | undefined;
 }
 
 /**
@@ -33,7 +34,8 @@ export interface ThreadComment {
  * "-1".
  */
 export function applyCommentLike<T extends ThreadComment>(comment: T, like: boolean): T {
-  if (comment.likedByMe === like) return comment;
+  // Unknown reads as not-yet-liked for the toggle: a tap from that state is a like.
+  if ((comment.likedByMe ?? false) === like) return comment;
   return {
     ...comment,
     likedByMe: like,
@@ -42,24 +44,13 @@ export function applyCommentLike<T extends ThreadComment>(comment: T, like: bool
 }
 
 /**
- * Where a new reply files.
- *
- * Replying to a top-level comment files under it. Replying to a REPLY files
- * under that reply's own parent, so the tree stays one level deep — the
- * person answered is named in the text instead (see `replyPrefill`).
+ * The thread a reply lands in, for the optimistic bump and the refetch: the
+ * tapped comment's own thread when it is a reply, itself when top-level. The
+ * SERVER decides the filing (it takes the tapped id and records who was
+ * answered); this only names the thread the client should expect to change.
  */
-export function replyParentOf(target: Pick<ThreadComment, "id" | "parentId">): string {
+export function threadOf(target: Pick<ThreadComment, "id" | "parentId">): string {
   return target.parentId ?? target.id;
-}
-
-/**
- * The composer's opening text for a reply: the handle, then a space, so the
- * reader's own words follow it without the cursor having to move. No handle
- * means an unhydrated author; the prefill is then empty rather than "@ ".
- */
-export function replyPrefill(username: string | null | undefined): string {
-  const handle = (username ?? "").trim();
-  return handle ? `@${handle} ` : "";
 }
 
 /**

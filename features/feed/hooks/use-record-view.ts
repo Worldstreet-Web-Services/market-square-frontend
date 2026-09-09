@@ -29,6 +29,32 @@ const DWELL_MS = 1000;
  */
 const reported = new Set<string>();
 
+/**
+ * Report one view, once per tab. The dwell observer below calls it for a
+ * post; a CLIP calls it the moment it actually starts playing, so a video's
+ * number means "how many played it" and not "how many scrolled past it".
+ * The service still deduplicates per viewer.
+ */
+export function reportView(postId: string) {
+  if (reported.has(postId)) return;
+  // Optimistic: mark before the request, so a slow network cannot let it
+  // fire twice for one card.
+  reported.add(postId);
+  // A failed view is not worth telling anybody about. It is not an action
+  // they took, there is nothing for them to retry, and an error toast for a
+  // number they did not ask about is noise. It also must never reject
+  // unhandled.
+  void msApi.post(`/posts/${postId}/views`, {}).catch(() => {
+    // Let it be retried if the card comes back.
+    reported.delete(postId);
+  });
+}
+
+/**
+ * `enabled` is false for a clip: its view is the play, reported by the
+ * player through `reportView`, and a clip that autoplayed muted for a second
+ * while the reader scrolled past is not a play.
+ */
 export function useRecordView(postId: string, enabled = true) {
   const ref = useRef<HTMLElement | null>(null);
 
@@ -40,20 +66,7 @@ export function useRecordView(postId: string, enabled = true) {
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          timer = setTimeout(() => {
-            if (reported.has(postId)) return;
-            // Optimistic: mark before the request, so a slow network cannot
-            // let the timer fire twice for one card.
-            reported.add(postId);
-            // A failed view is not worth telling anybody about. It is not an
-            // action they took, there is nothing for them to retry, and an
-            // error toast for a number they did not ask about is noise. It
-            // also must never reject unhandled.
-            void msApi.post(`/posts/${postId}/views`, {}).catch(() => {
-              // Let it be retried if the card comes back.
-              reported.delete(postId);
-            });
-          }, DWELL_MS);
+          timer = setTimeout(() => reportView(postId), DWELL_MS);
         } else if (timer) {
           // Left before the dwell elapsed: scrolled past, not watched.
           clearTimeout(timer);

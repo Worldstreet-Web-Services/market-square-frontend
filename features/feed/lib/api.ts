@@ -120,9 +120,10 @@ export async function fetchComments(postId: string, cursor?: string) {
 }
 
 /**
- * A comment, or a REPLY when `parentId` names the top-level comment it
- * answers. `parentId` is only sent when present, so a backend that has not
- * shipped threading receives exactly the body it always did.
+ * A comment, or a REPLY when `parentId` names the comment the reader TAPPED
+ * Reply on — top-level or reply alike; the service files it under the
+ * top-level parent and records who was answered. `parentId` is only sent
+ * when present.
  */
 export async function addComment(postId: string, text: string, parentId?: string | null) {
   return CommentSchema.parse(
@@ -130,20 +131,25 @@ export async function addComment(postId: string, text: string, parentId?: string
   );
 }
 
-/** `GET /comments/:id/replies` — a thread's replies, oldest first. Asked for; 404 until it ships. */
+/** `GET /comments/:id` — one comment, for a permalink opened ON it (`?comment=`). */
+export async function fetchComment(commentId: string) {
+  return CommentSchema.parse(await msApi.get(`/comments/${commentId}`));
+}
+
+/** `GET /comments/:id/replies` — a thread's replies, oldest first. */
 export async function fetchReplies(commentId: string, cursor?: string) {
   return CommentsPageSchema.parse(
     await msApi.get(`/comments/${commentId}/replies`, cursor ? { cursor } : {})
   );
 }
 
-/** `POST|DELETE /comments/:id/like`. Asked for; 404 until it ships. */
+/** `POST|DELETE /comments/:id/like` — idempotent both ways. */
 export async function likeComment(commentId: string, like: boolean) {
   const path = `/comments/${commentId}/like`;
   return CommentLikeResultSchema.parse(like ? await msApi.post(path) : await msApi.del(path));
 }
 
-/** `DELETE /comments/:id` — the author's own. Asked for; 404 until it ships. */
+/** `DELETE /comments/:id` — the comment's author, or the post's. */
 export async function deleteComment(commentId: string) {
   await msApi.del(`/comments/${commentId}`);
 }

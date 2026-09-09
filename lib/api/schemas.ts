@@ -340,6 +340,14 @@ export const PostSchema = z.object({
    * is a lie the reader cannot detect.
    */
   viewCount: z.number().optional(),
+  /**
+   * HOW MANY PEOPLE ARKMARKED IT — on the contract beside `viewCount`, and
+   * like it a number only: WHO saved a post is nobody's business but theirs
+   * (`GET /me/bookmarks` is the reader's own list and there is no route for
+   * anyone else's). Optional for the same reason `viewCount` is — a payload
+   * without it draws no count, never a fabricated "0".
+   */
+  bookmarkCount: z.number().optional(),
   repostedByMe: z.boolean().optional().default(false),
   // The quoted original, hydrated one level deep only — a quote of a quote
   // shows the inner card's text, never a third nested frame. When the original
