@@ -56,35 +56,44 @@ export interface FriendsMoment {
   notificationIds: string[];
 }
 
-export function pickFriendsMoment(notifications: FriendsMomentInput[]): FriendsMoment | null {
-  const unread = notifications.filter((n) => n.readAt === null && n.actor !== null);
-  const idsFor = (actorId: string, kinds: string[]) =>
-    unread.filter((n) => n.actor!.id === actorId && kinds.includes(n.kind)).map((n) => n.id);
-
-  const followBack = unread.find((n) => n.kind === "follow" && n.actor!.isFollowing === true);
-  if (followBack) {
-    return {
-      kind: "friends",
-      actor: followBack.actor!,
-      notificationIds: idsFor(followBack.actor!.id, ["follow"]),
-    };
-  }
-
-  const mutualWink = unread.find((n) => n.kind === "wink" && n.actor!.winkedByMe === true);
-  if (mutualWink) {
-    return {
-      kind: "mutual-wink",
-      actor: mutualWink.actor!,
-      notificationIds: idsFor(mutualWink.actor!.id, ["wink"]),
-    };
-  }
-
-  const wink = unread.find((n) => n.kind === "wink");
-  if (wink) {
-    return { kind: "wink", actor: wink.actor!, notificationIds: idsFor(wink.actor!.id, ["wink"]) };
-  }
-
+/** What one unread row is worth, or null when it is not a moment at all. */
+function momentKindOf(row: FriendsMomentInput): FriendsMomentKind | null {
+  if (row.kind === "follow") return row.actor!.isFollowing === true ? "friends" : null;
+  if (row.kind === "wink") return row.actor!.winkedByMe === true ? "mutual-wink" : "wink";
   return null;
+}
+
+const RANK: Record<FriendsMomentKind, number> = { friends: 0, "mutual-wink": 1, wink: 2 };
+
+/**
+ * EVERY moment worth showing, ONE PER PERSON, best first — the fan.
+ *
+ * A person can be in the list more than once (a follow and a wink, or two
+ * follows); they get one card, carrying their best moment and every unread
+ * row of that family, so closing the card reads them all. Between people the
+ * order is friends, then mutual winks, then first winks, and within a rank
+ * the service's own order (newest first).
+ */
+export function pickFriendsMoments(notifications: FriendsMomentInput[]): FriendsMoment[] {
+  const unread = notifications.filter((n) => n.readAt === null && n.actor !== null);
+  const byPerson = new Map<string, FriendsMoment>();
+  for (const row of unread) {
+    const kind = momentKindOf(row);
+    if (!kind) continue;
+    const actor = row.actor!;
+    const family = kind === "friends" ? ["follow"] : ["wink"];
+    const ids = unread
+      .filter((n) => n.actor!.id === actor.id && family.includes(n.kind))
+      .map((n) => n.id);
+    const held = byPerson.get(actor.id);
+    if (!held || RANK[kind] < RANK[held.kind]) byPerson.set(actor.id, { kind, actor, notificationIds: ids });
+  }
+  return [...byPerson.values()].sort((a, b) => RANK[a.kind] - RANK[b.kind]);
+}
+
+/** The one moment to lead with — the front of the fan. */
+export function pickFriendsMoment(notifications: FriendsMomentInput[]): FriendsMoment | null {
+  return pickFriendsMoments(notifications)[0] ?? null;
 }
 
 export interface FriendsMomentCopy {
