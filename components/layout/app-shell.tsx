@@ -1016,8 +1016,12 @@ function Breadcrumb({ pathname }: { pathname: string }) {
       </nav>
 
       {/* NODE 225:3641 puts two more controls between the crumb and the
-          account cluster: a search field and the reader's current location. */}
-      <TopBarSearch />
+          account cluster: a search field and the reader's current location.
+          NOT ON A PROFILE: the profile frames (545:47571 and its own-profile
+          twin) carry no search in the bar, and ogazboiz asked for it gone
+          there — "remove that search from that top". It stays on the routes
+          whose frames draw it. */}
+      {!pathname.startsWith("/u/") && <TopBarSearch />}
       <TopBarLocation />
 
       <div className="ml-auto shrink-0">
