@@ -131,7 +131,17 @@ export function ProfileGiftGallery() {
 
             {/* The footer row: price left, count and the send control right,
                 both inset 8 from the tile and 12 under the plate. */}
-            <div className="flex h-4 items-center justify-between px-1 pb-1 pt-3">
+            {/*
+              543:42115 / 543:42196 — the price and the count are a 16-tall
+              row 12 under the plate, 8 in from the tile's sides and 8 above
+              its foot (the tile's own 4 plus 4 here). It shipped as a 16px
+              box carrying 12 + 4 of PADDING, which under border-box sizing
+              leaves no room for the text at all: both labels overflowed the
+              row and sat hard against the plate, and the space the file
+              draws around them was gone. Margins keep the row 16 and the
+              gaps outside it.
+            */}
+            <div className="mb-1 mt-3 flex h-4 items-center justify-between px-1">
               <span className="flex items-center gap-1">
                 <span className="tnum text-[12px] font-bold leading-4 text-white">
                   {gift.priceKash}
