@@ -28,6 +28,15 @@ import type { Mention } from "@/features/feed/lib/types";
  * resolves typed handles too and structured ones win on ambiguity, so sending
  * exactly what was picked is the whole value of the picker.
  */
+/** The field's rect in viewport coordinates, as last measured. */
+export interface FieldRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+}
+
 export function useMentionTyping({
   max,
   field,
@@ -45,12 +54,33 @@ export function useMentionTyping({
   const [picked, setPicked] = useState<Mention[]>([]);
   const results = useMentionSearch(token?.query ?? "", token !== null);
 
+  /*
+    WHERE THE FIELD IS, measured in the EVENT that opens the list rather than
+    in the picker's render or an effect: React forbids reading a ref during
+    render and setting state inside an effect, and both are what a "measure
+    on mount" picker does. A keystroke is an event, so the rect is read here
+    and stored; the picker then places itself purely from it. Typing does not
+    move the field, and resize re-measures through `remeasure`.
+  */
+  const [anchor, setAnchor] = useState<FieldRect | null>(null);
+  const measureField = (): FieldRect | null => {
+    const node = field.current;
+    if (!node) return null;
+    const rect = node.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width };
+  };
+
   /** The field changed: keep the text and re-read the caret for a token. */
   const update = (value: string, caret: number | null) => {
     const next = value.slice(0, max);
     setText(next);
-    setToken(mentionTokenAt(next, caret ?? next.length));
+    const found = mentionTokenAt(next, caret ?? next.length);
+    setToken(found);
+    if (found) setAnchor(measureField());
   };
+
+  /** The window changed size: the field may have moved. Event handlers only. */
+  const remeasure = () => setAnchor(measureField());
 
   /** A pick from the list: write "@handle ", remember the object, land the caret. */
   const pick = (mention: Mention) => {
@@ -83,7 +113,7 @@ export function useMentionTyping({
   /** Set the text from outside (a tool that inserts an emoji or a symbol). */
   const replace = (value: string, caret: number | null = null) => update(value, caret);
 
-  return { text, update, replace, token, results, pick, dismiss, reset, mentionsFor };
+  return { text, update, replace, token, anchor, remeasure, results, pick, dismiss, reset, mentionsFor, field };
 }
 
 export type MentionTyping = ReturnType<typeof useMentionTyping>;

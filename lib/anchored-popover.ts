@@ -77,3 +77,38 @@ export function anchorBelow({
     top: Math.round(Math.max(margin, trigger.bottom + gap)),
   };
 }
+
+export type AnchoredPlacement =
+  | ({ side: "above" } & AnchorPosition)
+  | ({ side: "below" } & AnchorBelowPosition);
+
+/**
+ * ABOVE by default, BELOW only when there is no room above.
+ *
+ * Every comment field sits at the foot of something — the card's pill at the
+ * bottom of the post, the thread's box at the bottom of its sheet, a composer
+ * near the bottom of a phone — so a list that drops down is clipped or pushed
+ * off-screen. Opening upward is the rule; the one exception is a field near
+ * the TOP of a tall page, where upward would run off the top edge, and there
+ * the list hangs below instead. The decision needs the panel's height, which
+ * only the caller can measure; the rule itself is here so it can be pinned.
+ */
+export function placeAnchored({
+  trigger,
+  width,
+  height,
+  viewport,
+  align,
+  gap = 8,
+  margin = 12,
+}: AnchorInput & {
+  trigger: { left: number; right: number; top: number; bottom: number };
+  /** The panel's rendered (or maximum) height. */
+  height: number;
+}): AnchoredPlacement {
+  const roomAbove = trigger.top - gap - margin;
+  if (roomAbove >= height) {
+    return { side: "above", ...anchorAbove({ trigger, width, viewport, align, gap, margin }) };
+  }
+  return { side: "below", ...anchorBelow({ trigger, width, viewport, align, gap, margin }) };
+}

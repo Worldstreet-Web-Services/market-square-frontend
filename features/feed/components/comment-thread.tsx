@@ -181,9 +181,7 @@ export function CommentBox({
         >
           <IconSend className="h-4 w-4" />
         </button>
-        {typing.token && (
-          <MentionPicker typing={typing} className="absolute left-0 right-0 top-full mt-1" />
-        )}
+        {typing.token && <MentionPicker typing={typing} />}
       </div>
     </div>
   );

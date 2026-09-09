@@ -1,17 +1,50 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
-import type { MentionTyping } from "@/features/feed/hooks/use-mention-typing";
+import { placeAnchored } from "@/lib/anchored-popover";
+import type { FieldRect, MentionTyping } from "@/features/feed/hooks/use-mention-typing";
 
 /**
- * The candidate list under an @-token — the composer's, lifted out so the
- * comment boxes draw the same one. Render it only while `typing.token` is
- * open; the caller decides where it sits (in flow under a textarea, floated
- * under a one-line field).
+ * The candidate list for an @-token — one list for the post composer, the
+ * thread's comment box and the card's inline pill. Render it while
+ * `typing.token` is open.
  *
- * `onMouseDown` prevents the field losing focus before the click lands, which
- * is what made a pick close the list without inserting.
+ * ─── IT OPENS ABOVE THE FIELD, THROUGH A PORTAL ─────────────────────────────
+ * Every field that takes a mention sits at the foot of something: the pill at
+ * the bottom of a post card, the reply box at the bottom of the comments
+ * sheet, the composer near the bottom of a phone. A list that dropped down
+ * from the field was clipped by the sheet's overflow or pushed off-screen.
+ * So it is portalled to the body, fixed in viewport coordinates, and placed
+ * ABOVE the field by `placeAnchored` — flipping below only when the field is
+ * so near the top that the list would run off the top edge. Same mechanics
+ * as the emoji picker (`anchorAbove`) and the profile's more menu.
+ *
+ * Width: the field's own width where the field is wide (the thread box), and
+ * 288 where it is narrow (the card's 220 pill) — never a list narrower than
+ * a name and a handle need.
+ *
+ * Scroll CLOSES it rather than chasing the field — a list drifting away from
+ * the caret reads as a fault — and resize re-places it.
+ *
+ * `onMouseDown` prevents the field losing focus before the click lands,
+ * which is what made a pick close the list without inserting.
  */
+const MIN_W = 288;
+const MAX_H = 256;
+const MARGIN = 12;
+
+function place(anchor: FieldRect, viewport: { width: number; height: number }) {
+  const width = Math.min(anchor.width >= MIN_W ? anchor.width : MIN_W, viewport.width - MARGIN * 2);
+  // Decided against the list's CAP, not its current height, so the side
+  // never flips as "Searching…" turns into rows.
+  return {
+    ...placeAnchored({ trigger: anchor, width, height: MAX_H, viewport, align: "left", margin: MARGIN }),
+    width,
+  };
+}
+
 export function MentionPicker({
   typing,
   className,
@@ -19,12 +52,50 @@ export function MentionPicker({
   typing: MentionTyping;
   className?: string;
 }) {
-  const { results } = typing;
-  return (
+  const { results, anchor } = typing;
+  // Resize re-measures the field (an event, so the hook may read its ref);
+  // scroll closes — a list drifting away from the caret reads as a fault.
+  // Both go through a ref so the subscription is made once, not per keystroke.
+  const latest = useRef(typing);
+  // Written in an effect, never during render — the rule the compiler enforces.
+  useEffect(() => {
+    latest.current = typing;
+  });
+  useEffect(() => {
+    const onResize = () => latest.current.remeasure();
+    const onScroll = () => latest.current.dismiss();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, []);
+
+  // Pure: the rect was measured when the token opened, the viewport is read
+  // here. The list only exists while a token is open, which is client state
+  // set from a keystroke, so `window` is always present.
+  const at =
+    anchor && typeof window !== "undefined"
+      ? place(anchor, { width: window.innerWidth, height: window.innerHeight })
+      : null;
+
+  if (!at) return null;
+
+  return createPortal(
     <div
       role="listbox"
       aria-label="People to mention"
-      className={cn("ws-popover z-30 max-h-64 overflow-y-auto rounded-2xl p-1.5", className)}
+      style={{
+        left: at.left,
+        width: at.width,
+        ...(at.side === "above" ? { bottom: at.bottom } : { top: at.top }),
+      }}
+      className={cn(
+        "ws-popover ws-popover-enter fixed z-[60] max-h-64 overflow-y-auto overscroll-contain rounded-2xl p-1.5",
+        at.side === "above" ? "origin-bottom-left" : "origin-top-left",
+        className
+      )}
     >
       <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-meta">
         People and groups
@@ -54,6 +125,7 @@ export function MentionPicker({
       {results.isSuccess && results.data.items.length === 0 && (
         <p className="px-3 py-3 text-xs text-meta">No matching people or groups.</p>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

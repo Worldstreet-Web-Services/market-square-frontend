@@ -523,11 +523,9 @@ function InlineComment({
           <IconSend className="h-3.5 w-3.5" />
         </button>
       )}
-      {typing.token && (
-        // Floated under the pill rather than in flow: the pill sits in the
-        // actions row and must not push share/Arkmark/more around.
-        <MentionPicker typing={typing} className="absolute left-0 top-full mt-1 w-72" />
-      )}
+      {/* Portalled and placed above the pill by the picker itself — the pill
+          sits at the foot of the card, where a list dropping down is clipped. */}
+      {typing.token && <MentionPicker typing={typing} />}
     </div>
   );
 }

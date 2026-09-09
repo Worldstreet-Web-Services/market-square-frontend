@@ -289,7 +289,7 @@ export function Composer({
           style={{ maxHeight: "38dvh" }}
         />
 
-        {typing.token && <MentionPicker typing={typing} className="relative mb-2" />}
+        {typing.token && <MentionPicker typing={typing} />}
 
         <input
           ref={fileInput}

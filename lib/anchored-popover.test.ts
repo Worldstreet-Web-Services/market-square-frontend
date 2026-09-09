@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { anchorAbove, anchorBelow } from "./anchored-popover.ts";
+import { anchorAbove, anchorBelow, placeAnchored } from "./anchored-popover.ts";
 
 const viewport = { width: 1200, height: 800 };
 
@@ -82,5 +82,31 @@ describe("anchorBelow", () => {
     });
     assert.equal(at.left, 1440 - 231 - 12);
     assert.equal(at.top, 38);
+  });
+});
+
+describe("placeAnchored", () => {
+  const viewport = { width: 1440, height: 900 };
+  const field = { left: 100, right: 700, top: 800, bottom: 840 };
+
+  it("opens above when the panel fits above the field", () => {
+    const at = placeAnchored({ trigger: field, width: 600, height: 256, viewport, align: "left" });
+    assert.equal(at.side, "above");
+    assert.deepEqual(at, { side: "above", left: 100, bottom: 900 - 800 + 8 });
+  });
+
+  it("flips below when the space above is less than the panel's height", () => {
+    const high = { left: 100, right: 700, top: 120, bottom: 160 };
+    const at = placeAnchored({ trigger: high, width: 600, height: 256, viewport, align: "left" });
+    assert.equal(at.side, "below");
+    assert.deepEqual(at, { side: "below", left: 100, top: 168 });
+  });
+
+  it("counts the gap and the margin as space the panel cannot use", () => {
+    // 256 of panel needs 256 + 8 gap + 12 margin = 276 above the field's top.
+    const exact = { left: 0, right: 300, top: 276, bottom: 300 };
+    assert.equal(placeAnchored({ trigger: exact, width: 300, height: 256, viewport, align: "left" }).side, "above");
+    const short = { left: 0, right: 300, top: 275, bottom: 300 };
+    assert.equal(placeAnchored({ trigger: short, width: 300, height: 256, viewport, align: "left" }).side, "below");
   });
 });
