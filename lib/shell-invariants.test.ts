@@ -462,6 +462,29 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
     assert.match(stamp, /pals\/green-flag\.svg|pals\/red-flag\.svg/, "the file's own glyphs were swapped for a repo icon");
   });
 
+  it("shows the step discs and the page pills on a PHONE too", () => {
+    /*
+      Both were desktop-only and ogazboiz asked why. The discs were `wide`-
+      gated on "on a phone the fan is browsed by hand", which was true while
+      the gesture was navigation and wrong the moment /pals made it a decision:
+      a swipe there only goes forward, so without the discs a mis-swipe on a
+      phone cannot be taken back at all. The pills were dropped outright in the
+      deck rewrite.
+
+      Cost is why this is not a trade: `deckExtent` grows from 943 file units
+      to 954 when the discs are counted, because the fan is already wider than
+      the right disc. 1.2% of card width buys the only way back.
+    */
+    assert.doesNotMatch(deck, /\{wide && \(/, "the step discs are gated behind a breakpoint again");
+    assert.match(deck, /arrows: true/, "the layout stopped reserving room for the discs, so they overhang the column");
+    assert.match(deck, /<DeckDots count=\{3\}/, "the page pills are gone again — a fan cannot say there is more after this one");
+    assert.doesNotMatch(
+      deck,
+      /DeckDots[\s\S]{0,160}(hidden md:|md:hidden)/,
+      "the page pills are hidden on one size again"
+    );
+  });
+
   it("keeps the rail on its own drawing — the node geometry is a second KIND, not a fork", () => {
     assert.match(card, /kind: "node-844"/, "the node geometry lost its discriminator");
     assert.match(card, /export const RAIL_CARD: PalCardGeometry/, "the rail's RAIL_CARD changed shape");

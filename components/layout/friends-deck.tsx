@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconDeckArrow } from "@/components/ui/home-icons";
+import { DeckDots } from "@/components/ui/deck-dots";
 import { canGoBack } from "@/lib/nav-history";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
@@ -15,7 +16,6 @@ import {
 import { facetValues } from "@/lib/people-filters";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
-import { useMediaQuery } from "@/hooks/use-media-query";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import { SwipeVerdict } from "@/components/layout/swipe-verdict";
 import { useFollow, useIsFollowing } from "@/features/profile";
@@ -109,12 +109,11 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     ro.observe(el);
     observer.current = ro;
   }, []);
-  const wide = useMediaQuery(WIDE);
   // Node 844:18440 puts the deck 89 under the heading block on `/pals`; the
   // heading is drawn at 0.68 of the node here (see its note), and so is the
   // gap — 60. Home's own file keeps its 24.
   const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "gap-6");
-  const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: wide });
+  const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: true });
 
 
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
@@ -305,35 +304,58 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           with a lit rim; the rim is an inset highlight here. Their 32px inner
           ring has a zero-weight stroke and is not drawn. An inert disc keeps
           its strength — the file draws both at full — and is a real
-          `disabled`. Desktop only: on a phone the fan is browsed by hand.
+          `disabled`.
+
+          ON EVERY SIZE, not desktop only. They were `wide`-gated on the
+          reasoning that "on a phone the fan is browsed by hand" — true while
+          the gesture was navigation, and wrong the moment `/pals` made it a
+          DECISION: a swipe there follows or skips and only goes forward, so
+          without these a mis-swipe on a phone could not be taken back at all.
+          They are also the cheapest thing on the deck to show, which is what
+          settles it: `deckExtent` grows from 943 file units to 954 when the
+          discs are counted, because the fan is already wider than the right
+          disc. A 1.2% smaller card buys the only way back.
         */}
-        {wide && (
-          <>
-            <DeckArrow
-              direction="prev"
-              disabled={!canStep(-1)}
-              onClick={() => step(-1)}
-              size={arrowSize}
-              left={layout.frontX + (DECK_NODE.arrow.leftDx - DECK_NODE.arrow.size / 2) * layout.k}
-              top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
-            />
-            <DeckArrow
-              direction="next"
-              disabled={!canStep(1)}
-              onClick={() => step(1)}
-              size={arrowSize}
-              left={layout.frontX + (DECK_NODE.arrow.rightDx - DECK_NODE.arrow.size / 2) * layout.k}
-              top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
-            />
-          </>
-        )}
+        <DeckArrow
+          direction="prev"
+          disabled={!canStep(-1)}
+          onClick={() => step(-1)}
+          size={arrowSize}
+          left={layout.frontX + (DECK_NODE.arrow.leftDx - DECK_NODE.arrow.size / 2) * layout.k}
+          top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
+        />
+        <DeckArrow
+          direction="next"
+          disabled={!canStep(1)}
+          onClick={() => step(1)}
+          size={arrowSize}
+          left={layout.frontX + (DECK_NODE.arrow.rightDx - DECK_NODE.arrow.size / 2) * layout.k}
+          top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
+        />
       </div>
+
+      {/*
+        THE PAGE PILLS — node 289:5455, three of them under the deck.
+
+        They say "there is more after this one", which is the one thing a fan
+        cannot: the two cards behind the front are the same two whether the
+        roster holds four people or four hundred. Dropped in the rewrite and
+        back on EVERY size, phones included — a phone is where the fan is
+        smallest and the reassurance matters most.
+
+        THREE PILLS CANNOT COUNT AN UNBOUNDED ROSTER, so they do not try: the
+        reader's position is mapped across the three, which is all a row of
+        four-pixel pills can honestly say. With one person there is nothing to
+        page through and the row is absent rather than showing a lit pill and
+        two dead ones.
+      */}
+      {items.length > 1 && (
+        <DeckDots count={3} active={Math.round((index / (items.length - 1)) * 2)} />
+      )}
     </section>
   );
 }
 
-/** Tailwind's `md` — the shell's phone/desktop split. */
-const WIDE = "(min-width: 768px)";
 /** Before the first measurement: Home's desktop column. Replaced before paint by the callback ref. */
 const FALLBACK_ROOM = 552;
 
