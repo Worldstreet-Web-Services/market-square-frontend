@@ -4,6 +4,13 @@ import { useCallback, useRef, useState } from "react";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
+import {
+  EMPTY_FRIENDS_FILTER,
+  friendsFilterFacets,
+  isFriendsFilterActive,
+  type FriendsFilter as FriendsFilterState,
+} from "@/lib/friends-filter";
+import { facetValues } from "@/lib/people-filters";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
@@ -70,8 +77,20 @@ import type { Profile } from "@/lib/api/schemas";
  */
 export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
   const me = useMe();
-  const people = usePeople("", "followers", true);
+  /*
+    THE FILTER IS THE SERVICE'S, and changing it starts a NEW deck: the facets
+    are in `usePeople`'s query key, so a new city or gender is a new list from
+    page one rather than the old list trimmed — and the index goes back to the
+    front of it, because position in a list that no longer exists means
+    nothing. Reset in the change handler, not an effect: the two are one act.
+  */
+  const [filter, setFilter] = useState<FriendsFilterState>(EMPTY_FRIENDS_FILTER);
+  const people = usePeople("", "followers", true, friendsFilterFacets(filter));
   const [index, setIndex] = useState(0);
+  const changeFilter = (next: FriendsFilterState) => {
+    setFilter(next);
+    setIndex(0);
+  };
 
   /*
     HOW MUCH ROOM THE FAN ACTUALLY HAS.
@@ -144,8 +163,72 @@ export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (profile) => profile.id !== me.data?.id
   );
+  const filtering = isFriendsFilterActive(filter);
+  /* The gender vocabulary is whatever the loaded people published — the
+     service's and theirs, never a list written here. */
+  const genders = facetValues(items, "gender");
 
-  if (people.isPending || items.length === 0) return null;
+  const header = (
+    /*
+      THE HEADING ROW — node 647:16342 on the left, the filter pill
+      (647:17482) on the right. The pill is FLUSH with the column's right
+      edge (both end at x=-1016 in the Home frame) and sits 3px ABOVE the
+      heading's top (49817 against 49820), which centres it on the 22/28
+      title line rather than on the two-line block. `min-w-0` on the heading
+      so the caption wraps under a pill that does not shrink.
+    */
+    <div className="flex items-start justify-between gap-4">
+      {/* gap 1px, per node 225:3526 — the two lines are one block, not a
+          heading with a caption under it. */}
+      <div className="flex min-w-0 flex-col gap-px">
+        <h2 className="text-[22px] font-medium leading-7 text-white">Make some friends</h2>
+        <p className="text-[12px] font-bold leading-4 text-white/40">
+          Follow cool people and watch your feed go from boring to elite ✨
+        </p>
+      </div>
+      <FriendsFilter
+        className="-mt-[3px]"
+        value={filter}
+        onChange={changeFilter}
+        viewerCity={me.data?.city?.trim() || null}
+        genders={genders}
+      />
+    </div>
+  );
+
+  /*
+    WITH NO FILTER ON, an empty directory means the section has nothing to
+    say and is absent. WITH ONE ON, the section must stay — the pill is the
+    only way to take the filter off again, and a heading that vanished the
+    moment somebody narrowed to a city with nobody in it would strand them.
+    So the deck's place says so, briefly, and offers the way back.
+  */
+  if (!filtering && (people.isPending || items.length === 0)) return null;
+  if (filtering && !people.isPending && items.length === 0) {
+    return (
+      <section aria-label="People to meet" className="flex flex-col gap-6">
+        {header}
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <p className="text-[15px] leading-5 text-white/60">Nobody here matches that yet.</p>
+          <button
+            type="button"
+            onClick={() => changeFilter(EMPTY_FRIENDS_FILTER)}
+            className="ws-press rounded-full border border-white/20 px-4 py-1.5 text-[13px] font-bold text-white transition-colors hover:bg-white/10"
+          >
+            Show everyone
+          </button>
+        </div>
+      </section>
+    );
+  }
+  if (people.isPending) {
+    return (
+      <section aria-label="People to meet" className="flex flex-col gap-6">
+        {header}
+        <div className="ws-skeleton mx-auto h-[273px] w-full max-w-[467px] rounded-[18px]" />
+      </section>
+    );
+  }
 
   const step = (delta: number) => {
     const next = index + delta;
@@ -214,25 +297,7 @@ export function MakeSomeFriends({ fill = false }: { fill?: boolean }) {
 
   return (
     <section aria-label="People to meet" className="flex flex-col gap-6">
-      {/*
-        THE HEADING ROW — node 647:16342 on the left, the filter pill
-        (647:17482) on the right. The pill is FLUSH with the column's right
-        edge (both end at x=-1016 in the Home frame) and sits 3px ABOVE the
-        heading's top (49817 against 49820), which centres it on the 22/28
-        title line rather than on the two-line block. `min-w-0` on the heading
-        so the caption wraps under a pill that does not shrink.
-      */}
-      <div className="flex items-start justify-between gap-4">
-        {/* gap 1px, per node 225:3526 — the two lines are one block, not a
-            heading with a caption under it. */}
-        <div className="flex min-w-0 flex-col gap-px">
-          <h2 className="text-[22px] font-medium leading-7 text-white">Make some friends</h2>
-          <p className="text-[12px] font-bold leading-4 text-white/40">
-            Follow cool people and watch your feed go from boring to elite ✨
-          </p>
-        </div>
-        <FriendsFilter className="-mt-[3px]" />
-      </div>
+      {header}
 
       {/*
         The arrows sit BESIDE the deck, not at the column's edges. The file puts

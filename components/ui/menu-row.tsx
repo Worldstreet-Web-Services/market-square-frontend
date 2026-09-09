@@ -38,7 +38,8 @@ export function MenuRow({
   hint,
   onClick,
 }: {
-  icon: React.ReactNode;
+  /** Optional: a row with no glyph keeps the box so its label still aligns. */
+  icon?: React.ReactNode;
   label: string;
   tone?: "default" | "danger";
   /** `compact` is the row at the friends filter's 74.46% — see above. */
