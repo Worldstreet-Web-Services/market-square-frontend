@@ -1017,10 +1017,11 @@ function Breadcrumb({ pathname }: { pathname: string }) {
 
       {/* NODE 225:3641 puts two more controls between the crumb and the
           account cluster: a search field and the reader's current location.
-          THE SEARCH IS GONE, on every route — ogazboiz's call ("remove it").
-          It was a link into Explore rather than a field, and Explore's own
-          search and the sidebar's Explore entry are the ways in. `TopBarSearch`
-          stays defined for the day it is asked back. */}
+          NOT ON A PROFILE: the profile frames (545:47571 and its own-profile
+          twin) carry no search in the bar, and ogazboiz asked for it gone
+          there — "remove that search from that top". It stays on the routes
+          whose frames draw it. */}
+      {!pathname.startsWith("/u/") && <TopBarSearch />}
       <TopBarLocation />
 
       <div className="ml-auto shrink-0">
@@ -1030,6 +1031,34 @@ function Breadcrumb({ pathname }: { pathname: string }) {
   );
 }
 
+/**
+ * THE TOP BAR'S SEARCH — node 225:3681.
+ *
+ * A 298x38 field at a full round: transparent (`white/0.2%` is nothing), a
+ * `rgba(255,255,255,0.4)` stroke at 0.68px and the file's two-layer shadow —
+ * the same outlined material the stories rail's "Your Story" tile and the
+ * people deck's step buttons carry. Inside, the 16px
+ * `vuesax/linear/search-normal` and the word "Search" at Geist Medium 16/22
+ * with -0.007em, in `#7A7A7A`.
+ *
+ * It is a LINK, not an input. Search already has a surface with its own field,
+ * its filters and its result tabs; a second box that duplicates the query state
+ * is how the two drift apart. This is the door to it, which is what a field in
+ * a top bar is for.
+ */
+function TopBarSearch() {
+  return (
+    <Link
+      href="/discover"
+      className="ws-press hidden h-[38px] w-[298px] shrink-0 items-center gap-2 rounded-full border-[0.68px] border-white/40 px-2 text-[#7A7A7A] shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors hover:text-body lg:flex"
+    >
+      <IconTopSearch className="h-4 w-4 shrink-0" />
+      <span className="text-[16px] font-medium leading-[22px] tracking-[-0.007em]">
+        Search
+      </span>
+    </Link>
+  );
+}
 
 /**
  * THE CURRENT LOCATION — node 225:3684.
