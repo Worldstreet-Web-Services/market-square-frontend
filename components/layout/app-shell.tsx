@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/topbar-icons";
 import { LocationSheet } from "@/components/layout/location-sheet";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
+import { FriendsPopup } from "@/components/layout/friends-popup";
 import { RightRail } from "@/components/layout/right-rail";
 import { BottomDock } from "@/components/layout/bottom-dock";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
@@ -1852,6 +1853,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           open={composeOpen}
           onClose={() => setComposeOpen(false)}
         />
+
+        {/* "You and Fola are now friends" — 647:16628. Reads the signed-in
+            reader's unread social notifications once and shows the one moment
+            worth a popup; see components/layout/friends-popup. */}
+        {ready && !guest && <FriendsPopup />}
 
         {/* The one ticker sheet for the whole app. A `$BTC` in a caption is
           tappable on every surface that renders a post body, so the sheet is
