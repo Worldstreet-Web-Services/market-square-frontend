@@ -170,6 +170,12 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["posts", "post_1", "comments"]), true);
     });
 
+    it("allows one comment, a thread's replies, and nothing else under /comments", () => {
+      assert.equal(isPublicGet(["comments", "c_1", "replies"]), true);
+      assert.equal(isPublicGet(["comments", "c_1"]), true);
+      assert.equal(isPublicGet(["comments", "c_1", "like"]), false);
+    });
+
     it("does not open anything else under /posts", () => {
       // These are writes, so the handler never consults the predicate for
       // them — but the predicate must not claim them either.

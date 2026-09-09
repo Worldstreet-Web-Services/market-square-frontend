@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/use-me";
 import { usePeople } from "@/features/discovery";
 import { PersonQuickActions, useUpdateMe } from "@/features/profile";
+import { hasSeenWelcome } from "@/components/layout/welcome/welcome-flow";
 
 /**
  * ONBOARDING — nodes 107:1821, 122:2906, 125:3616 and 126:3769.
@@ -147,7 +148,16 @@ export function OnboardingFlow() {
     permission screen and nothing else — no splash, no welcome, no people it has
     already seen. It opens straight there.
   */
-  const entry = mustClaim ? 1 : profile.hasOnboarded ? 2 : 0;
+  /*
+    NO SECOND WELCOME. A newcomer arrives through the signed-out welcome
+    sequence (welcome-flow.tsx), signs up at its end, and lands here with
+    `hasOnboarded` false — which used to open the SPLASH, "Welcome to Square"
+    all over again. People read that as being sent back to the beginning. If
+    this browser has been through the welcome, the flow opens on the first
+    step that is actually new to them: the claim if they need one, otherwise
+    permissions. The splash still runs for an account created any other way.
+  */
+  const entry = mustClaim ? 1 : profile.hasOnboarded || hasSeenWelcome() ? 2 : 0;
   const current = step === 0 ? entry : step;
 
   return (

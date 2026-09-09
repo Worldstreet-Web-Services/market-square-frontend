@@ -3,15 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { IconLocationPin } from "@/components/ui/topbar-icons";
+import { IconProfileGlobePin, IconProfileLink } from "@/components/ui/profile-icons";
 import { IconMsEdit } from "@/components/ui/design-icons";
 import { IconRoomShare } from "@/components/ui/room-icons";
 import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
-import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { LiveBadge, Pill } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { IconCalendar } from "@/components/ui/icons";
 import { ProfileCover } from "@/features/profile/components/profile-cover";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
@@ -20,13 +18,14 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { MediaTab } from "@/features/profile/components/media-tab";
 import type { Post, Profile } from "@/lib/api/schemas";
 import {
-  useFollow,
   useProfile,
   useProfileActivities,
+  useProfileBadges,
   useProfilePosts,
   useProfileStreams,
 } from "@/features/profile/hooks/use-profile";
-import { useIsFollowing } from "@/features/profile/lib/follow-state";
+import { BadgesPanel, BadgesSection } from "@/features/profile/components/badges";
+import { isHttpUrl } from "@/lib/http-url";
 import { EditProfileSheet } from "@/features/profile/components/edit-profile-sheet";
 import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
 import { WinkButton } from "@/features/profile/components/wink-button";
@@ -51,22 +50,6 @@ import { useMarketView } from "@/lib/analytics";
   posted", and Posts carries the words that answer it.
 */
 type Tab = "posts" | "media" | "streams" | "activities";
-
-function FollowButton({ profile }: { profile: Profile }) {
-  const follow = useFollow(profile);
-  const gate = useGate();
-  const isFollowing = useIsFollowing(profile);
-  return (
-    <Button
-      variant={isFollowing ? "secondary" : "primary"}
-      size="sm"
-      aria-pressed={isFollowing}
-      onClick={() => gate(() => follow.mutate(!isFollowing))}
-    >
-      {isFollowing ? "Following" : "Follow"}
-    </Button>
-  );
-}
 
 /** The action under an empty profile tab — own profile only. */
 function TabCta({ href, label }: { href: string; label: string }) {
@@ -326,6 +309,8 @@ export function ProfilePage({
   messageSlot,
   kashSlot,
   housesSlot,
+  housesOfSlot,
+  replaysSlot,
   giftGallerySlot,
   earningsSlot,
   composeSlot,
@@ -342,6 +327,13 @@ export function ProfilePage({
    * to, so a visitor gets no rail rather than an empty one.
    */
   housesSlot?: React.ReactNode;
+  /**
+   * The rails on somebody ELSE's profile — 545:47653 (their houses) and
+   * 545:47746 (their ended gist rooms). Both read other slices, so both arrive
+   * as slots; each renders nothing until its route answers.
+   */
+  housesOfSlot?: (profile: Profile) => React.ReactNode;
+  replaysSlot?: (profile: Profile) => React.ReactNode;
   /**
    * The gift gallery — node 492:41810. It counts the viewer's own received
    * tips, so it lives in the tips slice and arrives as a slot; profile and
@@ -385,6 +377,9 @@ export function ProfilePage({
   const isMe = Boolean(
     profile.data && me.data && profile.data.id === me.data.id,
   );
+  // Asked once the profile is known; a 404 is "not deployed" and keeps both
+  // badge surfaces absent — see `useProfileBadges`.
+  const badges = useProfileBadges(username, Boolean(profile.data));
   useMarketView(
     "profile_viewed",
     { surface: "profile", entityType: "profile", entityId: profile.data?.id },
@@ -469,22 +464,24 @@ export function ProfilePage({
                 {/*
                   435:27531 and 435:27534 — a 38.4 disc and a 129x38 pill, and
                   BOTH report a white stroke at weight ZERO, which renders
-                  nothing. The material is `ws-glass-pill`, the same recessed
-                  lens the room's header and the post's more-menu use, not a
-                  hairline ring.
+                  nothing. The material is Figma's GLASS over the photograph —
+                  translucent, one bright rim — sampled from the render as
+                  `ws-glass-clear`. It was `ws-glass-pill`, the opaque dark
+                  lens the room's header uses, which on a light cover is a
+                  black coin the file does not draw.
                 */}
                 <button
                   type="button"
                   onClick={onShare}
                   aria-label="Share this profile"
-                  className="ws-glass-pill ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-white"
+                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-white"
                 >
                   <IconRoomShare className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
-                  className="ws-glass-pill ws-press flex h-[38px] items-center gap-2 rounded-full px-4 text-[15px] leading-6 text-white transition-opacity hover:opacity-90"
+                  className="ws-glass-clear ws-press flex h-[38px] items-center gap-2 rounded-full px-4 text-[15px] leading-6 text-white transition-opacity hover:opacity-90"
                 >
                   <IconMsEdit className="h-4 w-4 shrink-0" />
                   Edit Profile
@@ -492,10 +489,22 @@ export function ProfilePage({
               </>
             ) : (
               <>
-                <PersonMoreMenu profile={data} size="md" />
-                <WinkButton profile={data} size="md" />
+                {/*
+                  545:47603 — Wink, message, more, 16 apart, held to the right,
+                  and NOTHING ELSE: the file draws no Follow on this cover.
+
+                  A Follow pill was added ahead of Wink and it broke the frame
+                  — the identity column lost the width it needs and the name's
+                  chip wrapped under it, three rows against the file's two. So
+                  Follow moved into the more menu as its first row (see
+                  `PersonMoreMenu`) rather than being deleted: the act is one
+                  tap further away, not gone, and the cover is the file's.
+                  Whether it deserves a pill of its own is the designer's
+                  question, and it is asked.
+                */}
+                <WinkButton profile={data} size="cover" />
                 {messageSlot?.(data)}
-                <FollowButton profile={data} />
+                <PersonMoreMenu profile={data} size="cover" />
               </>
             )
           }
@@ -592,14 +601,38 @@ export function ProfilePage({
           `*url` keys. Requested; the row appears when the field does, and it
           is one `<a>` in the row that already exists.
         */}
-        {(data.city || data.region) && (
+        {/*
+          545:47626 — the place and the website on one row, 16 apart, each a
+          24px glyph 8 from its text at 15/20 in full white. The glyphs are the
+          file's own (the globe pin, `akar-icons:link-chain`), drawn in
+          `#7E3BEB` there and in `--color-create` here: purple ink on the dark
+          ground takes the ramp's light stop for contrast (CLAUDE.md), and the
+          previous pin already followed that rule.
+
+          THE WEBSITE IS LIVE on `PublicProfile` at :8080 (null today for
+          everyone; the edit sheet can set it). It is an anchor only when it
+          is an http(s) URL — a public page must never carry a `javascript:`
+          href somebody typed about themselves.
+        */}
+        {(data.city || data.region || isHttpUrl(data.website)) && (
           <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] leading-5 text-white">
             {(data.city || data.region) && (
               <span className="flex items-center gap-2">
-                <IconLocationPin className="h-6 w-6 shrink-0 text-create" />
+                <IconProfileGlobePin className="h-6 w-6 shrink-0 text-create" />
                 {/* "Ikeja, Lagos" from whichever halves they gave. */}
                 {[data.city, data.region].filter(Boolean).join(", ")}
               </span>
+            )}
+            {isHttpUrl(data.website) && (
+              <a
+                href={data.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80"
+              >
+                <IconProfileLink className="h-6 w-6 shrink-0 text-create" />
+                <span className="min-w-0 truncate">{data.website}</span>
+              </a>
             )}
           </p>
         )}
@@ -607,6 +640,20 @@ export function ProfilePage({
 
       {/* 534:15577 — the houses this person keeps, 38 under the block above. */}
       {isMe && housesSlot && <div className="px-8 pt-9">{housesSlot}</div>}
+
+      {/*
+        545:47615 — what a STRANGER's profile carries under the bio block, in
+        the file's order and on its 24 rhythm: Badges, House, Replays. Each
+        section is absent — heading included — until it has something real
+        to show, so a profile with none of the three ends at the bio block.
+      */}
+      {!isMe && (
+        <div className="flex flex-col gap-6 px-8 pt-6">
+          {!badges.unavailable && badges.data && <BadgesSection badges={badges.data.items} />}
+          {housesOfSlot?.(data)}
+          {replaysSlot?.(data)}
+        </div>
+      )}
 
       {/* Own-profile business: creator application and verification live above
           the tabs, where they read as account state rather than content.
@@ -641,9 +688,9 @@ export function ProfilePage({
         than because it was awkward. Earnings is live: nodes 492:46239 and
         492:46539 draw both its states and `GET /me/tips/received` backs them.
 
-         · Badges — no route at all. The served spec's only badge path is
-           `/admin/profiles/{id}/org-badge`, which ASSIGNS one; there is
-           nothing that lists what somebody has earned.
+         · Badges — `GET /profiles/:username/badges` is asked for and built
+           against (543:40148, `BadgesPanel`), but the backend holds it until
+           the earning rules are decided, so it 404s and the tab stays inert.
          · Replays — `MARKET_FLAGS.replays`, off because LiveKit egress and a
            storage bucket are not provisioned, so `replayUrl` is null on every
            stream. The flag makes the surface reappear; it cannot make the
@@ -660,7 +707,10 @@ export function ProfilePage({
               {
                 value: "badges",
                 label: "Badges",
-                disabledReason: "Not available yet",
+                // Live the moment `GET /profiles/:username/badges` answers;
+                // inert with the reason while it 404s — see `useProfileBadges`.
+                disabledReason:
+                  badges.unavailable || !badges.data ? "Not available yet" : undefined,
               },
               { value: "gifts", label: "Gift Gallery" },
               {
@@ -673,6 +723,7 @@ export function ProfilePage({
             onChange={setAccountTab}
           />
           {accountTab === "earnings" && earningsSlot}
+          {accountTab === "badges" && badges.data && <BadgesPanel badges={badges.data.items} />}
           {accountTab === "gifts" && giftGallerySlot}
         </div>
       )}

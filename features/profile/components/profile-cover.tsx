@@ -2,9 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
-import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
-import { IconArrowLeft } from "@/components/ui/icons";
+import { IconProfileBack } from "@/components/ui/profile-icons";
 import { canGoBack } from "@/lib/nav-history";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -74,6 +73,26 @@ export function ProfileCover({
         it is the same picture on every visit rather than a new one each
         render — and it is also what a person who has set no cover gets.
       */}
+      {/*
+        THE DEFAULT IS THE FILE'S OWN PHOTOGRAPH — node 543:45694, the cover
+        every profile in the design wears until the person sets one. It is the
+        image fill `b4f45247…` exported from the file (a lone winter tree, an
+        Unsplash photograph per its EXIF), resized to 1482 wide — 2x of the
+        741 card — at `public/profile/default-cover.jpg`.
+
+        HOW IT IS FRAMED, and why not with the file's numbers. The node crops
+        the picture to its middle half (`cropTransform` y-scale 0.5, offset
+        0.134) and STRETCHES that 3:1 band into the 1.57:1 card, so the render
+        shows the tree pulled nearly twice as tall as it is. That is a
+        distortion, not a composition, and a photograph nobody chose should at
+        least be the photograph. So the same band is shown at its true ratio:
+        `object-cover` at the band's centre (62.5% across — the tree — and
+        38.4% down), scaled 1.9x about that point, which puts the tree where
+        the render puts it without bending it.
+
+        The seeded GradientThumb that stood here is gone: a default the file
+        draws replaces a default we invented.
+      */}
       {profile.coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -83,7 +102,14 @@ export function ProfileCover({
           className="absolute inset-0 h-full w-full object-cover"
         />
       ) : (
-        <GradientThumb seed={profile.username} className="absolute inset-0 h-full w-full" />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src="/profile/default-cover.jpg"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full scale-[1.9] object-cover"
+          style={{ objectPosition: "62.5% 38.4%", transformOrigin: "62.5% 38.4%" }}
+        />
       )}
 
       {/* 108 of 473 at the top, 215 at the foot — see the note above for why
@@ -105,12 +131,16 @@ export function ProfileCover({
         onClick={() => (canGoBack() ? router.back() : router.push("/"))}
         className="ws-press absolute left-6 top-6 z-10 flex items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
       >
-        <IconArrowLeft className="h-5 w-5 shrink-0" />
+        {/* 545:47613 — the file's own `arrow-left` at 20, not the shared chevron. */}
+        <IconProfileBack className="h-5 w-5 shrink-0" />
         Back
       </button>
 
       {/* 435:27503 — the identity, 24 from the left and 24 from the foot. */}
-      <div className="absolute inset-x-6 bottom-6 z-10 flex items-end gap-4">
+      {/* 545:47576 (the identity, y=377..449) and 545:47603 (the actions,
+          y=394..432): the actions are CENTRED on the identity row, not hung
+          from its foot. */}
+      <div className="absolute inset-x-6 bottom-6 z-10 flex items-center gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-4">
           {/* 72 at a 16.36 radius behind a 2.18 ring in #15202B at 40%. A
               ROUNDED SQUARE, not the circle every other avatar in the app is:
@@ -124,6 +154,12 @@ export function ProfileCover({
             className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
           />
           <div className="flex min-w-0 flex-col gap-2">
+            {/* 545:47580 — the name, then its chips, 8 apart, on one row in a
+                column the file fixes at 377. Our column is narrower (600
+                against the file's 805) and a profile can carry two chips
+                where the file draws one, so the chips WRAP under the name
+                when they must. The name itself never truncates: it is the
+                person's, and "og…" is not a name. */}
             <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-[24px] font-bold leading-8 text-white">
               <span className="min-w-0 break-words">{name}</span>
               <VerifiedBadge verification={profile.verification} className="h-5 w-5" />

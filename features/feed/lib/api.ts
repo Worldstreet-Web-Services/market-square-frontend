@@ -7,6 +7,7 @@ import type { DeepLink } from "@/lib/api/schemas";
 import {
   BookmarkResultSchema,
   CommentSchema,
+  CommentLikeResultSchema,
   CommentsPageSchema,
   FeedPageSchema,
   LikeResultSchema,
@@ -112,12 +113,55 @@ export async function likePost(postId: string, like: boolean) {
   return LikeResultSchema.parse(like ? await msApi.post(path) : await msApi.del(path));
 }
 
-export async function fetchComments(postId: string) {
-  return CommentsPageSchema.parse(await msApi.get(`/posts/${postId}/comments`));
+export async function fetchComments(postId: string, cursor?: string) {
+  return CommentsPageSchema.parse(
+    await msApi.get(`/posts/${postId}/comments`, cursor ? { cursor } : {})
+  );
 }
 
-export async function addComment(postId: string, text: string) {
-  return CommentSchema.parse(await msApi.post(`/posts/${postId}/comments`, { text }));
+/**
+ * A comment, or a REPLY when `parentId` names the comment the reader TAPPED
+ * Reply on — top-level or reply alike; the service files it under the
+ * top-level parent and records who was answered. `parentId` is only sent
+ * when present.
+ */
+export async function addComment(
+  postId: string,
+  text: string,
+  parentId?: string | null,
+  mentions?: Mention[]
+) {
+  return CommentSchema.parse(
+    await msApi.post(`/posts/${postId}/comments`, {
+      text,
+      ...(parentId ? { parentId } : {}),
+      // Structured picks, so the service records exactly who was meant.
+      ...(mentions && mentions.length > 0 ? { mentions } : {}),
+    })
+  );
+}
+
+/** `GET /comments/:id` — one comment, for a permalink opened ON it (`?comment=`). */
+export async function fetchComment(commentId: string) {
+  return CommentSchema.parse(await msApi.get(`/comments/${commentId}`));
+}
+
+/** `GET /comments/:id/replies` — a thread's replies, oldest first. */
+export async function fetchReplies(commentId: string, cursor?: string) {
+  return CommentsPageSchema.parse(
+    await msApi.get(`/comments/${commentId}/replies`, cursor ? { cursor } : {})
+  );
+}
+
+/** `POST|DELETE /comments/:id/like` — idempotent both ways. */
+export async function likeComment(commentId: string, like: boolean) {
+  const path = `/comments/${commentId}/like`;
+  return CommentLikeResultSchema.parse(like ? await msApi.post(path) : await msApi.del(path));
+}
+
+/** `DELETE /comments/:id` — the comment's author, or the post's. */
+export async function deleteComment(commentId: string) {
+  await msApi.del(`/comments/${commentId}`);
 }
 
 export async function reportTarget(input: {

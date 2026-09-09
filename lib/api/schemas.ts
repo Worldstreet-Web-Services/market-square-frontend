@@ -49,6 +49,16 @@ const RawProfileSchema = z.object({
    * shipped before the field existed.
    */
   coverUrl: z.string().nullable().optional().default(null),
+  /**
+   * THE LINK ROW — node 545:47631 draws `akar-icons:link-chain` and a URL at
+   * 15/20 under the place. LIVE on `PublicProfile` and `PATCH /me` at :8080
+   * (null clears, absent leaves alone; the service accepts http(s) only).
+   * Optional with a null default because the deployed spec lags :8080, as
+   * `coverUrl` did. Rendered as an anchor only when it is an http(s) URL — the
+   * client re-checks rather than trusting the write-side rule, because a
+   * public page must never carry a `javascript:` href.
+   */
+  website: z.string().nullable().optional().default(null),
   role: RoleSchema,
   verification: VerificationSchema,
   orgBadge: OrgBadgeSchema.optional().default(null),
@@ -177,6 +187,22 @@ export const StreamSchema = z.object({
   id: z.string(),
   ownerId: z.string(),
   owner: ProfileSchema.nullable().optional().default(null),
+  /**
+   * WHO IS IN THE ROOM — a sample of up to three people currently connected,
+   * host first, then the most recent joiners. GIST ROOMS ONLY, by the
+   * backend's own privacy call: on a room you join, being seen is the point;
+   * on a broadcast, the same field would publish who is WATCHING by name and
+   * face to everyone, and nobody watching has been told they are visible.
+   * Broadcasts carry no field at all.
+   *
+   * Two things a reader must not do with it: derive "and N others" from
+   * `viewerCount` minus its length (presence counts SESSIONS, and a signed-out
+   * viewer has no profile to resolve, so the sample is routinely shorter than
+   * the count while a room is busy), and treat an empty array as "nobody is
+   * here" (it can also mean nobody RESOLVABLE is here). Defaulted to empty so
+   * a payload without it and a room without a resolvable soul render alike.
+   */
+  participants: z.array(ProfileSchema).optional().default([]),
   title: z.string(),
   description: z.string().nullable().optional().default(null),
   category: z.string().optional().default("other"),
@@ -314,6 +340,14 @@ export const PostSchema = z.object({
    * is a lie the reader cannot detect.
    */
   viewCount: z.number().optional(),
+  /**
+   * HOW MANY PEOPLE ARKMARKED IT — on the contract beside `viewCount`, and
+   * like it a number only: WHO saved a post is nobody's business but theirs
+   * (`GET /me/bookmarks` is the reader's own list and there is no route for
+   * anyone else's). Optional for the same reason `viewCount` is — a payload
+   * without it draws no count, never a fabricated "0".
+   */
+  bookmarkCount: z.number().optional(),
   repostedByMe: z.boolean().optional().default(false),
   // The quoted original, hydrated one level deep only — a quote of a quote
   // shows the inner card's text, never a third nested frame. When the original

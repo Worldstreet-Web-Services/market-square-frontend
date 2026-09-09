@@ -12,8 +12,8 @@ import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { PostText } from "@/components/ui/post-text";
 import { CoinChips } from "@/components/ui/coin-chips";
-import { EmojiPicker } from "@/components/ui/emoji-picker";
-import { useRecordView } from "@/features/feed/hooks/use-record-view";
+import { reportView, useRecordView } from "@/features/feed/hooks/use-record-view";
+import { IconReplayPlay } from "@/components/ui/profile-icons";
 import { useGate } from "@/hooks/use-gate";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ import {
   useRepostPost,
 } from "@/features/feed/hooks/use-feed";
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
+import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
+import { MentionPicker } from "@/features/feed/components/mention-picker";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -430,9 +432,10 @@ function InlineComment({
 }) {
   const add = useAddComment(postId);
   const gate = useGate();
-  const me = useMe();
   const field = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
+  // The same @-typing as the composer and the thread box.
+  const typing = useMentionTyping({ max: 500, field });
+  const { text } = typing;
   const [sent, setSent] = useState(false);
 
   const submit = () => {
@@ -441,9 +444,9 @@ function InlineComment({
     // would otherwise post the same reply twice.
     if (!body || add.isPending) return;
     gate(() =>
-      add.mutate(body, {
+      add.mutate({ text: body, mentions: typing.mentionsFor(body) }, {
         onSuccess: () => {
-          setText("");
+          typing.reset();
           // Something has to happen. The reply lands in a thread the reader
           // cannot see from here, so without this the field just empties and
           // it is not obvious anything was posted. The tally moves at the same
@@ -456,28 +459,21 @@ function InlineComment({
     );
   };
 
-  const insert = (emoji: string) => {
-    setText((current) => (current + emoji).slice(0, 500));
-    field.current?.focus();
-  };
-
   return (
     /*
-      NODE 236:4738 — the comment pill: `white/3` at a full round, 8.08 of
-      padding, a 24px glyph, then the field.
+      NODE 496:13647 — the comment pill: 220 x 40.15, `white/3` at a full
+      round, 8.08 of padding, the file's 24px comment glyph at 60% white, then
+      "Comment here..." 2 to its right at 12/16.
 
-      TWO DEPARTURES FROM THE FILE, both stated:
+      THE FILE'S PILL AND NOTHING MORE. The reader's own avatar and an emoji
+      picker used to sit in it; both are gone at ogazboiz's word ("remove that
+      emoji and that my profile ... it should look the same as the figma").
+      The field is still live — typing and Enter post a reply — it just wears
+      the file's clothes.
 
-      · The file leads with a comment GLYPH at 60% white and no avatar. This
-        keeps the reader's own avatar and puts the glyph beside it, because the
-        pill is a live field here rather than a placeholder — seeing whose reply
-        it will be is worth the 24px, and it is the same affordance every
-        composer in the app uses.
-      · The placeholder is the file's copy but NOT its colour. `236:4743` is
-        `#3C3C3C`, which reads on the white the mockup accidentally exported
-        (the page frame's fill is `visible: false`, so the PNG has no
-        background) and is very nearly invisible on the real `#0F0F0F` card.
-        The app's own placeholder grey is used instead.
+      One departure, stated: the placeholder is the file's copy but not its
+      colour. `496:13652` is `#3C3C3C`, which is 1.5:1 against the `#0F0F0F`
+      card — a hint nobody can read. The app's own placeholder grey is used.
     */
     /*
       220 wide at node 496:13434, not a field that grows: the file spends the
@@ -488,11 +484,10 @@ function InlineComment({
     */
     <div
       className={cn(
-        "ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2 md:max-w-[220px]",
+        "ws-comment-field relative flex h-10 min-w-0 flex-1 items-center gap-0.5 px-2 md:max-w-[220px]",
         className
       )}
     >
-      <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
       <IconMsComment aria-hidden className="h-6 w-6 shrink-0 text-white/60" />
       {sent ? (
         // Says what happened AND offers the one thing a person wants next.
@@ -507,18 +502,16 @@ function InlineComment({
         <input
           ref={field}
           value={text}
-          onChange={(event) => setText(event.target.value.slice(0, 500))}
-          onKeyDown={(event) => event.key === "Enter" && submit()}
+          onChange={(event) => typing.update(event.target.value, event.target.selectionStart)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !typing.token) submit();
+            if (event.key === "Escape") typing.dismiss();
+          }}
           placeholder="Comment here..."
           aria-label="Write a reply"
           disabled={add.isPending}
           className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700 disabled:opacity-60"
         />
-      )}
-      {!sent && (
-        // Right-aligned: this button sits at the end of the reply row, so a
-        // left-anchored panel would open off the edge of the card.
-        <EmojiPicker onPick={insert} label="Add an emoji to your reply" align="right" />
       )}
       {!sent && text.trim() && (
         <button
@@ -530,6 +523,9 @@ function InlineComment({
           <IconSend className="h-3.5 w-3.5" />
         </button>
       )}
+      {/* Portalled and placed above the pill by the picker itself — the pill
+          sits at the foot of the card, where a list dropping down is clipped. */}
+      {typing.token && <MentionPicker typing={typing} />}
     </div>
   );
 }
@@ -582,8 +578,10 @@ export function PostCard({
   // an inert button would announce a control to a screen reader that does
   // nothing when activated.
   const Tag = onOpenMedia ? "button" : "div";
-  // Recorded on dwell, not on mount: see useRecordView.
-  const viewRef = useRecordView(post.id);
+  // Recorded on dwell, not on mount: see useRecordView. A CLIP is the
+  // exception — its view is the play, reported by the player below.
+  const video = isVideoPost(post);
+  const viewRef = useRecordView(post.id, !video);
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
   // Share the POST, not its author's profile — a reader following the link
@@ -771,7 +769,12 @@ export function PostCard({
               className="ws-press relative block w-fit max-w-full cursor-pointer overflow-hidden rounded-xl"
               style={{ viewTransitionName: `media-${post.id}` }}
             >
-              <InlineVideo fit src={post.mediaUrl} poster={post.thumbnailUrl} />
+              <InlineVideo
+                fit
+                src={post.mediaUrl}
+                poster={post.thumbnailUrl}
+                onFirstPlay={() => reportView(post.id)}
+              />
               <button
                 type="button"
                 onClick={(event) => {
@@ -785,7 +788,12 @@ export function PostCard({
               </button>
             </div>
           ) : (
-            <InlineVideo fit src={post.mediaUrl} poster={post.thumbnailUrl} />
+            <InlineVideo
+              fit
+              src={post.mediaUrl}
+              poster={post.thumbnailUrl}
+              onFirstPlay={() => reportView(post.id)}
+            />
           )
         ) : (
           // A photo expands too. It is contained in the card, so a tall shot
@@ -914,10 +922,19 @@ export function PostCard({
               file's own geometry allows: its items are hug-width. */}
           {post.viewCount !== undefined && (
             <CountAction
-              label={`${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`}
+              label={
+                video
+                  ? `${post.viewCount} ${post.viewCount === 1 ? "play" : "plays"}`
+                  : `${post.viewCount} ${post.viewCount === 1 ? "view" : "views"}`
+              }
               count={post.viewCount}
             >
-              <IconMsChart className="h-6 w-6" />
+              {/* One tally, two meanings. On a clip the slot is PLAYS — the
+                  file's own play mark (545:47772) with the number of people
+                  who played it — and the chart that means "views" on a post
+                  is not drawn beside it. Asked for by name: "just add a count
+                  of who played the video". */}
+              {video ? <IconReplayPlay className="h-6 w-6" /> : <IconMsChart className="h-6 w-6" />}
             </CountAction>
           )}
         </div>
@@ -934,24 +951,39 @@ export function PostCard({
             </GlyphAction>
             {/* Arkmark. While the endpoint is absent the control goes quiet
                 rather than pretending the save landed. */}
-            <GlyphAction
-              label={
-                bookmark.unavailable
-                  ? "Arkmarks aren't available yet"
-                  : post.bookmarkedByMe
-                    ? "Remove from Arkmarks"
-                    : "Save to Arkmarks"
-              }
-              active={post.bookmarkedByMe}
-              disabled={bookmark.unavailable}
-              onClick={() =>
-                gate(() =>
-                  bookmark.mutate({ postId: post.id, bookmark: !post.bookmarkedByMe })
-                )
-              }
-            >
-              <IconMsBookmark className="h-6 w-6" filled={post.bookmarkedByMe} />
-            </GlyphAction>
+            {/* The glyph, then HOW MANY saved it — a number only, in the
+                pill's own 12/16 tally style, drawn only when the payload
+                carries `bookmarkCount`. Who saved it is nobody's business but
+                theirs; the count is the post's. Asked for by name ("number of
+                arkmark, no need to know who"). */}
+            <span className="flex items-center gap-0.5 md:gap-[2px]">
+              <GlyphAction
+                label={
+                  bookmark.unavailable
+                    ? "Arkmarks aren't available yet"
+                    : post.bookmarkedByMe
+                      ? "Remove from Arkmarks"
+                      : "Save to Arkmarks"
+                }
+                active={post.bookmarkedByMe}
+                disabled={bookmark.unavailable}
+                onClick={() =>
+                  gate(() =>
+                    bookmark.mutate({ postId: post.id, bookmark: !post.bookmarkedByMe })
+                  )
+                }
+              >
+                <IconMsBookmark className="h-6 w-6" filled={post.bookmarkedByMe} />
+              </GlyphAction>
+              {post.bookmarkCount !== undefined && (
+                <span
+                  aria-label={`${post.bookmarkCount} ${post.bookmarkCount === 1 ? "Arkmark" : "Arkmarks"}`}
+                  className="tnum text-[12px] leading-4 text-white"
+                >
+                  {formatCount(post.bookmarkCount)}
+                </span>
+              )}
+            </span>
           </div>
           {/* `mine` gates Edit and Delete — the service refuses both for
               anybody but the author, so offering them elsewhere would be a

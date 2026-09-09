@@ -23,6 +23,7 @@ import {
   fetchProfileActivities,
   fetchProfilePosts,
   fetchProfileStreams,
+  fetchProfileBadges,
   fetchSpotlight,
   fetchVerificationRule,
   renewVerification,
@@ -32,6 +33,7 @@ import {
   setFollow,
   updateMe,
 } from "@/features/profile/lib/api";
+import type { ProfileStreamFilters } from "@/features/profile/lib/types";
 import type { ReportReason } from "@/features/profile/lib/api";
 import { rememberWink, useSentWinks } from "@/features/profile/lib/wink-store";
 import {
@@ -252,12 +254,36 @@ export function useProfilePosts(username: string) {
   });
 }
 
-export function useProfileStreams(username: string) {
+export function useProfileStreams(username: string, filters: ProfileStreamFilters = {}) {
   return useQuery({
-    queryKey: ["ms", "profile-streams", username],
-    queryFn: () => fetchProfileStreams(username),
+    // The filters are in the key: the service's cursor encodes them, so a
+    // different filter is a different list rather than a page of the old one.
+    queryKey: ["ms", "profile-streams", username, filters.status ?? "", filters.kind ?? ""],
+    queryFn: () => fetchProfileStreams(username, filters),
   });
 }
+
+/**
+ * A ROUTE THAT MAY NOT BE DEPLOYED YET.
+ *
+ * The badge route was asked of the backend and answers 404 until it ships. A 404 here is "not deployed", not "this person has none" — so the
+ * query does not retry it (a missing route resolves immediately instead of
+ * three times), and `unavailable` is what a surface reads to stay absent. It
+ * never invents an empty list: absent-because-unknown and known-empty are
+ * different facts and both are kept.
+ */
+const notDeployed = (error: unknown) => errorCode(error) === "NOT_FOUND";
+
+export function useProfileBadges(username: string, enabled = true) {
+  const query = useQuery({
+    queryKey: ["ms", "profile-badges", username],
+    queryFn: () => fetchProfileBadges(username),
+    enabled,
+    retry: (count, error) => !notDeployed(error) && count < 2,
+  });
+  return { ...query, unavailable: query.isError && notDeployed(query.error) };
+}
+
 
 export function useProfileActivities(username: string) {
   return useQuery({

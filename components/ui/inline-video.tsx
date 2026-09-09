@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useActiveVideo } from "@/hooks/use-active-video";
 import { VIDEO_LAYER } from "@/lib/video-coordinator";
 import { cn } from "@/lib/cn";
@@ -31,10 +31,17 @@ export function InlineVideo({
   poster,
   className,
   fit = false,
+  onFirstPlay,
 }: {
   src: string;
   poster?: string | null;
   className?: string;
+  /**
+   * Fired ONCE, when the clip genuinely starts playing (`playing`, not
+   * `play`: the element has frames and is advancing). The card uses it to
+   * report the view — a video's count is plays, not dwell.
+   */
+  onFirstPlay?: () => void;
   /**
    * Let the CLIP set the box, instead of the box cropping the clip.
    *
@@ -64,6 +71,12 @@ export function InlineVideo({
     layer: VIDEO_LAYER.feed,
     enabled: !reduced,
   });
+  const played = useRef(false);
+  const handlePlaying = () => {
+    if (played.current) return;
+    played.current = true;
+    onFirstPlay?.();
+  };
 
   const sound = (
     <button
@@ -94,6 +107,7 @@ export function InlineVideo({
       playsInline
       preload="metadata"
       controls={reduced}
+      onPlaying={handlePlaying}
       className={
         fit
           ? "block h-auto max-h-[420px] w-auto max-w-full rounded-xl object-contain"

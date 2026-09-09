@@ -257,6 +257,20 @@ const PENDING_ROUTES = {
       "get /operations/summary — see that entry.",
   },
 
+  // ── threaded comments ────────────────────────────────────────────────────
+  // Replies, likes and delete shipped and are documented; their entries are
+  // gone. This one is SERVED but not yet DOCUMENTED: `GET /comments/{id}`
+  // answers 200 anonymously on :8080 (2026-09-09) and the permalink's deep
+  // link (`?comment=`) reads it. DELETE THIS ENTRY when it appears in
+  // openapi.json.
+  "get /profiles/{}/badges": {
+    reason:
+      "Asked of the backend 2026-09-09; held until ogazboiz decides how a badge is EARNED " +
+      "(there is no badge concept in the service yet, so the route would answer an empty " +
+      "list for everyone). Both badge surfaces are built and absent while it 404s. " +
+      "See features/profile/components/badges.tsx.",
+  },
+
   "get /conversations/{}/members": {
     reason:
       "The full member roster of a GROUP conversation. Group threads " +

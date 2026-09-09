@@ -90,13 +90,27 @@ export function ProfileGiftGallery() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6 px-8 py-6 sm:grid-cols-3 lg:grid-cols-5">
+    /*
+      THE TILE IS A FIXED 129, AND THE GRID FITS AS MANY AS THE COLUMN HOLDS.
+      543:42098 lays five across a 741 column (5 x 129 + 4 x 24 = 741 exactly).
+      This used to be `lg:grid-cols-5`, which was right at 741 and wrong the day
+      the column became 600: five cells in 488 of content squeezed every tile
+      to 78 wide under a 160 height, and the gallery read as a row of purple
+      slivers. `auto-fill` keeps the file's tile and its 24 gap and lets the
+      count per row follow the width — three here, five at the file's.
+
+      CENTRED. The file's five fill its 741 exactly, so there is no slack to
+      place; three of ours leave 53 in a 488 column, and packed left that read
+      as a grid hanging off one side. `justify-center` splits the slack, so
+      the rows sit under the middle of the strip above them.
+    */
+    <div className="grid grid-cols-[repeat(auto-fill,129px)] justify-center gap-6 px-8 py-6">
       {LIVE_GIFTS.map((gift) => {
         const received = counts.get(gift.id) ?? null;
         return (
           <div
             key={gift.id}
-            className="flex h-[160px] w-full max-w-[129px] flex-col rounded-[15px] bg-spotlight p-1"
+            className="flex h-[160px] w-[129px] flex-col rounded-[15px] bg-spotlight p-1"
           >
             {/* 485:40486 — 121x120 at a 12 radius on `#1C1C1C`, and it CLIPS:
                 the artwork is drawn larger than the plate and cropped by it. */}
@@ -105,14 +119,29 @@ export function ProfileGiftGallery() {
               <img
                 src={gift.art}
                 alt={gift.name}
-                className="h-full w-full object-contain p-2"
+                // 543:42114 — the artwork is 98x119 on the 121x120 plate: one
+                // pixel short of the plate's full height, centred, and NOT
+                // inset. It shipped with 8px of padding on every side, which
+                // shrank every gift by a fifth and left a ring of plate around
+                // it that the file does not draw.
+                className="h-[119px] w-auto max-w-full object-contain"
                 loading="lazy"
               />
             </div>
 
             {/* The footer row: price left, count and the send control right,
                 both inset 8 from the tile and 12 under the plate. */}
-            <div className="flex h-4 items-center justify-between px-1 pb-1 pt-3">
+            {/*
+              543:42115 / 543:42196 — the price and the count are a 16-tall
+              row 12 under the plate, 8 in from the tile's sides and 8 above
+              its foot (the tile's own 4 plus 4 here). It shipped as a 16px
+              box carrying 12 + 4 of PADDING, which under border-box sizing
+              leaves no room for the text at all: both labels overflowed the
+              row and sat hard against the plate, and the space the file
+              draws around them was gone. Margins keep the row 16 and the
+              gaps outside it.
+            */}
+            <div className="mb-1 mt-3 flex h-4 items-center justify-between px-1">
               <span className="flex items-center gap-1">
                 <span className="tnum text-[12px] font-bold leading-4 text-white">
                   {gift.priceKash}

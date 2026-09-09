@@ -14,11 +14,9 @@ import { isVideoPost } from "@/lib/media";
 import { videoListKey } from "@/lib/video-context";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
-  addComment,
   bookmarkPost,
   fetchBookmarks,
   createPost,
-  fetchComments,
   fetchFeed,
   fetchPost,
   fetchStories,
@@ -339,10 +337,16 @@ export function useBookmarkPost() {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
 
+  // The count moves with the flag — optimistically, and only when the
+  // payload carries one, so a post without a count never gains a fabricated
+  // "1". `reconcilePost` on settle replaces both with the service's truth.
   const applyBookmark = (postId: string, bookmarked: boolean) =>
     patchPostEverywhere(queryClient, postId, (post) => ({
       ...post,
       bookmarkedByMe: bookmarked,
+      ...(post.bookmarkCount !== undefined && post.bookmarkedByMe !== bookmarked
+        ? { bookmarkCount: Math.max(0, post.bookmarkCount + (bookmarked ? 1 : -1)) }
+        : {}),
     }));
 
   const mutation = useMutation({
@@ -380,38 +384,11 @@ export function useBookmarks() {
   });
 }
 
-export function useComments(postId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ["ms", "comments", postId],
-    queryFn: () => fetchComments(postId),
-    enabled,
-  });
-}
-
-export function useAddComment(postId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (text: string) => addComment(postId, text),
-    // The reply is visible at once and the tally moves with it, on every
-    // surface that draws this post rather than only the one being looked at.
-    onMutate: () =>
-      patchPostEverywhere(queryClient, postId, (post) => ({
-        ...post,
-        commentCount: post.commentCount + 1,
-      })),
-    onError: (error) => {
-      patchPostEverywhere(queryClient, postId, (post) => ({
-        ...post,
-        commentCount: Math.max(0, post.commentCount - 1),
-      }));
-      toast.error(errorMessage(error, "Couldn't add your comment."));
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["ms", "comments", postId] });
-      reconcilePost(queryClient, postId);
-    },
-  });
-}
+/**
+ * The comment thread moved to `use-comments.ts` when it grew replies and
+ * likes; re-exported here so the card and the sheet keep their import.
+ */
+export { useAddComment, useComments } from "@/features/feed/hooks/use-comments";
 
 export function useReport() {
   return useMutation({

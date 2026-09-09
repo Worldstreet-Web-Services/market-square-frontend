@@ -82,6 +82,14 @@ export function isPublicGet(path: string[]): boolean {
   if (head === "posts" && second) {
     return path.length === 2 || (path.length === 3 && third === "comments");
   }
+  // One comment, and a thread's replies, read like the comments they hang
+  // under: public with optional auth, so `likedByMe` resolves for a signed-in
+  // reader. `/replies` is documented so; `GET /comments/{id}` answers 200 to
+  // an anonymous curl on :8080 (2026-09-09) while the spec document has not
+  // caught up with it — see PENDING_ROUTES.
+  if (head === "comments" && second) {
+    return path.length === 2 || (path.length === 3 && third === "replies");
+  }
 
   // Stream reads are public at three EXACT shapes only: the list, one stream,
   // and its chat. Matching on the head alone let anything under /streams

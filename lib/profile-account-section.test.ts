@@ -65,6 +65,14 @@ describe("the profile's account section is own-profile only", () => {
       `disabled` means "there is nothing behind this", so a tab the page
       renders a panel for may never carry it.
     */
+    /*
+      A LITERAL reason is the bug; a COMPUTED one is the rule working. Badges
+      has a panel (543:40148) and a tab whose reason is an expression that
+      resolves to `undefined` the moment `GET /profiles/:username/badges`
+      answers — the panel is mounted on the same data the tab keys off, so the
+      two can never disagree. What this test forbids is a reason written as a
+      string beside a panel that always renders, which is what Earnings had.
+    */
     const panelled = [...page.matchAll(/accountTab === "(\w+)" &&/g)].map((m) => m[1]);
     assert.ok(panelled.length >= 2, "expected the earnings and gifts panels to be found");
     for (const tab of panelled) {
@@ -72,7 +80,7 @@ describe("the profile's account section is own-profile only", () => {
       assert.ok(entry, `no tab entry found for the "${tab}" panel`);
       assert.doesNotMatch(
         entry[0],
-        /disabledReason/,
+        /disabledReason:\s*"/,
         `"${tab}" renders a panel but its tab is disabled — it cannot be reached`
       );
     }

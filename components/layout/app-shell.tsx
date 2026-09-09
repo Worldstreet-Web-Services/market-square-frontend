@@ -16,6 +16,9 @@ import {
 import { useRailState } from "@/lib/sidebar-rail-store";
 import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { toast } from "sonner";
+import { useChatOpen } from "@/lib/chat-open-store";
+import { setSidebarHidden, useSidebarHidden } from "@/lib/sidebar-pref-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
@@ -37,7 +40,6 @@ import {
 import {
   IconCaretDown,
   IconLocationPin,
-  IconTopSearch,
 } from "@/components/ui/topbar-icons";
 import { LocationSheet } from "@/components/layout/location-sheet";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
@@ -48,7 +50,7 @@ import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import {
   IconBell,
-  IconChevronLeft,
+  IconCollapseRight,
   IconDots,
   IconChevronDown,
   IconMore,
@@ -71,6 +73,17 @@ interface NavItem {
   admin?: boolean;
   /** Folded into the "More" menu below xl, where vertical room runs out. */
   secondary?: boolean;
+  /**
+   * COMING SOON, and not shown at all — on any surface. The route still
+   * resolves; only its door is gone until the product is ready to open it.
+   */
+  hidden?: boolean;
+  /**
+   * COMING SOON, and SHOWN — faded, inert, and answering a tap with this
+   * message rather than the page. For the one entry ogazboiz wanted people to
+   * see is on its way ("seen but disabled, as if faded, but they tap it").
+   */
+  soon?: string;
   /**
    * Promoted in the DESKTOP SIDEBAR. Defaults to true.
    *
@@ -142,7 +155,8 @@ interface NavItem {
 */
 const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: IconSbHome },
-  { href: "/discover", label: "Explore", icon: IconSbExplore },
+  // Hidden for now — coming soon, per ogazboiz. The route still resolves.
+  { href: "/discover", label: "Explore", icon: IconSbExplore, hidden: true },
   /*
     Houses is a row of its own after all.
 
@@ -185,7 +199,8 @@ const NAV: NavItem[] = [
     */
     sidebar: false,
   },
-  { href: "/live", label: "Live", icon: IconSbLive, secondary: true },
+  // Hidden for now — coming soon, per ogazboiz. The route still resolves.
+  { href: "/live", label: "Live", icon: IconSbLive, secondary: true, hidden: true },
   /*
     LIBRARY is the saved-posts surface — node 496:13107 draws it sixth, on a
     bookmark, between Live and For Creators. The route stays `/arkmarks` and the
@@ -211,6 +226,8 @@ const NAV: NavItem[] = [
     icon: IconSbCreators,
     authed: true,
     secondary: true,
+    // Seen, faded, and a tap says so — not a door yet.
+    soon: "For Creators is coming soon",
   },
   {
     href: "/admin",
@@ -251,6 +268,7 @@ function visibleNav(options: {
 }): NavItem[] {
   return NAV.filter(
     (item) =>
+      !item.hidden &&
       (options.surface !== "sidebar" || item.sidebar !== false) &&
       (!item.authed || options.authenticated) &&
       (!item.operator || options.isOperator) &&
@@ -346,11 +364,26 @@ function NavLink({
         ? { target: "_blank", rel: "noopener noreferrer" }
         : {})}
       aria-label={
-        item.external
-          ? `${item.label} (opens in a new tab)`
-          : badge > 0
-            ? `${item.label}, ${badge} unread`
-            : item.label
+        item.soon
+          ? `${item.label} — ${item.soon}`
+          : item.external
+            ? `${item.label} (opens in a new tab)`
+            : badge > 0
+              ? `${item.label}, ${badge} unread`
+              : item.label
+      }
+      aria-disabled={item.soon ? true : undefined}
+      title={item.soon}
+      // A coming-soon entry stays where it is and says so; it never
+      // navigates. Not `disabled` on a link (links have no such state), so
+      // the tap is caught and answered instead.
+      onClick={
+        item.soon
+          ? (event) => {
+              event.preventDefault();
+              toast.info(item.soon!);
+            }
+          : undefined
       }
       aria-current={active ? "page" : undefined}
       // Geometry is the design's and is identical in both states — only the
@@ -366,6 +399,8 @@ function NavLink({
             // the existing token instead.
             "border border-create/30 bg-create/[0.11] text-white shadow-[0px_1px_3px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]"
           : "border border-transparent text-body hover:bg-white/[0.06]",
+        // Faded: the row is present and not yet a door.
+        item.soon && "opacity-40 hover:bg-transparent",
       )}
     >
       <span
@@ -627,32 +662,12 @@ function AccountChip() {
             View profile
           </Link>
           {/*
-            What is YOURS lives under you.
-
-            Tickets and Arkmarks are records — what you bought, what you saved
-            — not places you navigate to. In the rail they each cost a
-            permanent row to serve something opened once a week; here they sit
-            where a person already looks for their own things, next to their
-            own name.
+            View profile and Log out, and nothing else — ogazboiz's call
+            ("it should only be view profile and logout here"). Tickets and
+            Arkmarks sat here for a while as "what is yours"; both routes still
+            resolve (/tickets, /arkmarks) and the profile's own tabs are the
+            door to them now.
           */}
-          {me.data && (
-            <>
-              <Link
-                href="/tickets"
-                onClick={close}
-                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-              >
-                Tickets
-              </Link>
-              <Link
-                href="/arkmarks"
-                onClick={close}
-                className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-              >
-                Arkmarks
-              </Link>
-            </>
-          )}
           <button
             onClick={() => {
               close();
@@ -830,22 +845,25 @@ export function Sidebar({
         </span>
       </Link>
 
-      {/* The explicit control. The drag edge is discoverable only once you
-          know it is there; this says the rail collapses. */}
+      {/* The collapse chevron is gone for now, at ogazboiz's word ("remove
+          that collapse"). The rail still collapses by its drag edge and a
+          double-click on it (RailHandle); only the button that advertised it
+          is removed. */}
+
+      {/* USE THE DOCK INSTEAD. Tucks the whole rail away on this device and
+          hands navigation to the dock; the dock carries the switch back. See
+          lib/sidebar-pref-store for why it is a per-device preference. */}
       <button
-        onClick={() => commit(toggleRail(rail))}
-        aria-label={
-          rail.mode === "icon" ? "Expand sidebar" : "Collapse sidebar"
-        }
-        aria-expanded={rail.mode === "full"}
+        type="button"
+        onClick={() => setSidebarHidden(true)}
+        aria-label="Hide sidebar and use the dock"
+        title="Hide sidebar and use the dock"
         className="ws-press mb-2 flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
       >
-        <IconChevronLeft
-          className={cn(
-            "h-4 w-4 transition-transform",
-            rail.mode === "icon" && "rotate-180",
-          )}
-        />
+        <span className="hidden text-[12px] font-bold group-data-[rail=full]/rail:block">
+          Use the dock
+        </span>
+        <IconCollapseRight className="h-4 w-4 -scale-x-100" />
       </button>
 
       {/* The ONLY scrolling region. The whole rail used to scroll, which put
@@ -1016,8 +1034,12 @@ function Breadcrumb({ pathname }: { pathname: string }) {
       </nav>
 
       {/* NODE 225:3641 puts two more controls between the crumb and the
-          account cluster: a search field and the reader's current location. */}
-      <TopBarSearch />
+          account cluster: a search field and the reader's current location.
+          THE SEARCH IS GONE, on every route — ogazboiz's call, asked twice
+          ("remove it na", then "why am I seeing search at the top again").
+          It was a link into Explore rather than a field, and Explore's own
+          search and the sidebar are the ways in; git holds the field for the
+          day it is asked back. */}
       <TopBarLocation />
 
       <div className="ml-auto shrink-0">
@@ -1027,34 +1049,6 @@ function Breadcrumb({ pathname }: { pathname: string }) {
   );
 }
 
-/**
- * THE TOP BAR'S SEARCH — node 225:3681.
- *
- * A 298x38 field at a full round: transparent (`white/0.2%` is nothing), a
- * `rgba(255,255,255,0.4)` stroke at 0.68px and the file's two-layer shadow —
- * the same outlined material the stories rail's "Your Story" tile and the
- * people deck's step buttons carry. Inside, the 16px
- * `vuesax/linear/search-normal` and the word "Search" at Geist Medium 16/22
- * with -0.007em, in `#7A7A7A`.
- *
- * It is a LINK, not an input. Search already has a surface with its own field,
- * its filters and its result tabs; a second box that duplicates the query state
- * is how the two drift apart. This is the door to it, which is what a field in
- * a top bar is for.
- */
-function TopBarSearch() {
-  return (
-    <Link
-      href="/discover"
-      className="ws-press hidden h-[38px] w-[298px] shrink-0 items-center gap-2 rounded-full border-[0.68px] border-white/40 px-2 text-[#7A7A7A] shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors hover:text-body lg:flex"
-    >
-      <IconTopSearch className="h-4 w-4 shrink-0" />
-      <span className="text-[16px] font-medium leading-[22px] tracking-[-0.007em]">
-        Search
-      </span>
-    </Link>
-  );
-}
 
 /**
  * THE CURRENT LOCATION — node 225:3684.
@@ -1542,6 +1536,10 @@ export function MobileBar({
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // A chat thread being typed into — the dock stays out of its way.
+  const chatOpen = useChatOpen();
+  // The reader tucked the desktop rail away and uses the dock instead.
+  const sidebarHidden = useSidebarHidden();
   useTrackNavHistory();
   const { ready, authenticated } = useAuth();
   const me = useMe();
@@ -1569,6 +1567,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const canCompose = authenticated && allowsCompose(pathname);
   /** Somebody looking around: settled, and not signed in. */
   const guest = ready && !authenticated;
+  // The desktop rail is drawn: flagged on, signed in, and not tucked away.
+  const railOn = MARKET_FLAGS.sidebar && !guest && !sidebarHidden;
 
   // The stream room owns its whole viewport; the shell stays out of the way
   // there (no rails over the player, no bars).
@@ -1662,7 +1662,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           on desktop with everything it had, and the dock steps back to phones
           only — the two must never both claim the navigation.
         */}
-        {MARKET_FLAGS.sidebar && !guest && (
+        {railOn && (
           <Sidebar
             pathname={pathname}
             onCompose={
@@ -1742,7 +1742,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             read as floating away from the nav that selects it. Packed left,
             the column sits against the sidebar and the slack collects once, at
             the outer edge, where the shell's own mx-auto already balances it. */}
-          <div className="flex min-w-0 flex-1 justify-start">
+          {/* Packed against the rail while there is one (see above); with the
+              rail tucked away and the dock in charge there is nothing to pack
+              against, and a column hugging the window's left edge under a
+              centred dock reads as lopsided. Then the group is centred, which
+              is where the dock already is. */}
+          <div className={cn("flex min-w-0 flex-1", railOn ? "justify-start" : "justify-center")}>
             <main
               className={cn(
                 // Padding, not margin, and from the shared chrome vars rather
@@ -1758,19 +1763,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // overflow-x-auto and are unaffected, and anything that needs a
                 // horizontal scrollbar must still opt into one explicitly.
                 //
-                // No max-width. The column had one (720px on home, 600px
-                // elsewhere) and the shell had another (1600px), so the layout
-                // stopped growing while the window kept going — 125px of dead
-                // black at 1440, 197px at 1512, 445px at 1920, always parked on
-                // the right, where it reads as the whole product shoved to one
-                // side. Every pane flexes to the window it is in instead.
+                // 600 WIDE, LIKE X'S TIMELINE. The column briefly had no cap
+                // at all — every pane flexed to the window — and on a 1440
+                // display the feed ran to ~860, so a portrait clip drawn at its
+                // own width sat beside a slab of empty card. The reader's
+                // verdict was "the main feed is too wide", against X's 600, and
+                // 600 is also what every other column surface already holds.
+                // Wide routes (store, studio, operations, schedule) are exempt:
+                // they drop the rail and are meant to spread. Whatever the
+                // window has left collects at the outer edge, past the rail,
+                // where the shell's own mx-auto balances it.
                 // `100dvh` MINUS the breadcrumb, not `min-h-dvh`. The bar is a
                 // sibling above this in the same flex column, so a full-viewport
                 // minimum made the document exactly one bar taller than the
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+                "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)]",
+                // The foot reserves the dock's row — except over an open chat,
+                // where the dock is gone and the reservation would be a blank
+                // band under the composer. WhatsApp's rule: the field sits on
+                // the screen's bottom edge at every height.
+                chatOpen ? "pb-0" : "pb-[var(--ws-nav-h)]",
+                !wide && "max-w-[600px]"
               )}
             >
               {children}
@@ -1794,6 +1809,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Desktop compose is the dock's own circle now — the floating
             `CreateFab` was the same act in the same corner, and two plus
             buttons a few pixels apart is what mounting both would be. */}
+        {/* NOT OVER AN OPEN CHAT. The dock's row is the message composer's
+            row; over a thread it covered the field on a phone and floated
+            across the thread's foot on desktop. `MessagesPage` reports the
+            open thread through `lib/chat-open-store`, and the dock returns
+            the moment the thread closes. */}
+        {!chatOpen && (
         <BottomDock
           guest={guest}
           /*
@@ -1804,9 +1825,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             rail's benefit, leaving no navigation at all. Found by turning the
             switch on and looking, which is the only way that shows up.
           */
-          className={MARKET_FLAGS.sidebar && !guest ? "md:hidden" : undefined}
+          className={railOn ? "md:hidden" : undefined}
           onCompose={canCompose && !guest ? () => setComposeOpen(true) : undefined}
+          // The way back, on desktop only: the dock is standing in for a rail
+          // the reader tucked away, so it carries the switch that restores it.
+          onShowSidebar={
+            MARKET_FLAGS.sidebar && !guest && sidebarHidden
+              ? () => setSidebarHidden(false)
+              : undefined
+          }
         />
+        )}
 
         <ComposeSheet
           open={composeOpen}

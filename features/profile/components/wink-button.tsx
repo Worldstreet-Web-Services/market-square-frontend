@@ -5,6 +5,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { IconWink } from "@/components/ui/icons";
 import { IconMsWinkFace } from "@/components/ui/design-icons";
+import { IconProfileWink } from "@/components/ui/profile-icons";
 import type { Profile } from "@/lib/api/schemas";
 import { useWink } from "@/features/profile/hooks/use-profile";
 
@@ -59,7 +60,15 @@ export function WinkButton({
    * drawn. The 15° IS carried, in the gradient: local top-to-bottom turned by
    * the rotation is 195deg on the page.
    */
-  size?: "sm" | "md" | "post";
+  /**
+   * `cover` is node 545:47604 — the stranger's profile cover. A 91x38 pill on
+   * the 90deg `#9F65FD -> #5B05E6` ramp (`ws-btn-welcome`, the same two stops
+   * every 90deg purple pill in the app uses) behind a transparent top layer,
+   * 8.08 of padding, the file's own 16px wink face 10.1 from the label, "Wink"
+   * at 14.94/25.61. Its stroke is white at weight ZERO, which renders nothing:
+   * no border. Sent dims it, as the post's filled disc does.
+   */
+  size?: "sm" | "md" | "post" | "cover";
 }) {
   const gate = useGate();
   const me = useMe();
@@ -88,29 +97,40 @@ export function WinkButton({
       onClick={() => gate(() => wink.send())}
       className={cn(
         "ws-press flex shrink-0 items-center justify-center rounded-full transition-colors",
-        size === "post"
-          ? cn(
-              "h-[33.26px] w-[33.26px] text-white",
-              "bg-[linear-gradient(195deg,var(--color-create)_0%,var(--color-spotlight)_100%)]",
-              // Sent: the same disc, dimmed, rather than a different colour.
-              // The ramp IS the control here, so recolouring it would read as
-              // a second kind of button rather than the same one already used.
-              wink.winked && "opacity-60"
-            )
-          : cn(
-              "border",
-              size === "sm" ? "h-6 w-6" : "h-8 w-8",
-              wink.winked
-                ? "border-create/40 bg-create/12 text-create"
-                : "border-white/20 text-body hover:bg-white/10 hover:text-heading"
-            ),
+        size === "cover" &&
+          cn(
+            "ws-btn-welcome h-[38px] w-[91px] gap-[10.1px] p-[8.08px] text-[14.94px] leading-[25.61px] text-white",
+            wink.winked && "opacity-60"
+          ),
+        size === "post" &&
+          cn(
+            "h-[33.26px] w-[33.26px] text-white",
+            "bg-[linear-gradient(195deg,var(--color-create)_0%,var(--color-spotlight)_100%)]",
+            // Sent: the same disc, dimmed, rather than a different colour.
+            // The ramp IS the control here, so recolouring it would read as
+            // a second kind of button rather than the same one already used.
+            wink.winked && "opacity-60"
+          ),
+        (size === "sm" || size === "md") &&
+          cn(
+            "border",
+            size === "sm" ? "h-6 w-6" : "h-8 w-8",
+            wink.winked
+              ? "border-create/40 bg-create/12 text-create"
+              : "border-white/20 text-body hover:bg-white/10 hover:text-heading"
+          ),
         // A refusal that is not "already winked" stays neutral and dimmed —
         // colouring it would read as a state the reader had reached rather
         // than a door that is shut.
         refused && !wink.winked && "cursor-not-allowed opacity-40"
       )}
     >
-      {size === "post" ? (
+      {size === "cover" ? (
+        <>
+          <IconProfileWink className="h-4 w-4 shrink-0" />
+          Wink
+        </>
+      ) : size === "post" ? (
         <IconMsWinkFace className="h-[22.15px] w-[22.15px] shrink-0" />
       ) : (
         <IconWink className={size === "sm" ? "h-3.5 w-3.5" : "h-[18px] w-[18px]"} />
