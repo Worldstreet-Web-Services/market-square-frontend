@@ -177,6 +177,22 @@ export const StreamSchema = z.object({
   id: z.string(),
   ownerId: z.string(),
   owner: ProfileSchema.nullable().optional().default(null),
+  /**
+   * WHO IS IN THE ROOM — a sample of up to three people currently connected,
+   * host first, then the most recent joiners. GIST ROOMS ONLY, by the
+   * backend's own privacy call: on a room you join, being seen is the point;
+   * on a broadcast, the same field would publish who is WATCHING by name and
+   * face to everyone, and nobody watching has been told they are visible.
+   * Broadcasts carry no field at all.
+   *
+   * Two things a reader must not do with it: derive "and N others" from
+   * `viewerCount` minus its length (presence counts SESSIONS, and a signed-out
+   * viewer has no profile to resolve, so the sample is routinely shorter than
+   * the count while a room is busy), and treat an empty array as "nobody is
+   * here" (it can also mean nobody RESOLVABLE is here). Defaulted to empty so
+   * a payload without it and a room without a resolvable soul render alike.
+   */
+  participants: z.array(ProfileSchema).optional().default([]),
   title: z.string(),
   description: z.string().nullable().optional().default(null),
   category: z.string().optional().default("other"),

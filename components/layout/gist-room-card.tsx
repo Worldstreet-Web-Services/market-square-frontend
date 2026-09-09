@@ -58,9 +58,16 @@ import { useStream } from "@/features/streams";
  *     at all. Such a room has no `houseConversationId`, so there is no roster
  *     to read, and the card used to render an empty stack beside "Join
  *     Gistroom" — a room that looked like nobody was in it, including the
- *     person who had just opened it. What it still cannot show is who JOINED:
- *     a `participants` sample on `GET /streams` would let this say what the
- *     file means, and it is asked for in the backend notes.
+ *     person who had just opened it.
+ *
+ *     WHO JOINED comes first when the service can say: `participants` on
+ *     `GET /streams/:id` is a sample of people currently connected (gist rooms
+ *     only — see the schema for the privacy call behind that). The card
+ *     already fetches the detail route to poll the room's status, so the
+ *     faces cost no extra request and no list-route flag. When the sample is
+ *     empty — a backend that has not shipped it, or a room whose joiners are
+ *     all signed-out and unresolvable — the host and the house roster fill
+ *     in exactly as before.
  */
 /** 60s, and only while the room is live — see the note at the call site. */
 const LIVE_POLL = ["while-live", 60_000] as const;
@@ -138,18 +145,19 @@ export function GistRoomCard({
   });
 
   /*
-    Host first, then the house roster minus the host (a host is usually a
-    member of their own house, and a face drawn twice reads as a bug). Three at
-    most — the file's cluster has three tiles.
+    Who is actually here first, then the host, then the house roster — each
+    layer only adding people the earlier ones did not (a host is usually in
+    their own sample AND their own house, and a face drawn twice reads as a
+    bug). Three at most — the file's cluster has three tiles.
   */
   const roster = (members.data?.items ?? []).flatMap((member) =>
     member.profile ? [member.profile] : []
   );
   const host = room?.owner ?? null;
-  const faces = [
-    ...(host ? [host] : []),
-    ...roster.filter((profile) => profile.id !== host?.id),
-  ].slice(0, 3);
+  const seen = new Set<string>();
+  const faces = [...(room?.participants ?? []), ...(host ? [host] : []), ...roster]
+    .filter((profile) => (seen.has(profile.id) ? false : (seen.add(profile.id), true)))
+    .slice(0, 3);
 
   return (
     /*
