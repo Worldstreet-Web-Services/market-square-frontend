@@ -65,6 +65,8 @@ const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   // The file's own "Mentioned in…" mark, on the event it was drawn for.
   mention: "/notifications/notif-mention.svg",
   like: "/notifications/notif-post.svg",
+  // The same mark the post like row carries — a like is one identity.
+  comment_like: "/notifications/notif-post.svg",
   repost: "/notifications/notif-post.svg",
   bookmark: "/notifications/notif-post.svg",
   tip_received: "/gifts/coin-stack.svg",
@@ -110,6 +112,7 @@ function headline(item: MarketNotification): string {
     case "mention":
       return "Mentioned you";
     case "like":
+    case "comment_like":
       return "New like";
     case "repost":
       return "Reposted";
@@ -143,6 +146,8 @@ function describe(item: MarketNotification): string {
       return `${who} started following you on Square.`;
     case "like":
       return `${who} liked your post.`;
+    case "comment_like":
+      return `${who} liked your comment.`;
     case "comment":
       return `${who} commented on your post.`;
     case "comment_reply":
