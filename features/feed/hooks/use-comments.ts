@@ -3,6 +3,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type InfiniteData,
   type QueryClient,
@@ -14,6 +15,7 @@ import { applyCommentLike, patchCommentIn } from "@/lib/comment-thread";
 import {
   addComment,
   deleteComment,
+  fetchComment,
   fetchComments,
   fetchReplies,
   likeComment,
@@ -32,22 +34,22 @@ import { patchPostEverywhere, reconcilePost } from "@/features/feed/lib/cache";
  * invalidates `["ms", "post", postId]` and the prefix match takes the thread
  * with it, so a like on the post and a reply to it settle through one path.
  *
- * ─── WHAT IS LIVE AND WHAT IS WAITING ───────────────────────────────────────
- * The contract on :8080 has `GET|POST /posts/:id/comments` and nothing else:
- * no `parentId`, no counts, no replies route, no like route, no delete. All
- * five were asked of the backend on 2026-09-09. Every hook here is written to
- * their agreed shape and behaves honestly against today's service:
+ * ─── THE CONTRACT, LIVE ON :8080 2026-09-09 ─────────────────────────────────
+ * `GET|POST /posts/:id/comments` (top-level only, newest first; `parentId` on
+ * create), `GET /comments/:id`, `GET /comments/:id/replies` (oldest first),
+ * `POST|DELETE /comments/:id/like` (idempotent), `DELETE /comments/:id`
+ * (author or post author). The 404-quiet `unavailable` states stay because a
+ * deployment that lags this one is a real state, not a hypothetical.
  *
- *   · a reply posts as a plain comment carrying `parentId`, which the service
- *     ignores until it ships — so the words land, top-level, rather than being
- *     refused;
- *   · replies, like and delete go QUIET on a 404 (`unavailable`), the bookmark
- *     pattern: the control stops offering itself instead of raising an error
- *     toast on every tap for a route that is not deployed.
+ * A reply is posted with the TAPPED comment's id as `parentId`; the service
+ * files it under the top-level parent and records who was answered. So the
+ * mutation carries both the tapped id (what is sent) and the thread id (what
+ * the client expects to change) — see `threadOf`.
  */
 type CommentsPage = { items: Comment[]; nextCursor: string | null };
 
 export const commentsKey = (postId: string) => ["ms", "post", postId, "comments"] as const;
+export const commentKey = (commentId: string) => ["ms", "comment", commentId] as const;
 export const repliesKey = (commentId: string) =>
   ["ms", "comment", commentId, "replies"] as const;
 
@@ -104,10 +106,25 @@ export function useReplies(commentId: string, enabled: boolean) {
   });
 }
 
+/**
+ * One comment by id — the permalink opened ON a comment (`?comment=`) reads
+ * this to learn which thread to expand before it can scroll.
+ */
+export function useComment(commentId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: commentKey(commentId ?? ""),
+    queryFn: () => fetchComment(commentId ?? ""),
+    enabled: enabled && Boolean(commentId),
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+  });
+}
+
 export interface AddCommentInput {
   text: string;
-  /** The TOP-LEVEL comment this answers — see `replyParentOf`. */
+  /** The comment the reader tapped Reply on — sent as is; the server files it. */
   parentId?: string | null;
+  /** The top-level thread it lands in — see `threadOf`. Bumped and refetched. */
+  threadId?: string | null;
 }
 
 /**
@@ -128,9 +145,9 @@ export function useAddComment(postId: string) {
         ...post,
         commentCount: post.commentCount + 1,
       }));
-      const parentId = typeof input === "string" ? null : input.parentId;
-      if (parentId) {
-        patchCommentEverywhere(queryClient, parentId, (comment) => ({
+      const threadId = typeof input === "string" ? null : input.threadId;
+      if (threadId) {
+        patchCommentEverywhere(queryClient, threadId, (comment) => ({
           ...comment,
           replyCount: comment.replyCount + 1,
         }));
@@ -141,9 +158,9 @@ export function useAddComment(postId: string) {
         ...post,
         commentCount: Math.max(0, post.commentCount - 1),
       }));
-      const parentId = typeof input === "string" ? null : input.parentId;
-      if (parentId) {
-        patchCommentEverywhere(queryClient, parentId, (comment) => ({
+      const threadId = typeof input === "string" ? null : input.threadId;
+      if (threadId) {
+        patchCommentEverywhere(queryClient, threadId, (comment) => ({
           ...comment,
           replyCount: Math.max(0, comment.replyCount - 1),
         }));
@@ -151,10 +168,10 @@ export function useAddComment(postId: string) {
       toast.error(errorMessage(error, "Couldn't add your comment."));
     },
     onSettled: (_result, _error, input) => {
-      const parentId = typeof input === "string" ? null : input.parentId;
+      const threadId = typeof input === "string" ? null : input.threadId;
       // A reply refetches its thread; a comment refetches the page. Both go
       // through the post so the card's tally reconciles too.
-      if (parentId) void queryClient.invalidateQueries({ queryKey: repliesKey(parentId) });
+      if (threadId) void queryClient.invalidateQueries({ queryKey: repliesKey(threadId) });
       reconcilePost(queryClient, postId);
     },
   });

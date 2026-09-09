@@ -170,9 +170,9 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["posts", "post_1", "comments"]), true);
     });
 
-    it("allows a thread's replies and nothing else under /comments", () => {
+    it("allows one comment, a thread's replies, and nothing else under /comments", () => {
       assert.equal(isPublicGet(["comments", "c_1", "replies"]), true);
-      assert.equal(isPublicGet(["comments", "c_1"]), false);
+      assert.equal(isPublicGet(["comments", "c_1"]), true);
       assert.equal(isPublicGet(["comments", "c_1", "like"]), false);
     });
 

@@ -5,13 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { errorCode } from "@/lib/api/envelope";
 import { formatCount, relativeTime } from "@/lib/format";
-import {
-  expanderLabel,
-  groupThread,
-  locateComment,
-  replyParentOf,
-  replyPrefill,
-} from "@/lib/comment-thread";
+import { expanderLabel, groupThread, locateComment, threadOf } from "@/lib/comment-thread";
 import { useGate } from "@/hooks/use-gate";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useMe } from "@/hooks/use-me";
@@ -25,6 +19,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import {
   commentsOf,
   useAddComment,
+  useComment,
   useComments,
   useDeleteComment,
   useLikeComment,
@@ -61,9 +56,11 @@ import type { Comment } from "@/features/feed/lib/types";
  * header on the permalink, at the sheet's foot in the sheet.
  */
 export interface ReplyTarget {
-  /** The top-level comment the reply files under. */
+  /** The comment the reader tapped Reply on — sent as `parentId`, as is. */
   parentId: string;
-  /** Who is being answered — shown as "Replying to @x" and prefilled. */
+  /** The top-level thread it will land in, for the bump and the refetch. */
+  threadId: string;
+  /** Who is being answered — "Replying to @x" above the box. */
   username: string | null;
   displayName: string;
 }
@@ -71,22 +68,21 @@ export interface ReplyTarget {
 /** The target a tap on Reply produces, for the surface to hold. */
 export function replyTargetFor(comment: Comment): ReplyTarget {
   return {
-    parentId: replyParentOf(comment),
+    parentId: comment.id,
+    threadId: threadOf(comment),
     username: comment.author?.username ?? null,
     displayName: comment.author?.displayName ?? "this comment",
   };
 }
 
-function authorHandle(comment: Comment): string | null {
-  return comment.author?.username ?? null;
-}
-
 /**
  * The composer.
  *
- * With a `replyTo` it opens on "@handle " so the reader's own words follow the
- * mention, says who is being answered above the field, and offers a cancel —
- * Escape does the same. Without one it is the plain "Post your reply…" box.
+ * With a `replyTo` it says who is being answered above the field and offers a
+ * cancel — Escape does the same. The text is NOT prefilled with "@handle":
+ * the service records who was answered from the tapped comment and returns
+ * them as `replyTo`, and the reply row draws the handle from that field, so a
+ * typed mention would print twice.
  */
 export function CommentBox({
   postId,
@@ -104,22 +100,7 @@ export function CommentBox({
   const field = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
 
-  /*
-    THE PREFILL IS APPLIED WHEN THE TARGET CHANGES, not on every render, so a
-    reader who has typed can switch targets without losing their words: only
-    the leading mention is swapped. Focus moves into the field because a tap
-    on Reply is a tap that wants to type.
-  */
-  // Derived during render from the previous target — React's "store the last
-  // prop" pattern — rather than in an effect, so the swap costs no extra pass.
-  const [lastTarget, setLastTarget] = useState<ReplyTarget | null>(null);
-  if (replyTo !== lastTarget) {
-    setLastTarget(replyTo);
-    if (replyTo) {
-      const prefill = replyPrefill(replyTo.username);
-      setText((current) => `${prefill}${current.replace(/^@\S+\s?/, "")}`.slice(0, 1000));
-    }
-  }
+  // A tap on Reply is a tap that wants to type.
   useEffect(() => {
     if (replyTo) field.current?.focus();
   }, [replyTo]);
@@ -130,7 +111,7 @@ export function CommentBox({
     if (!body || add.isPending) return;
     gate(() =>
       add.mutate(
-        { text: body, parentId: replyTo?.parentId ?? null },
+        { text: body, parentId: replyTo?.parentId ?? null, threadId: replyTo?.threadId ?? null },
         {
           onSuccess: () => {
             setText("");
@@ -211,15 +192,15 @@ function CommentHeart({
       onClick={onToggle}
       disabled={disabled}
       title={disabled ? "Liking comments isn't available yet" : undefined}
-      aria-label={comment.likedByMe ? "Unlike this comment" : "Like this comment"}
-      aria-pressed={comment.likedByMe}
+      aria-label={comment.likedByMe === true ? "Unlike this comment" : "Like this comment"}
+      aria-pressed={comment.likedByMe === true}
       className={cn(
         "flex shrink-0 flex-col items-center gap-0.5 self-start transition-colors",
-        comment.likedByMe ? "text-like" : "text-grey-400 hover:text-heading",
+        comment.likedByMe === true ? "text-like" : "text-grey-400 hover:text-heading",
         disabled && "cursor-not-allowed"
       )}
     >
-      <IconMsLike className="h-5 w-5" filled={comment.likedByMe} />
+      <IconMsLike className="h-5 w-5" filled={comment.likedByMe === true} />
       <span className="tnum text-[11px] leading-4 text-grey-300">
         {formatCount(comment.likeCount)}
       </span>
@@ -241,8 +222,8 @@ function CommentRow({
   children,
 }: {
   comment: Comment;
-  /** For a reply: the handle of the comment it answers. */
-  answering?: string | null;
+  /** For a reply: the person it answered, from the payload's `replyTo`. */
+  answering?: Comment["replyTo"];
   reply?: boolean;
   onReply: (comment: Comment) => void;
   like: ReturnType<typeof useLikeComment>;
@@ -293,12 +274,20 @@ function CommentRow({
           )}
           <span className="text-[13px] text-meta">· {relativeTime(comment.createdAt)}</span>
         </p>
-        {reply && answering && (
-          <p className="text-[12px] leading-4 text-meta">
-            Replying to <span className="text-body">@{answering}</span>
-          </p>
-        )}
+        {/* The "@handle" a reply opens with is the RESOLVED person from
+            `replyTo` — a link, never a parse of the text — and absent when
+            the reply answered the parent directly or the account is gone. */}
         <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-normal text-body">
+          {reply && answering && (
+            <>
+              <Link
+                href={`/u/${answering.username}`}
+                className="font-semibold text-create hover:underline"
+              >
+                @{answering.username}
+              </Link>{" "}
+            </>
+          )}
           {comment.text}
         </p>
         <div className="mt-1.5 flex items-center gap-4 text-[13px] font-semibold text-meta">
@@ -331,7 +320,7 @@ function CommentRow({
         comment={comment}
         disabled={like.unavailable}
         onToggle={() =>
-          gate(() => like.mutate({ commentId: comment.id, like: !comment.likedByMe }))
+          gate(() => like.mutate({ commentId: comment.id, like: comment.likedByMe !== true }))
         }
       />
     </article>
@@ -379,7 +368,6 @@ function Thread({
   );
   const count = Math.max(comment.replyCount, inlineReplies.length);
   const label = expanderLabel(count, replies.length, open);
-  const answeredBy = new Map(replies.map((item) => [item.id, item]));
 
   return (
     <CommentRow
@@ -420,18 +408,12 @@ function Thread({
       {replies.length > 0 && (
         <div className="-mx-4 mt-2 -mb-3 border-t border-white/5">
           {replies.map((item) => {
-            // Whom it answers: the mention it opens with, if that names a
-            // reply on this thread, otherwise the thread's own author.
-            const mention = /^@(\S+)/.exec(item.text)?.[1] ?? null;
-            const target =
-              (mention && [...answeredBy.values()].find((r) => authorHandle(r) === mention)) ||
-              null;
             return (
               <CommentRow
                 key={item.id}
                 comment={item}
                 reply
-                answering={target ? authorHandle(target) : authorHandle(comment)}
+                answering={item.replyTo}
                 onReply={onReply}
                 like={like}
                 remove={remove}
@@ -477,7 +459,15 @@ export function CommentThread({
   const reduced = useReducedMotion();
   const items = commentsOf(comments.data);
   const threads = groupThread(items);
-  const located = locateComment(items, focusCommentId);
+  /*
+    THE DEEP LINK reads the comment itself (`GET /comments/:id`): a reply's id
+    is never on the top-level page, so only the service can say which thread
+    to open. What is already loaded is the fast path while that answers.
+  */
+  const focused = useComment(focusCommentId, Boolean(focusCommentId));
+  const located = focused.data
+    ? { commentId: focused.data.id, parentId: focused.data.parentId }
+    : locateComment(items, focusCommentId);
 
   /*
     SCROLL ONCE, WHEN THE ROW EXISTS. The row may arrive a beat after the

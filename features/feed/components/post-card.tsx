@@ -14,6 +14,7 @@ import { PostText } from "@/components/ui/post-text";
 import { CoinChips } from "@/components/ui/coin-chips";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { reportView, useRecordView } from "@/features/feed/hooks/use-record-view";
+import { IconReplayPlay } from "@/components/ui/profile-icons";
 import { useGate } from "@/hooks/use-gate";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -933,7 +934,12 @@ export function PostCard({
               }
               count={post.viewCount}
             >
-              <IconMsChart className="h-6 w-6" />
+              {/* One tally, two meanings. On a clip the slot is PLAYS — the
+                  file's own play mark (545:47772) with the number of people
+                  who played it — and the chart that means "views" on a post
+                  is not drawn beside it. Asked for by name: "just add a count
+                  of who played the video". */}
+              {video ? <IconReplayPlay className="h-6 w-6" /> : <IconMsChart className="h-6 w-6" />}
             </CountAction>
           )}
         </div>
