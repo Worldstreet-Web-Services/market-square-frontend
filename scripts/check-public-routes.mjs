@@ -257,6 +257,25 @@ const PENDING_ROUTES = {
       "get /operations/summary — see that entry.",
   },
 
+  // ── threaded comments (TikTok pattern) ───────────────────────────────────
+  // Asked of the backend 2026-09-09: replies under a comment, comment likes,
+  // and deleting one's own comment. Each call goes quiet on a 404 until the
+  // route ships. DELETE THESE ENTRIES when the routes appear in openapi.json.
+  "get /comments/{}/replies": {
+    reason:
+      "One thread's replies, oldest first. Fetched only when the reader opens " +
+      "a thread's expander; 404 today. See features/feed/hooks/use-comments.ts.",
+  },
+  "post /comments/{}/like": {
+    reason: "Like a comment. Optimistic in the client; 404 makes the heart go quiet.",
+  },
+  "delete /comments/{}/like": {
+    reason: "Unlike a comment. Same route as the post above.",
+  },
+  "delete /comments/{}": {
+    reason: "Delete the reader's own comment. Offered only on their own rows; 404 makes it go quiet.",
+  },
+
   "get /conversations/{}/members": {
     reason:
       "The full member roster of a GROUP conversation. Group threads " +

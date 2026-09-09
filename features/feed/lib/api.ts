@@ -7,6 +7,7 @@ import type { DeepLink } from "@/lib/api/schemas";
 import {
   BookmarkResultSchema,
   CommentSchema,
+  CommentLikeResultSchema,
   CommentsPageSchema,
   FeedPageSchema,
   LikeResultSchema,
@@ -112,12 +113,39 @@ export async function likePost(postId: string, like: boolean) {
   return LikeResultSchema.parse(like ? await msApi.post(path) : await msApi.del(path));
 }
 
-export async function fetchComments(postId: string) {
-  return CommentsPageSchema.parse(await msApi.get(`/posts/${postId}/comments`));
+export async function fetchComments(postId: string, cursor?: string) {
+  return CommentsPageSchema.parse(
+    await msApi.get(`/posts/${postId}/comments`, cursor ? { cursor } : {})
+  );
 }
 
-export async function addComment(postId: string, text: string) {
-  return CommentSchema.parse(await msApi.post(`/posts/${postId}/comments`, { text }));
+/**
+ * A comment, or a REPLY when `parentId` names the top-level comment it
+ * answers. `parentId` is only sent when present, so a backend that has not
+ * shipped threading receives exactly the body it always did.
+ */
+export async function addComment(postId: string, text: string, parentId?: string | null) {
+  return CommentSchema.parse(
+    await msApi.post(`/posts/${postId}/comments`, parentId ? { text, parentId } : { text })
+  );
+}
+
+/** `GET /comments/:id/replies` — a thread's replies, oldest first. Asked for; 404 until it ships. */
+export async function fetchReplies(commentId: string, cursor?: string) {
+  return CommentsPageSchema.parse(
+    await msApi.get(`/comments/${commentId}/replies`, cursor ? { cursor } : {})
+  );
+}
+
+/** `POST|DELETE /comments/:id/like`. Asked for; 404 until it ships. */
+export async function likeComment(commentId: string, like: boolean) {
+  const path = `/comments/${commentId}/like`;
+  return CommentLikeResultSchema.parse(like ? await msApi.post(path) : await msApi.del(path));
+}
+
+/** `DELETE /comments/:id` — the author's own. Asked for; 404 until it ships. */
+export async function deleteComment(commentId: string) {
+  await msApi.del(`/comments/${commentId}`);
 }
 
 export async function reportTarget(input: {

@@ -1,0 +1,496 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { cn } from "@/lib/cn";
+import { errorCode } from "@/lib/api/envelope";
+import { formatCount, relativeTime } from "@/lib/format";
+import { expanderLabel, groupThread, replyParentOf, replyPrefill } from "@/lib/comment-thread";
+import { useGate } from "@/hooks/use-gate";
+import { useMe } from "@/hooks/use-me";
+import { Avatar } from "@/components/ui/avatar";
+import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { IconMsLike } from "@/components/ui/design-icons";
+import { IconSend, IconX } from "@/components/ui/icons";
+import { IconTrash } from "@/components/ui/thread-icons";
+import { RowSkeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/ui/states";
+import {
+  commentsOf,
+  useAddComment,
+  useComments,
+  useDeleteComment,
+  useLikeComment,
+  useReplies,
+} from "@/features/feed/hooks/use-comments";
+import type { Comment } from "@/features/feed/lib/types";
+
+/**
+ * A POST'S COMMENT THREAD — the TikTok shape.
+ *
+ * Top-level comments newest first; under each, its replies oldest first,
+ * behind a "View N replies" expander so a page of thirty comments costs one
+ * request until a thread is opened. One level of nesting: a reply to a reply
+ * files under the same top-level comment and names the person it answers
+ * (`replyParentOf` / `replyPrefill`, pinned in `lib/comment-thread.test.ts`).
+ *
+ * Every comment and reply carries a heart with a live count — `--color-like`
+ * when the reader has liked it, the same red the post card's heart uses. Own
+ * rows carry a delete. Reply, like and delete all sit behind `useGate` for a
+ * signed-out reader.
+ *
+ * ─── WHAT GOES QUIET ────────────────────────────────────────────────────────
+ * Replies, likes and delete are asked-for routes. Until each ships, the
+ * matching control stops offering itself on the first 404 (`unavailable`)
+ * rather than toasting an error on every tap — the bookmark pattern. A reply
+ * still posts today: the service ignores `parentId` and files the words
+ * top-level, which is the honest fallback, and the thread refetches to show
+ * where they actually landed.
+ *
+ * ─── COMPOSITION ────────────────────────────────────────────────────────────
+ * `CommentThread` draws the list and `CommentBox` the composer; the SURFACE
+ * (permalink page, comments sheet) owns the `replyTo` state and hands it to
+ * both, because the box sits wherever that surface puts it — pinned under the
+ * header on the permalink, at the sheet's foot in the sheet.
+ */
+export interface ReplyTarget {
+  /** The top-level comment the reply files under. */
+  parentId: string;
+  /** Who is being answered — shown as "Replying to @x" and prefilled. */
+  username: string | null;
+  displayName: string;
+}
+
+/** The target a tap on Reply produces, for the surface to hold. */
+export function replyTargetFor(comment: Comment): ReplyTarget {
+  return {
+    parentId: replyParentOf(comment),
+    username: comment.author?.username ?? null,
+    displayName: comment.author?.displayName ?? "this comment",
+  };
+}
+
+function authorHandle(comment: Comment): string | null {
+  return comment.author?.username ?? null;
+}
+
+/**
+ * The composer.
+ *
+ * With a `replyTo` it opens on "@handle " so the reader's own words follow the
+ * mention, says who is being answered above the field, and offers a cancel —
+ * Escape does the same. Without one it is the plain "Post your reply…" box.
+ */
+export function CommentBox({
+  postId,
+  replyTo,
+  onCancelReply,
+  className,
+}: {
+  postId: string;
+  replyTo: ReplyTarget | null;
+  onCancelReply: () => void;
+  className?: string;
+}) {
+  const add = useAddComment(postId);
+  const gate = useGate();
+  const field = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState("");
+
+  /*
+    THE PREFILL IS APPLIED WHEN THE TARGET CHANGES, not on every render, so a
+    reader who has typed can switch targets without losing their words: only
+    the leading mention is swapped. Focus moves into the field because a tap
+    on Reply is a tap that wants to type.
+  */
+  // Derived during render from the previous target — React's "store the last
+  // prop" pattern — rather than in an effect, so the swap costs no extra pass.
+  const [lastTarget, setLastTarget] = useState<ReplyTarget | null>(null);
+  if (replyTo !== lastTarget) {
+    setLastTarget(replyTo);
+    if (replyTo) {
+      const prefill = replyPrefill(replyTo.username);
+      setText((current) => `${prefill}${current.replace(/^@\S+\s?/, "")}`.slice(0, 1000));
+    }
+  }
+  useEffect(() => {
+    if (replyTo) field.current?.focus();
+  }, [replyTo]);
+
+  const submit = () => {
+    const body = text.trim();
+    // Guarded on isPending too: Enter held down would post the same words twice.
+    if (!body || add.isPending) return;
+    gate(() =>
+      add.mutate(
+        { text: body, parentId: replyTo?.parentId ?? null },
+        {
+          onSuccess: () => {
+            setText("");
+            onCancelReply();
+          },
+        }
+      )
+    );
+  };
+
+  return (
+    <div className={cn("ws-hair flex flex-col gap-2 border-b px-4 py-3", className)}>
+      {replyTo && (
+        <div className="flex items-center justify-between gap-2 text-[13px] text-meta">
+          <span className="min-w-0 truncate">
+            Replying to{" "}
+            <span className="font-semibold text-body">
+              {replyTo.username ? `@${replyTo.username}` : replyTo.displayName}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+            className="ws-press flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-meta transition-colors hover:bg-white/10 hover:text-heading"
+          >
+            <IconX className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          ref={field}
+          value={text}
+          onChange={(event) => setText(event.target.value.slice(0, 1000))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submit();
+            if (event.key === "Escape" && replyTo) {
+              event.preventDefault();
+              onCancelReply();
+            }
+          }}
+          placeholder={replyTo ? "Write your reply…" : "Post your reply…"}
+          aria-label={replyTo ? "Write a reply to this comment" : "Write a reply"}
+          disabled={add.isPending}
+          className="ws-field min-w-0 flex-1 px-4 py-2 text-[15px] text-heading outline-none placeholder:text-meta disabled:opacity-60"
+        />
+        <button
+          onClick={submit}
+          disabled={!text.trim() || add.isPending}
+          aria-label={replyTo ? "Post reply to comment" : "Post reply"}
+          className="ws-press shrink-0 rounded-full bg-accent p-2 text-ink transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <IconSend className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The heart on a comment. The count sits under the heart, TikTok's column,
+ * and the whole control is one button so the count is part of the hit area.
+ */
+function CommentHeart({
+  comment,
+  onToggle,
+  disabled,
+}: {
+  comment: Comment;
+  onToggle: () => void;
+  /** Set once the like route has answered 404: still drawn, no longer live. */
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      title={disabled ? "Liking comments isn't available yet" : undefined}
+      aria-label={comment.likedByMe ? "Unlike this comment" : "Like this comment"}
+      aria-pressed={comment.likedByMe}
+      className={cn(
+        "flex shrink-0 flex-col items-center gap-0.5 self-start transition-colors",
+        comment.likedByMe ? "text-like" : "text-grey-400 hover:text-heading",
+        disabled && "cursor-not-allowed"
+      )}
+    >
+      <IconMsLike className="h-5 w-5" filled={comment.likedByMe} />
+      <span className="tnum text-[11px] leading-4 text-grey-300">
+        {formatCount(comment.likeCount)}
+      </span>
+    </button>
+  );
+}
+
+function CommentRow({
+  comment,
+  answering,
+  reply,
+  onReply,
+  like,
+  remove,
+  isMine,
+  gate,
+  className,
+  children,
+}: {
+  comment: Comment;
+  /** For a reply: the handle of the comment it answers. */
+  answering?: string | null;
+  reply?: boolean;
+  onReply: (comment: Comment) => void;
+  like: ReturnType<typeof useLikeComment>;
+  remove: ReturnType<typeof useDeleteComment>;
+  isMine: boolean;
+  gate: (action: () => void) => void;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const author = comment.author;
+  const size = reply ? 28 : 36;
+  return (
+    <article
+      className={cn(
+        "ws-row flex gap-3 px-4 py-3",
+        // A reply is indented by the parent's avatar column: 36 + the 12 gap.
+        reply && "pl-16",
+        className
+      )}
+    >
+      {author ? (
+        <Link href={`/u/${author.username}`} className="shrink-0">
+          <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={size} />
+        </Link>
+      ) : (
+        <Avatar name="?" seed={comment.authorId} size={size} />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[14px]">
+          {author ? (
+            <>
+              <Link href={`/u/${author.username}`} className="font-bold text-heading hover:underline">
+                {author.displayName}
+              </Link>
+              <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5 shrink-0" />
+              <OrgBadgeChip orgBadge={author.orgBadge} />
+              <RoleChip role={author.role} className="shrink-0" />
+              <span className="text-[13px] text-meta">@{author.username}</span>
+            </>
+          ) : (
+            <span className="font-bold text-heading">Member</span>
+          )}
+          <span className="text-[13px] text-meta">· {relativeTime(comment.createdAt)}</span>
+        </p>
+        {reply && answering && (
+          <p className="text-[12px] leading-4 text-meta">
+            Replying to <span className="text-body">@{answering}</span>
+          </p>
+        )}
+        <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-normal text-body">
+          {comment.text}
+        </p>
+        <div className="mt-1.5 flex items-center gap-4 text-[13px] font-semibold text-meta">
+          <button
+            type="button"
+            onClick={() => gate(() => onReply(comment))}
+            className="transition-colors hover:text-heading"
+          >
+            Reply
+          </button>
+          {isMine && (
+            <button
+              type="button"
+              disabled={remove.unavailable || remove.isPending}
+              title={remove.unavailable ? "Deleting comments isn't available yet" : undefined}
+              onClick={() =>
+                gate(() => remove.mutate({ commentId: comment.id, parentId: comment.parentId }))
+              }
+              aria-label="Delete your comment"
+              className="flex items-center gap-1 transition-colors hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <IconTrash className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          )}
+        </div>
+        {children}
+      </div>
+      <CommentHeart
+        comment={comment}
+        disabled={like.unavailable}
+        onToggle={() =>
+          gate(() => like.mutate({ commentId: comment.id, like: !comment.likedByMe }))
+        }
+      />
+    </article>
+  );
+}
+
+/**
+ * One top-level comment with its replies behind the expander.
+ *
+ * Replies the PAGE already carried (a backend that interleaves) are shown at
+ * once; the expander then fetches the rest through the replies route. The
+ * count on the expander is the server's `replyCount` less what is on screen.
+ */
+function Thread({
+  comment,
+  inlineReplies,
+  onReply,
+  like,
+  remove,
+  myId,
+  gate,
+}: {
+  comment: Comment;
+  inlineReplies: Comment[];
+  onReply: (comment: Comment) => void;
+  like: ReturnType<typeof useLikeComment>;
+  remove: ReturnType<typeof useDeleteComment>;
+  myId: string | undefined;
+  gate: (action: () => void) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const fetched = useReplies(comment.id, open);
+  const fetchedItems = fetched.data?.pages.flatMap((page) => page.items) ?? [];
+  // Inline first, then fetched, deduplicated on id — the same reply can arrive
+  // both ways once the backend fills `parentId` in on the page.
+  const seen = new Set<string>();
+  const replies = [...inlineReplies, ...(open ? fetchedItems : [])].filter((item) =>
+    seen.has(item.id) ? false : (seen.add(item.id), true)
+  );
+  const count = Math.max(comment.replyCount, inlineReplies.length);
+  const label = expanderLabel(count, replies.length, open);
+  const answeredBy = new Map(replies.map((item) => [item.id, item]));
+
+  return (
+    <CommentRow
+      comment={comment}
+      onReply={onReply}
+      like={like}
+      remove={remove}
+      isMine={Boolean(myId && comment.authorId === myId)}
+      gate={gate}
+    >
+      {label && (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="mt-2 flex items-center gap-2 text-[13px] font-semibold text-meta transition-colors hover:text-heading"
+        >
+          <span aria-hidden className="ws-hair h-px w-6 border-t" />
+          {label}
+        </button>
+      )}
+      {open && fetched.isPending && <RowSkeleton />}
+      {/* A 404 is the route not being deployed yet, not a failed thread: the
+          expander stays honest about the count and the row says nothing. */}
+      {open && fetched.isError && errorCode(fetched.error) !== "NOT_FOUND" && (
+        <p className="mt-2 text-[13px] text-meta">Couldn&apos;t load the replies.</p>
+      )}
+      {open && fetched.hasNextPage && (
+        <button
+          type="button"
+          onClick={() => fetched.fetchNextPage()}
+          disabled={fetched.isFetchingNextPage}
+          className="mt-2 text-[13px] font-semibold text-meta transition-colors hover:text-heading disabled:opacity-40"
+        >
+          View more replies
+        </button>
+      )}
+      {replies.length > 0 && (
+        <div className="-mx-4 mt-2 -mb-3 border-t border-white/5">
+          {replies.map((item) => {
+            // Whom it answers: the mention it opens with, if that names a
+            // reply on this thread, otherwise the thread's own author.
+            const mention = /^@(\S+)/.exec(item.text)?.[1] ?? null;
+            const target =
+              (mention && [...answeredBy.values()].find((r) => authorHandle(r) === mention)) ||
+              null;
+            return (
+              <CommentRow
+                key={item.id}
+                comment={item}
+                reply
+                answering={target ? authorHandle(target) : authorHandle(comment)}
+                onReply={onReply}
+                like={like}
+                remove={remove}
+                isMine={Boolean(myId && item.authorId === myId)}
+                gate={gate}
+                className="pl-16"
+              />
+            );
+          })}
+        </div>
+      )}
+    </CommentRow>
+  );
+}
+
+export function CommentThread({
+  postId,
+  enabled = true,
+  onReply,
+  emptyTitle = "No replies yet",
+  emptyBody = "Be the first to reply.",
+}: {
+  postId: string;
+  enabled?: boolean;
+  onReply: (target: ReplyTarget) => void;
+  emptyTitle?: string;
+  emptyBody?: string;
+}) {
+  const comments = useComments(postId, enabled);
+  const like = useLikeComment();
+  const remove = useDeleteComment(postId);
+  const me = useMe();
+  const gate = useGate();
+  const items = commentsOf(comments.data);
+  const threads = groupThread(items);
+
+  if (comments.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
+  if (comments.isError)
+    return (
+      <div className="p-4">
+        <ErrorState
+          error={comments.error}
+          fallback="Couldn't load the replies."
+          onRetry={() => comments.refetch()}
+        />
+      </div>
+    );
+  if (threads.length === 0)
+    return (
+      <div className="p-4">
+        <EmptyState glyph="◇" title={emptyTitle} body={emptyBody} />
+      </div>
+    );
+
+  return (
+    <>
+      {threads.map(({ comment, replies }) => (
+        <Thread
+          key={comment.id}
+          comment={comment}
+          inlineReplies={replies}
+          onReply={(target) => onReply(replyTargetFor(target))}
+          like={like}
+          remove={remove}
+          myId={me.data?.id}
+          gate={gate}
+        />
+      ))}
+      {comments.hasNextPage && (
+        <div className="px-4 py-3">
+          <button
+            type="button"
+            onClick={() => comments.fetchNextPage()}
+            disabled={comments.isFetchingNextPage}
+            className="text-[13px] font-semibold text-meta transition-colors hover:text-heading disabled:opacity-40"
+          >
+            More comments
+          </button>
+        </div>
+      )}
+    </>
+  );
+}

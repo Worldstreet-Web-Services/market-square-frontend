@@ -11,11 +11,34 @@ export { MentionSchema, PostSchema };
 // falls back to a shortened id when author is absent.
 export const CommentSchema = z.object({
   id: z.string(),
+  postId: z.string().optional().default(""),
   authorId: z.string().optional().default(""),
   text: z.string(),
   createdAt: z.string(),
   author: ProfileSchema.nullable().optional().default(null),
+  /**
+   * THE THREAD FIELDS — asked of the backend on 2026-09-09, every one
+   * optional with a default so today's payload (which carries none of them)
+   * keeps parsing.
+   *
+   * `parentId` is the TOP-LEVEL comment this one answers, or null for a
+   * top-level comment. One level only, the TikTok shape: a reply to a reply
+   * carries the same top-level parent and names the person in its text, so a
+   * thread never nests past two levels and never needs a recursive reader.
+   *
+   * `replyCount` is meaningful on a top-level comment (0 on a reply).
+   * `likeCount` / `likedByMe` default to nothing-yet rather than being
+   * absent, because the like control has to draw SOMETHING and "0, not liked"
+   * is the honest zero state for a payload that cannot count.
+   */
+  parentId: z.string().nullable().optional().default(null),
+  replyCount: z.number().optional().default(0),
+  likeCount: z.number().optional().default(0),
+  likedByMe: z.boolean().optional().default(false),
 });
+
+/** `POST|DELETE /comments/:id/like` — the resulting state, same shape as a post like. */
+export const CommentLikeResultSchema = z.object({ liked: z.boolean(), likeCount: z.number() });
 
 // The feed's view of a backend Stream: no owner object, no live viewerCount
 // (that's detail-only) — peakViewers is what the list carries.
