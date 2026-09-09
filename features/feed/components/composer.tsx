@@ -22,8 +22,10 @@ import {
   validateUpload,
   validateVideoDuration,
 } from "@/lib/api/upload";
-import { useCreatePost, useMentionSearch, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
-import type { Mention, Post } from "@/features/feed/lib/types";
+import { useCreatePost, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
+import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
+import { MentionPicker } from "@/features/feed/components/mention-picker";
+import type { Post } from "@/features/feed/lib/types";
 
 const MAX = 2000;
 
@@ -93,7 +95,10 @@ export function Composer({
   const fileInput = useRef<HTMLInputElement>(null);
   // Seeded once. Later renders must not clobber what the person has typed, so
   // this is an initial value rather than an effect that syncs on every change.
-  const [text, setText] = useState(prefill?.text ?? "");
+  // The text and the @-mention machinery live in one shared hook — the
+  // comment boxes use the same one, so "@" behaves identically everywhere.
+  const typing = useMentionTyping({ max: MAX, field, initial: prefill?.text ?? "" });
+  const { text } = typing;
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   // Attaching a link is a picker, not an id box — see LinkTargetPicker.
@@ -101,7 +106,6 @@ export function Composer({
   const [link, setLink] = useState<DeepLink | null>(prefill?.link ?? null);
   const [linkLabel, setLinkLabel] = useState<string | null>(prefill?.label ?? null);
   const [kind, setKind] = useState<"update" | "story">(asStory && !quoted ? "story" : "update");
-  const [mentionQuery, setMentionQuery] = useState("");
   // Height follows the CONTENT, measured from the element rather than counted
   // from newlines: a long unbroken line wraps into several visual rows that no
   // character count can predict. Reset to auto first, or scrollHeight only
@@ -113,13 +117,6 @@ export function Composer({
     node.style.height = `${node.scrollHeight}px`;
   }, [text]);
 
-  const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
-  // The picker used to insert "@handle" text and throw the Mention away, so
-  // nobody was ever actually mentioned. POST /posts takes `mentions`, so the
-  // chosen objects are kept and sent — filtered on submit to whoever is still
-  // written in the body, since a handle can be edited or deleted afterwards.
-  const [picked, setPicked] = useState<Mention[]>([]);
-  const mentionResults = useMentionSearch(mentionQuery, mentionRange !== null);
 
   useEffect(() => {
     if (autoFocus) field.current?.focus();
@@ -135,9 +132,8 @@ export function Composer({
   const submit = () => {
     const body = text.trim();
     if (!body && !mediaFile) return;
-    const mentions = picked.filter((mention) =>
-      new RegExp(`(^|\\s)@${mention.handle}\\b`).test(body)
-    );
+    // Kept objects, filtered to whoever is still written in the body.
+    const mentions = typing.mentionsFor(body);
     gate(() => void (async () => {
       let mediaUrl: string | undefined;
       try {
@@ -165,54 +161,16 @@ export function Composer({
             toast.error("Posted, but quoting isn't available yet — it went out as a plain post.");
           }
           onDone?.(created);
-          setText("");
+          typing.reset();
           setMediaFile(null);
           setPreviewUrl("");
           setLink(null);
           setLinkLabel(null);
           setLinkOpen(false);
-          setMentionQuery("");
-          setMentionRange(null);
-          setPicked([]);
           if (fileInput.current) fileInput.current.value = "";
         } }
       );
     })());
-  };
-
-  const updateText = (value: string, caret: number) => {
-    const next = value.slice(0, MAX);
-    setText(next);
-    const beforeCaret = next.slice(0, Math.min(caret, next.length));
-    const match = beforeCaret.match(/(?:^|\s)@([a-zA-Z0-9_-]*)$/);
-    if (!match) {
-      setMentionRange(null);
-      setMentionQuery("");
-      return;
-    }
-    const start = beforeCaret.length - match[1].length - 1;
-    setMentionRange({ start, end: beforeCaret.length });
-    setMentionQuery(match[1]);
-  };
-
-  const insertMention = (mention: Mention) => {
-    if (!mentionRange) return;
-    const handle = mention.handle;
-    setPicked((current) =>
-      current.some((entry) => entry.type === mention.type && entry.id === mention.id)
-        ? current
-        : [...current, mention]
-    );
-    const inserted = `@${handle} `;
-    const next = `${text.slice(0, mentionRange.start)}${inserted}${text.slice(mentionRange.end)}`.slice(0, MAX);
-    const caret = Math.min(mentionRange.start + inserted.length, next.length);
-    setText(next);
-    setMentionRange(null);
-    setMentionQuery("");
-    requestAnimationFrame(() => {
-      field.current?.focus();
-      field.current?.setSelectionRange(caret, caret);
-    });
   };
 
   const chooseMedia = async (file: File | undefined) => {
@@ -321,9 +279,9 @@ export function Composer({
         <textarea
           ref={field}
           value={text}
-          onChange={(event) => updateText(event.target.value, event.target.selectionStart)}
+          onChange={(event) => typing.update(event.target.value, event.target.selectionStart)}
           onKeyDown={(event) => {
-            if (event.key === "Escape") setMentionRange(null);
+            if (event.key === "Escape") typing.dismiss();
           }}
           placeholder="What's happening on the square?"
           rows={1}
@@ -331,27 +289,7 @@ export function Composer({
           style={{ maxHeight: "38dvh" }}
         />
 
-        {mentionRange && (
-          <div className="ws-popover relative z-30 mb-2 max-h-64 overflow-y-auto rounded-2xl p-1.5">
-            <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-meta">People and groups</p>
-            {mentionResults.isPending && <p className="px-3 py-3 text-xs text-meta">Searching…</p>}
-            {mentionResults.data?.items.map((mention) => (
-              <button
-                key={`${mention.type}:${mention.id}`}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => insertMention(mention)}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/8"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/8 text-xs font-bold text-accent">{mention.type === "group" ? "GR" : mention.label.slice(0, 2).toUpperCase()}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-heading">{mention.label}</span>
-                  <span className="block truncate text-xs text-meta">@{mention.handle} · {mention.type === "group" ? "Group" : "Person"}</span>
-                </span>
-              </button>
-            ))}
-            {mentionResults.isSuccess && mentionResults.data.items.length === 0 && <p className="px-3 py-3 text-xs text-meta">No matching people or groups.</p>}
-          </div>
-        )}
+        {typing.token && <MentionPicker typing={typing} className="relative mb-2" />}
 
         <input
           ref={fileInput}
@@ -460,7 +398,7 @@ export function Composer({
               const node = field.current;
               const at = node?.selectionStart ?? text.length;
               const next = `${text.slice(0, at)}${fragment}${text.slice(at)}`;
-              updateText(next, at + fragment.length);
+              typing.update(next, at + fragment.length);
               // Typing continues where the insert ended, not at the end.
               const caret = at + fragment.length;
               window.requestAnimationFrame(() => {
@@ -475,7 +413,7 @@ export function Composer({
               const node = field.current;
               const at = node?.selectionStart ?? text.length;
               const next = `${text.slice(0, at)}${emoji}${text.slice(at)}`;
-              updateText(next, at + emoji.length);
+              typing.update(next, at + emoji.length);
               const caret = at + emoji.length;
               window.requestAnimationFrame(() => {
                 node?.focus();

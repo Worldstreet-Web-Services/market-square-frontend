@@ -70,6 +70,35 @@ async function searchMentionTargets(req: NextRequest) {
     const result = handleFixture("GET", ["mentions", "search"], req.nextUrl.searchParams, undefined, await callerUserId(req));
     return NextResponse.json(result.body, { status: result.status });
   }
+  // A BARE "@" — nothing typed after it yet — is the moment a reader expects
+  // to see people, and `/search?type=people` answers an empty query with an
+  // empty list by design. So that case reads the directory instead
+  // (`GET /profiles`, public, sorted by followers, the viewer already
+  // excluded), reshaped to the same Mention rows. "Typing @ does nothing"
+  // was this branch not existing.
+  if (!query) {
+    const directory = await fetch(`${BASE}/profiles?sort=followers&limit=8`, {
+      headers: {
+        accept: "application/json",
+        ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}),
+      },
+      cache: "no-store",
+    });
+    if (!directory.ok) return new NextResponse(await directory.text(), { status: directory.status, headers: { "content-type": "application/json" } });
+    const page = (await directory.json()) as {
+      data?: { items?: Array<{ id?: string; username?: string | null; displayName?: string | null }> };
+    };
+    const people = (page.data?.items ?? [])
+      .filter((item) => item.username)
+      .slice(0, 8)
+      .map((item) => ({
+        type: "profile" as const,
+        id: item.id ?? "",
+        label: item.displayName ?? item.username ?? "",
+        handle: item.username ?? "",
+      }));
+    return NextResponse.json({ success: true, data: { items: people } });
+  }
   // There is no mentions endpoint: this rewrites onto /search and keeps the
   // people. Results are discriminated by `kind` and carry the profile payload,
   // so the handle comes off `profile.username` — never parsed out of a href.

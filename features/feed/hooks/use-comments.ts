@@ -20,7 +20,7 @@ import {
   fetchReplies,
   likeComment,
 } from "@/features/feed/lib/api";
-import type { Comment } from "@/features/feed/lib/types";
+import type { Comment, Mention } from "@/features/feed/lib/types";
 import { patchPostEverywhere, reconcilePost } from "@/features/feed/lib/cache";
 
 /**
@@ -125,6 +125,8 @@ export interface AddCommentInput {
   parentId?: string | null;
   /** The top-level thread it lands in — see `threadOf`. Bumped and refetched. */
   threadId?: string | null;
+  /** Picked from the @-list; the service resolves typed handles as well. */
+  mentions?: Mention[];
 }
 
 /**
@@ -135,8 +137,8 @@ export function useAddComment(postId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: string | AddCommentInput) => {
-      const { text, parentId } = typeof input === "string" ? { text: input } : input;
-      return addComment(postId, text, parentId);
+      const { text, parentId, mentions } = typeof input === "string" ? { text: input } : input;
+      return addComment(postId, text, parentId, mentions);
     },
     // The reply is visible at once and the tally moves with it, on every
     // surface that draws this post rather than only the one being looked at.

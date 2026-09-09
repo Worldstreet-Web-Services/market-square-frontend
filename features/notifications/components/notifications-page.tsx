@@ -62,6 +62,8 @@ const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   comment: "/notifications/notif-mention.svg",
   // A reply to your comment is the same conversation mark as a comment.
   comment_reply: "/notifications/notif-mention.svg",
+  // The file's own "Mentioned in…" mark, on the event it was drawn for.
+  mention: "/notifications/notif-mention.svg",
   like: "/notifications/notif-post.svg",
   repost: "/notifications/notif-post.svg",
   bookmark: "/notifications/notif-post.svg",
@@ -105,6 +107,8 @@ function headline(item: MarketNotification): string {
       return "New comment";
     case "comment_reply":
       return "New reply";
+    case "mention":
+      return "Mentioned you";
     case "like":
       return "New like";
     case "repost":
@@ -143,6 +147,8 @@ function describe(item: MarketNotification): string {
       return `${who} commented on your post.`;
     case "comment_reply":
       return `${who} replied to your comment.`;
+    case "mention":
+      return `${who} mentioned you.`;
     case "repost":
       return `${who} reposted your post.`;
     case "bookmark":

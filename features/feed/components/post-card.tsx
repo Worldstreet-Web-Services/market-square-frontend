@@ -41,6 +41,8 @@ import {
   useRepostPost,
 } from "@/features/feed/hooks/use-feed";
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
+import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
+import { MentionPicker } from "@/features/feed/components/mention-picker";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -431,7 +433,9 @@ function InlineComment({
   const add = useAddComment(postId);
   const gate = useGate();
   const field = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
+  // The same @-typing as the composer and the thread box.
+  const typing = useMentionTyping({ max: 500, field });
+  const { text } = typing;
   const [sent, setSent] = useState(false);
 
   const submit = () => {
@@ -440,9 +444,9 @@ function InlineComment({
     // would otherwise post the same reply twice.
     if (!body || add.isPending) return;
     gate(() =>
-      add.mutate(body, {
+      add.mutate({ text: body, mentions: typing.mentionsFor(body) }, {
         onSuccess: () => {
-          setText("");
+          typing.reset();
           // Something has to happen. The reply lands in a thread the reader
           // cannot see from here, so without this the field just empties and
           // it is not obvious anything was posted. The tally moves at the same
@@ -480,7 +484,7 @@ function InlineComment({
     */
     <div
       className={cn(
-        "ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-0.5 px-2 md:max-w-[220px]",
+        "ws-comment-field relative flex h-10 min-w-0 flex-1 items-center gap-0.5 px-2 md:max-w-[220px]",
         className
       )}
     >
@@ -498,8 +502,11 @@ function InlineComment({
         <input
           ref={field}
           value={text}
-          onChange={(event) => setText(event.target.value.slice(0, 500))}
-          onKeyDown={(event) => event.key === "Enter" && submit()}
+          onChange={(event) => typing.update(event.target.value, event.target.selectionStart)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !typing.token) submit();
+            if (event.key === "Escape") typing.dismiss();
+          }}
           placeholder="Comment here..."
           aria-label="Write a reply"
           disabled={add.isPending}
@@ -515,6 +522,11 @@ function InlineComment({
         >
           <IconSend className="h-3.5 w-3.5" />
         </button>
+      )}
+      {typing.token && (
+        // Floated under the pill rather than in flow: the pill sits in the
+        // actions row and must not push share/Arkmark/more around.
+        <MentionPicker typing={typing} className="absolute left-0 top-full mt-1 w-72" />
       )}
     </div>
   );

@@ -42,6 +42,12 @@ export const CommentSchema = z.object({
   replyCount: z.number().optional().default(0),
   likeCount: z.number().optional().default(0),
   likedByMe: z.boolean().optional(),
+  /**
+   * People named in the comment, RESOLVED by the service (typed handles too,
+   * with a picker's structured ones winning on ambiguity; an unresolvable
+   * handle is dropped). Safe to render every one as a link.
+   */
+  mentions: z.array(MentionSchema).optional().default([]),
 });
 
 /** `POST|DELETE /comments/:id/like` — the resulting state, same shape as a post like. */

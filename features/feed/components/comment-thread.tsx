@@ -15,6 +15,9 @@ import { IconMsLike } from "@/components/ui/design-icons";
 import { IconSend, IconX } from "@/components/ui/icons";
 import { IconTrash } from "@/components/ui/thread-icons";
 import { RowSkeleton } from "@/components/ui/skeleton";
+import { PostText } from "@/components/ui/post-text";
+import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
+import { MentionPicker } from "@/features/feed/components/mention-picker";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import {
   commentsOf,
@@ -98,7 +101,10 @@ export function CommentBox({
   const add = useAddComment(postId);
   const gate = useGate();
   const field = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
+  // The same @-typing the post composer has: "@" opens the list, a pick
+  // writes the handle and keeps the Mention to send.
+  const typing = useMentionTyping({ max: 1000, field });
+  const { text } = typing;
 
   // A tap on Reply is a tap that wants to type.
   useEffect(() => {
@@ -111,10 +117,15 @@ export function CommentBox({
     if (!body || add.isPending) return;
     gate(() =>
       add.mutate(
-        { text: body, parentId: replyTo?.parentId ?? null, threadId: replyTo?.threadId ?? null },
+        {
+          text: body,
+          parentId: replyTo?.parentId ?? null,
+          threadId: replyTo?.threadId ?? null,
+          mentions: typing.mentionsFor(body),
+        },
         {
           onSuccess: () => {
-            setText("");
+            typing.reset();
             onCancelReply();
           },
         }
@@ -142,16 +153,19 @@ export function CommentBox({
           </button>
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
         <input
           ref={field}
           value={text}
-          onChange={(event) => setText(event.target.value.slice(0, 1000))}
+          onChange={(event) => typing.update(event.target.value, event.target.selectionStart)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") submit();
-            if (event.key === "Escape" && replyTo) {
+            // With the list open, Enter is not a send and Escape closes the
+            // list first; a second Escape cancels the reply.
+            if (event.key === "Enter" && !typing.token) submit();
+            if (event.key === "Escape") {
               event.preventDefault();
-              onCancelReply();
+              if (typing.token) typing.dismiss();
+              else if (replyTo) onCancelReply();
             }
           }}
           placeholder={replyTo ? "Write your reply…" : "Post your reply…"}
@@ -167,6 +181,9 @@ export function CommentBox({
         >
           <IconSend className="h-4 w-4" />
         </button>
+        {typing.token && (
+          <MentionPicker typing={typing} className="absolute left-0 right-0 top-full mt-1" />
+        )}
       </div>
     </div>
   );
@@ -277,19 +294,19 @@ function CommentRow({
         {/* The "@handle" a reply opens with is the RESOLVED person from
             `replyTo` — a link, never a parse of the text — and absent when
             the reply answered the parent directly or the account is gone. */}
-        <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-normal text-body">
+        <div className="mt-0.5 text-[15px] leading-normal text-body">
           {reply && answering && (
-            <>
-              <Link
-                href={`/u/${answering.username}`}
-                className="font-semibold text-create hover:underline"
-              >
-                @{answering.username}
-              </Link>{" "}
-            </>
+            <Link
+              href={`/u/${answering.username}`}
+              className="mr-1 font-semibold text-create hover:underline"
+            >
+              @{answering.username}
+            </Link>
           )}
-          {comment.text}
-        </p>
+          {/* The one renderer for post-shaped text: mentions become links
+              from the RESOLVED `mentions` field, never a second parser. */}
+          <PostText text={comment.text} mentions={comment.mentions} className="inline" />
+        </div>
         <div className="mt-1.5 flex items-center gap-4 text-[13px] font-semibold text-meta">
           <button
             type="button"

@@ -12,6 +12,10 @@ export const NotificationKindSchema = z
     // comment"). Asked of the backend 2026-09-09 together with `commentId`;
     // listed ahead of the service sending it, per the rule above.
     "comment_reply",
+    // Named in a post or a comment. `commentId` points at the comment when
+    // there is one; a person who is both the thread's author and named in
+    // the same reply gets ONE row, the comment_reply — the service dedupes.
+    "mention",
     "repost",
     "bookmark",
     "ticket_purchased",

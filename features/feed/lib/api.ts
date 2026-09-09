@@ -125,9 +125,19 @@ export async function fetchComments(postId: string, cursor?: string) {
  * top-level parent and records who was answered. `parentId` is only sent
  * when present.
  */
-export async function addComment(postId: string, text: string, parentId?: string | null) {
+export async function addComment(
+  postId: string,
+  text: string,
+  parentId?: string | null,
+  mentions?: Mention[]
+) {
   return CommentSchema.parse(
-    await msApi.post(`/posts/${postId}/comments`, parentId ? { text, parentId } : { text })
+    await msApi.post(`/posts/${postId}/comments`, {
+      text,
+      ...(parentId ? { parentId } : {}),
+      // Structured picks, so the service records exactly who was meant.
+      ...(mentions && mentions.length > 0 ? { mentions } : {}),
+    })
   );
 }
 
