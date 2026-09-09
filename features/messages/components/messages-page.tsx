@@ -375,7 +375,18 @@ export function MessagesPage({
       much — which is also why the composer could not be reached without
       scrolling a pane that was supposed to be pinned.
     */
-    <div className="flex h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-crumb-h)-var(--ws-nav-h))] overflow-hidden">
+    <div
+      className={cn(
+        "flex overflow-hidden",
+        // With a thread open the dock is hidden (lib/chat-open-store) and its
+        // `--ws-nav-h` must NOT be subtracted, or the composer floats a dock's
+        // height above the screen's foot. The inbox alone keeps the dock and
+        // the reservation.
+        open
+          ? "h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-crumb-h))]"
+          : "h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-crumb-h)-var(--ws-nav-h))]"
+      )}
+    >
       <div
         className={cn(
           // `relative` so the `+` can be positioned against the COLUMN. It is

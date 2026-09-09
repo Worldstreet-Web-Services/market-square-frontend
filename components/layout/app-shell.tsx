@@ -1781,7 +1781,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+                "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)]",
+                // The foot reserves the dock's row — except over an open chat,
+                // where the dock is gone and the reservation would be a blank
+                // band under the composer. WhatsApp's rule: the field sits on
+                // the screen's bottom edge at every height.
+                chatOpen ? "pb-0" : "pb-[var(--ws-nav-h)]",
                 !wide && "max-w-[600px]"
               )}
             >

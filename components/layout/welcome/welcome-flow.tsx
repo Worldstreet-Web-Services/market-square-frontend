@@ -513,6 +513,17 @@ function subscribe(listener: () => void) {
 const getSnapshot = () => (cache ??= readSeen());
 const getServerSnapshot = () => true;
 
+/**
+ * Has THIS browser been through the welcome sequence? Read by the post-sign-in
+ * onboarding so it does not open on a second "Welcome to Square": a newcomer
+ * who watched the tour, signed up, and was then shown a splash again read it
+ * as being sent back to the start. False on the server.
+ */
+export function hasSeenWelcome(): boolean {
+  if (typeof window === "undefined") return false;
+  return getSnapshot();
+}
+
 /** Remember it was seen, and tell every mounted reader at once. */
 export function markWelcomeSeen() {
   try {
