@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
@@ -425,14 +425,30 @@ function InlineComment({
   postId,
   onOpenThread,
   className,
+  revealed = false,
+  rootRef,
 }: {
   postId: string;
   onOpenThread: () => void;
   className?: string;
+  /**
+   * ON A PHONE THE FIELD IS HIDDEN UNTIL THE COMMENT TALLY IS TAPPED — the
+   * tap reveals it and puts the cursor in it, so the reader is typing rather
+   * than looking at a second pill under every post. From `md` up the file's
+   * row shows the field always and this is never set.
+   */
+  revealed?: boolean;
+  /** The card reads the root's size to know whether the field is on screen. */
+  rootRef?: React.Ref<HTMLDivElement>;
 }) {
   const add = useAddComment(postId);
   const gate = useGate();
   const field = useRef<HTMLInputElement>(null);
+  // Focus follows the reveal: a field that appears and waits for a second tap
+  // is a field that reads as broken.
+  useEffect(() => {
+    if (revealed) field.current?.focus();
+  }, [revealed]);
   // The same @-typing as the composer and the thread box.
   const typing = useMentionTyping({ max: 500, field });
   const { text } = typing;
@@ -483,6 +499,7 @@ function InlineComment({
       than leaving the row short.
     */
     <div
+      ref={rootRef}
       className={cn(
         // `flex-1` ONLY where the row is horizontal. Below `md` the action row
         // is a column, and a flex-basis of 0 on the COLUMN axis overrides the
@@ -577,6 +594,21 @@ export function PostCard({
   // same rule the follow control and the directory filter apply.
   const me = useMe();
   const [commentsOpen, setCommentsOpen] = useState(false);
+  /*
+    THE COMMENT TALLY DOES TWO THINGS, decided by what is on screen. On a
+    phone the reply field is hidden under the row until the tally is tapped,
+    so the first tap REVEALS it (and focuses it); once it is showing — which
+    on desktop is always — the tap opens the thread, as a reply count should.
+    Read from the field's own box rather than a breakpoint so the two can
+    never disagree about what the reader is looking at.
+  */
+  const [replyOpen, setReplyOpen] = useState(false);
+  const inlineRef = useRef<HTMLDivElement>(null);
+  const onCommentTally = () => {
+    const box = inlineRef.current?.getBoundingClientRect();
+    if (box && box.height > 0) setCommentsOpen(true);
+    else setReplyOpen(true);
+  };
   const author = post.author;
   // A button when the media can expand, a plain div when it cannot. Rendering
   // an inert button would announce a control to a screen reader that does
@@ -862,10 +894,11 @@ export function PostCard({
           spacing the row could not fit a 360px screen and pushed the page
           wider than the viewport. The spacing is the design's from md up. */}
       {/* The reply field takes its OWN ROW on a phone and sits inline from md
-          up. It used to be hidden below md, which fixed the overflow by
-          deleting the feature on mobile: it cannot shrink past its avatar and
-          padding, so on one row it made the action row wider than the screen.
-          Giving it a row of its own solves the geometry instead. */}
+          up — and on a phone that row is CLOSED until the comment tally is
+          tapped (ogazboiz's call: a second pill under every post was noise;
+          the tally is the door). It cannot shrink past its glyph and padding,
+          so sharing the tallies' row would push the page wider than the
+          screen; its own row, opened on demand, solves the geometry. */}
       <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
       <div className="flex items-center justify-between gap-3 md:contents">
         {/*
@@ -890,7 +923,7 @@ export function PostCard({
           <CountAction
             label="Comments"
             count={post.commentCount}
-            onClick={() => setCommentsOpen(true)}
+            onClick={onCommentTally}
           >
             <IconMsComment className="h-6 w-6" />
           </CountAction>
@@ -1021,7 +1054,10 @@ export function PostCard({
         <InlineComment
           postId={post.id}
           onOpenThread={() => setCommentsOpen(true)}
-          className="md:order-2"
+          revealed={replyOpen}
+          rootRef={inlineRef}
+          // Hidden on a phone until the tally reveals it; the file's row from md.
+          className={cn("md:order-2", !replyOpen && "hidden md:flex")}
         />
       </div>
 
