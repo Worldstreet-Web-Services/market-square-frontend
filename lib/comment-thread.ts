@@ -133,3 +133,27 @@ export function expanderLabel(replyCount: number, loaded: number, open: boolean)
   const more = loaded > 0 ? " more" : "";
   return `View ${remaining}${more} ${remaining === 1 ? "reply" : "replies"}`;
 }
+
+/**
+ * Which thread holds a comment id, for a permalink opened ON a comment
+ * (`/p/:postId?comment=:id`, where a "replied to your comment" notification
+ * lands).
+ *
+ * A top-level comment is its own thread (`parentId: null`); a reply names the
+ * thread to open first. Only what is LOADED can be located: a reply whose
+ * parent is not on the page cannot be placed without a lookup route, and the
+ * answer is then null rather than a guess — scrolling to the wrong comment is
+ * worse than scrolling nowhere.
+ */
+export function locateComment<T extends ThreadComment>(
+  items: readonly T[],
+  id: string | null | undefined
+): { commentId: string; parentId: string | null } | null {
+  if (!id) return null;
+  const match = items.find((item) => item.id === id);
+  if (!match) return null;
+  const parent = match.parentId && items.some((item) => item.id === match.parentId)
+    ? match.parentId
+    : null;
+  return { commentId: id, parentId: parent };
+}

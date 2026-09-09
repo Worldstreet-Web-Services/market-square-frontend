@@ -4,6 +4,7 @@ import {
   applyCommentLike,
   expanderLabel,
   groupThread,
+  locateComment,
   patchCommentIn,
   replyParentOf,
   replyPrefill,
@@ -89,4 +90,25 @@ test("the expander says how many MORE there are, and hides when open", () => {
   assert.equal(expanderLabel(3, 3, false), null);
   assert.equal(expanderLabel(3, 3, true), "Hide replies");
   assert.equal(expanderLabel(3, 0, true), null);
+});
+
+test("a comment is located in its own thread, a reply in its parent's", () => {
+  const items = [
+    at("2026-09-09T10:00:00Z", "a"),
+    at("2026-09-09T11:00:00Z", "a1", "a"),
+  ];
+  assert.deepEqual(locateComment(items, "a"), { commentId: "a", parentId: null });
+  assert.deepEqual(locateComment(items, "a1"), { commentId: "a1", parentId: "a" });
+});
+
+test("an id that is not loaded, or no id, locates nothing", () => {
+  const items = [at("2026-09-09T10:00:00Z", "a")];
+  assert.equal(locateComment(items, "zzz"), null);
+  assert.equal(locateComment(items, null), null);
+  assert.equal(locateComment(items, ""), null);
+});
+
+test("a reply whose parent is not loaded is its own entry, not a guess", () => {
+  const orphan = at("2026-09-09T10:00:00Z", "r", "gone");
+  assert.deepEqual(locateComment([orphan], "r"), { commentId: "r", parentId: null });
 });

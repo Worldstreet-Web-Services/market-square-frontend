@@ -8,6 +8,10 @@ export const NotificationKindSchema = z
     "follow",
     "like",
     "comment",
+    // Someone answered a comment of yours (TikTok's "replied to your
+    // comment"). Asked of the backend 2026-09-09 together with `commentId`;
+    // listed ahead of the service sending it, per the rule above.
+    "comment_reply",
     "repost",
     "bookmark",
     "ticket_purchased",
@@ -64,6 +68,12 @@ export const NotificationSchema = z.object({
   // Hydrated on every read, but a deleted account can leave it null.
   actor: ProfileSchema.nullable().optional().default(null),
   postId: z.string().nullable().optional().default(null),
+  /**
+   * The comment a `comment` or `comment_reply` event is about, so the row can
+   * open the permalink ON that comment (`/p/:postId?comment=:id`). Asked of
+   * the backend; null until it ships, and null on every other kind.
+   */
+  commentId: z.string().nullable().optional().default(null),
   streamId: z.string().nullable().optional().default(null),
   /**
    * WHAT THE NOTIFICATION IS ABOUT — the same shape as a tip's `source`, and

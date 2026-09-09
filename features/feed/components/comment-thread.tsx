@@ -5,8 +5,15 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { errorCode } from "@/lib/api/envelope";
 import { formatCount, relativeTime } from "@/lib/format";
-import { expanderLabel, groupThread, replyParentOf, replyPrefill } from "@/lib/comment-thread";
+import {
+  expanderLabel,
+  groupThread,
+  locateComment,
+  replyParentOf,
+  replyPrefill,
+} from "@/lib/comment-thread";
 import { useGate } from "@/hooks/use-gate";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
@@ -229,6 +236,7 @@ function CommentRow({
   remove,
   isMine,
   gate,
+  highlighted = false,
   className,
   children,
 }: {
@@ -241,6 +249,8 @@ function CommentRow({
   remove: ReturnType<typeof useDeleteComment>;
   isMine: boolean;
   gate: (action: () => void) => void;
+  /** The comment the permalink was opened on — a brief tint, then it fades. */
+  highlighted?: boolean;
   className?: string;
   children?: React.ReactNode;
 }) {
@@ -248,10 +258,14 @@ function CommentRow({
   const size = reply ? 28 : 36;
   return (
     <article
+      id={`comment-${comment.id}`}
       className={cn(
-        "ws-row flex gap-3 px-4 py-3",
+        "ws-row flex gap-3 px-4 py-3 transition-colors duration-700 motion-reduce:transition-none",
         // A reply is indented by the parent's avatar column: 36 + the 12 gap.
         reply && "pl-16",
+        // The purple ramp's light stop at a wash, so the row the reader was
+        // sent to is unmistakable and still reads as the same row once it fades.
+        highlighted && "bg-create/10",
         className
       )}
     >
@@ -339,6 +353,8 @@ function Thread({
   remove,
   myId,
   gate,
+  openInitially = false,
+  flashId,
 }: {
   comment: Comment;
   inlineReplies: Comment[];
@@ -347,8 +363,12 @@ function Thread({
   remove: ReturnType<typeof useDeleteComment>;
   myId: string | undefined;
   gate: (action: () => void) => void;
+  /** The permalink was opened on one of this thread's replies: start expanded. */
+  openInitially?: boolean;
+  /** The id currently tinted, if it is on this thread. */
+  flashId?: string | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openInitially);
   const fetched = useReplies(comment.id, open);
   const fetchedItems = fetched.data?.pages.flatMap((page) => page.items) ?? [];
   // Inline first, then fetched, deduplicated on id — the same reply can arrive
@@ -369,6 +389,7 @@ function Thread({
       remove={remove}
       isMine={Boolean(myId && comment.authorId === myId)}
       gate={gate}
+      highlighted={flashId === comment.id}
     >
       {label && (
         <button
@@ -416,6 +437,7 @@ function Thread({
                 remove={remove}
                 isMine={Boolean(myId && item.authorId === myId)}
                 gate={gate}
+                highlighted={flashId === item.id}
                 className="pl-16"
               />
             );
@@ -430,12 +452,20 @@ export function CommentThread({
   postId,
   enabled = true,
   onReply,
+  focusCommentId = null,
   emptyTitle = "No replies yet",
   emptyBody = "Be the first to reply.",
 }: {
   postId: string;
   enabled?: boolean;
   onReply: (target: ReplyTarget) => void;
+  /**
+   * The comment the page was opened ON (`?comment=` — where a "replied to
+   * your comment" notification lands). Its thread opens, it scrolls into
+   * view, and it is tinted for a moment. Only a loaded comment can be found;
+   * see `locateComment`.
+   */
+  focusCommentId?: string | null;
   emptyTitle?: string;
   emptyBody?: string;
 }) {
@@ -444,8 +474,42 @@ export function CommentThread({
   const remove = useDeleteComment(postId);
   const me = useMe();
   const gate = useGate();
+  const reduced = useReducedMotion();
   const items = commentsOf(comments.data);
   const threads = groupThread(items);
+  const located = locateComment(items, focusCommentId);
+
+  /*
+    SCROLL ONCE, WHEN THE ROW EXISTS. The row may arrive a beat after the
+    data (a reply's thread has to open and its replies fetch), so this waits
+    for the element for up to ~3s rather than firing against nothing. The
+    tint clears itself; under reduced motion the scroll is a jump and the
+    tint is simply on, then off.
+  */
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const targetId = located?.commentId ?? null;
+  useEffect(() => {
+    if (!targetId) return;
+    let cancelled = false;
+    let tries = 0;
+    let clear: number | undefined;
+    const attempt = () => {
+      if (cancelled) return;
+      const node = document.getElementById(`comment-${targetId}`);
+      if (!node) {
+        if (tries++ < 90) requestAnimationFrame(attempt);
+        return;
+      }
+      node.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+      setFlashId(targetId);
+      clear = window.setTimeout(() => setFlashId(null), 1800);
+    };
+    attempt();
+    return () => {
+      cancelled = true;
+      if (clear) window.clearTimeout(clear);
+    };
+  }, [targetId, reduced]);
 
   if (comments.isPending) return <>{[0, 1].map((i) => <RowSkeleton key={i} />)}</>;
   if (comments.isError)
@@ -477,6 +541,8 @@ export function CommentThread({
           remove={remove}
           myId={me.data?.id}
           gate={gate}
+          openInitially={located?.parentId === comment.id}
+          flashId={flashId}
         />
       ))}
       {comments.hasNextPage && (

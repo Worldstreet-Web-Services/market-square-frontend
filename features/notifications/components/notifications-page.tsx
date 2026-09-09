@@ -60,6 +60,8 @@ const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   follow: "/notifications/notif-follow.svg",
   stream_live: "/notifications/notif-trending.svg",
   comment: "/notifications/notif-mention.svg",
+  // A reply to your comment is the same conversation mark as a comment.
+  comment_reply: "/notifications/notif-mention.svg",
   like: "/notifications/notif-post.svg",
   repost: "/notifications/notif-post.svg",
   bookmark: "/notifications/notif-post.svg",
@@ -101,6 +103,8 @@ function headline(item: MarketNotification): string {
       return "Happening Now! 🔥";
     case "comment":
       return "New comment";
+    case "comment_reply":
+      return "New reply";
     case "like":
       return "New like";
     case "repost":
@@ -137,6 +141,8 @@ function describe(item: MarketNotification): string {
       return `${who} liked your post.`;
     case "comment":
       return `${who} commented on your post.`;
+    case "comment_reply":
+      return `${who} replied to your comment.`;
     case "repost":
       return `${who} reposted your post.`;
     case "bookmark":
@@ -188,7 +194,13 @@ function hrefFor(item: MarketNotification): string | null {
   // the sender's PROFILE — which is not where the message is.
   if (item.kind === "message" || item.kind === "chat_request") return "/messages";
   if (item.streamId) return `/live/${item.streamId}`;
-  if (item.postId) return `/p/${item.postId}`;
+  // ON the comment when the payload names one: the permalink reads `?comment=`
+  // and scrolls to it. Without an id it opens the post, as it always did.
+  if (item.postId) {
+    return item.commentId
+      ? `/p/${item.postId}?comment=${encodeURIComponent(item.commentId)}`
+      : `/p/${item.postId}`;
+  }
   if (item.actor) return `/u/${item.actor.username}`;
   return null;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryParam } from "@/hooks/use-query-param";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/states";
@@ -39,6 +40,8 @@ export function PostDetailPage({
   // Which comment the box answers — null is a plain top-level reply. Held
   // here because the box is pinned under the header while the thread scrolls.
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  // `?comment=` — a notification lands ON the comment it is about.
+  const focusCommentId = useQueryParam("comment");
 
   if (post.isPending) {
     return (
@@ -97,7 +100,7 @@ export function PostDetailPage({
 
       {/* The thread — replies nest under their comment, TikTok's shape. See
           `comment-thread.tsx` for what is live and what waits on a route. */}
-      <CommentThread postId={postId} onReply={setReplyTo} />
+      <CommentThread postId={postId} onReply={setReplyTo} focusCommentId={focusCommentId} />
     </>
   );
 }
