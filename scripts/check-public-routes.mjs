@@ -263,6 +263,13 @@ const PENDING_ROUTES = {
   // answers 200 anonymously on :8080 (2026-09-09) and the permalink's deep
   // link (`?comment=`) reads it. DELETE THIS ENTRY when it appears in
   // openapi.json.
+  "get /profiles/{}/badges": {
+    reason:
+      "Asked of the backend 2026-09-09; held until ogazboiz decides how a badge is EARNED " +
+      "(there is no badge concept in the service yet, so the route would answer an empty " +
+      "list for everyone). Both badge surfaces are built and absent while it 404s. " +
+      "See features/profile/components/badges.tsx.",
+  },
   "get /comments/{}": {
     reason:
       "One comment by id, for a permalink opened on it. Live on the service " +
