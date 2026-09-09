@@ -1742,7 +1742,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             read as floating away from the nav that selects it. Packed left,
             the column sits against the sidebar and the slack collects once, at
             the outer edge, where the shell's own mx-auto already balances it. */}
-          <div className="flex min-w-0 flex-1 justify-start">
+          {/* Packed against the rail while there is one (see above); with the
+              rail tucked away and the dock in charge there is nothing to pack
+              against, and a column hugging the window's left edge under a
+              centred dock reads as lopsided. Then the group is centred, which
+              is where the dock already is. */}
+          <div className={cn("flex min-w-0 flex-1", railOn ? "justify-start" : "justify-center")}>
             <main
               className={cn(
                 // Padding, not margin, and from the shared chrome vars rather
