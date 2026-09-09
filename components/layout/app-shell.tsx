@@ -16,6 +16,7 @@ import {
 import { useRailState } from "@/lib/sidebar-rail-store";
 import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { useChatOpen } from "@/lib/chat-open-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
@@ -1546,6 +1547,8 @@ export function MobileBar({
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // A chat thread being typed into — the dock stays out of its way.
+  const chatOpen = useChatOpen();
   useTrackNavHistory();
   const { ready, authenticated } = useAuth();
   const me = useMe();
@@ -1803,6 +1806,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Desktop compose is the dock's own circle now — the floating
             `CreateFab` was the same act in the same corner, and two plus
             buttons a few pixels apart is what mounting both would be. */}
+        {/* NOT OVER AN OPEN CHAT. The dock's row is the message composer's
+            row; over a thread it covered the field on a phone and floated
+            across the thread's foot on desktop. `MessagesPage` reports the
+            open thread through `lib/chat-open-store`, and the dock returns
+            the moment the thread closes. */}
+        {!chatOpen && (
         <BottomDock
           guest={guest}
           /*
@@ -1816,6 +1825,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className={MARKET_FLAGS.sidebar && !guest ? "md:hidden" : undefined}
           onCompose={canCompose && !guest ? () => setComposeOpen(true) : undefined}
         />
+        )}
 
         <ComposeSheet
           open={composeOpen}

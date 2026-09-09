@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { setChatOpen } from "@/lib/chat-open-store";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -309,6 +310,12 @@ export function MessagesPage({
 } = {}) {
   const { ready, authenticated, login } = useAuth();
   const [open, setOpen] = useState<Conversation | null>(null);
+  // Tell the shell a thread is open so the dock leaves the composer alone —
+  // see lib/chat-open-store. Cleared on close and on leaving the page.
+  useEffect(() => {
+    setChatOpen(open !== null);
+    return () => setChatOpen(false);
+  }, [open]);
   // The `+` opens a MENU first — node 24:6403 — and the menu chooses which
   // picker. Null means neither is open.
   const [menuOpen, setMenuOpen] = useState(false);
