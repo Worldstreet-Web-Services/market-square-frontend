@@ -17,6 +17,7 @@ import {
   uploadFile,
   validateUpload,
 } from "@/lib/api/upload";
+import { errorMessage } from "@/lib/api/envelope";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -62,7 +63,6 @@ import type { Profile } from "@/lib/api/schemas";
  * "Visible to ...".
  */
 
-const GROUP_MAX = 20;
 const TITLE_MAX = 80;
 const DESCRIPTION_MAX = 500;
 
@@ -125,13 +125,25 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
     onClose();
   };
 
+  /*
+    NO CLIENT-SIDE CAP. Every tap toggles; nothing is ever refused here.
+
+    There used to be `GROUP_MAX = 20`, which both blocked the twenty-first
+    selection and printed "(max)" on Continue. It is gone because the size of a
+    group is the SERVICE's rule, and stating it in two places is how the two
+    disagree — which they already had: the service refused with "at most 20
+    other people" on create and "at most 21 people" on add, two numbers for one
+    rule, neither of them the number a person counts in the header.
+
+    The cost of removing it is that the refusal now arrives at SUBMIT rather
+    than at tap, after somebody has picked people and named the group. That is
+    why the refusal is rendered on the second step — see the note there.
+  */
   const toggle = (profile: Profile) =>
     setSelected((current) =>
       current.some((person) => person.id === profile.id)
         ? current.filter((person) => person.id !== profile.id)
-        : current.length >= GROUP_MAX
-          ? current
-          : [...current, profile]
+        : [...current, profile]
     );
 
   const takeImage = async (file: File | undefined) => {
@@ -297,7 +309,7 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
           >
             {selected.length === 0
               ? "Continue"
-              : `Continue with ${selected.length}${selected.length >= GROUP_MAX ? " (max)" : ""}`}
+              : `Continue with ${selected.length}`}
           </button>
         </div>
       </Sheet>
@@ -484,6 +496,34 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
                 : "Anyone with the link can join this group."}
             </p>
           </div>
+
+          {/*
+            THE REFUSAL HAS TO BE SEEN, and before this it was not.
+
+            The mutation carried only `onSuccess`. A 400 set `createGroup.error`
+            and nothing rendered it: the spinner stopped, the sheet sat there,
+            and the group was simply not created. That was survivable only while
+            a client-side cap kept the service's own limit unreachable — remove
+            the cap, as this change does, and the silent path becomes the one
+            people actually hit, after picking members and naming the group.
+
+            Read straight off the mutation rather than copied into state: a
+            second copy is a second thing to clear, and `mutate` already resets
+            it on the next attempt.
+
+            `errorMessage` is the app's translation layer, so the service's own
+            sentence passes through when it is one a person can act on ("A group
+            holds at most N people") while UNAUTHORIZED, RATE_LIMITED and a
+            transport failure each get their own copy instead of a raw code.
+
+            Nothing is closed or cleared, so the fix is to remove somebody
+            rather than to start the group again.
+          */}
+          {createGroup.isError && (
+            <p role="alert" className="text-[12px] text-down">
+              {errorMessage(createGroup.error, "Couldn't create that group — try again.")}
+            </p>
+          )}
 
           <div className="flex items-center justify-between gap-4">
             <button
