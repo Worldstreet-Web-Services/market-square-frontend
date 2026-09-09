@@ -50,7 +50,6 @@ import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import {
   IconBell,
-  IconChevronLeft,
   IconCollapseRight,
   IconDots,
   IconChevronDown,
@@ -846,26 +845,10 @@ export function Sidebar({
         </span>
       </Link>
 
-      {/* The explicit control. The drag edge is discoverable only once you
-          know it is there; this says the rail collapses. */}
-      <button
-        onClick={() => commit(toggleRail(rail))}
-        aria-label={
-          rail.mode === "icon" ? "Expand sidebar" : "Collapse sidebar"
-        }
-        aria-expanded={rail.mode === "full"}
-        className="ws-press mb-2 flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
-      >
-        <IconChevronLeft
-          className={cn(
-            "h-4 w-4 transition-transform",
-            rail.mode === "icon" && "rotate-180",
-          )}
-        />
-        <span className="hidden text-[12px] font-bold group-data-[rail=full]/rail:block">
-          {rail.mode === "icon" ? "" : "Collapse"}
-        </span>
-      </button>
+      {/* The collapse chevron is gone for now, at ogazboiz's word ("remove
+          that collapse"). The rail still collapses by its drag edge and a
+          double-click on it (RailHandle); only the button that advertised it
+          is removed. */}
 
       {/* USE THE DOCK INSTEAD. Tucks the whole rail away on this device and
           hands navigation to the dock; the dock carries the switch back. See
