@@ -47,8 +47,12 @@ export function FollowPill({
         "ws-press shrink-0 rounded-full",
         variant === "header"
           ? cn(
-              // The design's measured geometry, shared by both states.
-              "flex h-[26px] w-[78px] items-center justify-center border px-3 py-1 text-[12px] leading-4 transition-colors",
+              // The design's measured geometry, shared by both states —
+              // 78×38 at node 496:13395. It was 78×26 from the older file;
+              // the width is unchanged and only the height grew, so that the
+              // pill sits level with the 40.7 wink beside it instead of
+              // reading as a smaller control of the same kind.
+              "flex h-[38px] w-[78px] items-center justify-center border px-3 py-1 text-[12px] leading-4 transition-colors",
               // ...and the states stay INVERSES of each other. The 78×26
               // measurement is of the Following pill; applying its 5%-white
               // fill to both would leave Follow and Following looking alike,

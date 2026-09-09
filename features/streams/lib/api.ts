@@ -21,6 +21,7 @@ import {
   StreamStatsSchema,
   TicketSchema,
   type StreamCategory,
+  type StreamKind,
   type TicketTier,
 } from "@/features/streams/lib/types";
 
@@ -29,6 +30,8 @@ import {
 export async function fetchStreams(params: {
   status?: "live" | "scheduled" | "ended";
   category?: StreamCategory;
+  /** Broadcasts or gist rooms — see StreamKind. */
+  kind?: StreamKind;
   /** Topic keys from the viewer's picker; omitted when nothing is chosen. */
   topics?: string[];
   cursor?: string;
@@ -111,6 +114,30 @@ export async function createStream(input: {
   title: string;
   description?: string;
   category: StreamCategory;
+  /**
+   * Keys from the shared vocabulary (`GET /topics`) — never a hard-coded list.
+   * The service validates them against the topics table and rejects an unknown
+   * key BY NAME, so a client that invents a chip gets a 400 on submit rather
+   * than a silently untagged room.
+   */
+  topics?: string[];
+  /**
+   * WHO may find the room. `public` is listed everywhere; `private` is
+   * reachable only by members of `houseConversationId`, which the service
+   * enforces in its listing queries. Distinct from `visibility`, which is a
+   * door charge.
+   */
+  audience?: "public" | "private";
+  /** Required when `audience` is `private`; the caller must be a member. */
+  houseConversationId?: string;
+  /**
+   * WHO MAY TYPE in the room's chat (migration 041). `followers` admits the
+   * host, the host's followers, and anyone the host has approved as a speaker;
+   * everyone else is refused on SEND. It gates writing only — reading a room's
+   * chat is never restricted by this. Defaults to `open`, the historic
+   * behaviour, so omitting it changes nothing.
+   */
+  chatAccess?: "open" | "followers";
   thumbnailUrl?: string;
   scheduledAt?: string;
   visibility: "public" | "ticketed";

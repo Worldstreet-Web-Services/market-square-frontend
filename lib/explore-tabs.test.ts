@@ -9,17 +9,14 @@ import {
   parseExploreTab,
 } from "./explore-tabs.ts";
 
-test("the row is exactly the designed chip set, in order", () => {
+test("People leads the row, and the reel chip is still gone", () => {
   // `Add +` is not in here on purpose: it opens the topic picker rather than
   // selecting anything, so it is not a tab.
-  assert.deepEqual(EXPLORE_TABS, [
-    "for-you",
-    "people",
-    "posts",
-    "shows",
-    "streams",
-    "products",
-  ]);
+  //
+  // ORDER IS THE PRODUCT DECISION. Removing the reel took the wrong shape off
+  // this surface; leading with People says what the surface is FOR.
+  assert.deepEqual(EXPLORE_TABS, ["people", "for-you", "shows", "streams", "products"]);
+  assert.equal((EXPLORE_TABS as readonly string[]).includes("posts"), false);
 });
 
 test("For you and Shows search EVERYTHING, never a result kind", () => {
@@ -30,7 +27,6 @@ test("For you and Shows search EVERYTHING, never a result kind", () => {
 
 test("the result-kind chips map straight to the service's own types", () => {
   assert.equal(exploreTabSearchType("people"), "people");
-  assert.equal(exploreTabSearchType("posts"), "posts");
   assert.equal(exploreTabSearchType("streams"), "streams");
   assert.equal(exploreTabSearchType("products"), "products");
 });
@@ -48,7 +44,6 @@ test("no other chip filters by topic — interests boost, they do not filter", (
   // interests at onboarding saw LESS of the square than one who chose none.
   assert.deepEqual(exploreTabTopics("for-you"), []);
   assert.deepEqual(exploreTabTopics("people"), []);
-  assert.deepEqual(exploreTabTopics("posts"), []);
   assert.deepEqual(exploreTabTopics("streams"), []);
   assert.deepEqual(exploreTabTopics("products"), []);
 });
@@ -57,7 +52,6 @@ test("row lists and the card grid are different surfaces", () => {
   // People, Posts and Products are rows from their own paged routes; the rest
   // are the media/stream grid.
   assert.equal(exploreTabIsRowList("people"), true);
-  assert.equal(exploreTabIsRowList("posts"), true);
   assert.equal(exploreTabIsRowList("products"), true);
   assert.equal(exploreTabIsRowList("for-you"), false);
   assert.equal(exploreTabIsRowList("shows"), false);
@@ -70,9 +64,12 @@ test("Streams browses live broadcasts only; the media tabs carry videos too", ()
   assert.equal(exploreTabShowsVideos("shows"), true);
 });
 
-test("an unknown tab in the URL falls back rather than blanking the page", () => {
-  assert.equal(parseExploreTab(null), "for-you");
-  assert.equal(parseExploreTab(""), "for-you");
-  assert.equal(parseExploreTab("nonsense"), "for-you");
+test("an unknown tab in the URL falls back to People, not to the grid", () => {
+  assert.equal(parseExploreTab(null), "people");
+  assert.equal(parseExploreTab(""), "people");
+  assert.equal(parseExploreTab("nonsense"), "people");
+  // A link shared before the reel was removed still resolves — to what
+  // Explore is now for, rather than to a blank page.
+  assert.equal(parseExploreTab("posts"), "people");
   assert.equal(parseExploreTab("shows"), "shows");
 });

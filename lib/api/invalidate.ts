@@ -134,22 +134,37 @@ const FOLLOW_LIST_CACHES: string[][] = [
   ["ms", "spotlight"],
 ];
 
+/**
+ * Stamp a BLOCK the viewer just made onto the profiles sitting in list caches.
+ *
+ * Same mechanism as the follow patch above, and it exists for a harder reason
+ * than a stale label. Explore's people cards carry a wink — an unsolicited
+ * signal sent to a person — and `useWink` refuses to send into a block by
+ * reading `isBlocked` off the row it was handed. That row comes from the
+ * `["ms","people"]` page, not from the profile query, so blocking somebody
+ * from their card and then winking them was a real hole between the click and
+ * the refetch. Invalidation alone does not close it: there is a window in
+ * which the stale page is still on screen, and it is the window somebody would
+ * be in immediately after deciding they wanted nothing to do with this person.
+ *
+ * Blocking also drops the follow edge, so `isFollowing` goes with it.
+ */
+export function patchBlockInCaches(
+  queryClient: QueryClient,
+  profileId: string,
+  blocked: boolean
+) {
+  for (const queryKey of FOLLOW_LIST_CACHES) {
+    queryClient.setQueriesData({ queryKey }, (data: unknown) =>
+      patchBlockInData(data, profileId, blocked)
+    );
+  }
+}
+
 /** Pure cache rewrite, exported for test. Returns `node` itself when nothing matched. */
 export function patchFollowInData(node: unknown, profileId: string, following: boolean): unknown {
-  if (Array.isArray(node)) {
-    let changed = false;
-    const next = node.map((item) => {
-      const patched = patchFollowInData(item, profileId, following);
-      if (patched !== item) changed = true;
-      return patched;
-    });
-    return changed ? next : node;
-  }
-  if (!node || typeof node !== "object") return node;
-
-  const record = node as Record<string, unknown>;
-  if (record.id === profileId && "isFollowing" in record) {
-    if (record.isFollowing === following) return node;
+  return patchProfileInData(node, profileId, "isFollowing", (record) => {
+    if (record.isFollowing === following) return null;
     const followerCount = record.followerCount;
     return {
       ...record,
@@ -158,12 +173,62 @@ export function patchFollowInData(node: unknown, profileId: string, following: b
         ? { followerCount: Math.max(0, followerCount + (following ? 1 : -1)) }
         : {}),
     };
+  });
+}
+
+/** Pure cache rewrite, exported for test. Returns `node` itself when nothing matched. */
+export function patchBlockInData(node: unknown, profileId: string, blocked: boolean): unknown {
+  return patchProfileInData(node, profileId, "isBlocked", (record) => {
+    if (record.isBlocked === blocked) return null;
+    return {
+      ...record,
+      isBlocked: blocked,
+      // Blocking severs the follow; unblocking does NOT restore it, because
+      // the server did not restore it either.
+      ...(blocked && "isFollowing" in record ? { isFollowing: false } : {}),
+    };
+  });
+}
+
+/**
+ * ONE recursive walker for both patches.
+ *
+ * Recursive because the same profile appears at different depths per surface —
+ * bare in `/profiles`, nested under `result.profile` in `/search`, under
+ * `stream.owner` and `post.author` elsewhere. Matching on id plus the presence
+ * of a MARKER field patches every one of them without a shape list to
+ * maintain; the marker is what distinguishes a hydrated profile that carries
+ * the viewer's edge from a `ProfileSummary` that does not.
+ *
+ * `apply` returns null for "nothing to change", which keeps the identity of
+ * every untouched node and lets React Query skip the re-render.
+ */
+function patchProfileInData(
+  node: unknown,
+  profileId: string,
+  marker: string,
+  apply: (record: Record<string, unknown>) => Record<string, unknown> | null
+): unknown {
+  if (Array.isArray(node)) {
+    let changed = false;
+    const next = node.map((item) => {
+      const patched = patchProfileInData(item, profileId, marker, apply);
+      if (patched !== item) changed = true;
+      return patched;
+    });
+    return changed ? next : node;
+  }
+  if (!node || typeof node !== "object") return node;
+
+  const record = node as Record<string, unknown>;
+  if (record.id === profileId && marker in record) {
+    return apply(record) ?? node;
   }
 
   let changed = false;
   const next: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(record)) {
-    const patched = patchFollowInData(value, profileId, following);
+    const patched = patchProfileInData(value, profileId, marker, apply);
     if (patched !== value) changed = true;
     next[key] = patched;
   }

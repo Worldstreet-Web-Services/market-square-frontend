@@ -12,11 +12,24 @@ interface AuthSnapshot {
 }
 
 let snapshot: AuthSnapshot = { ready: false, authenticated: false };
+/**
+ * Has this page EVER held an authenticated session?
+ *
+ * The difference between "your session ended" and "you were never signed in",
+ * which the ready/authenticated pair alone cannot tell apart — both read
+ * `{ ready: true, authenticated: false }`. Without it, the first gated request
+ * a GUEST made was reported as an expiry: they were told their session had
+ * expired, which was untrue, and bounced to /auth off a page they were allowed
+ * to be reading. Signed-out browsing is a supported thing here, so that
+ * redirect broke the front door.
+ */
+let everAuthenticated = false;
 const readyWaiters = new Set<() => void>();
 const expiryListeners = new Set<() => void>();
 
 export function setAuthSnapshot(next: AuthSnapshot): void {
   snapshot = next;
+  if (next.authenticated) everAuthenticated = true;
   if (next.ready) {
     readyWaiters.forEach((resolve) => resolve());
     readyWaiters.clear();
@@ -25,6 +38,15 @@ export function setAuthSnapshot(next: AuthSnapshot): void {
 
 export function getAuthSnapshot(): AuthSnapshot {
   return snapshot;
+}
+
+/**
+ * Whether a session was ever held here. Latches ON and never clears: after a
+ * genuine expiry the reader HAS had one, and that is exactly when the expiry
+ * path should still run.
+ */
+export function hasHeldSession(): boolean {
+  return everAuthenticated;
 }
 
 // Resolves when Privy reports ready (or after the timeout, so a broken

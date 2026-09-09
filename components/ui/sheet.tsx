@@ -34,6 +34,16 @@ export function Sheet({
    * without an Escape handler.
    */
   bare = false,
+  /**
+   * Surface overrides for a `bare` caller whose design is not a glass sheet.
+   *
+   * Extends the same seam `bare` opens rather than forking the dialog: a
+   * design that specifies its own fill, radius and width (the attachment panel
+   * is a flat 420 x 16px card, not a sheet) would otherwise have to
+   * reimplement the portal, backdrop, Escape and scroll lock to get them —
+   * which is exactly what `bare` exists to prevent.
+   */
+  panelClassName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -44,6 +54,7 @@ export function Sheet({
   action?: React.ReactNode;
   tabs?: React.ReactNode;
   bare?: boolean;
+  panelClassName?: string;
 }) {
   // The CSS motion system honours prefers-reduced-motion, but these are
   // JS-driven springs that CSS cannot reach. Under the setting the panel stops
@@ -112,7 +123,8 @@ export function Sheet({
             }
             className={cn(
               "ws-glass relative z-10 flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-sheet/95 sm:max-h-[88dvh] sm:rounded-3xl",
-              wide ? "sm:max-w-2xl" : "sm:max-w-md"
+              wide ? "sm:max-w-2xl" : "sm:max-w-md",
+              panelClassName
             )}
           >
             {!bare && (

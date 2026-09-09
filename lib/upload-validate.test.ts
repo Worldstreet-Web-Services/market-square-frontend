@@ -181,3 +181,78 @@ describe("formatDuration reads the way a person would say it", () => {
     assert.equal(formatDuration(120), "2m");
   });
 });
+
+/**
+ * Audio is only acceptable where audio is actually accepted.
+ *
+ * THE BUG THIS PINS: `uploadFile`'s `accept` defaults to "media" (image +
+ * video), and both chat call sites — the attachment panel and the voice
+ * recorder — took that default. So a voice note passed the picker's own check
+ * and was then refused by our own uploader, one gate later, with a message
+ * naming only images and video. The user saw "Use an image (JPEG, PNG, WebP,
+ * GIF) or a video (MP4, WebM)." after recording one.
+ *
+ * The asymmetry is deliberate and must stay: a voice note is a message, never
+ * a post or an avatar. Widening "media" to admit audio would have fixed the
+ * symptom by letting a voice note be uploaded as somebody's profile picture.
+ */
+describe("audio is accepted only on the attachment path", () => {
+  const voiceNote = { type: "audio/webm", size: 200 * 1024 };
+
+  it("takes a voice note as a chat attachment", () => {
+    assert.equal(validateUpload(voiceNote, "attachment", FALLBACK_LIMITS), null);
+  });
+
+  it("refuses the same file as post media or as an avatar", () => {
+    // This is the exact rejection the chat composer was producing.
+    assert.equal(
+      validateUpload(voiceNote, "media", FALLBACK_LIMITS),
+      "Use an image (JPEG, PNG, WebP, GIF) or a video (MP4, WebM)."
+    );
+    assert.equal(
+      validateUpload(voiceNote, "image", FALLBACK_LIMITS),
+      "Use a JPEG, PNG, WebP or GIF image."
+    );
+  });
+
+  it("names the AUDIO cap when a voice note is too big, not the video one", () => {
+    const huge = { type: "audio/mpeg", size: FALLBACK_LIMITS.maxAudioBytes + 1 };
+    const message = validateUpload(huge, "attachment", FALLBACK_LIMITS);
+    assert.match(String(message), /Voice notes must be under/);
+    // Under the 200 MB video cap, so only a separate audio cap can catch it —
+    // which is the whole reason audio has its own number.
+    assert.ok(huge.size < FALLBACK_LIMITS.maxVideoBytes);
+  });
+
+  it("accepts what MediaRecorder actually produces, codec parameter and all", () => {
+    // THE SECOND BUG: `MediaRecorder` hands back `audio/webm;codecs=opus`, and
+    // the File built from that blob carries the parameter on `.type`. Compared
+    // verbatim against an allowlist holding plain `audio/webm`, every recorded
+    // voice note was refused — and `uploadKind` fell through to its default and
+    // called the recording an IMAGE, which would have applied the image cap and
+    // drawn the wrong bubble.
+    const recorded = { type: "audio/webm;codecs=opus", size: 200 * 1024 };
+    assert.equal(validateUpload(recorded, "attachment", FALLBACK_LIMITS), null);
+    assert.equal(uploadKind(recorded, FALLBACK_LIMITS), "audio");
+
+    // The parameter is metadata about the encoding, never part of the type's
+    // identity — so it must not smuggle a file past the accept rules either.
+    assert.notEqual(validateUpload(recorded, "media", FALLBACK_LIMITS), null);
+
+    // Case is not identity either.
+    assert.equal(
+      uploadKind({ type: "AUDIO/WEBM;codecs=opus", size: 1024 }, FALLBACK_LIMITS),
+      "audio"
+    );
+  });
+
+  it("types every recordable container as audio, not video", () => {
+    // `uploadKind` decides which cap applies and what the bubble draws. WebM
+    // is both a video and an audio container, so this is the one that could
+    // silently go wrong.
+    for (const type of FALLBACK_LIMITS.audioContentTypes) {
+      assert.equal(uploadKind({ type, size: 1024 }, FALLBACK_LIMITS), "audio", type);
+    }
+    assert.equal(uploadKind({ type: "video/webm", size: 1024 }, FALLBACK_LIMITS), "video");
+  });
+});

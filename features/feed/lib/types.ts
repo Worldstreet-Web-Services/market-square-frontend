@@ -11,11 +11,47 @@ export { MentionSchema, PostSchema };
 // falls back to a shortened id when author is absent.
 export const CommentSchema = z.object({
   id: z.string(),
+  postId: z.string().optional().default(""),
   authorId: z.string().optional().default(""),
   text: z.string(),
   createdAt: z.string(),
   author: ProfileSchema.nullable().optional().default(null),
+  /**
+   * THE THREAD FIELDS — the backend's final shape, live on :8080 2026-09-09.
+   *
+   * `parentId` is the TOP-LEVEL comment this one sits under, null on a
+   * top-level comment. The tree is one level deep and the SERVER keeps it so:
+   * a reply is posted with the TAPPED comment's id as `parentId`, and when
+   * that comment is itself a reply the service files the new one under the
+   * top-level parent and records who was answered in `replyToCommentId` and
+   * `replyTo`. The client never resolves the top-level parent itself.
+   *
+   * `replyTo` is the answered person, RESOLVED — the "@username" a reply
+   * opens with comes from this field and never from parsing the text. Null
+   * when the reply answered the parent directly or the account is gone, and
+   * then there is no prefix at all rather than a blank mention.
+   *
+   * `likedByMe` is OMITTED for an anonymous reader, never sent as false —
+   * the same rule as `isFollowing`. So it has no default: undefined means
+   * "nobody was asked", and the heart draws it as not-yet-liked without
+   * claiming a checked answer.
+   */
+  parentId: z.string().nullable().optional().default(null),
+  replyToCommentId: z.string().nullable().optional().default(null),
+  replyTo: ProfileSchema.nullable().optional().default(null),
+  replyCount: z.number().optional().default(0),
+  likeCount: z.number().optional().default(0),
+  likedByMe: z.boolean().optional(),
+  /**
+   * People named in the comment, RESOLVED by the service (typed handles too,
+   * with a picker's structured ones winning on ambiguity; an unresolvable
+   * handle is dropped). Safe to render every one as a link.
+   */
+  mentions: z.array(MentionSchema).optional().default([]),
 });
+
+/** `POST|DELETE /comments/:id/like` — the resulting state, same shape as a post like. */
+export const CommentLikeResultSchema = z.object({ liked: z.boolean(), likeCount: z.number() });
 
 // The feed's view of a backend Stream: no owner object, no live viewerCount
 // (that's detail-only) — peakViewers is what the list carries.

@@ -430,3 +430,73 @@ describe("the Privy identity token", () => {
     assert.equal("privy-id-token" in calls[0]!.headers, false);
   });
 });
+
+/**
+ * REGRESSION: a 204 from the service became a 5xx from the BFF.
+ *
+ * 204, 205 and 304 are "null body statuses" in the Fetch spec — constructing a
+ * Response for one with ANY body init, including the empty string this proxy
+ * carries for them, throws `TypeError: Response constructor: Invalid response
+ * status code 204`.
+ *
+ * The throw lands AFTER the upstream call has already succeeded, so Next
+ * answers 5xx for a request the service completed. The client then trips the
+ * shared circuit breaker and reports "Can't reach Market Square right now"
+ * about an action that worked.
+ *
+ * That is exactly what leaving a group looked like: the member really was
+ * removed, the app said the square was unreachable, the confirm sheet stayed
+ * open, and the next press hit a membership that was already gone and was
+ * refused. Two routes answer 204 — leaving a group and declining a chat
+ * request — so both were unusable through the proxy while both succeeded.
+ *
+ * These build the Response the route builds, because the bug was the
+ * CONSTRUCTOR: asserting on the forward result alone never sees it.
+ */
+describe("forwardToUpstream — null-body statuses", () => {
+  const NULL_BODY = new Set([204, 205, 304]);
+  const build = (result: { status: number; body: string; contentType: string }) =>
+    new Response(NULL_BODY.has(result.status) ? null : result.body, {
+      status: result.status,
+      headers: NULL_BODY.has(result.status) ? undefined : { "content-type": result.contentType },
+    });
+
+  for (const status of [204, 205, 304]) {
+    it(`carries a ${status} through without throwing`, async () => {
+      const { fetchImpl } = stubUpstream(() => new Response(null, { status }));
+      const result = await forwardToUpstream({
+        req: new Request("http://bff/api/market-square/conversations/c1/members/u1", {
+          method: "DELETE",
+        }),
+        url: "http://upstream/v1/market-square/conversations/c1/members/u1",
+        method: "DELETE",
+        fetchImpl,
+        logger: silent,
+      });
+
+      assert.equal(result.status, status);
+      // The line that used to throw.
+      const response = build(result);
+      assert.equal(response.status, status);
+      assert.equal(response.body, null);
+    });
+  }
+
+  it("still gives an ordinary response its body and content type", async () => {
+    const { fetchImpl } = stubUpstream(okEnvelope);
+    const result = await forwardToUpstream({
+      req: new Request("http://bff/api/market-square/categories"),
+      url: "http://upstream/v1/market-square/categories",
+      method: "GET",
+      fetchImpl,
+      logger: silent,
+    });
+
+    const response = build(result);
+    // okEnvelope answers 201 — a status that DOES carry a body, which is the
+    // contrast being drawn here.
+    assert.equal(response.status, 201);
+    assert.equal(response.headers.get("content-type"), "application/json");
+    assert.notEqual(await response.text(), "");
+  });
+});

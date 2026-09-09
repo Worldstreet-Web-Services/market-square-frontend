@@ -8,6 +8,14 @@ export const NotificationKindSchema = z
     "follow",
     "like",
     "comment",
+    // Someone answered a comment of yours (TikTok's "replied to your
+    // comment"). Asked of the backend 2026-09-09 together with `commentId`;
+    // listed ahead of the service sending it, per the rule above.
+    "comment_reply",
+    // Named in a post or a comment. `commentId` points at the comment when
+    // there is one; a person who is both the thread's author and named in
+    // the same reply gets ONE row, the comment_reply — the service dedupes.
+    "mention",
     "repost",
     "bookmark",
     "ticket_purchased",
@@ -20,9 +28,41 @@ export const NotificationKindSchema = z
      * event, and the one that matters most to get right.
      */
     "tip_received",
+    /**
+     * Somebody winked at you — a one-tap signal of interest, addressed to you
+     * rather than to something you posted.
+     *
+     * Listed here BEFORE the service sends one, and that ordering is the
+     * point: `.catch("follow")` turns any kind this enum has not heard of into
+     * "followed you". That is exactly how `tip_received` shipped as a lie for
+     * a while — a creator who had been paid was told they had a new follower.
+     * A wink misreported as a follow would be the same bug with worse
+     * consequences, because a follow is a public act and a wink is not.
+     */
+    "wink",
     "stream_live",
     "verification_resolved",
     "role_resolved",
+    /**
+     * FOUR KINDS THE SERVICE HAS BEEN SENDING ALL ALONG, and this enum did not
+     * list — so `.catch("follow")` rendered every one of them as "New
+     * Follower · X started following you on Square."
+     *
+     * This is the third time the same hole has bitten (see `tip_received` and
+     * `wink` above), and it was live: the service's enum carries fifteen kinds
+     * against our eleven, and the local database holds six `message`, six
+     * `speaker_request` and three `group_added` rows right now — every one of
+     * them being shown to somebody as a follow that never happened.
+     *
+     * Verified against the served contract at :8094 rather than guessed. The
+     * lesson the two earlier notes drew is the right one and was not applied
+     * widely enough: list a kind BEFORE the service sends it, and re-read the
+     * enum whenever notifications change.
+     */
+    "message",
+    "chat_request",
+    "group_added",
+    "speaker_request",
   ])
   .catch("follow");
 
@@ -32,11 +72,69 @@ export const NotificationSchema = z.object({
   // Hydrated on every read, but a deleted account can leave it null.
   actor: ProfileSchema.nullable().optional().default(null),
   postId: z.string().nullable().optional().default(null),
+  /**
+   * The comment a `comment` or `comment_reply` event is about, so the row can
+   * open the permalink ON that comment (`/p/:postId?comment=:id`). Asked of
+   * the backend; null until it ships, and null on every other kind.
+   */
+  commentId: z.string().nullable().optional().default(null),
   streamId: z.string().nullable().optional().default(null),
+  /**
+   * WHAT THE NOTIFICATION IS ABOUT — the same shape as a tip's `source`, and
+   * resolved by the same code upstream so the two can never disagree about
+   * what a gist room is (a stream with category 'house', reported as `room`).
+   *
+   * Two nulls, both real states rather than gaps:
+   *  · `subject` null — the row is about a PERSON, not a thing: follow, wink,
+   *    message. Render no subject line.
+   *  · `title` null — the thing has no words to show, such as a picture-only
+   *    post, or a room with no topic set. Same treatment; never fall back to
+   *    the id or to "a post".
+   *
+   * Titles arrive truncated at 140 with an ellipsis already applied, so
+   * nothing here clamps again expecting the full text.
+   */
+  subject: z
+    .object({
+      kind: z.enum(["post", "stream", "room"]).catch("post"),
+      id: z.string().nullable().optional().default(null),
+      title: z.string().nullable().optional().default(null),
+    })
+    .nullable()
+    .optional()
+    .default(null),
+  /**
+   * Which bucket this row belongs to, decided by the SERVICE.
+   *
+   * It exists precisely so the client never re-derives a kind-to-group map — a
+   * client-composed mapping silently drops every kind added after it ships,
+   * which is the failure we already hit in the other direction when four kinds
+   * rendered as follows.
+   *
+   * ─── SERVED BUT NOT DOCUMENTED. DO NOT DELETE THIS ON THE SPEC'S WORD ─────
+   * `subject` and `group` above are both set on every row by the service and
+   * are absent from `Notification` in the published `openapi.json`: the backend
+   * documented the `group` QUERY PARAMETER and never touched the RESPONSE
+   * shape. Confirmed by grepping the compiled build, not by reading the
+   * document — and the fix (their PR #190) is open, not merged, because the
+   * commit that would have carried it missed #189.
+   *
+   * So a reader who checks the spec will conclude these two fields do not
+   * exist, and anyone regenerating types from it will drop them. They are
+   * real. Read them off the row, which is what this schema does. Optional and
+   * nullable because the DEPLOYED environment is genuinely behind — required,
+   * they would fail to parse production — not because they are speculative.
+   */
+  group: z.enum(["social", "money", "rooms", "chat", "account"]).nullable().optional().default(null),
   // Null until the notification has been read.
   readAt: z.string().nullable().optional().default(null),
   createdAt: z.string().optional().default(""),
 });
+
+/** The service's own buckets. No `all` member: omitting the parameter IS all,
+    and an enum carrying both gives a client two ways to say one thing. */
+export const NOTIFICATION_GROUPS = ["social", "money", "rooms", "chat", "account"] as const;
+export type NotificationGroup = (typeof NOTIFICATION_GROUPS)[number];
 
 export const NotificationPageSchema = z.object({
   items: z.array(NotificationSchema),

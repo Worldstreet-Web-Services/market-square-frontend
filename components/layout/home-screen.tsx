@@ -1,9 +1,14 @@
 "use client";
 
 import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/feed";
-import { FollowPill } from "@/features/profile";
+import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
+import { useTopics } from "@/features/discovery";
+import { JoinACommunity } from "@/components/layout/join-a-community";
+import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
+import { MakeSomeFriends } from "@/components/layout/make-some-friends";
+import { SuggestedPals } from "@/components/layout/suggested-pals";
 
 // Slices never import each other, so the follow control — which belongs to the
 // profile slice — is composed into the timeline here, the same way the stream
@@ -23,21 +28,61 @@ const followSlot = (author: Parameters<typeof FollowPill>[0]["profile"]) => (
 // where there is no wallet or no engine, which is the honest answer.
 const balanceSlot = (amountKash: string | null) => <KashBalance amountKash={amountKash} />;
 
+// The wink sits between the tip and the follow on every post header — node
+// 496:13389 draws all three. It belongs to the profile slice, which owns the
+// rate limit and the refusal copy, so it arrives the same way the other two do.
+const winkSlot = (author: Parameters<typeof WinkButton>[0]["profile"]) => (
+  <WinkButton profile={author} size="post" />
+);
+
 const tipSlot = (post: Post) => (
   <TipButton
     target={{ kind: "post", id: post.id, recipient: post.author }}
     balance={balanceSlot}
+    variant="post"
   />
 );
 
+/**
+ * Home, composed — node 225:3315.
+ *
+ * The file's order is stories, the TOPIC row, the rooms open now, "Make some
+ * friends", the timeline, then "Join a community". Three of those read slices
+ * the feed may not import, so they are assembled here and handed down as slots
+ * — the same route-slot pattern the follow pill and the tip button above use.
+ *
+ * The topic vocabulary is DATA rather than a node, because the row's selection
+ * drives the feed's own query: `GET /topics` belongs to the discovery slice and
+ * `GET /feed?topics=` is the feed's, and this is the one layer allowed to know
+ * both.
+ */
 export function HomeScreen() {
-  return <FeedPage followSlot={followSlot} tipSlot={tipSlot} />;
+  const topics = useTopics();
+  return (
+    <FeedPage
+      followSlot={followSlot}
+      winkSlot={winkSlot}
+      tipSlot={tipSlot}
+      topicTabs={(topics.data ?? []).map((topic) => ({ key: topic.key, label: topic.label }))}
+      roomsSlot={<LiveGistRooms />}
+      friendsSlot={<MakeSomeFriends />}
+      communitySlot={<JoinACommunity />}
+      palsSlot={<SuggestedPals />}
+    />
+  );
 }
 
 export function ArkmarksScreen() {
-  return <ArkmarksPage followSlot={followSlot} tipSlot={tipSlot} />;
+  return <ArkmarksPage followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />;
 }
 
 export function PostScreen({ postId }: { postId: string }) {
-  return <PostDetailPage postId={postId} followSlot={followSlot} tipSlot={tipSlot} />;
+  return (
+    <PostDetailPage
+      postId={postId}
+      followSlot={followSlot}
+      winkSlot={winkSlot}
+      tipSlot={tipSlot}
+    />
+  );
 }

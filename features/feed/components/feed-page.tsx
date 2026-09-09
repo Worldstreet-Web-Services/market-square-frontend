@@ -1,50 +1,59 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
-import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { Spinner } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconCalendar, IconChevronDown, IconPlus } from "@/components/ui/icons";
 import { useQueryParam } from "@/hooks/use-query-param";
 import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
-import { ReelsFeed } from "@/features/feed/components/reels-feed";
+import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
-import { isVideoPost } from "@/lib/media";
 import type { VideoItem } from "@/lib/video-context";
-import { FeaturedArena } from "@/features/feed/components/featured-arena";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
 import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
+import { TopicTabs, type TopicTab } from "@/features/feed/components/topic-tabs";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 
-// The workspace switcher above the timeline, in the design's order. "Feeds"
-// is the current surface and renders as the active chip; every other entry is
-// a real route, so the list carries no "no destination" case.
-const SECTIONS: Array<{ label: string; href: string }> = [
-  { label: "Discover", href: "/discover" },
-  { label: "Messages", href: "/messages" },
-  { label: "Notifications", href: "/notifications" },
-  { label: "Arkmarks", href: "/arkmarks" },
-];
+/** How many posts stand between the top of the feed and "Join a community". */
+const BEFORE_COMMUNITY = 1;
+/**
+ * ...and how many before "Suggested Pals" (540:19351).
+ *
+ * Far enough in that the reader has seen what the square sounds like before
+ * being asked to meet anybody, and not so far that it only exists for people
+ * who scroll. The file cannot settle it — it draws the rail on its own — so
+ * four is a judgement call, changed by this line alone.
+ *
+ * A CEILING, NOT A THRESHOLD. Both this and BEFORE_COMMUNITY fall back to the
+ * last post when the feed is shorter, so neither section disappears on a young
+ * square. On a one-post feed that stacks the community grid and the pals rail
+ * after the same post, in that order; both are invitations to go somewhere
+ * else, and showing them is better than showing neither.
+ */
+const BEFORE_PALS = 4;
 
-// Lanes filter the timeline, in the design's order. Every one of these is a
-// real backend lane — `reels` and `trending` included.
-const LANES: Array<{ lane: Lane; label: string }> = [
-  { lane: "for-you", label: "For You" },
-  { lane: "live", label: "Live Streaming" },
-  { lane: "reels", label: "Reels" },
-  { lane: "following", label: "Following" },
-  { lane: "trending", label: "Trending" },
-];
+/*
+  Lanes filter the timeline, in the design's order.
 
+  REELS IS GONE, by product decision and not by accident. The endless vertical
+  scroll is the shape of a video product, and Market Square is not one — it is
+  a place to talk in a room and meet the people in it. A lane that swallows a
+  reader for twenty minutes is in direct competition with that, and while it
+  existed Home had two centres.
+
+  What did NOT go with it: video in a post, the upload that makes one, and the
+  story viewer. Media still belongs in the feed. What it no longer does is
+  become a river you fall into — to see what somebody has posted you go to
+  their profile, which is where their media lives.
+*/
 /**
  * Empty copy per lane.
  *
@@ -131,49 +140,95 @@ function PostSkeleton() {
 // Mobile Home stays the vertical snap feed; desktop is the card timeline.
 export function FeedPage({
   followSlot,
+  winkSlot,
   tipSlot,
+  topicTabs = [],
+  roomsSlot,
+  friendsSlot,
+  communitySlot,
+  palsSlot,
 }: {
   followSlot?: (author: Profile) => React.ReactNode;
+  winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
-  /** Real count of live streams, for the mobile lane badge. */
+  /**
+   * The shared topic vocabulary for the tab row (node 225:3352), supplied by
+   * the layout. `GET /topics` lives in the DISCOVERY slice and slices never
+   * import each other — and this is the data rather than a node, because the
+   * row's selection drives this component's own query.
+   */
+  topicTabs?: readonly TopicTab[];
+  /**
+   * The three sections the file puts around the timeline, each composed in
+   * `components/layout` because each reads a slice this one may not import:
+   * the open gist rooms (225:3822), the people deck (225:3374) and the
+   * community grid (258:5545).
+   */
+  roomsSlot?: React.ReactNode;
+  friendsSlot?: React.ReactNode;
+  communitySlot?: React.ReactNode;
+  /** The pals rail (540:19351), dropped a few posts into the timeline. */
+  palsSlot?: React.ReactNode;
 }) {
   const compose = useQueryParam("compose");
   const prefill = useComposePrefill();
-  const [lane, setLane] = useState<Lane>("for-you");
+  /*
+    THE TAB ROW SELECTS A TOPIC, NOT A LANE — node 225:3352.
+
+    Home used to head the timeline with `For You · Following · Trending`, which
+    are three ways of RANKING the same posts. The file heads it with the
+    subjects the square is talking about, which is the proposition of the
+    product. `null` is "For you" — the unfiltered lane.
+
+    The lane stays `for-you` throughout: a topic narrows what is in the lane, it
+    does not change how the lane is ranked. `GET /feed?topics=` does the
+    narrowing server-side.
+  */
+  const [topic, setTopic] = useState<string | null>(null);
+  /*
+    THE TIMELINE RUNS ON, AND "JOIN A COMMUNITY" SITS INSIDE IT.
+
+    It used to show three posts and stop at a "Load more" row (242:4890), for
+    one reason: the community grid came after the feed, and a grid placed under
+    a list that never ends can never be reached. Interleaving the grid instead
+    removes that constraint — it now sits after the first post, where it is on
+    the first screen whatever the feed does — so the floor under the feed came
+    out with it and the timeline pages itself as the reader scrolls.
+
+    Nothing is held back any more: every post that has been fetched is on the
+    page, and reaching the end asks for the next page rather than waiting to be
+    asked.
+  */
+  const lane: Lane = "for-you";
   const [composerOpen, setComposerOpen] = useState(false);
   // The post being quoted, if the composer was opened from a repost menu.
   const [quoting, setQuoting] = useState<Post | null>(null);
   const { authenticated } = useAuth();
-  const feed = useFeed(lane);
-  const sentinel = useInfiniteScroll(
-    () => feed.fetchNextPage(),
-    Boolean(feed.hasNextPage && !feed.isFetchingNextPage)
+  const topics = useMemo(() => (topic ? [topic] : []), [topic]);
+  const feed = useFeed(lane, topics);
+
+  /* `For you` plus whatever vocabulary the layout supplied, in the backend's
+     own order — nothing hard-coded, so a topic added upstream appears with no
+     client change. */
+  const tabs: TopicTab[] = useMemo(
+    () => [{ key: null, label: "For you" }, ...topicTabs],
+    [topicTabs]
   );
 
-  const items = useMemo(
+  const loaded = useMemo(
     () => feed.data?.pages.flatMap((page) => page.items) ?? [],
     [feed.data?.pages]
   );
-
-  /**
-   * The clips in this lane, in lane order.
-   *
-   * The viewer scrolls THIS list, so swiping up inside it walks the timeline
-   * the reader was already in rather than some separate video feed. Paging is
-   * the lane's own pager, so a swipe past the loaded page fetches the next one
-   * exactly as scrolling the timeline would.
-   */
-  const videoItems = useMemo(
-    () =>
-      items.flatMap((item) =>
-        item.type === "post" && item.post && isVideoPost(item.post)
-          ? [item.post as VideoItem]
-          : []
-      ),
-    [items]
-  );
+  /* Everything that has been fetched. Nothing is withheld behind a control. */
+  const items = loaded;
+  const canLoadMore = Boolean(feed.hasNextPage);
+  /* The shared sentinel every other paged list in the app uses — 600px of
+     rootMargin, so the next page is asked for before the reader arrives. */
+  const sentinelRef = useInfiniteScroll(() => {
+    if (feed.hasNextPage && !feed.isFetchingNextPage) void feed.fetchNextPage();
+  }, canLoadMore);
 
   /**
    * What the full-screen viewer scrolls: every MEDIA post of the lane, photos
@@ -181,8 +236,7 @@ export function FeedPage({
    *
    * Clips only would strand a reader who expanded a photo on a single slide
    * with nothing above or below it, and would skip past the photos of the lane
-   * they were reading. The Reels lane keeps `videoItems`, because reels are
-   * clips and a still frame in a reels feed is a dead screen.
+   * they were reading.
    */
   const mediaItems = useMemo(
     () =>
@@ -207,7 +261,7 @@ export function FeedPage({
     document.startViewTransition(apply);
   };
   const showComposer = composerOpen || compose === "1" || compose === "story";
-  useMarketView("feed_viewed", { surface: "market_square_home", source: lane });
+  useMarketView("feed_viewed", { surface: "market_square_home", source: topic ?? lane });
 
   return (
     <>
@@ -216,69 +270,63 @@ export function FeedPage({
           in a wall of black and why the phone never had the reading surface
           the desktop did. Video moved to Explore's reels, where it is watched
           rather than scrolled past. */}
+      {/* The ground is `#0F0F0F` and belongs to the shell's pane, not to this
+          column — see AppShell. Painting it here left a seam beside the right
+          rail. */}
       <div className="relative px-4 py-4 lg:px-6">
-        {/* Section switcher and the two creation actions share one long
-            outlined pill — that enclosure is the design's, not decoration.
-            Desktop only: on a phone every one of these sections is already a
-            tab in the bottom bar, so the row was a second copy of the same
-            navigation sitting above the stories, and one that ran off the
-            right edge because the pill cannot fit four labels at that width. */}
-        <div className="ws-tabbar mb-4 hidden items-center gap-3 p-1.5 md:flex">
-          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <span
-              aria-current="page"
-              className="ws-btn-silver shrink-0 rounded-full px-4 py-2 text-[14px] font-medium"
-            >
-              Feeds
-            </span>
-            {SECTIONS.map((section) => (
-              <Link
-                key={section.label}
-                href={section.href}
-                className="shrink-0 rounded-full px-4 py-2 text-[12px] font-bold text-white/40 transition-colors hover:bg-white/8 hover:text-body"
-              >
-                {section.label}
-              </Link>
-            ))}
-          </div>
+        {/*
+          HOME STARTS AT THE STORIES — node 225:3315.
 
-          {/* Hidden on a phone: the shell's floating create button already
-              covers posting there, and these two would squeeze the section
-              pills into nothing. */}
-          <div className="hidden shrink-0 items-center gap-3 md:flex">
-            <Link
-              href="/schedule"
-              className="ws-press flex shrink-0 items-center gap-2.5 rounded-full bg-[#979797]/[0.18] px-4 py-2 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-[#979797]/25"
-            >
-              <IconCalendar className="h-4 w-4" />
-              Schedule Stream
-              <IconChevronDown className="h-3.5 w-3.5" />
-            </Link>
-            <button
-              onClick={() => setComposerOpen(true)}
-              className="ws-btn-create ws-press flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-[14px] font-medium transition-opacity hover:opacity-90"
-            >
-              <IconPlus className="h-4 w-4" />
-              Create Post
-            </button>
-          </div>
-        </div>
+          Three things used to sit above them and none is in the file:
 
-        {/* Reels is a mode, not a filter. The story rail and the hero are
-            browsing furniture: left in place they push the first clip halfway
-            down the screen, which is the whole reason home's reels did not
-            feel like Explore's. */}
-        {authenticated && lane !== "reels" && (
+          · a `Schedule Stream` / `Create Post` pair. Composing is already
+            global — the shell's floating `+` opens the composer on every
+            surface that allows one — so this was a second entry point for the
+            same act, occupying the first thing a reader sees.
+          · the HALLWAY, whose whole job is now done by the rooms carousel
+            below the tab row (225:3822). It was drawing its own empty state,
+            so a square with no room open opened on "No gist rooms open" — an
+            apology, at the top of the home page, for a quiet evening. The
+            carousel renders NOTHING when nothing is open, which is the same
+            information and costs no space.
+          · `Trending discussions`, which is real and stays, but below the
+            stories rather than above them — see its own note.
+
+          What the file opens on is the people you follow, which is what a
+          social page should say first.
+        */}
+        {authenticated && (
           <div className="mb-4">
             <StoriesRow />
           </div>
         )}
 
-        {lane !== "reels" && (
-          <div className="mb-4">
-            <FeaturedArena />
-          </div>
-        )}
+        {/*
+          What the square is talking about, on the overview where it belongs.
+          It lives in the right rail, which is `hidden lg:block`, so without
+          this the one thing the brief names as the point of the place was
+          invisible to every reader on a phone.
+
+          BELOW the stories now, not above: the file opens Home on the stories
+          strip, and a section that is not in the design must not be the first
+          thing anybody sees.
+        */}
+        <div className="mb-4 lg:hidden">
+          <TrendingDiscussions limit={4} />
+        </div>
+
+        {/*
+          The arena banner is gone from Home.
+
+          It is a green, full-width call to join a LIVE ARENA — another
+          product, in another slice, shouting on the one page that is supposed
+          to say what this place is. Between it, the Live badge on the story
+          rail and a "Live Streaming" lane, Home read as a broadcast product.
+          It is not one: "we don't do all those streaming thing".
+
+          It keeps its home on /live, which is where somebody who wants an
+          arena goes.
+        */}
 
         {authenticated && showComposer && (
           <div className="ws-post mb-4">
@@ -300,53 +348,27 @@ export function FeedPage({
           </div>
         )}
 
-        {/* Lane tabs. The rule runs the full width at 8% white and the active
-            segment sits on top of it in solid white — not an amber bar. */}
-        <div className="mb-4 border-b border-white/8">
-          <div
-            aria-label="Timeline"
-            className="flex justify-between overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {LANES.map(({ lane: value, label }) => (
-              <button
-                key={value}
-                onClick={() => setLane(value)}
-                aria-current={lane === value ? "true" : undefined}
-                className={cn(
-                  "relative shrink-0 px-2.5 pb-2.5 pt-2.5 text-[12px] font-bold transition-colors",
-                  lane === value ? "text-grey-100" : "text-white/40 hover:text-body"
-                )}
-              >
-                {label}
-                {lane === value && (
-                  <span className="absolute inset-x-0 -bottom-px mx-auto h-0.5 w-[74px] bg-white" />
-                )}
-              </button>
-            ))}
-          </div>
+        {/* NODE 225:3352 — the topic row, over its own 2px rule. */}
+        <div className="mb-4">
+          <TopicTabs
+            tabs={tabs}
+            active={topic}
+            onSelect={(key) => setTopic(key)}
+          />
         </div>
 
-        {/* The Reels lane IS reels: full-bleed, one clip per screen, endless.
-            Rendering it as timeline cards made a clip a thumbnail that happens
-            to move, which is exactly what did not feel like a reel. Every
-            other lane stays a timeline, where a tap promotes a clip instead. */}
-        {lane === "reels" ? (
-          // Edge to edge: the column's own padding is cancelled, because a
-          // reel with a 16px gutter either side is a video in a page, not a
-          // reel. The reserved space is the lane switcher above it.
-          <div className="-mx-4 lg:-mx-6">
-            <ReelsFeed
-              items={videoItems}
-              isPending={feed.isPending}
-              hasNextPage={Boolean(feed.hasNextPage)}
-              isFetchingNextPage={feed.isFetchingNextPage}
-              fetchNextPage={() => void feed.fetchNextPage()}
-              reservedSpace="var(--ws-home-reels-chrome)"
-            />
-          </div>
-        ) : (
-          <>
-        <div className="space-y-4">
+        {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
+            A room happening now beats a subject being discussed, and both beat
+            a post from this morning. Renders nothing when none is open. */}
+        {roomsSlot && <div className="mb-6">{roomsSlot}</div>}
+
+        {/* NODES 225:3526 + 225:3374 — "Make some friends". */}
+        {friendsSlot && <div className="mb-6">{friendsSlot}</div>}
+
+        {/* 38 between cards, measured between the two slabs' outer edges in
+            the Home frame (496:13048). It was 16, which read as a stack rather
+            than as separate objects — and these are objects, not rows. */}
+        <div className="space-y-4 md:space-y-[38px]">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
             <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
@@ -354,37 +376,77 @@ export function FeedPage({
           {feed.isSuccess && items.length === 0 && (
             <EmptyState
               glyph="◇"
-              title={EMPTY_COPY[lane].title}
-              body={EMPTY_COPY[lane].body}
-              action={<LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />}
+              title={topic ? "Nothing here yet" : EMPTY_COPY[lane].title}
+              body={
+                topic
+                  ? "Nobody has posted under this topic yet. Try another, or start the conversation."
+                  : EMPTY_COPY[lane].body
+              }
+              action={
+                topic ? null : <LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />
+              }
             />
           )}
-          {items.map((item) => (
-            <div key={item.id} className="ws-enter">
-              <FeedItemCard
-                item={item}
-                followSlot={followSlot}
-                onOpenMedia={openMedia}
-                tipSlot={tipSlot}
-                onQuote={(post) => {
-                  setQuoting(post);
-                  setComposerOpen(true);
-                }}
-              />
-            </div>
+          {items.map((item, index) => (
+            <Fragment key={item.id}>
+              <div className="ws-enter">
+                <FeedItemCard
+                  item={item}
+                  followSlot={followSlot}
+                  winkSlot={winkSlot}
+                  onOpenMedia={openMedia}
+                  tipSlot={tipSlot}
+                  onQuote={(post) => {
+                    setQuoting(post);
+                    setComposerOpen(true);
+                  }}
+                />
+              </div>
+              {/*
+                NODE 258:5545 — "Join a community", INSIDE the timeline rather
+                than under it.
+
+                It used to close the page, which only worked while the feed had
+                a floor: a grid below a list that pages forever is a grid nobody
+                reaches. One post above it puts it on the first screen, where
+                somebody who has just seen what the square sounds like is being
+                offered a room to say it in.
+
+                Rendered against the LAST post when the feed is shorter than the
+                cut, so a one-post lane still shows it rather than dropping it.
+                It sits in the list's own 38 rhythm and carries no padding of
+                its own.
+              */}
+              {communitySlot &&
+                index === Math.min(BEFORE_COMMUNITY - 1, items.length - 1) && (
+                  <div>{communitySlot}</div>
+                )}
+              {/* NODE 540:19351 — the pals rail, deeper into the timeline than
+                  the community grid, and pinned to the LAST post when the feed
+                  is shorter than the cut. A young square has three posts in it,
+                  and a section that only exists once there are four would be
+                  missing exactly when meeting people matters most. */}
+              {palsSlot && index === Math.min(BEFORE_PALS - 1, items.length - 1) && (
+                <div>{palsSlot}</div>
+              )}
+            </Fragment>
           ))}
         </div>
 
-        <div ref={sentinel} />
+        {/*
+          The end of the list asks for the next page itself — node 242:4890's
+          "Load more" row is gone. The sentinel sits 600px ahead of the reader
+          (`useInfiniteScroll`), so the next posts are usually already there by
+          the time they arrive; the spinner is what shows when they are not.
+        */}
+        {canLoadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
         {feed.isFetchingNextPage && (
           <div className="flex justify-center py-6">
-            <Spinner className="h-6 w-6 text-meta" />
+            <Spinner className="h-4 w-4" />
           </div>
         )}
-        {feed.isSuccess && !feed.hasNextPage && items.length > 0 && (
+        {feed.isSuccess && !canLoadMore && items.length > 0 && (
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
-        )}
-        </>
         )}
 
         {/* The floating compose button used to live here, which is why it

@@ -48,7 +48,14 @@ export function MediaFrame({
     // zero height, and the slide rendered black. tailwind-merge resolves the
     // conflict by intent instead: the caller's position wins, and callers that
     // pass none keep `relative`.
-    <div className={cn("relative overflow-hidden bg-[#0b0b0c]", className)}>
+    /* The base is the PAGE'S OWN GROUND, `--color-chrome` (#121214) at full
+       opacity — not a darker near-black of its own. It used to be `#0b0b0c`,
+       which is four values below the ground, so every post carrying a photo or
+       a clip sat in a faintly darker rectangle: visible as a patch on the
+       timeline, and the thing that made media posts look like a different
+       surface from the ones around them. Letterbox space should read as the
+       page continuing behind the picture, not as a hole in it. */
+    <div className={cn("relative overflow-hidden bg-chrome", className)}>
       {backdrop && (
         <>
           {/* Scaled past the edges so the blur has real pixels to sample there

@@ -30,6 +30,36 @@ export const MARKET_FLAGS = {
    * CTA. Turning it on is one switch, and nothing behind it needs to change.
    */
   storeNav: process.env.NEXT_PUBLIC_MS_STORE_NAV_ENABLED === "true",
+  /**
+   * The labelled desktop SIDEBAR, instead of the bottom dock.
+   *
+   * Off by default, which is the shipped design: `BottomDock` (748:15721)
+   * replaced the sidebar on desktop and the tab bar on a phone, so the dock is
+   * the app's only bottom navigation. This is the way back.
+   *
+   * IT IS A LAYOUT SWITCH, NOT A CAPABILITY, so it does NOT follow the
+   * visible-and-inert rule the other flags do — there is nothing to grey out.
+   * On, the sidebar returns on desktop with its eleven destinations, its
+   * drag-to-resize and its unread badges, and the dock steps back to phones
+   * only so the two never both claim the navigation.
+   *
+   * `NEXT_PUBLIC_MS_SIDEBAR_ENABLED=true` and restart.
+   */
+  sidebar: process.env.NEXT_PUBLIC_MS_SIDEBAR_ENABLED === "true",
+
+  /**
+   * Houses: audio-only rooms where anyone can open a table and raise a hand.
+   *
+   * This gates PROMOTION, never the room. `/gist-rooms/[id]` always resolves — a
+   * link somebody was sent has to work, and hiding an entry must never break a
+   * route. What it hides is the app pointing at it: the street link in
+   * navigation and the "Open a gist room" entry point.
+   *
+   * OFF by default with the rest, and it is a soft launch switch rather than a
+   * governance one: nothing behind it takes money, issues an entitlement, or
+   * needs legal sign-off.
+   */
+  houses: process.env.NEXT_PUBLIC_MS_HOUSES_ENABLED === "true",
   moneyLinkedGames: false,
   predictions: false,
   staking: false,
