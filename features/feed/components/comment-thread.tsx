@@ -32,9 +32,9 @@ import type { Comment } from "@/features/feed/lib/types";
  *
  * Top-level comments newest first; under each, its replies oldest first,
  * behind a "View N replies" expander so a page of thirty comments costs one
- * request until a thread is opened. One level of nesting: a reply to a reply
- * files under the same top-level comment and names the person it answers
- * (`replyParentOf` / `replyPrefill`, pinned in `lib/comment-thread.test.ts`).
+ * request until a thread is opened. One level of nesting, kept by the SERVER:
+ * a reply is posted against the comment that was tapped, filed under the
+ * top-level parent, and names the person it answered through `replyTo`.
  *
  * Every comment and reply carries a heart with a live count — `--color-like`
  * when the reader has liked it, the same red the post card's heart uses. Own
