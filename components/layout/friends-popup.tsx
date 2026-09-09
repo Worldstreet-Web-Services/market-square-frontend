@@ -44,11 +44,13 @@ import type { Profile } from "@/lib/api/schemas";
  * the labels change per `friendsMomentCopy`. Which face is "you": the viewer
  * on the left, the other person on the right, the way the file reads.
  *
- * ─── ONCE, ON THE NEXT SIGN-IN ──────────────────────────────────────────────
+ * ─── ON ENTERING, AND THE MOMENT IT HAPPENS ──────────────────────────────────
  * It reads the person's unread social notifications when the shell first has
- * them, decides once, and does not reconsider on later polls — so a wink that
- * arrives while they are already looking becomes a badge, not an ambush. On
- * close it marks the rows it showed as read, which is the whole "once".
+ * them, and keeps reading them as they poll — so what arrived while they were
+ * away shows on entering, and a wink or a follow-back that lands while they
+ * are here shows then ("if they enter and that thing happens it will show").
+ * On close it marks the rows it showed as read, which is what keeps any one
+ * moment to once.
  *
  * Composed here because it acts across slices: the wink and follow are the
  * profile's, "Start gisting" is the messages slice's, the rows are the
@@ -59,23 +61,32 @@ export function FriendsPopup() {
   const notifications = useNotifications("social");
   const markRead = useMarkNotificationsRead();
   const [moment, setMoment] = useState<FriendsMoment | null>(null);
-  const decided = useRef(false);
+  // Rows this session has already put in front of the reader, so a poll
+  // that returns them again (before the read lands) cannot re-open them.
+  const shown = useRef(new Set<string>());
 
+  /*
+    ON ENTERING, AND WHILE THEY ARE HERE. The first answer from the social
+    list shows whatever arrived since they were last in; every later answer
+    (the list polls every 30s) is checked again for rows this session has not
+    shown, so a wink or a follow-back that lands while they are reading
+    appears then, not on their next sign-in. One popup at a time: a second
+    moment waits until the first is closed, and is picked up on the next
+    answer. Realtime delivery through the ws-gateway would cut the 30s; the
+    rule here does not change when it does.
+  */
   useEffect(() => {
-    if (decided.current || !notifications.data) return;
-    decided.current = true;
-    const rows = notifications.data.pages.flatMap((page) => page.items);
-    setMoment(
-      pickFriendsMoment(
-        rows.map((row) => ({
-          id: row.id,
-          kind: row.kind,
-          readAt: row.readAt,
-          actor: row.actor,
-        }))
-      )
+    if (moment || !notifications.data) return;
+    const rows = notifications.data.pages
+      .flatMap((page) => page.items)
+      .filter((row) => !shown.current.has(row.id));
+    const next = pickFriendsMoment(
+      rows.map((row) => ({ id: row.id, kind: row.kind, readAt: row.readAt, actor: row.actor }))
     );
-  }, [notifications.data]);
+    if (!next) return;
+    for (const id of next.notificationIds) shown.current.add(id);
+    setMoment(next);
+  }, [notifications.data, moment]);
 
   if (!moment || !me.data) return null;
   return (
@@ -218,8 +229,10 @@ function FriendsDialog({
           ))}
         </p>
 
-        {/* 647:16651 — the buttons, 5.88 apart. */}
-        <div className="absolute flex flex-col items-center gap-[5.88px]" style={{ left: 111.4, top: 364, width: 219 }}>
+        {/* 647:16651 — the buttons. The file stacks them 5.88 apart, which on
+            screen read as two pills touching ("there is no space in that
+            button"); 12 here, and the column keeps the file's top. */}
+        <div className="absolute flex flex-col items-center gap-3" style={{ left: 111.4, top: 364, width: 219 }}>
           <button
             type="button"
             onClick={primaryAct}
