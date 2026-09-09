@@ -12,7 +12,6 @@ import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { PostText } from "@/components/ui/post-text";
 import { CoinChips } from "@/components/ui/coin-chips";
-import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { reportView, useRecordView } from "@/features/feed/hooks/use-record-view";
 import { IconReplayPlay } from "@/components/ui/profile-icons";
 import { useGate } from "@/hooks/use-gate";
@@ -431,7 +430,6 @@ function InlineComment({
 }) {
   const add = useAddComment(postId);
   const gate = useGate();
-  const me = useMe();
   const field = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
@@ -457,28 +455,21 @@ function InlineComment({
     );
   };
 
-  const insert = (emoji: string) => {
-    setText((current) => (current + emoji).slice(0, 500));
-    field.current?.focus();
-  };
-
   return (
     /*
-      NODE 236:4738 — the comment pill: `white/3` at a full round, 8.08 of
-      padding, a 24px glyph, then the field.
+      NODE 496:13647 — the comment pill: 220 x 40.15, `white/3` at a full
+      round, 8.08 of padding, the file's 24px comment glyph at 60% white, then
+      "Comment here..." 2 to its right at 12/16.
 
-      TWO DEPARTURES FROM THE FILE, both stated:
+      THE FILE'S PILL AND NOTHING MORE. The reader's own avatar and an emoji
+      picker used to sit in it; both are gone at ogazboiz's word ("remove that
+      emoji and that my profile ... it should look the same as the figma").
+      The field is still live — typing and Enter post a reply — it just wears
+      the file's clothes.
 
-      · The file leads with a comment GLYPH at 60% white and no avatar. This
-        keeps the reader's own avatar and puts the glyph beside it, because the
-        pill is a live field here rather than a placeholder — seeing whose reply
-        it will be is worth the 24px, and it is the same affordance every
-        composer in the app uses.
-      · The placeholder is the file's copy but NOT its colour. `236:4743` is
-        `#3C3C3C`, which reads on the white the mockup accidentally exported
-        (the page frame's fill is `visible: false`, so the PNG has no
-        background) and is very nearly invisible on the real `#0F0F0F` card.
-        The app's own placeholder grey is used instead.
+      One departure, stated: the placeholder is the file's copy but not its
+      colour. `496:13652` is `#3C3C3C`, which is 1.5:1 against the `#0F0F0F`
+      card — a hint nobody can read. The app's own placeholder grey is used.
     */
     /*
       220 wide at node 496:13434, not a field that grows: the file spends the
@@ -489,11 +480,10 @@ function InlineComment({
     */
     <div
       className={cn(
-        "ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-2 px-2 md:max-w-[220px]",
+        "ws-comment-field flex h-10 min-w-0 flex-1 items-center gap-0.5 px-2 md:max-w-[220px]",
         className
       )}
     >
-      <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={24} />
       <IconMsComment aria-hidden className="h-6 w-6 shrink-0 text-white/60" />
       {sent ? (
         // Says what happened AND offers the one thing a person wants next.
@@ -515,11 +505,6 @@ function InlineComment({
           disabled={add.isPending}
           className="min-w-0 flex-1 bg-transparent text-[12px] text-heading outline-none placeholder:text-grey-700 disabled:opacity-60"
         />
-      )}
-      {!sent && (
-        // Right-aligned: this button sits at the end of the reply row, so a
-        // left-anchored panel would open off the edge of the card.
-        <EmojiPicker onPick={insert} label="Add an emoji to your reply" align="right" />
       )}
       {!sent && text.trim() && (
         <button
