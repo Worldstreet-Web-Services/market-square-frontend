@@ -50,7 +50,6 @@ import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import {
   IconBell,
-  IconCollapseRight,
   IconDots,
   IconChevronDown,
   IconMore,
@@ -850,22 +849,6 @@ export function Sidebar({
           double-click on it (RailHandle); only the button that advertised it
           is removed. */}
 
-      {/* USE THE DOCK INSTEAD. Tucks the whole rail away on this device and
-          hands navigation to the dock; the dock carries the switch back. See
-          lib/sidebar-pref-store for why it is a per-device preference. */}
-      <button
-        type="button"
-        onClick={() => setSidebarHidden(true)}
-        aria-label="Hide sidebar and use the dock"
-        title="Hide sidebar and use the dock"
-        className="ws-press mb-2 flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
-      >
-        <span className="hidden text-[12px] font-bold group-data-[rail=full]/rail:block">
-          Use the dock
-        </span>
-        <IconCollapseRight className="h-4 w-4 -scale-x-100" />
-      </button>
-
       {/* The ONLY scrolling region. The whole rail used to scroll, which put
           the account chip, Go live and Post on a conveyor belt: on a short
           laptop screen the identity you are posting as slid off the bottom
@@ -963,6 +946,34 @@ export function Sidebar({
       </div>
 
       <div className="mt-4 w-full shrink-0 border-t border-white/10 pt-4">
+        {/*
+          USE THE DOCK INSTEAD — a real switch, where settings sit: at the
+          rail's foot, above your own name, labelled in the full rail and a
+          bare switch with its tooltip in the icon rail. It replaced a small
+          button under the wordmark that nobody found ("i cant see my
+          toggle"). On: the rail tucks away on this device and the dock takes
+          over; the dock carries the switch back (lib/sidebar-pref-store).
+          It reads "off" here because while the rail is showing, the dock is
+          not in charge.
+        */}
+        <div
+          className="mb-3 flex items-center justify-center gap-3 group-data-[rail=full]/rail:justify-between group-data-[rail=full]/rail:px-2"
+          title="Hide the sidebar and use the dock"
+        >
+          <span className="hidden min-w-0 group-data-[rail=full]/rail:block">
+            <span className="block text-[12px] font-bold leading-4 text-body">Use the dock</span>
+            <span className="block text-[11px] leading-4 text-meta">Hides this sidebar</span>
+          </span>
+          <button
+            role="switch"
+            aria-checked={false}
+            aria-label="Use the dock instead of the sidebar"
+            onClick={() => setSidebarHidden(true)}
+            className="ws-press relative h-6 w-10 shrink-0 rounded-full bg-white/12 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          >
+            <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-grey-400 transition-[left] duration-150 motion-reduce:transition-none" />
+          </button>
+        </div>
         {broadcast.live && (
           <div className="mb-2 flex justify-center group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:pl-2">
             <OnAirPill streamId={broadcast.streamId} compact />
