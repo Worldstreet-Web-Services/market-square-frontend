@@ -7,8 +7,9 @@ import { newPostsLabel } from "@/lib/new-posts";
  * "N NEW POSTS" — the pill that floats over the timeline while posts wait.
  *
  * NO FIGMA NODE EXISTS FOR THIS. It is drawn from the design language in
- * CLAUDE.md rather than a frame: `ws-glass` (the dock's own material, with
- * the dock's shadow), the silver ramp, Geist 500 at 13px, a full round. The
+ * CLAUDE.md rather than a frame: `ws-popover` (the near-opaque material every
+ * floating menu uses — it sits OVER posts and must not be read through), the
+ * silver ramp, Geist 500 at 13px, a full round. The
  * geometry is X's — up to three of the new authors' faces overlapping at the
  * left, then the count — because that is the pattern the reader already
  * knows to tap.
@@ -35,7 +36,12 @@ export function NewPostsPill({
       <button
         type="button"
         onClick={onTap}
-        className="ws-glass ws-press ws-popover-enter pointer-events-auto flex items-center gap-2 rounded-full py-1.5 pl-2 pr-4 text-[13px] font-medium text-white shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)] transition-colors hover:bg-white/10"
+        // NEARLY OPAQUE, NOT GLASS. `ws-glass` is 70% over a blur, which reads
+        // fine over a dark ground and badly over a post: the words behind it
+        // showed through the pill and the pill "did not cover it". A control
+        // that floats over content is the popover's material (98%), as every
+        // menu in the app is — the reader must not read through it.
+        className="ws-popover ws-press ws-popover-enter pointer-events-auto flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full pl-2 pr-4 text-[13px] font-medium text-white transition-colors hover:bg-white/10"
       >
         {authors.length > 0 && (
           <span aria-hidden className="flex items-center -space-x-2">
