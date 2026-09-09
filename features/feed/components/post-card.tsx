@@ -484,7 +484,11 @@ function InlineComment({
     */
     <div
       className={cn(
-        "ws-comment-field relative flex h-10 min-w-0 flex-1 items-center gap-0.5 px-2 md:max-w-[220px]",
+        // `flex-1` ONLY where the row is horizontal. Below `md` the action row
+        // is a column, and a flex-basis of 0 on the COLUMN axis overrides the
+        // pill's own height — the field collapsed to its 24px glyph on a phone
+        // while the tallies pill beside it stood at 40. Full width there instead.
+        "ws-comment-field relative flex h-10 w-full min-w-0 items-center gap-0.5 px-2 md:w-auto md:flex-1 md:max-w-[220px]",
         className
       )}
     >
