@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { Spinner } from "@/components/ui/button";
@@ -237,6 +237,7 @@ export function FeedPage({
     meId: me.data?.id ?? null,
   });
   const items = fresh.shown;
+  const listRef = useRef<HTMLDivElement>(null);
   const canLoadMore = Boolean(feed.hasNextPage);
   /* The shared sentinel every other paged list in the app uses — 600px of
      rootMargin, so the next page is asked for before the reader arrives. */
@@ -382,10 +383,13 @@ export function FeedPage({
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
             than as separate objects — and these are objects, not rows. */}
-        <div className="space-y-4 md:space-y-[38px]">
-          {fresh.count > 0 && (
-            <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} />
-          )}
+        {/* Floats over the column, fixed under the top bars, only while the
+            reader is scrolled away from the head — at the top the held posts
+            merge in place and there is nothing to announce. */}
+        {fresh.pinned && (
+          <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
+        )}
+        <div ref={listRef} className="space-y-4 md:space-y-[38px]">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
             <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
