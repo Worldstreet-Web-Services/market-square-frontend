@@ -382,9 +382,17 @@ export function MessagesPage({
         // `--ws-nav-h` must NOT be subtracted, or the composer floats a dock's
         // height above the screen's foot. The inbox alone keeps the dock and
         // the reservation.
+        // `--ws-vvh` is the visual viewport — literally what is on the glass,
+        // with the URL bar AND the keyboard already accounted for. It replaces
+        // `100dvh` rather than adjusting it: `dvh` tracks a URL bar that
+        // slides, so a pane sized in it is short or long by the bar's height
+        // between recomputations, which is the dead band under the composer
+        // and the vertical scroll that should not exist. `100dvh` remains the
+        // fallback for a browser with no visualViewport, where it is right
+        // anyway. See hooks/use-keyboard-inset.ts.
         open
-          ? "h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-crumb-h))]"
-          : "h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-crumb-h)-var(--ws-nav-h))]"
+          ? "h-[calc(var(--ws-vvh,100dvh)-var(--ws-topbar-h)-var(--ws-crumb-h))]"
+          : "h-[calc(var(--ws-vvh,100dvh)-var(--ws-topbar-h)-var(--ws-crumb-h)-var(--ws-nav-h))]"
       )}
     >
       <div

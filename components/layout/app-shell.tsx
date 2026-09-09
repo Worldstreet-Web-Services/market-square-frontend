@@ -18,6 +18,7 @@ import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { toast } from "sonner";
 import { useChatOpen } from "@/lib/chat-open-store";
+import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { setSidebarHidden, useSidebarHidden } from "@/lib/sidebar-pref-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -793,7 +794,7 @@ export function Sidebar({
     <aside
       data-rail={rail.mode}
       style={{ width: railWidth(rail) }}
-      className="group/rail ws-hair sticky top-0 z-40 hidden h-dvh shrink-0 flex-col items-center overflow-hidden border-r bg-chrome px-3 pb-5 md:flex data-[rail=full]:items-stretch"
+      className="group/rail ws-hair sticky top-0 z-40 hidden h-[var(--ws-vvh,100dvh)] shrink-0 flex-col items-center overflow-hidden border-r bg-chrome px-3 pb-5 md:flex data-[rail=full]:items-stretch"
     >
       <RailHandle rail={rail} preview={preview} commit={commit} />
       {/*
@@ -1582,6 +1583,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // The desktop rail is drawn: flagged on, signed in, and not tucked away.
   const railOn = MARKET_FLAGS.sidebar && !guest && !sidebarHidden;
 
+  /*
+    ONE SOURCE OF VIEWPORT TRUTH, published for the whole shell.
+
+    `--ws-vvh` is `window.visualViewport.height` — what is actually on the
+    glass. It lives here rather than in the messages page because the SIDEBAR
+    and `main` size themselves off the viewport too, and two elements measuring
+    the same window in two different units is the bug: `main` in `100dvh`, the
+    chat pane in `--ws-vvh`. Disagree by one pixel and `main` grows past its
+    min-height, the document scrolls, and the `h-dvh` sidebar stops short of
+    the bottom — which is exactly the black band under the WHOLE app, sidebar
+    included, that appears on scrolling with a thread open.
+
+    Unset (no visualViewport) everything falls back to `100dvh`, which is the
+    behaviour this replaces.
+  */
+  useKeyboardInset();
+
+  /*
+    A CHAT THREAD CLAIMS THE VIEWPORT, so the page must not scroll behind it.
+
+    Sizing alone is not enough to guarantee that — every element has to agree
+    to the pixel, and a rounded half-pixel anywhere puts a scrollbar back. The
+    route's own contract is simpler and can be stated outright: on `/messages`
+    with a thread open, the MESSAGE LIST scrolls and nothing else does. Same
+    lock the drawer and the sheets already use.
+  */
+  useEffect(() => {
+    if (!chatOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [chatOpen]);
+
   // The stream room owns its whole viewport; the shell stays out of the way
   // there (no rails over the player, no bars).
   const inRoom = /^\/live\/[^/]+$/.test(pathname);
@@ -1640,7 +1676,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       `min-h-dvh` so a short route does not leave the ground stopping partway
       down with black beneath it.
     */
-    <div className="min-h-dvh w-full bg-chrome">
+    /* `data-rail` tells the STYLESHEET whether a dock is on screen, so
+       `--ws-nav-h` can be 0 where there is none — see globals.css. Every
+       consumer of that variable then agrees without knowing about the rail. */
+    <div className="min-h-dvh w-full bg-chrome" data-rail={railOn ? "on" : "off"}>
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*
         GUESTS GET NO SIDEBAR.
@@ -1791,7 +1830,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)]",
+                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)]",
                 // The foot reserves the dock's row — except over an open chat,
                 // where the dock is gone and the reservation would be a blank
                 // band under the composer. WhatsApp's rule: the field sits on

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconDeckArrow } from "@/components/ui/home-icons";
+import { DeckDots } from "@/components/ui/deck-dots";
 import { canGoBack } from "@/lib/nav-history";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
@@ -15,8 +16,10 @@ import {
 import { facetValues } from "@/lib/people-filters";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
-import { useMediaQuery } from "@/hooks/use-media-query";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
+import { SwipeVerdict } from "@/components/layout/swipe-verdict";
+import { useFollow, useIsFollowing } from "@/features/profile";
+import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
 import { DECK_NODE, deckLayout, type DeckLayout } from "@/lib/deck-layout";
 import type { Profile } from "@/lib/api/schemas";
@@ -106,12 +109,11 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     ro.observe(el);
     observer.current = ro;
   }, []);
-  const wide = useMediaQuery(WIDE);
   // Node 844:18440 puts the deck 89 under the heading block on `/pals`; the
   // heading is drawn at 0.68 of the node here (see its note), and so is the
   // gap — 60. Home's own file keeps its 24.
   const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "gap-6");
-  const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: wide });
+  const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: true });
 
 
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
@@ -282,6 +284,8 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
             profile={items[position]!}
             slot={slotOf(position)}
             layout={layout}
+            /* `/pals` DECIDES; Home BROWSES — see the note in DeckCard. */
+            decide={heading === "pals"}
             canStep={canStep}
             onStep={step}
             onNeedMore={() => {
@@ -300,35 +304,58 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           with a lit rim; the rim is an inset highlight here. Their 32px inner
           ring has a zero-weight stroke and is not drawn. An inert disc keeps
           its strength — the file draws both at full — and is a real
-          `disabled`. Desktop only: on a phone the fan is browsed by hand.
+          `disabled`.
+
+          ON EVERY SIZE, not desktop only. They were `wide`-gated on the
+          reasoning that "on a phone the fan is browsed by hand" — true while
+          the gesture was navigation, and wrong the moment `/pals` made it a
+          DECISION: a swipe there follows or skips and only goes forward, so
+          without these a mis-swipe on a phone could not be taken back at all.
+          They are also the cheapest thing on the deck to show, which is what
+          settles it: `deckExtent` grows from 943 file units to 954 when the
+          discs are counted, because the fan is already wider than the right
+          disc. A 1.2% smaller card buys the only way back.
         */}
-        {wide && (
-          <>
-            <DeckArrow
-              direction="prev"
-              disabled={!canStep(-1)}
-              onClick={() => step(-1)}
-              size={arrowSize}
-              left={layout.frontX + (DECK_NODE.arrow.leftDx - DECK_NODE.arrow.size / 2) * layout.k}
-              top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
-            />
-            <DeckArrow
-              direction="next"
-              disabled={!canStep(1)}
-              onClick={() => step(1)}
-              size={arrowSize}
-              left={layout.frontX + (DECK_NODE.arrow.rightDx - DECK_NODE.arrow.size / 2) * layout.k}
-              top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
-            />
-          </>
-        )}
+        <DeckArrow
+          direction="prev"
+          disabled={!canStep(-1)}
+          onClick={() => step(-1)}
+          size={arrowSize}
+          left={layout.frontX + (DECK_NODE.arrow.leftDx - DECK_NODE.arrow.size / 2) * layout.k}
+          top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
+        />
+        <DeckArrow
+          direction="next"
+          disabled={!canStep(1)}
+          onClick={() => step(1)}
+          size={arrowSize}
+          left={layout.frontX + (DECK_NODE.arrow.rightDx - DECK_NODE.arrow.size / 2) * layout.k}
+          top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
+        />
       </div>
+
+      {/*
+        THE PAGE PILLS — node 289:5455, three of them under the deck.
+
+        They say "there is more after this one", which is the one thing a fan
+        cannot: the two cards behind the front are the same two whether the
+        roster holds four people or four hundred. Dropped in the rewrite and
+        back on EVERY size, phones included — a phone is where the fan is
+        smallest and the reassurance matters most.
+
+        THREE PILLS CANNOT COUNT AN UNBOUNDED ROSTER, so they do not try: the
+        reader's position is mapped across the three, which is all a row of
+        four-pixel pills can honestly say. With one person there is nothing to
+        page through and the row is absent rather than showing a lit pill and
+        two dead ones.
+      */}
+      {items.length > 1 && (
+        <DeckDots count={3} active={Math.round((index / (items.length - 1)) * 2)} />
+      )}
     </section>
   );
 }
 
-/** Tailwind's `md` — the shell's phone/desktop split. */
-const WIDE = "(min-width: 768px)";
 /** Before the first measurement: Home's desktop column. Replaced before paint by the callback ref. */
 const FALLBACK_ROOM = 552;
 
@@ -380,6 +407,7 @@ function DeckCard({
   profile,
   slot,
   layout,
+  decide,
   canStep,
   onStep,
   onNeedMore,
@@ -387,6 +415,11 @@ function DeckCard({
   profile: Profile;
   slot: number;
   layout: DeckLayout;
+  /**
+   * True on `/pals`: the gesture is a DECISION and carries the file's verdict
+   * stamps. False on Home, where it stays navigation. See the note below.
+   */
+  decide: boolean;
   canStep: (delta: number) => boolean;
   onStep: (delta: number) => void;
   /** A left swipe on the last loaded person: ask for more rather than refuse. */
@@ -397,21 +430,56 @@ function DeckCard({
   const { k } = layout;
 
   /*
-    THE GESTURE IS NAVIGATION. The hook's "follow" is a rightward drag and its
-    "pass" a leftward one; here right means BACK and left means NEXT, and
+    THE GESTURE MEANS TWO DIFFERENT THINGS, AND THE PAGE DECIDES WHICH.
+
+    ON HOME IT IS NAVIGATION. The hook's "follow" is a rightward drag and its
+    "pass" a leftward one; there right means BACK and left means NEXT, and
     neither touches the service. `canCommit` is what makes the ends of the list
-    spring back rather than fly.
+    spring back rather than fly. The deck is one block in a timeline there, and
+    a gesture that silently followed somebody while they scrolled past would be
+    an action nobody asked for.
+
+    ON `/pals` IT IS A DECISION, which is what the deck is for on a page of its
+    own: RIGHT FOLLOWS, LEFT SKIPS, and the file's verdict stamps announce
+    which before the finger lifts (856:23668 and 856:23693).
+
+    A FOLLOW IS A REAL ACT AND A SKIP IS NOT. Right sends `useFollow` behind
+    the sign-in gate, guarded by `isFollowing` so swiping right on somebody you
+    already follow cannot toggle them OFF — which a bare `mutate(!isFollowing)`
+    would. Left tells the service nothing: there is no "dismiss a person"
+    route, and a preference kept in this tab alone is one that lies the moment
+    you open another. Both then step forward, because either way this card has
+    been dealt with.
+
+    DECIDING ONLY GOES FORWARD, so `canCommit` asks for the next page at the
+    end rather than refusing. The `<` `>` discs are still how you go back.
   */
+  const follow = useFollow(profile);
+  const isFollowing = useIsFollowing(profile);
+  const gate = useGate();
+
   const swipe = useSwipeCard({
     width: DECK_NODE.card.width * k,
     disabled: !front,
     canCommit: (decision) => {
+      if (decide) {
+        if (canStep(1)) return true;
+        onNeedMore();
+        return false;
+      }
       const delta = decision === "follow" ? -1 : 1;
       if (canStep(delta)) return true;
       if (delta === 1) onNeedMore();
       return false;
     },
-    onDecide: (decision) => onStep(decision === "follow" ? -1 : 1),
+    onDecide: (decision) => {
+      if (!decide) {
+        onStep(decision === "follow" ? -1 : 1);
+        return;
+      }
+      if (decision === "follow" && !isFollowing) gate(() => follow.mutate(true));
+      onStep(1);
+    },
   });
 
   return (
@@ -448,6 +516,13 @@ function DeckCard({
         onWinked={() => onStep(1)}
         onFollowed={() => onStep(1)}
       />
+      {/* Only the front card, and only where the gesture decides — a stamp on
+          a card you are merely paging past would promise an act that is not
+          happening. `k` is 1 here because the card's own box is already scaled
+          by the transform above; the stamp rides inside it. */}
+      {decide && front && (
+        <SwipeVerdict progress={swipe.progress} verdict={swipe.verdict} k={1} />
+      )}
     </div>
   );
 }
