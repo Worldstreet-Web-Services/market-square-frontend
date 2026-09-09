@@ -21,6 +21,9 @@ import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
 import { TopicTabs, type TopicTab } from "@/features/feed/components/topic-tabs";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useMe } from "@/hooks/use-me";
+import { useNewPosts } from "@/features/feed/hooks/use-new-posts";
+import { NewPostsPill } from "@/features/feed/components/new-posts-pill";
 
 /** How many posts stand between the top of the feed and "Join a community". */
 const BEFORE_COMMUNITY = 1;
@@ -221,8 +224,19 @@ export function FeedPage({
     () => feed.data?.pages.flatMap((page) => page.items) ?? [],
     [feed.data?.pages]
   );
-  /* Everything that has been fetched. Nothing is withheld behind a control. */
-  const items = loaded;
+  /*
+    Everything that has been fetched — except what arrived ABOVE the reader
+    while they were scrolled, which waits behind the "N new posts" pill until
+    they tap it (see `useNewPosts`). At the top it merges in place; the
+    reader's own posts always show at once.
+  */
+  const me = useMe();
+  const fresh = useNewPosts({
+    items: loaded,
+    laneKey: `${lane}:${topics.join(",")}`,
+    meId: me.data?.id ?? null,
+  });
+  const items = fresh.shown;
   const canLoadMore = Boolean(feed.hasNextPage);
   /* The shared sentinel every other paged list in the app uses — 600px of
      rootMargin, so the next page is asked for before the reader arrives. */
@@ -369,6 +383,9 @@ export function FeedPage({
             the Home frame (496:13048). It was 16, which read as a stack rather
             than as separate objects — and these are objects, not rows. */}
         <div className="space-y-4 md:space-y-[38px]">
+          {fresh.count > 0 && (
+            <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} />
+          )}
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
             <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
