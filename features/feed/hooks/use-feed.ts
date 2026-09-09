@@ -62,6 +62,36 @@ export function useFeed(lane: Lane, topics: readonly string[] = []) {
 }
 
 /**
+ * THE HEAD CHECK — what X does every few seconds: ask for the top of the lane
+ * again and see whether anything new sits above what the reader has.
+ *
+ * A separate, small query rather than a refetch interval on the timeline:
+ * an infinite query refetches EVERY loaded page on each tick, so a reader
+ * five pages deep would cost five requests every half minute to learn about
+ * one new post. This asks for ten items, once every 30 seconds, only while
+ * the tab is visible (`refetchIntervalInBackground: false`) and only once the
+ * timeline itself has loaded. Its items are merged in front of the loaded
+ * list by id (see the feed page), and the "N new posts" hold does the rest.
+ *
+ * Thirty seconds is the cadence the unread badge already polls at, so the
+ * app makes no new promise about freshness it does not keep elsewhere.
+ */
+export const FEED_HEAD_INTERVAL_MS = 30_000;
+
+export function useFeedHead(lane: Lane, topics: readonly string[] = [], enabled = true) {
+  const key = topics.join(",");
+  return useQuery({
+    queryKey: ["ms", "feed", lane, key, "head"],
+    queryFn: () => fetchFeed(lane, undefined, [...topics], undefined, 10),
+    enabled,
+    refetchInterval: FEED_HEAD_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    // The check is the freshness; nothing else should read this as current.
+    staleTime: 0,
+  });
+}
+
+/**
  * One discussion.
  *
  * The tag is part of the query key, or two discussions share a cache and

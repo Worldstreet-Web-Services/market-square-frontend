@@ -8,7 +8,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParam } from "@/hooks/use-query-param";
 import { useComposePrefill } from "@/hooks/use-compose-prefill";
-import { useFeed } from "@/features/feed/hooks/use-feed";
+import { useFeed, useFeedHead } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
 import { TrendingDiscussions } from "@/features/discovery";
@@ -220,10 +220,22 @@ export function FeedPage({
     [topicTabs]
   );
 
-  const loaded = useMemo(
-    () => feed.data?.pages.flatMap((page) => page.items) ?? [],
-    [feed.data?.pages]
-  );
+  /*
+    THE HEAD CHECK (`useFeedHead`) runs every 30 seconds while the tab is
+    visible and the timeline has loaded. Anything it returns that the
+    timeline does not already have is put IN FRONT of the loaded list, by
+    id — the timeline's own order for what it has, the head's for what is
+    new. From there `useNewPosts` holds the new items behind the pill while
+    the reader is scrolled, and merges them at the top. Nothing here decides
+    what is "new"; that is the hold's job, against what the reader has seen.
+  */
+  const head = useFeedHead(lane, topics, feed.isSuccess);
+  const loaded = useMemo(() => {
+    const paged = feed.data?.pages.flatMap((page) => page.items) ?? [];
+    const have = new Set(paged.map((item) => item.id));
+    const fresh = (head.data?.items ?? []).filter((item) => !have.has(item.id));
+    return fresh.length > 0 ? [...fresh, ...paged] : paged;
+  }, [feed.data?.pages, head.data?.items]);
   /*
     Everything that has been fetched — except what arrived ABOVE the reader
     while they were scrolled, which waits behind the "N new posts" pill until
