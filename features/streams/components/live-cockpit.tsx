@@ -37,7 +37,7 @@ import {
   GuestRequestsSheet,
 } from "@/features/streams/components/mobile-guest-requests";
 import {
-  BROADCAST_CATEGORIES,
+  STREAM_CATEGORIES,
   type Ingest,
   type Stream,
   type StreamCategory,
@@ -170,7 +170,7 @@ function InfoDrawer({ stream }: { stream: Stream }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(stream.title);
   const [category, setCategory] = useState<StreamCategory>(
-    (BROADCAST_CATEGORIES as readonly string[]).includes(stream.category)
+    (STREAM_CATEGORIES as readonly string[]).includes(stream.category)
       ? (stream.category as StreamCategory)
       : "other"
   );
@@ -188,7 +188,7 @@ function InfoDrawer({ stream }: { stream: Stream }) {
         <div className="space-y-2 px-3 pb-3">
           <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className={inputClass} aria-label="Title" />
           <select value={category} onChange={(e) => setCategory(e.target.value as StreamCategory)} className={inputClass} aria-label="Category">
-            {BROADCAST_CATEGORIES.map((c) => (
+            {STREAM_CATEGORIES.map((c) => (
               <option key={c} value={c} className="bg-sheet capitalize">
                 {c}
               </option>

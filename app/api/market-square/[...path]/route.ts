@@ -3,7 +3,6 @@ import { verifyRequest, verifyRequestDetailed } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
 import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
 import { forwardToUpstream } from "@/lib/server/proxy";
-import { cacheControlFor } from "@/lib/server/cache-policy";
 import { FALLBACK_LIMITS } from "@/lib/upload-rules";
 
 // BFF proxy for Market Square. Verifies the Privy session server-side and
@@ -69,35 +68,6 @@ async function searchMentionTargets(req: NextRequest) {
   if (!BASE) {
     const result = handleFixture("GET", ["mentions", "search"], req.nextUrl.searchParams, undefined, await callerUserId(req));
     return NextResponse.json(result.body, { status: result.status });
-  }
-  // A BARE "@" — nothing typed after it yet — is the moment a reader expects
-  // to see people, and `/search?type=people` answers an empty query with an
-  // empty list by design. So that case reads the directory instead
-  // (`GET /profiles`, public, sorted by followers, the viewer already
-  // excluded), reshaped to the same Mention rows. "Typing @ does nothing"
-  // was this branch not existing.
-  if (!query) {
-    const directory = await fetch(`${BASE}/profiles?sort=followers&limit=8`, {
-      headers: {
-        accept: "application/json",
-        ...(req.headers.get("authorization") ? { authorization: req.headers.get("authorization")! } : {}),
-      },
-      cache: "no-store",
-    });
-    if (!directory.ok) return new NextResponse(await directory.text(), { status: directory.status, headers: { "content-type": "application/json" } });
-    const page = (await directory.json()) as {
-      data?: { items?: Array<{ id?: string; username?: string | null; displayName?: string | null }> };
-    };
-    const people = (page.data?.items ?? [])
-      .filter((item) => item.username)
-      .slice(0, 8)
-      .map((item) => ({
-        type: "profile" as const,
-        id: item.id ?? "",
-        label: item.displayName ?? item.username ?? "",
-        handle: item.username ?? "",
-      }));
-    return NextResponse.json({ success: true, data: { items: people } });
   }
   // There is no mentions endpoint: this rewrites onto /search and keeps the
   // people. Results are discriminated by `kind` and carry the profile payload,
@@ -225,9 +195,6 @@ async function serveFixture(req: NextRequest, path: string[], method: string) {
   return NextResponse.json(result.body, { status: result.status });
 }
 
-/** Statuses the Fetch spec forbids a body on. Constructing one throws. */
-const NULL_BODY_STATUSES = new Set([204, 205, 304]);
-
 async function forward(req: NextRequest, path: string[], method: string) {
   const joined = path.join("/");
 
@@ -245,44 +212,9 @@ async function forward(req: NextRequest, path: string[], method: string) {
     url: `${BASE}/${joined}${req.nextUrl.search}`,
     method,
   });
-  /*
-    A 204 MUST BE CONSTRUCTED WITH A NULL BODY.
-
-    204, 205 and 304 are "null body statuses" in the Fetch spec: passing ANY
-    body init — including the empty string this proxy carries for them —
-    throws `TypeError: Response constructor: Invalid response status code 204`.
-    The throw happens HERE, after the upstream call has already succeeded, so
-    Next answers 5xx for a request the service completed. The client then sees
-    a server error, trips the shared circuit breaker, and tells the reader
-    "Can't reach Market Square right now" about an action that worked.
-
-    That is what leaving a group looked like: the member really was removed,
-    the app reported the square unreachable, the confirm sheet stayed open, and
-    the next press hit a membership that was already gone. Two of our routes
-    answer 204 — leaving a group and declining a chat request — so both were
-    unusable through the proxy while both were succeeding upstream.
-  */
-  /*
-    SAY WHAT MAY BE CACHED, ALWAYS — see lib/server/cache-policy.ts.
-
-    Nothing said `Cache-Control` before, which let an intermediary guess a
-    freshness lifetime for bodies that include somebody's inbox. Anonymous
-    public GETs become shared-cacheable so identical polls collapse; every
-    other response is explicitly `private, no-store`.
-  */
-  const cacheControl = cacheControlFor({
-    method,
+  return new NextResponse(result.body, {
     status: result.status,
-    isPublic: method === "GET" && isPublicGet(path),
-    hasAuthorization: Boolean(req.headers.get("authorization")),
-  });
-
-  return new NextResponse(NULL_BODY_STATUSES.has(result.status) ? null : result.body, {
-    status: result.status,
-    // A bodyless response must not claim a content type either.
-    headers: NULL_BODY_STATUSES.has(result.status)
-      ? { "cache-control": cacheControl }
-      : { "content-type": result.contentType, "cache-control": cacheControl },
+    headers: { "content-type": result.contentType },
   });
 }
 

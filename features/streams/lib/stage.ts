@@ -57,16 +57,6 @@ export interface StageParticipant {
   /** LiveKit sets this on join; used only to order guests behind the host. */
   joinedAt?: Date | number | null;
   name?: string;
-  /**
-   * The participant's own token metadata, verbatim.
-   *
-   * Opaque here on purpose: this module is about SEATING and must not learn a
-   * payload shape. Houses parses it (features/houses/lib/participant-meta.ts)
-   * to turn a seat into a link to somebody's profile, which is the whole
-   * discovery loop in an audio room — a face at a table is the only thing
-   * naming a person who has no chat message and no request row.
-   */
-  metadata?: string | null;
   isSpeaking?: boolean;
   connectionQuality?: string;
   videoTrackPublications: ReadonlyMap<string, StagePublication>;
@@ -89,8 +79,6 @@ export interface StageSlot {
   role: "host" | "guest";
   isLocal: boolean;
   name: string;
-  /** The token's metadata string, unparsed. See StageParticipant.metadata. */
-  metadata: string | null;
   /** The face. Null for an audio-only or camera-off participant. */
   cameraTrack: StagePublication | null;
   /**
@@ -148,7 +136,6 @@ function toSlot(participant: StageParticipant, role: "host" | "guest"): StageSlo
     role,
     isLocal: participant.isLocal === true,
     name: participantLabel(participant.name, participant.identity),
-    metadata: participant.metadata ?? null,
     cameraTrack: camera,
     screenTrack: screen,
     audioTrack: audio,
@@ -207,40 +194,6 @@ export function participantLabel(name: string | undefined, identity: string): st
   return base.startsWith("did:") ? `Guest ${tail}` : base;
 }
 
-/**
- * Is this participant the stream's host?
- *
- * ONE comparison, on the base identity, because every identity in the room now
- * carries the owner: a viewer is `<did>`, an approved speaker `<did>#speaker`,
- * and the host publishes as `<did>#broadcaster` (or `<did>#rtmp` when they are
- * pushing RTMP). `baseIdentity` drops the suffix, so all four collapse to the
- * same person.
- *
- * ─── WHAT WAS HERE BEFORE ────────────────────────────────────────────────────
- * A second branch accepting the literal string `broadcaster`, because the
- * service signed the host's publisher token with exactly that — no user id
- * anywhere on the token. It was a workaround for a backend gap, and it was
- * both necessary and wrong: necessary, because without it the host was
- * classified as a GUEST in their own room (no Host chip, a remove control on
- * their own tile, their slot free to reflow, and their name rendered as the
- * word "broadcaster" while they also appeared under House Members); wrong,
- * because the literal identified no particular person, so ANY participant
- * calling themselves `broadcaster` matched the host of every stream.
- *
- * The token carries `<ownerId>#broadcaster` now, so the branch is deleted
- * rather than kept alongside the real check. Two layers doing one job is how
- * the workaround outlives the bug and nobody can tell which one is load
- * bearing.
- *
- * NOTE ON DEPLOY ORDER: the backend must ship first. A host who connected on
- * an older token is still in the room as `broadcaster` until they go live
- * again, and this no longer recognises them.
- */
-export function isHostParticipant(identity: string, hostIdentity: string): boolean {
-  if (!hostIdentity) return false;
-  return baseIdentity(identity) === baseIdentity(hostIdentity);
-}
-
 export function buildStage(room: StageRoom, hostIdentity: string): StageSlot[] {
   const everyone: StageParticipant[] = [
     room.localParticipant,
@@ -253,7 +206,13 @@ export function buildStage(room: StageRoom, hostIdentity: string): StageSlot[] {
 
   for (const participant of everyone) {
     if (!participant || seen.has(participant.identity)) continue;
-    const isHost = isHostParticipant(participant.identity, hostIdentity);
+    // Compared on the BASE identity, because the host publishes as
+    // `<did>#speaker` while `hostIdentity` is the stream's plain `ownerId`.
+    // Comparing them raw never matched, so the host was classified as a guest:
+    // no Host chip on their own tile, a remove button offered on it, and their
+    // slot free to reflow out from under the viewer.
+    const isHost =
+      Boolean(hostIdentity) && baseIdentity(participant.identity) === baseIdentity(hostIdentity);
     // Read permissions fresh off the participant every time. LiveKit mutates
     // this object in place on ParticipantPermissionsChanged, and the documented
     // race is exactly a client trusting a role it cached at join.

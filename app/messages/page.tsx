@@ -1,5 +1,5 @@
-import { MessagesScreen } from "@/components/layout/messages-screen";
+import { MessagesPage } from "@/features/messages";
 
 export default function Page() {
-  return <MessagesScreen />;
+  return <MessagesPage />;
 }

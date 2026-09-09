@@ -3,12 +3,5 @@
 // through the same route-slot pattern `FollowPill` uses.
 export { TipButton } from "./components/tip-button";
 export { TipSheet } from "./components/tip-sheet";
-export {
-  useSendTip,
-  useTipCapability,
-  useTippingUnavailable,
-  // The gift gallery's counts — own profile only, see the hook.
-  useReceivedTips,
-} from "./hooks/use-tips";
-export type { ReceivedTip } from "./lib/api";
+export { useSendTip, useTipCapability, useTippingUnavailable } from "./hooks/use-tips";
 export type { Tip, TipTarget } from "./lib/types";

@@ -1,5 +1,5 @@
-import { NotificationsScreen } from "@/components/layout/notifications-screen";
+import { NotificationsPage } from "@/features/notifications";
 
 export default function Page() {
-  return <NotificationsScreen />;
+  return <NotificationsPage />;
 }

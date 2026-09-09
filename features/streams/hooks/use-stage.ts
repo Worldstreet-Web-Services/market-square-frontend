@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useQueryClient } from "@tanstack/react-query";
 import { captureErrorMessage, classifyCaptureError } from "@/lib/media-errors";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
-import { stageSources } from "@/features/streams/lib/capture-plan";
 import { STAGE_STALL_MS, type StageState } from "@/lib/stage-recovery";
 
 export { STAGE_FAILURES, type StageState } from "@/lib/stage-recovery";
@@ -89,26 +88,12 @@ function isPermissionRefusal(error: unknown): boolean {
 export function useStage({
   streamId,
   approved,
-  withCamera = true,
   previewRef,
 }: {
   streamId: string;
   approved: boolean;
-  /**
-   * Whether going on stage includes a camera. FALSE in a house, permanently.
-   *
-   * The decision is made once, by `stageSources()` in
-   * features/streams/lib/capture-plan.ts, so what a house may turn on is a
-   * pure function that can be asserted without a browser rather than an inline
-   * ternary that reads the same either way. `audioOnly` stays false, deliberately:
-   * in a house, audio-only is the product and a guest must never be told their
-   * camera was unavailable.
-   */
-  withCamera?: boolean;
-  previewRef?: React.RefObject<HTMLDivElement | null>;
+  previewRef: React.RefObject<HTMLDivElement | null>;
 }): StageControls {
-  const sources = stageSources({ withCamera });
-  const cameraAllowed = sources.includes("camera");
   // The player owns the room; this re-renders when it appears or goes away.
   const room = useSyncExternalStore(
     useCallback((listener) => subscribeRoom(streamId, listener), [streamId]),
@@ -214,27 +199,25 @@ export function useStage({
         return;
       }
 
-      if (cameraAllowed) {
-        try {
-          await enableOnce(() => room.localParticipant.setCameraEnabled(true));
-          if (cancelled) return;
-          setCamOn(true);
-          setAudioOnly(false);
-        } catch (cameraError) {
-          if (cancelled) return;
-          const failure = classifyCaptureError(cameraError);
-          setCamOn(false);
-          setAudioOnly(true);
-          setError(
-            failure === "device-busy"
-              ? "Your camera is in use by another app or browser tab."
-              : failure === "device-missing"
-                ? "No camera found."
-                : failure === "denied"
-                  ? "Camera access is blocked in your browser settings."
-                  : captureErrorMessage(cameraError)
-          );
-        }
+      try {
+        await enableOnce(() => room.localParticipant.setCameraEnabled(true));
+        if (cancelled) return;
+        setCamOn(true);
+        setAudioOnly(false);
+      } catch (cameraError) {
+        if (cancelled) return;
+        const failure = classifyCaptureError(cameraError);
+        setCamOn(false);
+        setAudioOnly(true);
+        setError(
+          failure === "device-busy"
+            ? "Your camera is in use by another app or browser tab."
+            : failure === "device-missing"
+              ? "No camera found."
+              : failure === "denied"
+                ? "Camera access is blocked in your browser settings."
+                : captureErrorMessage(cameraError)
+        );
       }
       if (!cancelled) setPhase("live");
     })();
@@ -242,12 +225,11 @@ export function useStage({
     return () => {
       cancelled = true;
     };
-  }, [approved, room, streamId, attempt, canPublish, cameraAllowed]);
+  }, [approved, room, streamId, attempt, canPublish]);
 
-  // Mirror the local camera into the caller's preview box. Never entered on
-  // the audio-only path: there is no camera track and no preview box.
+  // Mirror the local camera into the caller's preview box.
   useEffect(() => {
-    if (!room || !camOn || !previewRef) return;
+    if (!room || !camOn) return;
     // Read the camera off the publication map rather than by source key: the
     // enum value is an SDK detail, and a missing publication must degrade to
     // "no preview" rather than throwing inside an effect.
@@ -278,9 +260,7 @@ export function useStage({
     let cancelled = false;
     void (async () => {
       await room.localParticipant.setMicrophoneEnabled(false).catch(() => {});
-      if (cameraAllowed) {
-        await room.localParticipant.setCameraEnabled(false).catch(() => {});
-      }
+      await room.localParticipant.setCameraEnabled(false).catch(() => {});
       if (cancelled) return;
       setMicOn(false);
       setCamOn(false);
@@ -290,7 +270,7 @@ export function useStage({
     return () => {
       cancelled = true;
     };
-  }, [approved, room, cameraAllowed]);
+  }, [approved, room]);
 
   const toggleMic = useCallback(async () => {
     if (!room) return;
@@ -301,10 +281,6 @@ export function useStage({
 
   const toggleCam = useCallback(async () => {
     if (!room) return;
-    if (!cameraAllowed) {
-      console.warn("useStage: this stage is audio only — there is no camera to toggle.");
-      return;
-    }
     const next = !camOn;
     try {
       await room.localParticipant.setCameraEnabled(next);
@@ -325,7 +301,7 @@ export function useStage({
             : captureErrorMessage(cameraError)
       );
     }
-  }, [room, camOn, cameraAllowed]);
+  }, [room, camOn]);
 
   const retry = useCallback(() => {
     setError(null);
@@ -392,18 +368,5 @@ export function useStage({
           : "awaiting-grant"
         : phase;
 
-  return {
-    state,
-    micOn,
-    // Both pinned on the audio-only path, for the same reason they are pinned
-    // in usePublisher: nothing here can publish video, so reporting either from
-    // state would describe a possibility that does not exist.
-    camOn: cameraAllowed ? camOn : false,
-    audioOnly: cameraAllowed ? audioOnly : false,
-    error,
-    retry,
-    rejoin,
-    toggleMic,
-    toggleCam,
-  };
+  return { state, micOn, camOn, audioOnly, error, retry, rejoin, toggleMic, toggleCam };
 }

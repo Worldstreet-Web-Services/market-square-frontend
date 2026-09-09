@@ -8,7 +8,12 @@ import { Spinner } from "@/components/ui/button";
 import { SignInPrompt } from "@/components/ui/states";
 import {
   IconCheck,
+  IconCoin,
+  IconImage,
+  IconLive,
+  IconPlay,
   IconSpark,
+  IconStats,
   IconX,
 } from "@/components/ui/icons";
 import {
@@ -16,10 +21,23 @@ import {
   useSaveInterests,
   useTopics,
 } from "@/features/discovery/hooks/use-discovery";
-// One icon map for both topic surfaces. It used to live here; the gist-room
-// tags field needed the same thing, and two copies is how one row ends up with
-// a glyph the other does not have.
-import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
+
+/**
+ * "What would you like to watch on Market Square?"
+ *
+ * The topic list comes from `GET /topics` and is NEVER hard-coded here — a new
+ * topic ships from the backend alone. Only the glyph is a local decision, and
+ * an unknown key falls back to a neutral one rather than rendering nothing.
+ */
+const TOPIC_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  gaming: IconPlay,
+  trading: IconStats,
+  shows: IconLive,
+  arts: IconSpark,
+  pictures: IconImage,
+  reels: IconPlay,
+  crypto: IconCoin,
+};
 
 /**
  * Below this the feed has too little to rank by for the choice to be felt, so

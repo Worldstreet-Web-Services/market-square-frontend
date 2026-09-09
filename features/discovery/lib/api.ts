@@ -1,5 +1,4 @@
 import { msApi } from "@/lib/api/service";
-import { parsePeopleSort, type PeopleSort } from "@/lib/people-filters";
 import {
   CategoryListSchema,
   PeoplePageSchema,
@@ -55,65 +54,12 @@ export async function saveMyInterests(topics: string[]) {
  * to ignore an unknown parameter; the client never re-sorts a paged list
  * itself, since sorting one loaded page is not sorting the list.
  */
-export async function fetchPeople(
-  params: {
-    query?: string;
-    sort?: PeopleSort;
-    cursor?: string;
-    /**
-     * The place and gender facets, matched SERVER-SIDE.
-     *
-     * `city`, `region` and `gender` are real parameters on `GET /profiles` now,
-     * case-insensitive and exact (`lagos` matches `Lagos`, `Lag` matches
-     * nothing). They compose with each other and with `q`.
-     *
-     * This replaces filtering the loaded page, which was always a stopgap and
-     * said so: narrowing thirty rows of a directory is not narrowing the
-     * directory, and no cursor can top a filtered page back up — a reader who
-     * picked a city got one short page and an empty scroll.
-     *
-     * There is deliberately NO coordinate, radius or distance here, and there
-     * must never be one. See `lib/people-filters.ts`.
-     */
-    city?: string;
-    region?: string;
-    gender?: string;
-    /**
-     * Drop the people the viewer already follows — `?excludeFollowing=true`.
-     *
-     * Server-side, and it has to be: filtering the loaded page here costs a row
-     * per page that no cursor can top back up, so a long list silently runs
-     * short. The service pages AFTER excluding, and has a test saying a page of
-     * three comes back as three.
-     *
-     * ONE DIRECTION, by design: somebody who follows YOU is still suggested,
-     * because you have not followed them — which is exactly who a "people to
-     * follow" rail should surface. Signed out it is a no-op rather than an
-     * error, since a reader who follows nobody excludes nobody.
-     *
-     * A STRING, not a boolean. The parameter is a `"true" | "false"` enum
-     * upstream and anything else is a 400 — deliberately not a coerced boolean,
-     * which would read the string "false" as true.
-     */
-    excludeFollowing?: boolean;
-  } = {}
-) {
+export async function fetchPeople(params: { query?: string; cursor?: string } = {}) {
   const query = params.query?.trim() ?? "";
-  const city = params.city?.trim() ?? "";
-  const region = params.region?.trim() ?? "";
-  const gender = params.gender?.trim() ?? "";
   return PeoplePageSchema.parse(
     await msApi.get("/profiles", {
       ...(query ? { q: query } : {}),
-      // Omitted when empty rather than sent blank: `city=` reads as "match the
-      // empty string", which is not the same request as "do not filter".
-      ...(city ? { city } : {}),
-      ...(region ? { region } : {}),
-      ...(gender ? { gender } : {}),
-      // Sent only when asked for: the default is "do not filter", and an
-      // explicit `excludeFollowing=false` is a different request to make.
-      ...(params.excludeFollowing ? { excludeFollowing: "true" } : {}),
-      sort: parsePeopleSort(params.sort),
+      sort: "followers",
       limit: 30,
       cursor: params.cursor,
     })

@@ -14,9 +14,11 @@ import { isVideoPost } from "@/lib/media";
 import { videoListKey } from "@/lib/video-context";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
+  addComment,
   bookmarkPost,
   fetchBookmarks,
   createPost,
+  fetchComments,
   fetchFeed,
   fetchPost,
   fetchStories,
@@ -25,37 +27,18 @@ import {
   uploadPostMedia,
   searchMentions,
   reportTarget,
-  deletePost,
-  editPost,
 } from "@/features/feed/lib/api";
 import type { FeedPage, Lane, Mention, Post } from "@/features/feed/lib/types";
-import { invalidateContentSurfaces } from "@/lib/api/invalidate";
 import {
   invalidatePostLists,
   patchPostEverywhere,
   reconcilePost,
 } from "@/features/feed/lib/cache";
 
-/**
- * The timeline.
- *
- * `topics` narrows the lane to the shared vocabulary's keys — what the Home
- * design's tab row selects (node 225:3352: For you · Tech · Entertainment ·
- * Crypto & Web3 · …). `GET /feed?topics=` is a real parameter on the contract,
- * so the row filters SERVER-SIDE; the alternative — filtering one loaded page
- * in the client — is the thing this repo bans, because a page of thirty
- * mixed items yields almost nothing for a narrow topic.
- *
- * The topics are IN THE QUERY KEY, so each tab caches and pages independently.
- * Sharing one key would replay the previous tab's posts under the new tab's
- * name until the refetch landed, and page with a cursor minted for a different
- * filter.
- */
-export function useFeed(lane: Lane, topics: readonly string[] = []) {
-  const key = topics.join(",");
+export function useFeed(lane: Lane) {
   return useInfiniteQuery({
-    queryKey: ["ms", "feed", lane, key],
-    queryFn: ({ pageParam }) => fetchFeed(lane, pageParam ?? undefined, [...topics]),
+    queryKey: ["ms", "feed", lane],
+    queryFn: ({ pageParam }) => fetchFeed(lane, pageParam ?? undefined),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
@@ -337,16 +320,10 @@ export function useBookmarkPost() {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);
 
-  // The count moves with the flag — optimistically, and only when the
-  // payload carries one, so a post without a count never gains a fabricated
-  // "1". `reconcilePost` on settle replaces both with the service's truth.
   const applyBookmark = (postId: string, bookmarked: boolean) =>
     patchPostEverywhere(queryClient, postId, (post) => ({
       ...post,
       bookmarkedByMe: bookmarked,
-      ...(post.bookmarkCount !== undefined && post.bookmarkedByMe !== bookmarked
-        ? { bookmarkCount: Math.max(0, post.bookmarkCount + (bookmarked ? 1 : -1)) }
-        : {}),
     }));
 
   const mutation = useMutation({
@@ -384,57 +361,43 @@ export function useBookmarks() {
   });
 }
 
-/**
- * The comment thread moved to `use-comments.ts` when it grew replies and
- * likes; re-exported here so the card and the sheet keep their import.
- */
-export { useAddComment, useComments } from "@/features/feed/hooks/use-comments";
+export function useComments(postId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ms", "comments", postId],
+    queryFn: () => fetchComments(postId),
+    enabled,
+  });
+}
+
+export function useAddComment(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => addComment(postId, text),
+    // The reply is visible at once and the tally moves with it, on every
+    // surface that draws this post rather than only the one being looked at.
+    onMutate: () =>
+      patchPostEverywhere(queryClient, postId, (post) => ({
+        ...post,
+        commentCount: post.commentCount + 1,
+      })),
+    onError: (error) => {
+      patchPostEverywhere(queryClient, postId, (post) => ({
+        ...post,
+        commentCount: Math.max(0, post.commentCount - 1),
+      }));
+      toast.error(errorMessage(error, "Couldn't add your comment."));
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "comments", postId] });
+      reconcilePost(queryClient, postId);
+    },
+  });
+}
 
 export function useReport() {
   return useMutation({
     mutationFn: reportTarget,
     onSuccess: () => toast.success("Report received — thank you."),
     onError: (error) => toast.error(errorMessage(error, "Couldn't send the report.")),
-  });
-}
-
-/**
- * Edit a post's text — `PATCH /posts/:id`.
- *
- * The answer is the WHOLE updated post, so it is written into every cache that
- * draws this post rather than only invalidated: a reader who edits a typo
- * should see the fix on the card they are looking at, not two seconds later.
- * `editedAt` comes back stamped, which is what turns the "edited" marker on.
- */
-export function useEditPost(postId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (text: string) => editPost(postId, { text }),
-    onSuccess: (updated) => {
-      patchPostEverywhere(queryClient, postId, () => updated as Post);
-      toast.success("Post updated");
-    },
-    onError: (error) => toast.error(errorMessage(error, "Couldn't save that edit.")),
-    onSettled: () => reconcilePost(queryClient, postId),
-  });
-}
-
-/**
- * Delete a post or story — `DELETE /posts/:id`.
- *
- * Every list that could carry it is invalidated rather than patched: a deleted
- * post has no shape to write back, and the timeline, the profile grid, the
- * stories rail and the bookmarks can each hold a copy.
- */
-export function useDeletePost() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: deletePost,
-    onSuccess: () => {
-      invalidateContentSurfaces(queryClient);
-      invalidatePostLists(queryClient);
-      toast.success("Post deleted");
-    },
-    onError: (error) => toast.error(errorMessage(error, "Couldn't delete that post.")),
   });
 }

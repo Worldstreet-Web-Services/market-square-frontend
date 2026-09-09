@@ -3,12 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode } from "@/lib/api/envelope";
 import { isTipRouteMissing } from "@/lib/tip-errors";
-import {
-  fetchReceivedTips,
-  fetchTipCapability,
-  reportTipTransfer,
-  sendTip,
-} from "@/features/tips/lib/api";
+import { fetchTipCapability, reportTipTransfer, sendTip } from "@/features/tips/lib/api";
 import { KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
 import { encodeErc20Transfer, toBaseUnits } from "@/lib/erc20";
 import { holdKey } from "@/lib/payment-hold";
@@ -192,25 +187,3 @@ export function useSendTip() {
 }
 
 export { useTippingUnavailable };
-
-/**
- * The tips this reader has been PAID — the gift gallery's counts.
- *
- * `enabled` rather than an early return, because it is only ever asked on your
- * OWN profile: the route is `/me`, so on anybody else's there is no question
- * to ask and firing it would be a request whose answer is about the wrong
- * person.
- *
- * A missing route is not an error worth surfacing. Tipping shipped ahead of
- * the service more than once, so a 404 here means "not deployed" and the
- * gallery simply renders without counts — the same rule the Arkmark follows.
- */
-export function useReceivedTips(enabled: boolean) {
-  return useQuery({
-    queryKey: ["ms", "tips", "received"],
-    queryFn: fetchReceivedTips,
-    enabled,
-    staleTime: 60_000,
-    retry: (count, error) => !isRouteMissing(error) && count < 2,
-  });
-}

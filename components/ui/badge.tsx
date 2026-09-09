@@ -82,43 +82,21 @@ const ROLE_LABEL: Record<string, string | null> = {
   worldstreet: "WorldStreet",
 };
 
-/**
- * The capsule itself, with no opinion about what is in it.
- *
- * Extracted at the THIRD caller, not the second: `RoleChip`, a house's HOST
- * chip and its MUTED FOR YOU chip are the same object — the org badge's
- * geometry with a text label instead of a lockup — and three hand-copied
- * class strings is how one of them quietly stops matching the others.
- *
- * It deliberately does not take a tone. There is one capsule; anything that
- * needs a different colour is a different component, not a variant of this.
- */
-export function ChipShell({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      // Shares the org badge's capsule geometry so the two sit together
-      // cleanly. See OrgBadgeChip.
-      className={cn(
-        "inline-flex shrink-0 items-center rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-2 py-px text-[9px] font-semibold uppercase tracking-wide text-grey-200",
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
 export function RoleChip({ role, className }: { role: string; className?: string }) {
   const label = ROLE_LABEL[role] ?? null;
   if (!label) return null;
-  // Role and org badge are independent signals — see OrgBadgeChip.
-  return <ChipShell className={className}>{label}</ChipShell>;
+  return (
+    <span
+      // Shares the org badge's capsule geometry so the two sit together
+      // cleanly. Role and org badge are independent signals — see OrgBadgeChip.
+      className={cn(
+        "rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-2 py-px text-[9px] font-semibold uppercase tracking-wide text-grey-200",
+        className
+      )}
+    >
+      {label}
+    </span>
+  );
 }
 
 // Silver IS the live color: black pill, pulsing silver dot, uppercase.
