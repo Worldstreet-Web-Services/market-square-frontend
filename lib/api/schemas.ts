@@ -49,6 +49,16 @@ const RawProfileSchema = z.object({
    * shipped before the field existed.
    */
   coverUrl: z.string().nullable().optional().default(null),
+  /**
+   * THE LINK ROW — node 545:47631 draws `akar-icons:link-chain` and a URL at
+   * 15/20 under the place. LIVE on `PublicProfile` and `PATCH /me` at :8080
+   * (null clears, absent leaves alone; the service accepts http(s) only).
+   * Optional with a null default because the deployed spec lags :8080, as
+   * `coverUrl` did. Rendered as an anchor only when it is an http(s) URL — the
+   * client re-checks rather than trusting the write-side rule, because a
+   * public page must never carry a `javascript:` href.
+   */
+  website: z.string().nullable().optional().default(null),
   role: RoleSchema,
   verification: VerificationSchema,
   orgBadge: OrgBadgeSchema.optional().default(null),

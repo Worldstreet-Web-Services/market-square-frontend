@@ -72,6 +72,43 @@ import { useStream } from "@/features/streams";
 /** 60s, and only while the room is live — see the note at the call site. */
 const LIVE_POLL = ["while-live", 60_000] as const;
 
+/**
+ * THE CARD'S MATERIAL, stated once — nodes 225:3873 (the invite) and
+ * 545:47749 (a replay on a profile) are the same glass: `rgba(16,16,18,0.62)`
+ * behind a 7px backdrop blur, ringed at `white/18`, a 22px radius, 16px of
+ * padding. The invite is 338 wide in a rail and fluid on the rooms page; the
+ * replay is the file's 359. The width belongs to the surface, the shell does
+ * not.
+ */
+export function RoomCardShell({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "max-w-full rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 backdrop-blur-[7px]",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** One topic chip — 225:3887 / 545:47760. See the type-size note above. */
+export function RoomTopicChip({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold leading-4 text-grey-100">
+      {icon}
+      {label}
+    </span>
+  );
+}
+
 export function GistRoomCard({
   streamId,
   conversationId,
@@ -172,12 +209,7 @@ export function GistRoomCard({
       `max-w-full` still caps it, because this same card is composed into a
       message thread whose column can be narrower than 338.
     */
-    <div
-      className={cn(
-        "max-w-full rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 backdrop-blur-[7px]",
-        fluid ? "w-full" : "w-[338px] shrink-0"
-      )}
-    >
+    <RoomCardShell className={fluid ? "w-full" : "w-[338px] shrink-0"}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           {/*
@@ -209,13 +241,7 @@ export function GistRoomCard({
             {labelled.length > 0 && (
               <div className="flex flex-wrap items-center gap-1">
                 {labelled.map(({ key, label, Icon }) => (
-                  <span
-                    key={key}
-                    className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold leading-4 text-grey-100"
-                  >
-                    <Icon className="h-3 w-3" />
-                    {label}
-                  </span>
+                  <RoomTopicChip key={key} icon={<Icon className="h-3 w-3" />} label={label} />
                 ))}
               </div>
             )}
@@ -265,6 +291,6 @@ export function GistRoomCard({
           </div>
         )}
       </div>
-    </div>
+    </RoomCardShell>
   );
 }

@@ -219,6 +219,28 @@ body {
     inset -1px -1px 2px rgba(255, 255, 255, 0.10);
 }
 
+/* Glass over a PHOTOGRAPH — the profile cover's discs and pills (545:47607,
+   545:47609, 435:27531, 435:27534). Their fill is white at alpha zero with a
+   zero-weight stroke and Figma's GLASS effect. Sampled radially in the
+   render over the cover: the INTERIOR is the photograph itself, blurred (it
+   evens out — a few values darker than the ground at the top, ~30 brighter
+   at the foot, which is the blur averaging a light-to-dark picture, not a
+   tint), and the RIM is a refraction highlight, not a ring: near-white on
+   the top-left (249) and bottom-right (204), fading to nothing on the other
+   diagonal (122 at 45°, 120 at 225°, i.e. the ground). That two-sided rim
+   is what reads as the disc being "deep" — a lens, not a coin. Two inset
+   shadows offset along that diagonal draw it; a uniform ring did not.
+   `ws-glass-pill` is the OPAQUE near-black lens measured on a dark bar; on a
+   light photograph it is a black coin the file does not draw. */
+@utility ws-glass-clear {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.72),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.5);
+}
+
 /* Popover surface: for menus that float OVER content rather than beside it.
    Unlike ws-glass this is very nearly opaque — a picker that lets the feed
    read through it makes both unreadable, and a translucent panel over the

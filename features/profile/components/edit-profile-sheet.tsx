@@ -32,6 +32,7 @@ export function EditProfileSheet({
   const [city, setCity] = useState(me.city ?? "");
   const [region, setRegion] = useState(me.region ?? "");
   const [gender, setGender] = useState(me.gender ?? "");
+  const [website, setWebsite] = useState(me.website ?? "");
 
   const usernameTaken = errorCode(update.error) === "CONFLICT";
 
@@ -105,9 +106,23 @@ export function EditProfileSheet({
             className={inputClass}
           />
         </label>
+        {/* 545:47631 — the link row on the profile. The service accepts
+            http(s) only and clears on null. */}
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-semibold text-grey-400">Website</span>
+          <input
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            type="url"
+            inputMode="url"
+            maxLength={200}
+            placeholder="https://"
+            className={inputClass}
+          />
+        </label>
         <p className="text-xs leading-4 text-grey-500">
-          Your place and gender are public, and they are what the People filters match on.
-          Leave a field empty to remove it.
+          Your place, gender and website are public, and place and gender are what the People
+          filters match on. Leave a field empty to remove it.
         </p>
         {update.isError && !usernameTaken && (
           <InlineError error={update.error} fallback="Couldn't save your profile." />
@@ -127,6 +142,7 @@ export function EditProfileSheet({
                 // service reads a blank string as a clear.
                 city: city.trim(),
                 region: region.trim(),
+                website: website.trim() || null,
                 gender: gender.trim(),
               },
               { onSuccess: onClose }

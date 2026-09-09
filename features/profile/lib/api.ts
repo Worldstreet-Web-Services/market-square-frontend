@@ -10,8 +10,10 @@ import {
   MyVerificationSchema,
   RenewVerificationSchema,
   ProfileActivitiesSchema,
+  ProfileBadgesSchema,
   ProfilePostsSchema,
   ProfileStreamsSchema,
+  type ProfileStreamFilters,
   SpotlightSchema,
   VerificationRuleSchema,
 } from "@/features/profile/lib/types";
@@ -24,9 +26,23 @@ export async function fetchProfilePosts(username: string, cursor?: string) {
   return ProfilePostsSchema.parse(await msApi.get(`/profiles/${username}/posts`, { cursor }));
 }
 
-export async function fetchProfileStreams(username: string) {
-  return ProfileStreamsSchema.parse(await msApi.get(`/profiles/${username}/streams`));
+export async function fetchProfileStreams(username: string, filters: ProfileStreamFilters = {}) {
+  // Spread into a plain record: the client's query type is an index
+  // signature, and an omitted filter is omitted from the URL rather than sent
+  // as an empty value the service would read as "match nothing".
+  return ProfileStreamsSchema.parse(
+    await msApi.get(`/profiles/${username}/streams`, {
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.kind ? { kind: filters.kind } : {}),
+    })
+  );
 }
+
+/** `GET /profiles/:username/badges` — asked of the backend; a 404 is "not deployed". */
+export async function fetchProfileBadges(username: string) {
+  return ProfileBadgesSchema.parse(await msApi.get(`/profiles/${username}/badges`));
+}
+
 
 export async function fetchProfileActivities(username: string) {
   return ProfileActivitiesSchema.parse(await msApi.get(`/profiles/${username}/activities`));
@@ -85,6 +101,8 @@ export async function updateMe(input: {
   username?: string;
   displayName?: string;
   bio?: string;
+  /** http(s) only, checked by the service; null clears, absent leaves alone. */
+  website?: string | null;
   avatarUrl?: string;
   /**
    * The self-declared place and gender.

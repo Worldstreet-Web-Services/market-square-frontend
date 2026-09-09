@@ -11,3 +11,7 @@ export {
   useJoinGroup,
   useOpenConversation,
 } from "@/features/messages/hooks/use-messages";
+// A stranger's houses on their profile (545:47653) — parsed through the
+// conversation shape this slice owns, composed into the profile from the
+// layout layer.
+export { useProfileHouses, type ProfileHouse } from "@/features/messages/lib/profile-houses";

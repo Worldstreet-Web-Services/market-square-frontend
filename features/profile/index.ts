@@ -18,7 +18,16 @@ export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";
 // composed into the houses room through a route slot, because a room learns a
 // username off the media plane and never holds the whole object.
 export { PersonSafetyRows, PersonFollow } from "./components/person-safety-rows";
-export { useProfileSafety, useUpdateMe, useWink, useFollow } from "./hooks/use-profile";
+export {
+  useProfileSafety,
+  useUpdateMe,
+  useWink,
+  useFollow,
+  // The Replays rail is composed in `components/layout` because it reads the
+  // topic vocabulary from discovery; this is the read it needs from here.
+  useProfileStreams,
+} from "./hooks/use-profile";
+export type { ProfileStreamFilters } from "./lib/types";
 // The follow-edge resolver every follow control must read — a missing
 // `isFollowing` can never render a fabricated "Following". See CLAUDE.md.
 export { useIsFollowing } from "./lib/follow-state";

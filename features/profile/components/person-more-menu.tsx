@@ -6,9 +6,11 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { IconFlag, IconShield } from "@/components/ui/icons";
 import { IconMsMore } from "@/components/ui/design-icons";
+import { IconProfileMoreVertical } from "@/components/ui/profile-icons";
 import type { Profile } from "@/lib/api/schemas";
 import { REPORT_REASONS, type ReportReason } from "@/features/profile/lib/api";
-import { useProfileSafety } from "@/features/profile/hooks/use-profile";
+import { useFollow, useProfileSafety } from "@/features/profile/hooks/use-profile";
+import { useIsFollowing } from "@/features/profile/lib/follow-state";
 
 /**
  * Block and report, from anywhere a PERSON is rendered.
@@ -41,12 +43,21 @@ export function PersonMoreMenu({
   size = "sm",
 }: {
   profile: Profile;
-  /** `sm` sits in a list row; `md` sits in a profile header. */
-  size?: "sm" | "md";
+  /**
+   * `sm` sits in a list row; `md` in a profile header. `cover` is node
+   * 545:47609 — a 38.37 disc on the stranger's cover with the file's vertical
+   * three dots at 24. Its fill is white at alpha zero and its stroke white at
+   * weight ZERO, which renders nothing; what the render shows is Figma's GLASS
+   * effect over the photograph — translucent and rimmed — which is
+   * `ws-glass-clear`, sampled from the file's render (see globals.css).
+   */
+  size?: "sm" | "md" | "cover";
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const safety = useProfileSafety(profile);
+  const follow = useFollow(profile);
+  const isFollowing = useIsFollowing(profile);
   const gate = useGate();
   const me = useMe();
 
@@ -83,11 +94,20 @@ export function PersonMoreMenu({
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "ws-press flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-grey-100 transition-colors hover:bg-white/10",
-          size === "sm" ? "h-6 w-6" : "h-8 w-8"
+          "ws-press flex shrink-0 items-center justify-center rounded-full transition-colors",
+          size === "cover"
+            ? "ws-glass-clear h-[38.37px] w-[38.37px] text-white"
+            : cn(
+                "border border-white/15 bg-white/5 text-grey-100 hover:bg-white/10",
+                size === "sm" ? "h-6 w-6" : "h-8 w-8"
+              )
         )}
       >
-        <IconMsMore className={size === "sm" ? "h-4 w-4" : "h-5 w-5"} />
+        {size === "cover" ? (
+          <IconProfileMoreVertical className="h-6 w-6" />
+        ) : (
+          <IconMsMore className={size === "sm" ? "h-4 w-4" : "h-5 w-5"} />
+        )}
       </button>
 
       {open && (
@@ -97,6 +117,32 @@ export function PersonMoreMenu({
               row behind the menu must close it, not navigate. */}
           <div className="fixed inset-0 z-10" onClick={close} />
           <div role="menu" className="ws-popover ws-popover-enter absolute right-0 z-20 mt-1 w-56 rounded-2xl p-1.5">
+            {/*
+              FOLLOW LIVES HERE ON THE COVER (`size="cover"`), because the
+              stranger's cover (545:47603) draws Wink, message and more and no
+              follow pill — see the note in profile-page. Elsewhere the row or
+              header already carries its own Follow control, so the row is not
+              repeated. The same `useFollow` / `useIsFollowing` as every other
+              follow control: optimistic, rolled back, never a fabricated
+              "Following" from a missing field.
+            */}
+            {size === "cover" && (
+              <>
+                <button
+                  role="menuitemcheckbox"
+                  aria-checked={isFollowing}
+                  disabled={follow.isPending}
+                  onClick={() => {
+                    close();
+                    gate(() => follow.mutate(!isFollowing));
+                  }}
+                  className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-heading transition-colors hover:bg-white/10 disabled:opacity-50"
+                >
+                  {isFollowing ? "Unfollow" : "Follow"}
+                </button>
+                <div className="my-1 h-px bg-white/10" />
+              </>
+            )}
             <p className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-meta">
               <IconFlag className="h-3.5 w-3.5" /> Report
             </p>

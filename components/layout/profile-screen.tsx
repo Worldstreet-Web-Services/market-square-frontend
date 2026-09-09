@@ -11,7 +11,9 @@ import { ProfileEarnings } from "@/components/layout/profile-earnings";
 import { PostCard, VideoViewer } from "@/features/feed";
 import { useOpenConversation } from "@/features/messages";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
-import { Button } from "@/components/ui/button";
+import { IconProfileSms } from "@/components/ui/profile-icons";
+import { ProfileHousesOf } from "@/components/layout/profile-houses-of";
+import { ProfileReplays } from "@/components/layout/profile-replays";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -24,14 +26,24 @@ function MessageButton({ profile }: { profile: Profile }) {
   const open = useOpenConversation();
   const router = useRouter();
   return (
-    <Button
-      variant="secondary"
-      size="sm"
+    /*
+      545:47607 — a 38.37 disc with the file's `sms` glyph at 16. Its fill is
+      white at alpha zero and its stroke white at weight ZERO, which renders
+      nothing; the render shows Figma's GLASS effect over the photograph —
+      translucent, rimmed — which is `ws-glass-clear` (see globals.css for the
+      samples). It replaced a labelled secondary Button that the file does not
+      draw.
+    */
+    <button
+      type="button"
+      aria-label={`Message ${profile.displayName || profile.username}`}
+      title="Message"
       disabled={open.isPending}
       onClick={() => open.mutate(profile.id, { onSuccess: () => router.push("/messages") })}
+      className="ws-glass-clear ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-50"
     >
-      Message
-    </Button>
+      <IconProfileSms className="h-4 w-4" />
+    </button>
   );
 }
 
@@ -87,6 +99,12 @@ export function ProfileScreen({ username }: { username: string }) {
       /* 534:15577 — a house is a group CONVERSATION, so the rail reads the
          messages slice and is joined here rather than imported across. */
       housesSlot={<ProfileHouses />}
+      /* 545:47653 and 545:47746 — the houses somebody ELSE belongs to and
+         their ended gist rooms. Both read across slices (joining a house is
+         the messages slice's, the topic vocabulary is discovery's), so both
+         are composed here. */
+      housesOfSlot={(profile) => <ProfileHousesOf username={profile.username} />}
+      replaysSlot={(profile) => <ProfileReplays username={profile.username} />}
       giftGallerySlot={<ProfileGiftGallery />}
       earningsSlot={<ProfileEarnings />}
       /* 435:27523 — the balance chip on the cover. The kash slice's, and the
