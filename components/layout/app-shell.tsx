@@ -18,6 +18,7 @@ import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { toast } from "sonner";
 import { useChatOpen } from "@/lib/chat-open-store";
+import { setSidebarHidden, useSidebarHidden } from "@/lib/sidebar-pref-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useLogout } from "@/hooks/use-logout";
@@ -50,6 +51,7 @@ import { ConnectionBanner } from "@/components/layout/connection-banner";
 import {
   IconBell,
   IconChevronLeft,
+  IconCollapseRight,
   IconDots,
   IconChevronDown,
   IconMore,
@@ -860,6 +862,25 @@ export function Sidebar({
             rail.mode === "icon" && "rotate-180",
           )}
         />
+        <span className="hidden text-[12px] font-bold group-data-[rail=full]/rail:block">
+          {rail.mode === "icon" ? "" : "Collapse"}
+        </span>
+      </button>
+
+      {/* USE THE DOCK INSTEAD. Tucks the whole rail away on this device and
+          hands navigation to the dock; the dock carries the switch back. See
+          lib/sidebar-pref-store for why it is a per-device preference. */}
+      <button
+        type="button"
+        onClick={() => setSidebarHidden(true)}
+        aria-label="Hide sidebar and use the dock"
+        title="Hide sidebar and use the dock"
+        className="ws-press mb-2 flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg text-meta transition-colors hover:bg-white/[0.06] hover:text-body group-data-[rail=full]/rail:justify-end group-data-[rail=full]/rail:px-2"
+      >
+        <span className="hidden text-[12px] font-bold group-data-[rail=full]/rail:block">
+          Use the dock
+        </span>
+        <IconCollapseRight className="h-4 w-4 -scale-x-100" />
       </button>
 
       {/* The ONLY scrolling region. The whole rail used to scroll, which put
@@ -1534,6 +1555,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // A chat thread being typed into — the dock stays out of its way.
   const chatOpen = useChatOpen();
+  // The reader tucked the desktop rail away and uses the dock instead.
+  const sidebarHidden = useSidebarHidden();
   useTrackNavHistory();
   const { ready, authenticated } = useAuth();
   const me = useMe();
@@ -1561,6 +1584,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const canCompose = authenticated && allowsCompose(pathname);
   /** Somebody looking around: settled, and not signed in. */
   const guest = ready && !authenticated;
+  // The desktop rail is drawn: flagged on, signed in, and not tucked away.
+  const railOn = MARKET_FLAGS.sidebar && !guest && !sidebarHidden;
 
   // The stream room owns its whole viewport; the shell stays out of the way
   // there (no rails over the player, no bars).
@@ -1654,7 +1679,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           on desktop with everything it had, and the dock steps back to phones
           only — the two must never both claim the navigation.
         */}
-        {MARKET_FLAGS.sidebar && !guest && (
+        {railOn && (
           <Sidebar
             pathname={pathname}
             onCompose={
@@ -1812,8 +1837,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             rail's benefit, leaving no navigation at all. Found by turning the
             switch on and looking, which is the only way that shows up.
           */
-          className={MARKET_FLAGS.sidebar && !guest ? "md:hidden" : undefined}
+          className={railOn ? "md:hidden" : undefined}
           onCompose={canCompose && !guest ? () => setComposeOpen(true) : undefined}
+          // The way back, on desktop only: the dock is standing in for a rail
+          // the reader tucked away, so it carries the switch that restores it.
+          onShowSidebar={
+            MARKET_FLAGS.sidebar && !guest && sidebarHidden
+              ? () => setSidebarHidden(false)
+              : undefined
+          }
         />
         )}
 

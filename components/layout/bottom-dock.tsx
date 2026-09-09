@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { IconCollapseRight } from "@/components/ui/icons";
 import { SquareMark, type SquareMarkPalette } from "@/components/ui/square-mark";
 import { useUnread } from "@/hooks/use-unread";
 
@@ -71,10 +72,17 @@ interface DockItem {
 
 export function BottomDock({
   onCompose,
+  onShowSidebar,
   guest = false,
   className,
 }: {
   onCompose?: () => void;
+  /**
+   * Desktop only: the dock is standing in for a rail the reader tucked away
+   * (lib/sidebar-pref-store), so it carries the switch that brings the rail
+   * back. Absent on phones, where there is no rail to restore.
+   */
+  onShowSidebar?: () => void;
   /**
    * Only ever `md:hidden`, and only when `MARKET_FLAGS.sidebar` is on — the
    * rail takes desktop navigation back and the dock stays on phones. It lives
@@ -212,6 +220,18 @@ export function BottomDock({
             );
           })}
         </nav>
+
+        {onShowSidebar && (
+          <button
+            type="button"
+            onClick={onShowSidebar}
+            aria-label="Show sidebar"
+            title="Show sidebar"
+            className="ws-glass ws-press hidden h-[72px] w-[72px] place-items-center rounded-full text-[#9B9B9B] shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)] transition-colors hover:text-white md:grid"
+          >
+            <IconCollapseRight className="h-6 w-6" />
+          </button>
+        )}
 
         {/* 748:15743 — 113 in the file, 72 here, on the ramp's own two stops at
             the file's 201deg. */}

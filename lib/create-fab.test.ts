@@ -128,12 +128,26 @@ describe("the create button is rendered once, fixed, in the shell", () => {
       desktop, because the rail takes navigation back there. Asserted at the
       call site so the exception cannot quietly grow into the component.
     */
+    /*
+      Three conditions now, not two: the flag, a signed-in reader, and the
+      reader NOT having tucked the rail away (lib/sidebar-pref-store). The
+      third is the one that lets a desktop reader choose the dock; the first
+      two are still what stop a guest or a flag-off build from losing every
+      door. Read through `railOn` so the rail's mount and the dock's step-aside
+      can never disagree about whether the rail is on screen.
+    */
     const shellDock = stripComments(shell);
     assert.match(
       shellDock,
-      /MARKET_FLAGS\.sidebar && !guest \? "md:hidden" : undefined/,
-      "the dock may only step aside when the rail is ACTUALLY shown — flag AND signed in"
+      /const railOn = MARKET_FLAGS\.sidebar && !guest && !sidebarHidden;/,
+      "railOn must be exactly flag AND signed in AND not tucked away"
     );
+    assert.match(
+      shellDock,
+      /className=\{railOn \? "md:hidden" : undefined\}/,
+      "the dock may only step aside when the rail is ACTUALLY shown — railOn"
+    );
+    assert.match(shellDock, /\{railOn && \(\s*<Sidebar/, "the rail mounts on the same railOn");
   });
 
   it("is position:fixed, never sticky or absolute", () => {
