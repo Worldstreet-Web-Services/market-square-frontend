@@ -37,6 +37,7 @@ import {
 import {
   IconCaretDown,
   IconLocationPin,
+  IconTopSearch,
 } from "@/components/ui/topbar-icons";
 import { LocationSheet } from "@/components/layout/location-sheet";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
