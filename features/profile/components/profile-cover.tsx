@@ -160,7 +160,10 @@ export function ProfileCover({
             size={72}
             className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
           />
-          <div className="flex min-w-0 flex-col gap-2">
+          {/* `flex-1` as well as `min-w-0`: without it the column sizes to
+              its content and the name's chips run past the cover's edge on a
+              phone instead of wrapping under the name. */}
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             {/* 545:47580 — the name, then its chips, 8 apart, on one row in a
                 column the file fixes at 377. Our column is narrower (600
                 against the file's 805) and a profile can carry two chips
