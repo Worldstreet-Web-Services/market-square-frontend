@@ -90,13 +90,22 @@ export function ProfileGiftGallery() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6 px-8 py-6 sm:grid-cols-3 lg:grid-cols-5">
+    /*
+      THE TILE IS A FIXED 129, AND THE GRID FITS AS MANY AS THE COLUMN HOLDS.
+      543:42098 lays five across a 741 column (5 x 129 + 4 x 24 = 741 exactly).
+      This used to be `lg:grid-cols-5`, which was right at 741 and wrong the day
+      the column became 600: five cells in 488 of content squeezed every tile
+      to 78 wide under a 160 height, and the gallery read as a row of purple
+      slivers. `auto-fill` keeps the file's tile and its 24 gap and lets the
+      count per row follow the width — three here, five at the file's.
+    */
+    <div className="grid grid-cols-[repeat(auto-fill,129px)] gap-6 px-8 py-6">
       {LIVE_GIFTS.map((gift) => {
         const received = counts.get(gift.id) ?? null;
         return (
           <div
             key={gift.id}
-            className="flex h-[160px] w-full max-w-[129px] flex-col rounded-[15px] bg-spotlight p-1"
+            className="flex h-[160px] w-[129px] flex-col rounded-[15px] bg-spotlight p-1"
           >
             {/* 485:40486 — 121x120 at a 12 radius on `#1C1C1C`, and it CLIPS:
                 the artwork is drawn larger than the plate and cropped by it. */}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { anchorAbove } from "./anchored-popover.ts";
+import { anchorAbove, anchorBelow } from "./anchored-popover.ts";
 
 const viewport = { width: 1200, height: 800 };
 
@@ -58,5 +58,29 @@ describe("anchorAbove", () => {
       align: "left",
     });
     assert.equal(bottom, Math.max(12, 800 - 790 + 8));
+  });
+});
+
+describe("anchorBelow", () => {
+  const viewport = { width: 1440, height: 900 };
+  it("hangs under the trigger's bottom edge, aligned to the chosen edge", () => {
+    const at = anchorBelow({
+      trigger: { left: 900, right: 938, top: 400, bottom: 438 },
+      width: 231,
+      viewport,
+      align: "right",
+      gap: 4,
+    });
+    assert.deepEqual(at, { left: 707, top: 442 });
+  });
+  it("keeps the margin when the trigger sits at the viewport's edge", () => {
+    const at = anchorBelow({
+      trigger: { left: 1420, right: 1440, top: 10, bottom: 30 },
+      width: 231,
+      viewport,
+      align: "right",
+    });
+    assert.equal(at.left, 1440 - 231 - 12);
+    assert.equal(at.top, 38);
   });
 });

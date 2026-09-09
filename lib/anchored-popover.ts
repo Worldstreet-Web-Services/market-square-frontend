@@ -49,3 +49,31 @@ export function anchorAbove({
     bottom: Math.round(Math.max(margin, viewport.height - trigger.top + gap)),
   };
 }
+
+export interface AnchorBelowPosition {
+  left: number;
+  /** Distance from the viewport's TOP, so the panel hangs downward. */
+  top: number;
+}
+
+/**
+ * The same arithmetic for a panel that opens BELOW its trigger — the
+ * profile cover's more menu (545:49822), which used to be `absolute` inside
+ * a cover that clips its overflow, so the menu was sliced off at the card's
+ * foot. A fixed panel in a portal has no clipping ancestor.
+ */
+export function anchorBelow({
+  trigger,
+  width,
+  viewport,
+  align,
+  gap = 8,
+  margin = 12,
+}: AnchorInput & { trigger: { left: number; right: number; top: number; bottom: number } }): AnchorBelowPosition {
+  const preferred = align === "right" ? trigger.right - width : trigger.left;
+  const furthestLeft = Math.max(margin, viewport.width - width - margin);
+  return {
+    left: Math.round(Math.min(Math.max(preferred, margin), furthestLeft)),
+    top: Math.round(Math.max(margin, trigger.bottom + gap)),
+  };
+}

@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import { IconFlag, IconShield } from "@/components/ui/icons";
 import { IconMsMore } from "@/components/ui/design-icons";
-import { IconProfileMoreVertical } from "@/components/ui/profile-icons";
+import { IconMenuFlag, IconMenuShare, IconProfileMoreVertical } from "@/components/ui/profile-icons";
+import { MenuPanel, MenuRow } from "@/components/ui/menu-row";
+import { anchorBelow, type AnchorBelowPosition } from "@/lib/anchored-popover";
 import type { Profile } from "@/lib/api/schemas";
 import { REPORT_REASONS, type ReportReason } from "@/features/profile/lib/api";
 import { useFollow, useProfileSafety } from "@/features/profile/hooks/use-profile";
@@ -38,6 +42,28 @@ const REASON_LABELS: Record<ReportReason, string> = {
   other: "Something else",
 };
 
+/**
+ * THE COVER'S MENU IS THE FILE'S — node 545:49822 ("individual"): the DM
+ * menu's own `MenuPanel` (231 wide, `#1C1C1C`, a 1px `white/18` ring, 22px
+ * radius, 16 of padding) with `MenuRow`s 8 apart, each 32 tall at a 12 radius
+ * on `white/3`, a 16px glyph in `#9B9B9B` 8 from a label at Geist 500 12/16 in
+ * 80% white. The file draws two rows — "Share profile link"
+ * (`basil:share-outline`) and "Report" (`vuesax/outline/flag`) — and both are
+ * here with their own glyphs.
+ *
+ * WHAT WAS ALREADY IN THE MENU STAYS, in the same rows: Follow (moved here
+ * from the cover, see profile-page), Report's four reasons (a step inside the
+ * panel, with a Back row — the file's "Report" is one row, and the reasons are
+ * what make a report worth filing), and Block, last and red. Asked for by
+ * name: "leave those that were there before, just add them, still use the
+ * figma dropdown UI".
+ *
+ * IN A PORTAL, FIXED, HUNG UNDER THE DISC. It used to be `absolute` inside the
+ * cover, and the cover clips its overflow — so the menu was sliced off at the
+ * card's foot, "hiding behind something". `anchorBelow` does the arithmetic;
+ * `document.body` has no clipping ancestor.
+ */
+const PANEL_W = 231;
 export function PersonMoreMenu({
   profile,
   size = "sm",
@@ -54,6 +80,8 @@ export function PersonMoreMenu({
   size?: "sm" | "md" | "cover";
 }) {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"root" | "report">("root");
+  const [at, setAt] = useState<AnchorBelowPosition | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const safety = useProfileSafety(profile);
   const follow = useFollow(profile);
@@ -61,10 +89,128 @@ export function PersonMoreMenu({
   const gate = useGate();
   const me = useMe();
 
+  const cover = size === "cover";
+
+  // Where the fixed panel goes: measured when it opens and again if the
+  // window moves under it. A scroll closes it — a menu that drifts away from
+  // its disc is worse than one that shuts.
+  useEffect(() => {
+    if (!open || !cover) return;
+    const place = () => {
+      const node = trigger.current;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      setAt(
+        anchorBelow({
+          trigger: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+          width: PANEL_W,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          align: "right",
+          gap: 4,
+        })
+      );
+    };
+    place();
+    const shut = () => setOpen(false);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", shut, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", shut, true);
+    };
+  }, [open, cover]);
+
   // There is nothing to report or block about yourself.
   if (me.data?.id === profile.id) return null;
 
-  const close = () => setOpen(false);
+  const close = () => {
+    setOpen(false);
+    setStep("root");
+  };
+
+  const shareProfile = async () => {
+    close();
+    const url = `${window.location.origin}/u/${profile.username}`;
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title: profile.displayName || profile.username, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Profile link copied");
+    } catch {
+      // A dismissed share sheet is not an error.
+    }
+  };
+
+  const coverPanel = (
+    <>
+      <div className="fixed inset-0 z-40" onClick={close} />
+      {at && (
+        <div className="ws-popover-enter fixed z-50" style={{ left: at.left, top: at.top, width: PANEL_W }}>
+          <MenuPanel>
+            {step === "root" ? (
+              <>
+                {/* Follow has no row in the file; its glyph slot is empty on
+                    purpose rather than borrowing another glyph's meaning. */}
+                <MenuRow
+                  icon={<span aria-hidden className="block h-4 w-4" />}
+                  label={isFollowing ? "Unfollow" : "Follow"}
+                  disabled={follow.isPending}
+                  onClick={() => {
+                    close();
+                    gate(() => follow.mutate(!isFollowing));
+                  }}
+                />
+                <MenuRow
+                  icon={<IconMenuShare className="h-4 w-4 text-grey-400" />}
+                  label="Share profile link"
+                  onClick={() => void shareProfile()}
+                />
+                <MenuRow
+                  icon={<IconMenuFlag className="h-4 w-4 text-grey-400" />}
+                  label="Report"
+                  onClick={() => setStep("report")}
+                />
+                {!safety.blockUnavailable && (
+                  <MenuRow
+                    icon={<IconShield className="h-4 w-4" />}
+                    label={profile.isBlocked ? "Unblock" : "Block"}
+                    tone="danger"
+                    disabled={safety.block.isPending}
+                    onClick={() => {
+                      close();
+                      gate(() => safety.block.mutate(!profile.isBlocked));
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                <MenuRow
+                  icon={<IconMenuFlag className="h-4 w-4 -scale-x-100 text-grey-400" />}
+                  label="Back"
+                  onClick={() => setStep("root")}
+                />
+                {REPORT_REASONS.map((reason) => (
+                  <MenuRow
+                    key={reason}
+                    icon={<span aria-hidden className="block h-4 w-4" />}
+                    label={REASON_LABELS[reason]}
+                    disabled={safety.report.isPending}
+                    onClick={() => {
+                      close();
+                      gate(() => safety.report.mutate(reason));
+                    }}
+                  />
+                ))}
+              </>
+            )}
+          </MenuPanel>
+        </div>
+      )}
+    </>
+  );
 
   return (
     /*
@@ -95,7 +241,7 @@ export function PersonMoreMenu({
         onClick={() => setOpen((value) => !value)}
         className={cn(
           "ws-press flex shrink-0 items-center justify-center rounded-full transition-colors",
-          size === "cover"
+          cover
             ? "ws-glass-clear h-[38.37px] w-[38.37px] text-white"
             : cn(
                 "border border-white/15 bg-white/5 text-grey-100 hover:bg-white/10",
@@ -103,46 +249,22 @@ export function PersonMoreMenu({
               )
         )}
       >
-        {size === "cover" ? (
+        {cover ? (
           <IconProfileMoreVertical className="h-6 w-6" />
         ) : (
           <IconMsMore className={size === "sm" ? "h-4 w-4" : "h-5 w-5"} />
         )}
       </button>
 
-      {open && (
+      {open && cover && createPortal(coverPanel, document.body)}
+
+      {open && !cover && (
         <>
           {/* A full-screen catcher rather than a blur listener: the menu sits
               inside a row that is itself a link, and a click that lands on the
               row behind the menu must close it, not navigate. */}
           <div className="fixed inset-0 z-10" onClick={close} />
           <div role="menu" className="ws-popover ws-popover-enter absolute right-0 z-20 mt-1 w-56 rounded-2xl p-1.5">
-            {/*
-              FOLLOW LIVES HERE ON THE COVER (`size="cover"`), because the
-              stranger's cover (545:47603) draws Wink, message and more and no
-              follow pill — see the note in profile-page. Elsewhere the row or
-              header already carries its own Follow control, so the row is not
-              repeated. The same `useFollow` / `useIsFollowing` as every other
-              follow control: optimistic, rolled back, never a fabricated
-              "Following" from a missing field.
-            */}
-            {size === "cover" && (
-              <>
-                <button
-                  role="menuitemcheckbox"
-                  aria-checked={isFollowing}
-                  disabled={follow.isPending}
-                  onClick={() => {
-                    close();
-                    gate(() => follow.mutate(!isFollowing));
-                  }}
-                  className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-heading transition-colors hover:bg-white/10 disabled:opacity-50"
-                >
-                  {isFollowing ? "Unfollow" : "Follow"}
-                </button>
-                <div className="my-1 h-px bg-white/10" />
-              </>
-            )}
             <p className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-meta">
               <IconFlag className="h-3.5 w-3.5" /> Report
             </p>
