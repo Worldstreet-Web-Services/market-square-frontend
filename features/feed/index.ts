@@ -24,3 +24,6 @@ export type { Post } from "./lib/types";
 /** Home's topic row (225:3352), also used to head the gist rooms page — the one
     row over the one shared vocabulary. Composed in from `components/layout`. */
 export { TopicTabs, type TopicTab } from "./components/topic-tabs";
+// The stories strip heads `/pals` as well as Home (node 844:18440 opens both
+// on it), so the shell composes it through the barrel like everything else.
+export { StoriesRow } from "./components/stories-row";

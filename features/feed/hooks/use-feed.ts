@@ -32,6 +32,7 @@ import type { FeedPage, Lane, Mention, Post } from "@/features/feed/lib/types";
 import { invalidateContentSurfaces } from "@/lib/api/invalidate";
 import {
   invalidatePostLists,
+  isInfiniteFeed,
   patchPostEverywhere,
   reconcilePost,
 } from "@/features/feed/lib/cache";
@@ -228,7 +229,18 @@ export function useCreatePost() {
         queryClient.setQueriesData<InfiniteData<FeedPage>>(
           { queryKey: ["ms", "feed"] },
           (data) => {
-            if (!data) return data;
+            /*
+              A SHAPE CHECK, NOT A NULL CHECK — see the note in cache.ts.
+
+              `["ms","feed"]` also matches `useFeedHead`'s
+              `["ms","feed",lane,key,"head"]`, whose value is a bare FeedPage
+              with no `pages`. `if (!data)` passes it straight through to
+              `data.pages[0]`, which threw "Cannot read properties of undefined
+              (reading '0')" INSIDE onSuccess — so the post WAS created, the
+              mutation then reported failure, and the composer stayed open
+              inviting the reader to post it again.
+            */
+            if (!isInfiniteFeed(data)) return data;
             const first = data.pages[0];
             if (!first) return data;
             // Already reconciled by a refetch that beat us here.

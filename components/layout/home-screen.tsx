@@ -7,7 +7,7 @@ import { KashBalance } from "@/features/kash";
 import { useTopics } from "@/features/discovery";
 import { JoinACommunity } from "@/components/layout/join-a-community";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
-import { MakeSomeFriends } from "@/components/layout/make-some-friends";
+import { FriendsDeck } from "@/components/layout/friends-deck";
 import { SuggestedPals } from "@/components/layout/suggested-pals";
 
 // Slices never import each other, so the follow control — which belongs to the
@@ -65,7 +65,7 @@ export function HomeScreen() {
       tipSlot={tipSlot}
       topicTabs={(topics.data ?? []).map((topic) => ({ key: topic.key, label: topic.label }))}
       roomsSlot={<LiveGistRooms />}
-      friendsSlot={<MakeSomeFriends />}
+      friendsSlot={<FriendsDeck />}
       communitySlot={<JoinACommunity />}
       palsSlot={<SuggestedPals />}
     />

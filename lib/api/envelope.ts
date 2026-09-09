@@ -155,6 +155,22 @@ export function errorMessage(error: unknown, fallback: string): string {
        */
       return err.message || "Market Square is unreachable right now.";
     default:
-      return err.message || fallback;
+      /*
+        AN ERROR WITH NO CODE IS NOT OURS, AND ITS MESSAGE IS NOT COPY.
+
+        Every branch above reads `err.message` safely because reaching it means
+        the service sent a code, so the message was written for a reader. This
+        branch is reached by two very different things: a code we do not know
+        yet, whose message is still the service's own sentence and is better
+        than a generic line — and a plain JS exception, which has a `message`
+        and no `code` at all.
+
+        Returning `err.message` for both put "Cannot read properties of
+        undefined (reading '0')" in a toast under the composer. It told the
+        reader nothing they could act on, and it read as though they had broken
+        something. So an unknown CODE still shows the service's sentence, and
+        an error with no code shows the caller's fallback.
+      */
+      return err.code ? err.message || fallback : fallback;
   }
 }

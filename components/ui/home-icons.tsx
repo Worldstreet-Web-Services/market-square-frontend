@@ -3,25 +3,30 @@
 /**
  * HOME'S OWN GLYPHS, EXPORTED FROM THE FILE.
  *
- * Nodes 225:3595 (the deck arrow), 225:3412 (the add badge on a deck card),
- * 225:3409 (pass) and 225:3407 (wink), downloaded through the Figma images
- * endpoint and inlined verbatim.
+ * TWO DRAWINGS OF THE PAL CARD'S CONTROLS LIVE HERE, and both are live.
+ * `IconDeckAdd` / `IconDeckPass` / `IconDeckWink` are the OLDER node's
+ * (225:3412 / 225:3409 / 225:3407): each is a 36.58 rounded square at a 17.93
+ * radius rotated 17.773°, exported WITH its fill. They still draw the
+ * "Suggested pals" rail (540:19353), whose file they come from. DO NOT redraw
+ * them.
  *
- * THE THREE DECK BUTTONS ARE NOT CIRCLES. Each is a 36.58 rounded square at a
- * 17.93 radius, ROTATED 17.773 degrees — a squircle that reads as a slightly
- * organic disc rather than a geometric one, which is why redrawing them as
- * `rounded-full` looked subtly wrong. They carry their own fills (the wink's
- * vertical `#9F65FD -> #7E3BEB` ramp, pass at `#9F65FD` 23%, the badge's solid
- * `#7E3BEB`), so they are NOT recoloured to currentColor: those are the file's
- * exact values and there is no second state to tint them for.
+ * `IconPalAdd` / `IconPalPass` / `IconPalWink` are node 844:18440's — the `/pals` surface —
+ * exported at their own boxes and inlined verbatim: 844:23447 (`profile-add`,
+ * 70.5), 844:23444 (the pass cross, a 64.75 frame around a 42.5 vector) and
+ * 844:23442 (`Component 14`, the winking face, 72.84). They are the GLYPHS
+ * only. The discs under them are CSS: in this node every one is a true circle
+ * (`cornerRadius` 3038 on a 109.38 disc), so there is no squircle to export,
+ * and the fills — pass `--color-create` at 23%, wink the create → spotlight
+ * ramp turned the disc's own 17.773°, badge solid `--color-spotlight` — are
+ * the palette's two purple stops rather than a colour baked into an SVG.
  *
  * DO NOT redraw these. Re-export from the file.
  */
 
-/** `arrow-left-01-round` — the deck's step control, node 225:3595. Stroked, so it takes `currentColor`; flip it with a transform for `next`. */
-export function IconDeckArrow({ className }: { className?: string }) {
+/** `arrow-left-01-round` — the deck's step control, node 844:22644 (identical to 844:22641 mirrored). Stroked, so it takes `currentColor`; flip it with a transform for `next`. */
+export function IconDeckArrow({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
-    <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg aria-hidden viewBox="0 0 24 24" className={className} style={style} fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M15 6C15 6 9.00001 10.4189 9 12C8.99999 13.5812 15 18 15 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -65,6 +70,39 @@ export function IconDeckWink({ className }: { className?: string }) {
       <stop offset="1" stopColor="#7E3BEB"/>
       </linearGradient>
       </defs>
+    </svg>
+  );
+}
+
+/** `vuesax/outline/profile-add` — the glyph inside the follow badge, node 844:23447. White, on a disc the card draws. */
+export function IconPalAdd({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg aria-hidden viewBox="0 0 71 71" className={className} style={style} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M54.7295 59.9047H42.8962C41.6833 59.9047 40.6774 58.8989 40.6774 57.686C40.6774 56.473 41.6833 55.4672 42.8962 55.4672H54.7295C55.9424 55.4672 56.9482 56.473 56.9482 57.686C56.9482 58.8989 55.9424 59.9047 54.7295 59.9047Z" fill="white"/>
+      <path d="M48.8127 65.8215C47.5998 65.8215 46.5939 64.8157 46.5939 63.6028V51.7695C46.5939 50.5565 47.5998 49.5507 48.8127 49.5507C50.0256 49.5507 51.0314 50.5565 51.0314 51.7695V63.6028C51.0314 64.8157 50.0256 65.8215 48.8127 65.8215Z" fill="white"/>
+      <path d="M35.9737 34.3757C35.8849 34.3757 35.8258 34.3757 35.737 34.3757C35.5891 34.3461 35.382 34.3461 35.2045 34.3757C26.6253 34.1094 20.1466 27.3645 20.1466 19.0515C20.117 14.9691 21.7145 11.1232 24.6137 8.22406C27.5128 5.3249 31.3587 3.69781 35.4708 3.69781C43.9316 3.69781 50.8245 10.5907 50.8245 19.0515C50.8245 27.3645 44.3457 34.0799 36.0624 34.3757C36.0328 34.3757 36.0033 34.3757 35.9737 34.3757ZM35.4708 8.13531C32.542 8.13531 29.8203 9.28906 27.7495 11.3303C25.7083 13.4011 24.5841 16.1228 24.5841 19.022C24.5841 24.9386 29.1991 29.7311 35.0862 29.9086C35.2637 29.879 35.6483 29.879 36.0328 29.9086C41.8608 29.6424 46.387 24.8795 46.387 19.022C46.387 13.0461 41.4762 8.13531 35.4708 8.13531Z" fill="white"/>
+      <path d="M35.4707 66.7415C29.4357 66.7415 23.7262 65.1735 19.407 62.2744C15.2949 59.5231 13.0466 55.7661 13.0466 51.7131C13.0466 47.6602 15.3245 43.9327 19.407 41.2111C28.2524 35.2944 42.6299 35.2944 51.4753 41.2111C52.4811 41.8915 52.777 43.2819 52.0966 44.2877C51.4161 45.3232 50.0257 45.5894 49.0199 44.909C41.6536 39.9982 29.2287 39.9982 21.8624 44.909C19.0224 46.8023 17.4841 49.1986 17.4841 51.7131C17.4841 54.2277 19.0224 56.6831 21.8624 58.5765C25.442 60.9727 30.2641 62.2744 35.4412 62.2744C36.6541 62.2744 37.6599 63.2802 37.6599 64.4931C37.6599 65.706 36.6837 66.7415 35.4707 66.7415Z" fill="white"/>
+    </svg>
+  );
+}
+
+/** PASS — the cross, node 844:23444: a 64.75 frame around the 42.5 `#7E3BEB` vector. The 23% disc under it is the card's. */
+export function IconPalPass({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg aria-hidden viewBox="0 0 65 65" className={className} style={style} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M52.9337 48.6284C53.5061 49.2008 53.8277 49.9771 53.8277 50.7866C53.8277 51.5961 53.5061 52.3724 52.9337 52.9448C52.3613 53.5171 51.585 53.8387 50.7755 53.8387C49.9661 53.8387 49.1897 53.5171 48.6173 52.9448L32.497 36.8193L16.3716 52.9397C15.7992 53.5121 15.0229 53.8336 14.2134 53.8336C13.4039 53.8336 12.6276 53.5121 12.0552 52.9397C11.4828 52.3673 11.1613 51.591 11.1613 50.7815C11.1613 49.972 11.4828 49.1957 12.0552 48.6233L28.1806 32.503L12.0603 16.3776C11.4879 15.8052 11.1664 15.0288 11.1664 14.2194C11.1664 13.4099 11.4879 12.6336 12.0603 12.0612C12.6327 11.4888 13.409 11.1672 14.2185 11.1672C15.028 11.1672 15.8043 11.4888 16.3767 12.0612L32.497 28.1866L48.6224 12.0587C49.1948 11.4863 49.9711 11.1647 50.7806 11.1647C51.5901 11.1647 52.3664 11.4863 52.9388 12.0587C53.5112 12.631 53.8327 13.4074 53.8327 14.2168C53.8327 15.0263 53.5112 15.8026 52.9388 16.375L36.8134 32.503L52.9337 48.6284Z" fill="#7E3BEB"/>
+    </svg>
+  );
+}
+
+/** WINK — `Component 14`, node 844:23442: the white line-art face, 72.84, on a disc the card draws in the create → spotlight ramp. */
+export function IconPalWink({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg aria-hidden viewBox="0 0 73 73" className={className} style={style} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path fillRule="evenodd" clipRule="evenodd" d="M27.1425 26.8904C26.8979 24.0877 24.427 22.0142 21.6243 22.26C18.8233 22.5056 16.7513 24.9748 16.9958 27.7759C17.2402 30.577 19.7086 32.65 22.5098 32.4067C25.3127 32.1632 27.3871 29.6931 27.1425 26.8904ZM21.9693 25.6424C22.898 25.5872 23.6974 26.2913 23.76 27.2195C23.8226 28.1478 23.125 28.9528 22.1973 29.0228C21.259 29.0935 20.4429 28.3862 20.3796 27.4475C20.3163 26.5087 21.0301 25.6982 21.9693 25.6424Z" fill="white"/>
+      <path d="M54.1351 22.0679C54.8772 22.0751 55.4499 22.3616 55.8103 23.0363C56.0369 23.4579 56.0841 23.9531 55.9403 24.4098C55.836 24.7348 55.6405 25.0231 55.3776 25.2409C55.0255 25.5362 54.107 25.9529 53.6562 26.1768C52.7719 26.6145 51.89 27.0573 51.0105 27.5052C51.0686 27.5327 51.1261 27.5607 51.1836 27.5891L53.6462 28.8203C54.4852 29.2398 55.6263 29.6132 55.9322 30.5732C56.0771 31.0292 56.0369 31.5239 55.8205 31.9507C55.6057 32.3782 55.2282 32.7016 54.7729 32.8485C53.9373 33.1157 53.3398 32.7355 52.6188 32.3657L48.2296 30.1744C47.4433 29.7822 46.4843 29.3617 45.7761 28.8663C45.04 28.3515 44.9547 27.0199 45.5513 26.3621C46.0102 25.8558 46.8703 25.5079 47.5042 25.1928L49.8397 24.0271L52.1145 22.8871C52.7193 22.5843 53.468 22.1303 54.1351 22.0679Z" fill="white"/>
+      <path d="M20.9304 40.0665C21.1695 40.0539 21.464 40.0999 21.6865 40.1822C22.8302 40.6047 22.9309 41.5528 23.2552 42.5589C23.4106 43.0337 23.5948 43.4989 23.8066 43.9515C25.3903 47.3529 28.2729 49.9765 31.8081 51.2339C35.306 52.4715 39.1514 52.2759 42.5058 50.6893C45.442 49.2924 47.803 46.9207 49.1866 43.9781C49.5802 43.1204 49.8028 42.3766 50.0824 41.4842C50.251 40.9456 50.6289 40.4854 51.1528 40.2468C51.6503 40.0219 52.2175 40.0059 52.7267 40.2035C53.2159 40.3938 53.6091 40.7713 53.8191 41.2526C53.9347 41.5148 53.991 41.7994 53.9844 42.086C53.967 42.7721 53.3619 44.3217 53.1019 44.9965C52.4711 46.4915 51.6453 47.8964 50.6459 49.1747C47.6837 52.9347 43.3472 55.3614 38.5932 55.9193C33.8792 56.4684 29.1388 55.1365 25.4006 52.2126C22.7981 50.1765 20.8095 47.4599 19.6548 44.3637C19.4501 43.8299 19.0782 42.7845 19.0239 42.2316C18.9045 41.0146 19.8165 40.1775 20.9304 40.0665Z" fill="white"/>
+      <path d="M72.9987 36.4994C72.9987 56.6574 56.6574 72.9987 36.4994 72.9987C16.3413 72.9987 0 56.6574 0 36.4994C0 16.3413 16.3413 0 36.4994 0C56.6574 0 72.9987 16.3413 72.9987 36.4994ZM3.93185 36.4994C3.93185 54.4859 18.5128 69.0669 36.4994 69.0669C54.4859 69.0669 69.0669 54.4859 69.0669 36.4994C69.0669 18.5128 54.4859 3.93185 36.4994 3.93185C18.5128 3.93185 3.93185 18.5128 3.93185 36.4994Z" fill="white"/>
     </svg>
   );
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 /**
@@ -335,13 +336,12 @@ describe("the partner card cannot hide its own call to action", () => {
 });
 
 describe("the friends deck offers a real Follow", () => {
-  const deck = stripComments(read("components/layout/make-some-friends.tsx"));
   /*
-    The CARD is `PalCard`, shared with the "Suggested Pals" rail (540:19351) —
-    one object drawn at two sizes, because two copies of this markup is how a
-    wink cooldown gets fixed on one surface and not the other. So the badge, the
-    photo and the two controls are asserted there, and the FAN — placement,
-    tilt, scale, re-centring — is still asserted against the deck.
+    The CARD is `PalCard`, shared by the deck (Home and `/pals`) and the
+    "Suggested Pals" rail (540:19351) — one object drawn at two sizes, because
+    two copies of this markup is how a wink cooldown gets fixed on one surface
+    and not the other. So the badge and the two controls are asserted here; the
+    FAN — placement, tilt, scale, opacity — is asserted on the deck below.
   */
   const card = stripComments(read("components/layout/pal-card.tsx"));
 
@@ -356,20 +356,15 @@ describe("the friends deck offers a real Follow", () => {
     assert.match(card, /follow\.mutate\(!isFollowing\)/, "the follow badge does nothing again");
   });
 
-  it("sits INSIDE the card, as the file places it", () => {
-    // Node 225:3412 is at x=137.28 in a 183.7 card — a 7.29px inset. The badge
-    // hung 8px off the right edge, which is what made it read as stuck onto
-    // the photo rather than part of the card.
-    assert.doesNotMatch(
-      card,
-      /-right-2/,
-      "the follow badge hangs outside the card again"
-    );
-    // The inset is a NUMBER now, not a class: the deck's card and the rail's
-    // place the badge at 7 and 6.77 in cards of different widths, so it is
-    // passed in with the rest of the geometry rather than hard-coded.
-    assert.match(card, /right: g\.badge\.inset/, "the badge lost the file's inset");
-    assert.match(deck.concat(card), /inset: 7\b/, "the deck's own 7px inset is gone");
+  it("sits INSIDE the card, as both files place it", () => {
+    // The badge hung 8px off the right edge once, which is what made it read
+    // as stuck onto the photo rather than part of the card. Node 844:23446 puts
+    // it 23.27 in from the right and 20.59 from the top; the rail's 6.77.
+    assert.doesNotMatch(card, /-right-2/, "the follow badge hangs outside the card again");
+    assert.match(card, /right: node\.badge\.right/, "the deck badge lost the file's inset");
+    assert.match(card, /right: 23\.27, top: 20\.59/, "the deck's own 23.27 / 20.59 inset is gone");
+    assert.match(card, /right: g\.badge\.inset/, "the rail badge lost the file's inset");
+    assert.match(card, /inset: 6\.77/, "the rail's own 6.77 inset is gone");
   });
 
   it("paints ABOVE the photo it overlaps", () => {
@@ -385,84 +380,57 @@ describe("the friends deck offers a real Follow", () => {
     );
   });
 
-  it("draws every card at FULL strength — the file's fills carry their own alpha", () => {
-    // The neighbours were rendered at `opacity: 0.55`, which washed the
-    // white-to-#D0B3FF card out to grey against the black page. Depth in this
-    // deck comes from overlap and from the front card being raised; the only
-    // transparency in it belongs to the fills themselves — pass is #9F65FD at
-    // 23% inside its own exported glyph.
-    assert.doesNotMatch(
-      deck.concat(card),
-      /opacity:\s*front \?/,
-      "the deck dims its neighbouring cards again — the file draws all three opaque"
-    );
-  });
-
-  it("ROTATES the two neighbours — node 225:3374 tilts them", () => {
-    // This test used to assert the exact opposite, and it was wrong. Every one
-    // of the three cards carries a `relativeTransform`, and two of them turn:
-    // -9.27 and +9.90 degrees. The tilt is most of what makes the group read as
-    // a deck rather than three overlapping rectangles.
-    assert.match(deck, /rot: -9\.27/, "the left card lost the file's tilt");
-    assert.match(deck, /rot: 9\.9/, "the right card lost the file's tilt");
-    assert.match(deck, /rotate\(\$\{place\.rot\}deg\)/, "the tilt is no longer applied");
-  });
-
-  it("draws the neighbours SMALLER than the card in front — not larger", () => {
-    /*
-      The trap this pins. The file's neighbours report 205.55 and 207.76 wide
-      against the front card's 183.70, which reads as "the back cards are
-      bigger". Those are the bounding boxes of ROTATED cards. Solve the rotation
-      out and both are 170.5 — the same card at 92.79%.
-
-      Built from the AABBs, this deck had its neighbours at 1.119 and 1.131, so
-      the back cards were larger than the one being offered.
-    */
-    const scales = [...deck.matchAll(/scale: ([\d.]+)/g)].map((m) => Number(m[1]));
-    assert.ok(scales.length >= 3, "the deck stopped declaring its scales");
-    for (const scale of scales) {
-      assert.ok(scale <= 1, `a neighbour is scaled to ${scale} — larger than the front card`);
-    }
-    assert.match(deck, /scale: 0\.9279/, "the neighbours lost the file's 92.79%");
-  });
-
-  it("re-centres a fan that is not full, EXCEPT when it is filling", () => {
-    /*
-      THE ARITHMETIC MOVED OUT, and this assertion moved with it. Which thing
-      gets centred — the group in the feed, the FRONT card on `/pals` — is now
-      `deckShift` in `lib/deck-centring.ts`, checked numerically in
-      `lib/deck-centring.test.ts` against the file's own offsets.
-
-      Two spellings of this rule have now shipped wrong from this very file,
-      because a regex over source can only ever say the code LOOKS like the
-      last version that worked. The second one asserted `fill || drawn.length
-      >= 3 ? 0 :` on the written belief that the front card "already sits at
-      x=0"; it sits at -14.09, so every phone put the card being decided about
-      ~20px left of centre and this test held it there.
-
-      So what stays here is only the wiring a unit test cannot see: that the
-      deck delegates rather than re-deriving the shift inline, and that it
-      passes the front card's REAL offset rather than a literal.
-    */
-    assert.match(deck, /drawn\.length|offsets: drawn/, "the short-fan re-centring is gone entirely");
-    assert.match(
-      deck,
-      /const recentre = deckShift\(/,
-      "the deck re-derives its own centring again — the rule lives in lib/deck-centring.ts"
-    );
-    assert.match(
-      deck,
-      /frontX: DECK_PLACES\[0\]!?\.x/,
-      "the front card's offset is hard-coded at the call site and will drift from DECK_PLACES"
-    );
-  });
-
-  it("places the three cards from the file rather than a formula", () => {
-    assert.match(deck, /DECK_PLACES/, "the deck is generating positions again");
-  });
-
   it("reads the follow edge rather than the raw field", () => {
     assert.match(card, /useIsFollowing\(profile\)/, "a missing isFollowing can now fabricate Following");
+  });
+});
+
+describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
+  const deck = stripComments(read("components/layout/friends-deck.tsx"));
+  const layout = stripComments(read("lib/deck-layout.ts"));
+  const card = stripComments(read("components/layout/pal-card.tsx"));
+
+  it("DIMS the two cards behind by the node's own opacity — 0.39 and 0.30", () => {
+    // The file draws depth here with layer opacity on the whole back card,
+    // photo and controls included; the front card alone is at full strength.
+    assert.match(layout, /opacity: 0\.39/, "the left card lost the node's 0.39");
+    assert.match(layout, /opacity: 0\.3\b/, "the right card lost the node's 0.30");
+    assert.match(deck, /opacity: swipe\.committing \? 0 : place\.opacity/, "the node's opacity is no longer applied");
+  });
+
+  it("TILTS and SHRINKS them by the node's solved sizes, never its bounding boxes", () => {
+    assert.match(layout, /rot: -6\.836/, "the left card lost its tilt");
+    assert.match(layout, /rot: 13\.524/, "the right card lost its tilt");
+    assert.match(layout, /scale: 0\.8171/, "the left card is no longer 444.01 wide");
+    assert.match(layout, /scale: 0\.83\b/, "the right card is no longer 451.06 wide");
+    assert.match(deck, /rotate\(\$\{place\.rot\}deg\) scale\(\$\{place\.scale \* k\}\)/, "tilt or scale is no longer applied");
+  });
+
+  it("scales the whole fan by ONE factor from lib/deck-layout, never inline", () => {
+    assert.match(deck, /deckLayout\(\{ room/, "the deck computes its own scale again");
+    assert.doesNotMatch(deck, /(left|right)-0 bg-(black|white)/, "a step disc is pinned to the column edge instead of the file's own position");
+    assert.doesNotMatch(deck, /\/ 917|\/ 543/, "a file span is divided inline in the deck");
+  });
+
+  it("SWIPES TO BROWSE and never to act", () => {
+    // Right is back, left is next, the same as the two discs — no follow, pass
+    // or wink hangs off the gesture. Acting is the front card's own controls.
+    assert.match(deck, /onDecide: \(decision\) => onStep\(decision === "follow" \? -1 : 1\)/, "the swipe no longer maps to steps");
+    assert.doesNotMatch(deck, /follow\.mutate|wink\.send/, "the swipe sends something to the service");
+    assert.match(deck, /canCommit:/, "a swipe past either end flies out instead of springing back");
+  });
+
+  it("keeps the rail on its own drawing — the node geometry is a second KIND, not a fork", () => {
+    assert.match(card, /kind: "node-844"/, "the node geometry lost its discriminator");
+    assert.match(card, /export const RAIL_CARD: PalCardGeometry/, "the rail's RAIL_CARD changed shape");
+    assert.match(card, /export const DECK_CARD: PalCardNodeGeometry/, "the deck's geometry is gone");
+    assert.match(deck, /geometry=\{DECK_CARD\}/, "the deck is not drawing the node's card");
+  });
+
+  it("is the ONE deck: /pals renders it rather than a second fan", () => {
+    const pals = stripComments(read("components/layout/pals-screen.tsx"));
+    assert.match(pals, /<FriendsDeck heading="pals" \/>/, "/pals grew its own deck again");
+    assert.ok(!existsSync(resolve("components/layout/make-some-friends.tsx")), "the older deck is back");
   });
 });
 
@@ -669,6 +637,72 @@ describe("the welcome sequence fits a short phone", () => {
       css,
       /--ws-stage-w:\s*max\(\s*60vw,\s*min\(calc\(100dvh \* 1440 \/ 1024\), 130vw, var\(--ws-band-cap, 200vw\)\)\s*\)/,
       "the stage no longer prefers the file's 130vw when there is room for it"
+    );
+  });
+});
+
+/**
+ * THE GROUP PICKER STATES THE SIZE RULE IN ONE PLACE — THE SERVICE.
+ *
+ * `GROUP_MAX = 20` used to block the twenty-first selection and print "(max)"
+ * on Continue. It is gone: the size of a group is the service's rule, and
+ * stating it in two places is how the two disagree — which they already had,
+ * the service refusing with "at most 20 other people" on create and "at most
+ * 21 people" on add, two numbers for one rule.
+ *
+ * Removing it moves the refusal from tap-time to submit-time, which is only
+ * safe because the refusal is now rendered. Both halves are asserted together
+ * because shipping the first without the second is a silent failure after
+ * somebody has picked members and named the group.
+ */
+describe("the group picker leaves the size rule to the service", () => {
+  const flow = stripComments(read("components/layout/create-group-flow.tsx"));
+
+  it("hardcodes no member cap", () => {
+    assert.ok(
+      !/GROUP_MAX/.test(flow),
+      "a client-side group cap is back — it will disagree with the service the first time either number moves"
+    );
+    assert.ok(
+      !/\(max\)/.test(flow),
+      "the Continue button claims a maximum again, with nothing to read it off"
+    );
+  });
+
+  it("never refuses a selection locally", () => {
+    // Every tap toggles. A `>=` inside `toggle` is the cap wearing a different
+    // name, so the shape is asserted rather than the constant.
+    const toggle = flow.match(/const toggle = \(profile: Profile\) =>[\s\S]*?\n {4}\);/)?.[0] ?? "";
+    assert.ok(toggle, "could not find the toggle handler");
+    // Arrows first: `=>` is full of the very character a comparison uses, and
+    // matching it made this fail on the correct code.
+    const body = toggle.replace(/=>/g, "");
+    assert.ok(
+      !/[<>]=?|\.length\s*[!=]==?/.test(body),
+      "the picker refuses a selection again — the service is meant to be the only authority on group size"
+    );
+  });
+
+  it("shows the service's refusal instead of failing silently", () => {
+    /*
+      The mutation carried ONLY `onSuccess` before this. A 400 set the error
+      and nothing rendered it — the spinner stopped and the sheet sat there.
+      With no client cap that is now the path people actually reach.
+    */
+    assert.match(
+      flow,
+      /createGroup\.isError/,
+      "the create sheet no longer renders a failed create — a refused group fails silently"
+    );
+    assert.match(
+      flow,
+      /errorMessage\(createGroup\.error,/,
+      "the refusal is not going through errorMessage, so a raw code or a developer string can reach the screen"
+    );
+    assert.match(
+      flow,
+      /role="alert"[\s\S]{0,120}errorMessage\(createGroup\.error/,
+      "the refusal is not announced — a screen reader gets nothing when the create fails"
     );
   });
 });

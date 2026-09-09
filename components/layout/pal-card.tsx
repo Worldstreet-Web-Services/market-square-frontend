@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
-import { IconDeckAdd, IconDeckPass, IconDeckWink } from "@/components/ui/home-icons";
+import {
+  IconDeckAdd,
+  IconDeckPass,
+  IconDeckWink,
+  IconPalAdd,
+  IconPalPass,
+  IconPalWink,
+} from "@/components/ui/home-icons";
 import { useFollow, useIsFollowing, useWink } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
@@ -12,10 +19,10 @@ import type { Profile } from "@/lib/api/schemas";
  * THE PAL CARD — one object, two places.
  *
  * The lavender portrait card with a follow badge on its corner, the person's
- * name and handle over the foot of the photograph, and PASS and WINK straddling
- * its lower edge. "Make some friends" fans three of them into a deck
- * (225:3374); "Suggested Pals to follow nearby you" lays them out in a rail
- * (540:19351). Same card, drawn at two sizes.
+ * name and handle over the foot of the photograph, and PASS and WINK under the
+ * photo. "Make some friends" — on Home and on `/pals` — fans three of them into
+ * a deck (node 844:18440); "Suggested Pals to follow nearby you" lays them out
+ * in a rail (540:19351). Same card, drawn at two sizes.
  *
  * It is one component because it is one object. Two copies of this markup is
  * how a wink cooldown gets fixed in one place and not the other, and how the
@@ -28,24 +35,49 @@ import type { Profile } from "@/lib/api/schemas";
  * over its own file's numbers instead of a scale factor that would be wrong in
  * three places.
  *
- * `controlBox` is not the circle. The exported pass/wink glyphs carry roughly
- * 4.7px of padding around their squircle at a 46px box — that padding IS the
- * gap you see between them — so the box is the circle divided by 0.795, and
- * `controlBottom` is measured to the box rather than to the circle.
+ * ─── TWO DRAWINGS OF THE SAME CARD ──────────────────────────────────────────
+ * `PalCardGeometry` is the rail's file's drawing: pass, wink and the badge are
+ * EXPORTED glyphs that carry their own disc, so the geometry names the box each
+ * glyph is drawn in (`controlBox` is the circle divided by 0.795 — the glyph's
+ * own padding IS the gap between them — and `controlBottom` is measured to
+ * that box).
+ *
+ * `PalCardNodeGeometry` (`kind: "node-844"`) is node 844:18440's drawing, which
+ * the deck uses: the discs are CSS circles in the palette's own purples with
+ * the file's glyphs inside them, the badge carries a `#F9F5FF` ring, the two
+ * lines are LEFT-aligned at measured offsets, and the card has an outside rim.
+ * It is a second geometry, not a second card: every hook, handler, label and
+ * guard below is shared, and a surface picks a drawing by the object it passes.
+ * The rail keeps the older drawing untouched.
  */
-export interface PalCardGeometry {
-  /** Card width; the deck's is 186, the rail's 170.41. */
+interface PalCardBase {
+  /** Card width; the deck's is 543.42 (file units, scaled by the deck), the rail's 170.41. */
   width: number;
-  /** Card height. The deck lets its padding set this; the rail fixes it. */
   height?: number;
   radius: number;
   photo: { width: number; height: number; left: number; top: number; radius: number };
   /** The black scrim over the foot of the photo, carrying name and handle. */
   scrim: { height: number; name: number; nameLeading: number; handle: number; handleLeading: number };
+}
+
+export interface PalCardGeometry extends PalCardBase {
+  kind?: undefined;
   badge: { size: number; inset: number };
   /** Box the exported glyph is drawn in — see the note above. */
   controlBox: number;
   controlBottom: number;
+}
+
+export interface PalCardNodeGeometry extends PalCardBase {
+  kind: "node-844";
+  /** An OUTSIDE stroke in the page's own `#0F0F0F` (strokeAlign OUTSIDE) — invisible against the page, it shows only where it cuts the card out of the ones behind. */
+  rim: number;
+  /** The two lines, left-aligned and placed from the photo's bottom edge. */
+  lines: { nameLeft: number; nameBottom: number; handleLeft: number; handleBottom: number };
+  /** A solid `--color-spotlight` disc with an INSIDE ring, the glyph centred. */
+  badge: { size: number; right: number; top: number; ring: number; glyph: number };
+  /** Two CSS circles: `size` each, `gap` apart, `bottom` from the card's foot, with their glyphs at `passGlyph` / `winkGlyph`. */
+  controls: { size: number; gap: number; bottom: number; passGlyph: number; winkGlyph: number };
 }
 
 export function PalCard({
@@ -57,7 +89,7 @@ export function PalCard({
   onFollowed,
 }: {
   profile: Profile;
-  geometry: PalCardGeometry;
+  geometry: PalCardGeometry | PalCardNodeGeometry;
   /**
    * False for the deck's cards behind the front one: they are visible but not
    * reachable, so their controls are disabled and their link is out of the tab
@@ -88,16 +120,25 @@ export function PalCard({
   const isFollowing = useIsFollowing(profile);
   const gate = useGate();
   const name = profile.displayName || profile.username;
-  const g = geometry;
+  // One of these is the drawing in use; the other is null. `g` keeps its
+  // name so the older drawing's markup below reads exactly as it did.
+  const node = geometry.kind === "node-844" ? geometry : null;
+  const g = geometry.kind === "node-844" ? null : geometry;
+  const base: PalCardBase = geometry;
 
   return (
     <div
       className="relative shrink-0"
-      style={{ width: g.width, height: g.height }}
+      style={{ width: base.width, height: base.height }}
     >
       <div
         className="absolute inset-0 bg-[linear-gradient(180deg,#FFFFFF_0%,#D0B3FF_100%)]"
-        style={{ borderRadius: g.radius }}
+        style={{
+          borderRadius: base.radius,
+          // The rim is the file's OUTSIDE stroke, so it is drawn outside the
+          // box rather than eating into it: a spread shadow, no blur.
+          boxShadow: node ? `0 0 0 ${node.rim}px #0F0F0F` : undefined,
+        }}
       />
 
       {/*
@@ -122,17 +163,41 @@ export function PalCard({
           });
         }}
         aria-label={isFollowing ? `Unfollow ${name}` : `Follow ${name}`}
-        className="ws-press absolute z-10 transition-opacity hover:opacity-90 disabled:opacity-60"
-        style={{
-          width: g.badge.size,
-          height: g.badge.size,
-          right: g.badge.inset,
-          top: g.badge.inset,
-        }}
+        className={cn(
+          "ws-press absolute z-10 transition-opacity hover:opacity-90 disabled:opacity-60",
+          // Node 844:23446: a solid disc with a 9.27 INSIDE ring in #F9F5FF —
+          // `border-box` sizing keeps the ring inside the file's 107.43.
+          node && "flex items-center justify-center rounded-full border-solid border-[#F9F5FF] bg-spotlight"
+        )}
+        style={
+          node
+            ? {
+                width: node.badge.size,
+                height: node.badge.size,
+                right: node.badge.right,
+                top: node.badge.top,
+                borderWidth: node.badge.ring,
+              }
+            : g
+              ? {
+                  width: g.badge.size,
+                  height: g.badge.size,
+                  right: g.badge.inset,
+                  top: g.badge.inset,
+                }
+              : undefined
+        }
       >
         {/* Following DIMS the badge rather than removing it: a control that
             vanishes on success leaves no way back. */}
-        <IconDeckAdd className={cn("h-full w-full", isFollowing && "opacity-50")} />
+        {node ? (
+          <IconPalAdd
+            className={cn("shrink-0", isFollowing && "opacity-50")}
+            style={{ width: node.badge.glyph, height: node.badge.glyph }}
+          />
+        ) : (
+          <IconDeckAdd className={cn("h-full w-full", isFollowing && "opacity-50")} />
+        )}
       </button>
 
       <Link
@@ -140,18 +205,18 @@ export function PalCard({
         tabIndex={interactive ? undefined : -1}
         className="absolute block overflow-hidden"
         style={{
-          left: g.photo.left,
-          top: g.photo.top,
-          width: g.photo.width,
-          height: g.photo.height,
-          borderRadius: g.photo.radius,
+          left: base.photo.left,
+          top: base.photo.top,
+          width: base.photo.width,
+          height: base.photo.height,
+          borderRadius: base.photo.radius,
         }}
       >
         <Avatar
           name={name}
           seed={profile.id}
           src={profile.avatarUrl}
-          size={Math.round(g.photo.height)}
+          size={Math.round(base.photo.height)}
           sizeClassName="h-full w-full"
           className="rounded-none border-0 object-cover"
         />
@@ -163,20 +228,46 @@ export function PalCard({
           handle — not the product's Geist. These cards are the same
           purple-gradient object the welcome screens use and the design types
           them the same way, so the exception is kept here and nowhere else.
+
+          Node 844:23437 places the lines LEFT-aligned from the photo's foot —
+          the name's glyphs start 50.84 in and the handle's box 58.55 (the file's
+          own 8-unit stagger, kept), their line boxes 49.57 and 20.32 above the
+          photo's bottom edge. Those are the RENDER bounds solved back through
+          Roboto's metrics; the text nodes' own boxes are fixed-height frames
+          that report 26 and 18 for 62 and 38 line-heights and cannot be used.
+          The rail's drawing centres both lines under a padding.
         */}
         <span
-          className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-end bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,1)_100%)] px-2 pb-2 font-[family-name:var(--font-roboto)]"
-          style={{ height: g.scrim.height }}
+          className={cn(
+            "absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,1)_100%)] font-[family-name:var(--font-roboto)]",
+            !node && "flex flex-col items-center justify-end px-2 pb-2"
+          )}
+          style={{ height: base.scrim.height }}
         >
           <span
-            className="w-full truncate text-center font-semibold text-white"
-            style={{ fontSize: g.scrim.name, lineHeight: `${g.scrim.nameLeading}px` }}
+            className={cn(
+              "truncate font-semibold text-white",
+              node ? "absolute block" : "w-full text-center"
+            )}
+            style={{
+              fontSize: base.scrim.name,
+              lineHeight: `${base.scrim.nameLeading}px`,
+              ...(node
+                ? { left: node.lines.nameLeft, right: node.lines.nameLeft, bottom: node.lines.nameBottom }
+                : {}),
+            }}
           >
             {name}
           </span>
           <span
-            className="w-full truncate text-center text-white/50"
-            style={{ fontSize: g.scrim.handle, lineHeight: `${g.scrim.handleLeading}px` }}
+            className={cn("truncate text-white/50", node ? "absolute block" : "w-full text-center")}
+            style={{
+              fontSize: base.scrim.handle,
+              lineHeight: `${base.scrim.handleLeading}px`,
+              ...(node
+                ? { left: node.lines.handleLeft, right: node.lines.nameLeft, bottom: node.lines.handleBottom }
+                : {}),
+            }}
           >
             @{profile.username}
           </span>
@@ -184,27 +275,41 @@ export function PalCard({
       </Link>
 
       {/*
-        The two controls straddle the card's lower edge, on the gradient rather
-        than on the photo. They ABUT — the file has pass ending exactly where
-        wink begins — because each exported glyph carries its own padding and
-        that padding is the gap. Any `gap` here adds a second one.
+        The two controls sit on the gradient under the photo.
 
-        The wink sits ~3px higher than the pass in both files. Kept rather than
-        levelled: it is what gives the pair its slight lift to the right.
+        The rail's drawing: they ABUT — the file has pass ending exactly where wink
+        begins — because each exported glyph carries its own padding and that
+        padding is the gap. Any `gap` there adds a second one. The wink sits
+        ~3px higher than the pass in that file; kept rather than
+        levelled, it is what gives the pair its slight lift to the right.
+
+        Node 844:23459: a centred row of two 109.38 CIRCLES (cornerRadius 3038
+        — there is no squircle here) whose rotated boxes are 137.55, so they sit
+        28.17 apart and level. Pass is `--color-create` at 23% behind the
+        `#7E3BEB` cross; wink is the create → spotlight ramp, drawn top-to-bottom
+        on a span turned the disc's own 17.773° so the ramp runs the disc's full
+        diameter exactly as the file's does, with the white face upright.
       */}
       <div
-        className="absolute inset-x-0 flex items-center justify-center gap-0"
-        style={{ bottom: g.controlBottom }}
+        className="absolute inset-x-0 flex items-center justify-center"
+        style={node ? { bottom: node.controls.bottom, gap: node.controls.gap } : g ? { bottom: g.controlBottom, gap: 0 } : undefined}
       >
         <button
           type="button"
           disabled={!interactive}
           onClick={onPass}
           aria-label={`Skip ${name}`}
-          className="ws-press shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ width: g.controlBox, height: g.controlBox }}
+          className={cn(
+            "ws-press shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60",
+            node && "relative flex items-center justify-center rounded-full bg-create/23"
+          )}
+          style={node ? { width: node.controls.size, height: node.controls.size } : g ? { width: g.controlBox, height: g.controlBox } : undefined}
         >
-          <IconDeckPass className="h-full w-full" />
+          {node ? (
+            <IconPalPass className="shrink-0" style={{ width: node.controls.passGlyph, height: node.controls.passGlyph }} />
+          ) : (
+            <IconDeckPass className="h-full w-full" />
+          )}
         </button>
         <button
           type="button"
@@ -222,10 +327,26 @@ export function PalCard({
             })
           }
           aria-label={`Wink at ${name}`}
-          className="ws-press shrink-0 -translate-y-[3px] transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ width: g.controlBox, height: g.controlBox }}
+          className={cn(
+            "ws-press shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60",
+            node ? "relative flex items-center justify-center overflow-hidden rounded-full" : "-translate-y-[3px]"
+          )}
+          style={node ? { width: node.controls.size, height: node.controls.size } : g ? { width: g.controlBox, height: g.controlBox } : undefined}
         >
-          <IconDeckWink className={cn("h-full w-full", wink.winked && "opacity-60")} />
+          {node ? (
+            <>
+              <span
+                aria-hidden
+                className="absolute inset-0 rotate-[17.773deg] rounded-full bg-[linear-gradient(180deg,var(--color-create)_0%,var(--color-spotlight)_100%)]"
+              />
+              <IconPalWink
+                className={cn("relative shrink-0", wink.winked && "opacity-60")}
+                style={{ width: node.controls.winkGlyph, height: node.controls.winkGlyph }}
+              />
+            </>
+          ) : (
+            <IconDeckWink className={cn("h-full w-full", wink.winked && "opacity-60")} />
+          )}
         </button>
       </div>
     </div>
@@ -233,22 +354,35 @@ export function PalCard({
 }
 
 /**
- * "Make some friends" — node 225:3374, at our 186px card.
+ * "Make some friends" — node 844:23435, the FRONT card of 844:18440, in the
+ * file's own units. Home and `/pals` both draw it. The deck scales the whole fan by one factor, so
+ * these are never rounded to a pixel here.
  *
- * 253 is the height its padding used to produce: 16 above a 170 photo and the
- * file's 67 band below it. Stated rather than derived, because every part of
- * the card is positioned against the box now and a box with only absolute
- * children has no height of its own.
+ *   card    543.42 × 718, radius 89.53, outside stroke 4.54 #0F0F0F
+ *   photo   844:23436  496.13 × 521.15 at 24.18, 20.59, radius 82.52
+ *   scrim   844:23437  229.19 tall, black 0 → 100%
+ *   name    844:23438  Roboto 600 36.27 / 62.17 — render bounds x 75.02, baseline ~473.5
+ *   handle  844:23440  Roboto 400 25.55 / 38.32 at 50% — box x 82.73
+ *   badge   844:23446  107.43 at right 23.27, top 20.59; ring 9.27 INSIDE; glyph 70.5
+ *   discs   844:23459  two 109.38 circles, centres ±68.78 from the middle,
+ *           88.8 above the foot (the middle of the 176.26 band under the photo)
+ *
+ * The line offsets are from the photo's bottom (541.74): the name's 62.17 line
+ * box ends at 492.17 and the handle's at 521.42. The scrim's 3.5 units of
+ * spill past the photo's bottom in the file are not drawn — the render shows
+ * none, the photo's corners clip it.
  */
-export const DECK_CARD: PalCardGeometry = {
-  width: 186,
-  height: 253,
-  radius: 18.57,
-  photo: { width: 162, height: 170, left: 12, top: 16, radius: 26.9 },
-  scrim: { height: 74, name: 12, nameLeading: 20, handle: 8, handleLeading: 13 },
-  badge: { size: 40, inset: 7 },
-  controlBox: 46,
-  controlBottom: 11,
+export const DECK_CARD: PalCardNodeGeometry = {
+  kind: "node-844",
+  width: 543.42,
+  height: 718,
+  radius: 89.53,
+  rim: 4.54,
+  photo: { width: 496.13, height: 521.15, left: 24.18, top: 20.59, radius: 82.52 },
+  scrim: { height: 229.19, name: 36.27, nameLeading: 62.17, handle: 25.55, handleLeading: 38.32 },
+  lines: { nameLeft: 50.84, nameBottom: 49.57, handleLeft: 58.55, handleBottom: 20.32 },
+  badge: { size: 107.43, right: 23.27, top: 20.59, ring: 9.27, glyph: 70.5 },
+  controls: { size: 109.38, gap: 28.17, bottom: 34.11, passGlyph: 64.75, winkGlyph: 72.84 },
 };
 
 /**

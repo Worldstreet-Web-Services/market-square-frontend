@@ -43,7 +43,11 @@ export const MARKET_FLAGS = {
    * drag-to-resize and its unread badges, and the dock steps back to phones
    * only so the two never both claim the navigation.
    *
-   * `NEXT_PUBLIC_MS_SIDEBAR_ENABLED=true` and restart.
+   * `NEXT_PUBLIC_MS_SIDEBAR_ENABLED=true`, then REBUILD — not just restart.
+   * Every `NEXT_PUBLIC_*` value is inlined into the bundle at build time,
+   * so `next start` against an existing build serves the OLD value however
+   * many times it is restarted. This said "and restart" and cost real time:
+   * the flag was set, the server bounced, and the dock kept showing.
    */
   sidebar: process.env.NEXT_PUBLIC_MS_SIDEBAR_ENABLED === "true",
 
