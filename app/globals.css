@@ -912,6 +912,27 @@ body {
     --ws-fab-bottom: 33px;
     --ws-fab-clearance: 33px;
   }
+
+  /* ─── EXCEPT WHEN THE SIDEBAR IS ON, WHERE THERE IS NO DOCK TO RESERVE ─────
+     `BottomDock` carries `md:hidden` whenever the rail is actually on screen,
+     so the two never both claim the navigation. Nothing told the LAYOUT that:
+     `--ws-nav-h` stayed 112 and `main` went on padding its foot for a dock
+     that is not drawn, which is a band of dead space under EVERY page — the
+     dashboard included — and under the chat composer, where it reads worst
+     because that pane is supposed to sit on the screen's bottom edge.
+
+     Fixed HERE rather than at each consumer deliberately. `main`'s padding,
+     the messages pane's two height calcs and anything that subtracts this
+     later all have to agree about whether the dock exists; making the variable
+     itself tell the truth is one rule instead of a rule per reader, and a new
+     consumer inherits it for free. The shell stamps `data-rail` — see
+     app-shell.tsx.
+
+     Phones are untouched: the dock IS on screen below `md`, and this whole
+     block starts at 768. */
+  [data-rail="on"] {
+    --ws-nav-h: 0px;
+  }
 }
 
 @utility ws-btn-fab {

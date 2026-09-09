@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { InboxFilters, InboxSearch } from "@/features/messages/components/inbox-chrome";
 import { NewChatMenu } from "@/features/messages/components/new-chat-menu";
@@ -309,6 +310,15 @@ export function MessagesPage({
   }) => React.ReactNode;
 } = {}) {
   const { ready, authenticated, login } = useAuth();
+  /*
+    Publishes `--ws-kb`, which the pane's height subtracts below. This is what
+    glues the composer to the top of the on-screen keyboard on iOS, where
+    `interactive-widget=resizes-content` is not implemented and the layout
+    viewport therefore does not move when the keyboard opens. It costs nothing
+    on Chromium, where the same measurement comes out zero because the layout
+    viewport shrank along with the visual one.
+  */
+  useKeyboardInset();
   const [open, setOpen] = useState<Conversation | null>(null);
   // Tell the shell a thread is open so the dock leaves the composer alone —
   // see lib/chat-open-store. Cleared on close and on leaving the page.
@@ -382,9 +392,17 @@ export function MessagesPage({
         // `--ws-nav-h` must NOT be subtracted, or the composer floats a dock's
         // height above the screen's foot. The inbox alone keeps the dock and
         // the reservation.
+        // `--ws-vvh` is the visual viewport — literally what is on the glass,
+        // with the URL bar AND the keyboard already accounted for. It replaces
+        // `100dvh` rather than adjusting it: `dvh` tracks a URL bar that
+        // slides, so a pane sized in it is short or long by the bar's height
+        // between recomputations, which is the dead band under the composer
+        // and the vertical scroll that should not exist. `100dvh` remains the
+        // fallback for a browser with no visualViewport, where it is right
+        // anyway. See hooks/use-keyboard-inset.ts.
         open
-          ? "h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-crumb-h))]"
-          : "h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-crumb-h)-var(--ws-nav-h))]"
+          ? "h-[calc(var(--ws-vvh,100dvh)-var(--ws-topbar-h)-var(--ws-crumb-h))]"
+          : "h-[calc(var(--ws-vvh,100dvh)-var(--ws-topbar-h)-var(--ws-crumb-h)-var(--ws-nav-h))]"
       )}
     >
       <div

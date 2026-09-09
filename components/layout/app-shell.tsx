@@ -1640,7 +1640,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       `min-h-dvh` so a short route does not leave the ground stopping partway
       down with black beneath it.
     */
-    <div className="min-h-dvh w-full bg-chrome">
+    /* `data-rail` tells the STYLESHEET whether a dock is on screen, so
+       `--ws-nav-h` can be 0 where there is none — see globals.css. Every
+       consumer of that variable then agrees without knowing about the rail. */
+    <div className="min-h-dvh w-full bg-chrome" data-rail={railOn ? "on" : "off"}>
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*
         GUESTS GET NO SIDEBAR.
