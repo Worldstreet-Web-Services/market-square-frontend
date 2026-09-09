@@ -1758,12 +1758,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // overflow-x-auto and are unaffected, and anything that needs a
                 // horizontal scrollbar must still opt into one explicitly.
                 //
-                // No max-width. The column had one (720px on home, 600px
-                // elsewhere) and the shell had another (1600px), so the layout
-                // stopped growing while the window kept going — 125px of dead
-                // black at 1440, 197px at 1512, 445px at 1920, always parked on
-                // the right, where it reads as the whole product shoved to one
-                // side. Every pane flexes to the window it is in instead.
+                // 600 WIDE, LIKE X'S TIMELINE. The column briefly had no cap
+                // at all — every pane flexed to the window — and on a 1440
+                // display the feed ran to ~860, so a portrait clip drawn at its
+                // own width sat beside a slab of empty card. The reader's
+                // verdict was "the main feed is too wide", against X's 600, and
+                // 600 is also what every other column surface already holds.
+                // Wide routes (store, studio, operations, schedule) are exempt:
+                // they drop the rail and are meant to spread. Whatever the
+                // window has left collects at the outer edge, past the rail,
+                // where the shell's own mx-auto balances it.
                 // `100dvh` MINUS the breadcrumb, not `min-h-dvh`. The bar is a
                 // sibling above this in the same flex column, so a full-viewport
                 // minimum made the document exactly one bar taller than the
@@ -1771,6 +1775,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
                 "ws-hair min-h-[calc(100dvh-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)] pb-[var(--ws-nav-h)]",
+                !wide && "max-w-[600px]"
               )}
             >
               {children}
