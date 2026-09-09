@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { IconDeckArrow } from "@/components/ui/home-icons";
+import { canGoBack } from "@/lib/nav-history";
 import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
 import {
@@ -59,8 +61,9 @@ import type { Profile } from "@/lib/api/schemas";
  * are not somebody you can wink at. PASS is local and honest — there is no
  * "dismiss a person" route, so it moves to the next card and claims no more.
  */
-export function FriendsDeck() {
+export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" }) {
   const me = useMe();
+  const router = useRouter();
   /*
     THE FILTER IS THE SERVICE'S, and changing it starts a NEW deck: the facets
     are in `usePeople`'s query key, so a new city or gender is a new list from
@@ -98,6 +101,9 @@ export function FriendsDeck() {
     observer.current = ro;
   }, []);
   const wide = useMediaQuery(WIDE);
+  // Node 844:18440 puts the deck 89 under the heading block on `/pals`; Home's
+  // own file keeps its 24.
+  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[89px]" : "gap-6");
   const layout = deckLayout({ room: room || FALLBACK_ROOM, wide });
 
 
@@ -109,28 +115,73 @@ export function FriendsDeck() {
      service's and theirs, never a list written here. */
   const genders = facetValues(items, "gender");
 
-  const header = (
-    /*
-      THE HEADING ROW is Home's own (node 647:16342 left, the filter pill
-      647:17482 right, flush with the column's edge and 3px above the heading's
-      top). Unchanged by the deck under it.
-    */
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex min-w-0 flex-col gap-px">
-        <h2 className="text-[22px] font-medium leading-7 text-white">Make some friends</h2>
-        <p className="text-[12px] font-bold leading-4 text-white/40">
-          Follow cool people and watch your feed go from boring to elite ✨
-        </p>
-      </div>
-      <FriendsFilter
-        className="-mt-[3px]"
-        value={filter}
-        onChange={changeFilter}
-        viewerCity={me.data?.city?.trim() || null}
-        genders={genders}
-      />
-    </div>
+  const filterPill = (
+    <FriendsFilter
+      className={heading === "pals" ? "ml-auto md:absolute md:right-0 md:top-[10px] md:ml-0" : "-mt-[3px]"}
+      value={filter}
+      onChange={changeFilter}
+      viewerCity={me.data?.city?.trim() || null}
+      genders={genders}
+    />
   );
+  const header =
+    heading === "pals" ? (
+      /*
+        `/pals`'S HEADING ROW — node 844:18440's own: a 64 glass back disc
+        (844:23465: white at 16%, the `arrow-left-01-round` chevron upright,
+        its 32 inner ring at zero stroke weight and not drawn), 16 to the
+        title block (844:23461: Roboto 400 over Roboto 700 12 / 16 at 40%, 1
+        apart), the Location pill (844:22603, 136 × 38) flush right. The disc's
+        top is 9 above the block's and the pill's 10 below it — each centred on
+        the title line rather than on the two-line block.
+
+        THE TITLE IS 36 / 40.4, NOT THE NODE'S 41.3 / 46.38. The node's column
+        is 915 wide; ours is 550. The row's fixed parts — 64 disc, 16, and the
+        136 pill — leave 334 beside the disc, and "Make some friends" at 41.3
+        measures 350: it truncated to "Make some frie…". 36 keeps the node's
+        line-height ratio and ends 29 short of the pill. The pill is taken out
+        of the flow so the 12px subtitle (351 wide) can run its full length
+        under the pill's bottom edge rather than wrapping.
+
+        No phone frame was given: below `md` the disc (44) and the pill share
+        the first row and the title block (28 / 32) takes the full width
+        beneath them — the disc, the pill and the title cannot share 356.
+      */
+      <div className="relative flex flex-wrap items-start gap-x-4 gap-y-3 md:flex-nowrap">
+        <button
+          type="button"
+          onClick={() => (canGoBack() ? router.back() : router.push("/"))}
+          aria-label="Back"
+          className="ws-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/16 text-white backdrop-blur-md transition-colors hover:bg-white/25 md:h-16 md:w-16"
+        >
+          <IconDeckArrow className="h-[18px] w-[18px] md:h-6 md:w-6" />
+        </button>
+        {filterPill}
+        <div className="flex min-w-0 basis-full flex-col gap-px font-[family-name:var(--font-roboto)] md:basis-auto md:flex-1 md:pt-[9px]">
+          <h1 className="truncate text-[28px] font-normal leading-8 text-white md:pr-[152px] md:text-[36px] md:leading-[40.4px]">
+            Make some friends
+          </h1>
+          <p className="text-[12px] font-bold leading-4 text-white/40">
+            Follow cool people and watch your feed go from boring to elite ✨
+          </p>
+        </div>
+      </div>
+    ) : (
+      /*
+        HOME'S HEADING ROW (node 647:16342 left, the filter pill 647:17482
+        right, flush with the column's edge and 3px above the heading's top).
+        Unchanged by the deck under it.
+      */
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-px">
+          <h2 className="text-[22px] font-medium leading-7 text-white">Make some friends</h2>
+          <p className="text-[12px] font-bold leading-4 text-white/40">
+            Follow cool people and watch your feed go from boring to elite ✨
+          </p>
+        </div>
+        {filterPill}
+      </div>
+    );
 
   /*
     WITH NO FILTER ON, an empty directory means the section has nothing to
@@ -140,7 +191,7 @@ export function FriendsDeck() {
   if (!filtering && (people.isPending || items.length === 0)) return null;
   if (filtering && !people.isPending && items.length === 0) {
     return (
-      <section ref={fitRef} aria-label="People to meet" className="flex flex-col gap-6">
+      <section ref={fitRef} aria-label="People to meet" className={sectionClass}>
         {header}
         <div className="flex flex-col items-center gap-3 py-10 text-center">
           <p className="text-[15px] leading-5 text-white/60">Nobody here matches that yet.</p>
@@ -157,7 +208,7 @@ export function FriendsDeck() {
   }
   if (people.isPending) {
     return (
-      <section ref={fitRef} aria-label="People to meet" className="flex flex-col gap-6">
+      <section ref={fitRef} aria-label="People to meet" className={sectionClass}>
         {header}
         {/* The front card's own footprint, so the column does not jump when it lands. */}
         <div
@@ -208,7 +259,7 @@ export function FriendsDeck() {
   const arrowSize = DECK_NODE.arrow.size * layout.k;
 
   return (
-    <section ref={fitRef} aria-label="People to meet" className="flex flex-col gap-6">
+    <section ref={fitRef} aria-label="People to meet" className={sectionClass}>
       {header}
 
       {/*

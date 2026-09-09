@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 /**
@@ -427,8 +428,8 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
 
   it("is the ONE deck: /pals renders it rather than a second fan", () => {
     const pals = stripComments(read("components/layout/pals-screen.tsx"));
-    assert.match(pals, /<FriendsDeck \/>/, "/pals grew its own deck again");
-    assert.ok(!fs.existsSync(path.join(process.cwd(), "components/layout/make-some-friends.tsx")), "the older deck is back");
+    assert.match(pals, /<FriendsDeck heading="pals" \/>/, "/pals grew its own deck again");
+    assert.ok(!existsSync(resolve("components/layout/make-some-friends.tsx")), "the older deck is back");
   });
 });
 
@@ -635,6 +636,72 @@ describe("the welcome sequence fits a short phone", () => {
       css,
       /--ws-stage-w:\s*max\(\s*60vw,\s*min\(calc\(100dvh \* 1440 \/ 1024\), 130vw, var\(--ws-band-cap, 200vw\)\)\s*\)/,
       "the stage no longer prefers the file's 130vw when there is room for it"
+    );
+  });
+});
+
+/**
+ * THE GROUP PICKER STATES THE SIZE RULE IN ONE PLACE — THE SERVICE.
+ *
+ * `GROUP_MAX = 20` used to block the twenty-first selection and print "(max)"
+ * on Continue. It is gone: the size of a group is the service's rule, and
+ * stating it in two places is how the two disagree — which they already had,
+ * the service refusing with "at most 20 other people" on create and "at most
+ * 21 people" on add, two numbers for one rule.
+ *
+ * Removing it moves the refusal from tap-time to submit-time, which is only
+ * safe because the refusal is now rendered. Both halves are asserted together
+ * because shipping the first without the second is a silent failure after
+ * somebody has picked members and named the group.
+ */
+describe("the group picker leaves the size rule to the service", () => {
+  const flow = stripComments(read("components/layout/create-group-flow.tsx"));
+
+  it("hardcodes no member cap", () => {
+    assert.ok(
+      !/GROUP_MAX/.test(flow),
+      "a client-side group cap is back — it will disagree with the service the first time either number moves"
+    );
+    assert.ok(
+      !/\(max\)/.test(flow),
+      "the Continue button claims a maximum again, with nothing to read it off"
+    );
+  });
+
+  it("never refuses a selection locally", () => {
+    // Every tap toggles. A `>=` inside `toggle` is the cap wearing a different
+    // name, so the shape is asserted rather than the constant.
+    const toggle = flow.match(/const toggle = \(profile: Profile\) =>[\s\S]*?\n {4}\);/)?.[0] ?? "";
+    assert.ok(toggle, "could not find the toggle handler");
+    // Arrows first: `=>` is full of the very character a comparison uses, and
+    // matching it made this fail on the correct code.
+    const body = toggle.replace(/=>/g, "");
+    assert.ok(
+      !/[<>]=?|\.length\s*[!=]==?/.test(body),
+      "the picker refuses a selection again — the service is meant to be the only authority on group size"
+    );
+  });
+
+  it("shows the service's refusal instead of failing silently", () => {
+    /*
+      The mutation carried ONLY `onSuccess` before this. A 400 set the error
+      and nothing rendered it — the spinner stopped and the sheet sat there.
+      With no client cap that is now the path people actually reach.
+    */
+    assert.match(
+      flow,
+      /createGroup\.isError/,
+      "the create sheet no longer renders a failed create — a refused group fails silently"
+    );
+    assert.match(
+      flow,
+      /errorMessage\(createGroup\.error,/,
+      "the refusal is not going through errorMessage, so a raw code or a developer string can reach the screen"
+    );
+    assert.match(
+      flow,
+      /role="alert"[\s\S]{0,120}errorMessage\(createGroup\.error/,
+      "the refusal is not announced — a screen reader gets nothing when the create fails"
     );
   });
 });
