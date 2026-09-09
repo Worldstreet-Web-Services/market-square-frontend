@@ -412,12 +412,54 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
     assert.doesNotMatch(deck, /\/ 917|\/ 543/, "a file span is divided inline in the deck");
   });
 
-  it("SWIPES TO BROWSE and never to act", () => {
-    // Right is back, left is next, the same as the two discs — no follow, pass
-    // or wink hangs off the gesture. Acting is the front card's own controls.
-    assert.match(deck, /onDecide: \(decision\) => onStep\(decision === "follow" \? -1 : 1\)/, "the swipe no longer maps to steps");
-    assert.doesNotMatch(deck, /follow\.mutate|wink\.send/, "the swipe sends something to the service");
+  it("BROWSES on Home and DECIDES on /pals — never the other way round", () => {
+    /*
+      This used to read "SWIPES TO BROWSE and never to act", full stop, and it
+      was right for the surface it was written against. `/pals` changed the
+      rule rather than broke it: on a page whose whole job is one person at a
+      time, right FOLLOWS and left SKIPS, and the file's verdict stamps
+      (856:23668 / 856:23693) announce which before the finger lifts.
+
+      What has NOT changed, and is the half worth keeping: on HOME the deck is
+      one block inside a timeline, and a gesture that quietly followed somebody
+      while a reader scrolled past would be an act nobody asked for. So the
+      browse branch is still asserted, and it is still the default.
+    */
+    assert.match(deck, /decide=\{heading === "pals"\}/, "every deck now shares one gesture — Home can act again, or /pals cannot");
+    assert.match(
+      deck,
+      /if \(!decide\) \{\s*onStep\(decision === "follow" \? -1 : 1\);/,
+      "Home's swipe no longer maps to steps"
+    );
     assert.match(deck, /canCommit:/, "a swipe past either end flies out instead of springing back");
+  });
+
+  it("a swipe can follow but can never UNfollow, and never without the gate", () => {
+    /*
+      `mutate(!isFollowing)` would have made a right swipe on somebody you
+      already follow toggle them OFF — the one gesture on the page that could
+      undo an act the reader never asked to undo. And a follow is a real act,
+      so a signed-out reader meets the sign-in invitation rather than a
+      silent no-op.
+    */
+    assert.match(deck, /decision === "follow" && !isFollowing/, "a right swipe can now unfollow somebody");
+    assert.match(deck, /gate\(\(\) => follow\.mutate\(true\)\)/, "the swipe follows without the sign-in gate, or with a toggle");
+    assert.doesNotMatch(deck, /follow\.mutate\(!/, "the follow is a toggle again");
+  });
+
+  it("stamps the verdict only on the front card, and only where it decides", () => {
+    // A stamp on a card being paged past would promise an act that is not
+    // happening; on a card behind the front one it would label the wrong person.
+    assert.match(
+      deck,
+      /\{decide && front && \(\s*<SwipeVerdict/,
+      "the verdict stamp is drawn where the gesture does not decide, or on a back card"
+    );
+    const stamp = stripComments(read("components/layout/swipe-verdict.tsx"));
+    // The red pill's stroke is a real weight at ZERO ALPHA — it paints nothing.
+    assert.doesNotMatch(stamp, /border(?!-radius)|outline:/, "the red stamp grew a border the file does not draw");
+    assert.match(stamp, /opacity: verdict/, "the stamp no longer brightens with the drag");
+    assert.match(stamp, /pals\/green-flag\.svg|pals\/red-flag\.svg/, "the file's own glyphs were swapped for a repo icon");
   });
 
   it("keeps the rail on its own drawing — the node geometry is a second KIND, not a fork", () => {
