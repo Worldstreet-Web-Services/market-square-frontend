@@ -127,7 +127,7 @@ export function GET(request: Request) {
             color: "rgba(255,255,255,0.55)",
           }}
         >
-          MARKET SQUARE
+          SQUARE
         </div>
       </div>
     ),

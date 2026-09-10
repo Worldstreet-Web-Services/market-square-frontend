@@ -107,7 +107,7 @@ export async function apiFetch(
   const watched = opts.breaker !== false;
   const governed = watched && (method === "GET" || method === "HEAD");
   if (governed && !circuitAllows()) {
-    throw apiError("SERVICE_DOWN", "Can't reach Market Square right now.", 503);
+    throw apiError("SERVICE_DOWN", "Can't reach Square right now.", 503);
   }
 
   let response: Response;

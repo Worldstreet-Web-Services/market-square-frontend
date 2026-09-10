@@ -153,7 +153,7 @@ export function errorMessage(error: unknown, fallback: string): string {
        * proxy's own transport failure carries "Market Square is unreachable."
        * as its message, so a real outage still reads as one.
        */
-      return err.message || "Market Square is unreachable right now.";
+      return err.message || "Square is unreachable right now.";
     default:
       /*
         AN ERROR WITH NO CODE IS NOT OURS, AND ITS MESSAGE IS NOT COPY.

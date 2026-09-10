@@ -27,7 +27,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
   const reshare = async () => {
     const url = `${window.location.origin}/live/${stream.id}`;
     try {
-      if (navigator.share) await navigator.share({ title: stream.title, text: `Watch ${stream.title} live on Market Square`, url });
+      if (navigator.share) await navigator.share({ title: stream.title, text: `Watch ${stream.title} live on Square`, url });
       else {
         await navigator.clipboard.writeText(url);
         toast.success("Live stream link copied");

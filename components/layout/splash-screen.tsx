@@ -109,7 +109,7 @@ export function SplashScreen() {
       )}
     >
       <span role="status" className="sr-only">
-        Loading Market Square
+        Loading Square
       </span>
       <div aria-hidden className="ws-splash-mark">
         {/* `w-full h-auto` so the CSS width above wins over the SVG's own

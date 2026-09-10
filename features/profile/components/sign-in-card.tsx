@@ -322,7 +322,7 @@ export function SignInCard({ onSkip }: { onSkip?: () => void }) {
               Welcome to Square
             </h1>
             <p className="mt-3 text-[14px] font-medium leading-[18px] text-[#999999]">
-              Your MarketSquare to discover Gists and meet
+              Your Square to discover Gists and meet
               <br className="hidden sm:inline" /> new people near you.
             </p>
           </div>

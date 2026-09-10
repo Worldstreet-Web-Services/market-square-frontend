@@ -341,7 +341,7 @@ export function DiscoveryPage({
         <div className="px-4 py-2.5">
           <label className="ws-field flex h-11 items-center gap-3 px-4">
             <IconSearch className="h-5 w-5 shrink-0 text-meta" />
-            <span className="sr-only">Search Market Square</span>
+            <span className="sr-only">Search Square</span>
             <input
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}

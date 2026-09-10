@@ -56,7 +56,7 @@ export function Wordmark({ height = 18, className }: { height?: number; classNam
       // eslint-disable-next-line @next/next/no-img-element -- brand asset, intrinsic ratio
       <img
         src={WORDMARK_SRC}
-        alt="Market Square"
+        alt="Square"
         style={{ height }}
         className={cn("w-auto max-w-full", className)}
       />
@@ -76,7 +76,7 @@ export function BrandLink({
   className,
   markSize,
   wordmarkHeight,
-  label = "Market Square home",
+  label = "Square home",
 }: {
   variant?: "mark" | "wordmark" | "lockup";
   href?: string;
@@ -86,7 +86,7 @@ export function BrandLink({
   label?: string;
 }) {
   return (
-    <Link href={href} aria-label={label} title="Market Square" className={cn("ws-press", className)}>
+    <Link href={href} aria-label={label} title="Square" className={cn("ws-press", className)}>
       {variant !== "wordmark" && <LogoMark size={markSize} />}
       {variant !== "mark" && <Wordmark height={wordmarkHeight} />}
     </Link>

@@ -39,10 +39,7 @@ import {
   IconSbLive,
 } from "@/components/ui/sidebar-icons";
 import {
-  IconCaretDown,
-  IconLocationPin,
 } from "@/components/ui/topbar-icons";
-import { LocationSheet } from "@/components/layout/location-sheet";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { FriendsPopup } from "@/components/layout/friends-popup";
 import { RightRail } from "@/components/layout/right-rail";
@@ -874,8 +871,8 @@ export function Sidebar({
       */}
       <Link
         href="/"
-        aria-label="Market Square home"
-        title="Market Square"
+        aria-label="Square home"
+        title="Square"
         className="ws-press mb-4 flex h-[var(--ws-crumb-h)] shrink-0 items-center justify-center border-b border-white/10"
       >
         {/*
@@ -1039,7 +1036,7 @@ export function Sidebar({
 // The breadcrumb strip above the columns. Only the leaf changes — the root is
 // always the ecosystem the square belongs to.
 const CRUMB: Array<[RegExp, string]> = [
-  [/^\/$/, "Market Square"],
+  [/^\/$/, "Square"],
   [/^\/discover/, "Discover"],
   [/^\/arkmarks/, "Arkmarks"],
   [/^\/messages/, "Chat"],
@@ -1072,7 +1069,7 @@ const CRUMB: Array<[RegExp, string]> = [
  */
 function Breadcrumb({ pathname }: { pathname: string }) {
   const leaf =
-    CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Market Square";
+    CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Square";
   return (
     <div className="ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-center gap-6 border-b bg-chrome px-6 backdrop-blur-[6px] md:flex">
       {/* Geist Medium 16/21.75. The trailing space belongs to the grey run in
@@ -1101,8 +1098,17 @@ function Breadcrumb({ pathname }: { pathname: string }) {
           ("remove it na", then "why am I seeing search at the top again").
           It was a link into Explore rather than a field, and Explore's own
           search and the sidebar are the ways in; git holds the field for the
-          day it is asked back. */}
-      <TopBarLocation />
+          day it is asked back.
+
+          THE LOCATION IS GONE TOO, same call and same reasoning. The bar is
+          for saying where you are IN THE APP, and where you are in the WORLD
+          is a filter — it belongs beside the thing it filters, which is where
+          it already lives: the pill on "Make some friends" on Home. Two
+          controls setting one value is how they disagree, and the one in the
+          chrome was the one nobody was looking at when they changed it.
+
+          `LocationSheet` and `IconLocationPin` are untouched and still used by
+          the Home filter, so nothing is deleted that anything else needs. */}
 
       <div className="ml-auto shrink-0">
         <TopBarActions />
@@ -1110,7 +1116,6 @@ function Breadcrumb({ pathname }: { pathname: string }) {
     </div>
   );
 }
-
 
 /**
  * THE CURRENT LOCATION — node 225:3684.
@@ -1138,55 +1143,6 @@ function Breadcrumb({ pathname }: { pathname: string }) {
  * That precision is one migration away if product asks for it, WITH a rule
  * about who may read it; it is not something to acquire by accident.
  */
-function TopBarLocation() {
-  const me = useMe();
-  const { authenticated } = useAuth();
-  const [open, setOpen] = useState(false);
-  const place = [me.data?.city, me.data?.region].filter(Boolean).join(", ");
-
-  if (!authenticated) return null;
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={
-          place ? `Your location: ${place}. Change it.` : "Set your location"
-        }
-        className="ws-press hidden h-[38px] w-[293px] shrink-0 items-center gap-[5px] rounded-full bg-[rgba(151,151,151,0.05)] pl-[5px] pr-4 text-left transition-colors hover:bg-[rgba(151,151,151,0.09)] xl:flex"
-      >
-        <IconLocationPin className="h-8 w-8 shrink-0 text-white/70" />
-        <span className="flex min-w-0 flex-1 flex-col">
-          {/*
-            "LOCATION", not the file's "Current location".
-
-            The data is a place somebody named once and can leave for months —
-            "current" is a promise it cannot keep, and a profile reading Lagos
-            while the person is in Abuja is worse than one that just says where
-            they are from. The word is the only part of this pill that is not
-            the file's, and it is changed deliberately rather than by omission.
-          */}
-          <span className="truncate text-[11px] leading-[16.5px] text-[#A1A1AA]">
-            Location
-          </span>
-          {/* -7 of leading between the two lines is the file's; it is what makes
-              the pair read as one label rather than two stacked sentences. */}
-          <span className="-mt-[7px] truncate text-[16px] font-semibold leading-[25.85px] text-[#D9D9D9]">
-            {place || "Set location"}
-          </span>
-        </span>
-        <IconCaretDown className="h-1.5 w-2 shrink-0 text-white" />
-      </button>
-
-      {/* Keyed on the opening so the fields are seeded from the CURRENT profile
-          each time — a draft abandoned last time must not come back. */}
-      {open && (
-        <LocationSheet key={String(open)} open onClose={() => setOpen(false)} />
-      )}
-    </>
-  );
-}
 
 function TopBarActions() {
   const { ready, authenticated, login } = useAuth();
@@ -1815,7 +1771,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             which is the flex container's alignment and not a promise. */}
           <BrandLockup
             markHeight={28}
-            label="Market Square"
+            label="Square"
             className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2"
           />
 

@@ -70,7 +70,7 @@ export function ConnectionBanner() {
           "Reconnecting…"
         ) : (
           <>
-            <span className="font-semibold text-heading">Can&apos;t reach Market Square.</span>{" "}
+            <span className="font-semibold text-heading">Can&apos;t reach Square.</span>{" "}
             <span className="tnum text-meta">Retrying in {seconds}s</span>
           </>
         )}

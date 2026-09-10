@@ -315,7 +315,7 @@ export function OpenHouseSheet({
             </svg>
             {audience === "private"
               ? "Only members of this house group can find or join it."
-              : "Visible to anyone on Market Square — it shows on the home page."}
+              : "Visible to anyone on Square — it shows on the home page."}
           </p>
         </div>
 

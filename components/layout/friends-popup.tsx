@@ -314,7 +314,7 @@ function FriendsDialog({
             void shareLink(
               {
                 url: cardImage,
-                title: `${name} winked at you on Market Square`,
+                title: `${name} winked at you on Square`,
               },
               {
                 onCopied: () => toast.success("Link copied"),

@@ -33,7 +33,7 @@ export function AuthPage() {
               would be the same name twice. */}
           <h1 className="flex justify-center">
             <Wordmark height={52} />
-            <span className="sr-only">Market Square</span>
+            <span className="sr-only">Square</span>
           </h1>
           <p className="mt-2 text-[15px] leading-normal text-meta">
             The social square of the Ark platform. Streams, the ARK Store, creators and community — one account.

@@ -45,7 +45,7 @@ export default function GlobalError({
           fontFamily: "system-ui, -apple-system, sans-serif",
         }}
       >
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Market Square failed to load</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Square failed to load</h1>
         <p style={{ maxWidth: 420, fontSize: 15, lineHeight: 1.6, color: "rgba(255,255,255,0.5)", margin: 0 }}>
           It has been reported. Reloading usually fixes it.
         </p>

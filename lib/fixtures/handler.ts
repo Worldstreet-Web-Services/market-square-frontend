@@ -558,7 +558,7 @@ function storeItemDto(item: FxStoreItem) {
     actionUrl: item.actionUrl,
     ownerTeam: "WorldStreet",
     availability: "Available now",
-    supportPolicy: "Includes entitlement lookup and support through your Market Square receipt.",
+    supportPolicy: "Includes entitlement lookup and support through your Square receipt.",
     status: "published",
     installCount: item.installCount,
     createdAt: new Date().toISOString(),
