@@ -887,3 +887,39 @@ describe("the body under the dock", () => {
     );
   });
 });
+
+/**
+ * HOME'S TOPIC ROW IS NODE 647:16266 — the live file, updated 2026-09-10.
+ *
+ * The row was first built from 225:3352. The live node keeps its pill (101 x
+ * 38, full round, the 201deg #7E3BEB -> #472185 gradient while selected) and
+ * adds one thing: the "For you" pill carries the file's wink glyph (677:18745,
+ * exported), 3px before the label, tinted #D8BCFF while selected.
+ */
+describe("Home's topic row is node 647:16266", () => {
+  const tabs = stripComments(read("features/feed/components/topic-tabs.tsx"));
+
+  it("gives For you the file's wink, tinted #D8BCFF while selected", () => {
+    assert.match(
+      tabs,
+      /tab\.key === null && \(\s*<IconForYou className=\{cn\("h-6 w-6 shrink-0", on && "text-\[#D8BCFF\]"\)\} \/>/,
+      "the For you pill lost the file's wink"
+    );
+    assert.match(tabs, /gap-\[3px\]/, "the 3px between the glyph and the label is gone");
+    assert.match(tabs, /function IconForYou/);
+  });
+
+  it("keeps the file's pill: 101 x 38, round, and its gradient in PIXEL space", () => {
+    /*
+      The MCP summary converts the file's gradient handles to "201deg 13% ->
+      100%", which is the angle in the UNIT square. On a 101 x 38 pill that is
+      wrong: projected onto the real box the handles give 226deg with the
+      stops at 22.4% and 84.9%, which reproduces the file's render at both ends
+      (sampled: left 73,33,137 against 74,34,139; right 125,58,234 against
+      126,59,235). 201deg rendered the left end visibly lighter (88,41,166).
+    */
+    assert.match(tabs, /h-\[38px\] min-w-\[101px\]/);
+    assert.match(tabs, /bg-\[linear-gradient\(226deg,#7E3BEB_22\.4%,#472185_84\.9%\)\]/);
+    assert.doesNotMatch(tabs, /201deg/, "the unit-square angle is back");
+  });
+});
