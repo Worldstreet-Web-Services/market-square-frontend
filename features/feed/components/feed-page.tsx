@@ -404,7 +404,9 @@ export function FeedPage({
         {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
             A room happening now beats a subject being discussed, and both beat
             a post from this morning. Renders nothing when none is open. */}
-        {roomsSlot && <div className="mb-6">{roomsSlot}</div>}
+        {/* The section carries its own margins, so a quiet evening with no room
+            open renders nothing at all rather than an empty spacer. */}
+        {roomsSlot}
 
         {/* NODES 225:3526 + 225:3374 — "Make some friends". */}
         {friendsSlot && <div className="mb-6">{friendsSlot}</div>}

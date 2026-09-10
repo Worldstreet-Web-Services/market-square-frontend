@@ -959,7 +959,61 @@ describe("Home's Go Live banner is node 647:17219", () => {
     assert.match(home, /liveCtaSlot=\{authenticated \? <LiveCta \/> : null\}/);
     const tabs = feed.indexOf("<TopicTabs");
     const banner = feed.indexOf("{liveCtaSlot && ");
-    const rooms = feed.indexOf("{roomsSlot && ");
+    const rooms = feed.indexOf("{roomsSlot}");
     assert.ok(tabs > 0 && banner > tabs && rooms > banner, "the banner is not between the topic row and the rooms");
+  });
+});
+
+/**
+ * HOME'S SUGGESTED GISTROOMS SECTION — the first block of the content column,
+ * node 647:16288 (live file, updated 2026-09-10): the heading 1069:11814, View
+ * more 1069:11818, the pager dots 647:16289 and the card row 647:17211 of
+ * component 415:12668 (default variant 496:13802).
+ */
+describe("Home's Suggested GistRooms section is 647:16288's first block", () => {
+  const rail = stripComments(read("components/layout/live-gist-rooms.tsx"));
+  const card = stripComments(read("components/layout/gist-room-card.tsx"));
+  const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+  const icons = stripComments(read("components/ui/topic-tags-field.tsx"));
+
+  it("heads the carousel with the file's title and View more", () => {
+    assert.match(rail, /<span className="text-white">Suggested <\/span>GistRooms/);
+    assert.match(rail, /bg-\[linear-gradient\(90deg,#C196FD_0%,#7E3BEB_100%\)\] bg-clip-text/);
+    assert.match(rail, /href="\/gist-rooms"/);
+  });
+
+  it("spaces it by the file: 85 under the banner, 19 to the dots, 8.67 to cards 17 apart, 78 to what follows", () => {
+    assert.match(rail, /mb-\[78px\] mt-\[85px\]/);
+    assert.match(rail, /mb-\[19px\]/);
+    assert.match(rail, /gap-\[8\.67px\]/);
+    assert.match(rail, /gap-\[17px\] overflow-x-auto/);
+    assert.match(rail, /justify-start pl-\[5px\]/);
+    assert.doesNotMatch(feed, /\{roomsSlot && <div className="mb-6">/, "an empty rooms slot takes space again");
+  });
+
+  it("keeps the card at 120 with the Join pill at the file's y", () => {
+    assert.match(card, /flex items-center justify-between gap-4/);
+    assert.match(card, /flex h-4 items-center gap-1 rounded-full bg-white\/10 px-2 text-\[9px\]/);
+    // One 16-tall line: a chip that does not fit whole wraps out of sight
+    // instead of growing the card past 120 or being cut in half.
+    assert.match(card, /flex h-4 flex-wrap items-center gap-x-1 gap-y-4 overflow-hidden/);
+    // The ring is drawn INSIDE, as the file's stroke is, so it takes no width
+    // from the 306 content box.
+    assert.match(card, /shadow-\[inset_0_0_0_1px_rgba\(255,255,255,0\.18\)\]/);
+    assert.doesNotMatch(card, /border border-white\/\[0\.18\]/);
+    assert.match(card, /mt-2 space-y-3 pl-8/);
+    assert.match(card, /ws-press flex h-5 w-fit items-center gap-\[3px\] rounded-\[30px\] px-3/);
+  });
+
+  it("draws the face cluster at 496:13802's geometry", () => {
+    assert.match(card, /h-\[55\.62px\] w-\[72\.43px\]/);
+    assert.match(card, /left: 12\.31, top: 0, size: 32, rotate: 0/);
+    assert.match(card, /left: 38\.27, top: 21\.47, size: 34\.15, rotate: -4/);
+    assert.match(card, /left: 0, top: 20\.97, size: 34\.15, rotate: 4/);
+  });
+
+  it("gives Religion and Food & Lifestyle the file's exported glyphs", () => {
+    assert.match(icons, /religion: IconTopicChurch/);
+    assert.match(icons, /food: IconTopicFood/);
   });
 });
