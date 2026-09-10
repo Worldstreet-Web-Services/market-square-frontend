@@ -323,8 +323,11 @@ export function useFollow(profile: Profile) {
     // have to move too or the control sits on the stale server answer until
     // the refetch lands.
     patchFollowInCaches(queryClient, profile.id, following);
+    // The walk above has usually stamped this already — a signed-in profile
+    // carries `isFollowing` — so this is only for a payload without the field,
+    // and the guard keeps the follower count from moving twice.
     queryClient.setQueryData<Profile>(["ms", "profile", profile.username], (old) =>
-      old
+      old && old.isFollowing !== following
         ? {
             ...old,
             isFollowing: following,
