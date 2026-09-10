@@ -117,7 +117,23 @@ export function Announcement({
     `GET /announcement` will answer when the route lands, so the client's
     behaviour will not change when it does.
   */
-  if (!show || !post.data || post.data.status !== "active") return null;
+  /*
+    AN UNSIGNED ANNOUNCEMENT IS WORSE THAN NO ANNOUNCEMENT, so `author` is a
+    hard requirement rather than a nicety.
+
+    `GET /posts/:id` does NOT hydrate the author today — it returns `authorId`
+    and nothing else, while `/feed` returns the whole profile. PostCard's
+    fallback for that is an avatar named "?" with no name and no handle, which
+    is what this post's own permalink renders in production right now.
+
+    For an ordinary post that is a blemish. For the first use of this surface
+    — a notice naming which accounts are official and warning that support
+    will never DM you — a card that cannot say who sent it argues against
+    itself, and asks the reader for exactly the trust the notice is telling
+    them to withhold. So it stays hidden until the author is there, and lights
+    up on its own the moment the service hydrates it. Requested.
+  */
+  if (!show || !post.data || post.data.status !== "active" || !post.data.author) return null;
 
   return (
     <section aria-label="Announcement" className="ws-enter">
