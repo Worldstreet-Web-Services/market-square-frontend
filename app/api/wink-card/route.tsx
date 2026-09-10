@@ -13,9 +13,12 @@ import { parseWinkCard, winkCardFileName, type WinkCardFace } from "@/lib/wink-c
  * 6%, both purple glows, the stars and the hugging heart, the two tilted
  * portraits, the two lines run for run, and the button stack. Every offset
  * below is the one in `components/layout/friends-popup.tsx`; change one and
- * change both. It used to be a composition of its own — a heart, a square
- * initial, one line — and saved as something the reader had never seen:
- * "it suppose to be exactly like the wink card".
+ * change both. Like the popup, the buttons follow the text by 16.9 and the card
+ * grows past 472 to keep 24 beneath them when the text runs to three lines.
+ *
+ * It used to be a composition of its own — a heart, a square initial, one
+ * line — and saved as something the reader had never seen: "it suppose to be
+ * exactly like the wink card".
  *
  * WHAT IS LEFT OFF: the three corner discs (download, share, close) and the
  * "N more" count. They are controls for the popup, and in a picture they are
@@ -97,7 +100,7 @@ async function loadImage(url: string): Promise<string | null> {
  * Gaussian of peak 0.33 and σ ≈ 105 (the disc convolved with the blur), gone
  * by 330. Drawn on a layer the size of the card.
  */
-function Glow({ cx, cy }: { cx: number; cy: number }) {
+function Glow({ cx, cy, height }: { cx: number; cy: number; height: number }) {
   const reach = 330;
   const stops = [0, 50, 100, 150, 200, 250, 300, reach].map((d) => {
     const alpha = d === reach ? 0 : 0.33 * Math.exp(-(d * d) / (2 * 105 * 105));
@@ -111,7 +114,7 @@ function Glow({ cx, cy }: { cx: number; cy: number }) {
         left: 0,
         top: 0,
         width: px(CARD_W),
-        height: px(CARD_H),
+        height: px(height),
         backgroundImage: `radial-gradient(circle ${px(reach)}px at ${px(cx)}px ${px(cy)}px, ${stops.join(", ")})`,
       }}
     />
@@ -200,6 +203,9 @@ function WinkGlyph({ size }: { size: number }) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const card = parseWinkCard(url.searchParams);
+  if (!card) {
+    return new Response("This card link does not say who it is for.", { status: 400 });
+  }
   const both = card.copy.faces === "both";
 
   const asset = (path: string) => loadImage(new URL(path, url.origin).toString());
@@ -222,6 +228,9 @@ export async function GET(request: Request) {
     ...layoutText(card.copy.subline, font.bold, 14.71, 238),
   ];
   const label = (text: string) => layoutText([{ text, dim: false }], font.medium, 11.77)[0]?.pieces ?? [];
+  // The popup's flow, as a sum: buttons 16.9 under the last line, 24 under them.
+  const buttonsTop = 311.8 + lines.length * 17.65 + 16.9;
+  const cardH = Math.max(CARD_H, buttonsTop + (card.labels.secondary ? 36 + 12 + 36 : 36) + 24);
 
   const button = {
     display: "flex",
@@ -241,7 +250,7 @@ export async function GET(request: Request) {
           position: "relative",
           display: "flex",
           width: px(CARD_W),
-          height: px(CARD_H),
+          height: px(cardH),
           overflow: "hidden",
           borderRadius: px(25),
           border: `${px(0.735)}px solid #6155F5`,
@@ -254,8 +263,8 @@ export async function GET(request: Request) {
           <img src={rays} alt="" width={px(601)} height={px(602)} style={{ position: "absolute", left: px(-72), top: px(-121) }} />
         ) : null}
         {/* 647:16661 / 647:16662 — the discs at (-119, 438) and (390, -85), 178 x 176. */}
-        <Glow cx={-119 + 89} cy={438 + 88} />
-        <Glow cx={390 + 89} cy={-85 + 88} />
+        <Glow cx={-119 + 89} cy={438 + 88} height={cardH} />
+        <Glow cx={390 + 89} cy={-85 + 88} height={cardH} />
         {stars ? (
           // eslint-disable-next-line @next/next/no-img-element -- rendered to a PNG
           <img src={stars} alt="" width={px(181)} height={px(110)} style={{ position: "absolute", left: px(127), top: px(37) }} />
@@ -294,7 +303,7 @@ export async function GET(request: Request) {
             flexDirection: "column",
             alignItems: "center",
             left: px(111.4),
-            top: px(364),
+            top: px(buttonsTop),
             width: px(219),
             gap: px(12),
           }}
@@ -313,16 +322,14 @@ export async function GET(request: Request) {
     ),
     {
       width: px(CARD_W),
-      height: px(CARD_H),
+      height: px(cardH),
       fonts: font.list,
       headers: {
         // The query carries everything the card says: same URL, same picture.
         "cache-control": "public, max-age=3600, stale-while-revalidate=86400",
         ...(url.searchParams.get("download") === "1"
           ? {
-              "content-disposition": `attachment; filename="${winkCardFileName(
-                url.searchParams.get("ou") ?? ""
-              )}"`,
+              "content-disposition": `attachment; filename="${winkCardFileName(card.username)}"`,
             }
           : {}),
       },

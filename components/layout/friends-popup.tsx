@@ -18,7 +18,8 @@ import { winkCardFileName, winkCardQuery } from "@/lib/wink-card";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import type { Profile } from "@/lib/api/schemas";
 
-/** Node 647:16629 — the card is drawn at exactly this, and scaled to fit. */
+/** Node 647:16629 — the card's width, and its height while its text is two
+    lines; more lines grow it (see the text column), and it is scaled to fit. */
 const CARD_W = 441;
 const CARD_H = 472;
 
@@ -155,27 +156,40 @@ function FriendsDialog({
     the popup returns null until there is a moment to show, so an effect keyed
     on anything but the node itself runs once against nothing.
   */
-  const [scale, setScale] = useState(1);
-  const observer = useRef<ResizeObserver | null>(null);
-  const room = useCallback((el: HTMLDivElement | null) => {
-    observer.current?.disconnect();
-    observer.current = null;
+  const [room, setRoom] = useState<{ width: number; height: number } | null>(null);
+  const [cardHeight, setCardHeight] = useState(CARD_H);
+  const observers = useRef<{ room?: ResizeObserver; card?: ResizeObserver }>({});
+  const roomRef = useCallback((el: HTMLDivElement | null) => {
+    observers.current.room?.disconnect();
+    observers.current.room = undefined;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () =>
-      setScale(
-        fitScale({
-          width: CARD_W,
-          height: CARD_H,
-          // The overlay's `p-4` is 16 either side, top and bottom.
-          roomWidth: el.clientWidth - 32,
-          roomHeight: el.clientHeight - 32,
-        })
-      );
+    // The overlay's `p-4` is 16 either side, top and bottom.
+    const measure = () => setRoom({ width: el.clientWidth - 32, height: el.clientHeight - 32 });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    observer.current = ro;
+    observers.current.room = ro;
   }, []);
+  /*
+    The card's REAL height. It is 472 while the text is two lines and grows
+    with a third, so scaling it as if it were always 472 would push a taller
+    card off a short screen. `offsetHeight` is layout height, untouched by the
+    scale transform around it, so measuring cannot feed back into itself.
+  */
+  const cardRef = useCallback((el: HTMLDivElement | null) => {
+    dialog.current = el;
+    observers.current.card?.disconnect();
+    observers.current.card = undefined;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => setCardHeight(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    observers.current.card = ro;
+  }, []);
+  const scale = room
+    ? fitScale({ width: CARD_W, height: cardHeight, roomWidth: room.width, roomHeight: room.height })
+    : 1;
 
   useEffect(() => {
     dialog.current?.focus();
@@ -228,7 +242,7 @@ function FriendsDialog({
 
   return (
     <div
-      ref={room}
+      ref={roomRef}
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
@@ -249,14 +263,14 @@ function FriendsDialog({
       */}
       <div style={{ transform: `scale(${scale})`, transformOrigin: "center" }}>
       <div
-        ref={dialog}
+        ref={cardRef}
         role="dialog"
         aria-modal="true"
         aria-label={copy.headline.map((run) => run.text).join("")}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.key === "Escape" && onClose()}
-        className="relative h-[472px] w-[441px] overflow-hidden rounded-[25px] border-[0.735px] border-[#6155F5] bg-[#1A1A1A] outline-none"
+        className="relative min-h-[472px] w-[441px] overflow-hidden rounded-[25px] border-[0.735px] border-[#6155F5] bg-[#1A1A1A] outline-none"
       >
         {/* 647:16629 — the rays, at the file's own placement and its own 6%. */}
         {/* eslint-disable-next-line @next/next/no-img-element -- the file's own artwork, served locally */}
@@ -398,10 +412,22 @@ function FriendsDialog({
           );
         })()}
 
+        {/*
+          THE LINES AND THE BUTTONS FLOW, 16.9 APART — the file's own gap (text
+          at 311.8, two lines of 17.65, buttons at 364). Both were pinned at
+          those tops, which only holds while the text is two lines: "You and
+          prince winked at each / other!" with its subline is three, and the
+          third sat on the button ("let there be a space at the top of the
+          button"). In flow, each extra line takes the buttons down with it and
+          the card grows to keep its 24 beneath them. Relative and after the
+          artwork, so it paints above the glows as before; a margin, not
+          padding, so its box never lies over the corner controls.
+        */}
+        <div className="relative pb-6" style={{ marginTop: 311.8 }}>
         {/* 647:16649 — the two lines, run for run. */}
         <p
-          className="absolute text-center text-[14.71px] font-bold leading-[17.65px] text-white"
-          style={{ left: 104.4, top: 311.8, width: 238 }}
+          className="text-center text-[14.71px] font-bold leading-[17.65px] text-white"
+          style={{ marginLeft: 104.4, width: 238 }}
         >
           {copy.headline.map((run, i) => (
             <span key={`h${i}`} className={cn(run.dim && "text-white/[0.38]")}>{run.text}</span>
@@ -414,8 +440,8 @@ function FriendsDialog({
 
         {/* 647:16651 — the buttons. The file stacks them 5.88 apart, which on
             screen read as two pills touching ("there is no space in that
-            button"); 12 here, and the column keeps the file's top. */}
-        <div className="absolute flex flex-col items-center gap-3" style={{ left: 111.4, top: 364, width: 219 }}>
+            button"); 12 here, and the column follows the text by 16.9. */}
+        <div className="flex flex-col items-center gap-3" style={{ marginTop: 16.9, marginLeft: 111.4, width: 219 }}>
           <button
             type="button"
             onClick={primaryAct}
@@ -437,6 +463,7 @@ function FriendsDialog({
               {labels.secondary}
             </button>
           )}
+        </div>
         </div>
       </div>
       </div>

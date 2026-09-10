@@ -51,6 +51,8 @@ export interface WinkCardFace {
 }
 
 export interface WinkCard {
+  /** The other person's username — what the saved file is named after. */
+  username: string;
   copy: FriendsMomentCopy;
   labels: { primary: string; secondary: string | null };
   other: WinkCardFace;
@@ -106,8 +108,27 @@ function readPerson(params: URLSearchParams, prefix: "o" | "v") {
   return { id, username, face: { name, photo, artwork } satisfies WinkCardFace };
 }
 
-/** The route's half: the query back into what the card draws. */
-export function parseWinkCard(params: URLSearchParams): WinkCard {
+/**
+ * The card link's FIRST shape, `?name&handle&avatar`, read as the first wink it
+ * always drew. A page loaded before the link changed still sends it, and links
+ * already shared carry it; read any other way they draw nobody.
+ */
+function upgradeLegacy(params: URLSearchParams): URLSearchParams {
+  if (params.has("k") || !(params.has("name") || params.has("handle"))) return params;
+  const upgraded = new URLSearchParams({ k: "wink", on: params.get("name") ?? "", ou: params.get("handle") ?? "" });
+  const avatar = params.get("avatar");
+  if (avatar) upgraded.set("oa", avatar);
+  return upgraded;
+}
+
+/**
+ * The route's half: the query back into what the card draws — or null when
+ * it names nobody. A card about nobody is not a card; drawing "Someone" is
+ * what hid a link that had lost its person.
+ */
+export function parseWinkCard(query: URLSearchParams): WinkCard | null {
+  const params = upgradeLegacy(query);
+  if (!clean(params.get("ou"), WINK_CARD_TEXT_MAX) && !clean(params.get("on"), WINK_CARD_TEXT_MAX)) return null;
   const raw = params.get("k");
   const kind = KINDS.find((known) => known === raw) ?? "wink";
   const other = readPerson(params, "o");
@@ -127,6 +148,7 @@ export function parseWinkCard(params: URLSearchParams): WinkCard {
     other.face.name
   );
   return {
+    username: other.username,
     copy,
     labels: friendsMomentLabels(copy, other.face.name),
     other: other.face,

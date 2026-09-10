@@ -7,7 +7,11 @@ import { parseWinkCard, safePhoto, winkCardFileName, winkCardQuery, type WinkCar
 const FOLA = { id: "did:privy:fola", username: "fola", displayName: "Fola Ade", avatarUrl: null };
 const ME = { id: "did:privy:me", username: "ogazboiz", displayName: "ogazboiz", avatarUrl: "https://cdn.example/me.jpg" };
 
-const roundTrip = (input: WinkCardInput) => parseWinkCard(new URLSearchParams(winkCardQuery(input)));
+const roundTrip = (input: WinkCardInput) => {
+  const card = parseWinkCard(new URLSearchParams(winkCardQuery(input)));
+  assert.ok(card, "a card that names a person parses");
+  return card;
+};
 
 describe("the saved wink card says what the popup says", () => {
   for (const kind of ["friends", "mutual-wink", "wink"] as FriendsMomentKind[]) {
@@ -30,17 +34,31 @@ describe("the saved wink card says what the popup says", () => {
     assert.equal(card.other.artwork, artworkForSeed(resolveSeed({ id: FOLA.id, name: "Fola Ade" })));
   });
 
-  it("names a person by display name, else username, else Someone", () => {
+  it("names a person by display name, else username", () => {
     assert.equal(roundTrip({ kind: "wink", other: { ...FOLA, displayName: "" }, viewer: ME }).other.name, "fola");
-    assert.equal(parseWinkCard(new URLSearchParams("k=wink")).other.name, "Someone");
+  });
+
+  it("refuses a link that names nobody instead of drawing Someone", () => {
+    assert.equal(parseWinkCard(new URLSearchParams("k=wink")), null);
+    assert.equal(parseWinkCard(new URLSearchParams("")), null);
+    assert.equal(parseWinkCard(new URLSearchParams("k=friends&on=%20%20&ou=")), null);
+  });
+
+  it("reads the link's first shape (?name&handle&avatar) as the wink it drew", () => {
+    const card = parseWinkCard(new URLSearchParams("name=prince&handle=prince&avatar=https://cdn.example/p.png"));
+    assert.equal(card!.other.name, "prince");
+    assert.equal(card!.other.photo, "https://cdn.example/p.png");
+    assert.equal(card!.username, "prince");
+    assert.equal(card!.copy.faces, "theirs");
+    assert.equal(card!.labels.primary, "Wink back");
   });
 });
 
 describe("the card's URL is hostile input", () => {
   it("reads an unknown kind as a first wink, never a made-up match", () => {
     const card = parseWinkCard(new URLSearchParams("k=married&on=Fola"));
-    assert.equal(card.copy.faces, "theirs");
-    assert.equal(card.labels.primary, "Wink back");
+    assert.equal(card!.copy.faces, "theirs");
+    assert.equal(card!.labels.primary, "Wink back");
   });
 
   it("draws only https photos", () => {
@@ -53,8 +71,8 @@ describe("the card's URL is hostile input", () => {
 
   it("collapses whitespace and caps names", () => {
     const card = parseWinkCard(new URLSearchParams({ k: "wink", on: `  Fola\n\n${"x".repeat(200)}` }));
-    assert.equal(card.other.name.length, 40);
-    assert.ok(card.other.name.startsWith("Fola x"));
+    assert.equal(card!.other.name.length, 40);
+    assert.ok(card!.other.name.startsWith("Fola x"));
   });
 
   it("makes a file name that is safe in a header", () => {
