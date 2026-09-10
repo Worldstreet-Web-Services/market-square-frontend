@@ -40,7 +40,7 @@ export function OperationsPage() {
   return (
     <>
       <ColumnHeader
-        title="Market Square Control Room"
+        title="Square Control Room"
         subtitle="Qualified activity, reliability, moderation, entitlements and audit history"
       />
       <div className="space-y-7 px-4 py-5 lg:px-6">

@@ -154,7 +154,7 @@ export function TopicTagsField({
           <button
             type="button"
             disabled
-            title="Categories are managed by Market Square — these are all of them."
+            title="Categories are managed by Square — these are all of them."
             className="ws-btn-create flex h-[38px] w-20 cursor-not-allowed items-center justify-center rounded-full text-[12px] font-bold leading-4 text-[#F4F4F4] opacity-40"
           >
             Add +

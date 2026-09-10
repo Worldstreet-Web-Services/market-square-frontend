@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { setChatOpen } from "@/lib/chat-open-store";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
+import { useQueryParam } from "@/hooks/use-query-param";
 import { useMe } from "@/hooks/use-me";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
@@ -309,7 +310,62 @@ export function MessagesPage({
   }) => React.ReactNode;
 } = {}) {
   const { ready, authenticated, login } = useAuth();
-  const [open, setOpen] = useState<Conversation | null>(null);
+  const [picked, setPicked] = useState<Conversation | null>(null);
+
+  /*
+    A THREAD CAN BE LINKED TO — `/messages?c=<id>`.
+
+    Which thread is open was React state and nothing else, so nothing outside
+    this component could ask for one. The profile's Message button therefore
+    created the conversation and then sent the reader to `/messages`, the
+    INBOX, leaving them to find the person they had just pressed Message on.
+    That is what ogazboiz reported as the button "not opening a conversation":
+    it did open one, and then showed a list.
+
+    Read through `useQueryParam`, never `useSearchParams` — that one forces a
+    Suspense boundary which delays hydration of this subtree.
+
+    The conversation itself comes from the INBOX's own cache: the same query
+    key, so this shares the list rather than fetching a second copy, and a
+    thread just created by `POST /conversations` is at the head of it after the
+    invalidation that mutation already does. There is no `GET /conversations/
+    :id` on the contract, so the list is the only place to find it.
+  */
+  const wanted = useQueryParam("c");
+  const inbox = useConversations("all");
+  /*
+    DERIVED, not set in an effect. Calling `setState` synchronously from an
+    effect makes React render twice for one input and lint refuses it — so the
+    linked thread is simply part of what "which thread is open" MEANS, rather
+    than something copied into state after the fact.
+
+    `picked` is a thread the reader tapped. The parameter supplies one until
+    they have. Closing a linked thread sets `picked` to null and the parameter
+    is already gone by then (see below), so it cannot spring back open.
+  */
+  const linked =
+    wanted && !picked
+      ? ((inbox.data?.pages.flatMap((page) => page.items) ?? []).find(
+          (conversation) => conversation.id === wanted
+        ) ?? null)
+      : null;
+  const open = picked ?? linked;
+
+  /*
+    Drop the parameter once it has been used — and only then, or a reload
+    before the inbox arrives would lose the thread. No state is touched here,
+    so this cannot cascade.
+
+    `replaceState`, not a push: the reader came from a profile, and Back
+    should return them to that profile rather than to this page with the
+    thread reopening under them.
+  */
+  useEffect(() => {
+    if (!linked) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("c");
+    window.history.replaceState(null, "", url.toString());
+  }, [linked]);
   // Tell the shell a thread is open so the dock leaves the composer alone —
   // see lib/chat-open-store. Cleared on close and on leaving the page.
   useEffect(() => {
@@ -412,7 +468,7 @@ export function MessagesPage({
           // 48px down its own scroll box on a phone.
           className="h-full overflow-y-auto [--ws-topbar-h:0px]"
         >
-          <Inbox onOpen={setOpen} selectedId={open?.id} />
+          <Inbox onOpen={setPicked} selectedId={open?.id} />
         </div>
 
         {renderNewChat && (
@@ -434,7 +490,7 @@ export function MessagesPage({
         {open ? (
           <Thread
             conversation={open}
-            onBack={() => setOpen(null)}
+            onBack={() => setPicked(null)}
             // Only offered when the layout actually supplied a composer.
             onCreateGistRoom={renderGistRoom ? () => setGistRoomOpen(true) : undefined}
             // The announcement card, bound to the thread it is being read in —
@@ -476,7 +532,7 @@ export function MessagesPage({
         onClose: () => setPicking(null),
         onStarted: (conversation) => {
           setPicking(null);
-          setOpen(conversation);
+          setPicked(conversation);
         },
       })}
     </div>

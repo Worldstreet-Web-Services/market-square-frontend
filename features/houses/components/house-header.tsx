@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
 import { IconArrowLeft } from "@/components/ui/icons";
 // The file's own glyphs, exported from it. See components/ui/room-icons.tsx.
 import { IconHouseGroup, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
@@ -28,6 +30,7 @@ export function HouseHeader({
   onLeave,
   house,
   join,
+  confirmBeforeLeave = true,
 }: {
   topic: string;
   meta: React.ReactNode;
@@ -40,8 +43,25 @@ export function HouseHeader({
    * Nothing was dropped, and the row is the file's.
    */
   onShare?: () => void;
-  /** The header's red logout circle — leaving the room. */
+  /**
+   * Leaving the room.
+   *
+   * NOT called on the tap. The tap opens an "are you sure" dialog, and this
+   * runs only when the person says yes — see `confirmBeforeLeave`.
+   */
   onLeave?: () => void;
+  /**
+   * Whether the tap asks first. TRUE by default, because the alternative is a
+   * room you fall out of by brushing the top-right corner of a phone, and
+   * there is no undo: rejoining is a fresh connection into a conversation that
+   * did not pause for you.
+   *
+   * The seam exists for a caller that already asks its own question and would
+   * otherwise stack two dialogs. Pass `false` there and keep the caller's
+   * dialog, which knows things this header cannot — whether you are the host,
+   * and so whether "leave" means "close the room for everybody".
+   */
+  confirmBeforeLeave?: boolean;
   /**
    * The HOUSE GROUP this room belongs to — the file's "Hacker House Maestros
    * '26" line. Absent for a room opened from the street, which belongs to no
@@ -71,6 +91,15 @@ export function HouseHeader({
 }) {
   const router = useRouter();
   const ref = useRef<HTMLElement>(null);
+  // The trigger itself, so dismissing the dialog puts focus back on it instead
+  // of dropping it at the top of the document — this header is sticky and a
+  // keyboard user would otherwise have to tab the whole room to reach it again.
+  const leaveRef = useRef<HTMLButtonElement>(null);
+  const [confirming, setConfirming] = useState(false);
+  const closeConfirm = useCallback(() => {
+    setConfirming(false);
+    leaveRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const node = ref.current;
@@ -115,11 +144,16 @@ export function HouseHeader({
       `--color-chrome` (#121214 at full opacity), so the header is invisible as
       a band and only the content moves under it.
     */
+    <>
     <header
       ref={ref}
-      className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-4 pb-6 pt-4 xl:px-8 xl:pt-6"
+      className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-4 pb-4 pt-3 md:pb-6 md:pt-4 xl:px-8 xl:pt-6"
     >
-      <div className="flex flex-col gap-6">
+      {/* The file's 24px rhythm is a DESKTOP rhythm. Three rows 24 apart, on
+          top of a 24px title that wrapped to three lines, was a phone whose
+          first screenful was entirely header — the room it is a header for
+          started below the fold. Every value from `md` up is the file's. */}
+      <div className="flex flex-col gap-3 md:gap-6">
         {/*
           ── row 0: BACK, LABELLED, ON ITS OWN LINE ──
 
@@ -180,16 +214,28 @@ export function HouseHeader({
         </div>
 
         {/* ── row 2 ── */}
-        <div className="flex items-center gap-6">
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <h1 className="ws-display text-[24px] leading-8">{topic}</h1>
-            {/* 129:11900 — 16/24 at `white/50`. */}
-            <p className="text-[16px] leading-6 text-white/50">{meta}</p>
+        <div className="flex items-center gap-3 md:gap-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-1 md:gap-2">
+            {/*
+              20/28 on a phone, the file's 24/32 from `md` up.
+
+              A real room title — "ARKGIST with ARKSTRA" — took THREE lines at
+              24px on a 390px screen and read as the page rather than as its
+              label. Two things caused that and both are fixed here: the size,
+              and the 129px labelled pill on the right that left the title
+              roughly 150px of column to wrap inside. Nothing above `md`
+              changes; the desktop header is still the file's.
+            */}
+            <h1 className="ws-display text-[20px] leading-7 md:text-[24px] md:leading-8">{topic}</h1>
+            {/* 129:11900 — 16/24 at `white/50`, stepped down with the title so
+                the pair keeps its proportion instead of the subtitle crowding
+                a smaller heading. */}
+            <p className="text-[14px] leading-5 text-white/50 md:text-[16px] md:leading-6">{meta}</p>
           </div>
 
           {/* 38px circles, gap 16. `ws-glass-pill` is the file's own material —
               see globals.css for why it is a recessed lens and not a ring. */}
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2 md:gap-4">
             {onShare && (
               <button
                 type="button"
@@ -202,11 +248,26 @@ export function HouseHeader({
             )}
             {onLeave && (
               /*
-                A LABELLED PILL, NOT A GLYPH — node 369:9177, 129x38.
+                A LABELLED PILL FROM `md` UP — node 369:9177, 129x38 — AND A
+                FILLED RED DISC BELOW IT.
 
-                It was a 38px disc carrying only the logout mark. Leaving a room
-                you are audible in is the one irreversible thing in this header,
-                and an unlabelled glyph is the wrong amount of warning for it.
+                The label is the right amount of warning for the one
+                irreversible control in this header, and on a desktop it costs
+                nothing. On a 390px phone it costs 129px of the row, which came
+                straight out of the title beside it and wrapped a short room
+                name onto three lines. So under `md` the same control collapses
+                to the 38px disc the share circle already is.
+
+                A disc that says nothing needs to say it LOUDLY: the mobile one
+                is the solid `--color-danger` with a white glyph, not the
+                desktop wash, because a 13% tint reads as one more grey circle
+                at that size. White on #FF383C is 3.6:1 — over the 3:1 the
+                glyph needs, under the 4.5:1 the vanished label would have
+                needed, which is the other half of why the label stays wherever
+                there is room for it.
+
+                An icon alone is also easier to hit by accident, which is what
+                the confirmation below is for.
 
                 NO BORDER: the node reports a #FF0B0B stroke at weight ZERO,
                 which renders nothing — the same trap as the share disc beside
@@ -221,17 +282,74 @@ export function HouseHeader({
                 same hue rather than three reds a pixel apart.
               */
               <button
+                ref={leaveRef}
                 type="button"
-                onClick={onLeave}
-                className="ws-press flex h-[38px] shrink-0 items-center gap-2 rounded-full bg-danger/[0.13] px-4 text-[15px] leading-6 text-danger transition-colors hover:bg-danger/20"
+                onClick={() => (confirmBeforeLeave ? setConfirming(true) : onLeave())}
+                /* The visible label disappears under `md`, so the accessible
+                   name has to come from somewhere else. It is spelled exactly
+                   as the label it replaces, so the two never disagree and a
+                   voice user asking for "Leave Room" hits the same control at
+                   both widths. */
+                aria-label="Leave Room"
+                aria-haspopup={confirmBeforeLeave ? "dialog" : undefined}
+                className="ws-press flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-danger text-white transition-colors hover:bg-danger/90 md:w-auto md:gap-2 md:bg-danger/[0.13] md:px-4 md:text-[15px] md:leading-6 md:text-danger md:hover:bg-danger/20"
               >
                 <IconRoomLeave className="h-4 w-4 shrink-0" />
-                Leave Room
+                <span className="hidden md:inline">Leave Room</span>
               </button>
             )}
           </div>
         </div>
       </div>
     </header>
+
+    {/*
+      "ARE YOU SURE" — the other half of the icon-only button.
+
+      Leaving is not undoable: the room does not pause, the seat is handed back,
+      and returning is a fresh connection. That was previously one tap away from
+      a 38px target in the corner a thumb rests on, which is the mis-tap this
+      dialog exists to catch.
+
+      REUSED, NOT REBUILT: `components/ui/sheet` is the app's one modal — bottom
+      sheet on a phone, centred dialog on a desktop — and it already carries the
+      portal, the backdrop, the scroll lock, `role="dialog" aria-modal`, the
+      reduced-motion entrance and Escape-to-close. Every other confirmation in
+      the room is that component, so this one is too rather than a second dialog
+      with its own half of those behaviours.
+
+      Focus: the safe answer takes it on open and the trigger takes it back on
+      close. `Stay` is autofocused deliberately — landing a keyboard or screen
+      reader user on the destructive button is the same mis-tap with a keyboard.
+    */}
+    {onLeave && (
+      <Sheet open={confirming} onClose={closeConfirm} title="Leave this gist room?">
+        <p className="text-[13px] leading-5 text-body">
+          You will drop out of the conversation straight away.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button variant="ghost" className="flex-1" autoFocus onClick={closeConfirm}>
+            Stay
+          </Button>
+          {/*
+            `--color-danger`, the slice's one destructive red, filled rather
+            than washed so the committing button is the loudest thing in the
+            dialog. Not `Button`'s own `danger` variant: that paints
+            `--color-down`, which means a value going down on a price, and
+            `features/houses` is asserted never to borrow it.
+          */}
+          <Button
+            className="flex-1 bg-danger text-white hover:bg-danger/90 active:bg-danger/80"
+            onClick={() => {
+              setConfirming(false);
+              onLeave();
+            }}
+          >
+            Leave Room
+          </Button>
+        </div>
+      </Sheet>
+    )}
+    </>
   );
 }

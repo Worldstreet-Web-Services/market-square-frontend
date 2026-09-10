@@ -139,7 +139,27 @@ export function OpenHouseSheet({
   const create = useCreateStream();
   const [topic, setTopic] = useState(initialTopic);
   const [tags, setTags] = useState<string[]>([]);
-  const [audience, setAudience] = useState<"public" | "private">("public");
+  /*
+    A ROOM OPENED FROM A HOUSE IS PRIVATE TO THAT HOUSE BY DEFAULT.
+
+    This defaulted to "public" everywhere, so a room created inside a house was
+    walk-in-able by anybody on the platform, and those walk-ins land in the
+    Audience grid beside the house's own members. Read as one card that is
+    "everyone is in the room even though they are not in the house", which is
+    how ogazboiz reported it.
+
+    The Private option already existed and is disabled without a house to be
+    private TO, so the only rooms this changes are the ones that always had
+    somewhere to belong. Opened from the street there is no house, the option
+    is unavailable, and public remains the only thing it can be.
+
+    A host who wants the room open still chooses Public. What changes is which
+    way the default leans, and for a room created inside a house it should
+    lean inward.
+  */
+  const [audience, setAudience] = useState<"public" | "private">(
+    houseConversationId ? "private" : "public"
+  );
   /* Who may TYPE in the room (migration 041). `open` is the default and the
      historic behaviour, so a host who never touches this gets the room every
      room used to be. */
@@ -295,7 +315,7 @@ export function OpenHouseSheet({
             </svg>
             {audience === "private"
               ? "Only members of this house group can find or join it."
-              : "Visible to anyone on Market Square — it shows on the home page."}
+              : "Visible to anyone on Square — it shows on the home page."}
           </p>
         </div>
 

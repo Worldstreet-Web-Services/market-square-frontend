@@ -34,7 +34,7 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Market Square", template: "%s · Market Square" },
+  title: { default: "Square", template: "%s · Square" },
   description:
     "The social square of the Ark platform: live streams, the ARK Store, creators and community.",
 };

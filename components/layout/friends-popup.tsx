@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { cn } from "@/lib/cn";
+import { shareLink } from "@/lib/share-link";
+import { fitScale } from "@/lib/fit-scale";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { IconFriendsClose, IconProfileWink } from "@/components/ui/profile-icons";
+import { IconDownload, IconShare } from "@/components/ui/icons";
 import { useFollow, useWink } from "@/features/profile";
 import { useMarkNotificationsRead, useNotifications } from "@/features/notifications";
 import { useOpenConversation } from "@/features/messages";
 import { friendsMomentCopy, pickFriendsMoments, type FriendsMoment } from "@/lib/friends-popup";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import type { Profile } from "@/lib/api/schemas";
+
+/** Node 647:16629 — the card is drawn at exactly this, and scaled to fit. */
+const CARD_W = 441;
+const CARD_H = 472;
 
 /**
  * "YOU AND FOLA ARE NOW FRIENDS" — node 647:16628, "Follow modals".
@@ -129,11 +137,46 @@ function FriendsDialog({
   const remaining = fan.length - index - 1;
   const other = moment.actor as unknown as Profile;
   const name = other.displayName || other.username;
+  /* The picture the two corner controls hand over. Built from what is already
+     on screen, so it never disagrees with the card the reader is looking at. */
+  const cardImage = `/api/wink-card?${new URLSearchParams({
+    name,
+    handle: other.username,
+    ...(other.avatarUrl ? { avatar: other.avatarUrl } : {}),
+  })}`;
   const copy = friendsMomentCopy(moment, name);
   const wink = useWink(other);
   const follow = useFollow(other);
   const chat = useOpenConversation();
   const dialog = useRef<HTMLDivElement>(null);
+  /*
+    The room the overlay actually offers, measured rather than assumed at a
+    breakpoint: it is the viewport less the overlay's own padding, and on a
+    phone that is different in landscape from portrait. A callback ref because
+    the popup returns null until there is a moment to show, so an effect keyed
+    on anything but the node itself runs once against nothing.
+  */
+  const [scale, setScale] = useState(1);
+  const observer = useRef<ResizeObserver | null>(null);
+  const room = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () =>
+      setScale(
+        fitScale({
+          width: CARD_W,
+          height: CARD_H,
+          // The overlay's `p-4` is 16 either side, top and bottom.
+          roomWidth: el.clientWidth - 32,
+          roomHeight: el.clientHeight - 32,
+        })
+      );
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    observer.current = ro;
+  }, []);
 
   useEffect(() => {
     dialog.current?.focus();
@@ -149,7 +192,11 @@ function FriendsDialog({
 
   const startGisting = () => {
     onClose();
-    chat.mutate(other.id, { onSuccess: () => router.push("/messages") });
+    // To the THREAD, not the inbox — same reason as the profile's Message
+    // button. "Start gisting" that lands on a list has not started anything.
+    chat.mutate(other.id, {
+      onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
+    });
   };
   const winkBack = () => {
     wink.send();
@@ -185,9 +232,26 @@ function FriendsDialog({
 
   return (
     <div
+      ref={room}
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
+      {/*
+        THE CARD IS SCALED TO FIT, NOT NARROWED.
+
+        Everything inside it is absolutely placed at the file's own offsets in
+        a 441 x 472 frame, so `max-width` was the wrong tool: it shrank the BOX
+        while every child kept the offset it was given. On a 390px phone the
+        card came down to 358 and the heart, the avatar, the headline and both
+        buttons stayed positioned for 441 — all of them 41px right of where
+        they belong, which is what ogazboiz reported as "it is supposed to be
+        centred".
+
+        Scaling keeps every relationship the design specifies and just makes
+        the whole thing smaller. `fitScale` never scales UP: a 441 design blown
+        up owns a desktop page and goes fuzzy on any non-integer factor.
+      */}
+      <div style={{ transform: `scale(${scale})`, transformOrigin: "center" }}>
       <div
         ref={dialog}
         role="dialog"
@@ -196,7 +260,7 @@ function FriendsDialog({
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.key === "Escape" && onClose()}
-        className="relative h-[472px] w-[441px] max-w-full overflow-hidden rounded-[25px] border-[0.735px] border-[#6155F5] bg-[#1A1A1A] outline-none"
+        className="relative h-[472px] w-[441px] overflow-hidden rounded-[25px] border-[0.735px] border-[#6155F5] bg-[#1A1A1A] outline-none"
       >
         {/* 647:16629 — the rays, at the file's own placement and its own 6%. */}
         {/* eslint-disable-next-line @next/next/no-img-element -- the file's own artwork, served locally */}
@@ -221,6 +285,50 @@ function FriendsDialog({
             {remaining} more
           </span>
         )}
+
+        {/*
+          KEEP AND SHARE — not in the file, added because a card that only
+          exists inside the app cannot start the loop it is for. A wink works
+          by somebody learning a stranger finds them interesting and going to
+          look; an image that travels into a group chat brings them back with
+          it.
+
+          Mirrored against the close disc so the top of the card reads as a
+          pair of corners rather than a row of controls, and sized to match it
+          exactly. `/api/wink-card` renders the moment server-side — see the
+          note there for why it is not a snapshot of this DOM.
+        */}
+        <a
+          href={cardImage}
+          download={`wink-from-${name}.png`}
+          aria-label="Download this card"
+          title="Download"
+          className="ws-glass-clear ws-press absolute flex items-center justify-center rounded-full text-white"
+          style={{ left: 21, top: 23.5, width: 45, height: 45 }}
+        >
+          <IconDownload className="h-[17px] w-[17px]" />
+        </a>
+        <button
+          type="button"
+          onClick={() => {
+            void shareLink(
+              {
+                url: cardImage,
+                title: `${name} winked at you on Square`,
+              },
+              {
+                onCopied: () => toast.success("Link copied"),
+                onFailed: () => toast.error("Couldn't share that — try again."),
+              }
+            );
+          }}
+          aria-label="Share this card"
+          title="Share"
+          className="ws-glass-clear ws-press absolute flex items-center justify-center rounded-full text-white"
+          style={{ left: 74, top: 23.5, width: 45, height: 45 }}
+        >
+          <IconShare className="h-[17px] w-[17px]" />
+        </button>
 
         {/* 647:16667 — the close disc. */}
         <button
@@ -334,6 +442,7 @@ function FriendsDialog({
             </button>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

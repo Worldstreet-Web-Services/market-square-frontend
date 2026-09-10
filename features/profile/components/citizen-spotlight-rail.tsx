@@ -81,7 +81,7 @@ export function CitizenSpotlightRail() {
       <p className="mt-[11px] pr-[29px] text-[11.8px] leading-4 text-white/60">
         High performers &amp; verified ambassadors making
         <br />
-        moves across Market Square.
+        moves across Square.
       </p>
 
       <ul className="mt-[23px] space-y-3">

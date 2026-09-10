@@ -74,7 +74,7 @@ export function AdminPage() {
           <EmptyState
             glyph="○"
             title="Sign in to continue"
-            body="The operator console is for Market Square staff."
+            body="The operator console is for Square staff."
             action={
               <button
                 onClick={login}
@@ -110,7 +110,7 @@ export function AdminPage() {
           <EmptyState
             glyph="○"
             title="Not authorised"
-            body="This area is limited to Market Square operators."
+            body="This area is limited to Square operators."
             action={
               <Link
                 href="/"

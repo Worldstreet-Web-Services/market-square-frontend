@@ -276,8 +276,25 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         cards absolutely placed in it in file units and scaled about their
         centres by `k` — a `k` chosen so the WHOLE fan fits and nothing is
         cut. `overflow-x-clip` only catches a card mid-swipe flying out.
+
+        `isolate` IS LOAD BEARING. The fan's layers — the front card over its
+        neighbours (z-20 over z-10) and the two discs over both (z-30) — are
+        this box's internal business, but the box is `relative` at `z-index:
+        auto`, which is NOT a stacking context: without `isolate` those three
+        numbers are hoisted into the PAGE's root stacking context and compete
+        with everything else drawn on Home. The filter menu that hangs off
+        "Make some friends" is the column's own popover at the house's `z-20`,
+        and it is written EARLIER in the document than this box, so the tie at
+        20 was broken by document order in the deck's favour and the menu was
+        painted under the front card — unusable, on both widths. Isolating the
+        box makes it one atomic unit painted at the `z-index: auto` level, and
+        a positive `z-index` always paints above that level whatever the
+        document order, so the popover clears the whole fan by the spec rather
+        than by a bigger number. It also puts the menu's click-catcher over
+        the deck, which is what makes a click on a card close the menu instead
+        of deciding about a person.
       */}
-      <div className="relative w-full overflow-x-clip" style={{ height: layout.height }}>
+      <div className="relative isolate w-full overflow-x-clip" style={{ height: layout.height }}>
         {window.map((position) => (
           <DeckCard
             key={items[position]!.id}
