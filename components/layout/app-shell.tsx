@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useTrackNavHistory } from "@/lib/nav-history";
 import {
@@ -38,8 +38,7 @@ import {
   IconSbLibrary,
   IconSbLive,
 } from "@/components/ui/sidebar-icons";
-import {
-} from "@/components/ui/topbar-icons";
+import { IconCaretDown, IconTopSearch } from "@/components/ui/topbar-icons";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { FriendsPopup } from "@/components/layout/friends-popup";
 import { RightRail } from "@/components/layout/right-rail";
@@ -467,8 +466,11 @@ function RailMenu({
   label: string;
   trigger: (props: { open: boolean; toggle: () => void }) => React.ReactNode;
   children: (close: () => void) => React.ReactNode;
-  /** "right" clears the collapsed rail; "above" stacks over the account chip. */
-  align?: "right" | "above";
+  /**
+   * "right" clears the collapsed rail; "above" stacks over the account chip;
+   * "below" hangs from the top bar's avatar, its right edge on the trigger's.
+   */
+  align?: "right" | "above" | "below";
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLDivElement | null>(null);
@@ -484,10 +486,13 @@ function RailMenu({
       const left =
         align === "right"
           ? Math.min(rect.right + 8, window.innerWidth - width - 8)
-          : Math.min(rect.left, window.innerWidth - width - 8);
-      // 8px of breathing room at the top, so a short viewport clamps rather
+          : align === "below"
+            ? Math.min(rect.right - width, window.innerWidth - width - 8)
+            : Math.min(rect.left, window.innerWidth - width - 8);
+      // "below" hangs from the trigger's foot. The rail menus grow upward from
+      // its top, with 8px of breathing room so a short viewport clamps rather
       // than opening a menu whose first item is off-screen.
-      const top = Math.max(8, rect.top - 8);
+      const top = align === "below" ? rect.bottom + 8 : Math.max(8, rect.top - 8);
       setAt({ left: Math.max(8, left), top });
     };
     place();
@@ -519,9 +524,11 @@ function RailMenu({
               aria-label={label}
               style={{
                 left: at.left,
-                // Bottom-anchored: the menu grows upward from the trigger,
-                // which is what both rail menus want — they live at the foot.
-                bottom: Math.max(8, window.innerHeight - at.top),
+                // The rail menus live at the rail's foot and grow upward from
+                // the trigger; the top bar's hangs down from the avatar.
+                ...(align === "below"
+                  ? { top: at.top }
+                  : { bottom: Math.max(8, window.innerHeight - at.top) }),
                 width: 224,
               }}
               className="ws-popover fixed z-[61] rounded-2xl p-1.5"
@@ -587,7 +594,6 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
 /** Bottom-of-rail account chip: avatar, identity, overflow dots (X pattern). */
 function AccountChip() {
   const { ready, authenticated, login } = useAuth();
-  const logout = useLogout();
   const me = useMe();
 
   if (!ready) return <div className="ws-skeleton mx-2 h-12 rounded-full" />;
@@ -650,34 +656,44 @@ function AccountChip() {
         </button>
       )}
     >
-      {(close) => (
-        <>
-          <Link
-            href={me.data ? `/u/${me.data.username}` : "/auth"}
-            onClick={close}
-            className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-          >
-            View profile
-          </Link>
-          {/*
-            View profile and Log out, and nothing else — ogazboiz's call
-            ("it should only be view profile and logout here"). Tickets and
-            Arkmarks sat here for a while as "what is yours"; both routes still
-            resolve (/tickets, /arkmarks) and the profile's own tabs are the
-            door to them now.
-          */}
-          <button
-            onClick={() => {
-              close();
-              void logout();
-            }}
-            className="block w-full truncate rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
-          >
-            Log out @{me.data?.username ?? ""}
-          </button>
-        </>
-      )}
+      {(close) => <AccountMenuItems close={close} />}
     </RailMenu>
+  );
+}
+
+/**
+ * The account menu's entries. The rail's account chip and the top bar's
+ * avatar open the same menu, so it is written once.
+ */
+function AccountMenuItems({ close }: { close: () => void }) {
+  const logout = useLogout();
+  const me = useMe();
+  return (
+    <>
+      <Link
+        href={me.data ? `/u/${me.data.username}` : "/auth"}
+        onClick={close}
+        className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
+      >
+        View profile
+      </Link>
+      {/*
+        View profile and Log out, and nothing else — ogazboiz's call
+        ("it should only be view profile and logout here"). Tickets and
+        Arkmarks sat here for a while as "what is yours"; both routes still
+        resolve (/tickets, /arkmarks) and the profile's own tabs are the
+        door to them now.
+      */}
+      <button
+        onClick={() => {
+          close();
+          void logout();
+        }}
+        className="block w-full truncate rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
+      >
+        Log out @{me.data?.username ?? ""}
+      </button>
+    </>
   );
 }
 
@@ -856,7 +872,7 @@ export function Sidebar({
     >
       <RailHandle rail={rail} preview={preview} commit={commit} />
       {/*
-        THE WORDMARK BLOCK IS EXACTLY AS TALL AS THE BREADCRUMB BAR, so their
+        THE WORDMARK BLOCK IS EXACTLY AS TALL AS THE TOP BAR, so their
         two hairlines are one continuous line across the top of the app.
 
         It used to be `py-5` on the rail plus `pb-4` here, which put the rule at
@@ -1033,87 +1049,96 @@ export function Sidebar({
   );
 }
 
-// The breadcrumb strip above the columns. Only the leaf changes — the root is
-// always the ecosystem the square belongs to.
-const CRUMB: Array<[RegExp, string]> = [
-  [/^\/$/, "Square"],
-  [/^\/discover/, "Discover"],
-  [/^\/arkmarks/, "Arkmarks"],
-  [/^\/messages/, "Chat"],
-  [/^\/notifications/, "Notifications"],
-  [/^\/live\b/, "Live"],
-  [/^\/tickets/, "Tickets"],
-  [/^\/store/, "ARK Store"],
-  [/^\/schedule/, "Schedule"],
-  [/^\/studio/, "Studio"],
-  [/^\/admin/, "Admin"],
-  [/^\/operations/, "Operations"],
-  [/^\/spotlight/, "Citizen Spotlight"],
-  [/^\/p\//, "Post"],
-  [/^\/u\//, "Profile"],
-  [/^\/auth/, "Sign in"],
-];
-
 /**
- * The bar above the columns.
+ * THE TOP BAR — node 647:17439 ("this is how the header look like").
  *
- * Node 15:1302's own numbers: 76 tall, #121214 behind a 6px backdrop blur, a
- * 10% hairline underneath, 24px gutters, and the crumb pushed against the
- * right-hand cluster by `justify-between`.
+ * 1438 x 76 on `#121214`, a 10% hairline underneath and a background blur, and
+ * three things on it:
+ *   · THE LOCKUP, in a 224-wide cell 54 in from the left, the mark at the
+ *     file's 44.6 and centred on the bar. Only while the rail is unmounted:
+ *     the rail carries its own lockup, and two logos is one too many.
+ *   · THE SEARCH FIELD, 22 after the cell: 657 x 38 at the file's top of 22,
+ *     a few pixels under the cluster's centre line, kept as drawn.
+ *   · THE BELL, THE AVATAR AND A CARET, 11 apart and 67 in from the right.
  *
- * TWO things changed from the earlier build and both were wrong rather than
- * merely different. The bar was 69px and painted #0f0f0f — the same colour as
- * the page it sits on, so it read as part of the column instead of as chrome.
- * And the whole crumb was #979797, which made the page you are ON the same
- * weight as the ecosystem you are in; the file whitens the leaf.
+ * It REPLACED the breadcrumb that named the ecosystem and the page; the design
+ * no longer names the page in the chrome.
+ *
+ * THE SEARCH IS BACK because the design has it and ogazboiz said to follow
+ * the design, after twice asking for the older version — a link into Explore
+ * dressed as a field — to be removed. This one is a real field: Enter opens
+ * Explore on the query (`/discover?q=`), which Explore already reads as its
+ * seed.
  */
-function Breadcrumb({ pathname }: { pathname: string }) {
-  const leaf =
-    CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Square";
+function TopBar({ showBrand }: { showBrand: boolean }) {
   return (
-    <div className="ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-center gap-6 border-b bg-chrome px-6 backdrop-blur-[6px] md:flex">
-      {/* Geist Medium 16/21.75. The trailing space belongs to the grey run in
-          the file — "Ark Ecosystem/ " — so the slash hugs the root and the gap
-          before the leaf is part of the dim text, not the bright text. */}
-      {/* The crumb keeps the left edge and the account cluster the right; the
-          search field and the location pill sit between them. `mr-auto` rather
-          than `justify-between`, which with four children would spread all four
-          and pull the pair apart. */}
-      <nav
-        aria-label="Breadcrumb"
-        className="min-w-0 shrink truncate text-[16px] font-medium leading-[21.75px] text-[#979797]"
-      >
-        <Link href="/" className="transition-colors hover:text-body">
-          Ark Ecosystem
+    <div
+      className={cn(
+        "ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-start border-b bg-chrome backdrop-blur-[6px] md:flex",
+        showBrand ? "pl-[54px] pr-[67px]" : "px-6"
+      )}
+    >
+      {showBrand && (
+        <Link
+          href="/"
+          aria-label="Square home"
+          title="Square"
+          className="ws-press flex h-[76px] w-[224px] shrink-0 items-center justify-center"
+        >
+          <BrandLockup className="flex" />
         </Link>
-        <span aria-hidden>/ </span>
-        <span aria-current="page" className="text-white">
-          {leaf}
-        </span>
-      </nav>
+      )}
 
-      {/* NODE 225:3641 puts two more controls between the crumb and the
-          account cluster: a search field and the reader's current location.
-          THE SEARCH IS GONE, on every route — ogazboiz's call, asked twice
-          ("remove it na", then "why am I seeing search at the top again").
-          It was a link into Explore rather than a field, and Explore's own
-          search and the sidebar are the ways in; git holds the field for the
-          day it is asked back.
+      <TopBarSearch className={showBrand ? "ml-[22px]" : undefined} />
 
-          THE LOCATION IS GONE TOO, same call and same reasoning. The bar is
-          for saying where you are IN THE APP, and where you are in the WORLD
-          is a filter — it belongs beside the thing it filters, which is where
-          it already lives: the pill on "Make some friends" on Home. Two
-          controls setting one value is how they disagree, and the one in the
-          chrome was the one nobody was looking at when they changed it.
-
-          `LocationSheet` and `IconLocationPin` are untouched and still used by
-          the Home filter, so nothing is deleted that anything else needs. */}
-
-      <div className="ml-auto shrink-0">
+      <div className="ml-auto flex h-[76px] shrink-0 items-center pl-6">
         <TopBarActions />
       </div>
     </div>
+  );
+}
+
+/**
+ * 647:17479 — the field. 657 x 38 at most and shrinking with the window, a
+ * full pill, 8 either side, the file's 0.68px ring at 40% white drawn INSIDE
+ * (an inset shadow: a fractional border rounds to a whole pixel), its 0.2%
+ * fill and both of its soft drop shadows. The 16px vuesax glyph, then the
+ * placeholder in Geist Medium 16/22 at #7A7A7A; the file's string opens with
+ * a space, which is the 3.89 gap before the words.
+ *
+ * The glyph is #7A7A7A too. The cached node carries no vector paints for it,
+ * and this same vuesax glyph was drawn in that grey in the earlier top bar.
+ *
+ * Focus brightens the ring. The file draws no focus state, and a field with
+ * none cannot be found from a keyboard.
+ */
+function TopBarSearch({ className }: { className?: string }) {
+  const router = useRouter();
+  const [value, setValue] = useState("");
+  return (
+    <form
+      role="search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const q = value.trim();
+        router.push(q ? `/discover?q=${encodeURIComponent(q)}` : "/discover");
+      }}
+      className={cn(
+        "mt-[22px] flex h-[38px] min-w-0 max-w-[657px] flex-1 items-center rounded-full bg-white/[0.002] px-2 shadow-[inset_0_0_0_0.68px_rgba(255,255,255,0.4),0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] focus-within:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.75),0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)]",
+        className
+      )}
+    >
+      <IconTopSearch className="h-4 w-4 shrink-0 text-[#7A7A7A]" />
+      <input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        aria-label="Search Square"
+        placeholder="Search Gistrooms, houses, friends..."
+        autoComplete="off"
+        enterKeyHint="search"
+        className="ml-[3.89px] min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.112px] text-white outline-none placeholder:text-[#7A7A7A]"
+      />
+    </form>
   );
 }
 
@@ -1198,18 +1223,40 @@ function TopBarActions() {
         )}
       </Link>
 
-      <Link
-        href={me.data ? `/u/${me.data.username}` : "/auth"}
-        aria-label="Your profile"
-        className="ws-press flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10"
+      {/*
+        647:17442 — the avatar (34, a 20% white ring over 10% white) and the
+        file's caret 11 after it. The caret is the same exported chevron as
+        `IconCaretDown`, drawn at 8/7 of its size, which is exactly the file's
+        8 x 4 at a 2.29 stroke; the negative margin puts the GLYPH, not its
+        padded box, 11 from the avatar. The caret is what makes the avatar a
+        menu rather than a link: View profile and Log out.
+      */}
+      <RailMenu
+        label="Account"
+        align="below"
+        trigger={({ open, toggle }) => (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            aria-label={`Account menu for @${me.data?.username ?? "you"}`}
+            className="ws-press flex items-center gap-[11px]"
+          >
+            <span className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+              <Avatar
+                name={me.data?.displayName ?? "Me"}
+                seed={me.data?.id}
+                src={me.data?.avatarUrl}
+                size={32}
+              />
+            </span>
+            <IconCaretDown className="-ml-[1.14px] h-[6.86px] w-[10.29px] text-white" />
+          </button>
+        )}
       >
-        <Avatar
-          name={me.data?.displayName ?? "Me"}
-          seed={me.data?.id}
-          src={me.data?.avatarUrl}
-          size={32}
-        />
-      </Link>
+        {(close) => <AccountMenuItems close={close} />}
+      </RailMenu>
     </div>
   );
 }
@@ -1804,7 +1851,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         content frame, not a palette change.
       */}
         <div className="flex min-w-0 flex-1 flex-col bg-chrome">
-          <Breadcrumb pathname={pathname} />
+          <TopBar showBrand={!railOn} />
           {/* justify-START, not center. Centering the column+rail group inside
             the leftover width of the 1600px shell split that slack in two and
             left a dead band between the sidebar and the column — the column

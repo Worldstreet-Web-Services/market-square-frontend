@@ -771,3 +771,40 @@ describe("the group picker leaves the size rule to the service", () => {
     );
   });
 });
+
+/**
+ * THE TOP BAR IS NODE 647:17439 — "this is how the header look like".
+ *
+ * It replaced the "Ark Ecosystem / <page>" breadcrumb with the lockup, a search
+ * field and the account cluster. The search is back at ogazboiz's word ("follow
+ * the design"), after two earlier requests to remove the old link-into-Explore
+ * version, so what it does is pinned: a real field whose Enter opens Explore on
+ * that query. The avatar gained the file's caret and opens the account menu.
+ */
+describe("the top bar is node 647:17439", () => {
+  const shell = stripComments(read("components/layout/app-shell.tsx"));
+
+  it("no longer carries the breadcrumb", () => {
+    assert.doesNotMatch(shell, /Ark Ecosystem/, "the breadcrumb root is back in the chrome");
+    assert.doesNotMatch(shell, /function Breadcrumb\b/);
+  });
+
+  it("searches Explore on what was typed", () => {
+    assert.match(shell, /placeholder="Search Gistrooms, houses, friends\.\.\."/);
+    assert.match(
+      shell,
+      /router\.push\(q \? `\/discover\?q=\$\{encodeURIComponent\(q\)\}` : "\/discover"\)/,
+      "the header search no longer opens Explore on its query"
+    );
+  });
+
+  it("opens the account menu from the avatar and its caret", () => {
+    assert.match(shell, /<RailMenu\s+label="Account"\s+align="below"/);
+    assert.match(shell, /<IconCaretDown className="[^"]*"/);
+    assert.match(shell, /function AccountMenuItems/);
+  });
+
+  it("shows the lockup only while the rail is off, so there is never a second logo", () => {
+    assert.match(shell, /<TopBar showBrand=\{!railOn\} \/>/);
+  });
+});
