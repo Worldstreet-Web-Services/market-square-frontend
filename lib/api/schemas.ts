@@ -178,6 +178,17 @@ export const PostSchema = z.object({
   id: z.string(),
   authorId: z.string().optional().default(""),
   kind: z.enum(["update", "story"]).catch("update"),
+  /*
+    `active` or `removed`. Optional and defaulted, so a payload without it
+    parses as present rather than blanking the post — the same rule every
+    other late-arriving field here follows, and `catch` covers a third value
+    the service adds later.
+
+    Read by the pinned announcement, which holds a post id in CONFIG and so
+    outlives the post it names: without this a moderated-away announcement
+    would keep rendering above every timeline.
+  */
+  status: z.enum(["active", "removed"]).optional().default("active").catch("active"),
   text: z.string(),
   mediaUrl: z.string().nullable().optional().default(null),
   // The backend now types its own media. Renderers prefer this over sniffing
