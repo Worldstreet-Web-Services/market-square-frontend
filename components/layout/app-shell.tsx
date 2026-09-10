@@ -1881,7 +1881,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip border-x pt-[var(--ws-topbar-h)]",
+                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip pt-[var(--ws-topbar-h)] lg:border-r",
+                // The LEFT hairline separates the column from the SIDEBAR, so
+                // it exists only while the sidebar does. Under the dock it
+                // would cut down the line the top bar's logo starts on ("there
+                // is no vertical line border line so remove that when it is on
+                // dock... i meant in the left side"). The right one divides the
+                // column from the RAIL, so it is drawn from lg, where the rail
+                // is; below that it would be a lone line beside nothing.
+                railOn && "border-l",
                 // The foot reserves the dock's row — except over an open chat,
                 // where the dock is gone and the reservation would be a blank
                 // band under the composer. WhatsApp's rule: the field sits on

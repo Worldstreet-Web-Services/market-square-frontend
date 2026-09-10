@@ -848,3 +848,42 @@ describe("the top bar is node 647:17439", () => {
     );
   });
 });
+
+/**
+ * THE BODY UNDER THE DOCK — "there is no vertical line border line so remove
+ * that when it is on dock", and "the story... should be exactly below where
+ * that logo... so everything will be starting the same line".
+ *
+ * With the dock in charge there is no sidebar for the column's LEFT hairline to
+ * separate it from ("i meant in the left side"), so that one only belongs
+ * while the rail is mounted; the right one still divides column from rail. And the
+ * top bar's lockup starts on the column's edge, so Home's content drops its
+ * left gutter from md up to start on that same line. Phones keep the gutter
+ * (the top bar is desktop-only), and so does sidebar mode (no lockup there).
+ */
+describe("the body under the dock", () => {
+  const shell = stripComments(read("components/layout/app-shell.tsx"));
+  const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+  const css = read("app/globals.css");
+
+  it("drops the column's LEFT hairline under the dock and keeps the right one", () => {
+    // "i meant in the left side": the right hairline still divides the column
+    // from the rail; the left one would cut down the line the logo starts on.
+    const mainBase = shell.match(/"[^"]*min-h-\[calc\(var\(--ws-vvh,100dvh\)-var\(--ws-crumb-h\)\)\][^"]*"/)?.[0] ?? "";
+    assert.ok(mainBase, "could not find the column's base classes");
+    assert.doesNotMatch(mainBase, /border-x|border-l\b/, "the column's left hairline is unconditional again");
+    assert.match(mainBase, /\bws-hair\b/);
+    // The right one divides the column from the rail, which is shown from lg.
+    assert.match(mainBase, /(^|[\s"])lg:border-r\b/, "the hairline between the column and the rail is gone, or drawn where there is no rail");
+    assert.match(shell, /railOn && "border-l"/);
+  });
+
+  it("starts Home's content on the logo's line while the dock is on", () => {
+    assert.match(feed, /className="ws-align-logo relative px-4 py-4 lg:px-6"/);
+    assert.match(
+      css,
+      /@media \(min-width: 48rem\) \{\s*\[data-rail="off"\] \.ws-align-logo \{\s*padding-left: 0;/,
+      "Home's content no longer drops its left gutter under the dock"
+    );
+  });
+});

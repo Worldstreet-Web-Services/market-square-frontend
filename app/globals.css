@@ -935,6 +935,25 @@ body {
   }
 }
 
+/*
+  HOME STARTS ON THE LOGO'S LINE WHILE THE DOCK IS ON.
+
+  The top bar's lockup starts on the column's edge (see `TopBar`), so under
+  the dock Home drops its left gutter and the stories, the tab row and every
+  card below start exactly beneath the logo — "so everything will be starting
+  the same line". From md up only: below md the top bar is not drawn and the
+  phone keeps its gutter. Not in sidebar mode either, where the bar has no
+  lockup to line up with.
+
+  A selector rather than a utility so it wins over the wrapper's `lg:px-6`
+  whatever order the utilities land in.
+*/
+@media (min-width: 48rem) {
+  [data-rail="off"] .ws-align-logo {
+    padding-left: 0;
+  }
+}
+
 @utility ws-btn-fab {
   background: linear-gradient(
     250.02deg,

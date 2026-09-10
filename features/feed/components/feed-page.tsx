@@ -304,7 +304,9 @@ export function FeedPage({
       {/* The ground is `#0F0F0F` and belongs to the shell's pane, not to this
           column — see AppShell. Painting it here left a seam beside the right
           rail. */}
-      <div className="relative px-4 py-4 lg:px-6">
+      {/* `ws-align-logo`: under the dock, from md up, the left gutter goes so
+          the stories start on the top bar lockup's line — see globals.css. */}
+      <div className="ws-align-logo relative px-4 py-4 lg:px-6">
         {/*
           HOME STARTS AT THE STORIES — node 225:3315.
 
