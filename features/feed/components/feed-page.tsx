@@ -148,6 +148,7 @@ export function FeedPage({
   tipSlot,
   topicTabs = [],
   roomsSlot,
+  liveCtaSlot,
   friendsSlot,
   communitySlot,
   palsSlot,
@@ -171,6 +172,11 @@ export function FeedPage({
    * community grid (258:5545).
    */
   roomsSlot?: React.ReactNode;
+  /**
+   * The Go Live banner (647:17219), from the streams slice, directly under the
+   * topic row. Absent for signed-out readers; see HomeScreen.
+   */
+  liveCtaSlot?: React.ReactNode;
   friendsSlot?: React.ReactNode;
   communitySlot?: React.ReactNode;
   /** The pals rail (540:19351), dropped a few posts into the timeline. */
@@ -389,6 +395,11 @@ export function FeedPage({
             onSelect={(key) => setTopic(key)}
           />
         </div>
+
+        {/* NODE 647:17219 — the Go Live banner: 34 below the topic row's block
+            (its 16px margin collapses into this) and 60 above what follows,
+            the file's own gaps. */}
+        {liveCtaSlot && <div className="mb-[60px] mt-[34px]">{liveCtaSlot}</div>}
 
         {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
             A room happening now beats a subject being discussed, and both beat

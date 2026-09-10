@@ -923,3 +923,43 @@ describe("Home's topic row is node 647:16266", () => {
     assert.doesNotMatch(tabs, /201deg/, "the unit-square angle is back");
   });
 });
+
+/**
+ * HOME'S GO LIVE BANNER IS NODE 647:17219 — the live file, updated 2026-09-10.
+ *
+ * The file draws it 938 x 168 directly under the topic row. The column is 600,
+ * so from md up the banner keeps the file's composition and scales as ONE
+ * picture to the width it is given (every length a share of 938, via container
+ * units), rather than reflowing a two-line headline around a 138px figure.
+ * Phones keep the compact strip: no mobile frame was given.
+ */
+describe("Home's Go Live banner is node 647:17219", () => {
+  const cta = stripComments(read("features/streams/components/live-cta.tsx"));
+  const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+  const home = stripComments(read("components/layout/home-screen.tsx"));
+
+  it("draws the file's 938 x 168 artboard, scaled as one picture from md", () => {
+    assert.match(cta, /const DESIGN_W = 938;/);
+    assert.match(cta, /const DESIGN_H = 168;/);
+    assert.match(cta, /@container/, "the banner no longer scales against its own width");
+    assert.match(cta, /hidden md:block/);
+  });
+
+  it("paints the gradient in pixel space, not the unit square", () => {
+    assert.match(cta, /bg-\[linear-gradient\(92deg,#AD46FF_-16\.3%,#682A99_82%\)\]/);
+  });
+
+  it("places the two soft-light strokes from the file's path geometry", () => {
+    assert.match(cta, /mixBlendMode: "soft-light"/);
+    assert.match(cta, /transform="matrix\(1 0 0 1 -41 -92\)"/);
+    assert.match(cta, /transform="matrix\(-1 0 0 -1 992 275\.203125\)"/);
+  });
+
+  it("sits on Home right under the topic row, for signed-in readers only", () => {
+    assert.match(home, /liveCtaSlot=\{authenticated \? <LiveCta \/> : null\}/);
+    const tabs = feed.indexOf("<TopicTabs");
+    const banner = feed.indexOf("{liveCtaSlot && ");
+    const rooms = feed.indexOf("{roomsSlot && ");
+    assert.ok(tabs > 0 && banner > tabs && rooms > banner, "the banner is not between the topic row and the rooms");
+  });
+});
