@@ -159,3 +159,19 @@ export function friendsMomentCopy(moment: FriendsMoment, name: string): FriendsM
       };
   }
 }
+
+/**
+ * The buttons' words for a moment's copy. Shared by the popup and the saved
+ * card (`lib/wink-card`), so the picture can never label a button differently
+ * from the one on screen.
+ */
+export function friendsMomentLabels(
+  copy: FriendsMomentCopy,
+  name: string
+): { primary: string; secondary: string | null } {
+  const primary =
+    copy.primary === "start-gisting" ? "Start gisting" : copy.primary === "wink-back" ? "Wink back" : "Follow back";
+  const secondary =
+    copy.secondary === "wink" ? `Wink at ${name}` : copy.secondary === "start-gisting" ? "Start gisting" : null;
+  return { primary, secondary };
+}

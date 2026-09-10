@@ -9,6 +9,7 @@
 // is from the identity on their room token, and never holds the whole object.
 
 import { useEffect } from "react";
+import { isListeningHouseMember } from "@/lib/house-presence";
 import { GRID_CELLS, HouseRoom, RoomPeopleSection, type RoomPerson } from "@/features/houses";
 import { useConversationMembers, useJoinGroup } from "@/features/messages";
 import { PersonQuickActions as QuickActions } from "@/features/profile";
@@ -43,6 +44,7 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
         <HouseMembers
           conversationId={conversationId}
           speakerIds={stage.speakerIds}
+          presentIds={stage.presentIds}
           onRoster={stage.onRoster}
           onViewAll={stage.onViewAll}
         />
@@ -62,6 +64,16 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
  * not be in the room, and somebody in the room may not be a member. The old
  * design had one ring and nowhere to say that.
  *
+ * IT SHOWS ONLY MEMBERS WHO ARE HERE. It drew the house's whole roster, so a
+ * member who never joined sat in the grid exactly like one in the room — and
+ * a small room inside a big house showed the big house. The rule is ogazboiz's:
+ * a house member appears when they JOIN. `presentIds` is who is connected;
+ * the decision is `isListeningHouseMember`, pure and pinned in its tests.
+ *
+ * The ROSTER reported up through `onRoster` is still the WHOLE house, and has
+ * to be: the Audience excludes every house member, present or not, so that a
+ * member who is here is drawn once — under House Members — and never twice.
+ *
  * IT EXCLUDES WHOEVER IS ON STAGE. The room draws three sections and a person
  * belongs to exactly one of them — the host was appearing under Speakers AND
  * under House Members, which reads as two different people with the same face.
@@ -77,11 +89,13 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
 function HouseMembers({
   conversationId,
   speakerIds,
+  presentIds,
   onRoster,
   onViewAll,
 }: {
   conversationId: string;
   speakerIds: ReadonlySet<string>;
+  presentIds: ReadonlySet<string>;
   onRoster: (ids: ReadonlySet<string>) => void;
   /** Hands the whole roster up so the ROOM can open it over the chat column. */
   onViewAll: (title: string, people: RoomPerson[]) => void;
@@ -99,7 +113,7 @@ function HouseMembers({
   // A member whose profile did not come back is DROPPED rather than drawn as
   // a blank tile: the membership is the record, the profile is the display.
   const people = (items ?? []).flatMap((member) =>
-    member.profile && !speakerIds.has(member.profile.id)
+    member.profile && isListeningHouseMember(member.profile.id, presentIds, speakerIds)
       ? [
           {
             id: member.profile.id,
@@ -128,7 +142,7 @@ function HouseMembers({
           ? () => onViewAll("House Members", people)
           : undefined
       }
-      empty="Everyone in this house is on the stage."
+      empty="No members of this house are listening yet."
     />
   );
 }

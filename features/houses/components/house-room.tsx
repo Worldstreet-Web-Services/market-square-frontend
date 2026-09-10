@@ -124,6 +124,12 @@ interface SlotProps {
        */
       speakerIds: ReadonlySet<string>;
       /**
+       * User ids CONNECTED to the room and listening. House Members shows only
+       * the members in this set: belonging to the house is not being here, and
+       * a roster drawn as if it were put absent members in the room.
+       */
+      presentIds: ReadonlySet<string>;
+      /**
        * Reports the roster's profile ids back to the room, which is what lets
        * the AUDIENCE stay external — the people listening who are not members
        * of this house. Without it a member who is listening appears twice.
@@ -577,9 +583,33 @@ function LiveHouse({
     });
   }, [roster]);
 
+  /*
+    WHO IS ACTUALLY IN THE ROOM, off the stage.
+
+    House Members used to be the house's whole ROSTER, so a member asleep in
+    another city was drawn as a tile in this room exactly like one sitting in
+    it. A 2-person room inside a 40-member house showed 40 faces. ogazboiz's
+    rule: a house member appears here when they JOIN, not because they belong.
+
+    `useAudience` is everyone connected without a publish grant, local
+    participant included, keyed on the bare user id. Speakers are in
+    `speakerIds` and excluded from House Members anyway, so this set is the
+    whole of "present and listening". It moved above the slot call because the
+    slot now needs it; hook order is unchanged from render to render.
+
+    Stable: `useAudience` only swaps its array when membership changes, so this
+    set does not churn on every render.
+  */
+  const audience = useAudience(room);
+  const presentIds = useMemo(
+    () => new Set(audience.map((member) => member.userId)),
+    [audience]
+  );
+
   const houseMembers = stream.houseConversationId
     ? (houseSlot?.(stream.houseConversationId, {
         speakerIds,
+        presentIds,
         onRoster: setHouseMemberIds,
         onViewAll: openRoster,
       }) ?? null)
@@ -587,7 +617,6 @@ function LiveHouse({
 
   const seating = useMemo(() => buildSeating(slots), [slots]);
   const audio = useHouseAudio(room);
-  const audience = useAudience(room);
 
   const full = seatsFull(seating);
 
@@ -1072,20 +1101,19 @@ function LiveHouse({
         topic={houseTopic(stream)}
         house={house?.title}
         meta={
-          // The file's line is the HOUSE's partner count. A room with no house
-          // has no partners to count, so it falls back to what it does know:
-          // who is actually in the room right now.
-          (house && house.memberCount !== null ? (
-            <>
-              <span className="tnum">{house.memberCount}</span> gist{" "}
-              {house.memberCount === 1 ? "partner" : "partners"}
-            </>
-          ) : null) ?? (
-            <>
-              <span className="tnum">{listening}</span> listening ·{" "}
-              <span className="tnum">{speaking}</span> speaking
-            </>
-          )
+          /*
+            WHO IS IN THE ROOM, always — not how big the house is.
+
+            The file's line was the HOUSE's partner count, so a 2-person room
+            inside a 40-member house read "40 gist partners" in the room's own
+            header: the same presence-blind claim as the roster grid, made in
+            larger type. The house is still named beside this; its size is a
+            fact about the house, and this line describes the room.
+          */
+          <>
+            <span className="tnum">{listening}</span> listening ·{" "}
+            <span className="tnum">{speaking}</span> speaking
+          </>
         }
         /*
           THIS file confirms, not the header. Both paths open the sheet below,
