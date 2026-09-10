@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useTrackNavHistory } from "@/lib/nav-history";
 import {
@@ -38,7 +38,7 @@ import {
   IconSbLibrary,
   IconSbLive,
 } from "@/components/ui/sidebar-icons";
-import { IconCaretDown, IconTopSearch } from "@/components/ui/topbar-icons";
+import { IconTopBell, IconTopCaret } from "@/components/ui/topbar-icons";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { FriendsPopup } from "@/components/layout/friends-popup";
 import { RightRail } from "@/components/layout/right-rail";
@@ -1050,95 +1050,63 @@ export function Sidebar({
 }
 
 /**
- * THE TOP BAR — node 647:17439 ("this is how the header look like").
+ * THE TOP BAR — node 647:17439, read from the live file (updated 2026-09-10
+ * 21:10) and checked against its render.
  *
- * 1438 x 76 on `#121214`, a 10% hairline underneath and a background blur, and
- * three things on it:
- *   · THE LOCKUP, in a 224-wide cell 54 in from the left, the mark at the
- *     file's 44.6 and centred on the bar. Only while the rail is unmounted:
- *     the rail carries its own lockup, and two logos is one too many.
- *   · THE SEARCH FIELD, 22 after the cell: 657 x 38 at the file's top of 22,
- *     a few pixels under the cluster's centre line, kept as drawn.
- *   · THE BELL, THE AVATAR AND A CARET, 11 apart and 67 in from the right.
+ * 76 tall on `#121214` under a background blur: the lockup on the left (only
+ * while the rail is unmounted — the rail carries its own, and two logos is one
+ * too many) and the cluster on the right, top at 19 — the bell, 11, then the
+ * avatar pill.
  *
- * It REPLACED the breadcrumb that named the ecosystem and the page; the design
- * no longer names the page in the chrome.
+ * ITS EDGES ARE THE CONTENT'S, NOT THE FRAME'S. The file insets the lockup 54
+ * and the cluster 44 from a 1438 artboard; on this capped, centred layout that
+ * left both hanging well past the column and the rail beneath ("it look as if
+ * the header is wider than the content"). So the bar's content is exactly as
+ * wide as that group and centred the same way: the 600 column, plus the
+ * 371 rail from lg with the rail's own 24 of right padding. The logo starts on
+ * the column's edge and the cluster ends on the rail cards' edge. A WIDE route
+ * has no column cap and no rail, so there the bar just keeps 24 either side.
  *
- * THE SEARCH IS BACK because the design has it and ogazboiz said to follow
- * the design, after twice asking for the older version — a link into Explore
- * dressed as a field — to be removed. This one is a real field: Enter opens
- * Explore on the query (`/discover?q=`), which Explore already reads as its
- * seed.
+ * NO SEARCH. A build from a cached copy of this node (2026-09-08) put a field
+ * here; the live node has none, which is also what ogazboiz asked for twice.
+ *
+ * THE HAIRLINE RUNS THE WHOLE WINDOW — "the border line should full the
+ * screen for point A to point B". It is the file's 10% bottom stroke drawn as
+ * a 1px line 200vw wide centred on the bar, so however far the frame sits from
+ * either edge the line reaches both; the shell wrapper clips horizontal
+ * overflow so that width never turns into a scrollbar.
  */
-function TopBar({ showBrand }: { showBrand: boolean }) {
+function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
   return (
     <div
       className={cn(
-        "ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-start border-b bg-chrome backdrop-blur-[6px] md:flex",
-        showBrand ? "pl-[54px] pr-[67px]" : "px-6"
+        "sticky top-0 z-30 hidden h-[76px] shrink-0 items-start bg-chrome backdrop-blur-[6px] md:flex",
+        "after:pointer-events-none after:absolute after:bottom-0 after:left-1/2 after:h-px after:w-[200vw] after:-translate-x-1/2 after:bg-white/10",
+        (!showBrand || wide) && "px-6"
       )}
     >
-      {showBrand && (
-        <Link
-          href="/"
-          aria-label="Square home"
-          title="Square"
-          className="ws-press flex h-[76px] w-[224px] shrink-0 items-center justify-center"
-        >
-          <BrandLockup className="flex" />
-        </Link>
-      )}
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 items-start",
+          showBrand && !wide && "mx-auto max-w-[600px] lg:max-w-[971px] lg:pr-6"
+        )}
+      >
+        {showBrand && (
+          <Link
+            href="/"
+            aria-label="Square home"
+            title="Square"
+            className="ws-press flex h-[76px] shrink-0 items-center"
+          >
+            <BrandLockup className="flex" />
+          </Link>
+        )}
 
-      <TopBarSearch className={showBrand ? "ml-[22px]" : undefined} />
-
-      <div className="ml-auto flex h-[76px] shrink-0 items-center pl-6">
-        <TopBarActions />
+        <div className="ml-auto flex shrink-0 items-start pl-6 pt-[19px]">
+          <TopBarActions />
+        </div>
       </div>
     </div>
-  );
-}
-
-/**
- * 647:17479 — the field. 657 x 38 at most and shrinking with the window, a
- * full pill, 8 either side, the file's 0.68px ring at 40% white drawn INSIDE
- * (an inset shadow: a fractional border rounds to a whole pixel), its 0.2%
- * fill and both of its soft drop shadows. The 16px vuesax glyph, then the
- * placeholder in Geist Medium 16/22 at #7A7A7A; the file's string opens with
- * a space, which is the 3.89 gap before the words.
- *
- * The glyph is #7A7A7A too. The cached node carries no vector paints for it,
- * and this same vuesax glyph was drawn in that grey in the earlier top bar.
- *
- * Focus brightens the ring. The file draws no focus state, and a field with
- * none cannot be found from a keyboard.
- */
-function TopBarSearch({ className }: { className?: string }) {
-  const router = useRouter();
-  const [value, setValue] = useState("");
-  return (
-    <form
-      role="search"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const q = value.trim();
-        router.push(q ? `/discover?q=${encodeURIComponent(q)}` : "/discover");
-      }}
-      className={cn(
-        "mt-[22px] flex h-[38px] min-w-0 max-w-[657px] flex-1 items-center rounded-full bg-white/[0.002] px-2 shadow-[inset_0_0_0_0.68px_rgba(255,255,255,0.4),0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] focus-within:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.75),0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)]",
-        className
-      )}
-    >
-      <IconTopSearch className="h-4 w-4 shrink-0 text-[#7A7A7A]" />
-      <input
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        aria-label="Search Square"
-        placeholder="Search Gistrooms, houses, friends..."
-        autoComplete="off"
-        enterKeyHint="search"
-        className="ml-[3.89px] min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.112px] text-white outline-none placeholder:text-[#7A7A7A]"
-      />
-    </form>
   );
 }
 
@@ -1201,6 +1169,16 @@ function TopBarActions() {
 
   return (
     <div className="flex shrink-0 items-center gap-[11px]">
+      {/*
+        647:17443 — the bell: 38, round, and the file's GLASS effect. The API
+        does not publish GLASS's parameters (the node's own fill and stroke
+        are hidden), so it is matched to the file's render, sampled at 4x: a
+        body that darkens toward the top-left and lightens toward the
+        bottom-right about the bar's own #121214, and a 1px rim that catches
+        the light at the top-left (~64% white) and bottom-right (~54%) and
+        fades to nothing on the other diagonal (`ws-glass-rim`). The glyph is
+        the exported vuesax bell at the file's #DCDCDC.
+      */}
       <Link
         href="/notifications"
         aria-label={
@@ -1208,28 +1186,34 @@ function TopBarActions() {
             ? `Notifications, ${notifications} unread`
             : "Notifications"
         }
-        // GLASS in the file: a translucent fill over the blurred bar rather
-        // than a flat chip.
-        className="ws-press relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-body backdrop-blur-[6px] transition-colors hover:bg-white/12 hover:text-white"
+        className="ws-press ws-glass-rim relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[linear-gradient(135deg,#0A0A0C_0%,#121214_50%,#1A1A1C_100%)] text-[#DCDCDC] transition-colors hover:text-white"
       >
-        <IconBell className="h-6 w-6" />
+        <IconTopBell className="h-6 w-6" />
         {notifications > 0 && (
-          /* 7px, ringed in #F4F4F4 over the bar's own #0F0F0F — a ring, not a
-             filled dot, which is what keeps it legible against the glyph. */
+          /*
+            647:18433 — 9 x 9 at (20.24, 9) on the button, #9F5AFF inside a 1px
+            #0D0D0F ring, the count in white. The file draws "6"; this shows
+            the real number, and past 9 it reads "9+" and grows sideways rather
+            than shrinking the type below legibility.
+          */
           <span
             aria-hidden
-            className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full border-2 border-[#F4F4F4] bg-chrome"
-          />
+            className="absolute left-[20.24px] top-[9px] flex h-[9px] min-w-[9px] items-center justify-center rounded-full bg-[#9F5AFF] px-[1.5px] text-[6px] font-semibold leading-none text-white ring-1 ring-inset ring-[#0D0D0F]"
+          >
+            {notifications > 9 ? "9+" : notifications}
+          </span>
         )}
       </Link>
 
       {/*
-        647:17442 — the avatar (34, a 20% white ring over 10% white) and the
-        file's caret 11 after it. The caret is the same exported chevron as
-        `IconCaretDown`, drawn at 8/7 of its size, which is exactly the file's
-        8 x 4 at a 2.29 stroke; the negative margin puts the GLYPH, not its
-        padded box, 11 from the avatar. The caret is what makes the avatar a
-        menu rather than a link: View profile and Log out.
+        946:15827 — ONE pill holding the avatar and the caret: 7% white, radius
+        36, padding 3 / 8 / 3 / 3, the avatar (34, a 20% white ring over 10%
+        white) and the exported caret 23 after it. The caret is laid out as the
+        file's 8 x 4 and its 11 x 7 export overflows that box by the stroke;
+        a 1px pull, not the arithmetic 1.5, is what lands it on the file's
+        render (measured: 1.5 left it half a pixel up and left).
+        The whole pill opens the account menu: View profile and Log out. The
+        hover tint is not in the file; a control with no hover reads as dead.
       */}
       <RailMenu
         label="Account"
@@ -1241,7 +1225,7 @@ function TopBarActions() {
             aria-expanded={open}
             aria-haspopup="menu"
             aria-label={`Account menu for @${me.data?.username ?? "you"}`}
-            className="ws-press flex items-center gap-[11px]"
+            className="ws-press flex items-center gap-[23px] rounded-[36px] bg-white/[0.07] py-[3px] pl-[3px] pr-2 transition-colors hover:bg-white/[0.11]"
           >
             <span className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
               <Avatar
@@ -1251,7 +1235,9 @@ function TopBarActions() {
                 size={32}
               />
             </span>
-            <IconCaretDown className="-ml-[1.14px] h-[6.86px] w-[10.29px] text-white" />
+            <span className="relative h-[4px] w-[8px] shrink-0 text-white">
+              <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
+            </span>
           </button>
         )}
       >
@@ -1731,7 +1717,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     /* `data-rail` tells the STYLESHEET whether a dock is on screen, so
        `--ws-nav-h` can be 0 where there is none — see globals.css. Every
        consumer of that variable then agrees without knowing about the rail. */
-    <div className="min-h-dvh w-full bg-chrome" data-rail={railOn ? "on" : "off"}>
+    <div className="min-h-dvh w-full overflow-x-clip bg-chrome" data-rail={railOn ? "on" : "off"}>
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*
         GUESTS GET NO SIDEBAR.
@@ -1851,7 +1837,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         content frame, not a palette change.
       */}
         <div className="flex min-w-0 flex-1 flex-col bg-chrome">
-          <TopBar showBrand={!railOn} />
+          <TopBar showBrand={!railOn} wide={wide} />
           {/* justify-START, not center. Centering the column+rail group inside
             the leftover width of the 1600px shell split that slack in two and
             left a dead band between the sidebar and the column — the column

@@ -1456,6 +1456,37 @@ body {
   background: linear-gradient(97deg, #ac6803 0%, #f7d535 32.5%, #ad6803 100%);
 }
 
+/* The top bar bell's GLASS rim — node 647:17443, see TopBarActions. Figma's
+   API does not publish GLASS's parameters, so this is matched to the file's
+   render: a 1px ring brightest at the top-left and bottom-right, gone on the
+   other diagonal. Drawn as a masked ring so it follows the circle exactly. */
+@utility ws-glass-rim {
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.21) 0deg,
+      rgba(255, 255, 255, 0) 45deg,
+      rgba(255, 255, 255, 0.31) 90deg,
+      rgba(255, 255, 255, 0.54) 135deg,
+      rgba(255, 255, 255, 0.31) 180deg,
+      rgba(255, 255, 255, 0) 225deg,
+      rgba(255, 255, 255, 0.21) 270deg,
+      rgba(255, 255, 255, 0.64) 315deg,
+      rgba(255, 255, 255, 0.21) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+}
+
 @utility ws-btn-welcome {
   background: linear-gradient(90deg, var(--color-create) 0%, var(--color-create-deep) 100%);
   color: #ffffff;

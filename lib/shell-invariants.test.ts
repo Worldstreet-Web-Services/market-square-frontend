@@ -773,38 +773,78 @@ describe("the group picker leaves the size rule to the service", () => {
 });
 
 /**
- * THE TOP BAR IS NODE 647:17439 — "this is how the header look like".
+ * THE TOP BAR IS NODE 647:17439 — the live file, updated 2026-09-10 21:10.
  *
- * It replaced the "Ark Ecosystem / <page>" breadcrumb with the lockup, a search
- * field and the account cluster. The search is back at ogazboiz's word ("follow
- * the design"), after two earlier requests to remove the old link-into-Explore
- * version, so what it does is pinned: a real field whose Enter opens Explore on
- * that query. The avatar gained the file's caret and opens the account menu.
+ * It replaced the "Ark Ecosystem / <page>" breadcrumb with the lockup and the
+ * account cluster. An earlier build added a search field from a cached copy
+ * of this node dated 2026-09-08; the live node has NO search, which matches
+ * ogazboiz's two earlier requests to keep search out of the chrome, so its
+ * absence is pinned. So are the parts the file adds: the purple count badge on
+ * the bell, the avatar and caret inside one 7%-white pill, and a bottom
+ * hairline that runs the whole window while the bar itself stays capped
+ * ("the border line should full the screen for point A to point B").
  */
 describe("the top bar is node 647:17439", () => {
   const shell = stripComments(read("components/layout/app-shell.tsx"));
+  const bar = shell.slice(shell.indexOf("function TopBar("), shell.indexOf("function TopBarActions"));
+  const actions = shell.slice(shell.indexOf("function TopBarActions"), shell.indexOf("export function MobileBar"));
 
   it("no longer carries the breadcrumb", () => {
     assert.doesNotMatch(shell, /Ark Ecosystem/, "the breadcrumb root is back in the chrome");
     assert.doesNotMatch(shell, /function Breadcrumb\b/);
   });
 
-  it("searches Explore on what was typed", () => {
-    assert.match(shell, /placeholder="Search Gistrooms, houses, friends\.\.\."/);
+  it("carries no search field, as the live node has none", () => {
+    assert.doesNotMatch(bar, /role="search"|placeholder=/, "a search field is back in the top bar");
+    assert.doesNotMatch(shell, /function TopBarSearch\b/);
+  });
+
+  it("draws the bottom hairline across the whole window, not just the capped frame", () => {
+    assert.match(bar, /after:w-\[200vw\]/, "the hairline stops at the frame's edges again");
     assert.match(
       shell,
-      /router\.push\(q \? `\/discover\?q=\$\{encodeURIComponent\(q\)\}` : "\/discover"\)/,
-      "the header search no longer opens Explore on its query"
+      /min-h-dvh w-full overflow-x-clip bg-chrome/,
+      "the wrapper stopped clipping the wide hairline, which would add a horizontal scrollbar"
     );
   });
 
-  it("opens the account menu from the avatar and its caret", () => {
+  it("puts the unread COUNT on the bell in the file's purple badge", () => {
+    assert.match(actions, /<IconTopBell /);
+    assert.match(actions, /bg-\[#9F5AFF\]/, "the badge lost the file's #9F5AFF");
+    assert.match(actions, /notifications > 9 \? "9\+" : notifications/, "the badge no longer shows the count");
+  });
+
+  it("opens the account menu from one pill holding the avatar and caret", () => {
     assert.match(shell, /<RailMenu\s+label="Account"\s+align="below"/);
-    assert.match(shell, /<IconCaretDown className="[^"]*"/);
+    assert.match(actions, /gap-\[23px\] rounded-\[36px\] bg-white\/\[0\.07\]/, "the avatar pill lost the file's geometry");
+    assert.match(actions, /<IconTopCaret /);
     assert.match(shell, /function AccountMenuItems/);
   });
 
   it("shows the lockup only while the rail is off, so there is never a second logo", () => {
-    assert.match(shell, /<TopBar showBrand=\{!railOn\} \/>/);
+    assert.match(shell, /<TopBar showBrand=\{!railOn\} wide=\{wide\} \/>/);
+  });
+
+  it("lines its edges up with the content under it", () => {
+    /*
+      "it look as if the header is wider than the content". The design insets
+      the lockup 54 and the cluster 44 from a 1438 frame, which on the app's
+      capped, centred layout left both hanging past the column and the rail.
+      The bar's content now takes the SAME width as that group — the 600
+      column, plus the rail's width from lg — with the rail's own right padding,
+      so the logo starts on the column's edge and the cluster ends on the rail
+      cards' edge. Read from the rail rather than restated, so the two cannot
+      drift.
+    */
+    const rail = read("components/layout/right-rail.tsx");
+    const aside = rail.match(/<aside className="([^"]*)"/)?.[1] ?? "";
+    const railWidth = Number(aside.match(/\bw-\[(\d+)px\]/)?.[1] ?? 0);
+    assert.ok(railWidth > 0, "could not read the right rail's width");
+    assert.match(aside, /\bpr-6\b/, "the rail's right padding changed; the bar mirrors it");
+    assert.match(shell, /!wide && "max-w-\[600px\]"/, "the column is no longer 600 wide");
+    assert.ok(
+      bar.includes(`mx-auto max-w-[600px] lg:max-w-[${600 + railWidth}px] lg:pr-6`),
+      `the bar's content is not the column (600) plus the rail (${railWidth}) wide`
+    );
   });
 });
