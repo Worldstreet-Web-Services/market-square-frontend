@@ -14,6 +14,7 @@ import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
+import { Announcement } from "@/features/feed/components/announcement";
 import { ReelsFeed } from "@/features/feed/components/reels-feed";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import { isVideoPost } from "@/lib/media";
@@ -359,6 +360,11 @@ export function FeedPage({
               action={<LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />}
             />
           )}
+          {/* Above everything the lane returns, and only on the default lane:
+              an announcement pinned over "Following" or "Trending" would be
+              claiming to be part of a selection the reader deliberately made.
+              Renders nothing at all when none is configured. */}
+          {lane === "for-you" && <Announcement followSlot={followSlot} />}
           {items.map((item) => (
             <div key={item.id} className="ws-enter">
               <FeedItemCard
