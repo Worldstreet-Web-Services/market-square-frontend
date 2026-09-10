@@ -206,3 +206,71 @@ describe("features/houses uses design tokens, never raw colour", () => {
     }
   });
 });
+
+/**
+ * TWO RULES ABOUT LEAVING AND ABOUT WHO IS IN THE ROOM.
+ *
+ * Both were reported from a real device, and both were deliberate code doing
+ * the wrong thing rather than an oversight — which is why they are pinned
+ * here rather than left to review.
+ */
+describe("a gist room asks before it lets you out", () => {
+  /* Comments STRIPPED before matching. The note above the fix names the flag
+     it removed — as it should, so the next reader knows what was wrong — and
+     matching prose would fail the guard on its own explanation. */
+  const room = readFileSync(
+    new URL("../features/houses/components/house-room.tsx", import.meta.url),
+    "utf8"
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  it("has no once-only confirmation flag", () => {
+    /*
+      `ms:house:leave-seen` was written after the first confirmation, and from
+      then on a single tap dropped the reader out with no dialog at all —
+      permanently, on that device, for every room. The control is a small red
+      disc on a phone precisely because it is easy to catch by accident, and a
+      "seen it once" flag turns the second accident into a silent exit.
+    */
+    assert.doesNotMatch(room, /leave-seen/, "the once-only leave flag is back");
+    assert.doesNotMatch(
+      room,
+      /localStorage[\s\S]{0,80}LEAVE_SEEN/,
+      "leaving is being remembered as dismissed again"
+    );
+  });
+
+  it("confirms in the room, not in the header", () => {
+    // The room knows whether the reader is the HOST — leaving closes it for
+    // everybody — and writes copy that says so. The header cannot, so its
+    // generic dialog is off rather than stacked in front of this one.
+    assert.match(room, /confirmBeforeLeave=\{false\}/, "the header double-asks again");
+    assert.match(room, /const leave = useCallback\(\(\) => setConfirmLeave\(true\), \[\]\)/);
+  });
+});
+
+describe("a room opened from a house belongs to that house", () => {
+  const sheet = readFileSync(
+    new URL("../features/houses/components/open-house-sheet.tsx", import.meta.url),
+    "utf8"
+  );
+
+  it("defaults to private when there is a house to be private to", () => {
+    /*
+      It defaulted to public everywhere, so a room created inside a house was
+      walk-in-able by anybody on the platform and those walk-ins appeared in
+      the Audience grid beside the house's own members — "everyone is in the
+      room even though they are not in the house".
+
+      Opened from the street there is no house, the Private option is disabled,
+      and public stays the only thing it can be. So this changes only the rooms
+      that always had somewhere to belong.
+    */
+    assert.match(
+      sheet,
+      /useState<"public" \| "private">\(\s*houseConversationId \? "private" : "public"\s*\)/,
+      "a room opened inside a house is public by default again"
+    );
+  });
+});

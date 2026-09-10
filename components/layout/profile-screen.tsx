@@ -39,7 +39,19 @@ function MessageButton({ profile }: { profile: Profile }) {
       aria-label={`Message ${profile.displayName || profile.username}`}
       title="Message"
       disabled={open.isPending}
-      onClick={() => open.mutate(profile.id, { onSuccess: () => router.push("/messages") })}
+      /*
+        Navigate to the THREAD, not to the inbox. `POST /conversations` is
+        idempotent and answers with the conversation either way, so pressing
+        Message on somebody you already have a thread with lands on it rather
+        than creating a second one. Sending the reader to `/messages` bare —
+        which is what this did — showed them a list and left them to find the
+        person they had just pressed the button on.
+      */
+      onClick={() =>
+        open.mutate(profile.id, {
+          onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
+        })
+      }
       className="ws-glass-clear ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-50"
     >
       <IconProfileSms className="h-4 w-4" />

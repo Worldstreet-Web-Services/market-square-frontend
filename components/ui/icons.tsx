@@ -343,6 +343,20 @@ export function IconShare({ className }: IconProps) {
   );
 }
 
+/**
+ * Save it to the device — the same tray `IconShare` draws, with the arrow
+ * turned round. Share sends it out, download brings it down; drawing them as
+ * one shape flipped is what makes the pair read as a pair.
+ */
+export function IconDownload({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M12 4v11M12 15l-3.5-3.5M12 15l3.5-3.5" />
+      <path d="M5 13v5.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V13" />
+    </svg>
+  );
+}
+
 export function IconStats({ className }: IconProps) {
   return (
     <svg {...base(className)}>

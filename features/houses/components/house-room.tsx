@@ -804,7 +804,6 @@ function LiveHouse({
   }, [pendingMine]);
 
   const [confirmLeave, setConfirmLeave] = useState(false);
-  const LEAVE_SEEN = "ms:house:leave-seen";
 
   // Read out of `mine.data` up here rather than inside the callback: the
   // compiler infers the whole object as the dependency otherwise, which does
@@ -819,19 +818,22 @@ function LiveHouse({
     router.push("/gist-rooms");
   }, [isHost, myRequestId, resolve, router]);
 
-  const leave = useCallback(() => {
-    let seen = false;
-    try {
-      seen = localStorage.getItem(LEAVE_SEEN) === "1";
-    } catch {
-      seen = false;
-    }
-    if (seen) {
-      leaveNow();
-      return;
-    }
-    setConfirmLeave(true);
-  }, [leaveNow]);
+  /*
+    LEAVING ALWAYS ASKS. It used to ask ONCE: a `ms:house:leave-seen` flag was
+    written after the first confirmation and, from then on, a single tap
+    dropped the reader out of the room with no dialog at all — permanently, on
+    that device, for every room they ever entered again.
+
+    That is what ogazboiz hit. The very reason the control is becoming a small
+    red disc on a phone is that it is easy to catch by accident, and a "you
+    have seen this once" flag turns the second accident into a silent exit. A
+    confirmation is not a tutorial to be dismissed; it guards an action that
+    cannot be undone from inside the room.
+
+    Cheap to keep: one tap on Leave or Stay. The flag and its key are deleted
+    rather than left unread, so nothing can start honouring them again.
+  */
+  const leave = useCallback(() => setConfirmLeave(true), []);
 
   const endHouse = useEndStream();
 
@@ -1085,6 +1087,14 @@ function LiveHouse({
             </>
           )
         }
+        /*
+          THIS file confirms, not the header. Both paths open the sheet below,
+          whose copy knows whether the reader is the HOST — closing the room
+          for everybody — or a guest leaving quietly. The header cannot know
+          that, so its own generic dialog is switched off rather than stacked
+          in front of this one.
+        */
+        confirmBeforeLeave={false}
         onLeave={isHost ? () => setConfirmLeave(true) : leave}
         // The file's row 2 has two circles, not three. The overflow sheet the
         // third one opened is this one — both room links and the keyboard
@@ -1491,11 +1501,6 @@ function LiveHouse({
               if (isHost) {
                 endHouse.mutate(stream.id, { onSuccess: () => router.push("/gist-rooms") });
                 return;
-              }
-              try {
-                localStorage.setItem(LEAVE_SEEN, "1");
-              } catch {
-                // Asking again next time is a smaller cost than not leaving.
               }
               leaveNow();
             }}

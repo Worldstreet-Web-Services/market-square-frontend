@@ -748,6 +748,67 @@ function RailHandle({
   );
 }
 
+/*
+  THE BRAND LOCKUP, IN ONE PLACE — node 496:13198.
+
+  The file draws a 60.9x44.6 mark and sets " Square" beside it as LIVE TYPE at
+  Geist 900, 22.56/17.58; `/logo.svg` is a DIFFERENT lockup — the mark with
+  "Market Square" baked beside it in two stacked lines, at whatever weight the
+  export happened to carry. The rail wore the assembled one and the phone's top
+  strip wore the baked one, so the app introduced itself with two different
+  logos depending on the width of the screen.
+
+  This is that lockup as a component, so both surfaces draw the SAME artwork and
+  the same type and can never drift again. Everything but the mark's height is
+  derived from it, at the ratios the file sets, so a caller asks for one number.
+*/
+/** The mark's height in the source file — the size every ratio below is per. */
+const LOCKUP_MARK_H = 44.6;
+/** " Square", at the file's size, leading and gap (the string's leading space). */
+const LOCKUP_TYPE_PX = 22.56;
+const LOCKUP_LEAD_PX = 17.58;
+const LOCKUP_GAP_PX = 6;
+
+function BrandLockup({
+  /** HEIGHT of the mark. The type follows it; the artwork keeps its own ratio. */
+  markHeight = LOCKUP_MARK_H,
+  /**
+   * An accessible name, for a lockup that is NOT already inside a labelled
+   * control. `role="img"` collapses mark and type into one name — without it
+   * the phone's top strip would announce the bare word "Square".
+   */
+  label,
+  /** Display is the CALLER's — the rail's copy is hidden until it has room. */
+  className,
+}: {
+  markHeight?: number;
+  label?: string;
+  className?: string;
+}) {
+  const scale = markHeight / LOCKUP_MARK_H;
+  return (
+    <span
+      {...(label ? { role: "img" as const, "aria-label": label } : {})}
+      className={cn("items-center", className)}
+    >
+      <LogoMark size={markHeight} />
+      {/* The file's string carries a leading space, which is the gap between
+          mark and type; a space is not a layout instruction, so it is a margin
+          here and the word is just the word. */}
+      <span
+        style={{
+          marginLeft: LOCKUP_GAP_PX * scale,
+          fontSize: LOCKUP_TYPE_PX * scale,
+          lineHeight: `${LOCKUP_LEAD_PX * scale}px`,
+        }}
+        className="font-black tracking-[-0.01em] text-white"
+      >
+        Square
+      </span>
+    </span>
+  );
+}
+
 /**
  * THE LABELLED DESKTOP RAIL — kept, and no longer mounted.
  *
@@ -818,32 +879,20 @@ export function Sidebar({
         className="ws-press mb-4 flex h-[var(--ws-crumb-h)] shrink-0 items-center justify-center border-b border-white/10"
       >
         {/*
-          THE LOCKUP IS ASSEMBLED, NOT AN ASSET — node 496:13198.
+          THE LOCKUP IS ASSEMBLED, NOT AN ASSET — node 496:13198, and it lives
+          in `BrandLockup` above, which the phone's top strip draws too. The
+          ratios and the reason are there; only the two rail STATES are here.
 
-          The file draws a 60.9x44.6 mark and then sets " Square" beside it as
-          LIVE TYPE at Geist 900, 22.56/17.58. It was `/logo.svg`, a single
-          baked image at an arbitrary 30px, which is why the type came out at
-          neither the file's size nor its weight.
+          Collapsed, the mark stands alone at 28 — the type would be illegible
+          in a 72px strip. Labelled, the whole lockup, at the file's own 44.6.
 
           CENTRED, and that is measured rather than assumed: the group is 148.9
           wide in a 224 header, sitting at 37.6 with 37.5 left over — the same
           inset both sides. It used to be pushed to the left edge once the rail
           was labelled.
-
-          `size` on LogoMark is its HEIGHT, so 44.6 gives the file's mark back
-          at 59.5 wide against its 60.9 — the asset's own ratio, a pixel and a
-          half narrower, and not worth distorting the artwork to close.
         */}
         <LogoMark size={28} className="group-data-[rail=full]/rail:hidden" />
-        <span className="hidden items-center group-data-[rail=full]/rail:flex">
-          <LogoMark size={44.6} />
-          {/* The file's string carries a leading space, which is the gap
-              between mark and type; a space is not a layout instruction, so it
-              is a margin here and the word is just the word. */}
-          <span className="ml-[6px] text-[22.56px] font-black leading-[17.58px] tracking-[-0.01em] text-white">
-            Square
-          </span>
-        </span>
+        <BrandLockup className="hidden group-data-[rail=full]/rail:flex" />
       </Link>
 
       {/* The collapse chevron is gone for now, at ogazboiz's word ("remove
@@ -1749,12 +1798,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </button>
 
-          {/* Absolutely centred, so the mark sits on the middle of the SCREEN
+          {/* THE RAIL'S LOCKUP, NOT `/logo.svg`. The strip used to wear the
+            baked wordmark — the mark with "Market Square" stacked beside it —
+            while the rail wore the assembled one, so the app had two logos.
+            `BrandLockup` is the rail's, and this is the same call it makes.
+
+            THE MARK IS 28, which is the size the rail itself falls back to when
+            it has no room (the icon state above): the strip is 48 tall, so the
+            file's 44.6 would sit hairline-to-hairline, and 28 leaves the same
+            10px of air top and bottom that the 28px avatar beside it does.
+
+            Absolutely centred, so the mark sits on the middle of the SCREEN
             rather than the middle of whatever space the two sides leave —
-            those change with the live pill and the signed-in state. */}
-          <Wordmark
-            height={26}
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+            those change with the live pill and the signed-in state. Centred on
+            BOTH axes rather than leaning on an abspos child's static position,
+            which is the flex container's alignment and not a promise. */}
+          <BrandLockup
+            markHeight={28}
+            label="Market Square"
+            className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2"
           />
 
           <div className="ml-auto flex items-center gap-3">
