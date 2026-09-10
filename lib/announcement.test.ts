@@ -60,8 +60,8 @@ describe("a pinned announcement fails quiet", () => {
     const c = read("features/feed/components/announcement.tsx");
     assert.match(
       c,
-      /if \(!show \|\| !post\.data \|\| post\.data\.status !== "active"\) return null;/,
-      "a removed or missing announcement can render again"
+      /if \(!show \|\| !post\.data \|\| post\.data\.status !== "active" \|\| !post\.data\.author\) return null;/,
+      "a removed, missing or UNSIGNED announcement can render again"
     );
     assert.doesNotMatch(c, /Skeleton|ErrorState|toast\./, "the announcement shows a skeleton or an error");
   });
