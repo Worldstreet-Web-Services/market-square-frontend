@@ -13,7 +13,8 @@ import { IconDownload, IconShare } from "@/components/ui/icons";
 import { useFollow, useWink } from "@/features/profile";
 import { useMarkNotificationsRead, useNotifications } from "@/features/notifications";
 import { useOpenConversation } from "@/features/messages";
-import { friendsMomentCopy, pickFriendsMoments, type FriendsMoment } from "@/lib/friends-popup";
+import { friendsMomentCopy, friendsMomentLabels, pickFriendsMoments, type FriendsMoment } from "@/lib/friends-popup";
+import { winkCardFileName, winkCardQuery } from "@/lib/wink-card";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -137,14 +138,12 @@ function FriendsDialog({
   const remaining = fan.length - index - 1;
   const other = moment.actor as unknown as Profile;
   const name = other.displayName || other.username;
-  /* The picture the two corner controls hand over. Built from what is already
-     on screen, so it never disagrees with the card the reader is looking at. */
-  const cardImage = `/api/wink-card?${new URLSearchParams({
-    name,
-    handle: other.username,
-    ...(other.avatarUrl ? { avatar: other.avatarUrl } : {}),
-  })}`;
   const copy = friendsMomentCopy(moment, name);
+  const labels = friendsMomentLabels(copy, name);
+  /* The picture Download and Share hand over: THIS card, redrawn by the route
+     from the same moment, copy, labels and avatars (`lib/wink-card`), so what
+     is saved is what is on screen. */
+  const cardImage = `/api/wink-card?${winkCardQuery({ kind: moment.kind, other: moment.actor, viewer })}`;
   const wink = useWink(other);
   const follow = useFollow(other);
   const chat = useOpenConversation();
@@ -207,13 +206,10 @@ function FriendsDialog({
     onNext();
   };
 
-  const primaryLabel =
-    copy.primary === "start-gisting" ? "Start gisting" : copy.primary === "wink-back" ? "Wink back" : "Follow back";
   const primaryAct =
     copy.primary === "start-gisting" ? startGisting : copy.primary === "wink-back" ? winkBack : followBack;
   const primaryOff = copy.primary === "wink-back" && (wink.unavailable || wink.refusal !== null);
 
-  const secondaryLabel = copy.secondary === "wink" ? `Wink at ${name}` : "Start gisting";
   const secondaryAct = copy.secondary === "wink" ? winkBack : startGisting;
   const secondaryOff = copy.secondary === "wink" && (wink.unavailable || wink.refusal !== null);
 
@@ -295,12 +291,12 @@ function FriendsDialog({
 
           Mirrored against the close disc so the top of the card reads as a
           pair of corners rather than a row of controls, and sized to match it
-          exactly. `/api/wink-card` renders the moment server-side — see the
+          exactly. `/api/wink-card` redraws this card server-side — see the
           note there for why it is not a snapshot of this DOM.
         */}
         <a
           href={cardImage}
-          download={`wink-from-${name}.png`}
+          download={winkCardFileName(other.username)}
           aria-label="Download this card"
           title="Download"
           className="ws-glass-clear ws-press absolute flex items-center justify-center rounded-full text-white"
@@ -427,7 +423,7 @@ function FriendsDialog({
             title={copy.primary === "wink-back" ? (wink.refusal ?? undefined) : undefined}
             className="ws-btn-welcome ws-press flex h-9 w-[214px] items-center justify-center rounded-full text-[11.77px] font-medium leading-[20.45px] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {primaryLabel}
+            {labels.primary}
           </button>
           {copy.secondary && (
             <button
@@ -438,7 +434,7 @@ function FriendsDialog({
               className="ws-press flex h-9 w-[219px] items-center justify-center gap-[9.4px] rounded-full bg-[#323232] text-[11.77px] font-medium leading-[20.45px] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {copy.secondary === "wink" && <IconProfileWink className="h-[16.3px] w-[16.3px]" />}
-              {secondaryLabel}
+              {labels.secondary}
             </button>
           )}
         </div>
