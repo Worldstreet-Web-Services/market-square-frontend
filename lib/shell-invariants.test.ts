@@ -489,7 +489,8 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
     assert.match(card, /kind: "node-844"/, "the node geometry lost its discriminator");
     assert.match(card, /export const RAIL_CARD: PalCardGeometry/, "the rail's RAIL_CARD changed shape");
     assert.match(card, /export const DECK_CARD: PalCardNodeGeometry/, "the deck's geometry is gone");
-    assert.match(deck, /geometry=\{DECK_CARD\}/, "the deck is not drawing the node's card");
+    assert.match(deck, /geometry=\{card\}/, "the deck is not drawing the node's card");
+    assert.match(deck, /const card: PalCardNodeGeometry = /, "the deck's card is no longer a node-844 geometry");
   });
 
   it("is the ONE deck: /pals renders it rather than a second fan", () => {
@@ -1015,5 +1016,36 @@ describe("Home's Suggested GistRooms section is 647:16288's first block", () => 
   it("gives Religion and Food & Lifestyle the file's exported glyphs", () => {
     assert.match(icons, /religion: IconTopicChurch/);
     assert.match(icons, /food: IconTopicFood/);
+  });
+});
+
+/**
+ * HOME'S "MAKE SOME FRIENDS" — the second block of 647:16288 (live file,
+ * updated 2026-09-10): the deck 647:16300, its front card 647:16329, the
+ * pills 647:16296 and the rule 647:17210. Home draws its OWN deck; `/pals`
+ * keeps 844:18440's.
+ */
+describe("Home's Make some friends is 647:16288's second block", () => {
+  const deck = stripComments(read("components/layout/friends-deck.tsx"));
+  const pal = stripComments(read("components/layout/pal-card.tsx"));
+  const dots = stripComments(read("components/ui/deck-dots.tsx"));
+  const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+
+  it("draws Home's own deck and card, not /pals' at another scale", () => {
+    assert.match(deck, /heading === "home" \? HOME_DECK_NODE : DECK_NODE/);
+    assert.match(deck, /heading === "home" \? HOME_DECK_CARD : DECK_CARD/);
+    assert.match(pal, /export const HOME_DECK_CARD: PalCardNodeGeometry/);
+    assert.match(pal, /controls: \{ size: 60\.55, gap: 15\.61, bottom: 25\.76, passGlyph: 35\.84, winkGlyph: 40\.32, lift: 5\.59 \}/);
+  });
+
+  it("spaces it by the file: 90 to the deck, 9.38 to five pills, 67 to the rule, 60 to the timeline", () => {
+    assert.match(deck, /mt-\[90px\]/);
+    assert.match(deck, /mt-\[9\.38px\]/);
+    assert.match(deck, /mt-\[67px\] h-\[0\.5px\] bg-white\/25/);
+    assert.match(deck, /"mb-\[60px\]"/);
+    assert.match(deck, /<DeckDots variant="home" count=\{5\}/);
+    assert.match(dots, /w-\[36\.29px\]/);
+    assert.match(dots, /h-\[5\.81px\]/);
+    assert.doesNotMatch(feed, /\{friendsSlot && <div className="mb-6">/, "an empty friends slot takes space again");
   });
 });

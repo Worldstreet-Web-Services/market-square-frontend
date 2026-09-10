@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DECK_NODE, deckLayout, rotatedBox } from "./deck-layout.ts";
+import { DECK_NODE, HOME_DECK_NODE, deckLayout, rotatedBox } from "./deck-layout.ts";
 
 /**
  * The file's own boxes, node 844:18440. The deck stores SIZES and ROTATIONS;
@@ -87,5 +87,53 @@ describe("deckLayout, without the step discs (phone)", () => {
     close(layout.k, room / 943, 1e-9, "k");
     close(layout.frontX + (LEFT.place.dx - LEFT.box.width / 2) * layout.k, 0, 0.1, "left card's box edge");
     close(layout.frontX + (RIGHT.place.dx + RIGHT.box.width / 2) * layout.k, room, 0.1, "right card's box edge");
+  });
+});
+
+/**
+ * HOME'S OWN DECK — node 647:16300 in the live file (647:16288, updated
+ * 2026-09-10). Its numbers are the nodes' size and relativeTransform; these
+ * boxes are what Figma reports, and the two must round-trip.
+ */
+describe("Home's own deck — node 647:16300", () => {
+  const H = HOME_DECK_NODE;
+  const LEFT_BOX = { width: 347.15, height: 432.95 };
+  const RIGHT_BOX = { width: 350.87, height: 435.35 };
+
+  it("its back cards turned by their rotations give back the file's boxes", () => {
+    for (const [box, place] of [
+      [LEFT_BOX, H.places[-1]!],
+      [RIGHT_BOX, H.places[1]!],
+    ] as const) {
+      const size = rotatedBox(H.card.width * place.scale, H.card.height * place.scale, place.rot);
+      close(size.width, box.width, 0.1, "box width");
+      close(size.height, box.height, 0.1, "box height");
+    }
+  });
+
+  it("dims both back cards to the node's 20%", () => {
+    assert.equal(H.places[-1]!.opacity, 0.2);
+    assert.equal(H.places[1]!.opacity, 0.2);
+  });
+
+  const room = 575;
+  const layout = deckLayout({ room, arrows: true, node: H });
+  const edge = (dx: number, half: number, side: 1 | -1) => layout.frontX + (dx + side * half) * layout.k;
+
+  it("fits the fan and both discs in the column, cutting nothing", () => {
+    close(edge(H.arrow.leftDx, H.arrow.size / 2, -1), 0, 1e-6, "left disc");
+    close(edge(H.arrow.rightDx, H.arrow.size / 2, 1), room, 1e-6, "right disc");
+    for (const [dx, half] of [
+      [H.places[-1]!.dx, LEFT_BOX.width / 2],
+      [H.places[1]!.dx, RIGHT_BOX.width / 2],
+      [0, H.card.width / 2],
+    ] as const) {
+      assert.ok(edge(dx, half, -1) >= -0.1 && edge(dx, half, 1) <= room + 0.1, `something at dx ${dx} runs past the column`);
+    }
+  });
+
+  it("is the group's own height, with the front card's top on the box's top", () => {
+    close(layout.frontY - (H.card.height / 2) * layout.k, 0, 1e-9, "front card top");
+    close(layout.height, (229.7 + 211.12) * layout.k, 1e-9, "height");
   });
 });

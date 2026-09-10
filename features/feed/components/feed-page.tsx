@@ -409,7 +409,9 @@ export function FeedPage({
         {roomsSlot}
 
         {/* NODES 225:3526 + 225:3374 — "Make some friends". */}
-        {friendsSlot && <div className="mb-6">{friendsSlot}</div>}
+        {/* Its own margins, like the rooms above it: a directory with nobody
+            in it renders nothing and leaves no spacer. */}
+        {friendsSlot}
 
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
