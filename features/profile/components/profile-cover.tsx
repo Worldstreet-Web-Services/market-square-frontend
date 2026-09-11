@@ -152,6 +152,20 @@ export function ProfileCover({
         Back
       </button>
 
+      {/*
+        THE ACTIONS SIT ON BACK'S LINE, top right — "try a way to fit it in".
+
+        The file puts them at the identity row's foot (1021:20260), which works
+        in its 741 cover. Ours is 535 beside the rail, and there the actions took
+        183 of the row, leaving the name and handle 200 — so the handle row
+        (handle, KASH, "Who viewed my profile": 365 in the file) wrapped. Up
+        here, centred on Back's 24px line, they free the whole width for the
+        identity (399 at 1440), so that row holds at the file's own sizes.
+      */}
+      {actions && (
+        <div className="absolute right-6 top-[17px] z-10 flex items-center gap-2 md:gap-4">{actions}</div>
+      )}
+
       {/* 435:27503 — the identity, 24 from the left and 24 from the foot. */}
       {/* 545:47576 (the identity, y=377..449) and 545:47603 (the actions,
           y=394..432): the actions are CENTRED on the identity row, not hung
@@ -220,8 +234,7 @@ export function ProfileCover({
           </div>
         </div>
 
-        {/* 1021:20260 — 16 apart, their foot 5 above the avatar's (444 vs 449). */}
-        {actions && <div className="flex shrink-0 items-center gap-2 md:mb-[5px] md:gap-4">{actions}</div>}
+
       </div>
     </div>
   );

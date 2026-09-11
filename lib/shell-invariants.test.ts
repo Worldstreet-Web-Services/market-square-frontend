@@ -1293,10 +1293,10 @@ describe("The profile cover follows 1021:20229", () => {
     }
   });
 
-  it("sits the actions on the identity row's foot, with the file's share disc and Edit pill", () => {
+  it("sits the actions on Back's line so the identity row fits, with the file's share disc and Edit pill", () => {
     assert.match(cover, /md:items-end md:gap-4/);
     assert.match(cover, /relative block shrink-0 md:self-end/, "the avatar floats off the row's foot when the name wraps");
-    assert.match(cover, /md:mb-\[5px\] md:gap-4/);
+    assert.match(cover, /absolute right-6 top-\[17px\] z-10 flex items-center gap-2 md:gap-4/, "the actions left Back's line and squeeze the identity row again");
     assert.match(page, /h-\[38\.37px\] w-\[38\.37px\][\s\S]{0,160}\/profile\/icon-share\.svg/);
     assert.match(page, /text-\[14\.94px\] leading-\[25\.61px\][^"]*md:w-\[129px\] md:gap-\[10\.1px\]/);
     assert.match(chip, /tracking-\[-0\.05px\]/);
