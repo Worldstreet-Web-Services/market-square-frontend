@@ -24,6 +24,7 @@ import {
 } from "@/lib/friends-popup";
 import { winkCardFileName, winkCardQuery } from "@/lib/wink-card";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
+import { useFriendsCardRequest } from "@/lib/friends-card-store";
 import type { Profile } from "@/lib/api/schemas";
 
 /** Node 647:16629 — the card's width, and its height while its text is two
@@ -94,6 +95,22 @@ export function FriendsPopup() {
   // Rows this session has already put in front of the reader, so a poll
   // that returns them again (before the read lands) cannot re-open them.
   const shown = useRef(new Set<string>());
+
+  /*
+    ON DEMAND — a tap on a wink or a follow-back in the notifications list opens
+    that person's card, read or not ("when they click on the notification that
+    is about wink they should see the card"). It replaces any fan already open:
+    the tap is the newer, more deliberate ask.
+  */
+  const request = useFriendsCardRequest();
+  const handled = useRef(0);
+  useEffect(() => {
+    if (!request.moment || request.epoch === handled.current) return;
+    handled.current = request.epoch;
+    for (const id of request.moment.notificationIds) shown.current.add(id);
+    setFan([request.moment]);
+    setIndex(0);
+  }, [request]);
 
   /*
     ON ENTERING, AND WHILE THEY ARE HERE — AS ONE FAN, NOT ONE POPUP EACH.

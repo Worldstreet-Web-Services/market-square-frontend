@@ -1,5 +1,7 @@
 "use client";
 
+import { friendsMomentFor } from "@/lib/friends-popup";
+import { openFriendsCard } from "@/lib/friends-card-store";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { inboxTime } from "@/lib/inbox-time";
@@ -321,6 +323,45 @@ function Row({
     "flex min-h-[97px] items-center gap-4 px-8 py-6 transition-colors",
     unread ? "bg-white/[0.03] hover:bg-white/[0.06]" : "hover:bg-white/[0.03]"
   );
+
+  /*
+    A WINK OR A FOLLOW-BACK OPENS ITS CARD — the same card the popup shows on
+    entering, read or not, rather than the person's profile. A tap on the row's
+    own controls (Wink back, Follow back, the unread dot) stays theirs, which
+    is why this is a div that ignores clicks from inside a button or a link
+    rather than a button wrapped around buttons. A one-way follow is not a
+    moment and still opens the profile.
+  */
+  const moment = item.actor
+    ? friendsMomentFor({ id: item.id, kind: item.kind, readAt: item.readAt ?? null, actor: item.actor })
+    : null;
+  if (moment) {
+    const open = () => {
+      openFriendsCard(moment);
+      if (unread) onMarkRead(item.id);
+    };
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${headline(item)}: open the card`}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("button, a")) return;
+          open();
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            open();
+          }
+        }}
+        className={cn(className, "cursor-pointer")}
+      >
+        {body}
+      </div>
+    );
+  }
 
   if (!href) return <div className={className}>{body}</div>;
   return (

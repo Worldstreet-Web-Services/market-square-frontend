@@ -91,6 +91,18 @@ export function pickFriendsMoments(notifications: FriendsMomentInput[]): Friends
   return [...byPerson.values()].sort((a, b) => RANK[a.kind] - RANK[b.kind]);
 }
 
+/**
+ * The card for ONE notification row, read or not — what a tap on a wink or a
+ * follow-back in the notifications list opens. Same rules as the fan (a
+ * one-way follow is not a moment), without the unread filter: the reader asked
+ * for this one.
+ */
+export function friendsMomentFor(row: FriendsMomentInput): FriendsMoment | null {
+  if (row.actor === null) return null;
+  const kind = momentKindOf(row);
+  return kind ? { kind, actor: row.actor, notificationIds: [row.id] } : null;
+}
+
 /** The one moment to lead with — the front of the fan. */
 export function pickFriendsMoment(notifications: FriendsMomentInput[]): FriendsMoment | null {
   return pickFriendsMoments(notifications)[0] ?? null;

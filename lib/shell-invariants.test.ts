@@ -1160,3 +1160,19 @@ describe("A friends card can be posted to Square with a caption", () => {
     assert.doesNotMatch(popup, /create\.mutate|useCreatePost/, "the popup posts on its own instead of through the composer");
   });
 });
+
+describe("A wink or follow-back notification opens its card", () => {
+  const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+  const popup = stripComments(read("components/layout/friends-popup.tsx"));
+
+  it("opens the card from the row, leaving the row's own buttons alone", () => {
+    assert.match(page, /friendsMomentFor\(\{ id: item\.id/);
+    assert.match(page, /openFriendsCard\(moment\)/);
+    assert.match(page, /closest\("button, a"\)\) return;/, "tapping Wink back or the unread dot also opens the card");
+  });
+
+  it("is the same popup, opened on demand", () => {
+    assert.match(popup, /const request = useFriendsCardRequest\(\);/);
+    assert.match(popup, /setFan\(\[request\.moment\]\)/);
+  });
+});
