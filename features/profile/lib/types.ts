@@ -184,3 +184,18 @@ export type ProfileActivity = z.infer<typeof ProfileActivitySchema>;
 export type VerificationRule = z.infer<typeof VerificationRuleSchema>;
 export type MyVerification = z.infer<typeof MyVerificationSchema>;
 export type SpotlightBoard = z.infer<typeof SpotlightSchema>;
+
+/**
+ * One photo in a person's profile gallery — `GET /profiles/:username/photos`.
+ * `thumbnailUrl` is the 320 square for a 160 tile; `url` is the full picture.
+ * Both are rendered as the service gives them, never rebuilt from a key.
+ */
+export const ProfilePhotoSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  thumbnailUrl: z.string(),
+  position: z.number(),
+  createdAt: z.string(),
+});
+export const ProfilePhotosSchema = z.object({ items: z.array(ProfilePhotoSchema) });
+export type ProfilePhoto = z.infer<typeof ProfilePhotoSchema>;

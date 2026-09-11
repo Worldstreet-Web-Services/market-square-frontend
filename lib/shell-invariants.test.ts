@@ -1342,3 +1342,20 @@ describe("The profile hides the Creator card for now", () => {
     assert.match(page, /<VerificationCard \/>/);
   });
 });
+
+describe("The profile's Photos row is 1021:20930", () => {
+  const photos = stripComments(read("features/profile/components/profile-photos.tsx"));
+  const api = stripComments(read("features/profile/lib/api.ts"));
+  const page = stripComments(read("features/profile/components/profile-page.tsx"));
+
+  it("reads the gallery, stays absent while it is not deployed, and ends your row in Upload more", () => {
+    assert.match(api, /msApi\.get\(`\/profiles\/\$\{username\}\/photos`\)/);
+    assert.match(api, /msApi\.post\("\/me\/photos", \{ url \}\)/);
+    assert.match(photos, /if \(photos\.unavailable \|\| !photos\.data\) return null;/);
+    assert.match(photos, /h-40 w-40 shrink-0 overflow-hidden rounded-\[20px\]/);
+    assert.match(photos, /shadow-\[0_4px_25px_0_rgba\(107,107,107,0\.25\)\]/);
+    assert.match(photos, /"Upload more"/);
+    assert.ok(existsSync(new URL("../public/profile/gallery-add.svg", import.meta.url)));
+    assert.match(page, /<ProfilePhotos username=\{data\.username\} isMe=\{isMe\} \/>/);
+  });
+});

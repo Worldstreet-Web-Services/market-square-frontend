@@ -10,6 +10,7 @@ import { resolveCta } from "@/lib/deeplink";
 import { useMe } from "@/hooks/use-me";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { IconCalendar } from "@/components/ui/icons";
+import { ProfilePhotos } from "@/features/profile/components/profile-photos";
 import { ProfileCover } from "@/features/profile/components/profile-cover";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
@@ -646,6 +647,12 @@ export function ProfilePage({
       </div>
 
       {/* 534:15577 — the houses this person keeps, 38 under the block above. */}
+      {/* 1021:20930 — Photos, 38 under the bio block (the section rhythm of
+          1021:20270). The wrapper collapses when the row renders nothing. */}
+      <div className="px-4 pt-[38px] empty:hidden md:px-8">
+        <ProfilePhotos username={data.username} isMe={isMe} />
+      </div>
+
       {isMe && housesSlot && <div className="px-4 pt-9 md:px-8">{housesSlot}</div>}
 
       {/*
