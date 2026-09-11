@@ -63,7 +63,8 @@ const tipSlot = (post: Post) => (
  * both.
  */
 export function HomeScreen() {
-  const topics = useTopics();
+  // Home's own eight, in the design's order (`?surface=home`).
+  const topics = useTopics("home");
   const { authenticated } = useAuth();
   return (
     <FeedPage

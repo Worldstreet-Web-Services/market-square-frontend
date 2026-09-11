@@ -1268,3 +1268,14 @@ describe("Gender is one choice everywhere: Male or Female", () => {
     assert.doesNotMatch(filter, /genders\.map/, "the friends filter lists typed spellings again");
   });
 });
+
+describe("Each surface asks for its own topics", () => {
+  it("Home asks for home, the house tag field for composer, and the key carries the surface", () => {
+    const api = stripComments(read("features/discovery/lib/api.ts"));
+    const hook = stripComments(read("features/discovery/hooks/use-discovery.ts"));
+    assert.match(api, /msApi\.get\("\/topics", surface \? \{ surface \} : undefined\)/);
+    assert.match(hook, /queryKey: \["ms", "topics", surface \?\? "all"\]/, "one surface's list could be served to another");
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /useTopics\("home"\)/);
+    assert.match(stripComments(read("components/ui/topic-tags-field.tsx")), /useTopics\("composer"\)/);
+  });
+});

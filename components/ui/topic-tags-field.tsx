@@ -117,7 +117,8 @@ export function TopicTagsField({
   max?: number;
   className?: string;
 }) {
-  const topics = useTopics();
+  // The tag field's own list (`?surface=composer`), the eleven it has always offered.
+  const topics = useTopics("composer");
   const atLimit = selected.length >= max;
 
   const toggle = (key: string) => {
