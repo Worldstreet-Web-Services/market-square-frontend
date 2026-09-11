@@ -1156,7 +1156,7 @@ describe("A friends card can be posted to Square with a caption", () => {
   it("opens the composer with the card attached and the caption written, and posts nothing by itself", () => {
     assert.match(popup, /prefill=\{\{ link: null, label: null, text: draft\.caption \}\}/);
     assert.match(popup, /initialMedia=\{draft\.file\}/);
-    assert.match(composer, /useState<File \| null>\(initialMedia\)/);
+    assert.match(composer, /useState<Attachment\[\]>\(\(\) => \(initialMedia \? \[attach\(initialMedia\)\] : \[\]\)\)/);
     assert.doesNotMatch(popup, /create\.mutate|useCreatePost/, "the popup posts on its own instead of through the composer");
   });
 });
@@ -1416,5 +1416,23 @@ describe("Profile pictures open full size", () => {
     assert.match(cover, /<ImageViewer src=\{viewing\.src\}/);
     assert.match(cover, /pointer-events-none absolute inset-0 md:inset-auto/, "the furniture layer swallows taps on the cover again");
     assert.match(photos, /<ImageViewer src=\{open\}/);
+  });
+});
+
+describe("Posts carry several photos — node 1029:22591", () => {
+  it("rails two or more photos on the card and keeps the single frame for one", () => {
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /const rail = postMediaList\(post\);/);
+    assert.match(card, /rail\.length > 1 \? \(\s*<MediaRail items=\{rail\} \/>/);
+  });
+
+  it("only lets the composer pick several once the server has shown it takes lists", () => {
+    const composer = stripComments(read("features/feed/components/composer.tsx"));
+    assert.match(composer, /const multi = multiSupported && kind === "update";/);
+    assert.match(composer, /multiple=\{multi\}/);
+    assert.match(composer, /\.\.\.mediaFields\(attached\)/, "the composer must send media through mediaFields, never both fields");
+    assert.doesNotMatch(composer, /mediaUrl,\n/);
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    assert.match(schemas, /media: z\.array\(PostMediaSchema\)\.optional\(\),/, "a default on media erases the server's answer");
   });
 });

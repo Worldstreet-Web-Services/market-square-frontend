@@ -9,6 +9,8 @@ import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
+import { postMediaList } from "@/lib/post-media";
+import { MediaRail } from "@/features/feed/components/media-rail";
 import { PostText } from "@/components/ui/post-text";
 import { CoinChips } from "@/components/ui/coin-chips";
 import { reportView, useRecordView } from "@/features/feed/hooks/use-record-view";
@@ -635,6 +637,9 @@ export function PostCard({
   // Recorded on dwell, not on mount: see useRecordView. A CLIP is the
   // exception — its view is the play, reported by the player below.
   const video = isVideoPost(post);
+  // Two or more photos ride the rail (node 1029:22591); one keeps the
+  // hugging frame below.
+  const rail = postMediaList(post);
   const viewRef = useRecordView(post.id, !video);
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
@@ -794,7 +799,9 @@ export function PostCard({
         post payload would remove it — asked for; `MessageMedia` already carries
         both, so the service is storing them somewhere.
       */}
-      {post.mediaUrl &&
+      {rail.length > 1 ? (
+        <MediaRail items={rail} />
+      ) : post.mediaUrl &&
         (isVideoPost(post) ? (
           // A tap goes FULL SCREEN, the way it does in Reels and TikTok. The
           // inline preview still autoplays muted so the timeline is alive, but
@@ -885,7 +892,8 @@ export function PostCard({
         mentions={post.mentions}
         className={cn(
           "text-[13.8px] leading-[23px] text-white/90",
-          post.mediaUrl && "mt-3"
+          // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
+          rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
         )}
         clampLines={full ? undefined : 6}
       />
