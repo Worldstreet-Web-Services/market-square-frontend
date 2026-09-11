@@ -21,6 +21,7 @@ export function NotificationsView({
   onDirectNotificationsChange,
   onOpenHouse,
   push,
+  emailDigest,
   disabled = false,
 }: {
   friendsRoom: boolean;
@@ -29,6 +30,8 @@ export function NotificationsView({
   onDirectNotificationsChange: (v: boolean) => void;
   /** The "Push notifications" row: this browser's state and switch. */
   push: { checked: boolean; disabled: boolean; description: string; onChange: (next: boolean) => void };
+  /** The "Daily email summary" row. */
+  emailDigest: { checked: boolean; disabled: boolean; description: string; onChange: (next: boolean) => void };
   /** Opens a house's notification levels — the screen owns the drill-in. */
   onOpenHouse: (house: { id: string; title: string }) => void;
   /** The toggles cannot be saved yet — see `settings-copy.ts`. */
@@ -55,6 +58,23 @@ export function NotificationsView({
             checked={push.checked}
             onChange={push.onChange}
             label="Push notifications"
+          />
+        </div>
+        <div className="flex w-full items-center justify-between border-b border-white/15 px-4 py-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 pr-4">
+            <p className="text-base font-bold leading-4 text-white">
+              Daily email summary
+            </p>
+            <p className="text-sm font-normal leading-[16.5px] text-white/50">
+              {emailDigest.description}
+            </p>
+          </div>
+          <Toggle
+            disabled={emailDigest.disabled}
+            title={emailDigest.disabled ? emailDigest.description : undefined}
+            checked={emailDigest.checked}
+            onChange={emailDigest.onChange}
+            label="Daily email summary"
           />
         </div>
         <div className="flex w-full items-center justify-between border-b border-white/15 px-4 py-6">

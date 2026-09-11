@@ -1,7 +1,7 @@
 /**
  * The Help Centre's policy pages, as data.
  *
- * Written for what Square actually does today — in-app notifications only, no
+ * Written for what Square actually does today — in-app, push and daily email notifications, no
  * tracked location, KASH as the only payment rail, houses and gist rooms — so
  * nothing here promises a practice the product does not have. A standard
  * first version pending legal review; change the words here, not in the view.
@@ -58,7 +58,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       points: [
         "To run Square's features, such as your feed, chats, houses and gist rooms.",
         "To personalize what you see from your interests, the people you follow and, if you allow it, the place on your profile.",
-        "To send the in-app notifications you have switched on.",
+        "To send the notifications you have switched on: in the app, as push notifications on devices you allow, and an optional daily email summary to your sign-in email.",
         "To keep people safe, review reports and prevent abuse.",
       ],
     },

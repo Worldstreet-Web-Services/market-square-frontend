@@ -16,6 +16,8 @@ export const ProfileSettingsSchema = z.object({
     direct: z.boolean(),
     /** Web push to subscribed browsers. Absent on a service without push. */
     push: z.boolean().optional(),
+    /** The daily email summary. Absent on a service without email; turned off by the email's unsubscribe link too. */
+    emailDigest: z.boolean().optional(),
   }),
   chat: z.object({
     messagesFrom: z.enum(["no_one", "everyone", "verified"]),

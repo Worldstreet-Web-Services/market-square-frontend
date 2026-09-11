@@ -51,6 +51,17 @@ export function isSafePath(path: string[]): boolean {
   );
 }
 
+/**
+ * The ONLY write a signed-out visitor may make through the BFF: turning off the
+ * daily email summary from the link in the email. The signed token in its
+ * query names the one person it changes, and that person may not be signed in
+ * on this device. This exact shape only — every other write needs a session.
+ */
+export function isPublicPost(path: string[]): boolean {
+  if (!isSafePath(path)) return false;
+  return path.length === 2 && path[0] === "email" && path[1] === "unsubscribe";
+}
+
 export function isPublicGet(path: string[]): boolean {
   // A traversal attempt is never public, whatever its head looks like.
   if (!isSafePath(path)) return false;

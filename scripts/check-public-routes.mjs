@@ -353,6 +353,16 @@ const PENDING_ROUTES = {
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
   },
+  // ── daily email summary (notifications stage B) ─────────────────────────
+  "post /email/unsubscribe": {
+    reason:
+      "Turns off the daily email summary from the email's link (public, signed " +
+      "token). BUILT on the service (migration 069, PR #206) and served locally, " +
+      "NOT yet deployed. DELETE THIS ENTRY once it is in openapi.json.",
+  },
+  "* /email/unsubscribe": {
+    reason: "The same route, called as a raw BFF fetch because it must work signed out. See post /email/unsubscribe.",
+  },
   // ── web push (notifications stage A) ─────────────────────────────────────
   "get /push/vapid-public-key": {
     reason:

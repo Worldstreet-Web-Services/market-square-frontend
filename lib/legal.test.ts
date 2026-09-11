@@ -17,10 +17,10 @@ describe("the Help Centre's policy pages", () => {
     }
   });
 
-  it("promise only what Square does: no tracked location, no push or email", () => {
+  it("promise only what Square does: no tracked location, and the notification channels it has", () => {
     const privacy = text(PRIVACY_POLICY);
     assert.match(privacy, /does not track where you are/);
     assert.match(privacy, /support@tsionark\.com/);
-    assert.doesNotMatch(privacy, /push notification|by email/i);
+    assert.match(privacy, /daily email summary/);
   });
 });

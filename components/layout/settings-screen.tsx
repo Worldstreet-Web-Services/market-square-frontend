@@ -72,9 +72,8 @@ const SECTIONS: Array<{
   {
     key: "notifications",
     title: "Notifications",
-    // In-app only: Square has no push or email delivery (confirmed with the
-    // service), so the row does not promise channels that do not exist.
-    description: "Customize in-app and live room activity alerts.",
+    // Push and a daily email summary exist now, beside in-app alerts.
+    description: "Customize push, email, and live room activity alerts.",
     icon: IconSettingsBell,
     iconSize: "size-6",
   },
@@ -884,6 +883,17 @@ export function SettingsScreen({ username }: { username: string }) {
                     window.scrollTo({ top: 0 });
                   }}
                   push={push}
+                  emailDigest={{
+                    // Present once the service has email (stage B). Re-read,
+                    // never cached: the email's unsubscribe link turns it off.
+                    checked: settings.data?.notifications.emailDigest ?? false,
+                    disabled: settings.data?.notifications.emailDigest === undefined,
+                    description:
+                      settings.data?.notifications.emailDigest === undefined
+                        ? "Email summaries aren't available here yet."
+                        : "One email a day at most, only when something new is waiting.",
+                    onChange: (value) => save.mutate({ notifications: { emailDigest: value } }),
+                  }}
                   disabled={!settingsLive}
                 />
               ))}

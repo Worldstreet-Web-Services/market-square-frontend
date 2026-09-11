@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isPublicGet, isSafePath } from "./public-routes.ts";
+import { isPublicGet, isPublicPost, isSafePath } from "./public-routes.ts";
 
 /**
  * SOURCE OF TRUTH for this table: the backend's OpenAPI document. A GET is public when the spec lets an ANONYMOUS
@@ -307,5 +307,21 @@ describe("isPublicGet", () => {
     const secured = new Set(SECURED.map(show));
     const overlap = PUBLIC.map(show).filter((path) => secured.has(path));
     assert.deepEqual(overlap, [], "a path cannot be both public and secured");
+  });
+});
+
+describe("isPublicPost", () => {
+  it("opens exactly the email unsubscribe, and no other write", () => {
+    assert.equal(isPublicPost(["email", "unsubscribe"]), true);
+    for (const path of [
+      ["email"],
+      ["email", "unsubscribe", "x"],
+      ["posts"],
+      ["me", "settings"],
+      ["webhooks", "resend"],
+      ["..", "email", "unsubscribe"],
+    ]) {
+      assert.equal(isPublicPost(path), false, path.join("/"));
+    }
   });
 });

@@ -18,7 +18,7 @@ export interface PrivacySettings {
 }
 
 export interface SettingsShape {
-  notifications: { friendsRooms: boolean; direct: boolean; push?: boolean };
+  notifications: { friendsRooms: boolean; direct: boolean; push?: boolean; emailDigest?: boolean };
   chat: { messagesFrom: MessagesFrom; allowHouseMembers: boolean; allowPastAudience: boolean };
   /** Absent on a service without stage 3. */
   privacy?: PrivacySettings;

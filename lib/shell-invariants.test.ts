@@ -1531,7 +1531,7 @@ describe("Settings controls never pretend to save", () => {
     assert.equal((screen.match(/<Toggle\s+disabled=\{(personalizeDisabled|visibilityDisabled)\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
     for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
       const source = read(`components/layout/${file}.tsx`);
-      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
+      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
     }
   });
 
@@ -1626,8 +1626,8 @@ describe("Contact us opens a chat with support", () => {
     assert.match(read("lib/support.ts"), /export const SUPPORT_EMAIL = "support@tsionark\.com";/);
     assert.match(screen, /href=\{`mailto:\$\{SUPPORT_EMAIL\}`\}/);
     assert.match(screen, /\{ label: "Contact us", view: "contact" \}/);
-    // No push or email delivery exists, so Notifications must not promise it.
-    assert.doesNotMatch(screen, /push, email/);
+    // Push and a daily email summary exist now, so the row names them.
+    assert.match(screen, /Customize push, email, and live room activity alerts\./);
     // The policy pages are written, not "Coming soon".
     assert.match(screen, /<LegalDocumentView doc=\{PRIVACY_POLICY\} \/>/);
     assert.match(screen, /<LegalDocumentView doc=\{COMMUNITY_GUIDELINES\} \/>/);
@@ -1682,6 +1682,27 @@ describe("Web push", () => {
     assert.match(view, /checked=\{push\.checked\}/);
     assert.match(view, /\{push\.description\}/);
     assert.match(stripComments(read("components/layout/settings-screen.tsx")), /const push = usePushNotifications\(\);/);
+  });
+});
+
+describe("The daily email summary", () => {
+  it("offers the switch in Settings → Notifications, from the service's own answer", () => {
+    const view = stripComments(read("components/layout/notifications-view.tsx"));
+    assert.match(view, /checked=\{emailDigest\.checked\}/);
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /onChange: \(value\) => save\.mutate\(\{ notifications: \{ emailDigest: value \} \}\)/);
+  });
+
+  it("unsubscribes only when the button is pressed, never on page load", () => {
+    const page = stripComments(read("features/settings/components/unsubscribe-page.tsx"));
+    assert.match(page, /onClick=\{\(\) => unsubscribe\.mutate\(token\)\}/);
+    assert.doesNotMatch(page, /useEffect/, "a mail link-scanner opening the page would switch summaries off");
+    assert.match(read("app/unsubscribe/page.tsx"), /<UnsubscribePage \/>/);
+  });
+
+  it("lets the BFF pass exactly that one write through signed out", () => {
+    const route = stripComments(read("app/api/market-square/[...path]/route.ts"));
+    assert.match(route, /const needsAuth = method === "GET" \? !isPublicGet\(path\) : !\(method === "POST" && isPublicPost\(path\)\);/);
   });
 });
 
