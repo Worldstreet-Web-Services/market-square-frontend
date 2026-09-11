@@ -64,6 +64,7 @@ export function Composer({
   asStory = false,
   quoted = null,
   prefill,
+  initialMedia = null,
   onDone,
 }: {
   autoFocus?: boolean;
@@ -78,6 +79,11 @@ export function Composer({
    * component must never receive a raw query parameter.
    */
   prefill?: ComposePrefill | null;
+  /**
+   * A picture handed in already attached — the friends card's "Post to
+   * Square". Seeded once like `prefill`, and removable like any chosen file.
+   */
+  initialMedia?: File | null;
   /** The post being quoted, previewed above the field and sent as quotedPostId. */
   quoted?: Post | null;
   /**
@@ -99,8 +105,8 @@ export function Composer({
   // comment boxes use the same one, so "@" behaves identically everywhere.
   const typing = useMentionTyping({ max: MAX, field, initial: prefill?.text ?? "" });
   const { text } = typing;
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | null>(initialMedia);
+  const [previewUrl, setPreviewUrl] = useState(() => (initialMedia ? URL.createObjectURL(initialMedia) : ""));
   // Attaching a link is a picker, not an id box — see LinkTargetPicker.
   const [linkOpen, setLinkOpen] = useState(false);
   const [link, setLink] = useState<DeepLink | null>(prefill?.link ?? null);

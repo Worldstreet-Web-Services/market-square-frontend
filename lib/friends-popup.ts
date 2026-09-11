@@ -175,3 +175,22 @@ export function friendsMomentLabels(
     copy.secondary === "wink" ? `Wink at ${name}` : copy.secondary === "start-gisting" ? "Start gisting" : null;
   return { primary, secondary };
 }
+
+/**
+ * The caption a moment's card goes out with when it is posted to Square.
+ *
+ * Written in the poster's own voice, since it is their post now, and naming the
+ * other person by HANDLE so the caption links to them. A prefill only: the
+ * composer opens with it and the poster can change or delete every word.
+ */
+export function friendsMomentCaption(moment: FriendsMoment): string {
+  const handle = `@${moment.actor.username}`;
+  switch (moment.kind) {
+    case "friends":
+      return `${handle} and I are now friends on Square 💜`;
+    case "mutual-wink":
+      return `${handle} and I winked at each other on Square 😉`;
+    case "wink":
+      return `${handle} winked at me on Square 😉`;
+  }
+}

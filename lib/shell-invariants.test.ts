@@ -1142,3 +1142,21 @@ describe("A post answers the pointer in its acts' colours", () => {
     assert.match(post, /ws-glass-pill flex h-\[38\.37px\] w-\[38\.37px\] items-center justify-center rounded-full text-grey-100 transition-colors hover:text-create/);
   });
 });
+
+describe("A friends card can be posted to Square with a caption", () => {
+  const popup = stripComments(read("components/layout/friends-popup.tsx"));
+  const composer = stripComments(read("features/feed/components/composer.tsx"));
+
+  it("offers Post beside Download and Share, attaching the same card", () => {
+    assert.match(popup, /aria-label="Post this card to Square"/);
+    assert.match(popup, /await fetch\(cardImage\)/, "the posted picture is not the card Download saves");
+    assert.match(popup, /caption: friendsMomentCaption\(moment\)/);
+  });
+
+  it("opens the composer with the card attached and the caption written, and posts nothing by itself", () => {
+    assert.match(popup, /prefill=\{\{ link: null, label: null, text: draft\.caption \}\}/);
+    assert.match(popup, /initialMedia=\{draft\.file\}/);
+    assert.match(composer, /useState<File \| null>\(initialMedia\)/);
+    assert.doesNotMatch(popup, /create\.mutate|useCreatePost/, "the popup posts on its own instead of through the composer");
+  });
+});

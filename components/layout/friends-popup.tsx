@@ -9,11 +9,19 @@ import { fitScale } from "@/lib/fit-scale";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { IconFriendsClose, IconProfileWink } from "@/components/ui/profile-icons";
-import { IconDownload, IconShare } from "@/components/ui/icons";
+import { IconDownload, IconSend, IconShare } from "@/components/ui/icons";
+import { Sheet } from "@/components/ui/sheet";
+import { Composer, type Post } from "@/features/feed";
 import { useFollow, useWink } from "@/features/profile";
 import { useMarkNotificationsRead, useNotifications } from "@/features/notifications";
 import { useOpenConversation } from "@/features/messages";
-import { friendsMomentCopy, friendsMomentLabels, pickFriendsMoments, type FriendsMoment } from "@/lib/friends-popup";
+import {
+  friendsMomentCaption,
+  friendsMomentCopy,
+  friendsMomentLabels,
+  pickFriendsMoments,
+  type FriendsMoment,
+} from "@/lib/friends-popup";
 import { winkCardFileName, winkCardQuery } from "@/lib/wink-card";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import type { Profile } from "@/lib/api/schemas";
@@ -67,8 +75,18 @@ const CARD_H = 472;
  * profile's, "Start gisting" is the messages slice's, the rows are the
  * notifications slice's.
  */
+/** The card and caption "Post to Square" hands the composer. */
+interface CardDraft {
+  file: File;
+  caption: string;
+}
+
 export function FriendsPopup() {
+  const router = useRouter();
   const me = useMe();
+  // Held HERE, above the fan, so the composer outlives the popup it came from:
+  // posting closes the fan, and the sheet must not close with it.
+  const [draft, setDraft] = useState<CardDraft | null>(null);
   const notifications = useNotifications("social");
   const markRead = useMarkNotificationsRead();
   const [fan, setFan] = useState<FriendsMoment[]>([]);
@@ -101,7 +119,29 @@ export function FriendsPopup() {
     setIndex(0);
   }, [notifications.data, fan.length]);
 
-  if (fan.length === 0 || !me.data) return null;
+  /*
+    POST TO SQUARE — the card as a post, with a caption. The composer opens with
+    the saved card already attached and the moment's caption written in, and
+    publishes through the ordinary upload and post path; nothing is posted
+    until the person presses Post.
+  */
+  const composer = draft && (
+    <Sheet open onClose={() => setDraft(null)} title="Post to Square">
+      <Composer
+        autoFocus
+        prefill={{ link: null, label: null, text: draft.caption }}
+        initialMedia={draft.file}
+        onDone={(created: Post) => {
+          setDraft(null);
+          toast.success("Posted to Square", {
+            action: { label: "View post", onClick: () => router.push(`/p/${created.id}`) },
+          });
+        }}
+      />
+    </Sheet>
+  );
+
+  if (fan.length === 0 || !me.data) return composer || null;
 
   // Closing reads what was SEEN — the cards up to the front one — and leaves
   // the rest unread, so a fan closed halfway comes back next time rather than
@@ -117,7 +157,17 @@ export function FriendsPopup() {
     else setIndex(index + 1);
   };
 
-  return <FriendsDialog fan={fan} index={index} viewer={me.data} onNext={next} onClose={close} />;
+  const post = (card: CardDraft) => {
+    close();
+    setDraft(card);
+  };
+
+  return (
+    <>
+      <FriendsDialog fan={fan} index={index} viewer={me.data} onNext={next} onClose={close} onPost={post} />
+      {composer}
+    </>
+  );
 }
 
 function FriendsDialog({
@@ -126,12 +176,15 @@ function FriendsDialog({
   viewer,
   onNext,
   onClose,
+  onPost,
 }: {
   fan: FriendsMoment[];
   index: number;
   viewer: Profile;
   onNext: () => void;
   onClose: () => void;
+  /** Closes the fan and opens the composer with this card attached. */
+  onPost: (card: CardDraft) => void;
 }) {
   const router = useRouter();
   const moment = fan[index]!;
@@ -149,6 +202,23 @@ function FriendsDialog({
   const follow = useFollow(other);
   const chat = useOpenConversation();
   const dialog = useRef<HTMLDivElement>(null);
+  const [preparing, setPreparing] = useState(false);
+  // The SAME picture Download saves, fetched as a file so it can be uploaded.
+  const postToSquare = async () => {
+    setPreparing(true);
+    try {
+      const response = await fetch(cardImage);
+      if (!response.ok) throw new Error(`wink card ${response.status}`);
+      const blob = await response.blob();
+      onPost({
+        file: new File([blob], winkCardFileName(other.username), { type: blob.type || "image/png" }),
+        caption: friendsMomentCaption(moment),
+      });
+    } catch {
+      setPreparing(false);
+      toast.error("Couldn't get the card ready — try again.");
+    }
+  };
   /*
     The room the overlay actually offers, measured rather than assumed at a
     breakpoint: it is the viewport less the overlay's own padding, and on a
@@ -338,6 +408,19 @@ function FriendsDialog({
           style={{ left: 74, top: 23.5, width: 45, height: 45 }}
         >
           <IconShare className="h-[17px] w-[17px]" />
+        </button>
+        {/* Post it on Square itself, as a post with a caption — the third of
+            the corner pair's row, the same disc. */}
+        <button
+          type="button"
+          onClick={() => void postToSquare()}
+          disabled={preparing}
+          aria-label="Post this card to Square"
+          title="Post to Square"
+          className="ws-glass-clear ws-press absolute flex items-center justify-center rounded-full text-white disabled:opacity-50"
+          style={{ left: 127, top: 23.5, width: 45, height: 45 }}
+        >
+          <IconSend className="h-[17px] w-[17px]" />
         </button>
 
         {/* 647:16667 — the close disc. */}
