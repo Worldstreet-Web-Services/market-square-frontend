@@ -1,5 +1,6 @@
 "use client";
 
+import { GENDER_OPTIONS, genderLabel, normalizeGender } from "@/lib/gender";
 import { createPortal } from "react-dom";
 
 import { useEffect, useRef, useState } from "react";
@@ -680,9 +681,6 @@ function AccountChip() {
  * The account menu's entries. The rail's account chip and the top bar's
  * avatar open the same menu, so it is written once.
  */
-/** The two genders the account menu offers. */
-const GENDER_CHOICES = ["Male", "Female"] as const;
-
 function AccountMenuItems({ close }: { close: () => void }) {
   const logout = useLogout();
   const me = useMe();
@@ -709,13 +707,13 @@ function AccountMenuItems({ close }: { close: () => void }) {
     return (
       <>
         <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
-        {GENDER_CHOICES.map((option) => (
+        {GENDER_OPTIONS.map((option) => (
           <MenuRow
-            key={option}
+            key={option.value}
             size="compact"
-            icon={dot(me.data?.gender?.toLowerCase() === option.toLowerCase())}
-            label={option}
-            onClick={() => update.mutate({ gender: option }, { onSuccess: () => setStep("root") })}
+            icon={dot(normalizeGender(me.data?.gender) === option.value)}
+            label={option.label}
+            onClick={() => update.mutate({ gender: option.value }, { onSuccess: () => setStep("root") })}
           />
         ))}
       </>
@@ -748,7 +746,7 @@ function AccountMenuItems({ close }: { close: () => void }) {
       <MenuRow
         size="compact"
         icon={<IconFilterGender className="h-3.5 w-3.5 text-grey-400" />}
-        label={me.data?.gender ? `Gender · ${me.data.gender}` : "Gender"}
+        label={genderLabel(me.data?.gender) ? `Gender · ${genderLabel(me.data?.gender)}` : "Gender"}
         trailing={chevron}
         onClick={me.data ? () => setStep("gender") : undefined}
       />

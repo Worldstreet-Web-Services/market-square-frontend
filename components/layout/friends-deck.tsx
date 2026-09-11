@@ -13,7 +13,6 @@ import {
   isFriendsFilterActive,
   type FriendsFilter as FriendsFilterState,
 } from "@/lib/friends-filter";
-import { facetValues } from "@/lib/people-filters";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
@@ -126,9 +125,6 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     (profile) => profile.id !== me.data?.id
   );
   const filtering = isFriendsFilterActive(filter);
-  /* The gender vocabulary is whatever the loaded people published — the
-     service's and theirs, never a list written here. */
-  const genders = facetValues(items, "gender");
 
   const filterPill = (
     <FriendsFilter
@@ -136,7 +132,6 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
       value={filter}
       onChange={changeFilter}
       viewerCity={me.data?.city?.trim() || null}
-      genders={genders}
     />
   );
   const header =

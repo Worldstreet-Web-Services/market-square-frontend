@@ -1228,8 +1228,8 @@ describe("The account dropdown follows 747:14001", () => {
     assert.match(items, /label="Profile"/);
     assert.match(items, /go\(me\.data \? `\/u\/\$\{me\.data\.username\}\/settings` : "\/auth"\)/, "Settings no longer opens the person's own /u/<username>/settings");
     assert.match(items, /setStep\("gender"\)/);
-    assert.match(shell, /const GENDER_CHOICES = \["Male", "Female"\] as const;/);
-    assert.match(items, /update\.mutate\(\{ gender: option \}/);
+    assert.match(items, /GENDER_OPTIONS\.map\(\(option\) =>/);
+    assert.match(items, /update\.mutate\(\{ gender: option\.value \}/);
     assert.doesNotMatch(items, /<input/, "the account menu asks people to type their gender again");
     assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
   });
@@ -1238,5 +1238,33 @@ describe("The account dropdown follows 747:14001", () => {
     assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 2);
     assert.match(shell, /const width = panel === "gist" \? 172 : 224;/);
     assert.match(shell, /border-\[0\.745px\] border-white\/\[0\.18\] bg-grey-800 p-\[11\.913px\]/);
+  });
+});
+
+
+describe("Gender is one choice everywhere: Male or Female", () => {
+  const places = [
+    "components/layout/app-shell.tsx",
+    "components/layout/onboarding-flow.tsx",
+    "features/profile/components/edit-profile-sheet.tsx",
+    "components/layout/friends-filter.tsx",
+    "features/discovery/components/people-filters.tsx",
+  ];
+
+  it("reads the one list in lib/gender.ts wherever gender is set or filtered", () => {
+    for (const path of places) {
+      const code = stripComments(read(path));
+      assert.match(code, /from "@\/lib\/gender"/, `${path} does not use the shared gender list`);
+      assert.match(code, /GENDER_OPTIONS\.map\(/, `${path} draws its own gender options`);
+    }
+  });
+
+  it("never asks anybody to type a gender", () => {
+    const edit = stripComments(read("features/profile/components/edit-profile-sheet.tsx"));
+    const explore = stripComments(read("features/discovery/components/people-filters.tsx"));
+    const filter = stripComments(read("components/layout/friends-filter.tsx"));
+    assert.doesNotMatch(edit, /onChange=\{\(e\) => setGender\(e\.target\.value\)\}/, "Edit profile has a gender text box again");
+    assert.doesNotMatch(explore, /placeholder="Gender"/, "Explore has a gender text box again");
+    assert.doesNotMatch(filter, /genders\.map/, "the friends filter lists typed spellings again");
   });
 });

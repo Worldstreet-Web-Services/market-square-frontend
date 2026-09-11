@@ -15,7 +15,7 @@
 export interface FriendsFilter {
   /** Exact city, as the service matches it. Empty means "anywhere". */
   city: string;
-  /** A value from the service's own vocabulary. Empty means "anyone". */
+  /** "male" or "female" (`lib/gender.ts`). Empty means "anyone". */
   gender: string;
   /** Only people the viewer does not follow yet. */
   newOnly: boolean;
@@ -44,7 +44,11 @@ export function friendsFilterLabel(filter: FriendsFilter): string {
   if (count === 0) return "Location";
   if (count > 1) return `${count} filters`;
   if (filter.city.trim()) return filter.city.trim();
-  if (filter.gender.trim()) return filter.gender.trim();
+  // Stored lowercase ("female"); shown as its label ("Female").
+  if (filter.gender.trim()) {
+    const gender = filter.gender.trim();
+    return gender.charAt(0).toUpperCase() + gender.slice(1);
+  }
   return "New people";
 }
 

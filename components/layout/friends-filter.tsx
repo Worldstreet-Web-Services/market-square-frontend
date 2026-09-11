@@ -1,5 +1,6 @@
 "use client";
 
+import { GENDER_OPTIONS, genderLabel, normalizeGender } from "@/lib/gender";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { MenuRow } from "@/components/ui/menu-row";
@@ -56,9 +57,8 @@ import { friendsFilterLabel, type FriendsFilter } from "@/lib/friends-filter";
  *   · Friends  — "Everyone", or only people the viewer does not follow yet
  *     (`excludeFollowing`). Nothing else is offered: "friends of friends" has
  *     no route, and a row the service cannot back is a lie, not a roadmap.
- *   · Gender   — "Anyone", then the values the loaded people actually
- *     published (`facetValues`), never a list written here: the service and
- *     the people describing themselves own that vocabulary.
+ *   · Gender   — "Anyone", Male or Female (`lib/gender.ts`), the only two
+ *     values a profile can hold, so the list never shows five spellings.
  *
  * A step opens with a Back row at its head, and Escape from anywhere closes
  * the whole menu and returns focus to the pill.
@@ -69,15 +69,12 @@ export function FriendsFilter({
   value,
   onChange,
   viewerCity,
-  genders,
   className,
 }: {
   value: FriendsFilter;
   onChange: (next: FriendsFilter) => void;
   /** The viewer's own published city, for "Near me". Null when they have none. */
   viewerCity: string | null;
-  /** The gender values present among the loaded people — the service's vocabulary. */
-  genders: string[];
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -166,7 +163,7 @@ export function FriendsFilter({
                 <MenuRow
                   size="compact"
                   icon={<IconFilterGender className="h-3.5 w-3.5 text-grey-400" />}
-                  label={value.gender.trim() ? `Gender · ${value.gender.trim()}` : "Gender"}
+                  label={genderLabel(value.gender) ? `Gender · ${genderLabel(value.gender)}` : "Gender"}
                   trailing={chevron}
                   onClick={() => setStep("gender")}
                 />
@@ -236,26 +233,19 @@ export function FriendsFilter({
                 <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
                 <MenuRow
                   size="compact"
-                  icon={dot(value.gender === "")}
+                  icon={dot(normalizeGender(value.gender) === null)}
                   label="Anyone"
                   onClick={() => set({ gender: "" })}
                 />
-                {genders.map((gender) => (
+                {GENDER_OPTIONS.map((option) => (
                   <MenuRow
-                    key={gender}
+                    key={option.value}
                     size="compact"
-                    icon={dot(value.gender === gender)}
-                    label={gender}
-                    onClick={() => set({ gender })}
+                    icon={dot(normalizeGender(value.gender) === option.value)}
+                    label={option.label}
+                    onClick={() => set({ gender: option.value })}
                   />
                 ))}
-                {genders.length === 0 && (
-                  <MenuRow
-                    size="compact"
-                    label="Nobody has shared a gender yet"
-                    hint="Values appear as people publish them"
-                  />
-                )}
               </>
             )}
           </div>
