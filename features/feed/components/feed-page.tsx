@@ -11,7 +11,6 @@ import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed, useFeedHead } from "@/features/feed/hooks/use-feed";
 import { useLaneSignal } from "@/features/feed/hooks/use-lane-signal";
 import { Composer } from "@/features/feed/components/composer";
-import { StoriesRow } from "@/features/feed/components/stories-row";
 import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import type { VideoItem } from "@/lib/video-context";
@@ -334,11 +333,8 @@ export function FeedPage({
           What the file opens on is the people you follow, which is what a
           social page should say first.
         */}
-        {authenticated && (
-          <div className="mb-4">
-            <StoriesRow />
-          </div>
-        )}
+        {/* The stories strip moved to Pals, above its tabs (ogazboiz,
+            2026-09-11). Home opens on what the square is talking about. */}
 
         {/*
           What the square is talking about, on the overview where it belongs.

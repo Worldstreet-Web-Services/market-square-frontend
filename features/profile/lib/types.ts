@@ -199,3 +199,26 @@ export const ProfilePhotoSchema = z.object({
 });
 export const ProfilePhotosSchema = z.object({ items: z.array(ProfilePhotoSchema) });
 export type ProfilePhoto = z.infer<typeof ProfilePhotoSchema>;
+
+/** `GET /profiles/:id/following` — a page of people, each with the reader's follow and wink state. */
+export const FollowingPageSchema = z.object({
+  items: z.array(ProfileSchema),
+  nextCursor: z.string().nullable().optional().default(null),
+});
+
+/**
+ * `GET /me/winks` — who winked at the reader: one row per person (their latest
+ * wink), newest first. `active` is true while the wink still stands (the same
+ * window that sets `profile.winkedMe`); answered and lapsed winks stay listed.
+ */
+export const WinksPageSchema = z.object({
+  items: z.array(
+    z.object({
+      profile: ProfileSchema,
+      winkedAt: z.string(),
+      active: z.boolean().optional().default(false),
+    })
+  ),
+  nextCursor: z.string().nullable().optional().default(null),
+});
+

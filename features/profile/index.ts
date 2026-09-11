@@ -27,6 +27,9 @@ export {
   // The Replays rail is composed in `components/layout` because it reads the
   // topic vocabulary from discovery; this is the read it needs from here.
   useProfileStreams,
+  // Pals' Winks and Following tabs.
+  useFollowingList,
+  useMyWinks,
 } from "./hooks/use-profile";
 export type { ProfileStreamFilters } from "./lib/types";
 // The follow-edge resolver every follow control must read — a missing

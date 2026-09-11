@@ -60,7 +60,6 @@ import {
   IconMic,
   IconPlus,
   IconLogout,
-  IconSearch,
   IconShield,
   IconStore,
   IconUser,
@@ -1912,12 +1911,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {broadcast.live && (
               <OnAirPill streamId={broadcast.streamId} compact />
             )}
-            {/* Search only. Notifications live in the bottom tab bar, where they
-              carry their unread badge — the bell here was the same
-              destination a second time, without the count. */}
-            <Link href="/discover" className="text-meta" aria-label="Explore">
-              <IconSearch className="h-5 w-5" />
-            </Link>
           </div>
         </div>
 

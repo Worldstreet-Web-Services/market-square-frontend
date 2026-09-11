@@ -353,6 +353,13 @@ const PENDING_ROUTES = {
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
   },
+  // ── who winked at me (Pals' Winks tab) ───────────────────────────────────
+  "get /me/winks": {
+    reason:
+      "People who winked at the reader, one row per person. BUILT on the service " +
+      "(migration 070, PR #206), NOT yet deployed. Until then Pals' Winks tab " +
+      "reads the 404 as 'not available here yet'. DELETE THIS ENTRY once it is in openapi.json.",
+  },
   // ── daily email summary (notifications stage B) ─────────────────────────
   "post /email/unsubscribe": {
     reason:

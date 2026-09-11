@@ -1206,12 +1206,12 @@ describe("Your Story works like WhatsApp's My status", () => {
 describe("The dock follows 964:24177", () => {
   const dock = stripComments(read("components/layout/bottom-dock.tsx"));
 
-  it("carries Home, Discover, Pals and Chat, with the node's own glyphs", () => {
-    for (const glyph of ["dock-home.svg", "dock-discover.svg", "dock-pals.svg", "dock-chat.svg"]) {
+  it("carries Home, Pals and Chat, with the node's own glyphs", () => {
+    for (const glyph of ["dock-home.svg", "dock-pals.svg", "dock-chat.svg"]) {
       assert.ok(dock.includes(`/notifications/${glyph}`), `${glyph} is not the dock's glyph`);
       assert.ok(existsSync(new URL(`../public/notifications/${glyph}`, import.meta.url)), `${glyph} is missing from public`);
     }
-    assert.match(dock, /href: "\/discover", label: "Discover"/);
+    assert.doesNotMatch(dock, /href: "\/discover"/, "Discover is back in the dock; people are met on Pals now");
   });
 
   it("is the file's bar and circle at 72/113", () => {
@@ -1703,6 +1703,23 @@ describe("The daily email summary", () => {
   it("lets the BFF pass exactly that one write through signed out", () => {
     const route = stripComments(read("app/api/market-square/[...path]/route.ts"));
     assert.match(route, /const needsAuth = method === "GET" \? !isPublicGet\(path\) : !\(method === "POST" && isPublicPost\(path\)\);/);
+  });
+});
+
+describe("Pals: stories, then Discover · Winks · Following", () => {
+  const pals = stripComments(read("components/layout/pals-screen.tsx"));
+
+  it("opens on the stories strip with the three tabs right under it", () => {
+    const stories = pals.indexOf("<StoriesRow />");
+    const tabs = pals.indexOf("<ColumnTabs tabs={TABS}");
+    assert.ok(stories > -1 && tabs > stories, "the tabs are not under the stories strip");
+    assert.match(pals, /\{ value: "discover", label: "Discover" \},\s*\{ value: "winks", label: "Winks" \},\s*\{ value: "following", label: "Following" \}/);
+    assert.match(pals, /\{tab === "discover" && <FriendsDeck heading="pals" \/>\}/);
+  });
+
+  it("keeps stories off Home and Discover out of the navigation", () => {
+    assert.doesNotMatch(stripComments(read("features/feed/components/feed-page.tsx")), /<StoriesRow/);
+    assert.doesNotMatch(stripComments(read("components/layout/app-shell.tsx")), /aria-label="Explore"/);
   });
 });
 
