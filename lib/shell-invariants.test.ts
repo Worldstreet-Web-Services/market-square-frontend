@@ -1507,20 +1507,25 @@ describe("Settings are the reader's own, and show real houses", () => {
 });
 
 describe("Settings controls never pretend to save", () => {
-  it("disables every preference control while no stage is wired", () => {
+  it("saves Notifications and Chat through /me/settings, and keeps the later stages disabled", () => {
     const copy = read("components/layout/settings-copy.ts");
-    assert.match(copy, /export const SETTINGS_SAVE_LIVE = false;/, "switch this on only with the service wiring for that stage");
-    const chat = read("components/layout/chat-view.tsx");
-    const house = read("components/layout/house-notifications-view.tsx");
-    const notifications = read("components/layout/notifications-view.tsx");
-    const screen = read("components/layout/settings-screen.tsx");
-    for (const [name, source] of [["chat", chat], ["house", house], ["notifications", notifications]] as const) {
-      const toggles = source.match(/<Toggle\b/g) ?? [];
-      const disabled = source.match(/<Toggle\s+disabled=\{disabled\}/g) ?? [];
-      assert.equal(disabled.length, toggles.length, `${name}: a toggle can flip without saving`);
+    assert.match(copy, /export const HOUSE_SAVE_LIVE = false;/);
+    assert.match(copy, /export const PRIVACY_SAVE_LIVE = false;/);
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /const settingsLive = settings\.isSuccess;/);
+    assert.match(screen, /onFriendsRoomChange=\{\(value\) => save\.mutate\(\{ notifications: \{ friendsRooms: value \} \}\)\}/);
+    assert.match(screen, /onMessagesFromChange=\{\(value\) => save\.mutate\(\{ chat: \{ messagesFrom: value \} \}\)\}/);
+    assert.match(screen, /disabled=\{!HOUSE_SAVE_LIVE\}/);
+    assert.equal((screen.match(/<Toggle\s+disabled=\{!PRIVACY_SAVE_LIVE\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
+    for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
+      const source = read(`components/layout/${file}.tsx`);
+      assert.equal((source.match(/<Toggle\s+disabled=\{disabled\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
     }
-    assert.equal((screen.match(/<Toggle\s+disabled=\{!SETTINGS_SAVE_LIVE\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
-    assert.match(screen, /disabled=\{!SETTINGS_SAVE_LIVE\}\s+title=\{SETTINGS_SAVE_LIVE \? undefined : SAVING_SOON\}\s+className="flex h-16/);
+  });
+
+  it("names a chat refused by someone's Messages-from setting in the service's words", () => {
+    const envelope = read("lib/api/envelope.ts");
+    assert.match(envelope, /case "MESSAGES_RESTRICTED":\s+return err\.message \|\| "This person isn't accepting messages\.";/);
   });
 });
 

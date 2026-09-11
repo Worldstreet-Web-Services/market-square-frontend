@@ -353,6 +353,18 @@ const PENDING_ROUTES = {
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
   },
+  // ── settings, stage 1 ─────────────────────────────────────────────────────
+  "get /me/settings": {
+    reason:
+      "The reader's settings (notifications, who can message you). BUILT on the " +
+      "service (migration 063, PR #205) and served locally, NOT yet deployed, " +
+      "so it is absent from the production spec. Until then the settings " +
+      "screen reads the 404 as 'coming soon' and keeps those controls " +
+      "disabled. DELETE THIS ENTRY once the route appears in openapi.json.",
+  },
+  "patch /me/settings": {
+    reason: "Saving a setting. Same undeployed service change as get /me/settings.",
+  },
   // ── house invite links ────────────────────────────────────────────────────
   "post /conversations/{}/invites": {
     reason:

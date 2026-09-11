@@ -70,7 +70,7 @@ export function ErrorState({
   // signed-out visitor at a dead end.
   if (isAuthError(error)) return <SignInPrompt className={className} />;
   return (
-    <div className={cn("ws-inset flex flex-col items-center gap-3 px-6 py-10 text-center", className)}>
+    <div className={cn("flex flex-col items-center gap-3 rounded-[16.5px] border border-white/10 bg-transparent px-6 py-10 text-center", className)}>
       <p className="text-sm text-down">{errorMessage(error, fallback)}</p>
       {onRetry && <RetryButton onRetry={onRetry} />}
     </div>
@@ -175,7 +175,9 @@ export function SignInPrompt({
   return (
     <div
       className={cn(
-        "ws-inset flex flex-col items-center gap-3 px-6 py-8 text-center",
+        // An outline like the empty state and the post card — a black/35
+        // slab read as a hole in the column.
+        "flex flex-col items-center gap-3 rounded-[16.5px] border border-white/10 bg-transparent px-6 py-8 text-center",
         className
       )}
     >

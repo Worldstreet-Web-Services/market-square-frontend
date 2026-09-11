@@ -3,7 +3,7 @@
 import { Toggle } from "@/components/ui/toggle";
 import { SAVING_SOON } from "@/components/layout/settings-copy";
 
-type ChatMessagesFrom = "no-one" | "everyone" | "verified";
+type ChatMessagesFrom = "no_one" | "everyone" | "verified";
 
 export function ChatView({
   messagesFrom,
@@ -34,7 +34,7 @@ export function ChatView({
         <div className="flex flex-col">
           <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">No one</p>
-            <Toggle disabled={disabled} title={disabled ? SAVING_SOON : undefined} checked={messagesFrom === "no-one"} onChange={() => onMessagesFromChange("no-one")} label="Messages from no one" />
+            <Toggle disabled={disabled} title={disabled ? SAVING_SOON : undefined} checked={messagesFrom === "no_one"} onChange={() => onMessagesFromChange("no_one")} label="Messages from no one" />
           </div>
           <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">Everyone</p>

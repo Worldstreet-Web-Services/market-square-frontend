@@ -9,7 +9,9 @@ import { SignInPrompt } from "@/components/ui/states";
 import { Toggle } from "@/components/ui/toggle";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { ChatView } from "@/components/layout/chat-view";
-import { SAVING_SOON, SETTINGS_SAVE_LIVE } from "@/components/layout/settings-copy";
+import { HOUSE_SAVE_LIVE, PRIVACY_SAVE_LIVE, SAVING_SOON } from "@/components/layout/settings-copy";
+import { errorCode } from "@/lib/api/envelope";
+import { useSettings, useUpdateSettings } from "@/features/settings";
 import { NotificationsView } from "@/components/layout/notifications-view";
 import {
   HouseNotificationsView,
@@ -88,8 +90,6 @@ type PrivacyView = "main" | "location" | "chat";
 type HelpView = "main" | "terms" | "privacy-policy" | "community-guidelines";
 
 type LocationChoice = "country" | "region-and-country" | "continent";
-
-type ChatMessagesFrom = "no-one" | "everyone" | "verified";
 
 const LOCATION_CHOICES: Array<{ key: LocationChoice; label: string }> = [
   { key: "country", label: "Country" },
@@ -197,8 +197,8 @@ function PrivacyMain({
         description="Personalize your feed based on your sign-up info and locations you visit."
         trailing={
           <Toggle
-            disabled={!SETTINGS_SAVE_LIVE}
-            title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
+            disabled={!PRIVACY_SAVE_LIVE}
+            title={PRIVACY_SAVE_LIVE ? undefined : SAVING_SOON}
             checked={personalizePlaces}
             onChange={onPersonalizePlacesChange}
             label="Personalize based on places you've been"
@@ -226,8 +226,8 @@ function PrivacyMain({
         description="Allow followers to see which Spaces you're listening to."
         trailing={
           <Toggle
-            disabled={!SETTINGS_SAVE_LIVE}
-            title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
+            disabled={!PRIVACY_SAVE_LIVE}
+            title={PRIVACY_SAVE_LIVE ? undefined : SAVING_SOON}
             checked={visibilityOnSpace}
             onChange={onVisibilityOnSpaceChange}
             label="Visibility on Space"
@@ -257,8 +257,8 @@ function LocationView({
           <button
             key={choice.key}
             onClick={() => onLocationChoiceChange(choice.key)}
-            disabled={!SETTINGS_SAVE_LIVE}
-            title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
+            disabled={!PRIVACY_SAVE_LIVE}
+            title={PRIVACY_SAVE_LIVE ? undefined : SAVING_SOON}
             className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           >
             <p className="text-base font-bold leading-6 text-white">
@@ -579,12 +579,16 @@ export function SettingsScreen({ username }: { username: string }) {
   const [visibilityOnSpace, setVisibilityOnSpace] = useState(true);
   const [locationChoice, setLocationChoice] =
     useState<LocationChoice>("region-and-country");
-  const [friendsRoom, setFriendsRoom] = useState(true);
-  const [directNotifications, setDirectNotifications] = useState(true);
-  const [chatMessagesFrom, setChatMessagesFrom] =
-    useState<ChatMessagesFrom>("everyone");
-  const [chatAllowHouseMembers, setChatAllowHouseMembers] = useState(false);
-  const [chatAllowPastAudience, setChatAllowPastAudience] = useState(false);
+  /*
+    STAGE 1 IS LIVE: Notifications and Privacy → Chat read and write
+    `/me/settings`. A 404 means that route is not deployed on this server, so
+    those controls stay disabled with the reason; while it loads they are
+    disabled too, so nothing can be flipped before the real value is known.
+  */
+  const settings = useSettings();
+  const save = useUpdateSettings();
+  const settingsLive = settings.isSuccess;
+  const settingsGone = settings.isError && errorCode(settings.error) === "NOT_FOUND";
   const [houseMessagesFrom, setHouseMessagesFrom] =
     useState<MessageNotifFrom>("admins");
   const [houseGistroomsFrom, setHouseGistroomsFrom] =
@@ -655,11 +659,28 @@ export function SettingsScreen({ username }: { username: string }) {
       ) : (
         <div className="flex flex-col pb-10">
           {/* One quiet line, only where there are controls that cannot save. */}
-          {!SETTINGS_SAVE_LIVE && (active === "notifications" || active === "privacy") && (
+          {((active === "notifications" && house && !HOUSE_SAVE_LIVE) ||
+            (active === "privacy" && privacyView !== "chat" && !PRIVACY_SAVE_LIVE) ||
+            (((active === "notifications" && !house) || (active === "privacy" && privacyView === "chat")) &&
+              settingsGone)) && (
             <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
               Saving these settings is coming soon.
             </p>
           )}
+          {((active === "notifications" && !house) || (active === "privacy" && privacyView === "chat")) &&
+            settings.isError &&
+            !settingsGone && (
+              <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
+                Couldn&apos;t load your settings.{" "}
+                <button
+                  type="button"
+                  onClick={() => void settings.refetch()}
+                  className="font-bold text-white underline-offset-2 hover:underline"
+                >
+                  Try again
+                </button>
+              </p>
+            )}
 
           {active === "subscription" && <SubscriptionDetail />}
 
@@ -670,19 +691,19 @@ export function SettingsScreen({ username }: { username: string }) {
                 onMessagesFromChange={setHouseMessagesFrom}
                 gistroomsFrom={houseGistroomsFrom}
                 onGistroomsFromChange={setHouseGistroomsFrom}
-                disabled={!SETTINGS_SAVE_LIVE}
+                disabled={!HOUSE_SAVE_LIVE}
               />
             ) : (
               <NotificationsView
-                friendsRoom={friendsRoom}
-                onFriendsRoomChange={setFriendsRoom}
-                directNotifications={directNotifications}
-                onDirectNotificationsChange={setDirectNotifications}
+                friendsRoom={settings.data?.notifications.friendsRooms ?? true}
+                onFriendsRoomChange={(value) => save.mutate({ notifications: { friendsRooms: value } })}
+                directNotifications={settings.data?.notifications.direct ?? true}
+                onDirectNotificationsChange={(value) => save.mutate({ notifications: { direct: value } })}
                 onOpenHouse={(next) => {
                   setHouse(next);
                   window.scrollTo({ top: 0 });
                 }}
-                disabled={!SETTINGS_SAVE_LIVE}
+                disabled={!settingsLive}
               />
             ))}
 
@@ -691,13 +712,13 @@ export function SettingsScreen({ username }: { username: string }) {
           )}
           {active === "privacy" && privacyView === "chat" && (
             <ChatView
-              messagesFrom={chatMessagesFrom}
-              onMessagesFromChange={setChatMessagesFrom}
-              allowHouseMembers={chatAllowHouseMembers}
-              onAllowHouseMembersChange={setChatAllowHouseMembers}
-              allowPastAudience={chatAllowPastAudience}
-              onAllowPastAudienceChange={setChatAllowPastAudience}
-              disabled={!SETTINGS_SAVE_LIVE}
+              messagesFrom={settings.data?.chat.messagesFrom ?? "everyone"}
+              onMessagesFromChange={(value) => save.mutate({ chat: { messagesFrom: value } })}
+              allowHouseMembers={settings.data?.chat.allowHouseMembers ?? true}
+              onAllowHouseMembersChange={(value) => save.mutate({ chat: { allowHouseMembers: value } })}
+              allowPastAudience={settings.data?.chat.allowPastAudience ?? false}
+              onAllowPastAudienceChange={(value) => save.mutate({ chat: { allowPastAudience: value } })}
+              disabled={!settingsLive}
             />
           )}
           {active === "privacy" && privacyView === "main" && (
