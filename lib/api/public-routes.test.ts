@@ -66,6 +66,8 @@ const PUBLIC: string[][] = [
   // Home's "Join a community" grid renders signed out, so the directory it
   // reads has to answer signed out. This exact shape only.
   ["conversations", "discover"],
+  // A house invite's landing page, read by strangers and signed-out visitors.
+  ["invites", "tok_1"],
   // Public upstream and public here: the trending rail is a discovery surface
   // that renders signed out.
   ["hashtags", "trending"],
@@ -224,6 +226,12 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["conversations", "cv_1"]), false);
       assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
       assert.equal(isPublicGet(["conversations", "discover", "anything"]), false);
+    });
+
+    it("opens one invite's preview and nothing else under /invites", () => {
+      assert.equal(isPublicGet(["invites", "tok_1"]), true);
+      assert.equal(isPublicGet(["invites"]), false);
+      assert.equal(isPublicGet(["invites", "tok_1", "accept"]), false);
     });
 
     it("gates /verification unless it is the rule", () => {

@@ -1,4 +1,6 @@
 export { MessagesPage } from "@/features/messages/components/messages-page";
+// `/join/<token>` — where a shared house invite lands.
+export { JoinPage } from "@/features/messages/components/join-page";
 export type { NewChatPickerProps, NewChatMode } from "@/features/messages/components/messages-page";
 export {
   useAddGroupMembers,

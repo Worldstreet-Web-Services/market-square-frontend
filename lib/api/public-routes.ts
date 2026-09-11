@@ -112,6 +112,12 @@ export function isPublicGet(path: string[]): boolean {
   // carries no message, unread count or last activity.
   if (head === "conversations" && second === "discover" && path.length === 2) return true;
 
+  // What a house INVITE LINK opens onto — `GET /invites/:token`, optional auth.
+  // The link is sent to people who are not members and often not signed in,
+  // and the landing page has to show them the house before asking either. Only
+  // this exact shape; accepting is a POST and never reaches this predicate.
+  if (head === "invites" && second && path.length === 2) return true;
+
   // The trending hashtag rail. Public upstream and public here: it is a
   // DISCOVERY surface that renders for signed-out visitors, and gating it gave
   // them a 401 on content the service was serving to anyone who asked. Only

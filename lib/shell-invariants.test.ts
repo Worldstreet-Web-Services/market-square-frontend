@@ -1436,3 +1436,23 @@ describe("Posts carry several photos — node 1029:22591", () => {
     assert.match(schemas, /media: z\.array\(PostMediaSchema\)\.optional\(\),/, "a default on media erases the server's answer");
   });
 });
+
+
+describe("A house can be shared with an invite link", () => {
+  it("offers Share invite link to whoever may make one and opens the post share sheet", () => {
+    const menu = stripComments(read("features/messages/components/thread-menu.tsx"));
+    const thread = stripComments(read("features/messages/components/thread.tsx"));
+    assert.match(menu, /\{actions\.onShareInvite && \(/);
+    assert.doesNotMatch(menu, /label="Copy link"/, "the thread-address copy is back; nobody outside the house can use it");
+    assert.match(thread, /const canShareInvite = group && canMakeInvite\(\{ visibility: conversation\.visibility, isOwner \}\);/);
+    assert.match(thread, /onShareInvite: canShareInvite \? shareInvite : undefined,/);
+    assert.match(thread, /<ShareSheet\s+open\s+onClose=\{\(\) => setInviteLink\(null\)\}\s+title="Share invite link"/);
+  });
+
+  it("lands the link on /join/<token>", () => {
+    const route = read("app/join/[token]/page.tsx");
+    assert.match(route, /<JoinPage token=\{decodeURIComponent\(token\)\} \/>/);
+    const page = stripComments(read("features/messages/components/join-page.tsx"));
+    assert.match(page, /const state = inviteState\(house, authenticated\);/);
+  });
+});
