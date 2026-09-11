@@ -1322,3 +1322,13 @@ describe("The profile draws no creator badge", () => {
     assert.match(cover, /<OrgBadgeChip orgBadge=\{profile\.orgBadge\} \/>/);
   });
 });
+
+describe("Pickers offer the types the service publishes", () => {
+  it("builds the composer's and the story creator's accept list from the live limits", () => {
+    for (const path of ["features/feed/components/composer.tsx", "features/feed/components/story-creator.tsx"]) {
+      const code = stripComments(read(path));
+      assert.match(code, /accept=\{acceptFor\("media", limits\)\}/, `${path} hard-codes its accepted types again`);
+      assert.doesNotMatch(code, /ACCEPT_MEDIA/, `${path} still uses the compiled-in list`);
+    }
+  });
+});

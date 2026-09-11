@@ -13,7 +13,6 @@ import { SymbolPicker } from "@/components/ui/symbol-picker";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { cn } from "@/lib/cn";
 import {
-  ACCEPT_MEDIA,
   ensureUploadLimits,
   formatBytes,
   getUploadLimits,
@@ -22,6 +21,7 @@ import {
   validateUpload,
   validateVideoDuration,
 } from "@/lib/api/upload";
+import { acceptFor } from "@/lib/upload-rules";
 import { useCreatePost, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
 import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
 import { MentionPicker } from "@/features/feed/components/mention-picker";
@@ -303,7 +303,9 @@ export function Composer({
           // Derived from the allowlist so the picker can never offer a type
           // we reject — it used to include video/quicktime, which guaranteed
           // a failure after the user had already chosen a file.
-          accept={ACCEPT_MEDIA}
+          // From the LIVE limits: a type appears here the moment the service
+          // publishes it (`.mov` included), and never before.
+          accept={acceptFor("media", limits)}
           className="sr-only"
           onChange={(event) => void chooseMedia(event.target.files?.[0])}
         />

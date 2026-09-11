@@ -6,13 +6,14 @@ import { toast } from "sonner";
 import { useGate } from "@/hooks/use-gate";
 import { IconImage, IconSend, IconX } from "@/components/ui/icons";
 import {
-  ACCEPT_MEDIA,
   ensureUploadLimits,
+  getUploadLimits,
   readVideoDuration,
   uploadKind,
   validateUpload,
   validateVideoDuration,
 } from "@/lib/api/upload";
+import { acceptFor } from "@/lib/upload-rules";
 import { useCreatePost, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
 
 /** A text story is a thought, not an essay. */
@@ -52,6 +53,17 @@ export function StoryCreator({ onClose }: { onClose: () => void }) {
   const [caption, setCaption] = useState("");
   const [text, setText] = useState("");
   const busy = upload.isPending || create.isPending;
+  // The picker offers what the service publishes, `.mov` included once it does.
+  const [limits, setLimits] = useState(getUploadLimits());
+  useEffect(() => {
+    let live = true;
+    void ensureUploadLimits().then((fetched) => {
+      if (live) setLimits(fetched);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // A chosen picture's preview URL is released when it is replaced or closed.
   useEffect(() => {
@@ -156,7 +168,7 @@ export function StoryCreator({ onClose }: { onClose: () => void }) {
       <input
         ref={fileInput}
         type="file"
-        accept={ACCEPT_MEDIA}
+        accept={acceptFor("media", limits)}
         className="sr-only"
         onChange={(event) => void choose(event.target.files?.[0])}
       />
