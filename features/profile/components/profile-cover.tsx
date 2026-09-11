@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
@@ -65,6 +66,31 @@ export function ProfileCover({
   const router = useRouter();
   const name = profile.displayName || profile.username;
 
+  /*
+    THE FILE'S COVER, DRAWN AS ONE PICTURE. From md the furniture over the photo
+    (Back, the identity row, the actions) is laid out at the node's own 741x473
+    and scaled to the card's real width, so everything sits exactly where
+    1021:20868 puts it — actions at the identity row's foot, the handle, KASH and
+    "Who viewed my profile" on one row — while the column keeps the rail beside
+    it (535 wide at 1440, a 0.72 scale). Below md the phone layout stands.
+  */
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const md = window.matchMedia("(min-width: 48rem)");
+    const measure = () => setScale(md.matches ? Math.min(1, el.clientWidth / 741) : null);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    md.addEventListener("change", measure);
+    return () => {
+      observer.disconnect();
+      md.removeEventListener("change", measure);
+    };
+  }, []);
+
   return (
     /*
       The file's 741x473 holds on desktop. On a phone that ratio gives a
@@ -73,7 +99,7 @@ export function ProfileCover({
       the left edge. So the phone cover is 300 tall and stacks the identity
       above the actions; `md:` returns the file's frame.
     */
-    <div className="relative h-[300px] w-full overflow-hidden rounded-[20px] md:aspect-[741/473] md:h-auto">
+    <div ref={cardRef} className="relative h-[300px] w-full overflow-hidden rounded-[20px] md:aspect-[741/473] md:h-auto">
       {/*
         THE COVER PHOTOGRAPH, AND THE FALLBACK IT KEEPS.
 
@@ -139,6 +165,10 @@ export function ProfileCover({
         className="absolute inset-x-0 bottom-0 h-[45.5%] bg-[linear-gradient(0deg,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0)_100%)]"
       />
 
+      <div
+        className="absolute inset-0 md:inset-auto md:left-0 md:top-0 md:h-[473px] md:w-[741px] md:origin-top-left"
+        style={scale === null ? undefined : { transform: `scale(${scale})` }}
+      >
       {/* 435:27537 — 24 in and 24 down, the same labelled Back the gist room
           carries. Inside the card, over the scrim, not above it in a column
           header. */}
@@ -152,19 +182,6 @@ export function ProfileCover({
         Back
       </button>
 
-      {/*
-        THE ACTIONS SIT ON BACK'S LINE, top right — "try a way to fit it in".
-
-        The file puts them at the identity row's foot (1021:20260), which works
-        in its 741 cover. Ours is 535 beside the rail, and there the actions took
-        183 of the row, leaving the name and handle 200 — so the handle row
-        (handle, KASH, "Who viewed my profile": 365 in the file) wrapped. Up
-        here, centred on Back's 24px line, they free the whole width for the
-        identity (399 at 1440), so that row holds at the file's own sizes.
-      */}
-      {actions && (
-        <div className="absolute right-6 top-[17px] z-10 flex items-center gap-2 md:gap-4">{actions}</div>
-      )}
 
       {/* 435:27503 — the identity, 24 from the left and 24 from the foot. */}
       {/* 545:47576 (the identity, y=377..449) and 545:47603 (the actions,
@@ -234,7 +251,9 @@ export function ProfileCover({
           </div>
         </div>
 
-
+        {/* 1021:20260 — 16 apart, their foot 5 above the avatar's (444 vs 449). */}
+        {actions && <div className="flex shrink-0 items-center gap-2 md:mb-[5px] md:gap-4">{actions}</div>}
+      </div>
       </div>
     </div>
   );
