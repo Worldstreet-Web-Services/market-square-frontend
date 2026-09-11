@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
@@ -607,6 +608,20 @@ export function PostCard({
 }) {
   const like = useLikePost();
   const repost = useRepostPost();
+  const router = useRouter();
+  /*
+    TAPPING THE WORDS OPENS THE POST, as it does on X — the card had no way
+    into its own page at all. Anything interactive inside the caption (a
+    mention, a hashtag, a $ticker, Show more) keeps its own tap, and a reader
+    who dragged to select text is not thrown onto another page. On the post's
+    own page there is nowhere further to go, so nothing is wired.
+  */
+  const openPost = (event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("a, button, input, textarea, [role='button']")) return;
+    if (window.getSelection()?.toString()) return;
+    router.push(`/p/${post.id}`);
+  };
   const bookmark = useBookmarkPost();
   const gate = useGate();
   // Who is reading, so the overflow menu can offer Edit and Delete to the
@@ -731,7 +746,14 @@ export function PostCard({
           </div>
           <p className="mt-[2.8px] truncate text-[12.1px] leading-[16.2px] text-white/50">
             {author ? `@${author.username}  •  ` : ""}
-            {relativeTime(post.createdAt)}
+            {/* The time is the post's own link, the keyboard's way in. */}
+            {full ? (
+              relativeTime(post.createdAt)
+            ) : (
+              <Link href={`/p/${post.id}`} className="hover:text-white/80 hover:underline">
+                {relativeTime(post.createdAt)}
+              </Link>
+            )}
             {/*
               EDITED, from `editedAt` alone.
 
@@ -887,16 +909,18 @@ export function PostCard({
         exactly 18 below the hairline, the same distance the media does on the
         first). So the 12 belongs to the media, not to the text.
       */}
-      <PostText
-        text={post.text}
-        mentions={post.mentions}
-        className={cn(
-          "text-[13.8px] leading-[23px] text-white/90",
-          // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
-          rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
-        )}
-        clampLines={full ? undefined : 6}
-      />
+      <div data-post-body onClick={full ? undefined : openPost} className={cn(!full && "cursor-pointer")}>
+        <PostText
+          text={post.text}
+          mentions={post.mentions}
+          className={cn(
+            "text-[13.8px] leading-[23px] text-white/90",
+            // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
+            rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
+          )}
+          clampLines={full ? undefined : 6}
+        />
+      </div>
       {/* The coins the post names, with today's move — the row Ark draws. */}
       <CoinChips text={post.text} />
 

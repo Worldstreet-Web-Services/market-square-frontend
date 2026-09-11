@@ -1472,3 +1472,17 @@ describe("Column pages sit on the chrome ground", () => {
   });
 });
 
+describe("Tapping a post's words opens the post", () => {
+  const card = stripComments(read("features/feed/components/post-card.tsx"));
+
+  it("opens /p/:id from the caption, leaving links, buttons and selections alone", () => {
+    assert.match(card, /<div data-post-body onClick=\{full \? undefined : openPost\}/);
+    assert.match(card, /target\.closest\("a, button, input, textarea, \[role='button'\]"\)\) return;/);
+    assert.match(card, /if \(window\.getSelection\(\)\?\.toString\(\)\) return;/);
+    assert.match(card, /router\.push\(`\/p\/\$\{post\.id\}`\);/);
+  });
+
+  it("makes the timestamp the post's link everywhere but the post's own page", () => {
+    assert.match(card, /<Link href=\{`\/p\/\$\{post\.id\}`\} className="hover:text-white\/80 hover:underline">/);
+  });
+});
