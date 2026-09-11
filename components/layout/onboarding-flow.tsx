@@ -1,5 +1,6 @@
 "use client";
 
+import { GENDER_OPTIONS } from "@/lib/gender";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Avatar } from "@/components/ui/avatar";
@@ -348,9 +349,6 @@ function ClaimStep({ onDone }: { onDone: () => void }) {
   const taken = errorCode(update.error) === "CONFLICT";
   const valid = /^[a-z0-9_]{3,20}$/.test(tag);
 
-  // The file's two, and only those two.
-  const options = ["Male", "Female"];
-
   return (
     <>
       <CardHead title="Claim your Square tag name" step={1} />
@@ -385,12 +383,13 @@ function ClaimStep({ onDone }: { onDone: () => void }) {
           aria-label="Gender"
           className="overflow-hidden rounded-lg bg-[rgba(51,51,51,0.31)]"
         >
-          {options.map((option) => {
-            const value = option.toLowerCase();
+          {/* The file's two, and only those two — the one list in `lib/gender.ts`. */}
+          {GENDER_OPTIONS.map((option) => {
+            const value = option.value;
             const on = gender.toLowerCase() === value;
             return (
               <button
-                key={option}
+                key={value}
                 type="button"
                 role="radio"
                 aria-checked={on}
@@ -398,7 +397,7 @@ function ClaimStep({ onDone }: { onDone: () => void }) {
                 className="ws-press flex w-full items-center justify-between px-6 py-3.5 text-left transition-colors hover:bg-white/[0.04]"
               >
                 <span className="text-[20px] font-medium leading-[27.81px] text-white">
-                  {option}
+                  {option.label}
                 </span>
                 <TickSquare on={on} />
               </button>

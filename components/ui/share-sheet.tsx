@@ -8,8 +8,9 @@ import { IconLink } from "@/components/ui/icons";
 import { SHARE_TARGETS, shareUrl, type SharePayload, type ShareTarget } from "@/lib/share-targets";
 
 /**
- * SHARE A POST — to WhatsApp, X, Facebook, Telegram, the clipboard, or the
- * device's own sheet.
+ * SHARE — a post, a profile — to WhatsApp, X, Facebook, Telegram, the
+ * clipboard, or the device's own sheet. Shared UI, so every slice shares the
+ * same way ("share in the profile should work just like the feed").
  *
  * It used to be one tap: the native sheet where the browser had one, else a
  * silent copy of the link. Desktop browsers mostly have no native sheet, so
@@ -33,10 +34,13 @@ export function ShareSheet({
   open,
   onClose,
   payload,
+  title = "Share post",
 }: {
   open: boolean;
   onClose: () => void;
   payload: SharePayload;
+  /** The sheet's heading: "Share post", "Share profile". */
+  title?: string;
 }) {
   const canNative = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
@@ -63,7 +67,7 @@ export function ShareSheet({
     "ws-press flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-heading transition-colors hover:bg-white/[0.06]";
 
   return (
-    <Sheet open={open} onClose={onClose} title="Share post">
+    <Sheet open={open} onClose={onClose} title={title}>
       <div className="flex flex-col gap-1">
         {canNative && (
           <button type="button" onClick={() => void native()} className={row}>

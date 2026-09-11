@@ -1,4 +1,5 @@
 export { LiveHub } from "./components/live-hub";
+export { LiveCta } from "./components/live-cta";
 export { StreamRoom } from "./components/stream-room";
 export { StudioHome } from "./components/studio-home";
 export { StudioStreamScreen } from "./components/studio-stream-screen";

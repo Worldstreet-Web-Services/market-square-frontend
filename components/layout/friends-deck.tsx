@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { DeckDots } from "@/components/ui/deck-dots";
 import { canGoBack } from "@/lib/nav-history";
-import { PalCard, DECK_CARD } from "@/components/layout/pal-card";
+import { PalCard, DECK_CARD, HOME_DECK_CARD, type PalCardNodeGeometry } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
 import {
   EMPTY_FRIENDS_FILTER,
@@ -13,7 +13,6 @@ import {
   isFriendsFilterActive,
   type FriendsFilter as FriendsFilterState,
 } from "@/lib/friends-filter";
-import { facetValues } from "@/lib/people-filters";
 import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
@@ -21,14 +20,15 @@ import { SwipeVerdict } from "@/components/layout/swipe-verdict";
 import { useFollow, useIsFollowing } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
-import { DECK_NODE, deckLayout, type DeckLayout } from "@/lib/deck-layout";
+import { DECK_NODE, HOME_DECK_NODE, deckLayout, type DeckLayout, type DeckNode } from "@/lib/deck-layout";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
  * "MAKE SOME FRIENDS" — node 844:18440's deck, on Home and on `/pals`.
  *
  * One person at a time, raised and lifted forward; the two either side of them
- * behind it, tilted and DIMMED to the node's own 0.39 and 0.30; the pass X and
+ * behind it, tilted and DIMMED to the node's own 0.39 and 0.30 (Home's own deck,
+ * 647:16300, dims both to 0.2); the pass X and
  * the wink under the photo; a `<` `>` disc at each edge of the column. It is a
  * DECK rather than a list because a list is a directory you scan and a deck is
  * one person you have to decide about, and deciding is what produces a wink.
@@ -111,18 +111,20 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
   }, []);
   // Node 844:18440 puts the deck 89 under the heading block on `/pals`; the
   // heading is drawn at 0.68 of the node here (see its note), and so is the
-  // gap — 60. Home's own file keeps its 24.
-  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "gap-6");
-  const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: true });
+  // gap — 60. HOME (647:16300) spaces its own parts explicitly — 90 to the
+  // deck, 9.38 to the pills, 67 to the rule, 60 to the timeline — so its
+  // section carries no gap of its own, only the 60 under it.
+  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "mb-[60px]");
+  /* HOME DRAWS ITS OWN DECK (647:16300), not `/pals`' at another scale. */
+  const node: DeckNode = heading === "home" ? HOME_DECK_NODE : DECK_NODE;
+  const card: PalCardNodeGeometry = heading === "home" ? HOME_DECK_CARD : DECK_CARD;
+  const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: true, node });
 
 
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
     (profile) => profile.id !== me.data?.id
   );
   const filtering = isFriendsFilterActive(filter);
-  /* The gender vocabulary is whatever the loaded people published — the
-     service's and theirs, never a list written here. */
-  const genders = facetValues(items, "gender");
 
   const filterPill = (
     <FriendsFilter
@@ -130,7 +132,6 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
       value={filter}
       onChange={changeFilter}
       viewerCity={me.data?.city?.trim() || null}
-      genders={genders}
     />
   );
   const header =
@@ -202,7 +203,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     return (
       <section ref={fitRef} aria-label="People to meet" className={sectionClass}>
         {header}
-        <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <div className={cn("flex flex-col items-center gap-3 py-10 text-center", heading === "home" && "mt-6")}>
           <p className="text-[15px] leading-5 text-white/60">Nobody here matches that yet.</p>
           <button
             type="button"
@@ -221,11 +222,11 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         {header}
         {/* The front card's own footprint, so the column does not jump when it lands. */}
         <div
-          className="ws-skeleton mx-auto"
+          className={cn("ws-skeleton mx-auto", heading === "home" && "mt-[90px]")}
           style={{
-            width: DECK_NODE.card.width * layout.k,
+            width: node.card.width * layout.k,
             height: layout.height,
-            borderRadius: DECK_CARD.radius * layout.k,
+            borderRadius: card.radius * layout.k,
           }}
         />
       </section>
@@ -265,7 +266,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     return spareOnLeftOnly && slot === -1 ? 1 : slot;
   };
 
-  const arrowSize = DECK_NODE.arrow.size * layout.k;
+  const arrowSize = node.arrow.size * layout.k;
 
   return (
     <section ref={fitRef} aria-label="People to meet" className={sectionClass}>
@@ -294,13 +295,18 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         the deck, which is what makes a click on a card close the menu instead
         of deciding about a person.
       */}
-      <div className="relative isolate w-full overflow-x-clip" style={{ height: layout.height }}>
+      <div
+        className={cn("relative isolate w-full overflow-x-clip", heading === "home" && "mt-[90px]")}
+        style={{ height: layout.height }}
+      >
         {window.map((position) => (
           <DeckCard
             key={items[position]!.id}
             profile={items[position]!}
             slot={slotOf(position)}
             layout={layout}
+            node={node}
+            card={card}
             /* `/pals` DECIDES; Home BROWSES — see the note in DeckCard. */
             decide={heading === "pals"}
             canStep={canStep}
@@ -338,16 +344,16 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           disabled={!canStep(-1)}
           onClick={() => step(-1)}
           size={arrowSize}
-          left={layout.frontX + (DECK_NODE.arrow.leftDx - DECK_NODE.arrow.size / 2) * layout.k}
-          top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
+          left={layout.frontX + (node.arrow.leftDx - node.arrow.size / 2) * layout.k}
+          top={layout.frontY + (node.arrow.dy - node.arrow.size / 2) * layout.k}
         />
         <DeckArrow
           direction="next"
           disabled={!canStep(1)}
           onClick={() => step(1)}
           size={arrowSize}
-          left={layout.frontX + (DECK_NODE.arrow.rightDx - DECK_NODE.arrow.size / 2) * layout.k}
-          top={layout.height / 2 + (DECK_NODE.arrow.dy - DECK_NODE.arrow.size / 2) * layout.k}
+          left={layout.frontX + (node.arrow.rightDx - node.arrow.size / 2) * layout.k}
+          top={layout.frontY + (node.arrow.dy - node.arrow.size / 2) * layout.k}
         />
       </div>
 
@@ -366,8 +372,25 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         page through and the row is absent rather than showing a lit pill and
         two dead ones.
       */}
-      {items.length > 1 && (
-        <DeckDots count={3} active={Math.round((index / (items.length - 1)) * 2)} />
+      {items.length > 1 &&
+        (heading === "home" ? (
+          /* 647:16296 — FIVE pills, 9.38 under the deck, centred 5.61 right of
+             the front card's centre, as the file draws them. */
+          <div
+            className="mt-[9.38px]"
+            style={{ paddingLeft: Math.max(0, layout.frontX + HOME_DOTS.dx * layout.k - HOME_DOTS.width / 2) }}
+          >
+            <DeckDots variant="home" count={5} active={Math.round((index / (items.length - 1)) * 4)} className="justify-start" />
+          </div>
+        ) : (
+          <DeckDots count={3} active={Math.round((index / (items.length - 1)) * 2)} />
+        ))}
+
+      {/* 647:17210 — the rule under the section: 0.5 at 25% white, 67 under the
+          pills, running past the column's content to its edges as the file's
+          line runs past its column. */}
+      {heading === "home" && (
+        <div aria-hidden className="ws-rule-to-left-edge -mx-4 mt-[67px] h-[0.5px] bg-white/25 md:ml-0 lg:-mr-6" />
       )}
     </section>
   );
@@ -375,6 +398,9 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
 
 /** Before the first measurement: Home's desktop column. Replaced before paint by the callback ref. */
 const FALLBACK_ROOM = 552;
+
+/** Home's pill row, 647:16296: its centre 5.61 right of the front card's, and its drawn width (one 36.29 pill, four 13.79, four 3.63 gaps). */
+const HOME_DOTS = { dx: 5.61, width: 36.29 + 4 * 13.79 + 4 * 3.63 };
 
 function DeckArrow({
   direction,
@@ -424,6 +450,8 @@ function DeckCard({
   profile,
   slot,
   layout,
+  node,
+  card,
   decide,
   canStep,
   onStep,
@@ -432,6 +460,9 @@ function DeckCard({
   profile: Profile;
   slot: number;
   layout: DeckLayout;
+  /** Whose deck: Home's 647:16300 or `/pals`' 844:18440. */
+  node: DeckNode;
+  card: PalCardNodeGeometry;
   /**
    * True on `/pals`: the gesture is a DECISION and carries the file's verdict
    * stamps. False on Home, where it stays navigation. See the note below.
@@ -443,7 +474,7 @@ function DeckCard({
   onNeedMore: () => void;
 }) {
   const front = slot === 0;
-  const place = DECK_NODE.places[slot] ?? DECK_NODE.places[0]!;
+  const place = node.places[slot] ?? node.places[0]!;
   const { k } = layout;
 
   /*
@@ -476,7 +507,7 @@ function DeckCard({
   const gate = useGate();
 
   const swipe = useSwipeCard({
-    width: DECK_NODE.card.width * k,
+    width: node.card.width * k,
     disabled: !front,
     canCommit: (decision) => {
       if (decide) {
@@ -517,8 +548,8 @@ function DeckCard({
       style={{
         // The card's box is the file's 543.42 × 718; it is centred on the front
         // card's spot and everything else is a transform about that centre.
-        left: layout.frontX - DECK_NODE.card.width / 2,
-        top: layout.height / 2 - DECK_NODE.card.height / 2,
+        left: layout.frontX - node.card.width / 2,
+        top: layout.frontY - node.card.height / 2,
         // The drag is prepended so it moves in SCREEN space, on top of the
         // fan's own placement rather than inside it.
         transform: `${front ? swipe.transform : ""} translate(${place.dx * k}px, ${place.dy * k}px) rotate(${place.rot}deg) scale(${place.scale * k})`,
@@ -527,7 +558,7 @@ function DeckCard({
     >
       <PalCard
         profile={profile}
-        geometry={DECK_CARD}
+        geometry={card}
         interactive={front}
         onPass={() => onStep(1)}
         onWinked={() => onStep(1)}

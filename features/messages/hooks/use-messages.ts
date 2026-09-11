@@ -2,11 +2,15 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { errorMessage } from "@/lib/api/envelope";
+import { errorCode, errorMessage } from "@/lib/api/envelope";
+import { inviteErrorCopy } from "@/features/messages/lib/invites";
 import { useAuth } from "@/hooks/use-auth";
 import { useRefreshUnread } from "@/hooks/use-unread";
 import {
   acceptConversation,
+  acceptInvite,
+  createInvite,
+  fetchInvitePreview,
   addGroupMembers,
   createGroup,
   joinGroup,
@@ -240,6 +244,52 @@ export function useJoinGroup() {
       toast.success("You're in");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't join that house.")),
+  });
+}
+
+/**
+ * "Share invite link" — makes the token the share sheet carries.
+ *
+ * A 404 from a member's own thread means the route is not on this server yet,
+ * so it says that rather than "not found".
+ */
+export function useCreateInvite() {
+  return useMutation({
+    mutationFn: createInvite,
+    onError: (error) =>
+      toast.error(
+        errorCode(error) === "NOT_FOUND"
+          ? "Invite links aren't available here yet."
+          : errorMessage(error, "Couldn't make an invite link.")
+      ),
+  });
+}
+
+/**
+ * The landing page's read. SIGNED-IN STATE IS IN THE KEY: `canJoin` answers
+ * for the viewer, so signing in on the page has to ask again.
+ */
+export function useInvitePreview(token: string) {
+  const { ready, authenticated } = useAuth();
+  return useQuery({
+    queryKey: ["ms", "invite", token, authenticated],
+    queryFn: () => fetchInvitePreview(token),
+    enabled: ready && token.length > 0,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+  });
+}
+
+export function useAcceptInvite() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: acceptInvite,
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+      client.invalidateQueries({ queryKey: ["ms", "invite"] });
+      toast.success("You're in");
+    },
+    onError: (error) =>
+      toast.error(inviteErrorCopy(error as never) ?? errorMessage(error, "Couldn't join with this link.")),
   });
 }
 

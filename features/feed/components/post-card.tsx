@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
@@ -9,6 +10,8 @@ import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
+import { postMediaList } from "@/lib/post-media";
+import { MediaRail } from "@/features/feed/components/media-rail";
 import { PostText } from "@/components/ui/post-text";
 import { CoinChips } from "@/components/ui/coin-chips";
 import { reportView, useRecordView } from "@/features/feed/hooks/use-record-view";
@@ -42,7 +45,7 @@ import {
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
 import { MentionPicker } from "@/features/feed/components/mention-picker";
-import { ShareSheet } from "@/features/feed/components/share-sheet";
+import { ShareSheet } from "@/components/ui/share-sheet";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -87,15 +90,19 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
            weight — the zero-weight trap. The rendered node is the opaque
            near-black lens `ws-glass-pill` paints, which is what the file shows:
            a solid dark disc, not a hairline ring. Same control, same material,
-           as the gist room's circular buttons. */
-        className="ws-glass-pill flex h-[38px] w-[38px] items-center justify-center rounded-full text-grey-100 transition-opacity hover:opacity-90"
+           as the gist room's circular buttons. 647:16439 is 44.16 across at
+           the live file's 1.151 scale: 38.37 here. */
+        className="ws-glass-pill flex h-[38.37px] w-[38.37px] items-center justify-center rounded-full text-grey-100 transition-colors hover:text-create"
       >
         <IconMsMore className="h-6 w-6" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="ws-popover absolute right-0 z-20 mt-1 w-56 rounded-2xl p-1.5">
+          {/* Opens UPWARD, over its own post — "let the modal move up instead
+              of down". Downward it hung past the card's foot and over the
+              next post, which paints above it (see the ws-enter note). */}
+          <div className="ws-popover absolute bottom-full right-0 z-20 mb-2 w-56 rounded-2xl p-1.5">
             {mine && (
               <>
                 <button
@@ -224,6 +231,7 @@ function CountAction({
   count,
   active,
   activeClass = "text-heading",
+  hoverClass,
   onClick,
   children,
 }: {
@@ -231,6 +239,12 @@ function CountAction({
   count: number;
   active?: boolean;
   activeClass?: string;
+  /**
+   * The act's own colour on hover, for the glyph AND its count together —
+   * blue to reply, green to repost, red to like. `group-hover:` classes,
+   * spelled out at the call site so Tailwind sees them.
+   */
+  hoverClass?: string;
   /** Absent for a tally that is only a fact — views have nothing to do. */
   onClick?: () => void;
   children: React.ReactNode;
@@ -240,18 +254,20 @@ function CountAction({
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className="flex shrink-0 items-center gap-0.5 transition-colors md:gap-[2px]"
+      className="group flex shrink-0 items-center gap-0.5 transition-colors md:gap-[2px]"
     >
       <span
         className={cn(
           "flex h-6 w-6 items-center justify-center transition-colors",
-          active ? activeClass : "text-grey-400 hover:text-heading"
+          active ? activeClass : cn("text-grey-400", hoverClass ?? "group-hover:text-heading")
         )}
       >
         {children}
       </span>
       {/* 12/16 in `#FFFFFF` — node 236:4729. */}
-      <span className="tnum text-[12px] leading-4 text-white">{formatCount(count)}</span>
+      <span className={cn("tnum text-[12px] leading-4 text-white transition-colors", hoverClass)}>
+        {formatCount(count)}
+      </span>
     </button>
   );
 }
@@ -316,12 +332,15 @@ function GlyphAction({
   label,
   active,
   disabled,
+  hoverClass,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
   disabled?: boolean;
+  /** The act's own colour on hover — blue to share, purple to save. Spelled out at the call site. */
+  hoverClass?: string;
   /** Absent for a tally that is only a fact — views have nothing to do. */
   onClick?: () => void;
   children: React.ReactNode;
@@ -334,7 +353,7 @@ function GlyphAction({
       disabled={disabled}
       className={cn(
         "flex h-6 w-6 shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-        active ? "text-create" : "text-body hover:text-heading"
+        active ? "text-create" : cn("text-body", hoverClass ?? "hover:text-heading")
       )}
     >
       {children}
@@ -368,6 +387,7 @@ function RepostMenu({
         count={post.repostCount}
         active
         activeClass="text-up"
+        hoverClass="group-hover:text-up"
         onClick={onRepost}
       >
         <IconMsRepost className="h-[18px] w-[18px]" />
@@ -380,6 +400,7 @@ function RepostMenu({
       <CountAction
         label="Repost or quote"
         count={post.repostCount}
+        hoverClass="group-hover:text-up"
         onClick={() => setOpen((v) => !v)}
       >
         <IconMsRepost className="h-[18px] w-[18px]" />
@@ -587,6 +608,20 @@ export function PostCard({
 }) {
   const like = useLikePost();
   const repost = useRepostPost();
+  const router = useRouter();
+  /*
+    TAPPING THE WORDS OPENS THE POST, as it does on X — the card had no way
+    into its own page at all. Anything interactive inside the caption (a
+    mention, a hashtag, a $ticker, Show more) keeps its own tap, and a reader
+    who dragged to select text is not thrown onto another page. On the post's
+    own page there is nowhere further to go, so nothing is wired.
+  */
+  const openPost = (event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("a, button, input, textarea, [role='button']")) return;
+    if (window.getSelection()?.toString()) return;
+    router.push(`/p/${post.id}`);
+  };
   const bookmark = useBookmarkPost();
   const gate = useGate();
   // Who is reading, so the overflow menu can offer Edit and Delete to the
@@ -617,6 +652,9 @@ export function PostCard({
   // Recorded on dwell, not on mount: see useRecordView. A CLIP is the
   // exception — its view is the play, reported by the player below.
   const video = isVideoPost(post);
+  // Two or more photos ride the rail (node 1029:22591); one keeps the
+  // hugging frame below.
+  const rail = postMediaList(post);
   const viewRef = useRecordView(post.id, !video);
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
 
@@ -701,14 +739,21 @@ export function PostCard({
                   {author.displayName}
                 </Link>
                 <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5" />
-                <OrgBadgeChip orgBadge={author.orgBadge} />
+                <OrgBadgeChip orgBadge={author.orgBadge} bare />
                 <RoleChip role={author.role} />
               </>
             )}
           </div>
           <p className="mt-[2.8px] truncate text-[12.1px] leading-[16.2px] text-white/50">
             {author ? `@${author.username}  •  ` : ""}
-            {relativeTime(post.createdAt)}
+            {/* The time is the post's own link, the keyboard's way in. */}
+            {full ? (
+              relativeTime(post.createdAt)
+            ) : (
+              <Link href={`/p/${post.id}`} className="hover:text-white/80 hover:underline">
+                {relativeTime(post.createdAt)}
+              </Link>
+            )}
             {/*
               EDITED, from `editedAt` alone.
 
@@ -776,7 +821,9 @@ export function PostCard({
         post payload would remove it — asked for; `MessageMedia` already carries
         both, so the service is storing them somewhere.
       */}
-      {post.mediaUrl &&
+      {rail.length > 1 ? (
+        <MediaRail items={rail} />
+      ) : post.mediaUrl &&
         (isVideoPost(post) ? (
           // A tap goes FULL SCREEN, the way it does in Reels and TikTok. The
           // inline preview still autoplays muted so the timeline is alive, but
@@ -862,15 +909,18 @@ export function PostCard({
         exactly 18 below the hairline, the same distance the media does on the
         first). So the 12 belongs to the media, not to the text.
       */}
-      <PostText
-        text={post.text}
-        mentions={post.mentions}
-        className={cn(
-          "text-[13.8px] leading-[23px] text-white/90",
-          post.mediaUrl && "mt-3"
-        )}
-        clampLines={full ? undefined : 6}
-      />
+      <div data-post-body onClick={full ? undefined : openPost} className={cn(!full && "cursor-pointer")}>
+        <PostText
+          text={post.text}
+          mentions={post.mentions}
+          className={cn(
+            "text-[13.8px] leading-[23px] text-white/90",
+            // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
+            rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
+          )}
+          clampLines={full ? undefined : 6}
+        />
+      </div>
       {/* The coins the post names, with today's move — the row Ark draws. */}
       <CoinChips text={post.text} />
 
@@ -899,7 +949,9 @@ export function PostCard({
           the tally is the door). It cannot shrink past its glyph and padding,
           so sharing the tallies' row would push the page wider than the
           screen; its own row, opened on demand, solves the geometry. */}
-      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+      {/* 647:16409 aligns its children to the BOTTOM (counter axis MAX): the
+          38.37 "more" disc sits on the 40.15 tallies pill's foot, not its middle. */}
+      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-end md:gap-6">
       <div className="flex items-center justify-between gap-3 md:contents">
         {/*
           THE TALLIES PILL — node 496:13417.
@@ -923,6 +975,7 @@ export function PostCard({
           <CountAction
             label="Comments"
             count={post.commentCount}
+            hoverClass="group-hover:text-reply"
             onClick={onCommentTally}
           >
             <IconMsComment className="h-6 w-6" />
@@ -943,6 +996,7 @@ export function PostCard({
             count={post.likeCount}
             active={post.likedByMe}
             activeClass="text-like"
+            hoverClass="group-hover:text-like"
             onClick={() => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }))}
           >
             <IconMsLike className="h-6 w-6" filled={post.likedByMe} />
@@ -977,7 +1031,7 @@ export function PostCard({
             same statement for a row whose middle child is capped. */}
         <div className="flex shrink-0 items-center gap-3 md:order-3 md:ml-auto md:gap-[17px]">
           <div className="flex items-center gap-3 md:gap-3">
-            <GlyphAction label="Share" onClick={share}>
+            <GlyphAction label="Share" hoverClass="hover:text-reply" onClick={share}>
               <IconMsShare className="h-6 w-6" />
             </GlyphAction>
             {/* Arkmark. While the endpoint is absent the control goes quiet
@@ -987,7 +1041,8 @@ export function PostCard({
                 carries `bookmarkCount`. Who saved it is nobody's business but
                 theirs; the count is the post's. Asked for by name ("number of
                 arkmark, no need to know who"). */}
-            <span className="flex items-center gap-0.5 md:gap-[2px]">
+            {/* A group, so the count takes the purple with the glyph. */}
+            <span className="group flex items-center gap-0.5 md:gap-[2px]">
               <GlyphAction
                 label={
                   bookmark.unavailable
@@ -998,6 +1053,7 @@ export function PostCard({
                 }
                 active={post.bookmarkedByMe}
                 disabled={bookmark.unavailable}
+                hoverClass={bookmark.unavailable ? undefined : "group-hover:text-create"}
                 onClick={() =>
                   gate(() =>
                     bookmark.mutate({ postId: post.id, bookmark: !post.bookmarkedByMe })
@@ -1009,7 +1065,10 @@ export function PostCard({
               {post.bookmarkCount !== undefined && (
                 <span
                   aria-label={`${post.bookmarkCount} ${post.bookmarkCount === 1 ? "Arkmark" : "Arkmarks"}`}
-                  className="tnum text-[12px] leading-4 text-white"
+                  className={cn(
+                    "tnum text-[12px] leading-4 text-white transition-colors",
+                    !bookmark.unavailable && "group-hover:text-create"
+                  )}
                 >
                   {formatCount(post.bookmarkCount)}
                 </span>

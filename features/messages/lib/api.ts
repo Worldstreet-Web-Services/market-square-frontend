@@ -7,6 +7,8 @@ import {
   MessagePageSchema,
   MessageSchema,
   ReadResultSchema,
+  InvitePreviewSchema,
+  InviteSchema,
 } from "@/features/messages/lib/types";
 import {
   buildMessagePayload,
@@ -180,6 +182,30 @@ export async function renameGroup(conversationId: string, title: string) {
  */
 export async function joinGroup(conversationId: string) {
   return msApi.post<unknown>(`/conversations/${conversationId}/join`);
+}
+
+/**
+ * Make a house invite link — `POST /conversations/:id/invites`.
+ *
+ * Sent with no options, so the service's defaults apply: the link works for a
+ * week with no cap on uses. In a public house any member may make one; in a
+ * private house only the owner (403 otherwise).
+ */
+export async function createInvite(conversationId: string) {
+  return InviteSchema.parse(await msApi.post(`/conversations/${conversationId}/invites`, {}));
+}
+
+/** What an invite link opens onto — `GET /invites/:token`, public with optional auth. */
+export async function fetchInvitePreview(token: string) {
+  return InvitePreviewSchema.parse(await msApi.get(`/invites/${encodeURIComponent(token)}`));
+}
+
+/**
+ * Join through a link — `POST /invites/:token/accept`, private houses included.
+ * Idempotent for somebody already inside. Answers the house joined.
+ */
+export async function acceptInvite(token: string) {
+  return GroupRefSchema.parse(await msApi.post(`/invites/${encodeURIComponent(token)}/accept`));
 }
 
 /**

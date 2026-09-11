@@ -25,25 +25,41 @@ import { cn } from "@/lib/cn";
  * cannot get from the deck itself, and announcing "list, 3 items" over a
  * roster of forty would be worse than silence.
  */
+/**
+ * The pills' two drawings. `default` is the rooms rail's and `/pals`'. `home`
+ * is Home's "Make some friends" row, 647:16296: FIVE pills 5.81 tall at an
+ * 18.14 radius on a 3.63 gap, the active one 36.29 wide and the rest 13.79 —
+ * the file's last pill reads 12.34, the same hand placement the note above
+ * describes, so every inactive one is 13.79.
+ */
+const DOT_VARIANTS = {
+  default: { row: "gap-[2.71px]", pill: "h-[4.33px] rounded-[13.54px]", on: "w-[27.08px]", off: "w-[9.21px]" },
+  home: { row: "gap-[3.63px]", pill: "h-[5.81px] rounded-[18.14px]", on: "w-[36.29px]", off: "w-[13.79px]" },
+} as const;
+
 export function DeckDots({
   count,
   active,
   className,
+  variant = "default",
 }: {
   count: number;
   /** Clamped by the component, so a caller cannot light a pill that is not there. */
   active: number;
   className?: string;
+  variant?: keyof typeof DOT_VARIANTS;
 }) {
   const current = Math.min(Math.max(active, 0), count - 1);
+  const v = DOT_VARIANTS[variant];
   return (
-    <div aria-hidden className={cn("flex items-center justify-center gap-[2.71px]", className)}>
+    <div aria-hidden className={cn("flex items-center justify-center", v.row, className)}>
       {Array.from({ length: count }, (_, index) => (
         <span
           key={index}
           className={cn(
-            "h-[4.33px] rounded-[13.54px] transition-all",
-            index === current ? "w-[27.08px] bg-spotlight" : "w-[9.21px] bg-[#D9D9D9]"
+            v.pill,
+            "transition-all",
+            index === current ? cn(v.on, "bg-spotlight") : cn(v.off, "bg-[#D9D9D9]")
           )}
         />
       ))}

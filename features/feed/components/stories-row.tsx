@@ -21,6 +21,7 @@ import { relativeTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
+import { StoryCreator } from "@/features/feed/components/story-creator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   IconChevronLeft,
@@ -937,6 +938,7 @@ export function StoriesRail() {
   const stories = useStories();
   const live = useFeed("live");
   const [openAt, setOpenAt] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
   const seen = useSyncExternalStore(subscribeSeen, getSeenSnapshot, getSeenServerSnapshot);
   const liveEntries = useMemo(
     () => toLiveEntries(live.data?.pages.flatMap((page) => page.items) ?? []),
@@ -946,27 +948,55 @@ export function StoriesRail() {
     () => groupByAuthor(stories.data?.items ?? []),
     [stories.data]
   );
+  // YOUR STORY, WHATSAPP'S "MY STATUS": with stories of your own the tile plays
+  // them; without, or on its + badge, it opens the creator.
+  const mine = groups.findIndex((group) => group.id === me.data?.id);
+  const openYourStory = (event: React.MouseEvent<HTMLElement>) => {
+    const add = (event.target as HTMLElement).closest("[data-add-story]");
+    if (mine >= 0 && !add) setOpenAt(mine);
+    else setCreating(true);
+  };
 
   if (stories.isPending) return <div className="h-[74px]" />;
 
   return (
     <>
       <div className="flex items-center gap-[11px] overflow-x-auto rounded-[22px] border border-white/[0.18] bg-[#101012]/62 px-3 py-2 backdrop-blur-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <Link
-          href="/?compose=story"
-          aria-label="Add to your story"
+        <button
+          type="button"
+          onClick={openYourStory}
+          aria-label={mine >= 0 ? "View your story" : "Add to your story"}
           className="ws-press flex w-[41px] shrink-0 flex-col items-center gap-1"
         >
-          <span className="relative flex h-[41px] w-[41px] items-center justify-center rounded-full border border-white/20 bg-white/5">
-            <span className="opacity-60">
-              <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={33} />
-            </span>
-            <span className="absolute -bottom-0.5 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-black">
+          <span className="relative block h-[41px] w-[41px]">
+            {mine >= 0 ? (
+              <span
+                className={cn(
+                  "ws-story-ring block !h-[41px] !w-[41px] !p-[1.4px]",
+                  groups[mine]!.stories.every((story) => seen.has(story.id)) && "ws-story-seen"
+                )}
+              >
+                <span className="ws-story-gap block !p-0">
+                  <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={38} />
+                </span>
+              </span>
+            ) : (
+              <span className="flex h-[41px] w-[41px] items-center justify-center rounded-full border border-white/20 bg-white/5">
+                <span className="opacity-60">
+                  <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={33} />
+                </span>
+              </span>
+            )}
+            <span
+              data-add-story
+              title="Add to your story"
+              className="absolute -bottom-0.5 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-black"
+            >
               <IconPlus className="h-2.5 w-2.5 [&]:stroke-[3]" />
             </span>
           </span>
           <span className="w-full truncate text-center text-[8px] text-white/60">Your Story</span>
-        </Link>
+        </button>
 
         {/* Same ordering rule as desktop: live leads. The design never drew a
             live entry in the circular variant, so the treatment is carried over
@@ -991,6 +1021,8 @@ export function StoriesRail() {
         ))}
 
         {groups.map((group, i) => {
+          // Your own group plays from the "Your Story" tile, not twice.
+          if (i === mine) return null;
           const allSeen = group.stories.every((story) => seen.has(story.id));
           return (
             <button
@@ -1027,6 +1059,7 @@ export function StoriesRail() {
           />
         )}
       </AnimatePresence>
+      {creating && <StoryCreator onClose={() => setCreating(false)} />}
     </>
   );
 }
@@ -1039,6 +1072,7 @@ export function StoriesRow() {
   // it keeps the rail inside the feed slice instead of reaching into streams.
   const live = useFeed("live");
   const [openAt, setOpenAt] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
   const seen = useSyncExternalStore(subscribeSeen, getSeenSnapshot, getSeenServerSnapshot);
 
   const liveEntries = useMemo(
@@ -1049,6 +1083,14 @@ export function StoriesRow() {
     () => groupByAuthor(stories.data?.items ?? []),
     [stories.data]
   );
+  // YOUR STORY, WHATSAPP'S "MY STATUS": with stories of your own the tile plays
+  // them; without, or on its + badge, it opens the creator.
+  const mine = groups.findIndex((group) => group.id === me.data?.id);
+  const openYourStory = (event: React.MouseEvent<HTMLElement>) => {
+    const add = (event.target as HTMLElement).closest("[data-add-story]");
+    if (mine >= 0 && !add) setOpenAt(mine);
+    else setCreating(true);
+  };
 
   if (stories.isPending) {
     return (
@@ -1067,7 +1109,29 @@ export function StoriesRow() {
       <div className="flex gap-[5px] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* "Your Story" leads: an outlined tile carrying the viewer's own
             avatar, a white + badge cut into it, and the label beneath. */}
-        <Link href="/?compose=story" className="ws-press shrink-0" aria-label="Add to your story">
+        <button
+          type="button"
+          onClick={openYourStory}
+          aria-label={mine >= 0 ? "View your story" : "Add to your story"}
+          className="ws-press shrink-0"
+        >
+          {mine >= 0 ? (
+            /* With a story up it is YOUR story card — your latest cover in the
+               ring, the + still on it to add another, as WhatsApp's My status. */
+            <span className="relative block">
+              <StoryCard group={groups[mine]!} seen={groups[mine]!.stories.every((story) => seen.has(story.id))} />
+              <span className="ws-text-shadow pointer-events-none absolute bottom-3 left-3.5 text-[9px] font-bold text-white">
+                Your Story
+              </span>
+              <span
+                data-add-story
+                title="Add to your story"
+                className="absolute bottom-2.5 right-2.5 flex h-5 w-5 items-center justify-center rounded-full border border-black bg-white text-black"
+              >
+                <IconPlus className="h-3 w-3 [&]:stroke-[3]" />
+              </span>
+            </span>
+          ) : (
           <span className="ws-story-card relative flex h-24 w-[100px] flex-col items-center justify-center gap-1">
             {/* The file's dashed ring, drawn rather than bordered so the dash
                 length (6.13 on, 6.13 off), the 0.68px weight and the 16.34
@@ -1092,13 +1156,17 @@ export function StoriesRow() {
             </svg>
             <span className="relative">
               <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={48} />
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-black bg-white text-black">
+              <span
+                data-add-story
+                className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-black bg-white text-black"
+              >
                 <IconPlus className="h-2.5 w-2.5 [&]:stroke-[3]" />
               </span>
             </span>
             <span className="text-[8px] font-bold text-white/40">Your Story</span>
           </span>
-        </Link>
+          )}
+        </button>
 
         {/* Live leads the rail — the highest-urgency thing on the square, and
             the one entry that expires while you look at it. A tap opens the
@@ -1115,6 +1183,8 @@ export function StoriesRow() {
         ))}
 
         {groups.map((group, i) => {
+          // Your own group plays from the "Your Story" tile, not twice.
+          if (i === mine) return null;
           const allSeen = group.stories.every((story) => seen.has(story.id));
           return (
             <button
@@ -1139,6 +1209,7 @@ export function StoriesRow() {
           />
         )}
       </AnimatePresence>
+      {creating && <StoryCreator onClose={() => setCreating(false)} />}
     </>
   );
 }

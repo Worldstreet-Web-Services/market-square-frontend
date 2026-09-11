@@ -27,7 +27,7 @@ import { useNewPosts } from "@/features/feed/hooks/use-new-posts";
 import { NewPostsPill } from "@/features/feed/components/new-posts-pill";
 
 /** How many posts stand between the top of the feed and "Join a community". */
-const BEFORE_COMMUNITY = 1;
+const BEFORE_COMMUNITY = 2;
 /**
  * ...and how many before "Suggested Pals" (540:19351).
  *
@@ -148,6 +148,7 @@ export function FeedPage({
   tipSlot,
   topicTabs = [],
   roomsSlot,
+  liveCtaSlot,
   friendsSlot,
   communitySlot,
   palsSlot,
@@ -171,6 +172,11 @@ export function FeedPage({
    * community grid (258:5545).
    */
   roomsSlot?: React.ReactNode;
+  /**
+   * The Go Live banner (647:17219), from the streams slice, directly under the
+   * topic row. Absent for signed-out readers; see HomeScreen.
+   */
+  liveCtaSlot?: React.ReactNode;
   friendsSlot?: React.ReactNode;
   communitySlot?: React.ReactNode;
   /** The pals rail (540:19351), dropped a few posts into the timeline. */
@@ -304,7 +310,9 @@ export function FeedPage({
       {/* The ground is `#0F0F0F` and belongs to the shell's pane, not to this
           column — see AppShell. Painting it here left a seam beside the right
           rail. */}
-      <div className="relative px-4 py-4 lg:px-6">
+      {/* `ws-align-logo`: under the dock, from md up, the left gutter goes so
+          the stories start on the top bar lockup's line — see globals.css. */}
+      <div className="ws-align-logo relative px-4 py-4 lg:px-6">
         {/*
           HOME STARTS AT THE STORIES — node 225:3315.
 
@@ -388,13 +396,22 @@ export function FeedPage({
           />
         </div>
 
+        {/* NODE 647:17219 — the Go Live banner: 34 below the topic row's block
+            (its 16px margin collapses into this) and 60 above what follows,
+            the file's own gaps. */}
+        {liveCtaSlot && <div className="mb-[60px] mt-[34px]">{liveCtaSlot}</div>}
+
         {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
             A room happening now beats a subject being discussed, and both beat
             a post from this morning. Renders nothing when none is open. */}
-        {roomsSlot && <div className="mb-6">{roomsSlot}</div>}
+        {/* The section carries its own margins, so a quiet evening with no room
+            open renders nothing at all rather than an empty spacer. */}
+        {roomsSlot}
 
         {/* NODES 225:3526 + 225:3374 — "Make some friends". */}
-        {friendsSlot && <div className="mb-6">{friendsSlot}</div>}
+        {/* Its own margins, like the rooms above it: a directory with nobody
+            in it renders nothing and leaves no spacer. */}
+        {friendsSlot}
 
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
@@ -405,7 +422,9 @@ export function FeedPage({
         {fresh.pinned && (
           <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
         )}
-        <div ref={listRef} className="space-y-4 md:space-y-[38px]">
+        {/* 647:16354 spaces the timeline 73 apart around cards drawn 873.65 wide; the
+            card here is that drawing at 759 (see PostCard), so 73/1.151 = 63.42. */}
+        <div ref={listRef} className="space-y-4 md:space-y-[63.42px]">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
             <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
@@ -440,18 +459,18 @@ export function FeedPage({
                 />
               </div>
               {/*
-                NODE 258:5545 — "Join a community", INSIDE the timeline rather
-                than under it.
+                NODE 647:16515 — "Join a community", INSIDE the timeline rather
+                than under it, after the SECOND post as the live file places it.
 
                 It used to close the page, which only worked while the feed had
                 a floor: a grid below a list that pages forever is a grid nobody
-                reaches. One post above it puts it on the first screen, where
+                reaches. Two posts above it keep it near the top, where
                 somebody who has just seen what the square sounds like is being
                 offered a room to say it in.
 
                 Rendered against the LAST post when the feed is shorter than the
                 cut, so a one-post lane still shows it rather than dropping it.
-                It sits in the list's own 38 rhythm and carries no padding of
+                It sits in the list's own 63.42 rhythm and carries no padding of
                 its own.
               */}
               {communitySlot &&

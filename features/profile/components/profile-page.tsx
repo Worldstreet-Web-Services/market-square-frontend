@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { IconProfileGlobePin, IconProfileLink } from "@/components/ui/profile-icons";
 import { IconMsEdit } from "@/components/ui/design-icons";
-import { IconRoomShare } from "@/components/ui/room-icons";
 import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useMe } from "@/hooks/use-me";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { IconCalendar } from "@/components/ui/icons";
+import { ProfilePhotos } from "@/features/profile/components/profile-photos";
+import { ShareSheet } from "@/components/ui/share-sheet";
 import { ProfileCover } from "@/features/profile/components/profile-cover";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
@@ -30,10 +30,10 @@ import { EditProfileSheet } from "@/features/profile/components/edit-profile-she
 import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
 import { WinkButton } from "@/features/profile/components/wink-button";
 import { VerificationCard } from "@/features/profile/components/verification-card";
-import { CreatorCard } from "@/features/profile/components/creator-card";
 import {
   AccountTabs,
   type AccountTab,
+  type AccountTabDef,
 } from "@/features/profile/components/account-tabs";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
@@ -123,8 +123,9 @@ function PostsTab({
   // was a <span> with no handler, so liking a post from somebody's profile did
   // nothing at all. It also dropped the media, the author, the arkmark and the
   // repost, which is why a post read differently here than anywhere else.
+  // 1029:22923 — 32 under the tab strip's rule, 32 in from the column, cards 24 apart.
   return (
-    <ul>
+    <ul className="flex flex-col gap-6 px-4 pt-8 md:px-8">
       {posts.data.items.map((post) => (
         <li key={post.id}>{postSlot(post)}</li>
       ))}
@@ -371,7 +372,8 @@ export function ProfilePage({
    * are different questions and must not share one value. Gift Gallery is the
    * one the file draws active and the only one with a panel behind it.
    */
-  const [accountTab, setAccountTab] = useState<AccountTab>("earnings");
+  const [accountTab, setAccountTab] = useState<AccountTab>("posts");
+  const [sharing, setSharing] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
   const isMe = Boolean(
@@ -418,23 +420,10 @@ export function ProfilePage({
   const data = profile.data;
 
   /*
-    Share the PROFILE — the same shape the post card uses: the platform sheet
-    where there is one, the clipboard where there is not, and a dismissed sheet
-    is not an error.
+    Share the PROFILE the way a post is shared on Home: the same sheet, with
+    WhatsApp, X, Facebook, Telegram, copy link and the device's own sheet.
   */
-  const onShare = async () => {
-    const url = `${window.location.origin}/u/${data.username}`;
-    try {
-      if (navigator.share)
-        await navigator.share({ text: data.displayName, url });
-      else {
-        await navigator.clipboard.writeText(url);
-        toast.success("Link copied");
-      }
-    } catch {
-      /* dismissed share sheets are not errors */
-    }
-  };
+  const onShare = () => setSharing(true);
 
   return (
     <>
@@ -458,6 +447,7 @@ export function ProfilePage({
              kash slice's and arrives as a slot; "Who viewed my profile" is not
              drawn, see the note on `ProfileCover`. */
           meta={isMe ? kashSlot : null}
+          onChangePhoto={isMe ? () => setEditOpen(true) : undefined}
           actions={
             isMe ? (
               <>
@@ -474,15 +464,17 @@ export function ProfilePage({
                   type="button"
                   onClick={onShare}
                   aria-label="Share this profile"
-                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-white"
+                  className="ws-glass-clear ws-press flex h-[38.37px] w-[38.37px] items-center justify-center rounded-full text-white"
                 >
-                  <IconRoomShare className="h-4 w-4" />
+                  {/* 1021:20262 — the node's own `basil:share-outline`. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/profile/icon-share.svg" alt="" aria-hidden className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
                   aria-label="Edit profile"
-                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-[15px] leading-6 text-white transition-opacity hover:opacity-90 md:w-auto md:gap-2 md:px-4"
+                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-[14.94px] leading-[25.61px] text-white transition-opacity hover:opacity-90 md:w-[129px] md:gap-[10.1px]"
                 >
                   <IconMsEdit className="h-4 w-4 shrink-0" />
                   {/* The label is the file's on desktop; on a phone the disc's
@@ -523,13 +515,16 @@ export function ProfilePage({
         the place, and the two counts.
       */}
       {/*
-        NODE 414:24935 — bio, counts, place. 741 wide on a 16 rhythm.
+        NODE 414:24935 — bio, counts, place. 741 wide on a 16 rhythm. Redrawn as
+        1021:20271 (live file, 2026-09-11): 40 under the cover, the bio and the
+        count labels at weight 400, the counts in `#F7F9F9`, and the place and
+        website at 14/20 in `#A1A1AA`.
 
         The name, handle, badges and actions moved ONTO the cover (435:27503);
         this block used to draw all of them a second time underneath. What the
         file leaves here is three lines.
       */}
-      <div className="flex flex-col gap-4 px-4 pt-6 md:px-8">
+      <div className="flex flex-col gap-4 px-4 pt-6 md:px-8 md:pt-10">
         {/*
           THE FILE PRINTS A LINE WHEN THERE IS NO BIO — "Bio not updated" at
           50% white, where a written one is the same size in full white. Empty
@@ -541,8 +536,8 @@ export function ProfilePage({
         <p
           className={
             data.bio
-              ? "text-[15px] leading-5 text-white"
-              : "text-[15px] leading-5 text-white/50"
+              ? "text-[15px] font-normal leading-5 text-white"
+              : "text-[15px] font-normal leading-5 text-white/50"
           }
         >
           {data.bio || "Bio not updated"}
@@ -564,16 +559,16 @@ export function ProfilePage({
         */}
         <p className="tnum flex flex-wrap items-baseline gap-x-[55px] gap-y-1 text-[15px] leading-5">
           <span className="flex items-baseline gap-1">
-            <span className="font-semibold text-grey-100">
+            <span className="font-semibold text-[#F7F9F9]">
               {formatCount(data.followingCount)}
             </span>
-            <span className="text-white/50">Following</span>
+            <span className="font-normal text-white/50">Following</span>
           </span>
           <span className="flex items-baseline gap-1">
-            <span className="font-semibold text-grey-100">
+            <span className="font-semibold text-[#F7F9F9]">
               {formatCount(data.followerCount)}
             </span>
-            <span className="text-white/50">Followers</span>
+            <span className="font-normal text-white/50">Followers</span>
           </span>
         </p>
 
@@ -618,7 +613,7 @@ export function ProfilePage({
           href somebody typed about themselves.
         */}
         {(data.city || data.region || isHttpUrl(data.website)) && (
-          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] leading-5 text-white">
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px] font-normal leading-5 text-[#A1A1AA]">
             {(data.city || data.region) && (
               <span className="flex items-center gap-2">
                 <IconProfileGlobePin className="h-6 w-6 shrink-0 text-create" />
@@ -642,7 +637,13 @@ export function ProfilePage({
       </div>
 
       {/* 534:15577 — the houses this person keeps, 38 under the block above. */}
-      {isMe && housesSlot && <div className="px-4 pt-9 md:px-8">{housesSlot}</div>}
+      {/* 1021:20930 — Photos, 38 under the bio block (the section rhythm of
+          1021:20270). The wrapper collapses when the row renders nothing. */}
+      <div className="px-4 pt-[38px] empty:hidden md:px-8">
+        <ProfilePhotos username={data.username} isMe={isMe} />
+      </div>
+
+      {isMe && housesSlot && <div className="px-4 pt-[38px] md:px-8">{housesSlot}</div>}
 
       {/*
         545:47615 — what a STRANGER's profile carries under the bio block, in
@@ -673,7 +674,10 @@ export function ProfilePage({
           wider than the rail directly above them. */}
       {isMe && (
         <div className="space-y-3 px-4 pb-4 pt-9 md:px-8">
-          <CreatorCard role={data.role} />
+          {/* The Creator card ("You can host streams and schedule sessions",
+              Open Studio) is hidden for now, at ogazboiz's call. The Studio
+              route still works; the card comes back by restoring this line:
+              <CreatorCard role={data.role} /> */}
           <VerificationCard />
         </div>
       )}
@@ -702,10 +706,15 @@ export function ProfilePage({
         Visible and disabled, per the standing rule — deleting them loses the
         roadmap, leaving them live tells the reader a lie.
       */}
-      {isMe && giftGallerySlot && (
-        <div className="pt-6">
+      {/* 1021:21615 — ONE strip, Posts first, 38 under the section above. Your
+          own profile adds the account tabs after it; anyone else's is Posts. */}
+      {(
+        <div className="pt-[38px]">
           <AccountTabs
             tabs={[
+              { value: "posts", label: "Posts" },
+              ...(isMe && giftGallerySlot
+                ? ([
               { value: "earnings", label: "Earnings" },
               {
                 value: "badges",
@@ -721,13 +730,24 @@ export function ProfilePage({
                 label: "Replays",
                 disabledReason: MARKET_FLAGS.replays ? undefined : "Soon",
               },
+                  ] satisfies AccountTabDef[])
+                : []),
             ]}
             value={accountTab}
             onChange={setAccountTab}
           />
-          {accountTab === "earnings" && earningsSlot}
-          {accountTab === "badges" && badges.data && <BadgesPanel badges={badges.data.items} />}
-          {accountTab === "gifts" && giftGallerySlot}
+          {accountTab === "posts" && (
+            <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
+          )}
+          {/* The account panels are YOUR OWN, gated where ownership is decided:
+              a stranger's strip is Posts alone and can never mount these. */}
+          {isMe && giftGallerySlot && (
+            <>
+              {accountTab === "earnings" && earningsSlot}
+              {accountTab === "badges" && badges.data && <BadgesPanel badges={badges.data.items} />}
+              {accountTab === "gifts" && giftGallerySlot}
+            </>
+          )}
         </div>
       )}
 
@@ -771,6 +791,18 @@ export function ProfilePage({
             <ActivitiesTab username={username} isMe={isMe} />
           )}
         </>
+      )}
+
+      {sharing && (
+        <ShareSheet
+          open
+          onClose={() => setSharing(false)}
+          title="Share profile"
+          payload={{
+            text: `${data.displayName || data.username} on Square`,
+            url: `${window.location.origin}/u/${data.username}`,
+          }}
+        />
       )}
 
       {isMe && (

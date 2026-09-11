@@ -11,6 +11,7 @@ import {
   fetchPeople,
   fetchMyInterests,
   fetchTopics,
+  type TopicSurface,
   saveMyInterests,
   searchMarket,
 } from "@/features/discovery/lib/api";
@@ -46,12 +47,14 @@ export function useCategories() {
  * "broken", so the picker simply does not offer topics yet rather than
  * inventing a list of its own. Retrying a missing route only delays that.
  */
-export function useTopics() {
+export function useTopics(surface?: TopicSurface) {
   return useQuery({
-    queryKey: ["ms", "topics"],
+    // The surface is IN the key: `sortOrder` is a position on that surface, so
+    // one surface's list must never be served to another.
+    queryKey: ["ms", "topics", surface ?? "all"],
     // Ordered by the backend's own `sortOrder`, EXPLICITLY — see the note in
     // `lib/topic-order.ts` for why the served order is not trusted.
-    queryFn: async () => sortTopicsByOrder(await fetchTopics()),
+    queryFn: async () => sortTopicsByOrder(await fetchTopics(surface)),
     staleTime: 5 * 60_000,
     retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
   });

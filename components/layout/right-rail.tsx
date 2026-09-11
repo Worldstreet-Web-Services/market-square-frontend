@@ -40,14 +40,16 @@ export function RightRail() {
 
           The spotlight was cut once, on the argument that status is only worth
           seeing when there is a room to be seen in. There is one now, and it
-          is asked for. It sits between the two because the order is what the
-          square is doing, then who is doing it, then who we are doing it with
-          — and because it costs NOTHING when there is nobody to show: the
+          is asked for. It costs NOTHING when there is nobody to show: the
           board renders null on an empty list rather than holding a panel open.
+
+          DISCUSSIONS GO LAST — "the trending discussions in the second column
+          should go to the last place instead". The spotlight and the partners
+          lead; the discussions list, the longest block, closes the rail.
         */}
-        <TrendingDiscussions limit={5} />
         <CitizenSpotlightRail />
         <EcosystemPartnersRail />
+        <TrendingDiscussions limit={5} />
       </div>
     </aside>
   );

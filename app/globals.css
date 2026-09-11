@@ -72,6 +72,9 @@
      unnamed. Do not reuse it for errors — an error is a state, not an act. */
   --color-danger: #ff383c;
   --color-like: #e84a4a;
+  /* A post's reply tally on hover — blue for conversation, beside red for a
+     like and green (`--color-up`) for a repost. */
+  --color-reply: #1d9bf0;
   /* Broadcasting-now red, read off the design's stories strip: the LIVE pill
      is solid #ff0b0b and the tile ring is the same red at 40%. This is the
      STRIP's live marker only — the live identity everywhere else in the app is
@@ -621,9 +624,12 @@ body {
    practice a post's avatar and name read straight through the bar and drew on
    top of the wordmark. Chrome that content passes UNDER has to hide it
    outright; glass is for chrome that floats over content on purpose (ws-glass,
-   the tab bar pill). Solid also drops a compositing layer per header. */
+   the tab bar pill). Solid also drops a compositing layer per header.
+   CHROME, not ground: the shell paints the page `--color-chrome`, so a
+   pure-black bar read as a hole cut across the top of every column page
+   ("why is this page odd and seeing black color"). */
 @utility ws-head {
-  background: var(--color-ground);
+  background: var(--color-chrome);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -746,7 +752,8 @@ body {
 @utility ws-post {
   border-radius: 16.5px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* 647:16355 strokes INSIDE at 0.79 around a card 1.151x this one: 0.69. */
+  border: 0.69px solid rgba(255, 255, 255, 0.1);
   /* Node 496:13361's own two drop shadows, both black at 10%. They lift the
      slab off the page by about one and a half levels of grey — a black shadow
      on a near-black ground can do no more than that, and the design asks for
@@ -757,8 +764,10 @@ body {
     0 13.75px 17.19px -3.44px rgba(0, 0, 0, 0.1);
   transition: border-color 0.15s ease;
 }
+/* Hovering a post rings it in the brand purple — "when we hover on a post
+   the border line should be purple". */
 .ws-post:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--color-create);
 }
 
 /* The hairline under a post's identity row. Its own colour in the design. */
@@ -932,6 +941,55 @@ body {
      block starts at 768. */
   [data-rail="on"] {
     --ws-nav-h: 0px;
+  }
+}
+
+/*
+  HOME STARTS ON THE LOGO'S LINE WHILE THE DOCK IS ON.
+
+  The top bar's lockup starts on the column's edge (see `TopBar`), so under
+  the dock Home drops its left gutter and the stories, the tab row and every
+  card below start exactly beneath the logo — "so everything will be starting
+  the same line". From md up only: below md the top bar is not drawn and the
+  phone keeps its gutter. Not in sidebar mode either, where the bar has no
+  lockup to line up with.
+
+  A selector rather than a utility so it wins over the wrapper's `lg:px-6`
+  whatever order the utilities land in.
+*/
+@media (min-width: 48rem) {
+  [data-rail="off"] .ws-align-logo {
+    padding-left: 0;
+  }
+
+  /*
+    With that gutter gone, a rail that bleeds 16px past its padding for scroll
+    room would run past the column's left edge. It stops on the edge instead,
+    where the stories and the lockup start.
+  */
+  [data-rail="off"] .ws-align-logo .ws-bleed-right-only {
+    margin-left: 0;
+    padding-left: 0;
+  }
+
+  /*
+    A rule that runs to the WINDOW's left edge under the dock, as the top bar's
+    hairline does ("we need this line to reach the extreme end in the left hand
+    side"). Drawn 100vw leftwards from the rule's own LEFT end — from its right
+    end it lay over the rule itself, and 25% on 25% drew the column's stretch
+    brighter than the rest. The shell wrapper clips it at the window. With a
+    sidebar there is something to stop at, so it keeps to the column.
+  */
+  [data-rail="off"] .ws-rule-to-left-edge {
+    position: relative;
+  }
+  [data-rail="off"] .ws-rule-to-left-edge::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    right: 100%;
+    width: 100vw;
+    background: inherit;
   }
 }
 
@@ -1454,6 +1512,37 @@ body {
    cost a request to render nothing. */
 @utility ws-kash-card {
   background: linear-gradient(97deg, #ac6803 0%, #f7d535 32.5%, #ad6803 100%);
+}
+
+/* The top bar bell's GLASS rim — node 647:17443, see TopBarActions. Figma's
+   API does not publish GLASS's parameters, so this is matched to the file's
+   render: a 1px ring brightest at the top-left and bottom-right, gone on the
+   other diagonal. Drawn as a masked ring so it follows the circle exactly. */
+@utility ws-glass-rim {
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.21) 0deg,
+      rgba(255, 255, 255, 0) 45deg,
+      rgba(255, 255, 255, 0.31) 90deg,
+      rgba(255, 255, 255, 0.54) 135deg,
+      rgba(255, 255, 255, 0.31) 180deg,
+      rgba(255, 255, 255, 0) 225deg,
+      rgba(255, 255, 255, 0.21) 270deg,
+      rgba(255, 255, 255, 0.64) 315deg,
+      rgba(255, 255, 255, 0.21) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
 }
 
 @utility ws-btn-welcome {

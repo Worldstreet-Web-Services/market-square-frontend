@@ -91,6 +91,18 @@ export function pickFriendsMoments(notifications: FriendsMomentInput[]): Friends
   return [...byPerson.values()].sort((a, b) => RANK[a.kind] - RANK[b.kind]);
 }
 
+/**
+ * The card for ONE notification row, read or not — what a tap on a wink or a
+ * follow-back in the notifications list opens. Same rules as the fan (a
+ * one-way follow is not a moment), without the unread filter: the reader asked
+ * for this one.
+ */
+export function friendsMomentFor(row: FriendsMomentInput): FriendsMoment | null {
+  if (row.actor === null) return null;
+  const kind = momentKindOf(row);
+  return kind ? { kind, actor: row.actor, notificationIds: [row.id] } : null;
+}
+
 /** The one moment to lead with — the front of the fan. */
 export function pickFriendsMoment(notifications: FriendsMomentInput[]): FriendsMoment | null {
   return pickFriendsMoments(notifications)[0] ?? null;
@@ -174,4 +186,23 @@ export function friendsMomentLabels(
   const secondary =
     copy.secondary === "wink" ? `Wink at ${name}` : copy.secondary === "start-gisting" ? "Start gisting" : null;
   return { primary, secondary };
+}
+
+/**
+ * The caption a moment's card goes out with when it is posted to Square.
+ *
+ * Written in the poster's own voice, since it is their post now, and naming the
+ * other person by HANDLE so the caption links to them. A prefill only: the
+ * composer opens with it and the poster can change or delete every word.
+ */
+export function friendsMomentCaption(moment: FriendsMoment): string {
+  const handle = `@${moment.actor.username}`;
+  switch (moment.kind) {
+    case "friends":
+      return `${handle} and I are now friends on Square 💜`;
+    case "mutual-wink":
+      return `${handle} and I winked at each other on Square 😉`;
+    case "wink":
+      return `${handle} winked at me on Square 😉`;
+  }
 }

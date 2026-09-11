@@ -280,7 +280,11 @@ export function LiveHub() {
           <div className="space-y-7 pt-7">
             {/* Signed-out readers do not see the prompt — "Go Live" that opens
                 a login wall is bait. */}
-            {authenticated && <LiveCta />}
+            {authenticated && (
+              <div className="px-4 lg:px-6">
+                <LiveCta />
+              </div>
+            )}
 
             <LiveHero streams={visible} />
           </div>

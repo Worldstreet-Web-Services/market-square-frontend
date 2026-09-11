@@ -5,6 +5,8 @@ import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
 import { useTopics } from "@/features/discovery";
+import { LiveCta } from "@/features/streams";
+import { useAuth } from "@/hooks/use-auth";
 import { JoinACommunity } from "@/components/layout/join-a-community";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
@@ -51,19 +53,26 @@ const tipSlot = (post: Post) => (
  * the feed may not import, so they are assembled here and handed down as slots
  * — the same route-slot pattern the follow pill and the tip button above use.
  *
+ * The Go Live banner (647:17219) belongs to the streams slice and sits under
+ * the topic row. Signed-out readers do not get it, for the Live page's reason:
+ * a "Go Live" that opens a login wall is bait.
+ *
  * The topic vocabulary is DATA rather than a node, because the row's selection
  * drives the feed's own query: `GET /topics` belongs to the discovery slice and
  * `GET /feed?topics=` is the feed's, and this is the one layer allowed to know
  * both.
  */
 export function HomeScreen() {
-  const topics = useTopics();
+  // Home's own eight, in the design's order (`?surface=home`).
+  const topics = useTopics("home");
+  const { authenticated } = useAuth();
   return (
     <FeedPage
       followSlot={followSlot}
       winkSlot={winkSlot}
       tipSlot={tipSlot}
       topicTabs={(topics.data ?? []).map((topic) => ({ key: topic.key, label: topic.label }))}
+      liveCtaSlot={authenticated ? <LiveCta /> : null}
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
       communitySlot={<JoinACommunity />}

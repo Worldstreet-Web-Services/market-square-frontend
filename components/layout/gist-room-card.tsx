@@ -41,7 +41,9 @@ import { useStream } from "@/features/streams";
  *     text cannot be rendered by a browser, let alone read. The title's 12/16
  *     and every box measurement are the file's exactly; the chips are drawn at
  *     10px over a 12px glyph and the pill's label at 11px, which is the
- *     smallest either can be and still be legible. Everything else — the 22px
+ *     smallest either can be and still be legible. Their BOXES stay the
+ *     file's: a 16-tall chip and a 20-tall pill, 12 apart, keep the card at
+ *     its 120 and the pill at the file's y of 84 (496:13802, live file). Everything else — the 22px
  *     radius, the 24px disc, the 16px padding, the 8px gap, the two gradients,
  *     the tile geometry — is verbatim.
  *
@@ -73,6 +75,18 @@ import { useStream } from "@/features/streams";
 const LIVE_POLL = ["while-live", 60_000] as const;
 
 /**
+ * The face cluster at 496:13802's own geometry inside its 72.43 x 55.62 group:
+ * the raised tile first, then the one to its right turned -4deg on a white ->
+ * #F0E8FF ring, then the one to its left turned 4deg on a thinner white ring.
+ * Paint order is the file's, and each ring is drawn INSIDE its tile.
+ */
+const TILES = [
+  { left: 12.31, top: 0, size: 32, rotate: 0, ring: 1.668, gradient: false },
+  { left: 38.27, top: 21.47, size: 34.15, rotate: -4, ring: 1.668, gradient: true },
+  { left: 0, top: 20.97, size: 34.15, rotate: 4, ring: 1.334, gradient: false },
+] as const;
+
+/**
  * THE CARD'S MATERIAL, stated once — nodes 225:3873 (the invite) and
  * 545:47749 (a replay on a profile) are the same glass: `rgba(16,16,18,0.62)`
  * behind a 7px backdrop blur, ringed at `white/18`, a 22px radius, 16px of
@@ -90,7 +104,10 @@ export function RoomCardShell({
   return (
     <div
       className={cn(
-        "max-w-full rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 backdrop-blur-[7px]",
+        // The ring is an INSET shadow, not a border: the file's stroke sits
+        // inside the card and takes no layout, so a border cost 2px of the
+        // 306 content box and wrapped the topic chips onto a second line.
+        "max-w-full rounded-[22px] bg-[rgba(16,16,18,0.62)] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[7px]",
         className
       )}
     >
@@ -102,7 +119,7 @@ export function RoomCardShell({
 /** One topic chip — 225:3887 / 545:47760. See the type-size note above. */
 export function RoomTopicChip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold leading-4 text-grey-100">
+    <span className="flex h-4 items-center gap-1 rounded-full bg-white/10 px-2 text-[9px] font-bold leading-3 text-grey-100">
       {icon}
       {label}
     </span>
@@ -210,7 +227,7 @@ export function GistRoomCard({
       message thread whose column can be narrower than 338.
     */
     <RoomCardShell className={fluid ? "w-full" : "w-[338px] shrink-0"}>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
           {/*
             The title box is a FIXED TWO LINES, which is the file's 186x32 at
@@ -234,14 +251,22 @@ export function GistRoomCard({
           </div>
 
           {/* Indented to the title's own left edge — 24 + 8, which is the
-              file's x=31.57 on both the chip row and the pill. The 8 and 16
-              below are the file's own gaps: title ends at 48.3, chips open at
-              56.3, and the pill at 84.7. */}
-          <div className="mt-2 space-y-4 pl-8">
+              file's x=31.57 on both the chip row and the pill. Title ends at
+              48, chips open 8 later at 56 and stand 16 tall, and the pill sits
+              12 under them at 84 — the file's 84.32, in a 120 card. */}
+          <div className="mt-2 space-y-3 pl-8">
             {labelled.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1">
+              /* ONE line, 16 tall. Measured in Geist: the file's own pair
+                 ("Religion" + "Food & Lifestyle") is 170.5 wide at 9px over a
+                 10px glyph against the column's 186, and 186.3 at 10px, so 9px
+                 is the size that keeps the file's pair on one line. Longer
+                 pairs ("Trading & Finance" + "Food & Lifestyle", 213) cannot
+                 fit at any legible size, so a chip that does not fit WHOLE
+                 wraps onto a second line that `overflow-hidden` never shows —
+                 never cut in half, and the card never grows past 120. */
+              <div className="flex h-4 flex-wrap items-center gap-x-1 gap-y-4 overflow-hidden">
                 {labelled.map(({ key, label, Icon }) => (
-                  <RoomTopicChip key={key} icon={<Icon className="h-3 w-3" />} label={label} />
+                  <RoomTopicChip key={key} icon={<Icon className="h-2.5 w-2.5" />} label={label} />
                 ))}
               </div>
             )}
@@ -249,14 +274,17 @@ export function GistRoomCard({
             <Link
               href={housePath(streamId)}
               className={cn(
-                "ws-press inline-flex items-center gap-1.5 rounded-[30px] px-3 py-1.5 text-[11px] font-medium leading-4 transition-opacity hover:opacity-90",
+                // BLOCK-level `flex w-fit`, not `inline-flex`: an inline box sits
+                // on the line's baseline and took 3.5px of strut below it, which
+                // pushed the pill to 87.5 and the card to 124.
+                "ws-press flex h-5 w-fit items-center gap-[3px] rounded-[30px] px-3 text-[11px] font-medium leading-none transition-opacity hover:opacity-90",
                 over || pending
                   ? "bg-white/10 text-white/60"
                   : "bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] text-white"
               )}
             >
               {label}
-              {!over && !pending && <IconVoiceMode className="h-3 w-3" />}
+              {!over && !pending && <IconVoiceMode className="h-[11px] w-[11px]" />}
             </Link>
           </div>
         </div>
@@ -265,29 +293,39 @@ export function GistRoomCard({
           /* The file's cluster: one tile raised and centred, two below it and
              outset, each overlapping its neighbour. `-space-x` would flatten
              them into a row, so the offsets are the file's own. */
-          <div aria-hidden className="relative h-[56px] w-[73px] shrink-0">
-            {faces.map((profile, index) => (
-              <span
-                key={profile.id}
-                className="absolute overflow-hidden rounded-[10.7px] border-[1.67px] border-white bg-grey-200 shadow-[0_4px_15px_0_rgba(147,147,147,0.25)]"
-                style={
-                  [
-                    { left: 22, top: 0, width: 32, height: 32 },
-                    { left: 0, top: 21, width: 34, height: 34 },
-                    { left: 38, top: 21, width: 34, height: 34 },
-                  ][index]
-                }
-              >
-                <Avatar
-                  name={profile.displayName || profile.username}
-                  seed={profile.id}
-                  src={profile.avatarUrl}
-                  size={34}
-                  sizeClassName="h-full w-full"
-                  className="rounded-none border-0"
-                />
-              </span>
-            ))}
+          <div aria-hidden className="relative h-[55.62px] w-[72.43px] shrink-0">
+            {faces.map((profile, index) => {
+              const tile = TILES[index]!;
+              return (
+                <span
+                  key={profile.id}
+                  className="absolute rounded-[10.675px] shadow-[0_4px_15px_0_rgba(147,147,147,0.25)]"
+                  style={{
+                    left: tile.left,
+                    top: tile.top,
+                    width: tile.size,
+                    height: tile.size,
+                    padding: tile.ring,
+                    transform: tile.rotate ? `rotate(${tile.rotate}deg)` : undefined,
+                    background: tile.gradient ? "linear-gradient(180deg, #FFFFFF 0%, #F0E8FF 100%)" : "#FFFFFF",
+                  }}
+                >
+                  <span
+                    className="block h-full w-full overflow-hidden bg-[#EDEDED]"
+                    style={{ borderRadius: 10.675 - tile.ring }}
+                  >
+                    <Avatar
+                      name={profile.displayName || profile.username}
+                      seed={profile.id}
+                      src={profile.avatarUrl}
+                      size={34}
+                      sizeClassName="h-full w-full"
+                      className="rounded-none border-0"
+                    />
+                  </span>
+                </span>
+              );
+            })}
           </div>
         )}
       </div>

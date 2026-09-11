@@ -75,9 +75,25 @@ export interface PalCardNodeGeometry extends PalCardBase {
   /** The two lines, left-aligned and placed from the photo's bottom edge. */
   lines: { nameLeft: number; nameBottom: number; handleLeft: number; handleBottom: number };
   /** A solid `--color-spotlight` disc with an INSIDE ring, the glyph centred. */
-  badge: { size: number; right: number; top: number; ring: number; glyph: number };
+  badge: {
+    size: number;
+    right: number;
+    top: number;
+    ring: number;
+    glyph: number;
+    /** The ring's colour when it is not `/pals`' `#F9F5FF` — Home's is white. */
+    ringColor?: string;
+  };
   /** Two CSS circles: `size` each, `gap` apart, `bottom` from the card's foot, with their glyphs at `passGlyph` / `winkGlyph`. */
-  controls: { size: number; gap: number; bottom: number; passGlyph: number; winkGlyph: number };
+  controls: {
+    size: number;
+    gap: number;
+    bottom: number;
+    passGlyph: number;
+    winkGlyph: number;
+    /** How far the wink sits ABOVE the pass, when the pair is drawn tilted (Home: 5.59). */
+    lift?: number;
+  };
 }
 
 export function PalCard({
@@ -177,6 +193,7 @@ export function PalCard({
                 right: node.badge.right,
                 top: node.badge.top,
                 borderWidth: node.badge.ring,
+                ...(node.badge.ringColor ? { borderColor: node.badge.ringColor } : {}),
               }
             : g
               ? {
@@ -331,7 +348,17 @@ export function PalCard({
             "ws-press shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60",
             node ? "relative flex items-center justify-center overflow-hidden rounded-full" : "-translate-y-[3px]"
           )}
-          style={node ? { width: node.controls.size, height: node.controls.size } : g ? { width: g.controlBox, height: g.controlBox } : undefined}
+          style={
+            node
+              ? {
+                  width: node.controls.size,
+                  height: node.controls.size,
+                  ...(node.controls.lift ? { translate: `0 -${node.controls.lift}px` } : {}),
+                }
+              : g
+                ? { width: g.controlBox, height: g.controlBox }
+                : undefined
+          }
         >
           {node ? (
             <>
@@ -383,6 +410,38 @@ export const DECK_CARD: PalCardNodeGeometry = {
   lines: { nameLeft: 50.84, nameBottom: 49.57, handleLeft: 58.55, handleBottom: 20.32 },
   badge: { size: 107.43, right: 23.27, top: 20.59, ring: 9.27, glyph: 70.5 },
   controls: { size: 109.38, gap: 28.17, bottom: 34.11, passGlyph: 64.75, winkGlyph: 72.84 },
+};
+
+/**
+ * "Make some friends" ON HOME — node 647:16329, the front card of 647:16300 in
+ * the live file (647:16288, updated 2026-09-10), in its own units.
+ *
+ * Home's own drawing, not `DECK_CARD` scaled: its foot is taller (422.24 for a
+ * 310.24 card), its rim thicker (5.07), its badge ring white, and its two
+ * discs larger in proportion and TILTED as a pair — the wink sits 5.59 above
+ * the pass, both turned the same 17.77deg. Disc centres come from the nodes'
+ * `relativeTransform`: pass (117.59, 366.21) and wink (193.75, 360.62), 60.55
+ * across, so 15.61 apart and the pass's foot 25.76 above the card's.
+ *
+ * THE LINES ARE PLACED BY THEIR INK, as `/pals`' are. The file's name box is a
+ * fixed 155.87 with the name centred inside it, which a name of any other
+ * length would not survive, so both lines are left-aligned from the photo's
+ * foot. The ink was converted to line boxes with Roboto's metrics measured in
+ * Chrome at the file's sizes: the name's line box ends 11.76 below its ink,
+ * the handle's 2.90 below its "@". Name ink: 29.42 in, 38.73 above the foot;
+ * handle ink: 34.66 in, 14.84 above.
+ */
+export const HOME_DECK_CARD: PalCardNodeGeometry = {
+  kind: "node-844",
+  width: 310.24,
+  height: 422.24,
+  radius: 50,
+  rim: 5.07,
+  photo: { width: 283.92, height: 298.24, left: 13.08, top: 12, radius: 47.22 },
+  scrim: { height: 129.67, name: 20.98, nameLeading: 35.97, handle: 14.78, handleLeading: 22.17 },
+  lines: { nameLeft: 28.98, nameBottom: 26.97, handleLeft: 33.87, handleBottom: 11.94 },
+  badge: { size: 66.08, right: 12.32, top: 12.32, ring: 5.07, glyph: 38.55, ringColor: "#FFFFFF" },
+  controls: { size: 60.55, gap: 15.61, bottom: 25.76, passGlyph: 35.84, winkGlyph: 40.32, lift: 5.59 },
 };
 
 /**

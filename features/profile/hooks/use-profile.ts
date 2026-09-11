@@ -13,6 +13,7 @@ import {
 import { trackMarketEvent } from "@/lib/analytics";
 import type { Profile } from "@/lib/api/schemas";
 import { useAuth } from "@/hooks/use-auth";
+import { uploadFile } from "@/lib/api/upload";
 import { useMe } from "@/hooks/use-me";
 import { clearFollowIntent, setFollowIntent } from "@/features/profile/lib/follow-state";
 import {
@@ -24,6 +25,9 @@ import {
   fetchProfilePosts,
   fetchProfileStreams,
   fetchProfileBadges,
+  fetchProfilePhotos,
+  addMyPhoto,
+  removeMyPhoto,
   fetchSpotlight,
   fetchVerificationRule,
   renewVerification,
@@ -323,8 +327,11 @@ export function useFollow(profile: Profile) {
     // have to move too or the control sits on the stale server answer until
     // the refetch lands.
     patchFollowInCaches(queryClient, profile.id, following);
+    // The walk above has usually stamped this already — a signed-in profile
+    // carries `isFollowing` — so this is only for a payload without the field,
+    // and the guard keeps the follower count from moving twice.
     queryClient.setQueryData<Profile>(["ms", "profile", profile.username], (old) =>
-      old
+      old && old.isFollowing !== following
         ? {
             ...old,
             isFollowing: following,
@@ -455,5 +462,37 @@ export function useApplyCreator() {
       toast.success("Application sent — we'll review it shortly.");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't send the application.")),
+  });
+}
+
+/**
+ * A person's photo gallery. ABSENT, not empty, while the route is not deployed:
+ * `unavailable` is what the Photos row reads to stay off the page.
+ */
+export function useProfilePhotos(username: string) {
+  const query = useQuery({
+    queryKey: ["ms", "profile-photos", username],
+    queryFn: () => fetchProfilePhotos(username),
+    retry: (count, error) => !notDeployed(error) && count < 2,
+  });
+  return { ...query, unavailable: query.isError && notDeployed(query.error) };
+}
+
+/** Upload an image, then attach it to your gallery. The service's own messages (the 12 cap) are shown as they come. */
+export function useAddProfilePhoto(username: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => addMyPhoto((await uploadFile(file, undefined, "image")).url),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["ms", "profile-photos", username] }),
+    onError: (error) => toast.error(errorMessage(error, "Couldn't add that photo.")),
+  });
+}
+
+export function useRemoveProfilePhoto(username: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => removeMyPhoto(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["ms", "profile-photos", username] }),
+    onError: (error) => toast.error(errorMessage(error, "Couldn't remove that photo.")),
   });
 }

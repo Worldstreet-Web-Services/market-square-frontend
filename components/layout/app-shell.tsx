@@ -1,11 +1,15 @@
 "use client";
 
+import { GENDER_OPTIONS, genderLabel, normalizeGender } from "@/lib/gender";
 import { createPortal } from "react-dom";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { MenuRow } from "@/components/ui/menu-row";
+import { IconFilterChevronRight, IconFilterFriends, IconFilterGender, IconFilterLocation } from "@/components/ui/home-icons";
+import { useUpdateMe } from "@/features/profile";
 import { useTrackNavHistory } from "@/lib/nav-history";
 import {
   type RailState,
@@ -38,8 +42,7 @@ import {
   IconSbLibrary,
   IconSbLive,
 } from "@/components/ui/sidebar-icons";
-import {
-} from "@/components/ui/topbar-icons";
+import { IconTopBell, IconTopCaret } from "@/components/ui/topbar-icons";
 import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { FriendsPopup } from "@/components/layout/friends-popup";
 import { RightRail } from "@/components/layout/right-rail";
@@ -466,12 +469,22 @@ function RailMenu({
   trigger,
   children,
   align = "right",
+  panel = "default",
 }: {
   label: string;
   trigger: (props: { open: boolean; toggle: () => void }) => React.ReactNode;
   children: (close: () => void) => React.ReactNode;
-  /** "right" clears the collapsed rail; "above" stacks over the account chip. */
-  align?: "right" | "above";
+  /**
+   * "right" clears the collapsed rail; "above" stacks over the account chip;
+   * "below" hangs from the top bar's avatar, its right edge on the trigger's.
+   */
+  align?: "right" | "above" | "below";
+  /**
+   * `gist` is node 747:14001 ("gist dm"), the account dropdown: 172 wide,
+   * `#1C1C1C`, a 0.745 inside ring at 18% white, radius 8, 11.913 of padding
+   * and rows 5.957 apart — the same menu the friends filter draws (651:18441).
+   */
+  panel?: "default" | "gist";
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLDivElement | null>(null);
@@ -483,14 +496,17 @@ function RailMenu({
       const node = anchor.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
-      const width = 224;
+      const width = panel === "gist" ? 172 : 224;
       const left =
         align === "right"
           ? Math.min(rect.right + 8, window.innerWidth - width - 8)
-          : Math.min(rect.left, window.innerWidth - width - 8);
-      // 8px of breathing room at the top, so a short viewport clamps rather
+          : align === "below"
+            ? Math.min(rect.right - width, window.innerWidth - width - 8)
+            : Math.min(rect.left, window.innerWidth - width - 8);
+      // "below" hangs from the trigger's foot. The rail menus grow upward from
+      // its top, with 8px of breathing room so a short viewport clamps rather
       // than opening a menu whose first item is off-screen.
-      const top = Math.max(8, rect.top - 8);
+      const top = align === "below" ? rect.bottom + 8 : Math.max(8, rect.top - 8);
       setAt({ left: Math.max(8, left), top });
     };
     place();
@@ -504,7 +520,7 @@ function RailMenu({
       window.removeEventListener("resize", place);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, align]);
+  }, [open, align, panel]);
 
   return (
     <div ref={anchor} className="relative">
@@ -522,12 +538,18 @@ function RailMenu({
               aria-label={label}
               style={{
                 left: at.left,
-                // Bottom-anchored: the menu grows upward from the trigger,
-                // which is what both rail menus want — they live at the foot.
-                bottom: Math.max(8, window.innerHeight - at.top),
-                width: 224,
+                // The rail menus live at the rail's foot and grow upward from
+                // the trigger; the top bar's hangs down from the avatar.
+                ...(align === "below"
+                  ? { top: at.top }
+                  : { bottom: Math.max(8, window.innerHeight - at.top) }),
+                width: panel === "gist" ? 172 : 224,
               }}
-              className="ws-popover fixed z-[61] rounded-2xl p-1.5"
+              className={
+                panel === "gist"
+                  ? "ws-popover-enter fixed z-[61] flex flex-col gap-[5.957px] rounded-lg border-[0.745px] border-white/[0.18] bg-grey-800 p-[11.913px]"
+                  : "ws-popover fixed z-[61] rounded-2xl p-1.5"
+              }
             >
               {children(() => setOpen(false))}
             </div>
@@ -590,7 +612,6 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
 /** Bottom-of-rail account chip: avatar, identity, overflow dots (X pattern). */
 function AccountChip() {
   const { ready, authenticated, login } = useAuth();
-  const logout = useLogout();
   const me = useMe();
 
   if (!ready) return <div className="ws-skeleton mx-2 h-12 rounded-full" />;
@@ -622,6 +643,7 @@ function AccountChip() {
     <RailMenu
       label="Account"
       align="above"
+      panel="gist"
       trigger={({ open, toggle }) => (
         <button
           type="button"
@@ -653,34 +675,94 @@ function AccountChip() {
         </button>
       )}
     >
-      {(close) => (
-        <>
-          <Link
-            href={me.data ? `/u/${me.data.username}` : "/auth"}
-            onClick={close}
-            className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-          >
-            View profile
-          </Link>
-          {/*
-            View profile and Log out, and nothing else — ogazboiz's call
-            ("it should only be view profile and logout here"). Tickets and
-            Arkmarks sat here for a while as "what is yours"; both routes still
-            resolve (/tickets, /arkmarks) and the profile's own tabs are the
-            door to them now.
-          */}
-          <button
-            onClick={() => {
-              close();
-              void logout();
-            }}
-            className="block w-full truncate rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
-          >
-            Log out @{me.data?.username ?? ""}
-          </button>
-        </>
-      )}
+      {(close) => <AccountMenuItems close={close} />}
     </RailMenu>
+  );
+}
+
+/**
+ * The account menu's entries. The rail's account chip and the top bar's
+ * avatar open the same menu, so it is written once.
+ */
+function AccountMenuItems({ close }: { close: () => void }) {
+  const logout = useLogout();
+  const me = useMe();
+  const router = useRouter();
+  const update = useUpdateMe();
+  const [step, setStep] = useState<"root" | "gender">("root");
+  /* The file's own chevron (747:14009), and turned round for a step's Back. */
+  const chevron = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] text-white" />;
+  const back = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] -scale-x-100 text-white" />;
+  /* The option that is on carries the filter menu's own dot in `--color-create`. */
+  const dot = (on: boolean) =>
+    on ? <span aria-hidden className="block h-1.5 w-1.5 rounded-full bg-create" /> : undefined;
+  const go = (href: string) => {
+    close();
+    router.push(href);
+  };
+
+  /*
+    GENDER — a CHOICE, never typed: Male or Female ("we dont make them type
+    they choose either male or female"). It saves the reader's public profile
+    gender, the field Explore's people filters read, and steps back.
+  */
+  if (step === "gender") {
+    return (
+      <>
+        <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
+        {GENDER_OPTIONS.map((option) => (
+          <MenuRow
+            key={option.value}
+            size="compact"
+            icon={dot(normalizeGender(me.data?.gender) === option.value)}
+            label={option.label}
+            onClick={() => update.mutate({ gender: option.value }, { onSuccess: () => setStep("root") })}
+          />
+        ))}
+      </>
+    );
+  }
+
+  /*
+    NODE 747:14001 — Profile, Settings, Gender, in the file's rows and glyphs
+    (the same "gist dm" component the friends filter draws, so its exported
+    icons are reused), then Log out, which the file does not draw and
+    ogazboiz asked to keep. Settings goes to `/u/<username>/settings`, a page
+    being built elsewhere.
+  */
+  return (
+    <>
+      <MenuRow
+        size="compact"
+        icon={<IconFilterLocation className="h-[11.81px] w-[12.25px] text-grey-400" />}
+        label="Profile"
+        trailing={chevron}
+        onClick={() => go(me.data ? `/u/${me.data.username}` : "/auth")}
+      />
+      <MenuRow
+        size="compact"
+        icon={<IconFilterFriends className="h-[9.64px] w-[13.13px] text-grey-400" />}
+        label="Settings"
+        // Each person's own settings live under their profile.
+        onClick={() => go(me.data ? `/u/${me.data.username}/settings` : "/auth")}
+      />
+      <MenuRow
+        size="compact"
+        icon={<IconFilterGender className="h-3.5 w-3.5 text-grey-400" />}
+        label={genderLabel(me.data?.gender) ? `Gender · ${genderLabel(me.data?.gender)}` : "Gender"}
+        trailing={chevron}
+        onClick={me.data ? () => setStep("gender") : undefined}
+      />
+      <MenuRow
+        size="compact"
+        icon={<IconLogout className="h-3.5 w-3.5 text-grey-400" />}
+        label={`Log out @${me.data?.username ?? ""}`}
+        onClick={() => {
+          close();
+          void logout();
+        }}
+      />
+    </>
   );
 }
 
@@ -859,7 +941,7 @@ export function Sidebar({
     >
       <RailHandle rail={rail} preview={preview} commit={commit} />
       {/*
-        THE WORDMARK BLOCK IS EXACTLY AS TALL AS THE BREADCRUMB BAR, so their
+        THE WORDMARK BLOCK IS EXACTLY AS TALL AS THE TOP BAR, so their
         two hairlines are one continuous line across the top of the app.
 
         It used to be `py-5` on the rail plus `pb-4` here, which put the rule at
@@ -1036,85 +1118,62 @@ export function Sidebar({
   );
 }
 
-// The breadcrumb strip above the columns. Only the leaf changes — the root is
-// always the ecosystem the square belongs to.
-const CRUMB: Array<[RegExp, string]> = [
-  [/^\/$/, "Square"],
-  [/^\/discover/, "Discover"],
-  [/^\/arkmarks/, "Arkmarks"],
-  [/^\/messages/, "Chat"],
-  [/^\/notifications/, "Notifications"],
-  [/^\/live\b/, "Live"],
-  [/^\/tickets/, "Tickets"],
-  [/^\/store/, "ARK Store"],
-  [/^\/schedule/, "Schedule"],
-  [/^\/studio/, "Studio"],
-  [/^\/admin/, "Admin"],
-  [/^\/operations/, "Operations"],
-  [/^\/spotlight/, "Citizen Spotlight"],
-  [/^\/p\//, "Post"],
-  [/^\/u\//, "Profile"],
-  [/^\/auth/, "Sign in"],
-];
-
 /**
- * The bar above the columns.
+ * THE TOP BAR — node 647:17439, read from the live file (updated 2026-09-10
+ * 21:10) and checked against its render.
  *
- * Node 15:1302's own numbers: 76 tall, #121214 behind a 6px backdrop blur, a
- * 10% hairline underneath, 24px gutters, and the crumb pushed against the
- * right-hand cluster by `justify-between`.
+ * 76 tall on `#121214` under a background blur: the lockup on the left (only
+ * while the rail is unmounted — the rail carries its own, and two logos is one
+ * too many) and the cluster on the right, top at 19 — the bell, 11, then the
+ * avatar pill.
  *
- * TWO things changed from the earlier build and both were wrong rather than
- * merely different. The bar was 69px and painted #0f0f0f — the same colour as
- * the page it sits on, so it read as part of the column instead of as chrome.
- * And the whole crumb was #979797, which made the page you are ON the same
- * weight as the ecosystem you are in; the file whitens the leaf.
+ * ITS EDGES ARE THE CONTENT'S, NOT THE FRAME'S. The file insets the lockup 54
+ * and the cluster 44 from a 1438 artboard; on this capped, centred layout that
+ * left both hanging well past the column and the rail beneath ("it look as if
+ * the header is wider than the content"). So the bar's content is exactly as
+ * wide as that group and centred the same way: the 600 column, plus the
+ * 371 rail from lg with the rail's own 24 of right padding. The logo starts on
+ * the column's edge and the cluster ends on the rail cards' edge. A WIDE route
+ * has no column cap and no rail, so there the bar just keeps 24 either side.
+ *
+ * NO SEARCH. A build from a cached copy of this node (2026-09-08) put a field
+ * here; the live node has none, which is also what ogazboiz asked for twice.
+ *
+ * THE HAIRLINE RUNS THE WHOLE WINDOW — "the border line should full the
+ * screen for point A to point B". It is the file's 10% bottom stroke drawn as
+ * a 1px line 200vw wide centred on the bar, so however far the frame sits from
+ * either edge the line reaches both; the shell wrapper clips horizontal
+ * overflow so that width never turns into a scrollbar.
  */
-function Breadcrumb({ pathname }: { pathname: string }) {
-  const leaf =
-    CRUMB.find(([pattern]) => pattern.test(pathname))?.[1] ?? "Square";
+function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
   return (
-    <div className="ws-hair sticky top-0 z-30 hidden h-[76px] shrink-0 items-center gap-6 border-b bg-chrome px-6 backdrop-blur-[6px] md:flex">
-      {/* Geist Medium 16/21.75. The trailing space belongs to the grey run in
-          the file — "Ark Ecosystem/ " — so the slash hugs the root and the gap
-          before the leaf is part of the dim text, not the bright text. */}
-      {/* The crumb keeps the left edge and the account cluster the right; the
-          search field and the location pill sit between them. `mr-auto` rather
-          than `justify-between`, which with four children would spread all four
-          and pull the pair apart. */}
-      <nav
-        aria-label="Breadcrumb"
-        className="min-w-0 shrink truncate text-[16px] font-medium leading-[21.75px] text-[#979797]"
+    <div
+      className={cn(
+        "sticky top-0 z-30 hidden h-[76px] shrink-0 items-start bg-chrome backdrop-blur-[6px] md:flex",
+        "after:pointer-events-none after:absolute after:bottom-0 after:left-1/2 after:h-px after:w-[200vw] after:-translate-x-1/2 after:bg-white/10",
+        (!showBrand || wide) && "px-6"
+      )}
+    >
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 items-start",
+          showBrand && !wide && "mx-auto max-w-[600px] lg:max-w-[971px] lg:pr-6"
+        )}
       >
-        <Link href="/" className="transition-colors hover:text-body">
-          Ark Ecosystem
-        </Link>
-        <span aria-hidden>/ </span>
-        <span aria-current="page" className="text-white">
-          {leaf}
-        </span>
-      </nav>
+        {showBrand && (
+          <Link
+            href="/"
+            aria-label="Square home"
+            title="Square"
+            className="ws-press flex h-[76px] shrink-0 items-center"
+          >
+            <BrandLockup className="flex" />
+          </Link>
+        )}
 
-      {/* NODE 225:3641 puts two more controls between the crumb and the
-          account cluster: a search field and the reader's current location.
-          THE SEARCH IS GONE, on every route — ogazboiz's call, asked twice
-          ("remove it na", then "why am I seeing search at the top again").
-          It was a link into Explore rather than a field, and Explore's own
-          search and the sidebar are the ways in; git holds the field for the
-          day it is asked back.
-
-          THE LOCATION IS GONE TOO, same call and same reasoning. The bar is
-          for saying where you are IN THE APP, and where you are in the WORLD
-          is a filter — it belongs beside the thing it filters, which is where
-          it already lives: the pill on "Make some friends" on Home. Two
-          controls setting one value is how they disagree, and the one in the
-          chrome was the one nobody was looking at when they changed it.
-
-          `LocationSheet` and `IconLocationPin` are untouched and still used by
-          the Home filter, so nothing is deleted that anything else needs. */}
-
-      <div className="ml-auto shrink-0">
-        <TopBarActions />
+        <div className="ml-auto flex shrink-0 items-start pl-6 pt-[19px]">
+          <TopBarActions />
+        </div>
       </div>
     </div>
   );
@@ -1179,6 +1238,16 @@ function TopBarActions() {
 
   return (
     <div className="flex shrink-0 items-center gap-[11px]">
+      {/*
+        647:17443 — the bell: 38, round, and the file's GLASS effect. The API
+        does not publish GLASS's parameters (the node's own fill and stroke
+        are hidden), so it is matched to the file's render, sampled at 4x: a
+        body that darkens toward the top-left and lightens toward the
+        bottom-right about the bar's own #121214, and a 1px rim that catches
+        the light at the top-left (~64% white) and bottom-right (~54%) and
+        fades to nothing on the other diagonal (`ws-glass-rim`). The glyph is
+        the exported vuesax bell at the file's #DCDCDC.
+      */}
       <Link
         href="/notifications"
         aria-label={
@@ -1186,33 +1255,64 @@ function TopBarActions() {
             ? `Notifications, ${notifications} unread`
             : "Notifications"
         }
-        // GLASS in the file: a translucent fill over the blurred bar rather
-        // than a flat chip.
-        className="ws-press relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-body backdrop-blur-[6px] transition-colors hover:bg-white/12 hover:text-white"
+        className="ws-press ws-glass-rim relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[linear-gradient(135deg,#0A0A0C_0%,#121214_50%,#1A1A1C_100%)] text-[#DCDCDC] transition-colors hover:text-white"
       >
-        <IconBell className="h-6 w-6" />
+        <IconTopBell className="h-6 w-6" />
         {notifications > 0 && (
-          /* 7px, ringed in #F4F4F4 over the bar's own #0F0F0F — a ring, not a
-             filled dot, which is what keeps it legible against the glyph. */
+          /*
+            647:18433 — 9 x 9 at (20.24, 9) on the button, #9F5AFF inside a 1px
+            #0D0D0F ring, the count in white. The file draws "6"; this shows
+            the real number, and past 9 it reads "9+" and grows sideways rather
+            than shrinking the type below legibility.
+          */
           <span
             aria-hidden
-            className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full border-2 border-[#F4F4F4] bg-chrome"
-          />
+            className="absolute left-[20.24px] top-[9px] flex h-[9px] min-w-[9px] items-center justify-center rounded-full bg-[#9F5AFF] px-[1.5px] text-[6px] font-semibold leading-none text-white ring-1 ring-inset ring-[#0D0D0F]"
+          >
+            {notifications > 9 ? "9+" : notifications}
+          </span>
         )}
       </Link>
 
-      <Link
-        href={me.data ? `/u/${me.data.username}` : "/auth"}
-        aria-label="Your profile"
-        className="ws-press flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10"
+      {/*
+        946:15827 — ONE pill holding the avatar and the caret: 7% white, radius
+        36, padding 3 / 8 / 3 / 3, the avatar (34, a 20% white ring over 10%
+        white) and the exported caret 23 after it. The caret is laid out as the
+        file's 8 x 4 and its 11 x 7 export overflows that box by the stroke;
+        a 1px pull, not the arithmetic 1.5, is what lands it on the file's
+        render (measured: 1.5 left it half a pixel up and left).
+        The whole pill opens the account menu: View profile and Log out. The
+        hover tint is not in the file; a control with no hover reads as dead.
+      */}
+      <RailMenu
+        label="Account"
+        align="below"
+        panel="gist"
+        trigger={({ open, toggle }) => (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            aria-label={`Account menu for @${me.data?.username ?? "you"}`}
+            className="ws-press flex items-center gap-[23px] rounded-[36px] bg-white/[0.07] py-[3px] pl-[3px] pr-2 transition-colors hover:bg-white/[0.11]"
+          >
+            <span className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+              <Avatar
+                name={me.data?.displayName ?? "Me"}
+                seed={me.data?.id}
+                src={me.data?.avatarUrl}
+                size={32}
+              />
+            </span>
+            <span className="relative h-[4px] w-[8px] shrink-0 text-white">
+              <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
+            </span>
+          </button>
+        )}
       >
-        <Avatar
-          name={me.data?.displayName ?? "Me"}
-          seed={me.data?.id}
-          src={me.data?.avatarUrl}
-          size={32}
-        />
-      </Link>
+        {(close) => <AccountMenuItems close={close} />}
+      </RailMenu>
     </div>
   );
 }
@@ -1687,7 +1787,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     /* `data-rail` tells the STYLESHEET whether a dock is on screen, so
        `--ws-nav-h` can be 0 where there is none — see globals.css. Every
        consumer of that variable then agrees without knowing about the rail. */
-    <div className="min-h-dvh w-full bg-chrome" data-rail={railOn ? "on" : "off"}>
+    <div className="min-h-dvh w-full overflow-x-clip bg-chrome" data-rail={railOn ? "on" : "off"}>
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*
         GUESTS GET NO SIDEBAR.
@@ -1807,7 +1907,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         content frame, not a palette change.
       */}
         <div className="flex min-w-0 flex-1 flex-col bg-chrome">
-          <Breadcrumb pathname={pathname} />
+          <TopBar showBrand={!railOn} wide={wide} />
           {/* justify-START, not center. Centering the column+rail group inside
             the leftover width of the 1600px shell split that slack in two and
             left a dead band between the sidebar and the column — the column
@@ -1826,14 +1926,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // than hand-matched numbers: pb-16 was 64px against a 69px tab
                 // bar, so the last five pixels of every column surface sat
                 // underneath it.
-                // overflow-x-clip is a BACKSTOP, not the fix: a single child with
-                // an intrinsic minimum wider than a phone (a fixed-width CTA, a
-                // row of shrink-0 groups) drags the whole page sideways, and the
-                // reader then has to scroll horizontally to reach the right edge
-                // of every other surface. Clip contains that blast radius to the
-                // offending row. Rails that are MEANT to scroll set their own
-                // overflow-x-auto and are unaffected, and anything that needs a
-                // horizontal scrollbar must still opt into one explicitly.
+                // NO overflow clip of its own. A child wider than a phone (a
+                // fixed-width CTA, a row of shrink-0 groups) would drag the page
+                // sideways, and the SHELL's wrapper clips at the window for
+                // that. Clipping here as well cut every line meant to run past
+                // the column: Home's rule under "Make some friends" has to reach
+                // the window's left edge under the dock ("we need this line to
+                // reach the extreme end in the left hand side"), as the top
+                // bar's does. Rails that are MEANT to scroll set their own
+                // overflow-x-auto, and anything that needs a horizontal
+                // scrollbar must still opt into one explicitly.
                 //
                 // 600 WIDE, LIKE X'S TIMELINE. The column briefly had no cap
                 // at all — every pane flexed to the window — and on a 1440
@@ -1851,8 +1953,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip pt-[var(--ws-topbar-h)]",
-                !wide && "border-x",
+                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 pt-[var(--ws-topbar-h)] lg:border-r",
+                // The LEFT hairline separates the column from the SIDEBAR, so
+                // it exists only while the sidebar does. Under the dock it
+                // would cut down the line the top bar's logo starts on ("there
+                // is no vertical line border line so remove that when it is on
+                // dock... i meant in the left side"). The right one divides the
+                // column from the RAIL, so it is drawn from lg, where the rail
+                // is; below that it would be a lone line beside nothing.
+                railOn && "border-l",
                 // The foot reserves the dock's row — except over an open chat,
                 // where the dock is gone and the reservation would be a blank
                 // band under the composer. WhatsApp's rule: the field sits on

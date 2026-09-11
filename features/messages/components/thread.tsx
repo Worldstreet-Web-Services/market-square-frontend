@@ -12,10 +12,11 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
+import { ShareSheet } from "@/components/ui/share-sheet";
+import { canMakeInvite, inviteUrl } from "@/features/messages/lib/invites";
 import { ErrorState } from "@/components/ui/states";
 import Link from "next/link";
 import { housePath } from "@/lib/house-path";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ThreadMenu } from "@/features/messages/components/thread-menu";
 import {
@@ -36,6 +37,7 @@ import {
   useMessages,
   useRenameGroup,
   useSendMessage,
+  useCreateInvite,
 } from "@/features/messages/hooks/use-messages";
 import {
   formatClockTime,
@@ -1340,32 +1342,28 @@ export function Thread({
   const rename = useRenameGroup(conversation.id);
   const leave = useLeaveGroup(conversation.id);
 
-  /**
-   * "Copy link" — node 78:8620.
-   *
-   * The URL is the thread itself. What the toast says depends on the group's
-   * `visibility`, because that is the flag `POST /conversations/:id/join` reads:
-   * on a `public` group anybody holding it may let themselves in, and on a
-   * `private` one the same link answers 403 with "ask a member to add you".
-   *
-   * `visibility` is on `ConversationSummary` now, so the toast says which of
-   * the two the reader has just handed out. Copying a link that silently
-   * refuses everyone who receives it, without saying so, is worse than no row.
-   */
-  const copyLink = () => {
-    const url = `${window.location.origin}/messages?c=${conversation.id}`;
-    void navigator.clipboard.writeText(url).then(() =>
-      toast.success(
-        conversation.visibility === "public"
-          ? "Link copied — anyone with it can join"
-          : "Link copied — only members can open it"
-      )
-    );
-  };
+  /*
+    "Share invite link" — mints an invite and opens the share sheet a post uses,
+    so a house can be sent to somebody who is not in it yet. The link lands on
+    `/join/<token>`. Offered to whoever the service lets make one: any member
+    of a public house, only the owner of a private one (`canMakeInvite`).
+  */
+  const makeInvite = useCreateInvite();
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const shareInvite = () =>
+    makeInvite.mutate(conversation.id, {
+      onSuccess: (invite) => setInviteLink(inviteUrl(window.location.origin, invite.token)),
+    });
 
   // The roster, for turning a bubble's `senderId` into a face. Groups only —
   // a 1:1 reads identity from `peer` and never issues the request.
   const members = useConversationMembers(conversation.id, group);
+  // The service lets only the group's creator rename it, and `createdBy` says
+  // who that is; the roster's owner row is the fallback for an older payload.
+  const isOwner = conversation.createdBy
+    ? conversation.createdBy === me.data?.id
+    : (members.data?.items.some((row) => row.role === "owner" && row.profile?.id === me.data?.id) ?? false);
+  const canShareInvite = group && canMakeInvite({ visibility: conversation.visibility, isOwner });
   const senders = new Map<string, Profile>();
   // The summary's capped preview first, so avatars are right for the four most
   // recent talkers before the full roster arrives; the full list overwrites it.
@@ -1438,20 +1436,14 @@ export function Thread({
               avatars, and is kept here only as the fallback for a payload that
               predates the field.
             */
-            isOwner={
-              conversation.createdBy
-                ? conversation.createdBy === me.data?.id
-                : (members.data?.items.some(
-                    (row) => row.role === "owner" && row.profile?.id === me.data?.id
-                  ) ?? false)
-            }
+            isOwner={isOwner}
             safetyRows={
               !group && conversation.peer ? safetyRowsSlot?.(conversation.peer) : undefined
             }
             actions={{
               onAddMembers,
               onViewMembers: () => setMembersOpen(true),
-              onCopyLink: copyLink,
+              onShareInvite: canShareInvite ? shareInvite : undefined,
               onRenameGroup: () => setRenaming(true),
               onLeaveGroup: me.data ? () => setLeaving(true) : undefined,
               onDeleteChat: () => setDeleting(true),
@@ -1459,6 +1451,15 @@ export function Thread({
           />
         }
       />
+
+      {inviteLink && (
+        <ShareSheet
+          open
+          onClose={() => setInviteLink(null)}
+          title="Share invite link"
+          payload={{ text: `Join ${conversation.title ?? "my house"} on Square`, url: inviteLink }}
+        />
+      )}
 
       {/* 40px from the header to the first separator is the design's (header
           80, first label at y=120). The gap below is ours — its day sections
