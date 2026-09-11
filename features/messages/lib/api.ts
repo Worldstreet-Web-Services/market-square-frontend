@@ -9,6 +9,8 @@ import {
   ReadResultSchema,
   InvitePreviewSchema,
   InviteSchema,
+  HouseNotificationSettingsSchema,
+  type HouseNotificationSettings,
 } from "@/features/messages/lib/types";
 import {
   buildMessagePayload,
@@ -174,6 +176,23 @@ export async function setMemberRole(conversationId: string, profileId: string, r
  */
 export async function transferOwnership(conversationId: string, profileId: string) {
   return msApi.post<unknown>(`/conversations/${conversationId}/transfer-ownership`, { profileId });
+}
+
+/** The reader's notification levels for one house — members of a group only (404 otherwise). */
+export async function fetchHouseNotificationSettings(conversationId: string) {
+  return HouseNotificationSettingsSchema.parse(
+    await msApi.authedGet(`/conversations/${conversationId}/notification-settings`)
+  );
+}
+
+/** Save one or both levels. Strict on the service; answers the whole object. */
+export async function updateHouseNotificationSettings(
+  conversationId: string,
+  patch: Partial<HouseNotificationSettings>
+) {
+  return HouseNotificationSettingsSchema.parse(
+    await msApi.put(`/conversations/${conversationId}/notification-settings`, patch)
+  );
 }
 
 /**

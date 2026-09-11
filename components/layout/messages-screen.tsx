@@ -136,6 +136,9 @@ function NewChatSheet({ open, onClose, onStarted }: NewChatPickerProps) {
           // says so too, and these are the values it would have returned.
           createdBy: null,
           visibility: "private" as const,
+          // Roles and per-house levels belong to groups; a 1:1 has neither.
+          viewerRole: null,
+          notificationSettings: null,
           imageUrl: null,
           description: null,
           title: null,

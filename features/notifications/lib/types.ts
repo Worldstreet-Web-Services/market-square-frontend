@@ -68,6 +68,12 @@ export const NotificationKindSchema = z
     "chat_request",
     "group_added",
     "speaker_request",
+    /**
+     * Someone opened a gist room from one of your houses (settings stage 2b).
+     * Listed as the service ships it, so it never lands as "followed you".
+     * Carries the opener and `streamId`; it does NOT carry the house.
+     */
+    "house_room",
   ])
   .catch("follow");
 

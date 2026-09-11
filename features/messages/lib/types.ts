@@ -83,6 +83,19 @@ export const MessageSchema = z.object({
   ...flattenMessageMedia(message.media),
 }));
 
+/**
+ * A reader's notification levels for ONE house (settings stage 2b). Every
+ * member starts at all/all. "leaders_and_friends" is the house's owner and
+ * admins, plus anyone the reader follows; "directed" (rooms only) hears no
+ * room openings but still gets speaker requests addressed to them.
+ */
+export const HouseNotificationSettingsSchema = z.object({
+  messages: z.enum(["all", "leaders_and_friends", "none"]),
+  rooms: z.enum(["all", "leaders_and_friends", "directed", "none"]),
+});
+
+export type HouseNotificationSettings = z.infer<typeof HouseNotificationSettingsSchema>;
+
 /** `ConversationSummary` in the served spec, and the object the thread pane is
     handed. `lastMessage` is a full ConversationMessage object, NOT a string —
     declaring it as a string is what made the whole inbox fail to parse. The
@@ -126,9 +139,13 @@ export const ConversationSchema = z.object({
    * public ones. A direct conversation is always private.
    *
    * `canMakeInvite` reads it: any member of a public house may share an invite
-   * link, only the owner of a private one.
+   * link, only the owner or an admin of a private one.
    */
   visibility: z.enum(["public", "private"]).optional().default("private").catch("private"),
+  /** The reader's own role in a GROUP row. Null on a 1:1, and on a service that predates roles. */
+  viewerRole: z.enum(["owner", "admin", "member"]).nullable().optional().default(null).catch(null),
+  /** The reader's notification levels for a GROUP row. Null on a 1:1, and before stage 2b. */
+  notificationSettings: HouseNotificationSettingsSchema.nullable().optional().default(null).catch(null),
   /** Groups only: who wrote `lastMessage`, so the inbox row can prefix it. */
   lastSender: ProfileSchema.nullable().optional().default(null),
   lastMessage: MessageSchema.nullable().optional().default(null),

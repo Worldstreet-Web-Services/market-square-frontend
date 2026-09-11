@@ -7,8 +7,8 @@ import { SAVING_SOON } from "@/components/layout/settings-copy";
 // Types
 // ---------------------------------------------------------------------------
 
-type MessageNotifFrom = "all" | "admins" | "none";
-type GistroomNotifFrom = "all" | "admins" | "directed" | "none";
+type MessageNotifFrom = "all" | "leaders_and_friends" | "none";
+type GistroomNotifFrom = "all" | "leaders_and_friends" | "directed" | "none";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -58,8 +58,8 @@ export function HouseNotificationsView({
             <Toggle
               disabled={disabled}
               title={disabled ? SAVING_SOON : undefined}
-              checked={messagesFrom === "admins"}
-              onChange={() => onMessagesFromChange("admins")}
+              checked={messagesFrom === "leaders_and_friends"}
+              onChange={() => onMessagesFromChange("leaders_and_friends")}
               label="Message notifications from admins, leaders and friends"
             />
           </div>
@@ -101,8 +101,8 @@ export function HouseNotificationsView({
             <Toggle
               disabled={disabled}
               title={disabled ? SAVING_SOON : undefined}
-              checked={gistroomsFrom === "admins"}
-              onChange={() => onGistroomsFromChange("admins")}
+              checked={gistroomsFrom === "leaders_and_friends"}
+              onChange={() => onGistroomsFromChange("leaders_and_friends")}
               label="Gistroom notifications from admins, leaders and friends"
             />
           </div>

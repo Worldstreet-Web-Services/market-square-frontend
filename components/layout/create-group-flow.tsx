@@ -195,6 +195,10 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
       // caller, and with the visibility they chose on the form.
       createdBy: me.data?.id ?? null,
       visibility,
+      // The creator is its owner, and every member starts at all/all — the
+      // next inbox poll brings the stored levels.
+      viewerRole: "owner" as const,
+      notificationSettings: null,
           imageUrl: imageUrl ?? null,
           description: description.trim() || null,
             title: conversation.title ?? name,

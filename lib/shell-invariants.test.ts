@@ -1514,13 +1514,15 @@ describe("Settings are the reader's own, and show real houses", () => {
 describe("Settings controls never pretend to save", () => {
   it("saves Notifications and Chat through /me/settings, and keeps the later stages disabled", () => {
     const copy = read("components/layout/settings-copy.ts");
-    assert.match(copy, /export const HOUSE_SAVE_LIVE = false;/);
+    assert.doesNotMatch(copy, /HOUSE_SAVE_LIVE/, 'a house is live from its own query now');
     assert.match(copy, /export const PRIVACY_SAVE_LIVE = false;/);
     const screen = stripComments(read("components/layout/settings-screen.tsx"));
     assert.match(screen, /const settingsLive = settings\.isSuccess;/);
     assert.match(screen, /onFriendsRoomChange=\{\(value\) => save\.mutate\(\{ notifications: \{ friendsRooms: value \} \}\)\}/);
     assert.match(screen, /onMessagesFromChange=\{\(value\) => save\.mutate\(\{ chat: \{ messagesFrom: value \} \}\)\}/);
-    assert.match(screen, /disabled=\{!HOUSE_SAVE_LIVE\}/);
+    assert.match(screen, /onMessagesFromChange=\{\(value\) => saveHouse\.mutate\(\{ messages: value \}\)\}/);
+    assert.match(screen, /onGistroomsFromChange=\{\(value\) => saveHouse\.mutate\(\{ rooms: value \}\)\}/);
+    assert.match(screen, /disabled=\{!houseSettings\.isSuccess\}/);
     assert.equal((screen.match(/<Toggle\s+disabled=\{!PRIVACY_SAVE_LIVE\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
     for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
       const source = read(`components/layout/${file}.tsx`);
@@ -1545,7 +1547,11 @@ describe("Settings sits in Home's column, under the shared header", () => {
 
   it("opens with ColumnHeader, whose back arrow climbs the settings levels", () => {
     const screen = stripComments(read("components/layout/settings-screen.tsx"));
-    assert.match(screen, /<ColumnHeader\s+title=\{title\}\s+subtitle=\{subtitle\}\s+back\s+onBack=\{active === null \? undefined : stepBack\}/);
+    // Two panes from lg: the list beside the chosen setting, the design's layout.
+    assert.match(screen, /lg:w-\[360px\] lg:shrink-0 lg:border-r/);
+    assert.match(screen, /<PaneHeader title=\{title\} subtitle=\{subtitle\} onBack=\{subLevel \? stepBack : undefined\} \/>/);
+    // One pane below lg, where the shared header's arrow walks back up.
+    assert.match(screen, /<ColumnHeader title=\{title\} subtitle=\{subtitle\} back onBack=\{stepBack\} \/>/);
     assert.doesNotMatch(screen, /<h1|lg:max-w-\[600px\]|92dvh/, "settings draws its own heading or its own wide layout again");
     const header = stripComments(read("components/layout/column-header.tsx"));
     assert.match(header, /onClick=\{\(\) => \(onBack \? onBack\(\) : canGoBack\(\) \? router\.back\(\) : router\.push\(backFallback\)\)\}/);
@@ -1567,6 +1573,21 @@ describe("House roles: owner, admin, member", () => {
     assert.match(thread, /memberActions\(\{ viewer: myRole, target: member\.role, isSelf: profile\.id === meId \}\)/);
     assert.match(thread, /setConfirming\(\{ kind: "owner", profile \}\)/);
     assert.match(thread, /setConfirming\(\{ kind: "remove", profile \}\)/);
+  });
+});
+
+describe("A house's notification levels and the house_room notification", () => {
+  it("sends the service's own level names, never the old local ones", () => {
+    const view = read("components/layout/house-notifications-view.tsx");
+    assert.doesNotMatch(view, /"admins"/);
+    assert.equal((view.match(/"leaders_and_friends"/g) ?? []).length, 6);
+  });
+
+  it("names a gist room opened in a house instead of calling it a follow", () => {
+    const types = read("features/notifications/lib/types.ts");
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.match(types, /"house_room",/);
+    assert.equal((page.match(/case "house_room":/g) ?? []).length, 2);
   });
 });
 

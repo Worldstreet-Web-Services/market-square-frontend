@@ -353,6 +353,17 @@ const PENDING_ROUTES = {
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
   },
+  // ── per-house notification settings (settings stage 2b) ─────────────────
+  "get /conversations/{}/notification-settings": {
+    reason:
+      "A house's notification levels. BUILT on the service (migration 065, " +
+      "PR #205) and served locally, NOT yet deployed. Until then Settings → " +
+      "a house reads the 404 as 'coming soon' and keeps its levels disabled. " +
+      "DELETE THIS ENTRY once the route appears in openapi.json.",
+  },
+  "put /conversations/{}/notification-settings": {
+    reason: "Saving a house's notification levels. Same undeployed change as the get.",
+  },
   // ── house roles (settings stage 2a) ──────────────────────────────────────
   "put /conversations/{}/members/{}/role": {
     reason:

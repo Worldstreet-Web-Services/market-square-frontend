@@ -5,20 +5,18 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
+import { errorCode } from "@/lib/api/envelope";
 import { SignInPrompt } from "@/components/ui/states";
 import { Toggle } from "@/components/ui/toggle";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { ChatView } from "@/components/layout/chat-view";
-import { HOUSE_SAVE_LIVE, PRIVACY_SAVE_LIVE, SAVING_SOON } from "@/components/layout/settings-copy";
-import { errorCode } from "@/lib/api/envelope";
-import { useSettings, useUpdateSettings } from "@/features/settings";
+import { PRIVACY_SAVE_LIVE, SAVING_SOON } from "@/components/layout/settings-copy";
 import { NotificationsView } from "@/components/layout/notifications-view";
+import { HouseNotificationsView } from "@/components/layout/house-notifications-view";
+import { useHouseNotificationSettings, useUpdateHouseNotificationSettings } from "@/features/messages";
+import { useSettings, useUpdateSettings } from "@/features/settings";
 import {
-  HouseNotificationsView,
-  type GistroomNotifFrom,
-  type MessageNotifFrom,
-} from "@/components/layout/house-notifications-view";
-import {
+  IconArrowLeft,
   IconCheckbox,
   IconCheckboxChecked,
   IconCheckCircle,
@@ -31,15 +29,15 @@ import {
 } from "@/components/ui/icons";
 
 /*
-  SETTINGS SIT IN THE SAME COLUMN AS HOME.
+  SETTINGS IS TWO PANES, IN HOME'S FRAME.
 
-  It was a WIDE route with its own two-column master-detail layout and its own
-  24px headings, so it spread past the column and dropped the right rail —
-  "it look as if it is wider, even the heading is not using the normal
-  header". Now it is the 600 column with the rail beside it, opened by the
-  shared `ColumnHeader`, and it drills in one level at a time: the menu, a
-  section, a sub-page. The header's back arrow steps back up those levels, and
-  from the menu itself leaves the page like every other column surface.
+  From lg: the list on the left and the chosen setting in a second column
+  beside it — tap a row and it opens there, which is the design. Both panes
+  sit inside the shell's FULL frame (Home's column plus rail, no rail drawn),
+  and both open with the shared header style, so the page lines up with the top
+  bar and reads like every other surface. Below lg there is no room for two
+  panes, so the list and the setting swap, and the header's back arrow walks
+  back up: sub-page → section → list.
 */
 
 // ---------------------------------------------------------------------------
@@ -110,16 +108,22 @@ const HELP_TITLES: Record<Exclude<HelpView, "main">, string> = {
 /** A menu row — 81px tall, icon circle + text + chevron. */
 function MenuRow({
   section,
+  isActive,
   onClick,
 }: {
   section: (typeof SECTIONS)[number];
+  isActive: boolean;
   onClick: () => void;
 }) {
   const Icon = section.icon;
   return (
     <button
       onClick={onClick}
-      className="flex h-[81px] w-full items-center justify-between border-b border-white/15 px-4 py-6 text-left transition-colors hover:bg-white/[0.03]"
+      aria-current={isActive ? "true" : undefined}
+      className={cn(
+        "flex h-[81px] w-full items-center justify-between border-b border-white/15 px-4 py-6 text-left transition-colors hover:bg-white/[0.03]",
+        isActive && "lg:bg-white/[0.04]",
+      )}
     >
       <div className="flex min-w-0 items-center gap-4">
         <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/10">
@@ -136,6 +140,41 @@ function MenuRow({
       </div>
       <IconSettingsChevron className="size-6 shrink-0 text-white/50" />
     </button>
+  );
+}
+
+/**
+ * The second pane's header, from lg — the shared header's own look (the
+ * `ws-head` bar, a 20px display title, the hairline under it) at the same
+ * height as the list's header beside it, so the two read as one bar. A back
+ * arrow only below a section's top level; the list is always one column away.
+ */
+function PaneHeader({
+  title,
+  subtitle,
+  onBack,
+}: {
+  title: string;
+  subtitle?: string;
+  onBack?: () => void;
+}) {
+  return (
+    <div className="ws-head sticky top-[var(--ws-topbar-h)] z-20 hidden min-h-14 items-center gap-5 px-4 py-2.5 lg:flex">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back"
+          className="ws-press -ml-2 rounded-full p-2 text-heading transition-colors hover:bg-white/10"
+        >
+          <IconArrowLeft className="h-5 w-5" />
+        </button>
+      )}
+      <div className="min-w-0 flex-1">
+        <h2 className="ws-display truncate text-xl">{title}</h2>
+        {subtitle && <p className="truncate text-[13px] text-meta">{subtitle}</p>}
+      </div>
+    </div>
   );
 }
 
@@ -589,10 +628,10 @@ export function SettingsScreen({ username }: { username: string }) {
   const save = useUpdateSettings();
   const settingsLive = settings.isSuccess;
   const settingsGone = settings.isError && errorCode(settings.error) === "NOT_FOUND";
-  const [houseMessagesFrom, setHouseMessagesFrom] =
-    useState<MessageNotifFrom>("admins");
-  const [houseGistroomsFrom, setHouseGistroomsFrom] =
-    useState<GistroomNotifFrom>("admins");
+  /* A house's notification levels (stage 2b), read only while one is open. */
+  const houseSettings = useHouseNotificationSettings(house?.id ?? "", house !== null);
+  const saveHouse = useUpdateHouseNotificationSettings(house?.id ?? "");
+  const houseGone = houseSettings.isError && errorCode(houseSettings.error) === "NOT_FOUND";
 
   const openSection = (next: Section) => {
     setPrivacyView("main");
@@ -602,7 +641,7 @@ export function SettingsScreen({ username }: { username: string }) {
     window.scrollTo({ top: 0 });
   };
 
-  /** One level up: sub-page → section → the menu. */
+  /** One level up: sub-page → section → the list (the last step only below lg). */
   const stepBack = () => {
     if (house) setHouse(null);
     else if (active === "privacy" && privacyView !== "main") setPrivacyView("main");
@@ -638,107 +677,133 @@ export function SettingsScreen({ username }: { username: string }) {
               ? HELP_TITLES[helpView]
               : (SECTIONS.find((section) => section.key === active)?.title ?? "Settings");
   const subtitle = active === "notifications" && house ? "House notifications" : undefined;
+  /** Below a section's top level — the second pane's header gets a back arrow. */
+  const subLevel =
+    house !== null ||
+    (active === "privacy" && privacyView !== "main") ||
+    (active === "help" && helpView !== "main");
+
+  const onStageOneScreen =
+    (active === "notifications" && !house) || (active === "privacy" && privacyView === "chat");
+  const savingSoon =
+    (active === "notifications" && house !== null && houseGone) ||
+    (active === "privacy" && privacyView !== "chat" && !PRIVACY_SAVE_LIVE) ||
+    (onStageOneScreen && settingsGone);
+  const loadFailed =
+    (onStageOneScreen && settings.isError && !settingsGone) ||
+    (active === "notifications" && house !== null && houseSettings.isError && !houseGone);
 
   return (
-    <>
-      <ColumnHeader
-        title={title}
-        subtitle={subtitle}
-        back
-        // From the menu the arrow leaves the page, as on every column
-        // surface; inside a section it climbs back up one level.
-        onBack={active === null ? undefined : stepBack}
-      />
-
-      {active === null ? (
-        <nav className="flex flex-col gap-4" aria-label="Settings">
+    <div className="lg:flex lg:min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h)-var(--ws-nav-h))]">
+      {/* THE LIST — always beside the chosen setting from lg; below lg, the
+          whole page until a setting is chosen. */}
+      <div className={cn("lg:w-[360px] lg:shrink-0 lg:border-r lg:border-white/10", active !== null && "hidden lg:block")}>
+        <ColumnHeader title="Settings" back />
+        <nav className="flex flex-col gap-4 lg:gap-0" aria-label="Settings">
           {SECTIONS.map((section) => (
-            <MenuRow key={section.key} section={section} onClick={() => openSection(section.key)} />
+            <MenuRow
+              key={section.key}
+              section={section}
+              isActive={active === section.key}
+              onClick={() => openSection(section.key)}
+            />
           ))}
         </nav>
-      ) : (
-        <div className="flex flex-col pb-10">
-          {/* One quiet line, only where there are controls that cannot save. */}
-          {((active === "notifications" && house && !HOUSE_SAVE_LIVE) ||
-            (active === "privacy" && privacyView !== "chat" && !PRIVACY_SAVE_LIVE) ||
-            (((active === "notifications" && !house) || (active === "privacy" && privacyView === "chat")) &&
-              settingsGone)) && (
-            <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
-              Saving these settings is coming soon.
-            </p>
-          )}
-          {((active === "notifications" && !house) || (active === "privacy" && privacyView === "chat")) &&
-            settings.isError &&
-            !settingsGone && (
-              <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
-                Couldn&apos;t load your settings.{" "}
-                <button
-                  type="button"
-                  onClick={() => void settings.refetch()}
-                  className="font-bold text-white underline-offset-2 hover:underline"
-                >
-                  Try again
-                </button>
-              </p>
-            )}
+      </div>
 
-          {active === "subscription" && <SubscriptionDetail />}
+      {/* THE CHOSEN SETTING — the second column from lg; below lg it takes the
+          list's place, with the shared header and its back arrow. */}
+      <div className={cn("min-w-0 flex-1", active === null && "hidden lg:block")}>
+        {active === null ? (
+          <p className="hidden px-6 py-10 text-[13px] leading-5 text-white/50 lg:block">
+            Choose a setting to see it here.
+          </p>
+        ) : (
+          <>
+            <div className="lg:hidden">
+              <ColumnHeader title={title} subtitle={subtitle} back onBack={stepBack} />
+            </div>
+            <PaneHeader title={title} subtitle={subtitle} onBack={subLevel ? stepBack : undefined} />
 
-          {active === "notifications" &&
-            (house ? (
-              <HouseNotificationsView
-                messagesFrom={houseMessagesFrom}
-                onMessagesFromChange={setHouseMessagesFrom}
-                gistroomsFrom={houseGistroomsFrom}
-                onGistroomsFromChange={setHouseGistroomsFrom}
-                disabled={!HOUSE_SAVE_LIVE}
-              />
-            ) : (
-              <NotificationsView
-                friendsRoom={settings.data?.notifications.friendsRooms ?? true}
-                onFriendsRoomChange={(value) => save.mutate({ notifications: { friendsRooms: value } })}
-                directNotifications={settings.data?.notifications.direct ?? true}
-                onDirectNotificationsChange={(value) => save.mutate({ notifications: { direct: value } })}
-                onOpenHouse={(next) => {
-                  setHouse(next);
-                  window.scrollTo({ top: 0 });
-                }}
-                disabled={!settingsLive}
-              />
-            ))}
+            <div className="flex flex-col pb-10">
+              {/* One quiet line, only where there are controls that cannot save. */}
+              {savingSoon && (
+                <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
+                  Saving these settings is coming soon.
+                </p>
+              )}
+              {loadFailed && (
+                <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
+                  Couldn&apos;t load your settings.{" "}
+                  <button
+                    type="button"
+                    onClick={() => void (house ? houseSettings.refetch() : settings.refetch())}
+                    className="font-bold text-white underline-offset-2 hover:underline"
+                  >
+                    Try again
+                  </button>
+                </p>
+              )}
 
-          {active === "privacy" && privacyView === "location" && (
-            <LocationView locationChoice={locationChoice} onLocationChoiceChange={setLocationChoice} />
-          )}
-          {active === "privacy" && privacyView === "chat" && (
-            <ChatView
-              messagesFrom={settings.data?.chat.messagesFrom ?? "everyone"}
-              onMessagesFromChange={(value) => save.mutate({ chat: { messagesFrom: value } })}
-              allowHouseMembers={settings.data?.chat.allowHouseMembers ?? true}
-              onAllowHouseMembersChange={(value) => save.mutate({ chat: { allowHouseMembers: value } })}
-              allowPastAudience={settings.data?.chat.allowPastAudience ?? false}
-              onAllowPastAudienceChange={(value) => save.mutate({ chat: { allowPastAudience: value } })}
-              disabled={!settingsLive}
-            />
-          )}
-          {active === "privacy" && privacyView === "main" && (
-            <PrivacyMain
-              personalizePlaces={personalizePlaces}
-              onPersonalizePlacesChange={setPersonalizePlaces}
-              visibilityOnSpace={visibilityOnSpace}
-              onVisibilityOnSpaceChange={setVisibilityOnSpace}
-              onOpenLocation={() => setPrivacyView("location")}
-              onOpenChat={() => setPrivacyView("chat")}
-            />
-          )}
+              {active === "subscription" && <SubscriptionDetail />}
 
-          {active === "help" && helpView === "main" && <HelpCentreMain onNavigate={setHelpView} />}
-          {active === "help" && helpView === "terms" && <TermsOfServiceView />}
-          {active === "help" && (helpView === "privacy-policy" || helpView === "community-guidelines") && (
-            <HelpSubView />
-          )}
-        </div>
-      )}
-    </>
+              {active === "notifications" &&
+                (house ? (
+                  <HouseNotificationsView
+                    messagesFrom={houseSettings.data?.messages ?? "all"}
+                    onMessagesFromChange={(value) => saveHouse.mutate({ messages: value })}
+                    gistroomsFrom={houseSettings.data?.rooms ?? "all"}
+                    onGistroomsFromChange={(value) => saveHouse.mutate({ rooms: value })}
+                    disabled={!houseSettings.isSuccess}
+                  />
+                ) : (
+                  <NotificationsView
+                    friendsRoom={settings.data?.notifications.friendsRooms ?? true}
+                    onFriendsRoomChange={(value) => save.mutate({ notifications: { friendsRooms: value } })}
+                    directNotifications={settings.data?.notifications.direct ?? true}
+                    onDirectNotificationsChange={(value) => save.mutate({ notifications: { direct: value } })}
+                    onOpenHouse={(next) => {
+                      setHouse(next);
+                      window.scrollTo({ top: 0 });
+                    }}
+                    disabled={!settingsLive}
+                  />
+                ))}
+
+              {active === "privacy" && privacyView === "location" && (
+                <LocationView locationChoice={locationChoice} onLocationChoiceChange={setLocationChoice} />
+              )}
+              {active === "privacy" && privacyView === "chat" && (
+                <ChatView
+                  messagesFrom={settings.data?.chat.messagesFrom ?? "everyone"}
+                  onMessagesFromChange={(value) => save.mutate({ chat: { messagesFrom: value } })}
+                  allowHouseMembers={settings.data?.chat.allowHouseMembers ?? true}
+                  onAllowHouseMembersChange={(value) => save.mutate({ chat: { allowHouseMembers: value } })}
+                  allowPastAudience={settings.data?.chat.allowPastAudience ?? false}
+                  onAllowPastAudienceChange={(value) => save.mutate({ chat: { allowPastAudience: value } })}
+                  disabled={!settingsLive}
+                />
+              )}
+              {active === "privacy" && privacyView === "main" && (
+                <PrivacyMain
+                  personalizePlaces={personalizePlaces}
+                  onPersonalizePlacesChange={setPersonalizePlaces}
+                  visibilityOnSpace={visibilityOnSpace}
+                  onVisibilityOnSpaceChange={setVisibilityOnSpace}
+                  onOpenLocation={() => setPrivacyView("location")}
+                  onOpenChat={() => setPrivacyView("chat")}
+                />
+              )}
+
+              {active === "help" && helpView === "main" && <HelpCentreMain onNavigate={setHelpView} />}
+              {active === "help" && helpView === "terms" && <TermsOfServiceView />}
+              {active === "help" && (helpView === "privacy-policy" || helpView === "community-guidelines") && (
+                <HelpSubView />
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

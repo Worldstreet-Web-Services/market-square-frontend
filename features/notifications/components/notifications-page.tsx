@@ -81,6 +81,8 @@ const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   group_added: "/notifications/notif-follow.svg",
   // A raised hand belongs to a live room, so it takes the trending mark.
   speaker_request: "/notifications/notif-trending.svg",
+  // A room opening in a house is a live room, like a raised hand.
+  house_room: "/notifications/notif-trending.svg",
 };
 
 /**
@@ -136,6 +138,8 @@ function headline(item: MarketNotification): string {
       return "Added to a house";
     case "speaker_request":
       return "Speaker request";
+    case "house_room":
+      return "Gist room opened";
   }
 }
 
@@ -188,6 +192,10 @@ function describe(item: MarketNotification): string {
       return `${who} added you to a house.`;
     case "speaker_request":
       return `${who} asked to speak in your room.`;
+    case "house_room":
+      // The payload names the room, not the house, so the copy does not guess
+      // which one.
+      return `${who} opened a gist room in one of your houses.`;
   }
 }
 
