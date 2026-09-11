@@ -1303,3 +1303,13 @@ describe("The profile cover follows 1021:20229", () => {
     assert.match(chip, /\/profile\/kash-chevron\.svg/);
   });
 });
+
+describe("The profile's bio block follows 1021:20271", () => {
+  const page = stripComments(read("features/profile/components/profile-page.tsx"));
+  it("sits 40 under the cover, bio and labels at 400, counts in #F7F9F9, place and website 14/20 #A1A1AA", () => {
+    assert.match(page, /flex flex-col gap-4 px-4 pt-6 md:px-8 md:pt-10/);
+    assert.match(page, /"text-\[15px\] font-normal leading-5 text-white\/50"/);
+    assert.equal((page.match(/font-semibold text-\[#F7F9F9\]/g) ?? []).length, 2);
+    assert.match(page, /gap-y-2 text-\[14px\] font-normal leading-5 text-\[#A1A1AA\]/);
+  });
+});

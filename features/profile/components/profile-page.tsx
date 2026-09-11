@@ -525,13 +525,16 @@ export function ProfilePage({
         the place, and the two counts.
       */}
       {/*
-        NODE 414:24935 — bio, counts, place. 741 wide on a 16 rhythm.
+        NODE 414:24935 — bio, counts, place. 741 wide on a 16 rhythm. Redrawn as
+        1021:20271 (live file, 2026-09-11): 40 under the cover, the bio and the
+        count labels at weight 400, the counts in `#F7F9F9`, and the place and
+        website at 14/20 in `#A1A1AA`.
 
         The name, handle, badges and actions moved ONTO the cover (435:27503);
         this block used to draw all of them a second time underneath. What the
         file leaves here is three lines.
       */}
-      <div className="flex flex-col gap-4 px-4 pt-6 md:px-8">
+      <div className="flex flex-col gap-4 px-4 pt-6 md:px-8 md:pt-10">
         {/*
           THE FILE PRINTS A LINE WHEN THERE IS NO BIO — "Bio not updated" at
           50% white, where a written one is the same size in full white. Empty
@@ -543,8 +546,8 @@ export function ProfilePage({
         <p
           className={
             data.bio
-              ? "text-[15px] leading-5 text-white"
-              : "text-[15px] leading-5 text-white/50"
+              ? "text-[15px] font-normal leading-5 text-white"
+              : "text-[15px] font-normal leading-5 text-white/50"
           }
         >
           {data.bio || "Bio not updated"}
@@ -566,16 +569,16 @@ export function ProfilePage({
         */}
         <p className="tnum flex flex-wrap items-baseline gap-x-[55px] gap-y-1 text-[15px] leading-5">
           <span className="flex items-baseline gap-1">
-            <span className="font-semibold text-grey-100">
+            <span className="font-semibold text-[#F7F9F9]">
               {formatCount(data.followingCount)}
             </span>
-            <span className="text-white/50">Following</span>
+            <span className="font-normal text-white/50">Following</span>
           </span>
           <span className="flex items-baseline gap-1">
-            <span className="font-semibold text-grey-100">
+            <span className="font-semibold text-[#F7F9F9]">
               {formatCount(data.followerCount)}
             </span>
-            <span className="text-white/50">Followers</span>
+            <span className="font-normal text-white/50">Followers</span>
           </span>
         </p>
 
@@ -620,7 +623,7 @@ export function ProfilePage({
           href somebody typed about themselves.
         */}
         {(data.city || data.region || isHttpUrl(data.website)) && (
-          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[15px] leading-5 text-white">
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px] font-normal leading-5 text-[#A1A1AA]">
             {(data.city || data.region) && (
               <span className="flex items-center gap-2">
                 <IconProfileGlobePin className="h-6 w-6 shrink-0 text-create" />
