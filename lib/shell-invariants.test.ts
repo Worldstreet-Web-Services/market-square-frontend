@@ -1176,3 +1176,24 @@ describe("A wink or follow-back notification opens its card", () => {
     assert.match(popup, /setFan\(\[request\.moment\]\)/);
   });
 });
+
+describe("Your Story works like WhatsApp's My status", () => {
+  const rail = stripComments(read("features/feed/components/stories-row.tsx"));
+  const creator = stripComments(read("features/feed/components/story-creator.tsx"));
+  const count = (re: RegExp) => (rail.match(re) ?? []).length;
+
+  it("plays your stories when you have some, and opens the creator when you don't or you tap +", () => {
+    assert.doesNotMatch(rail, /href="\/\?compose=story"/, "Your Story is a link to the inline composer again");
+    assert.equal(count(/const mine = groups\.findIndex\(\(group\) => group\.id === me\.data\?\.id\);/g), 2);
+    assert.equal(count(/if \(mine >= 0 && !add\) setOpenAt\(mine\);\s*else setCreating\(true\);/g), 2);
+    assert.equal(count(/\{creating && <StoryCreator onClose=\{\(\) => setCreating\(false\)\} \/>\}/g), 2);
+    assert.equal(count(/if \(i === mine\) return null;/g), 2, "your own stories show twice in the rail");
+  });
+
+  it("posts a photo, video or text story through the ordinary upload and create path", () => {
+    assert.match(creator, /create\.mutate\(\{ kind: "story"/);
+    assert.match(creator, /upload\.mutateAsync\(stage\.file\)/);
+    assert.match(creator, /validateUpload\(file, "media"\)/);
+    assert.match(creator, /createPortal\(/);
+  });
+});
