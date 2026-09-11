@@ -1218,3 +1218,23 @@ describe("The dock follows 964:24177", () => {
     assert.match(dock, /strokeWidth="6\.00677"/);
   });
 });
+
+
+describe("The account dropdown follows 747:14001", () => {
+  const shell = stripComments(read("components/layout/app-shell.tsx"));
+  const items = block(shell, "function AccountMenuItems(", "\nfunction RailHandle(");
+
+  it("offers Profile, Settings, Gender and Log out", () => {
+    assert.match(items, /label="Profile"/);
+    assert.match(items, /label="Settings"\s+onClick=\{\(\) => go\("\/settings"\)\}/);
+    assert.match(items, /setStep\("gender"\)/);
+    assert.match(items, /update\.mutate\(\{ gender: gender\.trim\(\) \}/);
+    assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
+  });
+
+  it("hangs in the file's 172 panel on both account menus", () => {
+    assert.equal((shell.match(/label="Account"\s+panel="gist"/g) ?? []).length, 2);
+    assert.match(shell, /const width = panel === "gist" \? 172 : 224;/);
+    assert.match(shell, /border-\[0\.745px\] border-white\/\[0\.18\] bg-grey-800 p-\[11\.913px\]/);
+  });
+});

@@ -4,8 +4,11 @@ import { createPortal } from "react-dom";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { MenuRow } from "@/components/ui/menu-row";
+import { IconFilterChevronRight, IconFilterFriends, IconFilterGender, IconFilterLocation } from "@/components/ui/home-icons";
+import { useUpdateMe } from "@/features/profile";
 import { useTrackNavHistory } from "@/lib/nav-history";
 import {
   type RailState,
@@ -462,6 +465,7 @@ function RailMenu({
   trigger,
   children,
   align = "right",
+  panel = "default",
 }: {
   label: string;
   trigger: (props: { open: boolean; toggle: () => void }) => React.ReactNode;
@@ -471,6 +475,12 @@ function RailMenu({
    * "below" hangs from the top bar's avatar, its right edge on the trigger's.
    */
   align?: "right" | "above" | "below";
+  /**
+   * `gist` is node 747:14001 ("gist dm"), the account dropdown: 172 wide,
+   * `#1C1C1C`, a 0.745 inside ring at 18% white, radius 8, 11.913 of padding
+   * and rows 5.957 apart — the same menu the friends filter draws (651:18441).
+   */
+  panel?: "default" | "gist";
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLDivElement | null>(null);
@@ -482,7 +492,7 @@ function RailMenu({
       const node = anchor.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
-      const width = 224;
+      const width = panel === "gist" ? 172 : 224;
       const left =
         align === "right"
           ? Math.min(rect.right + 8, window.innerWidth - width - 8)
@@ -506,7 +516,7 @@ function RailMenu({
       window.removeEventListener("resize", place);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, align]);
+  }, [open, align, panel]);
 
   return (
     <div ref={anchor} className="relative">
@@ -529,9 +539,13 @@ function RailMenu({
                 ...(align === "below"
                   ? { top: at.top }
                   : { bottom: Math.max(8, window.innerHeight - at.top) }),
-                width: 224,
+                width: panel === "gist" ? 172 : 224,
               }}
-              className="ws-popover fixed z-[61] rounded-2xl p-1.5"
+              className={
+                panel === "gist"
+                  ? "ws-popover-enter fixed z-[61] flex flex-col gap-[5.957px] rounded-lg border-[0.745px] border-white/[0.18] bg-grey-800 p-[11.913px]"
+                  : "ws-popover fixed z-[61] rounded-2xl p-1.5"
+              }
             >
               {children(() => setOpen(false))}
             </div>
@@ -624,6 +638,7 @@ function AccountChip() {
   return (
     <RailMenu
       label="Account"
+      panel="gist"
       align="above"
       trigger={({ open, toggle }) => (
         <button
@@ -668,31 +683,103 @@ function AccountChip() {
 function AccountMenuItems({ close }: { close: () => void }) {
   const logout = useLogout();
   const me = useMe();
+  const router = useRouter();
+  const update = useUpdateMe();
+  const [step, setStep] = useState<"root" | "gender">("root");
+  const [gender, setGender] = useState(me.data?.gender ?? "");
+  /* The file's own chevron (747:14009), and turned round for a step's Back. */
+  const chevron = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] text-white" />;
+  const back = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] -scale-x-100 text-white" />;
+  const go = (href: string) => {
+    close();
+    router.push(href);
+  };
+
+  /*
+    GENDER — the reader's own self-declared gender, the same public field Edit
+    profile saves and Explore's people filters read. Free text, as the service
+    stores it; Enter saves, and a set value can be cleared.
+  */
+  if (step === "gender") {
+    return (
+      <>
+        <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            update.mutate({ gender: gender.trim() }, { onSuccess: () => setStep("root") });
+          }}
+        >
+          <input
+            type="text"
+            autoFocus
+            value={gender}
+            onChange={(event) => setGender(event.target.value)}
+            maxLength={40}
+            placeholder="Your gender, then Enter"
+            aria-label="Your gender"
+            className="h-[23.83px] w-full rounded-[8.935px] bg-white/[0.03] px-[5.957px] text-[8.935px] font-medium leading-[11.913px] text-white/80 outline-none placeholder:text-white/40 focus:bg-white/[0.08]"
+          />
+        </form>
+        {me.data?.gender && (
+          <MenuRow
+            size="compact"
+            label="Clear"
+            onClick={() =>
+              update.mutate(
+                { gender: "" },
+                {
+                  onSuccess: () => {
+                    setGender("");
+                    setStep("root");
+                  },
+                }
+              )
+            }
+          />
+        )}
+      </>
+    );
+  }
+
+  /*
+    NODE 747:14001 — Profile, Settings, Gender, in the file's rows and glyphs
+    (the same "gist dm" component the friends filter draws, so its exported
+    icons are reused), then Log out, which the file does not draw and
+    ogazboiz asked to keep. Settings goes to `/settings`, a page being built
+    elsewhere.
+  */
   return (
     <>
-      <Link
-        href={me.data ? `/u/${me.data.username}` : "/auth"}
-        onClick={close}
-        className="block rounded-xl px-3 py-2.5 text-sm text-body transition-colors hover:bg-white/10"
-      >
-        View profile
-      </Link>
-      {/*
-        View profile and Log out, and nothing else — ogazboiz's call
-        ("it should only be view profile and logout here"). Tickets and
-        Arkmarks sat here for a while as "what is yours"; both routes still
-        resolve (/tickets, /arkmarks) and the profile's own tabs are the
-        door to them now.
-      */}
-      <button
+      <MenuRow
+        size="compact"
+        icon={<IconFilterLocation className="h-[11.81px] w-[12.25px] text-grey-400" />}
+        label="Profile"
+        trailing={chevron}
+        onClick={() => go(me.data ? `/u/${me.data.username}` : "/auth")}
+      />
+      <MenuRow
+        size="compact"
+        icon={<IconFilterFriends className="h-[9.64px] w-[13.13px] text-grey-400" />}
+        label="Settings"
+        onClick={() => go("/settings")}
+      />
+      <MenuRow
+        size="compact"
+        icon={<IconFilterGender className="h-3.5 w-3.5 text-grey-400" />}
+        label={me.data?.gender ? `Gender · ${me.data.gender}` : "Gender"}
+        trailing={chevron}
+        onClick={me.data ? () => setStep("gender") : undefined}
+      />
+      <MenuRow
+        size="compact"
+        icon={<IconLogout className="h-3.5 w-3.5 text-grey-400" />}
+        label={`Log out @${me.data?.username ?? ""}`}
         onClick={() => {
           close();
           void logout();
         }}
-        className="block w-full truncate rounded-xl px-3 py-2.5 text-left text-sm text-body transition-colors hover:bg-white/10"
-      >
-        Log out @{me.data?.username ?? ""}
-      </button>
+      />
     </>
   );
 }
@@ -1217,6 +1304,7 @@ function TopBarActions() {
       */}
       <RailMenu
         label="Account"
+      panel="gist"
         align="below"
         trigger={({ open, toggle }) => (
           <button
