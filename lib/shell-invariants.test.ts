@@ -1506,3 +1506,21 @@ describe("Settings are the reader's own, and show real houses", () => {
   });
 });
 
+describe("Settings controls never pretend to save", () => {
+  it("disables every preference control while no stage is wired", () => {
+    const copy = read("components/layout/settings-copy.ts");
+    assert.match(copy, /export const SETTINGS_SAVE_LIVE = false;/, "switch this on only with the service wiring for that stage");
+    const chat = read("components/layout/chat-view.tsx");
+    const house = read("components/layout/house-notifications-view.tsx");
+    const notifications = read("components/layout/notifications-view.tsx");
+    const screen = read("components/layout/settings-screen.tsx");
+    for (const [name, source] of [["chat", chat], ["house", house], ["notifications", notifications]] as const) {
+      const toggles = source.match(/<Toggle\b/g) ?? [];
+      const disabled = source.match(/<Toggle\s+disabled=\{disabled\}/g) ?? [];
+      assert.equal(disabled.length, toggles.length, `${name}: a toggle can flip without saving`);
+    }
+    assert.equal((screen.match(/<Toggle\s+disabled=\{!SETTINGS_SAVE_LIVE\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
+    assert.match(screen, /disabled=\{!SETTINGS_SAVE_LIVE\}\s+title=\{SETTINGS_SAVE_LIVE \? undefined : SAVING_SOON\}\s+className="flex h-16/);
+  });
+});
+

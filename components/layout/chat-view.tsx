@@ -2,6 +2,7 @@
 
 import { Toggle } from "@/components/ui/toggle";
 import { IconArrowLeft } from "@/components/ui/icons";
+import { SAVING_SOON } from "@/components/layout/settings-copy";
 
 type ChatMessagesFrom = "no-one" | "everyone" | "verified";
 
@@ -13,6 +14,7 @@ export function ChatView({
   allowPastAudience,
   onAllowPastAudienceChange,
   onBack,
+  disabled = false,
 }: {
   messagesFrom: ChatMessagesFrom;
   onMessagesFromChange: (v: ChatMessagesFrom) => void;
@@ -21,6 +23,8 @@ export function ChatView({
   allowPastAudience: boolean;
   onAllowPastAudienceChange: (v: boolean) => void;
   onBack: () => void;
+  /** The choices cannot be saved yet — see `settings-copy.ts`. */
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -44,15 +48,15 @@ export function ChatView({
         <div className="flex flex-col">
           <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
             <p className="text-base font-bold leading-6 text-white">No one</p>
-            <Toggle checked={messagesFrom === "no-one"} onChange={() => onMessagesFromChange("no-one")} label="Messages from no one" />
+            <Toggle disabled={disabled} title={disabled ? SAVING_SOON : undefined} checked={messagesFrom === "no-one"} onChange={() => onMessagesFromChange("no-one")} label="Messages from no one" />
           </div>
           <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
             <p className="text-base font-bold leading-6 text-white">Everyone</p>
-            <Toggle checked={messagesFrom === "everyone"} onChange={() => onMessagesFromChange("everyone")} label="Messages from everyone" />
+            <Toggle disabled={disabled} title={disabled ? SAVING_SOON : undefined} checked={messagesFrom === "everyone"} onChange={() => onMessagesFromChange("everyone")} label="Messages from everyone" />
           </div>
           <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
             <p className="text-base font-bold leading-6 text-white">Verified users</p>
-            <Toggle checked={messagesFrom === "verified"} onChange={() => onMessagesFromChange("verified")} label="Messages from verified users" />
+            <Toggle disabled={disabled} title={disabled ? SAVING_SOON : undefined} checked={messagesFrom === "verified"} onChange={() => onMessagesFromChange("verified")} label="Messages from verified users" />
           </div>
         </div>
       </div>
@@ -65,11 +69,11 @@ export function ChatView({
         <div className="flex flex-col">
           <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
             <p className="text-base font-bold leading-6 text-white">My house members</p>
-            <Toggle checked={allowHouseMembers} onChange={onAllowHouseMembersChange} label="Allow messages from house members" />
+            <Toggle disabled={disabled} title={disabled ? SAVING_SOON : undefined} checked={allowHouseMembers} onChange={onAllowHouseMembersChange} label="Allow messages from house members" />
           </div>
           <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
             <p className="text-base font-bold leading-6 text-white">Past gistroom audience</p>
-            <Toggle checked={allowPastAudience} onChange={onAllowPastAudienceChange} label="Allow messages from past gistroom audience" />
+            <Toggle disabled={disabled} title={disabled ? SAVING_SOON : undefined} checked={allowPastAudience} onChange={onAllowPastAudienceChange} label="Allow messages from past gistroom audience" />
           </div>
         </div>
       </div>

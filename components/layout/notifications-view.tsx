@@ -10,6 +10,7 @@ import {
   type MessageNotifFrom,
   type GistroomNotifFrom,
 } from "@/components/layout/house-notifications-view";
+import { SAVING_SOON } from "@/components/layout/settings-copy";
 
 /**
  * Settings → Notifications.
@@ -24,11 +25,14 @@ export function NotificationsView({
   onFriendsRoomChange,
   directNotifications,
   onDirectNotificationsChange,
+  disabled = false,
 }: {
   friendsRoom: boolean;
   onFriendsRoomChange: (v: boolean) => void;
   directNotifications: boolean;
   onDirectNotificationsChange: (v: boolean) => void;
+  /** The toggles cannot be saved yet — see `settings-copy.ts`. */
+  disabled?: boolean;
 }) {
   const houses = useConversations("houses");
   const rows = houses.data?.pages.flatMap((page) => page.items) ?? [];
@@ -47,6 +51,7 @@ export function NotificationsView({
         gistroomsFrom={houseGistroomsFrom}
         onGistroomsFromChange={setHouseGistroomsFrom}
         onBack={() => setActiveHouse(null)}
+        disabled={disabled}
       />
     );
   }
@@ -65,6 +70,8 @@ export function NotificationsView({
             </p>
           </div>
           <Toggle
+            disabled={disabled}
+            title={disabled ? SAVING_SOON : undefined}
             checked={friendsRoom}
             onChange={onFriendsRoomChange}
             label="Friends Room notifications"
@@ -80,6 +87,8 @@ export function NotificationsView({
             </p>
           </div>
           <Toggle
+            disabled={disabled}
+            title={disabled ? SAVING_SOON : undefined}
             checked={directNotifications}
             onChange={onDirectNotificationsChange}
             label="Direct notifications"

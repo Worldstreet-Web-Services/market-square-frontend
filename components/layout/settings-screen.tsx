@@ -8,6 +8,7 @@ import { useMe } from "@/hooks/use-me";
 import { SignInPrompt } from "@/components/ui/states";
 import { Toggle } from "@/components/ui/toggle";
 import { ChatView } from "@/components/layout/chat-view";
+import { SAVING_SOON, SETTINGS_SAVE_LIVE } from "@/components/layout/settings-copy";
 import { NotificationsView } from "@/components/layout/notifications-view";
 import {
   IconArrowLeft,
@@ -202,6 +203,8 @@ function PrivacyMain({
         description="Personalize your feed based on your sign-up info and locations you visit."
         trailing={
           <Toggle
+            disabled={!SETTINGS_SAVE_LIVE}
+            title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
             checked={personalizePlaces}
             onChange={onPersonalizePlacesChange}
             label="Personalize based on places you've been"
@@ -229,6 +232,8 @@ function PrivacyMain({
         description="Allow followers to see which Spaces you're listening to."
         trailing={
           <Toggle
+            disabled={!SETTINGS_SAVE_LIVE}
+            title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
             checked={visibilityOnSpace}
             onChange={onVisibilityOnSpaceChange}
             label="Visibility on Space"
@@ -262,7 +267,9 @@ function LocationView({
             <button
               key={choice.key}
               onClick={() => onLocationChoiceChange(choice.key)}
-              className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-4 text-left transition-colors hover:bg-white/[0.03]"
+              disabled={!SETTINGS_SAVE_LIVE}
+              title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
+              className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
             >
               <p className="text-base font-bold leading-6 text-white">
                 {choice.label}
@@ -636,6 +643,7 @@ function DetailPanel({
           allowPastAudience={chatAllowPastAudience}
           onAllowPastAudienceChange={onChatAllowPastAudienceChange}
           onBack={() => onPrivacyViewChange("main")}
+          disabled={!SETTINGS_SAVE_LIVE}
         />
       );
     }
@@ -674,6 +682,7 @@ function DetailPanel({
       onFriendsRoomChange={onFriendsRoomChange}
       directNotifications={directNotifications}
       onDirectNotificationsChange={onDirectNotificationsChange}
+      disabled={!SETTINGS_SAVE_LIVE}
     />
   );
 }
@@ -804,6 +813,13 @@ export function SettingsScreen({ username }: { username: string }) {
             <div className="px-6 pb-6 lg:hidden">
               <h2 className="text-xl font-semibold leading-normal text-white">{rightTitle}</h2>
             </div>
+          )}
+
+          {/* One quiet line, only where there are controls that cannot save. */}
+          {!SETTINGS_SAVE_LIVE && (active === "notifications" || active === "privacy") && (
+            <p className="px-6 pb-4 text-[13px] leading-5 text-white/50 lg:px-8">
+              Saving these settings is coming soon.
+            </p>
           )}
 
           <DetailPanel

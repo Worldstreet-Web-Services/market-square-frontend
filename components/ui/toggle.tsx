@@ -7,11 +7,14 @@ export function Toggle({
   onChange,
   disabled,
   label,
+  title,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
   label?: string;
+  /** Why it is disabled, for a control that cannot act yet. */
+  title?: string;
 }) {
   return (
     <button
@@ -19,6 +22,7 @@ export function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      title={title}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
