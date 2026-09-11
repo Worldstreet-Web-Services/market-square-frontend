@@ -1254,7 +1254,7 @@ function Composer({ conversationId }: { conversationId: string }) {
             placeholder={attachment ? "Add a caption…" : "Write a message…"}
             // The design's caret is #008CFF — the one place in this pane a
             // colour is specified for something the house has no token for.
-            className="max-h-32 min-w-0 flex-1 resize-none bg-transparent text-[13px] leading-5 text-white caret-[#008CFF] outline-none placeholder:text-meta"
+            className="max-h-32 min-w-0 flex-1 resize-none bg-transparent text-base leading-5 text-white caret-[#008CFF] outline-none placeholder:text-meta"
           />
           {/* Decoration, not a control — there is no emoji picker on this
               surface, and the live-stream composer draws the same glyph the
