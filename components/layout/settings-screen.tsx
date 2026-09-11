@@ -31,8 +31,9 @@ import {
 /*
   SETTINGS IS TWO PANES, IN HOME'S FRAME.
 
-  From lg: the list on the left and the chosen setting in a second column
-  beside it — tap a row and it opens there, which is the design. Both panes
+  It opens as ONE pane: the list, across the frame. Tap a row and, from lg, it
+  becomes two — the list narrows to the left and the chosen setting opens in a
+  second column beside it, which is the design. Both panes
   sit inside the shell's FULL frame (Home's column plus rail, no rail drawn),
   and both open with the shared header style, so the page lines up with the top
   bar and reads like every other surface. Below lg there is no room for two
@@ -695,11 +696,15 @@ export function SettingsScreen({ username }: { username: string }) {
 
   return (
     <div className="lg:flex lg:min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h)-var(--ws-nav-h))]">
-      {/* THE LIST — always beside the chosen setting from lg; below lg, the
-          whole page until a setting is chosen. */}
-      <div className={cn("lg:w-[360px] lg:shrink-0 lg:border-r lg:border-white/10", active !== null && "hidden lg:block")}>
+      {/* THE LIST — the whole page until a setting is chosen; then, from lg,
+          the narrow left pane beside it (below lg it steps aside). */}
+      <div
+        className={cn(
+          active === null ? "w-full" : "hidden lg:block lg:w-[360px] lg:shrink-0 lg:border-r lg:border-white/10"
+        )}
+      >
         <ColumnHeader title="Settings" back />
-        <nav className="flex flex-col gap-4 lg:gap-0" aria-label="Settings">
+        <nav className={cn("flex flex-col", active === null ? "gap-4" : "gap-0")} aria-label="Settings">
           {SECTIONS.map((section) => (
             <MenuRow
               key={section.key}
@@ -711,15 +716,11 @@ export function SettingsScreen({ username }: { username: string }) {
         </nav>
       </div>
 
-      {/* THE CHOSEN SETTING — the second column from lg; below lg it takes the
-          list's place, with the shared header and its back arrow. */}
-      <div className={cn("min-w-0 flex-1", active === null && "hidden lg:block")}>
-        {active === null ? (
-          <p className="hidden px-6 py-10 text-[13px] leading-5 text-white/50 lg:block">
-            Choose a setting to see it here.
-          </p>
-        ) : (
-          <>
+      {/* THE CHOSEN SETTING — only once one is chosen: the second column from
+          lg; below lg it takes the list's place, with the shared header and its
+          back arrow. */}
+      {active !== null && (
+        <div className="min-w-0 flex-1">
             <div className="lg:hidden">
               <ColumnHeader title={title} subtitle={subtitle} back onBack={stepBack} />
             </div>
@@ -801,9 +802,8 @@ export function SettingsScreen({ username }: { username: string }) {
                 <HelpSubView />
               )}
             </div>
-          </>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

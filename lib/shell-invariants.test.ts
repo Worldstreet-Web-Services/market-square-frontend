@@ -1549,6 +1549,10 @@ describe("Settings sits in Home's column, under the shared header", () => {
     const screen = stripComments(read("components/layout/settings-screen.tsx"));
     // Two panes from lg: the list beside the chosen setting, the design's layout.
     assert.match(screen, /lg:w-\[360px\] lg:shrink-0 lg:border-r/);
+    // ONE pane until a row is tapped: the list spans the frame, and the second column exists only for a chosen setting.
+    assert.match(screen, /active === null \? "w-full" : "hidden lg:block lg:w-\[360px\] lg:shrink-0 lg:border-r lg:border-white\/10"/);
+    assert.match(screen, /\{active !== null && \(\s*<div className="min-w-0 flex-1">/);
+    assert.doesNotMatch(screen, /Choose a setting to see it here/);
     assert.match(screen, /<PaneHeader title=\{title\} subtitle=\{subtitle\} onBack=\{subLevel \? stepBack : undefined\} \/>/);
     // One pane below lg, where the shared header's arrow walks back up.
     assert.match(screen, /<ColumnHeader title=\{title\} subtitle=\{subtitle\} back onBack=\{stepBack\} \/>/);
