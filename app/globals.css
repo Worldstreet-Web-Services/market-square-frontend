@@ -72,6 +72,9 @@
      unnamed. Do not reuse it for errors — an error is a state, not an act. */
   --color-danger: #ff383c;
   --color-like: #e84a4a;
+  /* A post's reply tally on hover — blue for conversation, beside red for a
+     like and green (`--color-up`) for a repost. */
+  --color-reply: #1d9bf0;
   /* Broadcasting-now red, read off the design's stories strip: the LIVE pill
      is solid #ff0b0b and the tile ring is the same red at 40%. This is the
      STRIP's live marker only — the live identity everywhere else in the app is
@@ -758,8 +761,10 @@ body {
     0 13.75px 17.19px -3.44px rgba(0, 0, 0, 0.1);
   transition: border-color 0.15s ease;
 }
+/* Hovering a post rings it in the brand purple — "when we hover on a post
+   the border line should be purple". */
 .ws-post:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--color-create);
 }
 
 /* The hairline under a post's identity row. Its own colour in the design. */

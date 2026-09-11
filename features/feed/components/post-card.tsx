@@ -225,6 +225,7 @@ function CountAction({
   count,
   active,
   activeClass = "text-heading",
+  hoverClass,
   onClick,
   children,
 }: {
@@ -232,6 +233,12 @@ function CountAction({
   count: number;
   active?: boolean;
   activeClass?: string;
+  /**
+   * The act's own colour on hover, for the glyph AND its count together —
+   * blue to reply, green to repost, red to like. `group-hover:` classes,
+   * spelled out at the call site so Tailwind sees them.
+   */
+  hoverClass?: string;
   /** Absent for a tally that is only a fact — views have nothing to do. */
   onClick?: () => void;
   children: React.ReactNode;
@@ -241,18 +248,20 @@ function CountAction({
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className="flex shrink-0 items-center gap-0.5 transition-colors md:gap-[2px]"
+      className="group flex shrink-0 items-center gap-0.5 transition-colors md:gap-[2px]"
     >
       <span
         className={cn(
           "flex h-6 w-6 items-center justify-center transition-colors",
-          active ? activeClass : "text-grey-400 hover:text-heading"
+          active ? activeClass : cn("text-grey-400", hoverClass ?? "group-hover:text-heading")
         )}
       >
         {children}
       </span>
       {/* 12/16 in `#FFFFFF` — node 236:4729. */}
-      <span className="tnum text-[12px] leading-4 text-white">{formatCount(count)}</span>
+      <span className={cn("tnum text-[12px] leading-4 text-white transition-colors", hoverClass)}>
+        {formatCount(count)}
+      </span>
     </button>
   );
 }
@@ -369,6 +378,7 @@ function RepostMenu({
         count={post.repostCount}
         active
         activeClass="text-up"
+        hoverClass="group-hover:text-up"
         onClick={onRepost}
       >
         <IconMsRepost className="h-[18px] w-[18px]" />
@@ -381,6 +391,7 @@ function RepostMenu({
       <CountAction
         label="Repost or quote"
         count={post.repostCount}
+        hoverClass="group-hover:text-up"
         onClick={() => setOpen((v) => !v)}
       >
         <IconMsRepost className="h-[18px] w-[18px]" />
@@ -926,6 +937,7 @@ export function PostCard({
           <CountAction
             label="Comments"
             count={post.commentCount}
+            hoverClass="group-hover:text-reply"
             onClick={onCommentTally}
           >
             <IconMsComment className="h-6 w-6" />
@@ -946,6 +958,7 @@ export function PostCard({
             count={post.likeCount}
             active={post.likedByMe}
             activeClass="text-like"
+            hoverClass="group-hover:text-like"
             onClick={() => gate(() => like.mutate({ postId: post.id, like: !post.likedByMe }))}
           >
             <IconMsLike className="h-6 w-6" filled={post.likedByMe} />

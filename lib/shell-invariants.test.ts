@@ -1118,3 +1118,20 @@ describe("The verified badge is the supplied seal", () => {
     assert.match(seal, /if \(verification !== "verified"\) return null;/);
   });
 });
+
+describe("A post answers the pointer in its acts' colours", () => {
+  const post = stripComments(read("features/feed/components/post-card.tsx"));
+  const css = read("app/globals.css");
+
+  it("rings a hovered post in the brand purple", () => {
+    assert.match(css, /\.ws-post:hover \{\s*border-color: var\(--color-create\);/);
+  });
+
+  it("colours reply blue, repost green and like red on hover, glyph and count together", () => {
+    assert.match(css, /--color-reply: #1d9bf0;/);
+    assert.match(post, /label="Comments"\s+count=\{post\.commentCount\}\s+hoverClass="group-hover:text-reply"/);
+    assert.match(post, /label="Repost or quote"\s+count=\{post\.repostCount\}\s+hoverClass="group-hover:text-up"/);
+    assert.match(post, /activeClass="text-like"\s+hoverClass="group-hover:text-like"/);
+    assert.match(post, /<span className=\{cn\("tnum text-\[12px\] leading-4 text-white transition-colors", hoverClass\)\}>/, "the count no longer follows the glyph's hover colour");
+  });
+});
