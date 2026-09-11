@@ -1101,3 +1101,20 @@ describe("Home's timeline follows 647:16354", () => {
     assert.match(badge, /!bare && "rounded-\[21px\] border/, "the capsule is drawn around the bare lockup");
   });
 });
+
+describe("The verified badge is the supplied seal", () => {
+  const badge = stripComments(read("components/ui/badge.tsx"));
+  const seal = block(badge, "export function VerifiedBadge(", "\n}\n");
+
+  it("draws the seal on its own gradient and ring, not the old silver check", () => {
+    assert.match(seal, /viewBox="0 0 132 131"/);
+    assert.match(seal, /stroke="#9E58FF"/);
+    for (const stop of ["#A361FF", "#623A99", "#9F5AFF"]) assert.ok(seal.includes(stop), `the seal lost its ${stop} stop`);
+    assert.doesNotMatch(seal, /IconCheck|bg-accent/, "the silver check is back");
+  });
+
+  it("gives every seal its own gradient id and still gates on verified alone", () => {
+    assert.match(seal, /useId\(\)/, "a shared gradient id lets one seal paint the rest");
+    assert.match(seal, /if \(verification !== "verified"\) return null;/);
+  });
+});
