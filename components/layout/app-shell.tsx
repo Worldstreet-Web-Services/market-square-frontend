@@ -726,8 +726,8 @@ function AccountMenuItems({ close }: { close: () => void }) {
     NODE 747:14001 — Profile, Settings, Gender, in the file's rows and glyphs
     (the same "gist dm" component the friends filter draws, so its exported
     icons are reused), then Log out, which the file does not draw and
-    ogazboiz asked to keep. Settings goes to `/settings`, a page being built
-    elsewhere.
+    ogazboiz asked to keep. Settings goes to `/u/<username>/settings`, a page
+    being built elsewhere.
   */
   return (
     <>
@@ -742,7 +742,8 @@ function AccountMenuItems({ close }: { close: () => void }) {
         size="compact"
         icon={<IconFilterFriends className="h-[9.64px] w-[13.13px] text-grey-400" />}
         label="Settings"
-        onClick={() => go("/settings")}
+        // Each person's own settings live under their profile.
+        onClick={() => go(me.data ? `/u/${me.data.username}/settings` : "/auth")}
       />
       <MenuRow
         size="compact"
