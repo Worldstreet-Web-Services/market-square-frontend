@@ -1313,3 +1313,12 @@ describe("The profile's bio block follows 1021:20271", () => {
     assert.match(page, /gap-y-2 text-\[14px\] font-normal leading-5 text-\[#A1A1AA\]/);
   });
 });
+
+describe("The profile draws no creator badge", () => {
+  it("keeps the verified seal and the org badge on the cover, and no RoleChip", () => {
+    const cover = stripComments(read("features/profile/components/profile-cover.tsx"));
+    assert.doesNotMatch(cover, /RoleChip/, "the creator badge is back on the profile");
+    assert.match(cover, /<VerifiedBadge verification=\{profile\.verification\}/);
+    assert.match(cover, /<OrgBadgeChip orgBadge=\{profile\.orgBadge\} \/>/);
+  });
+});

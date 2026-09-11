@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconProfileBack } from "@/components/ui/profile-icons";
 import { canGoBack } from "@/lib/nav-history";
 import type { Profile } from "@/lib/api/schemas";
@@ -205,7 +205,8 @@ export function ProfileCover({
               <span className="min-w-0 break-words">{name}</span>
               <VerifiedBadge verification={profile.verification} className="h-5 w-5" />
               <OrgBadgeChip orgBadge={profile.orgBadge} />
-              <RoleChip role={profile.role} />
+              {/* No creator badge on the profile ("remove that creator badge in
+                  profile", ogazboiz). `role` still decides who can go live. */}
             </h1>
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               {/* An unclaimed member's username is their Privy DID — forty-odd
