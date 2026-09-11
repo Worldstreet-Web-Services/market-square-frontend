@@ -27,7 +27,7 @@ import { useNewPosts } from "@/features/feed/hooks/use-new-posts";
 import { NewPostsPill } from "@/features/feed/components/new-posts-pill";
 
 /** How many posts stand between the top of the feed and "Join a community". */
-const BEFORE_COMMUNITY = 1;
+const BEFORE_COMMUNITY = 2;
 /**
  * ...and how many before "Suggested Pals" (540:19351).
  *
@@ -457,12 +457,12 @@ export function FeedPage({
                 />
               </div>
               {/*
-                NODE 258:5545 — "Join a community", INSIDE the timeline rather
-                than under it.
+                NODE 647:16515 — "Join a community", INSIDE the timeline rather
+                than under it, after the SECOND post as the live file places it.
 
                 It used to close the page, which only worked while the feed had
                 a floor: a grid below a list that pages forever is a grid nobody
-                reaches. One post above it puts it on the first screen, where
+                reaches. Two posts above it keep it near the top, where
                 somebody who has just seen what the square sounds like is being
                 offered a room to say it in.
 
