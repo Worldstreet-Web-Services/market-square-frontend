@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { captureVisitUtm } from "@/lib/analytics";
 import { MenuRow } from "@/components/ui/menu-row";
 import { IconFilterChevronRight, IconFilterFriends, IconFilterGender, IconFilterLocation } from "@/components/ui/home-icons";
 import { useUpdateMe } from "@/features/profile";
@@ -1748,6 +1749,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // there (no rails over the player, no bars).
   const inRoom = /^\/live\/[^/]+$/.test(pathname);
   const wide = isWide(pathname);
+  // Keep the UTM tags this visit landed with before any navigation drops them.
+  useEffect(() => {
+    captureVisitUtm();
+  }, []);
   const full = !wide && isFull(pathname);
 
   if (inRoom) {

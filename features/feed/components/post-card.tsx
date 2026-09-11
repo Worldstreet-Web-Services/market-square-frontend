@@ -1090,6 +1090,7 @@ export function PostCard({
             text: post.text,
             url: `${window.location.origin}/p/${post.id}`,
           }}
+          campaign="post_share"
         />
       )}
 

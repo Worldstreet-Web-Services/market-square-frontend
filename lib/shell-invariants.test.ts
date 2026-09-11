@@ -1635,3 +1635,32 @@ describe("Contact us opens a chat with support", () => {
   });
 });
 
+describe("Square has a favicon and tagged share links", () => {
+  it("serves the brand mark as the tab icon and a home-screen icon", () => {
+    const icon = read("app/icon.svg");
+    assert.match(icon, /viewBox="0 0 60 60"/);
+    assert.ok(read("app/apple-icon.png").length > 0);
+  });
+
+  it("tags every link the share sheet hands out, with what was shared", () => {
+    const sheet = stripComments(read("components/ui/share-sheet.tsx"));
+    assert.match(sheet, /shareTags\("native_share", campaign\)/);
+    assert.match(sheet, /shareTags\("copy_link", campaign\)/);
+    assert.match(sheet, /shareTags\(target, campaign\)/);
+    for (const [file, campaign] of [
+      ["features/feed/components/post-card.tsx", "post_share"],
+      ["features/profile/components/profile-page.tsx", "profile_share"],
+      ["features/profile/components/person-more-menu.tsx", "profile_share"],
+      ["features/messages/components/thread.tsx", "house_invite"],
+    ] as const) {
+      assert.match(read(file), new RegExp(`campaign="${campaign}"`), file);
+    }
+  });
+
+  it("keeps the UTM tags a visit arrived with and sends them with analytics", () => {
+    const analytics = stripComments(read("lib/analytics.ts"));
+    assert.match(analytics, /const utm = captureVisitUtm\(\);/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /captureVisitUtm\(\);/);
+  });
+});
+
