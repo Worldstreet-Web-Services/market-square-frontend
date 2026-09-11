@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/cn";
 
-export type AccountTab = "earnings" | "badges" | "gifts" | "replays";
+export type AccountTab = "posts" | "earnings" | "badges" | "gifts" | "replays";
 
 export interface AccountTabDef {
   value: AccountTab;
@@ -84,7 +84,8 @@ export function AccountTabs({
               className={cn(
                 "ws-press flex h-[38px] w-[101px] shrink-0 items-center justify-center rounded-full text-[12px] font-bold leading-4 transition-colors",
                 active
-                  ? "ws-btn-welcome text-grey-100"
+                  ? // 1021:21618 — the same handles as Home's "For you" pill (647:16268).
+                    "bg-[linear-gradient(226deg,#7E3BEB_22.4%,#472185_84.9%)] text-grey-100"
                   : "bg-transparent text-white/40 hover:text-white/70",
                 // Not a dimmed control that still fires: `disabled` above is
                 // the real thing, and this only says so visually.

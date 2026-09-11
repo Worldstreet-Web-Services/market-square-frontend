@@ -33,6 +33,7 @@ import { VerificationCard } from "@/features/profile/components/verification-car
 import {
   AccountTabs,
   type AccountTab,
+  type AccountTabDef,
 } from "@/features/profile/components/account-tabs";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
@@ -370,7 +371,7 @@ export function ProfilePage({
    * are different questions and must not share one value. Gift Gallery is the
    * one the file draws active and the only one with a panel behind it.
    */
-  const [accountTab, setAccountTab] = useState<AccountTab>("earnings");
+  const [accountTab, setAccountTab] = useState<AccountTab>("posts");
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
   const isMe = Boolean(
@@ -653,7 +654,7 @@ export function ProfilePage({
         <ProfilePhotos username={data.username} isMe={isMe} />
       </div>
 
-      {isMe && housesSlot && <div className="px-4 pt-9 md:px-8">{housesSlot}</div>}
+      {isMe && housesSlot && <div className="px-4 pt-[38px] md:px-8">{housesSlot}</div>}
 
       {/*
         545:47615 — what a STRANGER's profile carries under the bio block, in
@@ -716,10 +717,15 @@ export function ProfilePage({
         Visible and disabled, per the standing rule — deleting them loses the
         roadmap, leaving them live tells the reader a lie.
       */}
-      {isMe && giftGallerySlot && (
-        <div className="pt-6">
+      {/* 1021:21615 — ONE strip, Posts first, 38 under the section above. Your
+          own profile adds the account tabs after it; anyone else's is Posts. */}
+      {(
+        <div className="pt-[38px]">
           <AccountTabs
             tabs={[
+              { value: "posts", label: "Posts" },
+              ...(isMe && giftGallerySlot
+                ? ([
               { value: "earnings", label: "Earnings" },
               {
                 value: "badges",
@@ -735,13 +741,24 @@ export function ProfilePage({
                 label: "Replays",
                 disabledReason: MARKET_FLAGS.replays ? undefined : "Soon",
               },
+                  ] satisfies AccountTabDef[])
+                : []),
             ]}
             value={accountTab}
             onChange={setAccountTab}
           />
-          {accountTab === "earnings" && earningsSlot}
-          {accountTab === "badges" && badges.data && <BadgesPanel badges={badges.data.items} />}
-          {accountTab === "gifts" && giftGallerySlot}
+          {accountTab === "posts" && (
+            <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
+          )}
+          {/* The account panels are YOUR OWN, gated where ownership is decided:
+              a stranger's strip is Posts alone and can never mount these. */}
+          {isMe && giftGallerySlot && (
+            <>
+              {accountTab === "earnings" && earningsSlot}
+              {accountTab === "badges" && badges.data && <BadgesPanel badges={badges.data.items} />}
+              {accountTab === "gifts" && giftGallerySlot}
+            </>
+          )}
         </div>
       )}
 

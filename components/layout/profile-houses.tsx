@@ -44,12 +44,15 @@ export function ProfileHouses() {
 
   return (
     <section aria-label="Houses" className="flex flex-col gap-4">
-      {/* 534:16950 — 12/16 at 700 in `#F4F4F4`, which is `--color-grey-100`
-          exactly. It spans the full 741 and has NOTHING opposite it: the
-          section's only children are this line and the rail, so the "View All"
-          that used to sit here is gone. It cost nothing — the rail scrolls and
-          already holds every house. */}
-      <h2 className="text-[12px] font-bold leading-4 text-grey-100">Houses</h2>
+      {/* 1021:20293 — "Houses" at 12/16 700 in `#F4F4F4`, and opposite it the
+          live file's "View All" (1021:20295) at 12/16 700 in white, opening the
+          inbox on its Houses tab. */}
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-[12px] font-bold leading-4 text-grey-100">Houses</h2>
+        <Link href="/messages?tab=houses" className="text-[12px] font-bold leading-4 text-white transition-opacity hover:opacity-80">
+          View All
+        </Link>
+      </div>
 
       <div className="flex items-center gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* 534:16952 — 136 wide against the houses' 427, so it reads as a slot

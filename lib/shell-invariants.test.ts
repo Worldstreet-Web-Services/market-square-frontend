@@ -1359,3 +1359,22 @@ describe("The profile's Photos row is 1021:20930", () => {
     assert.match(page, /<ProfilePhotos username=\{data\.username\} isMe=\{isMe\} \/>/);
   });
 });
+
+describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () => {
+  const houses = stripComments(read("components/layout/profile-houses.tsx"));
+  const tabs = stripComments(read("features/profile/components/account-tabs.tsx"));
+  const page = stripComments(read("features/profile/components/profile-page.tsx"));
+  const inbox = stripComments(read("features/messages/components/messages-page.tsx"));
+
+  it("puts View All opposite Houses, opening the inbox on Houses", () => {
+    assert.match(houses, /href="\/messages\?tab=houses"[^>]*>\s*View All/);
+    assert.match(inbox, /useState<InboxTab>\(tabParam === "houses" \? "houses" : "all"\)/);
+  });
+
+  it("leads the strip with Posts on the For you gradient and shows the posts under it", () => {
+    assert.match(page, /\{ value: "posts", label: "Posts" \}/);
+    assert.match(page, /useState<AccountTab>\("posts"\)/);
+    assert.match(page, /accountTab === "posts" && \(\s*<PostsTab/);
+    assert.match(tabs, /bg-\[linear-gradient\(226deg,#7E3BEB_22\.4%,#472185_84\.9%\)\] text-grey-100/);
+  });
+});
