@@ -1233,7 +1233,7 @@ describe("The account dropdown follows 747:14001", () => {
   });
 
   it("hangs in the file's 172 panel on both account menus", () => {
-    assert.equal((shell.match(/label="Account"\s+panel="gist"/g) ?? []).length, 2);
+    assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 2);
     assert.match(shell, /const width = panel === "gist" \? 172 : 224;/);
     assert.match(shell, /border-\[0\.745px\] border-white\/\[0\.18\] bg-grey-800 p-\[11\.913px\]/);
   });

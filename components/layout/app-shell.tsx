@@ -638,8 +638,8 @@ function AccountChip() {
   return (
     <RailMenu
       label="Account"
-      panel="gist"
       align="above"
+      panel="gist"
       trigger={({ open, toggle }) => (
         <button
           type="button"
@@ -1304,8 +1304,8 @@ function TopBarActions() {
       */}
       <RailMenu
         label="Account"
-      panel="gist"
         align="below"
+        panel="gist"
         trigger={({ open, toggle }) => (
           <button
             type="button"
