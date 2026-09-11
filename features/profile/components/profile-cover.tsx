@@ -7,6 +7,7 @@ import { ImageViewer } from "@/components/ui/image-viewer";
 import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconProfileBack } from "@/components/ui/profile-icons";
 import { canGoBack } from "@/lib/nav-history";
+import { artworkForSeed, resolveSeed } from "@/lib/avatar-seed";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -80,6 +81,7 @@ export function ProfileCover({
   /* The picture open full screen, if any: the profile picture or the cover. */
   const [viewing, setViewing] = useState<{ src: string; alt: string } | null>(null);
   const coverSrc = profile.coverUrl ?? "/profile/default-cover.jpg";
+  const avatarSrc = profile.avatarUrl ?? artworkForSeed(resolveSeed({ id: profile.id, name }));
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -216,8 +218,10 @@ export function ProfileCover({
           <span className="relative block shrink-0 md:self-end">
             <button
               type="button"
-              onClick={() => profile.avatarUrl && setViewing({ src: profile.avatarUrl, alt: `${name}'s profile picture` })}
-              disabled={!profile.avatarUrl}
+              // The picture ON SCREEN: the upload, or the seeded mascot the
+              // avatar draws when there is none — a tap on either opens it.
+              onClick={() => avatarSrc && setViewing({ src: avatarSrc, alt: `${name}'s profile picture` })}
+              disabled={!avatarSrc}
               aria-label="View profile picture"
               className="block cursor-zoom-in rounded-[16.36px] disabled:cursor-default"
             >

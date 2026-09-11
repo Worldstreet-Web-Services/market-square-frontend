@@ -624,9 +624,12 @@ body {
    practice a post's avatar and name read straight through the bar and drew on
    top of the wordmark. Chrome that content passes UNDER has to hide it
    outright; glass is for chrome that floats over content on purpose (ws-glass,
-   the tab bar pill). Solid also drops a compositing layer per header. */
+   the tab bar pill). Solid also drops a compositing layer per header.
+   CHROME, not ground: the shell paints the page `--color-chrome`, so a
+   pure-black bar read as a hole cut across the top of every column page
+   ("why is this page odd and seeing black color"). */
 @utility ws-head {
-  background: var(--color-ground);
+  background: var(--color-chrome);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 

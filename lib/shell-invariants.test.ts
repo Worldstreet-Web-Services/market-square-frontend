@@ -1456,3 +1456,19 @@ describe("A house can be shared with an invite link", () => {
     assert.match(page, /const state = inviteState\(house, authenticated\);/);
   });
 });
+
+describe("Column pages sit on the chrome ground", () => {
+  it("paints the sticky column header and empty states like the page, not black", () => {
+    const css = read("app/globals.css");
+    assert.match(css, /@utility ws-head \{\s*background: var\(--color-chrome\);/);
+    const states = stripComments(read("components/ui/states.tsx"));
+    assert.doesNotMatch(states.slice(states.indexOf("export function EmptyState"), states.indexOf("export function ErrorState")), /ws-inset/);
+  });
+
+  it("opens the profile picture on screen, the seeded mascot included", () => {
+    const cover = stripComments(read("features/profile/components/profile-cover.tsx"));
+    assert.match(cover, /const avatarSrc = profile\.avatarUrl \?\? artworkForSeed\(resolveSeed\(\{ id: profile\.id, name \}\)\);/);
+    assert.match(cover, /disabled=\{!avatarSrc\}/);
+  });
+});
+
