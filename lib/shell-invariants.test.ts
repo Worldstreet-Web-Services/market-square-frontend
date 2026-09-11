@@ -1615,3 +1615,13 @@ describe("A person's place respects how much they share", () => {
   });
 });
 
+describe("Contact us opens a chat with support", () => {
+  it("resolves the support account by username and opens a chat with it", () => {
+    assert.match(read("lib/support.ts"), /export const SUPPORT_USERNAME = "tsionarksupport";/);
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /const support = useProfile\(SUPPORT_USERNAME\);/);
+    assert.match(screen, /openChat\.mutate\(support\.data\.id, \{\s*onSuccess: \(conversation\) => router\.push\(`\/messages\?c=\$\{conversation\.id\}`\),/);
+    assert.doesNotMatch(screen, /did:privy:/, "the support account's id is hard-coded; it differs per environment");
+  });
+});
+

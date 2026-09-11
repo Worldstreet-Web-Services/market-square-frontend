@@ -19,6 +19,7 @@ export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";
 // username off the media plane and never holds the whole object.
 export { PersonSafetyRows, PersonFollow } from "./components/person-safety-rows";
 export {
+  useProfile,
   useProfileSafety,
   useUpdateMe,
   useWink,

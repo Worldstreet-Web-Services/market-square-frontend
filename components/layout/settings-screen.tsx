@@ -14,8 +14,13 @@ import { ChatView } from "@/components/layout/chat-view";
 import { SAVING_SOON } from "@/components/layout/settings-copy";
 import { NotificationsView } from "@/components/layout/notifications-view";
 import { HouseNotificationsView } from "@/components/layout/house-notifications-view";
-import { useHouseNotificationSettings, useUpdateHouseNotificationSettings } from "@/features/messages";
-import { useUpdateMe } from "@/features/profile";
+import {
+  useHouseNotificationSettings,
+  useOpenConversation,
+  useUpdateHouseNotificationSettings,
+} from "@/features/messages";
+import { useProfile, useUpdateMe } from "@/features/profile";
+import { SUPPORT_USERNAME } from "@/lib/support";
 import { useSettings, useUpdateSettings, type LocationPrecision } from "@/features/settings";
 import {
   IconArrowLeft,
@@ -510,21 +515,30 @@ const HELP_ROWS: Array<{
   { label: "Contact us", external: true },
 ];
 
-function HelpCentreMain({ onNavigate }: { onNavigate: (v: HelpView) => void }) {
+function HelpCentreMain({
+  onNavigate,
+  onContact,
+  contactBusy,
+}: {
+  onNavigate: (v: HelpView) => void;
+  /** Opens a chat with the support account; absent where that account does not exist. */
+  onContact?: () => void;
+  contactBusy: boolean;
+}) {
   return (
     <div className="flex flex-col gap-4">
       {HELP_ROWS.map((row) => (
         <button
           key={row.label}
-          onClick={() => row.view && onNavigate(row.view)}
-          // Contact us has no destination yet (a support address and account
-          // are still to be chosen), so it is inert rather than a dead tap.
-          disabled={!row.view}
-          title={row.view ? undefined : "Coming soon"}
+          onClick={() => (row.view ? onNavigate(row.view) : onContact?.())}
+          // Contact us opens a chat with TsionArk Support. On a server without
+          // that account it is inert rather than a dead tap.
+          disabled={!row.view && (!onContact || contactBusy)}
+          title={row.view || onContact ? undefined : "Coming soon"}
           className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
         >
           <p className="text-base font-bold leading-6 text-white">
-            {row.label}
+            {!row.view && contactBusy ? "Opening chat…" : row.label}
           </p>
           {row.external ? (
             <IconExternalLink className="size-6 shrink-0 text-white/50" />
@@ -673,6 +687,9 @@ export function SettingsScreen({ username }: { username: string }) {
   const settings = useSettings();
   const save = useUpdateSettings();
   const updateMe = useUpdateMe();
+  /* Contact us: the official support account, looked up by username. */
+  const support = useProfile(SUPPORT_USERNAME);
+  const openChat = useOpenConversation();
   const settingsLive = settings.isSuccess;
   const settingsGone = settings.isError && errorCode(settings.error) === "NOT_FOUND";
   const privacy = settings.data?.privacy;
@@ -854,7 +871,20 @@ export function SettingsScreen({ username }: { username: string }) {
               />
             )}
 
-            {active === "help" && helpView === "main" && <HelpCentreMain onNavigate={setHelpView} />}
+            {active === "help" && helpView === "main" && (
+              <HelpCentreMain
+                onNavigate={setHelpView}
+                onContact={
+                  support.data
+                    ? () =>
+                        openChat.mutate(support.data.id, {
+                          onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
+                        })
+                    : undefined
+                }
+                contactBusy={openChat.isPending}
+              />
+            )}
             {active === "help" && helpView === "terms" && <TermsOfServiceView />}
             {active === "help" && (helpView === "privacy-policy" || helpView === "community-guidelines") && (
               <HelpSubView />
