@@ -8,3 +8,10 @@
  * leaves the row inert.
  */
 export const SUPPORT_USERNAME = "tsionarksupport";
+
+/**
+ * Support's email — the address the official support account publishes in its
+ * own bio on production ("📧 Support: support@tsionark.com"), so it is theirs
+ * to state, not ours to guess.
+ */
+export const SUPPORT_EMAIL = "support@tsionark.com";

@@ -20,7 +20,7 @@ import {
   useUpdateHouseNotificationSettings,
 } from "@/features/messages";
 import { useProfile, useUpdateMe } from "@/features/profile";
-import { SUPPORT_USERNAME } from "@/lib/support";
+import { SUPPORT_EMAIL, SUPPORT_USERNAME } from "@/lib/support";
 import { useSettings, useUpdateSettings, type LocationPrecision } from "@/features/settings";
 import {
   IconArrowLeft,
@@ -92,7 +92,7 @@ const SECTIONS: Array<{
 ];
 
 type PrivacyView = "main" | "location" | "chat";
-type HelpView = "main" | "terms" | "privacy-policy" | "community-guidelines";
+type HelpView = "main" | "terms" | "privacy-policy" | "community-guidelines" | "contact";
 
 /*
   FOUR choices, not the design's three: the city stays on profiles (the
@@ -111,6 +111,7 @@ const HELP_TITLES: Record<Exclude<HelpView, "main">, string> = {
   terms: "Terms of Service",
   "privacy-policy": "Privacy Policy",
   "community-guidelines": "Community Guidelines",
+  contact: "Contact us",
 };
 
 // ---------------------------------------------------------------------------
@@ -512,33 +513,21 @@ const HELP_ROWS: Array<{
   { label: "Terms of Service", view: "terms" },
   { label: "Privacy Policy", view: "privacy-policy" },
   { label: "Community Guidelines", view: "community-guidelines" },
-  { label: "Contact us", external: true },
+  { label: "Contact us", view: "contact" },
 ];
 
-function HelpCentreMain({
-  onNavigate,
-  onContact,
-  contactBusy,
-}: {
-  onNavigate: (v: HelpView) => void;
-  /** Opens a chat with the support account; absent where that account does not exist. */
-  onContact?: () => void;
-  contactBusy: boolean;
-}) {
+function HelpCentreMain({ onNavigate }: { onNavigate: (v: HelpView) => void }) {
   return (
     <div className="flex flex-col gap-4">
       {HELP_ROWS.map((row) => (
         <button
           key={row.label}
-          onClick={() => (row.view ? onNavigate(row.view) : onContact?.())}
-          // Contact us opens a chat with TsionArk Support. On a server without
-          // that account it is inert rather than a dead tap.
-          disabled={!row.view && (!onContact || contactBusy)}
-          title={row.view || onContact ? undefined : "Coming soon"}
+          onClick={() => row.view && onNavigate(row.view)}
+          disabled={!row.view}
           className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
         >
           <p className="text-base font-bold leading-6 text-white">
-            {!row.view && contactBusy ? "Opening chat…" : row.label}
+            {row.label}
           </p>
           {row.external ? (
             <IconExternalLink className="size-6 shrink-0 text-white/50" />
@@ -641,6 +630,41 @@ function TermsOfServiceView() {
           laws, without regard to conflict of law principles.
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Contact us — both ways the support team can be reached: a chat with the
+ * official TsionArk Support account, and the email address that account
+ * publishes. The chat row is inert on a server without the account; email
+ * always works.
+ */
+function ContactView({ onChat, chatBusy }: { onChat?: () => void; chatBusy: boolean }) {
+  return (
+    <div className="flex flex-col">
+      <DetailRow
+        title="Chat with TsionArk Support"
+        description={
+          !onChat
+            ? "Chat support is coming soon."
+            : chatBusy
+              ? "Opening chat…"
+              : "Opens a chat with the official support account."
+        }
+        onClick={onChat && !chatBusy ? onChat : undefined}
+        trailing={<IconSettingsChevron className={cn("size-6 shrink-0", onChat ? "text-white/50" : "text-white/20")} />}
+      />
+      <a
+        href={`mailto:${SUPPORT_EMAIL}`}
+        className="flex w-full items-center gap-4 border-b border-white/15 px-4 py-6 text-left transition-colors hover:bg-white/[0.03]"
+      >
+        <div className="flex min-w-0 flex-1 flex-col gap-2 pr-4">
+          <p className="text-base font-bold leading-6 text-white">Email support</p>
+          <p className="text-[13px] font-normal leading-5 text-white/50">{SUPPORT_EMAIL}</p>
+        </div>
+        <IconExternalLink className="size-6 shrink-0 text-white/50" />
+      </a>
     </div>
   );
 }
@@ -871,10 +895,10 @@ export function SettingsScreen({ username }: { username: string }) {
               />
             )}
 
-            {active === "help" && helpView === "main" && (
-              <HelpCentreMain
-                onNavigate={setHelpView}
-                onContact={
+            {active === "help" && helpView === "main" && <HelpCentreMain onNavigate={setHelpView} />}
+            {active === "help" && helpView === "contact" && (
+              <ContactView
+                onChat={
                   support.data
                     ? () =>
                         openChat.mutate(support.data.id, {
@@ -882,7 +906,7 @@ export function SettingsScreen({ username }: { username: string }) {
                         })
                     : undefined
                 }
-                contactBusy={openChat.isPending}
+                chatBusy={openChat.isPending}
               />
             )}
             {active === "help" && helpView === "terms" && <TermsOfServiceView />}

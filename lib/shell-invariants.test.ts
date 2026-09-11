@@ -1622,6 +1622,10 @@ describe("Contact us opens a chat with support", () => {
     assert.match(screen, /const support = useProfile\(SUPPORT_USERNAME\);/);
     assert.match(screen, /openChat\.mutate\(support\.data\.id, \{\s*onSuccess: \(conversation\) => router\.push\(`\/messages\?c=\$\{conversation\.id\}`\),/);
     assert.doesNotMatch(screen, /did:privy:/, "the support account's id is hard-coded; it differs per environment");
+    // The email is the one the support account publishes in its own bio.
+    assert.match(read("lib/support.ts"), /export const SUPPORT_EMAIL = "support@tsionark\.com";/);
+    assert.match(screen, /href=\{`mailto:\$\{SUPPORT_EMAIL\}`\}/);
+    assert.match(screen, /\{ label: "Contact us", view: "contact" \}/);
   });
 });
 
