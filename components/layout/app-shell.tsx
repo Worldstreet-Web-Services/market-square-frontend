@@ -298,17 +298,6 @@ const WIDE_EXACT = ["/store", "/operations", "/messages"];
 */
 const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
 
-/*
-  A PERSON'S PROFILE (`/u/:username`) is the design's own 805-wide page with
-  no rail beside it (1021:20228), so its 741 cover holds the name, handle,
-  KASH and "Who viewed my profile" on ONE row ("everything enter in one row").
-  In the 600 column the cover came out 535 and the handle row wrapped. The
-  profile's sub-pages (`/u/:username/settings`) keep the normal column.
-*/
-function isProfilePage(pathname: string): boolean {
-  return /^\/u\/[^/]+\/?$/.test(pathname);
-}
-
 function isWide(pathname: string): boolean {
   return (
     WIDE_EXACT.includes(pathname) ||
@@ -1154,8 +1143,6 @@ export function Sidebar({
  * overflow so that width never turns into a scrollbar.
  */
 function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
-  // The profile's own 805 frame: the bar's content lines up with it, not with the column and rail.
-  const profile = isProfilePage(usePathname());
   return (
     <div
       className={cn(
@@ -1167,8 +1154,7 @@ function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
       <div
         className={cn(
           "flex min-w-0 flex-1 items-start",
-          showBrand && !wide && !profile && "mx-auto max-w-[600px] lg:max-w-[971px] lg:pr-6",
-          showBrand && profile && "mx-auto max-w-[805px]"
+          showBrand && !wide && "mx-auto max-w-[600px] lg:max-w-[971px] lg:pr-6"
         )}
       >
         {showBrand && (
@@ -1741,7 +1727,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // there (no rails over the player, no bars).
   const inRoom = /^\/live\/[^/]+$/.test(pathname);
   const wide = isWide(pathname);
-  const profile = isProfilePage(pathname);
 
   if (inRoom) {
     return (
@@ -1979,13 +1964,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // band under the composer. WhatsApp's rule: the field sits on
                 // the screen's bottom edge at every height.
                 chatOpen ? "pb-0" : "pb-[var(--ws-nav-h)]",
-                profile ? "max-w-[805px] lg:border-r-0" : !wide && "max-w-[600px]"
+                !wide && "max-w-[600px]"
               )}
             >
               {children}
             </main>
 
-            {!wide && !profile && <RightRail />}
+            {!wide && <RightRail />}
           </div>
         </div>
 

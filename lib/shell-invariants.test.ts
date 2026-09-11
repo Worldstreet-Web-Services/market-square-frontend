@@ -1333,13 +1333,3 @@ describe("Pickers offer the types the service publishes", () => {
   });
 });
 
-
-describe("The profile is the design's 805-wide page, so the cover's row fits", () => {
-  const shell = stripComments(read("components/layout/app-shell.tsx"));
-  it("gives /u/:username an 805 column with no rail, and leaves its sub-pages alone", () => {
-    assert.match(shell, /return \/\^\\\/u\\\/\[\^\/\]\+\\\/\?\$\/\.test\(pathname\);/);
-    assert.match(shell, /profile \? "max-w-\[805px\] lg:border-r-0" : !wide && "max-w-\[600px\]"/);
-    assert.match(shell, /\{!wide && !profile && <RightRail \/>\}/);
-    assert.match(shell, /showBrand && profile && "mx-auto max-w-\[805px\]"/);
-  });
-});
