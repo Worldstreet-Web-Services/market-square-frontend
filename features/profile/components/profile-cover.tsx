@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
+import { ImageViewer } from "@/components/ui/image-viewer";
 import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconProfileBack } from "@/components/ui/profile-icons";
 import { canGoBack } from "@/lib/nav-history";
@@ -76,6 +77,9 @@ export function ProfileCover({
   */
   const cardRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number | null>(null);
+  /* The picture open full screen, if any: the profile picture or the cover. */
+  const [viewing, setViewing] = useState<{ src: string; alt: string } | null>(null);
+  const coverSrc = profile.coverUrl ?? "/profile/default-cover.jpg";
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -158,15 +162,24 @@ export function ProfileCover({
           these are vertical and why the alphas are not the stops' 1.0. */}
       <span
         aria-hidden
-        className="absolute inset-x-0 top-0 h-[22.8%] bg-[linear-gradient(180deg,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0)_100%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[22.8%] bg-[linear-gradient(180deg,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0)_100%)]"
       />
       <span
         aria-hidden
-        className="absolute inset-x-0 bottom-0 h-[45.5%] bg-[linear-gradient(0deg,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0)_100%)]"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[45.5%] bg-[linear-gradient(0deg,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0)_100%)]"
+      />
+
+      {/* Tap the cover to see it whole ("even the background picture"). The
+          layer above lets taps through except on its own controls. */}
+      <button
+        type="button"
+        onClick={() => setViewing({ src: coverSrc, alt: "Cover photo" })}
+        aria-label="View cover photo"
+        className="absolute inset-0 cursor-zoom-in"
       />
 
       <div
-        className="absolute inset-0 md:inset-auto md:left-0 md:top-0 md:h-[473px] md:w-[741px] md:origin-top-left"
+        className="pointer-events-none absolute inset-0 md:inset-auto md:left-0 md:top-0 md:h-[473px] md:w-[741px] md:origin-top-left"
         style={scale === null ? undefined : { transform: `scale(${scale})` }}
       >
       {/* 435:27537 — 24 in and 24 down, the same labelled Back the gist room
@@ -175,7 +188,7 @@ export function ProfileCover({
       <button
         type="button"
         onClick={() => (canGoBack() ? router.back() : router.push("/"))}
-        className="ws-press absolute left-6 top-6 z-10 flex items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
+        className="ws-press pointer-events-auto absolute left-6 top-6 z-10 flex items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
       >
         {/* 545:47613 — the file's own `arrow-left` at 20, not the shared chevron. */}
         <IconProfileBack className="h-5 w-5 shrink-0" />
@@ -191,7 +204,7 @@ export function ProfileCover({
           On a phone the controls are icons only (the Wink pill and Edit Profile
           drop their labels below md) and the avatar and name step down a size,
           so the row fits 358 with the name still readable. */}
-      <div className="absolute inset-x-4 bottom-4 z-10 flex items-center gap-3 md:inset-x-6 md:bottom-6 md:items-end md:gap-4">
+      <div className="pointer-events-auto absolute inset-x-4 bottom-4 z-10 flex items-center gap-3 md:inset-x-6 md:bottom-6 md:items-end md:gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
           {/* 72 at a 16.36 radius behind a 2.18 ring in #15202B at 40%. A
               ROUNDED SQUARE, not the circle every other avatar in the app is:
@@ -201,14 +214,22 @@ export function ProfileCover({
               so a name with chips can wrap taller than the avatar, and the
               actions are measured against the avatar's foot, not the text's. */}
           <span className="relative block shrink-0 md:self-end">
-            <Avatar
-              name={name}
-              seed={profile.id}
-              src={profile.avatarUrl}
-              size={72}
-              sizeClassName="h-14 w-14 md:h-[72px] md:w-[72px]"
-              className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
-            />
+            <button
+              type="button"
+              onClick={() => profile.avatarUrl && setViewing({ src: profile.avatarUrl, alt: `${name}'s profile picture` })}
+              disabled={!profile.avatarUrl}
+              aria-label="View profile picture"
+              className="block cursor-zoom-in rounded-[16.36px] disabled:cursor-default"
+            >
+              <Avatar
+                name={name}
+                seed={profile.id}
+                src={profile.avatarUrl}
+                size={72}
+                sizeClassName="h-14 w-14 md:h-[72px] md:w-[72px]"
+                className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
+              />
+            </button>
             {onChangePhoto && (
               <button
                 type="button"
@@ -255,6 +276,7 @@ export function ProfileCover({
         {actions && <div className="flex shrink-0 items-center gap-2 md:mb-[5px] md:gap-4">{actions}</div>}
       </div>
       </div>
+      {viewing && <ImageViewer src={viewing.src} alt={viewing.alt} onClose={() => setViewing(null)} />}
     </div>
   );
 }

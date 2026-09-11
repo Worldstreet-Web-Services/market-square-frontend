@@ -1406,3 +1406,15 @@ describe("Profiles share like posts, and the posts sit off the tab strip", () =>
     assert.match(page, /<ul className="flex flex-col gap-6 px-4 pt-8 md:px-8">/);
   });
 });
+
+describe("Profile pictures open full size", () => {
+  it("opens the avatar, the cover and gallery photos in the one ImageViewer", () => {
+    const cover = stripComments(read("features/profile/components/profile-cover.tsx"));
+    const photos = stripComments(read("features/profile/components/profile-photos.tsx"));
+    assert.match(cover, /aria-label="View cover photo"/);
+    assert.match(cover, /aria-label="View profile picture"/);
+    assert.match(cover, /<ImageViewer src=\{viewing\.src\}/);
+    assert.match(cover, /pointer-events-none absolute inset-0 md:inset-auto/, "the furniture layer swallows taps on the cover again");
+    assert.match(photos, /<ImageViewer src=\{open\}/);
+  });
+});

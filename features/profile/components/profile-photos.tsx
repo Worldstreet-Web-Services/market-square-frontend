@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import { IconX } from "@/components/ui/icons";
+import { ImageViewer } from "@/components/ui/image-viewer";
 import { acceptFor } from "@/lib/upload-rules";
 import {
   useAddProfilePhoto,
@@ -37,12 +37,6 @@ export function ProfilePhotos({ username, isMe }: { username: string; isMe: bool
   const input = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(null);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
 
   if (photos.unavailable || !photos.data) return null;
   const items = photos.data.items;
@@ -113,28 +107,7 @@ export function ProfilePhotos({ username, isMe }: { username: string; isMe: bool
         )}
       </div>
 
-      {open &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Photo"
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4"
-            onClick={() => setOpen(null)}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */}
-            <img src={open} alt="" className="max-h-[90dvh] max-w-full rounded-[20px] object-contain" />
-            <button
-              type="button"
-              onClick={() => setOpen(null)}
-              aria-label="Close photo"
-              className="ws-glass-clear ws-press absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-white"
-            >
-              <IconX className="h-4 w-4" />
-            </button>
-          </div>,
-          document.body
-        )}
+      {open && <ImageViewer src={open} alt="Photo" onClose={() => setOpen(null)} />}
     </section>
   );
 }
