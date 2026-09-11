@@ -1197,3 +1197,24 @@ describe("Your Story works like WhatsApp's My status", () => {
     assert.match(creator, /createPortal\(/);
   });
 });
+
+describe("The dock follows 964:24177", () => {
+  const dock = stripComments(read("components/layout/bottom-dock.tsx"));
+
+  it("carries Home, Discover, Pals and Chat, with the node's own glyphs", () => {
+    for (const glyph of ["dock-home.svg", "dock-discover.svg", "dock-pals.svg", "dock-chat.svg"]) {
+      assert.ok(dock.includes(`/notifications/${glyph}`), `${glyph} is not the dock's glyph`);
+      assert.ok(existsSync(new URL(`../public/notifications/${glyph}`, import.meta.url)), `${glyph} is missing from public`);
+    }
+    assert.match(dock, /href: "\/discover", label: "Discover"/);
+  });
+
+  it("is the file's bar and circle at 72/113", () => {
+    assert.match(dock, /const K = 72 \/ 113;/);
+    assert.match(dock, /style=\{\{ width: px\(286\), gap: px\(21\.6\) \}\}/);
+    assert.match(dock, /bg-\[rgba\(20,20,22,0\.47\)\]/);
+    assert.match(dock, /inset_0_0_0_1\.2px_rgba\(255,255,255,0\.12\)/);
+    assert.match(dock, /<stop stopColor="#7E3BEB" \/>\s*<stop offset="1" stopColor="#C27AFF" \/>/);
+    assert.match(dock, /strokeWidth="6\.00677"/);
+  });
+});
