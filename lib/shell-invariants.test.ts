@@ -1228,7 +1228,9 @@ describe("The account dropdown follows 747:14001", () => {
     assert.match(items, /label="Profile"/);
     assert.match(items, /label="Settings"\s+onClick=\{\(\) => go\("\/settings"\)\}/);
     assert.match(items, /setStep\("gender"\)/);
-    assert.match(items, /update\.mutate\(\{ gender: gender\.trim\(\) \}/);
+    assert.match(shell, /const GENDER_CHOICES = \["Male", "Female"\] as const;/);
+    assert.match(items, /update\.mutate\(\{ gender: option \}/);
+    assert.doesNotMatch(items, /<input/, "the account menu asks people to type their gender again");
     assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
   });
 

@@ -680,64 +680,44 @@ function AccountChip() {
  * The account menu's entries. The rail's account chip and the top bar's
  * avatar open the same menu, so it is written once.
  */
+/** The two genders the account menu offers. */
+const GENDER_CHOICES = ["Male", "Female"] as const;
+
 function AccountMenuItems({ close }: { close: () => void }) {
   const logout = useLogout();
   const me = useMe();
   const router = useRouter();
   const update = useUpdateMe();
   const [step, setStep] = useState<"root" | "gender">("root");
-  const [gender, setGender] = useState(me.data?.gender ?? "");
   /* The file's own chevron (747:14009), and turned round for a step's Back. */
   const chevron = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] text-white" />;
   const back = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] -scale-x-100 text-white" />;
+  /* The option that is on carries the filter menu's own dot in `--color-create`. */
+  const dot = (on: boolean) =>
+    on ? <span aria-hidden className="block h-1.5 w-1.5 rounded-full bg-create" /> : undefined;
   const go = (href: string) => {
     close();
     router.push(href);
   };
 
   /*
-    GENDER — the reader's own self-declared gender, the same public field Edit
-    profile saves and Explore's people filters read. Free text, as the service
-    stores it; Enter saves, and a set value can be cleared.
+    GENDER — a CHOICE, never typed: Male or Female ("we dont make them type
+    they choose either male or female"). It saves the reader's public profile
+    gender, the field Explore's people filters read, and steps back.
   */
   if (step === "gender") {
     return (
       <>
         <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            update.mutate({ gender: gender.trim() }, { onSuccess: () => setStep("root") });
-          }}
-        >
-          <input
-            type="text"
-            autoFocus
-            value={gender}
-            onChange={(event) => setGender(event.target.value)}
-            maxLength={40}
-            placeholder="Your gender, then Enter"
-            aria-label="Your gender"
-            className="h-[23.83px] w-full rounded-[8.935px] bg-white/[0.03] px-[5.957px] text-[8.935px] font-medium leading-[11.913px] text-white/80 outline-none placeholder:text-white/40 focus:bg-white/[0.08]"
-          />
-        </form>
-        {me.data?.gender && (
+        {GENDER_CHOICES.map((option) => (
           <MenuRow
+            key={option}
             size="compact"
-            label="Clear"
-            onClick={() =>
-              update.mutate(
-                { gender: "" },
-                {
-                  onSuccess: () => {
-                    setGender("");
-                    setStep("root");
-                  },
-                }
-              )
-            }
+            icon={dot(me.data?.gender?.toLowerCase() === option.toLowerCase())}
+            label={option}
+            onClick={() => update.mutate({ gender: option }, { onSuccess: () => setStep("root") })}
           />
-        )}
+        ))}
       </>
     );
   }
