@@ -8,7 +8,9 @@ import { canGoBack } from "@/lib/nav-history";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
- * THE PROFILE COVER — node 435:27500.
+ * THE PROFILE COVER — node 435:27500, redrawn as 1021:20229 (live file,
+ * updated 2026-09-11): the avatar carries a camera button on your own profile,
+ * and the actions sit on the identity row's FOOT, 5 above the avatar's.
  *
  * A 741x473 card at a 20 radius with the cover photograph filling it, the
  * person's identity laid over its foot, and the actions held at the right. It
@@ -33,8 +35,15 @@ export function ProfileCover({
   profile,
   actions,
   meta,
+  onChangePhoto,
 }: {
   profile: Profile;
+  /**
+   * Your own profile only: the camera button on the avatar (1097:23670), a 32
+   * disc on the create ramp over white, 12 past the avatar's right edge and 8
+   * below its foot. Absent on somebody else's.
+   */
+  onChangePhoto?: () => void;
   /** Edit Profile on your own, follow/wink/message on somebody else's. */
   actions?: React.ReactNode;
   /**
@@ -151,20 +160,37 @@ export function ProfileCover({
           On a phone the controls are icons only (the Wink pill and Edit Profile
           drop their labels below md) and the avatar and name step down a size,
           so the row fits 358 with the name still readable. */}
-      <div className="absolute inset-x-4 bottom-4 z-10 flex items-center gap-3 md:inset-x-6 md:bottom-6 md:gap-4">
+      <div className="absolute inset-x-4 bottom-4 z-10 flex items-center gap-3 md:inset-x-6 md:bottom-6 md:items-end md:gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
           {/* 72 at a 16.36 radius behind a 2.18 ring in #15202B at 40%. A
               ROUNDED SQUARE, not the circle every other avatar in the app is:
               the file draws the profile's own portrait differently from the one
               in a row, and this is the only place that holds. */}
-          <Avatar
-            name={name}
-            seed={profile.id}
-            src={profile.avatarUrl}
-            size={72}
-            sizeClassName="h-14 w-14 md:h-[72px] md:w-[72px]"
-            className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
-          />
+          {/* On the row's FOOT from md: our column is narrower than the file's,
+              so a name with chips can wrap taller than the avatar, and the
+              actions are measured against the avatar's foot, not the text's. */}
+          <span className="relative block shrink-0 md:self-end">
+            <Avatar
+              name={name}
+              seed={profile.id}
+              src={profile.avatarUrl}
+              size={72}
+              sizeClassName="h-14 w-14 md:h-[72px] md:w-[72px]"
+              className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
+            />
+            {onChangePhoto && (
+              <button
+                type="button"
+                onClick={onChangePhoto}
+                aria-label="Change profile photo"
+                className="ws-press absolute -bottom-2 -right-3 h-8 w-8 rounded-full"
+              >
+                {/* The node's own export: the disc, its ramp and the camera. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/profile/camera-button.svg" alt="" aria-hidden className="block h-8 w-8" />
+              </button>
+            )}
+          </span>
           {/* `flex-1` as well as `min-w-0`: without it the column sizes to
               its content and the name's chips run past the cover's edge on a
               phone instead of wrapping under the name. */}
@@ -193,7 +219,8 @@ export function ProfileCover({
           </div>
         </div>
 
-        {actions && <div className="flex shrink-0 items-center gap-2 md:gap-4">{actions}</div>}
+        {/* 1021:20260 — 16 apart, their foot 5 above the avatar's (444 vs 449). */}
+        {actions && <div className="flex shrink-0 items-center gap-2 md:mb-[5px] md:gap-4">{actions}</div>}
       </div>
     </div>
   );

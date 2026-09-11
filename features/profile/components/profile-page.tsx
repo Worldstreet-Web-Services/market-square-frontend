@@ -5,7 +5,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { IconProfileGlobePin, IconProfileLink } from "@/components/ui/profile-icons";
 import { IconMsEdit } from "@/components/ui/design-icons";
-import { IconRoomShare } from "@/components/ui/room-icons";
 import { formatCount, formatDateTime, formatKash } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { useMe } from "@/hooks/use-me";
@@ -458,6 +457,7 @@ export function ProfilePage({
              kash slice's and arrives as a slot; "Who viewed my profile" is not
              drawn, see the note on `ProfileCover`. */
           meta={isMe ? kashSlot : null}
+          onChangePhoto={isMe ? () => setEditOpen(true) : undefined}
           actions={
             isMe ? (
               <>
@@ -474,15 +474,17 @@ export function ProfilePage({
                   type="button"
                   onClick={onShare}
                   aria-label="Share this profile"
-                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-white"
+                  className="ws-glass-clear ws-press flex h-[38.37px] w-[38.37px] items-center justify-center rounded-full text-white"
                 >
-                  <IconRoomShare className="h-4 w-4" />
+                  {/* 1021:20262 — the node's own `basil:share-outline`. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/profile/icon-share.svg" alt="" aria-hidden className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
                   aria-label="Edit profile"
-                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-[15px] leading-6 text-white transition-opacity hover:opacity-90 md:w-auto md:gap-2 md:px-4"
+                  className="ws-glass-clear ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-[14.94px] leading-[25.61px] text-white transition-opacity hover:opacity-90 md:w-[129px] md:gap-[10.1px]"
                 >
                   <IconMsEdit className="h-4 w-4 shrink-0" />
                   {/* The label is the file's on desktop; on a phone the disc's

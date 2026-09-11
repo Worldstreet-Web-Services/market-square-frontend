@@ -1279,3 +1279,27 @@ describe("Each surface asks for its own topics", () => {
     assert.match(stripComments(read("components/ui/topic-tags-field.tsx")), /useTopics\("composer"\)/);
   });
 });
+
+describe("The profile cover follows 1021:20229", () => {
+  const cover = stripComments(read("features/profile/components/profile-cover.tsx"));
+  const page = stripComments(read("features/profile/components/profile-page.tsx"));
+  const chip = stripComments(read("components/layout/profile-kash-chip.tsx"));
+
+  it("puts the camera button on your own avatar, 12 past its edge and 8 below", () => {
+    assert.match(cover, /aria-label="Change profile photo"[\s\S]{0,80}absolute -bottom-2 -right-3 h-8 w-8/);
+    assert.match(page, /onChangePhoto=\{isMe \? \(\) => setEditOpen\(true\) : undefined\}/);
+    for (const asset of ["camera-button.svg", "icon-share.svg", "kash-chevron.svg"]) {
+      assert.ok(existsSync(new URL(`../public/profile/${asset}`, import.meta.url)), `${asset} is missing`);
+    }
+  });
+
+  it("sits the actions on the identity row's foot, with the file's share disc and Edit pill", () => {
+    assert.match(cover, /md:items-end md:gap-4/);
+    assert.match(cover, /relative block shrink-0 md:self-end/, "the avatar floats off the row's foot when the name wraps");
+    assert.match(cover, /md:mb-\[5px\] md:gap-4/);
+    assert.match(page, /h-\[38\.37px\] w-\[38\.37px\][\s\S]{0,160}\/profile\/icon-share\.svg/);
+    assert.match(page, /text-\[14\.94px\] leading-\[25\.61px\][^"]*md:w-\[129px\] md:gap-\[10\.1px\]/);
+    assert.match(chip, /tracking-\[-0\.05px\]/);
+    assert.match(chip, /\/profile\/kash-chevron\.svg/);
+  });
+});

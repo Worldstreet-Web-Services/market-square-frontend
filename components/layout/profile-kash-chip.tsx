@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { formatKash } from "@/lib/format";
-import { IconChevronRight } from "@/components/ui/icons";
 import { useKashAccount, useKashStatus } from "@/features/kash";
 
 /**
@@ -39,10 +38,12 @@ export function ProfileKashChip() {
       scroll={false}
       className="ws-press flex h-6 shrink-0 items-center gap-1 rounded-full bg-white/10 px-2 py-[5px] transition-colors hover:bg-white/20"
     >
-      <span className="tnum text-[12px] font-semibold leading-[14px] text-white">
+      <span className="tnum text-[12px] font-semibold leading-[14px] tracking-[-0.05px] text-white">
         {formatKash(balance)}
       </span>
-      <IconChevronRight className="h-4 w-4 shrink-0 text-white" />
+      {/* 1097:23691 — the node's own chevron, 1.5 stroke at 60% white. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/profile/kash-chevron.svg" alt="" aria-hidden className="h-4 w-4 shrink-0" />
     </Link>
   );
 }
