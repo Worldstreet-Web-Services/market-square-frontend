@@ -1449,7 +1449,7 @@ describe("A house can be shared with an invite link", () => {
     const thread = stripComments(read("features/messages/components/thread.tsx"));
     assert.match(menu, /\{actions\.onShareInvite && \(/);
     assert.doesNotMatch(menu, /label="Copy link"/, "the thread-address copy is back; nobody outside the house can use it");
-    assert.match(thread, /const canShareInvite = group && canMakeInvite\(\{ visibility: conversation\.visibility, isOwner \}\);/);
+    assert.match(thread, /const canShareInvite = group && canMakeInvite\(\{ visibility: conversation\.visibility, manages \}\);/);
     assert.match(thread, /onShareInvite: canShareInvite \? shareInvite : undefined,/);
     assert.match(thread, /<ShareSheet\s+open\s+onClose=\{\(\) => setInviteLink\(null\)\}\s+title="Share invite link"/);
   });
@@ -1549,6 +1549,24 @@ describe("Settings sits in Home's column, under the shared header", () => {
     assert.doesNotMatch(screen, /<h1|lg:max-w-\[600px\]|92dvh/, "settings draws its own heading or its own wide layout again");
     const header = stripComments(read("components/layout/column-header.tsx"));
     assert.match(header, /onClick=\{\(\) => \(onBack \? onBack\(\) : canGoBack\(\) \? router\.back\(\) : router\.push\(backFallback\)\)\}/);
+  });
+});
+
+describe("House roles: owner, admin, member", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+  const menu = stripComments(read("features/messages/components/thread-menu.tsx"));
+
+  it("reads the reader's role from the roster, not from who made the house", () => {
+    assert.match(thread, /const myRole = viewerRole\(members\.data\?\.items, me\.data\?\.id, conversation\.createdBy\);/);
+    assert.doesNotMatch(thread, /conversation\.createdBy === me\.data\?\.id/, "ownership is inferred from createdBy again; it goes stale after a handover");
+  });
+
+  it("lets owners and admins rename the house, and offers member controls from the roles rules", () => {
+    assert.match(thread, /canEdit=\{manages\}/);
+    assert.match(menu, /\{\(canEdit \?\? isOwner\) && \(/);
+    assert.match(thread, /memberActions\(\{ viewer: myRole, target: member\.role, isSelf: profile\.id === meId \}\)/);
+    assert.match(thread, /setConfirming\(\{ kind: "owner", profile \}\)/);
+    assert.match(thread, /setConfirming\(\{ kind: "remove", profile \}\)/);
   });
 });
 

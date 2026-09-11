@@ -23,6 +23,8 @@ import {
   openConversation,
   removeGroupMember,
   renameGroup,
+  setMemberRole,
+  transferOwnership,
   sendMessage,
 } from "@/features/messages/lib/api";
 import type { OutgoingMessage } from "@/features/messages/lib/types";
@@ -230,6 +232,33 @@ export function useLeaveGroup(conversationId: string) {
     conversationId,
     (profileId) => removeGroupMember(conversationId, profileId),
     "You left the group"
+  );
+}
+
+/** Remove somebody from the house — owner (anyone but themself) or admin (members only). */
+export function useRemoveGroupMember(conversationId: string) {
+  return useConversationAction<string>(
+    conversationId,
+    (profileId) => removeGroupMember(conversationId, profileId),
+    "Removed from the house"
+  );
+}
+
+/** "Make admin" / "Remove admin" — owner only. */
+export function useSetMemberRole(conversationId: string) {
+  return useConversationAction<{ profileId: string; role: "admin" | "member" }>(
+    conversationId,
+    ({ profileId, role }) => setMemberRole(conversationId, profileId, role),
+    "Role updated"
+  );
+}
+
+/** "Make owner" — the owner hands the house over and stays on as an admin. */
+export function useTransferOwnership(conversationId: string) {
+  return useConversationAction<string>(
+    conversationId,
+    (profileId) => transferOwnership(conversationId, profileId),
+    "Ownership handed over"
   );
 }
 

@@ -353,6 +353,20 @@ const PENDING_ROUTES = {
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
   },
+  // ── house roles (settings stage 2a) ──────────────────────────────────────
+  "put /conversations/{}/members/{}/role": {
+    reason:
+      "Make a house member an admin, or back to a member (owner only). BUILT on " +
+      "the service (migration 064, PR #205) and served locally, NOT yet " +
+      "deployed. Until then the members sheet's Make admin / Remove admin " +
+      "answer with the service's 404. DELETE THIS ENTRY once the route appears " +
+      "in openapi.json.",
+  },
+  "post /conversations/{}/transfer-ownership": {
+    reason:
+      "Hand a house to another member (owner only). Same undeployed service " +
+      "change as put /conversations/{}/members/{}/role.",
+  },
   // ── settings, stage 1 ─────────────────────────────────────────────────────
   "get /me/settings": {
     reason:

@@ -75,12 +75,15 @@ const NO_CLEAR = "Clearing a conversation isn't on the messages service yet.";
 export function ThreadMenu({
   kind,
   isOwner,
+  canEdit,
   actions,
   safetyRows,
 }: {
   kind: "direct" | "group";
   /** Owner of the group — the only member the service lets rename it. */
   isOwner: boolean;
+  /** Owner or admin — both may rename the house. Defaults to the owner alone. */
+  canEdit?: boolean;
   actions: ThreadMenuActions;
   /**
    * Block and Report for a 1:1, rendered by the profile slice through
@@ -124,7 +127,7 @@ export function ThreadMenu({
         />
       )}
 
-      {isOwner && (
+      {(canEdit ?? isOwner) && (
         <MenuRow
           icon={<IconProfileAdd className="h-4 w-4" />}
           label="Edit group title"

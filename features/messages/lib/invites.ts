@@ -4,7 +4,7 @@
  * The service mints a token (`POST /conversations/:id/invites`) and returns no
  * URL; the link is ours, `/join/<token>`. Who may mint one is the service's
  * rule, mirrored so the menu only offers the row to somebody it will serve: in
- * a PUBLIC house any member, in a PRIVATE one only the owner.
+ * a PUBLIC house any member, in a PRIVATE one only the owner or an admin.
  *
  * The landing page reads `GET /invites/:token`, which answers for strangers
  * and signed-out visitors alike, and decides one of six things to show from
@@ -19,8 +19,8 @@ export function inviteUrl(origin: string, token: string): string {
 }
 
 /** May this reader make an invite link for this house? */
-export function canMakeInvite({ visibility, isOwner }: { visibility: string; isOwner: boolean }): boolean {
-  return visibility === "public" || isOwner;
+export function canMakeInvite({ visibility, manages }: { visibility: string; manages: boolean }): boolean {
+  return visibility === "public" || manages;
 }
 
 export type InviteState = "member" | "join" | "sign-in" | "expired" | "used_up" | "refused";

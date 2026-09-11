@@ -160,6 +160,23 @@ export async function removeGroupMember(conversationId: string, profileId: strin
 }
 
 /**
+ * Make somebody an admin, or back to a member —
+ * `PUT /conversations/:id/members/:profileId/role { role }`. Owner only.
+ * Ownership itself moves through `transferOwnership`, never through here.
+ */
+export async function setMemberRole(conversationId: string, profileId: string, role: "admin" | "member") {
+  return msApi.put<unknown>(`/conversations/${conversationId}/members/${profileId}/role`, { role });
+}
+
+/**
+ * Hand the house over — `POST /conversations/:id/transfer-ownership { profileId }`.
+ * Owner only; the previous owner stays on as an admin, in one write.
+ */
+export async function transferOwnership(conversationId: string, profileId: string) {
+  return msApi.post<unknown>(`/conversations/${conversationId}/transfer-ownership`, { profileId });
+}
+
+/**
  * Rename a group — `PATCH /conversations/:id { title }`.
  *
  * The route takes title, description and imageUrl in ONE call, deliberately:

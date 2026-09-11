@@ -162,7 +162,9 @@ export const ConversationRefSchema = z.object({
     the row would silently shrink the count the header prints. */
 export const ConversationMemberSchema = z.object({
   profile: ProfileSchema.nullable().optional().default(null),
-  role: z.enum(["owner", "member"]).optional().default("member").catch("member"),
+  // owner | admin | member. An unknown future role reads as a plain member,
+  // which offers the fewest controls rather than the most.
+  role: z.enum(["owner", "admin", "member"]).optional().default("member").catch("member"),
   joinedAt: z.string().nullable().optional().default(null),
 });
 
