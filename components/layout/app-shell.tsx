@@ -298,6 +298,21 @@ const WIDE_EXACT = ["/store", "/operations", "/messages"];
 */
 const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
 
+/*
+  FULL: no right rail, but HOME'S FRAME. Settings has no use for the rail
+  ("the setting doesnt have that second column so it should full"), and a WIDE
+  route spreads to the window's edges, which read as wider than Home. So these
+  routes take the column AND the rail's width together — 971 from lg, with the
+  rail's own 24 of right padding — which is exactly the top bar's capped
+  frame: the page starts on the logo's line and ends where the bar's controls
+  do. Below lg there is no rail anyway, and the 600 column is unchanged.
+*/
+const FULL_PATTERNS = [/^\/u\/[^/]+\/settings$/];
+
+function isFull(pathname: string): boolean {
+  return FULL_PATTERNS.some((pattern) => pattern.test(pathname));
+}
+
 function isWide(pathname: string): boolean {
   return (
     WIDE_EXACT.includes(pathname) ||
@@ -1727,6 +1742,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // there (no rails over the player, no bars).
   const inRoom = /^\/live\/[^/]+$/.test(pathname);
   const wide = isWide(pathname);
+  const full = !wide && isFull(pathname);
 
   if (inRoom) {
     return (
@@ -1950,7 +1966,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 pt-[var(--ws-topbar-h)] lg:border-r",
+                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 pt-[var(--ws-topbar-h)]",
+                // The right hairline divides the column from the rail; a FULL
+                // route has no rail to divide from.
+                !full && "lg:border-r",
                 // The LEFT hairline separates the column from the SIDEBAR, so
                 // it exists only while the sidebar does. Under the dock it
                 // would cut down the line the top bar's logo starts on ("there
@@ -1964,13 +1983,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // band under the composer. WhatsApp's rule: the field sits on
                 // the screen's bottom edge at every height.
                 chatOpen ? "pb-0" : "pb-[var(--ws-nav-h)]",
-                !wide && "max-w-[600px]"
+                !wide && (full ? "max-w-[600px] lg:max-w-[971px] lg:pr-6" : "max-w-[600px]")
               )}
             >
               {children}
             </main>
 
-            {!wide && <RightRail />}
+            {!wide && !full && <RightRail />}
           </div>
         </div>
 

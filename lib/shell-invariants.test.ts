@@ -842,7 +842,12 @@ describe("the top bar is node 647:17439", () => {
     const railWidth = Number(aside.match(/\bw-\[(\d+)px\]/)?.[1] ?? 0);
     assert.ok(railWidth > 0, "could not read the right rail's width");
     assert.match(aside, /\bpr-6\b/, "the rail's right padding changed; the bar mirrors it");
-    assert.match(shell, /!wide && "max-w-\[600px\]"/, "the column is no longer 600 wide");
+    // The column is 600; a FULL route (no rail, e.g. Settings) takes the
+    // column AND the rail's width — the bar's own frame — so it lines up too.
+    assert.ok(
+      shell.includes(`!wide && (full ? "max-w-[600px] lg:max-w-[${600 + railWidth}px] lg:pr-6" : "max-w-[600px]")`),
+      "the column is no longer 600 wide, or a full route no longer matches the bar's frame"
+    );
     assert.ok(
       bar.includes(`mx-auto max-w-[600px] lg:max-w-[${600 + railWidth}px] lg:pr-6`),
       `the bar's content is not the column (600) plus the rail (${railWidth}) wide`
@@ -875,7 +880,7 @@ describe("the body under the dock", () => {
     assert.doesNotMatch(mainBase, /border-x|border-l\b/, "the column's left hairline is unconditional again");
     assert.match(mainBase, /\bws-hair\b/);
     // The right one divides the column from the rail, which is shown from lg.
-    assert.match(mainBase, /(^|[\s"])lg:border-r\b/, "the hairline between the column and the rail is gone, or drawn where there is no rail");
+    assert.match(shell, /!full && "lg:border-r"/, "the hairline between the column and the rail is gone, or drawn where there is no rail");
     assert.match(shell, /railOn && "border-l"/);
   });
 
@@ -1530,9 +1535,12 @@ describe("Settings controls never pretend to save", () => {
 });
 
 describe("Settings sits in Home's column, under the shared header", () => {
-  it("is not a wide route, so the column and the right rail match Home", () => {
+  it("fills Home's frame without the right rail: not wide, but full", () => {
     const shell = stripComments(read("components/layout/app-shell.tsx"));
     assert.doesNotMatch(shell.slice(shell.indexOf("function isWide"), shell.indexOf("function isWide") + 400), /settings/);
+    assert.ok(shell.includes("const FULL_PATTERNS = [/^\\/u\\/[^/]+\\/settings$/];"), "settings is no longer a full route");
+    assert.match(shell, /!wide && \(full \? "max-w-\[600px\] lg:max-w-\[971px\] lg:pr-6" : "max-w-\[600px\]"\)/);
+    assert.match(shell, /\{!wide && !full && <RightRail \/>\}/);
   });
 
   it("opens with ColumnHeader, whose back arrow climbs the settings levels", () => {
