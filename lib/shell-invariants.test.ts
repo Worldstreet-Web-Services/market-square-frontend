@@ -1048,4 +1048,17 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     assert.match(dots, /h-\[5\.81px\]/);
     assert.doesNotMatch(feed, /\{friendsSlot && <div className="mb-6">/, "an empty friends slot takes space again");
   });
+
+  it("runs the rule to the window's left edge under the dock, with nothing in between cutting it", () => {
+    const css = read("app/globals.css");
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    const houses = stripComments(read("components/layout/join-a-community.tsx"));
+    assert.match(deck, /ws-rule-to-left-edge -mx-4 mt-\[67px\]/);
+    assert.match(css, /\[data-rail="off"\] \.ws-rule-to-left-edge::before \{[^}]*right: 100%;[^}]*width: 100vw;/, "the extension lies over the rule again, doubling it");
+    const mainBase = shell.match(/"[^"]*min-h-\[calc\(var\(--ws-vvh,100dvh\)-var\(--ws-crumb-h\)\)\][^"]*"/)?.[0] ?? "";
+    assert.ok(mainBase, "could not find the column's base classes");
+    assert.doesNotMatch(mainBase, /overflow-x-clip/, "the column clips again, cutting the rule at its edge");
+    assert.match(shell, /min-h-dvh w-full overflow-x-clip bg-chrome/, "nothing clips at the window, so the rule scrolls the page sideways");
+    assert.match(houses, /ws-bleed-right-only -mx-4 overflow-x-auto/, "the houses rail bleeds past the column's left edge under the dock");
+  });
 });

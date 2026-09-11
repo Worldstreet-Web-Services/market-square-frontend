@@ -395,7 +395,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           pills, running past the column's content to its edges as the file's
           line runs past its column. */}
       {heading === "home" && (
-        <div aria-hidden className="-mx-4 mt-[67px] h-[0.5px] bg-white/25 md:ml-0 lg:-mr-6" />
+        <div aria-hidden className="ws-rule-to-left-edge -mx-4 mt-[67px] h-[0.5px] bg-white/25 md:ml-0 lg:-mr-6" />
       )}
     </section>
   );

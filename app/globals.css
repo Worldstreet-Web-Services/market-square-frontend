@@ -952,6 +952,36 @@ body {
   [data-rail="off"] .ws-align-logo {
     padding-left: 0;
   }
+
+  /*
+    With that gutter gone, a rail that bleeds 16px past its padding for scroll
+    room would run past the column's left edge. It stops on the edge instead,
+    where the stories and the lockup start.
+  */
+  [data-rail="off"] .ws-align-logo .ws-bleed-right-only {
+    margin-left: 0;
+    padding-left: 0;
+  }
+
+  /*
+    A rule that runs to the WINDOW's left edge under the dock, as the top bar's
+    hairline does ("we need this line to reach the extreme end in the left hand
+    side"). Drawn 100vw leftwards from the rule's own LEFT end — from its right
+    end it lay over the rule itself, and 25% on 25% drew the column's stretch
+    brighter than the rest. The shell wrapper clips it at the window. With a
+    sidebar there is something to stop at, so it keeps to the column.
+  */
+  [data-rail="off"] .ws-rule-to-left-edge {
+    position: relative;
+  }
+  [data-rail="off"] .ws-rule-to-left-edge::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    right: 100%;
+    width: 100vw;
+    background: inherit;
+  }
 }
 
 @utility ws-btn-fab {

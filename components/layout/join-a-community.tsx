@@ -60,7 +60,7 @@ export function JoinACommunity() {
           `grid-flow-col` with two rows is the only layout that fills down THEN
           across, so a short list makes one full column rather than a lonely
           top row. */}
-      <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="ws-bleed-right-only -mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="grid grid-flow-col grid-rows-2 gap-6">
           {items.map((house) => (
             <article

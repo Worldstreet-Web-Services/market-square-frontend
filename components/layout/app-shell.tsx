@@ -1856,14 +1856,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // than hand-matched numbers: pb-16 was 64px against a 69px tab
                 // bar, so the last five pixels of every column surface sat
                 // underneath it.
-                // overflow-x-clip is a BACKSTOP, not the fix: a single child with
-                // an intrinsic minimum wider than a phone (a fixed-width CTA, a
-                // row of shrink-0 groups) drags the whole page sideways, and the
-                // reader then has to scroll horizontally to reach the right edge
-                // of every other surface. Clip contains that blast radius to the
-                // offending row. Rails that are MEANT to scroll set their own
-                // overflow-x-auto and are unaffected, and anything that needs a
-                // horizontal scrollbar must still opt into one explicitly.
+                // NO overflow clip of its own. A child wider than a phone (a
+                // fixed-width CTA, a row of shrink-0 groups) would drag the page
+                // sideways, and the SHELL's wrapper clips at the window for
+                // that. Clipping here as well cut every line meant to run past
+                // the column: Home's rule under "Make some friends" has to reach
+                // the window's left edge under the dock ("we need this line to
+                // reach the extreme end in the left hand side"), as the top
+                // bar's does. Rails that are MEANT to scroll set their own
+                // overflow-x-auto, and anything that needs a horizontal
+                // scrollbar must still opt into one explicitly.
                 //
                 // 600 WIDE, LIKE X'S TIMELINE. The column briefly had no cap
                 // at all — every pane flexed to the window — and on a 1440
@@ -1881,7 +1883,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 overflow-x-clip pt-[var(--ws-topbar-h)] lg:border-r",
+                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 pt-[var(--ws-topbar-h)] lg:border-r",
                 // The LEFT hairline separates the column from the SIDEBAR, so
                 // it exists only while the sidebar does. Under the dock it
                 // would cut down the line the top bar's logo starts on ("there
