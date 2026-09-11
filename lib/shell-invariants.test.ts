@@ -1531,7 +1531,7 @@ describe("Settings controls never pretend to save", () => {
     assert.equal((screen.match(/<Toggle\s+disabled=\{(personalizeDisabled|visibilityDisabled)\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
     for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
       const source = read(`components/layout/${file}.tsx`);
-      assert.equal((source.match(/<Toggle\s+disabled=\{disabled\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
+      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
     }
   });
 
@@ -1661,6 +1661,27 @@ describe("Square has a favicon and tagged share links", () => {
     const analytics = stripComments(read("lib/analytics.ts"));
     assert.match(analytics, /const utm = captureVisitUtm\(\);/);
     assert.match(stripComments(read("components/layout/app-shell.tsx")), /captureVisitUtm\(\);/);
+  });
+});
+
+describe("Web push", () => {
+  it("shows a push with Square's icon and only ever opens a page on Square", () => {
+    const sw = read("public/sw.js");
+    assert.match(sw, /addEventListener\("push"/);
+    assert.match(sw, /icon: "\/apple-icon\.png"/);
+    assert.match(sw, /if \(target\.origin !== self\.location\.origin\)/);
+  });
+
+  it("forgets this browser on sign-out and re-records it on load", () => {
+    assert.match(stripComments(read("hooks/use-logout.ts")), /await unsubscribeThisBrowser\(\);/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /if \(authenticated\) void refreshPushSubscription\(\);/);
+  });
+
+  it("offers the push row in Settings, disabled with its reason", () => {
+    const view = stripComments(read("components/layout/notifications-view.tsx"));
+    assert.match(view, /checked=\{push\.checked\}/);
+    assert.match(view, /\{push\.description\}/);
+    assert.match(stripComments(read("components/layout/settings-screen.tsx")), /const push = usePushNotifications\(\);/);
   });
 });
 

@@ -139,5 +139,9 @@ export function isPublicGet(path: string[]): boolean {
   // POST and never reaches this predicate.
   if (head === "uploads" && second === "limits" && path.length === 2) return true;
 
+  // The deployment's public web-push key — handed to the browser by design,
+  // and read before the reader has chosen to subscribe. This exact shape only.
+  if (head === "push" && second === "vapid-public-key" && path.length === 2) return true;
+
   return false;
 }

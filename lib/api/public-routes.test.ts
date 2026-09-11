@@ -78,6 +78,8 @@ const PUBLIC: string[][] = [
   // file before sign-in; gating it here would silently pin signed-out users to
   // the client's fallback caps.
   ["uploads", "limits"],
+  // The public web-push key, read before anyone subscribes.
+  ["push", "vapid-public-key"],
 ];
 
 // Every GET the service publishes BEHIND bearerAuth or adminKey (13 of them).
@@ -226,6 +228,12 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["conversations", "cv_1"]), false);
       assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
       assert.equal(isPublicGet(["conversations", "discover", "anything"]), false);
+    });
+
+    it("opens the push key and nothing else under /push", () => {
+      assert.equal(isPublicGet(["push", "vapid-public-key"]), true);
+      assert.equal(isPublicGet(["push"]), false);
+      assert.equal(isPublicGet(["push", "vapid-public-key", "x"]), false);
     });
 
     it("opens one invite's preview and nothing else under /invites", () => {

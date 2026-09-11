@@ -20,12 +20,15 @@ export function NotificationsView({
   directNotifications,
   onDirectNotificationsChange,
   onOpenHouse,
+  push,
   disabled = false,
 }: {
   friendsRoom: boolean;
   onFriendsRoomChange: (v: boolean) => void;
   directNotifications: boolean;
   onDirectNotificationsChange: (v: boolean) => void;
+  /** The "Push notifications" row: this browser's state and switch. */
+  push: { checked: boolean; disabled: boolean; description: string; onChange: (next: boolean) => void };
   /** Opens a house's notification levels — the screen owns the drill-in. */
   onOpenHouse: (house: { id: string; title: string }) => void;
   /** The toggles cannot be saved yet — see `settings-copy.ts`. */
@@ -37,6 +40,23 @@ export function NotificationsView({
     <div>
       {/* Top toggles — no section header */}
       <div className="flex flex-col">
+        <div className="flex w-full items-center justify-between border-b border-white/15 px-4 py-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 pr-4">
+            <p className="text-base font-bold leading-4 text-white">
+              Push notifications
+            </p>
+            <p className="text-sm font-normal leading-[16.5px] text-white/50">
+              {push.description}
+            </p>
+          </div>
+          <Toggle
+            disabled={push.disabled}
+            title={push.disabled ? push.description : undefined}
+            checked={push.checked}
+            onChange={push.onChange}
+            label="Push notifications"
+          />
+        </div>
         <div className="flex w-full items-center justify-between border-b border-white/15 px-4 py-6">
           <div className="flex min-w-0 flex-1 flex-col gap-2 pr-4">
             <p className="text-base font-bold leading-4 text-white">

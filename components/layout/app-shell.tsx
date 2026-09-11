@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { captureVisitUtm } from "@/lib/analytics";
+import { refreshPushSubscription } from "@/lib/push-client";
 import { MenuRow } from "@/components/ui/menu-row";
 import { IconFilterChevronRight, IconFilterFriends, IconFilterGender, IconFilterLocation } from "@/components/ui/home-icons";
 import { useUpdateMe } from "@/features/profile";
@@ -1753,6 +1754,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     captureVisitUtm();
   }, []);
+  // Re-record this browser's push subscription while signed in, so the service
+  // keeps its keys fresh and it follows whoever is signed in here.
+  useEffect(() => {
+    if (authenticated) void refreshPushSubscription();
+  }, [authenticated]);
   const full = !wide && isFull(pathname);
 
   if (inRoom) {

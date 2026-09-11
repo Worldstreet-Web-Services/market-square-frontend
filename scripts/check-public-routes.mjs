@@ -353,6 +353,20 @@ const PENDING_ROUTES = {
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
   },
+  // ── web push (notifications stage A) ─────────────────────────────────────
+  "get /push/vapid-public-key": {
+    reason:
+      "The deployment's public web-push key (null where push is not " +
+      "configured). BUILT on the service (migration 068, PR #206) and served " +
+      "locally, NOT yet deployed. Until then the Settings push row reads the " +
+      "404 as 'not available here'. DELETE THIS ENTRY once it is in openapi.json.",
+  },
+  "post /me/push-subscriptions": {
+    reason: "Records this browser's push subscription. Same undeployed change as get /push/vapid-public-key.",
+  },
+  "delete /me/push-subscriptions": {
+    reason: "Forgets this browser's push subscription (switch-off and sign-out). Same undeployed change.",
+  },
   // ── per-house notification settings (settings stage 2b) ─────────────────
   "get /conversations/{}/notification-settings": {
     reason:

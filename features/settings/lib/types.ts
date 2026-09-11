@@ -14,6 +14,8 @@ export const ProfileSettingsSchema = z.object({
     friendsRooms: z.boolean(),
     /** Chat requests, 1:1 messages and being added to a group. */
     direct: z.boolean(),
+    /** Web push to subscribed browsers. Absent on a service without push. */
+    push: z.boolean().optional(),
   }),
   chat: z.object({
     messagesFrom: z.enum(["no_one", "everyone", "verified"]),

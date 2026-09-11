@@ -22,7 +22,7 @@ import {
 import { useProfile, useUpdateMe } from "@/features/profile";
 import { SUPPORT_EMAIL, SUPPORT_USERNAME } from "@/lib/support";
 import { COMMUNITY_GUIDELINES, PRIVACY_POLICY, type LegalDocument } from "@/lib/legal";
-import { useSettings, useUpdateSettings, type LocationPrecision } from "@/features/settings";
+import { usePushNotifications, useSettings, useUpdateSettings, type LocationPrecision } from "@/features/settings";
 import {
   IconArrowLeft,
   IconCheckbox,
@@ -735,6 +735,7 @@ export function SettingsScreen({ username }: { username: string }) {
   */
   const settings = useSettings();
   const save = useUpdateSettings();
+  const push = usePushNotifications();
   const updateMe = useUpdateMe();
   /* Contact us: the official support account, looked up by username. */
   const support = useProfile(SUPPORT_USERNAME);
@@ -882,6 +883,7 @@ export function SettingsScreen({ username }: { username: string }) {
                     setHouse(next);
                     window.scrollTo({ top: 0 });
                   }}
+                  push={push}
                   disabled={!settingsLive}
                 />
               ))}
