@@ -1062,3 +1062,12 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     assert.match(houses, /ws-bleed-right-only -mx-4 overflow-x-auto/, "the houses rail bleeds past the column's left edge under the dock");
   });
 });
+
+describe("Trending discussions close the right rail", () => {
+  it("renders the spotlight and partners first, the discussions last", () => {
+    const rail = stripComments(read("components/layout/right-rail.tsx"));
+    const order = ["<CitizenSpotlightRail", "<EcosystemPartnersRail", "<TrendingDiscussions"].map((tag) => rail.indexOf(tag));
+    assert.ok(order.every((i) => i >= 0), "a rail block is missing");
+    assert.deepEqual([...order].sort((a, b) => a - b), order, "trending discussions no longer sit last in the rail");
+  });
+});
