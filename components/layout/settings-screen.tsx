@@ -21,6 +21,7 @@ import {
 } from "@/features/messages";
 import { useProfile, useUpdateMe } from "@/features/profile";
 import { SUPPORT_EMAIL, SUPPORT_USERNAME } from "@/lib/support";
+import { COMMUNITY_GUIDELINES, PRIVACY_POLICY, type LegalDocument } from "@/lib/legal";
 import { useSettings, useUpdateSettings, type LocationPrecision } from "@/features/settings";
 import {
   IconArrowLeft,
@@ -671,10 +672,32 @@ function ContactView({ onChat, chatBusy }: { onChat?: () => void; chatBusy: bool
   );
 }
 
-function HelpSubView() {
+/** A policy page from `lib/legal.ts`, in the Terms of Service's own layout. */
+function LegalDocumentView({ doc }: { doc: LegalDocument }) {
   return (
-    <div className="flex flex-col items-center justify-center px-4 py-16">
-      <p className="text-sm text-white/50">Coming soon</p>
+    <div>
+      <p className="px-4 pt-6 text-sm leading-[16.5px] text-white/50">{doc.updated}</p>
+      <div className="px-4 pt-6 pb-12 text-[15px] font-normal leading-6 text-white">
+        {doc.sections.map((section, index) => (
+          <section key={section.heading} className="mb-4">
+            <p className="mb-2 font-bold">
+              {index + 1}. {section.heading}
+            </p>
+            {section.paragraphs?.map((paragraph) => (
+              <p key={paragraph} className="mb-2">
+                {paragraph}
+              </p>
+            ))}
+            {section.points && (
+              <ul className="mb-2 list-disc space-y-1 pl-6">
+                {section.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -912,9 +935,8 @@ export function SettingsScreen({ username }: { username: string }) {
               />
             )}
             {active === "help" && helpView === "terms" && <TermsOfServiceView />}
-            {active === "help" && (helpView === "privacy-policy" || helpView === "community-guidelines") && (
-              <HelpSubView />
-            )}
+            {active === "help" && helpView === "privacy-policy" && <LegalDocumentView doc={PRIVACY_POLICY} />}
+            {active === "help" && helpView === "community-guidelines" && <LegalDocumentView doc={COMMUNITY_GUIDELINES} />}
           </div>
         </div>
       )}

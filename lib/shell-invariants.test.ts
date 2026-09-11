@@ -1628,6 +1628,10 @@ describe("Contact us opens a chat with support", () => {
     assert.match(screen, /\{ label: "Contact us", view: "contact" \}/);
     // No push or email delivery exists, so Notifications must not promise it.
     assert.doesNotMatch(screen, /push, email/);
+    // The policy pages are written, not "Coming soon".
+    assert.match(screen, /<LegalDocumentView doc=\{PRIVACY_POLICY\} \/>/);
+    assert.match(screen, /<LegalDocumentView doc=\{COMMUNITY_GUIDELINES\} \/>/);
+    assert.doesNotMatch(screen, /function HelpSubView/);
   });
 });
 
