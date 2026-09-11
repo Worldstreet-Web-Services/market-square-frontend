@@ -1134,4 +1134,11 @@ describe("A post answers the pointer in its acts' colours", () => {
     assert.match(post, /activeClass="text-like"\s+hoverClass="group-hover:text-like"/);
     assert.match(post, /<span className=\{cn\("tnum text-\[12px\] leading-4 text-white transition-colors", hoverClass\)\}>/, "the count no longer follows the glyph's hover colour");
   });
+
+  it("colours share blue, the Arkmark purple and the more disc purple on hover", () => {
+    assert.match(post, /<GlyphAction label="Share" hoverClass="hover:text-reply"/);
+    assert.match(post, /hoverClass=\{bookmark\.unavailable \? undefined : "group-hover:text-create"\}/);
+    assert.match(post, /!bookmark\.unavailable && "group-hover:text-create"/, "the Arkmark count no longer follows its glyph");
+    assert.match(post, /ws-glass-pill flex h-\[38\.37px\] w-\[38\.37px\] items-center justify-center rounded-full text-grey-100 transition-colors hover:text-create/);
+  });
 });

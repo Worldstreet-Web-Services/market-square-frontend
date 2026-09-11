@@ -89,7 +89,7 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
            a solid dark disc, not a hairline ring. Same control, same material,
            as the gist room's circular buttons. 647:16439 is 44.16 across at
            the live file's 1.151 scale: 38.37 here. */
-        className="ws-glass-pill flex h-[38.37px] w-[38.37px] items-center justify-center rounded-full text-grey-100 transition-opacity hover:opacity-90"
+        className="ws-glass-pill flex h-[38.37px] w-[38.37px] items-center justify-center rounded-full text-grey-100 transition-colors hover:text-create"
       >
         <IconMsMore className="h-6 w-6" />
       </button>
@@ -326,12 +326,15 @@ function GlyphAction({
   label,
   active,
   disabled,
+  hoverClass,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
   disabled?: boolean;
+  /** The act's own colour on hover — blue to share, purple to save. Spelled out at the call site. */
+  hoverClass?: string;
   /** Absent for a tally that is only a fact — views have nothing to do. */
   onClick?: () => void;
   children: React.ReactNode;
@@ -344,7 +347,7 @@ function GlyphAction({
       disabled={disabled}
       className={cn(
         "flex h-6 w-6 shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-        active ? "text-create" : "text-body hover:text-heading"
+        active ? "text-create" : cn("text-body", hoverClass ?? "hover:text-heading")
       )}
     >
       {children}
@@ -993,7 +996,7 @@ export function PostCard({
             same statement for a row whose middle child is capped. */}
         <div className="flex shrink-0 items-center gap-3 md:order-3 md:ml-auto md:gap-[17px]">
           <div className="flex items-center gap-3 md:gap-3">
-            <GlyphAction label="Share" onClick={share}>
+            <GlyphAction label="Share" hoverClass="hover:text-reply" onClick={share}>
               <IconMsShare className="h-6 w-6" />
             </GlyphAction>
             {/* Arkmark. While the endpoint is absent the control goes quiet
@@ -1003,7 +1006,8 @@ export function PostCard({
                 carries `bookmarkCount`. Who saved it is nobody's business but
                 theirs; the count is the post's. Asked for by name ("number of
                 arkmark, no need to know who"). */}
-            <span className="flex items-center gap-0.5 md:gap-[2px]">
+            {/* A group, so the count takes the purple with the glyph. */}
+            <span className="group flex items-center gap-0.5 md:gap-[2px]">
               <GlyphAction
                 label={
                   bookmark.unavailable
@@ -1014,6 +1018,7 @@ export function PostCard({
                 }
                 active={post.bookmarkedByMe}
                 disabled={bookmark.unavailable}
+                hoverClass={bookmark.unavailable ? undefined : "group-hover:text-create"}
                 onClick={() =>
                   gate(() =>
                     bookmark.mutate({ postId: post.id, bookmark: !post.bookmarkedByMe })
@@ -1025,7 +1030,10 @@ export function PostCard({
               {post.bookmarkCount !== undefined && (
                 <span
                   aria-label={`${post.bookmarkCount} ${post.bookmarkCount === 1 ? "Arkmark" : "Arkmarks"}`}
-                  className="tnum text-[12px] leading-4 text-white"
+                  className={cn(
+                    "tnum text-[12px] leading-4 text-white transition-colors",
+                    !bookmark.unavailable && "group-hover:text-create"
+                  )}
                 >
                   {formatCount(post.bookmarkCount)}
                 </span>
