@@ -29,7 +29,6 @@ import { EditProfileSheet } from "@/features/profile/components/edit-profile-she
 import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
 import { WinkButton } from "@/features/profile/components/wink-button";
 import { VerificationCard } from "@/features/profile/components/verification-card";
-import { CreatorCard } from "@/features/profile/components/creator-card";
 import {
   AccountTabs,
   type AccountTab,
@@ -678,7 +677,10 @@ export function ProfilePage({
           wider than the rail directly above them. */}
       {isMe && (
         <div className="space-y-3 px-4 pb-4 pt-9 md:px-8">
-          <CreatorCard role={data.role} />
+          {/* The Creator card ("You can host streams and schedule sessions",
+              Open Studio) is hidden for now, at ogazboiz's call. The Studio
+              route still works; the card comes back by restoring this line:
+              <CreatorCard role={data.role} /> */}
           <VerificationCard />
         </div>
       )}

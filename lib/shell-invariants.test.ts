@@ -1335,3 +1335,10 @@ describe("Pickers offer the types the service publishes", () => {
   });
 });
 
+describe("The profile hides the Creator card for now", () => {
+  it("does not render CreatorCard on the profile page, and keeps the verification card", () => {
+    const page = stripComments(read("features/profile/components/profile-page.tsx"));
+    assert.doesNotMatch(page, /<CreatorCard\b/, "the Creator / Open Studio card is back on the profile");
+    assert.match(page, /<VerificationCard \/>/);
+  });
+});
