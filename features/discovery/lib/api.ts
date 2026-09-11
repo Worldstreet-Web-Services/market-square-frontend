@@ -33,8 +33,15 @@ export async function fetchCategories() {
   return CategoryListSchema.parse(await msApi.get("/categories"));
 }
 
-export async function fetchTopics() {
-  return TopicListSchema.parse(await msApi.get("/topics"));
+/**
+ * Where a topic list is shown. `GET /topics?surface=` answers each surface its
+ * OWN chips in its own order — Home's row is eight, a house's tag field is the
+ * eleven — and no surface is every topic, for pickers and label lookups.
+ */
+export type TopicSurface = "home" | "composer";
+
+export async function fetchTopics(surface?: TopicSurface) {
+  return TopicListSchema.parse(await msApi.get("/topics", surface ? { surface } : undefined));
 }
 
 export async function fetchMyInterests() {

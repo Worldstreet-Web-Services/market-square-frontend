@@ -1,5 +1,6 @@
 "use client";
 
+import { GENDER_OPTIONS, normalizeGender } from "@/lib/gender";
 import { useState } from "react";
 import { errorCode } from "@/lib/api/envelope";
 import type { Profile } from "@/lib/api/schemas";
@@ -31,7 +32,7 @@ export function EditProfileSheet({
      real "hasn't said" and an input cannot hold it. */
   const [city, setCity] = useState(me.city ?? "");
   const [region, setRegion] = useState(me.region ?? "");
-  const [gender, setGender] = useState(me.gender ?? "");
+  const [gender, setGender] = useState<string>(normalizeGender(me.gender) ?? "");
   const [website, setWebsite] = useState(me.website ?? "");
 
   const usernameTaken = errorCode(update.error) === "CONFLICT";
@@ -62,11 +63,11 @@ export function EditProfileSheet({
         {/*
           PLACE AND GENDER — the fields Explore's People filters match on.
 
-          FREE TEXT, all three, and gender is a text box rather than a picker on
-          purpose: a dropdown is a list of which identities exist, and that is
-          not a decision to take in a component. The service folds case so
-          self-declared answers stay comparable without anybody owning a
-          vocabulary.
+          PLACE IS FREE TEXT; GENDER IS A CHOICE of Male or Female
+          (`lib/gender.ts`), never typed — "when they type people can type
+          different way of male and female" (ogazboiz). Every profile then
+          holds one of two values, and the people filters never list five
+          spellings of one answer. Tapping the chosen one again clears it.
 
           NOT REQUIRED, and emptying one clears it. The note says who can see
           them, because a field that quietly becomes a filter other people
@@ -96,16 +97,31 @@ export function EditProfileSheet({
             />
           </label>
         </div>
-        <label className="block">
+        <div className="block">
           <span className="mb-1.5 block text-xs font-semibold text-grey-400">Gender</span>
-          <input
-            value={gender}
-            onChange={(e) => setGender(e.target.value)}
-            maxLength={40}
-            placeholder="However you describe yourself"
-            className={inputClass}
-          />
-        </label>
+          <div role="radiogroup" aria-label="Gender" className="grid grid-cols-2 gap-2">
+            {GENDER_OPTIONS.map((option) => {
+              const on = gender === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setGender(on ? "" : option.value)}
+                  className={cn(
+                    "ws-press ws-inset flex items-center justify-center px-4 py-2.5 text-sm transition-colors",
+                    on
+                      ? "bg-create/15 text-white shadow-[inset_0_0_0_1px_var(--color-create)]"
+                      : "text-grey-300 hover:text-white"
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {/* 545:47631 — the link row on the profile. The service accepts
             http(s) only and clears on null. */}
         <label className="block">

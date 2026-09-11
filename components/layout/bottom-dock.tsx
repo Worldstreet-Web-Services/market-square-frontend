@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { IconCollapseRight } from "@/components/ui/icons";
-import { SquareMark, type SquareMarkPalette } from "@/components/ui/square-mark";
 import { useUnread } from "@/hooks/use-unread";
 
 /**
@@ -26,6 +26,13 @@ import { useUnread } from "@/hooks/use-unread";
  * whoever finds it next: the answer is that it was asked for, and the way to
  * reverse it is to put `Sidebar` back in `AppShell`.
  *
+ * ─── NOW NODE 964:24177 ──────────────────────────────────────────────────────
+ * The live file (updated 2026-09-11) redrew it: FOUR destinations — Home,
+ * Discover, Pals, Chat — in a bar of a fixed 286 x 113, 21.6 between items, a
+ * 1.886 inside ring at 12% white, and the compose circle 13.29 beside it on a
+ * new ramp. Everything below is that node at the same 72/113 (0.6372) scale;
+ * the icons, the home mark and the circle are the node's own exports.
+ *
  * ─── THE FILE'S GEOMETRY IS A RESIZED GROUP ─────────────────────────────────
  * It is drawn 368.91 x 113 with a 63.147 home circle, a 39.88 icon and a 9.9px
  * label — fractions that come from a group somebody scaled, not from decisions.
@@ -40,32 +47,17 @@ import { useUnread } from "@/hooks/use-unread";
  * a new purple.
  */
 
-/**
- * THE MARK'S OWN PALETTE IN THIS DOCK — 748:15725, and it is NOT the brand one.
- *
- * `SQUARE_MARK_BRAND` runs the card `#7E3BEB` -> `#472185` over a `#7E3BEB`
- * side. The dock's copy runs it the other way and lighter — `#C19CFE` ->
- * `#7E3BEB` — and its side is `#2D2D2E`, a near-black grey rather than purple.
- * Read off the node rather than assumed, because `LogoMark` was rendering the
- * brand palette here and the difference is plain at a glance: the file's mark
- * is a pale violet face on a dark edge, ours was a saturated one on a purple
- * edge.
- *
- * The bubble is white over `#D9D9D9`, which is the mark's own two greys.
- */
-const DOCK_MARK: SquareMarkPalette = {
-  cardA: "#C19CFE",
-  cardB: "#7E3BEB",
-  bubbleA: "#D9D9D9",
-  bubbleB: "#FFFFFF",
-  ink: "#2D2D2E",
-};
+/** The node at the dock's height: every length below is the file's times this. */
+const K = 72 / 113;
+const px = (value: number) => `${(value * K).toFixed(2)}px`;
 
 interface DockItem {
   href: string;
   label: string;
-  /** Exported from the node; the file's grey is mapped to `currentColor`. */
+  /** Exported from the node; drawn as a mask so the link's colour inks it. */
   glyph: string;
+  /** The glyph's own drawn size in the file (its vector, not its frame). */
+  size: { width: number; height: number };
   /** Live count, or null where we genuinely do not have one. */
   badge?: number | null;
 }
@@ -100,8 +92,15 @@ export function BottomDock({
   const pathname = usePathname();
   const unread = useUnread();
 
+  const gradient = `dock-create-${useId().replace(/:/g, "")}`;
+
   const all: DockItem[] = [
-    { href: "/", label: "Home", glyph: "" },
+    /* 964:24181 — the home mark, 31.57 x 23.5, exported with its own ramp. */
+    { href: "/", label: "Home", glyph: "/notifications/dock-home.svg", size: { width: 31.57, height: 23.5 } },
+    /* 964:24203 — "iconamoon:discover-light", a 38 frame with its 2.4 stroke.
+       Explore was hidden as "coming soon"; the dock shows it now, as the file
+       draws it (ogazboiz's call). */
+    { href: "/discover", label: "Discover", glyph: "/notifications/dock-discover.svg", size: { width: 38, height: 38 } },
     /*
       THE FILE DRAWS A "4" ON THIS ONE AND WE DO NOT DRAW ANYTHING.
 
@@ -115,11 +114,12 @@ export function BottomDock({
       one person at a time; Explore is a directory you scan. `/pals` is the
       same `FriendsDeck` the timeline carries, given a page of its own.
     */
-    { href: "/pals", label: "Pals", glyph: "/notifications/dock-pals.svg", badge: null },
+    { href: "/pals", label: "Pals", glyph: "/notifications/dock-pals.svg", size: { width: 37.39, height: 27.46 }, badge: null },
     {
       href: "/messages",
       label: "Chat",
       glyph: "/notifications/dock-chat.svg",
+      size: { width: 32.4, height: 29.91 },
       // The real global unread, the same number the bell reads.
       badge: unread.data?.messages ?? null,
     },
@@ -137,7 +137,7 @@ export function BottomDock({
       className={cn("pointer-events-none fixed inset-x-0 z-40 flex justify-center", className)}
       style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
     >
-      <div className="pointer-events-auto flex items-center gap-2">
+      <div className="pointer-events-auto flex items-center" style={{ gap: px(13.29) }}>
         {/* 748:15722 — `#141416` at 47%, fully round, behind a heavy backdrop
             blur and the file's own deep shadow. */}
         {/* `ws-glass` — the app's own material, not a second one invented here.
@@ -148,9 +148,14 @@ export function BottomDock({
             what every other floating surface in the app is made of, and a
             dock a shade more solid than the rest is a new material nobody
             asked for. */}
+        {/* 964:24178 — the file's own material, not the app's glass utility:
+            `#141416` at 47% behind its 93.18 background blur (46.59 in CSS),
+            a 1.886 INSIDE ring at 12% white, and its 94.32 shadow 33.95 down
+            with -30.18 spread. Fixed 286 wide, items centred 21.6 apart. */}
         <nav
           aria-label="Primary"
-          className="ws-glass flex h-[72px] items-center gap-[14px] rounded-full px-[18px] shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)]"
+          className="flex h-[72px] items-center justify-center rounded-full bg-[rgba(20,20,22,0.47)] backdrop-blur-[29.69px] shadow-[inset_0_0_0_1.2px_rgba(255,255,255,0.12),0_21.63px_60.1px_-19.23px_rgba(0,0,0,0.95)]"
+          style={{ width: px(286), gap: px(21.6) }}
         >
           {items.map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -160,36 +165,39 @@ export function BottomDock({
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "ws-press relative flex flex-col items-center justify-center gap-1 rounded-full transition-colors",
-                  // The active item is the wider one in the file: it carries a
-                  // label the others do not.
-                  active ? "w-10 text-white" : "w-[25px] text-[#9B9B9B] hover:text-white"
+                  "ws-press relative flex flex-col items-center justify-center rounded-full transition-colors",
+                  active ? "text-white" : "text-[#9B9B9B] hover:text-white"
                 )}
+                // 964:24188 sits 5 under the mark in the file.
+                style={{ gap: px(5) }}
               >
                 <span className="relative">
                   {item.href === "/" ? (
-                    // Home is the product's own mark, which we already have as
-                    // a component — not a second copy of it as an asset.
-                    <SquareMark width={26} palette={DOCK_MARK} className="h-auto w-[26px]" />
+                    // eslint-disable-next-line @next/next/no-img-element -- the node's own export, fixed colours
+                    <img
+                      src={item.glyph}
+                      alt=""
+                      aria-hidden
+                      className="block"
+                      style={{ width: px(item.size.width), height: px(item.size.height) }}
+                    />
                   ) : (
                     /*
                       MASKED, NOT AN <img>.
 
-                      The exported glyphs carry the file's grey as
-                      `currentColor` so one asset can serve both states — but an
-                      SVG loaded through `<img src>` is a SEPARATE DOCUMENT and
-                      cannot see this page's `color`, so `currentColor` resolved
-                      to its own default and both icons rendered BLACK on a dark
-                      dock. Painting them as a mask puts the colour back under
-                      CSS's control: the shape comes from the file, the ink from
-                      the link's own `text-…`, which is `#9B9B9B` at rest and
-                      white when it is the current page — exactly what 748:15734
-                      and 748:15739 specify.
+                      The exported glyphs carry the file's grey — but an SVG
+                      loaded through `<img src>` is a SEPARATE DOCUMENT and
+                      cannot see this page's `color`. Painting them as a mask
+                      puts the colour under CSS's control: the shape comes from
+                      the file, the ink from the link's own `text-…`, `#9B9B9B`
+                      at rest and white when it is the current page.
                     */
                     <span
                       aria-hidden
-                      className="block h-[25px] w-[25px] bg-current"
+                      className="block bg-current"
                       style={{
+                        width: px(item.size.width),
+                        height: px(item.size.height),
                         maskImage: `url(${item.glyph})`,
                         WebkitMaskImage: `url(${item.glyph})`,
                         maskSize: "contain",
@@ -201,7 +209,7 @@ export function BottomDock({
                       }}
                     />
                   )}
-                  {/* 748:15735 — the badge, drawn only when there is a real
+                {/* 748:15735 — the badge, drawn only when there is a real
                       number behind it. */}
                   {typeof item.badge === "number" && item.badge > 0 && (
                     <span className="tnum absolute -right-2 -top-1.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-spotlight px-1 text-[9px] font-bold leading-none text-white">
@@ -233,22 +241,34 @@ export function BottomDock({
           </button>
         )}
 
-        {/* 748:15743 — 113 in the file, 72 here, on the ramp's own two stops at
-            the file's 201deg. */}
+        {/* 964:24199 — the node's own export at 72: the circle on its ramp
+            (`#7E3BEB` -> `#C27AFF`, light on the left) and the 6.007 plus. No
+            shadow — the file gives this circle none. */}
         {onCompose && (
           <button
             type="button"
             onClick={onCompose}
             aria-label="Create post"
-            className="ws-press grid h-[72px] w-[72px] place-items-center rounded-full bg-[linear-gradient(201deg,var(--color-spotlight)_0%,var(--color-spotlight-chip-ink)_100%)] text-white shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)] transition-opacity hover:opacity-90"
+            className="ws-press block h-[72px] w-[72px] rounded-full transition-opacity hover:opacity-90"
           >
-            <svg viewBox="0 0 24 24" className="h-9 w-9" aria-hidden>
+            <svg viewBox="0 0 113 113" className="block h-full w-full" fill="none" aria-hidden>
               <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                strokeWidth="2.6"
-                strokeLinecap="round"
+                d="M0 56.5C0 25.2959 25.2959 0 56.5 0C87.7041 0 113 25.2959 113 56.5C113 87.7041 87.7041 113 56.5 113C25.2959 113 0 87.7041 0 56.5Z"
+                fill={`url(#${gradient})`}
               />
+              <path
+                d="M38.4792 56.5027H56.4995M56.4995 56.5027H74.5198M56.4995 56.5027V74.523M56.4995 56.5027V38.4824"
+                stroke="white"
+                strokeWidth="6.00677"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <defs>
+                <linearGradient id={gradient} x1="83.9109" y1="14.8684" x2="-1.12419" y2="45.7834" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#7E3BEB" />
+                  <stop offset="1" stopColor="#C27AFF" />
+                </linearGradient>
+              </defs>
             </svg>
           </button>
         )}

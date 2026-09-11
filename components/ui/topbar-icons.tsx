@@ -37,3 +37,32 @@ export function IconCaretDown({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * `vuesax/linear/notification`, 24px — the top bar's bell, node 647:17444 in
+ * the live header (647:17439), exported from the file. The file strokes it
+ * #DCDCDC; `currentColor` here so the button can carry that and a hover.
+ */
+export function IconTopBell({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12.02 2.91016C8.71003 2.91016 6.02003 5.60016 6.02003 8.91016V11.8002C6.02003 12.4102 5.76003 13.3402 5.45003 13.8602L4.30003 15.7702C3.59003 16.9502 4.08003 18.2602 5.38003 18.7002C9.69003 20.1402 14.34 20.1402 18.65 18.7002C19.86 18.3002 20.39 16.8702 19.73 15.7702L18.58 13.8602C18.28 13.3402 18.02 12.4102 18.02 11.8002V8.91016C18.02 5.61016 15.32 2.91016 12.02 2.91016Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round"/>
+      <path d="M13.87 3.20141C13.56 3.11141 13.24 3.04141 12.91 3.00141C11.95 2.88141 11.03 2.95141 10.17 3.20141C10.46 2.46141 11.18 1.94141 12.02 1.94141C12.86 1.94141 13.58 2.46141 13.87 3.20141Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M15.02 19.0586C15.02 20.7086 13.67 22.0586 12.02 22.0586C11.2 22.0586 10.44 21.7186 9.90002 21.1786C9.36002 20.6386 9.02002 19.8786 9.02002 19.0586" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10"/>
+    </svg>
+  );
+}
+
+/**
+ * The account pill's caret, node 747:14031, exported from the file: an 8 x 4
+ * chevron at a 2.29 stroke with round caps, which exports as an 11 x 7 box
+ * because the stroke is centred on the path. Lay it out as the 8 x 4 the file
+ * sizes and let this overflow it.
+ */
+export function IconTopCaret({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 11 7" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9.77777 1.22393L5.66939 5.33231C5.57584 5.42586 5.42416 5.42586 5.33061 5.33231L1.22223 1.22393" stroke="currentColor" strokeWidth="2.44444" strokeLinecap="round"/>
+    </svg>
+  );
+}

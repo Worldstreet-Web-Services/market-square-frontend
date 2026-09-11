@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { isVideoPost } from "@/lib/media";
 import { videoListKey } from "@/lib/video-context";
-import type { DeepLink } from "@/lib/api/schemas";
 import {
   bookmarkPost,
   fetchBookmarks,
@@ -28,7 +27,7 @@ import {
   deletePost,
   editPost,
 } from "@/features/feed/lib/api";
-import type { FeedPage, Lane, Mention, Post } from "@/features/feed/lib/types";
+import type { FeedPage, Lane, Post } from "@/features/feed/lib/types";
 import { invalidateContentSurfaces } from "@/lib/api/invalidate";
 import {
   invalidatePostLists,
@@ -212,14 +211,7 @@ export function useStories() {
 export function useCreatePost() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
-      kind: "update" | "story";
-      text: string;
-      mediaUrl?: string;
-      deepLink?: DeepLink;
-      quotedPostId?: string;
-      mentions?: Mention[];
-    }) => createPost(input),
+    mutationFn: (input: Parameters<typeof createPost>[0]) => createPost(input),
     onSuccess: (post) => {
       // Two halves, and both are needed. The prepend puts the post on screen
       // instantly; the invalidation below reconciles it with the server, which

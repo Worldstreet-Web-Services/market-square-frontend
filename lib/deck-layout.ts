@@ -53,7 +53,20 @@ export interface DeckPlace {
   opacity: number;
 }
 
-export const DECK_NODE = {
+export interface DeckNode {
+  card: { width: number; height: number };
+  fan: { left: number; right: number };
+  arrow: { size: number; dy: number; leftDx: number; rightDx: number };
+  places: Record<number, DeckPlace>;
+  /**
+   * The deck box's vertical extent from the front card's centre, when the back
+   * cards run past the front card's own height. Absent: the box IS the front
+   * card, as on `/pals`.
+   */
+  box?: { top: number; bottom: number };
+}
+
+export const DECK_NODE: DeckNode = {
   /** 844:23435 — the front card, the unit everything else is measured in. */
   card: { width: 543.42, height: 718 },
   /** The fan's own extent from the front card's centre: the left card's box edge (4134) to the right card's (5077). */
@@ -74,17 +87,47 @@ export interface DeckLayout {
   k: number;
   /** The front card's centre, from the deck box's left edge, in screen pixels. */
   frontX: number;
-  /** The deck box's height in screen pixels — the front card's; the tilted cards fit inside it. */
+  /** The deck box's height in screen pixels: the front card's, or the node's own `box` when its tilted cards run past it. */
   height: number;
+  /** The front card's centre, from the deck box's top edge, in screen pixels. */
+  frontY: number;
 }
 
+/**
+ * HOME'S OWN DECK — node 647:16300 in the live file (647:16288, updated
+ * 2026-09-10), in its front card's units (647:16329, 310.24 x 422.24).
+ *
+ * Not `/pals`' drawing at another scale. Its back cards sit further out and
+ * lower, at 0.9276 each and 20% opacity; its discs flank the fan instead of
+ * one lying over the right card; and its tilted cards reach 18.58 below the
+ * front card, so the box is the group's own height with the front card's top
+ * on its top. Offsets, scales and tilts are read from the nodes' `size` and
+ * `relativeTransform` (REST `geometry=paths`), never from rotated boxes.
+ */
+export const HOME_DECK_NODE: DeckNode = {
+  card: { width: 310.24, height: 422.24 },
+  /** The left card's box edge (138.12) to the right card's (957.18), from the front card's centre (524.17). */
+  fan: { left: -386.05, right: 433.06 },
+  /** 695:27703 / 695:27693 — 64 discs centred 15.88 below the front card's centre, at -357.17 and +412.83. */
+  arrow: { size: 64, dy: 15.88, leftDx: -357.17, rightDx: 412.83 },
+  places: {
+    /** 647:16314 — size 287.79 x 391.69, turned -9.274deg. */
+    [-1]: { dx: -212.47, dy: 5.71, scale: 0.9276, rot: -9.274, opacity: 0.2 },
+    0: { dx: 0, dy: 0, scale: 1, rot: 0, opacity: 1 },
+    /** 647:16301 — size 287.79 x 391.69, turned 9.904deg. */
+    1: { dx: 257.62, dy: 12.02, scale: 0.9276, rot: 9.904, opacity: 0.2 },
+  },
+  /** The group 647:16300 runs from the front card's top to 229.70 below its centre. */
+  box: { top: -211.12, bottom: 229.7 },
+};
+
 /** The deck's full extent from the front card's centre, with or without the step discs. */
-export function deckExtent(arrows: boolean): { left: number; right: number } {
-  const discLeft = DECK_NODE.arrow.leftDx - DECK_NODE.arrow.size / 2;
-  const discRight = DECK_NODE.arrow.rightDx + DECK_NODE.arrow.size / 2;
+export function deckExtent(arrows: boolean, node: DeckNode = DECK_NODE): { left: number; right: number } {
+  const discLeft = node.arrow.leftDx - node.arrow.size / 2;
+  const discRight = node.arrow.rightDx + node.arrow.size / 2;
   return {
-    left: arrows ? Math.min(DECK_NODE.fan.left, discLeft) : DECK_NODE.fan.left,
-    right: arrows ? Math.max(DECK_NODE.fan.right, discRight) : DECK_NODE.fan.right,
+    left: arrows ? Math.min(node.fan.left, discLeft) : node.fan.left,
+    right: arrows ? Math.max(node.fan.right, discRight) : node.fan.right,
   };
 }
 
@@ -93,10 +136,20 @@ export function deckExtent(arrows: boolean): { left: number; right: number } {
  * both back cards and, when `arrows` is on, both discs — fits the room, and
  * the front card sits at its own file offset inside it.
  */
-export function deckLayout({ room, arrows }: { room: number; arrows: boolean }): DeckLayout {
-  const extent = deckExtent(arrows);
+export function deckLayout({
+  room,
+  arrows,
+  node = DECK_NODE,
+}: {
+  room: number;
+  arrows: boolean;
+  node?: DeckNode;
+}): DeckLayout {
+  const extent = deckExtent(arrows, node);
   const k = room / (extent.right - extent.left);
-  return { k, frontX: -extent.left * k, height: DECK_NODE.card.height * k };
+  const top = node.box?.top ?? -node.card.height / 2;
+  const bottom = node.box?.bottom ?? node.card.height / 2;
+  return { k, frontX: -extent.left * k, frontY: -top * k, height: (bottom - top) * k };
 }
 
 /** The axis-aligned box a `width` × `height` node needs once turned by `deg` — what Figma reports as its bounding box. */

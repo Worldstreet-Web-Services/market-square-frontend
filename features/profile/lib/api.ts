@@ -11,6 +11,8 @@ import {
   RenewVerificationSchema,
   ProfileActivitiesSchema,
   ProfileBadgesSchema,
+  ProfilePhotoSchema,
+  ProfilePhotosSchema,
   ProfilePostsSchema,
   ProfileStreamsSchema,
   type ProfileStreamFilters,
@@ -43,6 +45,21 @@ export async function fetchProfileBadges(username: string) {
   return ProfileBadgesSchema.parse(await msApi.get(`/profiles/${username}/badges`));
 }
 
+
+/** `GET /profiles/:username/photos` — the gallery by position. A 404 before it deploys is "not deployed". */
+export async function fetchProfilePhotos(username: string) {
+  return ProfilePhotosSchema.parse(await msApi.get(`/profiles/${username}/photos`));
+}
+
+/** `POST /me/photos` — attach a URL this service issued for your own upload. Cap 12 (409 with the message). */
+export async function addMyPhoto(url: string) {
+  return ProfilePhotoSchema.parse(await msApi.post("/me/photos", { url }));
+}
+
+/** `DELETE /me/photos/:id` — 204; the rest keep their order. */
+export async function removeMyPhoto(id: string) {
+  await msApi.del(`/me/photos/${encodeURIComponent(id)}`);
+}
 
 export async function fetchProfileActivities(username: string) {
   return ProfileActivitiesSchema.parse(await msApi.get(`/profiles/${username}/activities`));

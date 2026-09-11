@@ -353,6 +353,25 @@ const PENDING_ROUTES = {
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
   },
+  // ── house invite links ────────────────────────────────────────────────────
+  "post /conversations/{}/invites": {
+    reason:
+      "Makes a house invite link. BUILT on the service (migration 062, PR #205) " +
+      "and served locally, NOT yet deployed, so it is absent from the " +
+      "production spec. Until then the menu row answers a 404 with 'Invite " +
+      "links aren't available here yet'. DELETE THIS ENTRY once the route " +
+      "appears in openapi.json.",
+  },
+  "get /invites/{}": {
+    reason:
+      "The invite landing page's read (public, optional auth). Same undeployed " +
+      "service change as post /conversations/{}/invites — see that entry.",
+  },
+  "post /invites/{}/accept": {
+    reason:
+      "Joining through an invite link. Same undeployed service change as " +
+      "post /conversations/{}/invites — see that entry.",
+  },
   // EMPTY IS THE CORRECT STATE. `/profiles` lived here for the few hours
   // between the People tab being built and the directory route shipping; it
   // was deleted the moment the spec documented it. An entry that outlives its

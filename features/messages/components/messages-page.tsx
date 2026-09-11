@@ -55,7 +55,9 @@ function Inbox({
   onOpen: (conversation: Conversation) => void;
   selectedId?: string;
 }) {
-  const [tab, setTab] = useState<InboxTab>("all");
+  // `?tab=houses` opens straight on Houses — the profile's "View All" (1021:20295).
+  const tabParam = useQueryParam("tab");
+  const [tab, setTab] = useState<InboxTab>(tabParam === "houses" ? "houses" : "all");
   const conversations = useConversations(tab);
   const requests = useAnswerRequest();
   const me = useMe();

@@ -1,14 +1,19 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { ImageViewer } from "@/components/ui/image-viewer";
+import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconProfileBack } from "@/components/ui/profile-icons";
 import { canGoBack } from "@/lib/nav-history";
+import { artworkForSeed, resolveSeed } from "@/lib/avatar-seed";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
- * THE PROFILE COVER — node 435:27500.
+ * THE PROFILE COVER — node 435:27500, redrawn as 1021:20229 (live file,
+ * updated 2026-09-11): the avatar carries a camera button on your own profile,
+ * and the actions sit on the identity row's FOOT, 5 above the avatar's.
  *
  * A 741x473 card at a 20 radius with the cover photograph filling it, the
  * person's identity laid over its foot, and the actions held at the right. It
@@ -33,8 +38,15 @@ export function ProfileCover({
   profile,
   actions,
   meta,
+  onChangePhoto,
 }: {
   profile: Profile;
+  /**
+   * Your own profile only: the camera button on the avatar (1097:23670), a 32
+   * disc on the create ramp over white, 12 past the avatar's right edge and 8
+   * below its foot. Absent on somebody else's.
+   */
+  onChangePhoto?: () => void;
   /** Edit Profile on your own, follow/wink/message on somebody else's. */
   actions?: React.ReactNode;
   /**
@@ -56,6 +68,35 @@ export function ProfileCover({
   const router = useRouter();
   const name = profile.displayName || profile.username;
 
+  /*
+    THE FILE'S COVER, DRAWN AS ONE PICTURE. From md the furniture over the photo
+    (Back, the identity row, the actions) is laid out at the node's own 741x473
+    and scaled to the card's real width, so everything sits exactly where
+    1021:20868 puts it — actions at the identity row's foot, the handle, KASH and
+    "Who viewed my profile" on one row — while the column keeps the rail beside
+    it (535 wide at 1440, a 0.72 scale). Below md the phone layout stands.
+  */
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState<number | null>(null);
+  /* The picture open full screen, if any: the profile picture or the cover. */
+  const [viewing, setViewing] = useState<{ src: string; alt: string } | null>(null);
+  const coverSrc = profile.coverUrl ?? "/profile/default-cover.jpg";
+  const avatarSrc = profile.avatarUrl ?? artworkForSeed(resolveSeed({ id: profile.id, name }));
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const md = window.matchMedia("(min-width: 48rem)");
+    const measure = () => setScale(md.matches ? Math.min(1, el.clientWidth / 741) : null);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    md.addEventListener("change", measure);
+    return () => {
+      observer.disconnect();
+      md.removeEventListener("change", measure);
+    };
+  }, []);
+
   return (
     /*
       The file's 741x473 holds on desktop. On a phone that ratio gives a
@@ -64,7 +105,7 @@ export function ProfileCover({
       the left edge. So the phone cover is 300 tall and stacks the identity
       above the actions; `md:` returns the file's frame.
     */
-    <div className="relative h-[300px] w-full overflow-hidden rounded-[20px] md:aspect-[741/473] md:h-auto">
+    <div ref={cardRef} className="relative h-[300px] w-full overflow-hidden rounded-[20px] md:aspect-[741/473] md:h-auto">
       {/*
         THE COVER PHOTOGRAPH, AND THE FALLBACK IT KEEPS.
 
@@ -123,25 +164,39 @@ export function ProfileCover({
           these are vertical and why the alphas are not the stops' 1.0. */}
       <span
         aria-hidden
-        className="absolute inset-x-0 top-0 h-[22.8%] bg-[linear-gradient(180deg,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0)_100%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[22.8%] bg-[linear-gradient(180deg,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0)_100%)]"
       />
       <span
         aria-hidden
-        className="absolute inset-x-0 bottom-0 h-[45.5%] bg-[linear-gradient(0deg,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0)_100%)]"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[45.5%] bg-[linear-gradient(0deg,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0)_100%)]"
       />
 
+      {/* Tap the cover to see it whole ("even the background picture"). The
+          layer above lets taps through except on its own controls. */}
+      <button
+        type="button"
+        onClick={() => setViewing({ src: coverSrc, alt: "Cover photo" })}
+        aria-label="View cover photo"
+        className="absolute inset-0 cursor-zoom-in"
+      />
+
+      <div
+        className="pointer-events-none absolute inset-0 md:inset-auto md:left-0 md:top-0 md:h-[473px] md:w-[741px] md:origin-top-left"
+        style={scale === null ? undefined : { transform: `scale(${scale})` }}
+      >
       {/* 435:27537 — 24 in and 24 down, the same labelled Back the gist room
           carries. Inside the card, over the scrim, not above it in a column
           header. */}
       <button
         type="button"
         onClick={() => (canGoBack() ? router.back() : router.push("/"))}
-        className="ws-press absolute left-6 top-6 z-10 flex items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
+        className="ws-press pointer-events-auto absolute left-6 top-6 z-10 flex items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
       >
         {/* 545:47613 — the file's own `arrow-left` at 20, not the shared chevron. */}
         <IconProfileBack className="h-5 w-5 shrink-0" />
         Back
       </button>
+
 
       {/* 435:27503 — the identity, 24 from the left and 24 from the foot. */}
       {/* 545:47576 (the identity, y=377..449) and 545:47603 (the actions,
@@ -151,20 +206,47 @@ export function ProfileCover({
           On a phone the controls are icons only (the Wink pill and Edit Profile
           drop their labels below md) and the avatar and name step down a size,
           so the row fits 358 with the name still readable. */}
-      <div className="absolute inset-x-4 bottom-4 z-10 flex items-center gap-3 md:inset-x-6 md:bottom-6 md:gap-4">
+      <div className="pointer-events-auto absolute inset-x-4 bottom-4 z-10 flex items-center gap-3 md:inset-x-6 md:bottom-6 md:items-end md:gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
           {/* 72 at a 16.36 radius behind a 2.18 ring in #15202B at 40%. A
               ROUNDED SQUARE, not the circle every other avatar in the app is:
               the file draws the profile's own portrait differently from the one
               in a row, and this is the only place that holds. */}
-          <Avatar
-            name={name}
-            seed={profile.id}
-            src={profile.avatarUrl}
-            size={72}
-            sizeClassName="h-14 w-14 md:h-[72px] md:w-[72px]"
-            className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
-          />
+          {/* On the row's FOOT from md: our column is narrower than the file's,
+              so a name with chips can wrap taller than the avatar, and the
+              actions are measured against the avatar's foot, not the text's. */}
+          <span className="relative block shrink-0 md:self-end">
+            <button
+              type="button"
+              // The picture ON SCREEN: the upload, or the seeded mascot the
+              // avatar draws when there is none — a tap on either opens it.
+              onClick={() => avatarSrc && setViewing({ src: avatarSrc, alt: `${name}'s profile picture` })}
+              disabled={!avatarSrc}
+              aria-label="View profile picture"
+              className="block cursor-zoom-in rounded-[16.36px] disabled:cursor-default"
+            >
+              <Avatar
+                name={name}
+                seed={profile.id}
+                src={profile.avatarUrl}
+                size={72}
+                sizeClassName="h-14 w-14 md:h-[72px] md:w-[72px]"
+                className="shrink-0 rounded-[16.36px] ring-[2.18px] ring-[#15202B]/40"
+              />
+            </button>
+            {onChangePhoto && (
+              <button
+                type="button"
+                onClick={onChangePhoto}
+                aria-label="Change profile photo"
+                className="ws-press absolute -bottom-2 -right-3 h-8 w-8 rounded-full"
+              >
+                {/* The node's own export: the disc, its ramp and the camera. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/profile/camera-button.svg" alt="" aria-hidden className="block h-8 w-8" />
+              </button>
+            )}
+          </span>
           {/* `flex-1` as well as `min-w-0`: without it the column sizes to
               its content and the name's chips run past the cover's edge on a
               phone instead of wrapping under the name. */}
@@ -179,7 +261,8 @@ export function ProfileCover({
               <span className="min-w-0 break-words">{name}</span>
               <VerifiedBadge verification={profile.verification} className="h-5 w-5" />
               <OrgBadgeChip orgBadge={profile.orgBadge} />
-              <RoleChip role={profile.role} />
+              {/* No creator badge on the profile ("remove that creator badge in
+                  profile", ogazboiz). `role` still decides who can go live. */}
             </h1>
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               {/* An unclaimed member's username is their Privy DID — forty-odd
@@ -193,8 +276,11 @@ export function ProfileCover({
           </div>
         </div>
 
-        {actions && <div className="flex shrink-0 items-center gap-2 md:gap-4">{actions}</div>}
+        {/* 1021:20260 — 16 apart, their foot 5 above the avatar's (444 vs 449). */}
+        {actions && <div className="flex shrink-0 items-center gap-2 md:mb-[5px] md:gap-4">{actions}</div>}
       </div>
+      </div>
+      {viewing && <ImageViewer src={viewing.src} alt={viewing.alt} onClose={() => setViewing(null)} />}
     </div>
   );
 }

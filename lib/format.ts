@@ -4,8 +4,29 @@
 export function formatKash(amount: string): string {
   const n = Number.parseFloat(amount);
   if (!Number.isFinite(n)) return `${amount} KASH`;
-  const text = n % 1 === 0 ? String(n) : amount.replace(/0+$/, "").replace(/\.$/, "");
-  return `${text} KASH`;
+  return `${kashAmount(amount)} KASH`;
+}
+
+/**
+ * A KASH amount at AT MOST TWO decimal places — "80", "80.50", "80.25".
+ *
+ * CUT, never rounded: this is somebody's balance, and rounding 80.999 up would
+ * show money they do not have. Worked on the decimal STRING, so no float ever
+ * touches the digits; a whole amount (or one whose first two decimals are
+ * zero) shows no decimals at all.
+ */
+export function kashAmount(amount: string): string {
+  const trimmed = amount.trim();
+  if (/e/i.test(trimmed)) {
+    const n = Number.parseFloat(trimmed);
+    return kashAmount((Math.trunc(n * 100) / 100).toFixed(2));
+  }
+  const negative = trimmed.startsWith("-");
+  const [whole = "0", fraction = ""] = trimmed.replace(/^[+-]/, "").split(".");
+  const cents = fraction.slice(0, 2).padEnd(2, "0");
+  const wholeText = String(Number(whole || "0"));
+  const text = cents === "00" ? wholeText : `${wholeText}.${cents}`;
+  return negative && text !== "0" ? `-${text}` : text;
 }
 
 export function formatCount(count: number): string {

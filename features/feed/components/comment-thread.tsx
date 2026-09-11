@@ -11,7 +11,7 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
-import { IconMsLike } from "@/components/ui/design-icons";
+import { IconMsComment, IconMsLike } from "@/components/ui/design-icons";
 import { IconSend, IconX } from "@/components/ui/icons";
 import { IconTrash } from "@/components/ui/thread-icons";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -530,7 +530,7 @@ export function CommentThread({
   if (threads.length === 0)
     return (
       <div className="p-4">
-        <EmptyState glyph="◇" title={emptyTitle} body={emptyBody} />
+        <EmptyState icon={<IconMsComment className="h-5 w-5" />} title={emptyTitle} body={emptyBody} />
       </div>
     );
 

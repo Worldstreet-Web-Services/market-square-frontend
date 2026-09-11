@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { msApi } from "@/lib/api/service";
 import { uploadFile } from "@/lib/api/upload";
+import { noteMediaContract } from "@/lib/media-contract";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   BookmarkResultSchema,
@@ -32,7 +33,7 @@ export async function fetchFeed(
   /** The timeline pages at 30; the head check that looks for new posts asks for fewer. */
   limit = 30
 ) {
-  return FeedPageSchema.parse(
+  const page = FeedPageSchema.parse(
     await msApi.get("/feed", {
       lane,
       limit,
@@ -41,6 +42,24 @@ export async function fetchFeed(
       ...(hashtag ? { hashtag } : {}),
     })
   );
+  noteMediaContract(page.items.map((item) => item.post));
+  return page;
+}
+
+/**
+ * Asks for ONE post, only to learn whether this server returns the `media`
+ * list — the composer's question when nothing on the page has answered it.
+ * Once per page load; a failed ask is forgotten so the next composer retries.
+ */
+let mediaProbe: Promise<void> | null = null;
+export function probeMediaContract(): Promise<void> {
+  mediaProbe ??= fetchFeed("for-you", undefined, [], undefined, 1).then(
+    () => undefined,
+    () => {
+      mediaProbe = null;
+    }
+  );
+  return mediaProbe;
 }
 
 // GET /stories returns FeedItems; the row only needs the posts inside them.
@@ -59,17 +78,23 @@ export async function createPost(input: {
   kind: "update" | "story";
   text: string;
   mediaUrl?: string;
+  /** Two or more photos, in order — sent INSTEAD of `mediaUrl` (`mediaFields`). */
+  media?: { url: string; kind: "image" | "video" }[];
   deepLink?: DeepLink;
   quotedPostId?: string;
   mentions?: Mention[];
 }) {
-  return PostSchema.parse(await msApi.post("/posts", input));
+  const post = PostSchema.parse(await msApi.post("/posts", input));
+  noteMediaContract([post]);
+  return post;
 }
 
 // Single post, by id — the permalink's source. Public GET: a signed-out
 // reader can open a shared link, and a signed-in one still gets likedByMe.
 export async function fetchPost(postId: string) {
-  return PostSchema.parse(await msApi.get(`/posts/${postId}`));
+  const post = PostSchema.parse(await msApi.get(`/posts/${postId}`));
+  noteMediaContract([post]);
+  return post;
 }
 
 export async function repostPost(postId: string, repost: boolean) {

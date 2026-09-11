@@ -120,19 +120,28 @@ export function patchFollowInCaches(
   profileId: string,
   following: boolean
 ) {
-  for (const queryKey of FOLLOW_LIST_CACHES) {
-    queryClient.setQueriesData({ queryKey }, (data: unknown) =>
-      patchFollowInData(data, profileId, following)
-    );
-  }
+  queryClient.setQueriesData({ queryKey: PROFILE_CACHES }, (data: unknown) =>
+    patchFollowInData(data, profileId, following)
+  );
 }
 
-/** List caches that render follow controls from an embedded profile. */
-const FOLLOW_LIST_CACHES: string[][] = [
-  ["ms", "people"],
-  ["ms", "discovery"],
-  ["ms", "spotlight"],
-];
+/**
+ * EVERY Square cache — not a list of the ones that render a follow control.
+ *
+ * It was a list (People, Explore, Spotlight) and the home feed was not on it.
+ * A signed-in feed carries `isFollowing` on each post author, so tapping
+ * Follow on a post rewrote nothing the button reads: it went on saying
+ * "Follow" until something else refetched the feed, and people tapped it five
+ * times. The post permalink, Arkmarks, a profile's posts, a stream's owner and
+ * notification actors were missing the same way. A list of surfaces is a list
+ * the next surface is not on.
+ *
+ * Walking the whole tree is safe because the patch is precise: it touches only
+ * a record whose `id` is this person AND that already carries the marker
+ * field, and hands back the untouched node itself, so a cache that does not
+ * hold them keeps its identity and nothing re-renders.
+ */
+const PROFILE_CACHES = ["ms"];
 
 /**
  * Stamp a BLOCK the viewer just made onto the profiles sitting in list caches.
@@ -154,11 +163,9 @@ export function patchBlockInCaches(
   profileId: string,
   blocked: boolean
 ) {
-  for (const queryKey of FOLLOW_LIST_CACHES) {
-    queryClient.setQueriesData({ queryKey }, (data: unknown) =>
-      patchBlockInData(data, profileId, blocked)
-    );
-  }
+  queryClient.setQueriesData({ queryKey: PROFILE_CACHES }, (data: unknown) =>
+    patchBlockInData(data, profileId, blocked)
+  );
 }
 
 /** Pure cache rewrite, exported for test. Returns `node` itself when nothing matched. */

@@ -125,7 +125,8 @@ export const ConversationSchema = z.object({
    * `GET /conversations/discover` is what lists them, and it lists exactly the
    * public ones. A direct conversation is always private.
    *
-   * "Copy link" reads it to say what it just handed out.
+   * `canMakeInvite` reads it: any member of a public house may share an invite
+   * link, only the owner of a private one.
    */
   visibility: z.enum(["public", "private"]).optional().default("private").catch("private"),
   /** Groups only: who wrote `lastMessage`, so the inbox row can prefix it. */
@@ -207,6 +208,37 @@ export const ReadResultSchema = z.object({
  * one schema that is optional in both directions would parse a malformed
  * response of either shape.
  */
+/** `POST /conversations/:id/invites` — a house invite. The link is ours: `/join/<token>`. */
+export const InviteSchema = z.object({
+  token: z.string(),
+  conversationId: z.string(),
+  expiresAt: z.string().nullable().optional().default(null),
+  maxUses: z.number().nullable().optional().default(null),
+  useCount: z.number().optional().default(0),
+});
+
+/**
+ * `GET /invites/:token` — what a link opens onto, for members, strangers and
+ * signed-out visitors alike. `canJoin` is for THIS link and THIS viewer, and is
+ * false for anybody signed out. An expired or used-up link still answers, with
+ * `valid: false` and the reason.
+ */
+export const InvitePreviewSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable().optional().default(null),
+  description: z.string().nullable().optional().default(null),
+  imageUrl: z.string().nullable().optional().default(null),
+  memberCount: z.number().nullable().optional().default(null),
+  visibility: z.enum(["public", "private"]).optional().default("private").catch("private"),
+  viewerIsMember: z.boolean().optional().default(false),
+  canJoin: z.boolean().optional().default(false),
+  valid: z.boolean(),
+  reason: z.enum(["expired", "used_up"]).nullable().optional().default(null).catch(null),
+  expiresAt: z.string().nullable().optional().default(null),
+});
+
+export type InvitePreview = z.infer<typeof InvitePreviewSchema>;
+
 export const GroupRefSchema = z.object({
   id: z.string(),
   kind: z.enum(["direct", "group"]).optional().default("group").catch("group"),

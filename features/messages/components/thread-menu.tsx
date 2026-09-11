@@ -30,8 +30,8 @@ import {
  *   Edit group title            PATCH  /conversations/:id
  *   View members                GET    /conversations/:id/members
  *   Leave group                 DELETE /conversations/:id/members/:me
- *   Copy link                   client-side; the group's `visibility` decides
- *                               whether the link can be acted on (see below)
+ *   Share invite link           POST   /conversations/:id/invites, then the
+ *                               share sheet (see below)
  *   Block · Report              the profile slice's, composed in
  *
  * Visible and genuinely DISABLED, with the reason on the row, because the
@@ -48,17 +48,21 @@ import {
  *                               half-fail — it is not a workaround worth
  *                               shipping behind a button labelled "Delete"
  *
- * ─── ONE THING THE FILE COULD NOT SAY ────────────────────────────────────────
- * `Copy link` only means something on a group whose `visibility` is `public`:
- * that is the flag `POST /conversations/:id/join` reads, and on a private group
- * the same link answers 403 with "ask a member to add you". So the row copies
- * the link either way — a member can still use it to open the thread — and the
- * toast says which of the two the reader has just handed out. Copying a link
- * that silently refuses everyone who receives it is worse than no row.
+ * ─── THE LINK ────────────────────────────────────────────────────────────────
+ * The file's `Copy link` row copied the THREAD's address, which only a member
+ * could open — so a house could not be shared with anyone who was not already
+ * in it ("i cant share link to someone to join my group"). The row is now
+ * `Share invite link`: it mints an invite token and opens the same share sheet
+ * a post uses (WhatsApp, X, Facebook, Telegram, copy), and the link lands on
+ * `/join/<token>`, which lets a stranger in, private houses included. It is
+ * shown to whoever the service lets make one — any member of a public house,
+ * only the owner of a private one — which the thread decides and says by
+ * passing `onShareInvite` or not.
  */
 export interface ThreadMenuActions {
   onAddMembers?: () => void;
-  onCopyLink?: () => void;
+  /** Makes an invite link and opens the share sheet. Absent for a reader who may not make one. */
+  onShareInvite?: () => void;
   onRenameGroup?: () => void;
   onViewMembers?: () => void;
   onLeaveGroup?: () => void;
@@ -112,19 +116,20 @@ export function ThreadMenu({
         onClick={actions.onAddMembers}
       />
 
+      {actions.onShareInvite && (
+        <MenuRow
+          icon={<IconProfileAdd className="h-4 w-4" />}
+          label="Share invite link"
+          onClick={actions.onShareInvite}
+        />
+      )}
+
       {isOwner && (
-        <>
-          <MenuRow
-            icon={<IconProfileAdd className="h-4 w-4" />}
-            label="Copy link"
-            onClick={actions.onCopyLink}
-          />
-          <MenuRow
-            icon={<IconProfileAdd className="h-4 w-4" />}
-            label="Edit group title"
-            onClick={actions.onRenameGroup}
-          />
-        </>
+        <MenuRow
+          icon={<IconProfileAdd className="h-4 w-4" />}
+          label="Edit group title"
+          onClick={actions.onRenameGroup}
+        />
       )}
 
       <MenuRow

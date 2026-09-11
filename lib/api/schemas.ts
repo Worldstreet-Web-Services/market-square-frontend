@@ -316,6 +316,17 @@ export const MentionSchema = z.object({
   handle: z.string(),
 });
 
+/** One picture or clip of a post, in the order the author chose. */
+export const PostMediaSchema = z.object({
+  url: z.string(),
+  kind: z.string().catch("image"),
+  width: z.number().nullable().optional().default(null),
+  height: z.number().nullable().optional().default(null),
+  thumbnailUrl: z.string().nullable().optional().default(null),
+});
+
+export type PostMediaItem = z.infer<typeof PostMediaSchema>;
+
 // Backend Post: author id plus a hydrated ProfileSummary on feed items.
 // likedByMe comes from the backend on authed reads; the optimistic like
 // cache is an overlay on that truth, reconciled on every refetch.
@@ -329,6 +340,14 @@ export const PostSchema = z.object({
   // the URL's extension; `isVideoPost` falls back to the sniff when absent.
   mediaKind: z.string().nullable().optional().default(null),
   thumbnailUrl: z.string().nullable().optional().default(null),
+  /**
+   * EVERY picture of the post, in order (node 1029:22591's rail) — `[]` for a
+   * text post; `mediaUrl` above mirrors the first. OPTIONAL WITH NO DEFAULT on
+   * purpose: a deployment that predates the list sends no key, and that absence
+   * is how the composer knows the server takes one picture per post
+   * (`lib/media-contract.ts`). Defaulting it to `[]` would erase that answer.
+   */
+  media: z.array(PostMediaSchema).optional(),
   deepLink: DeepLinkSchema.nullable().optional().default(null),
   storyExpiresAt: z.string().nullable().optional().default(null),
   createdAt: z.string(),
