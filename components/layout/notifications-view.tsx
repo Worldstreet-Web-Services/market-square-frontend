@@ -1,15 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Toggle } from "@/components/ui/toggle";
 import { Avatar } from "@/components/ui/avatar";
 import { IconSettingsChevron } from "@/components/ui/icons";
 import { useConversations } from "@/features/messages";
-import {
-  HouseNotificationsView,
-  type MessageNotifFrom,
-  type GistroomNotifFrom,
-} from "@/components/layout/house-notifications-view";
 import { SAVING_SOON } from "@/components/layout/settings-copy";
 
 /**
@@ -25,42 +19,25 @@ export function NotificationsView({
   onFriendsRoomChange,
   directNotifications,
   onDirectNotificationsChange,
+  onOpenHouse,
   disabled = false,
 }: {
   friendsRoom: boolean;
   onFriendsRoomChange: (v: boolean) => void;
   directNotifications: boolean;
   onDirectNotificationsChange: (v: boolean) => void;
+  /** Opens a house's notification levels — the screen owns the drill-in. */
+  onOpenHouse: (house: { id: string; title: string }) => void;
   /** The toggles cannot be saved yet — see `settings-copy.ts`. */
   disabled?: boolean;
 }) {
   const houses = useConversations("houses");
   const rows = houses.data?.pages.flatMap((page) => page.items) ?? [];
-  const [activeHouse, setActiveHouse] = useState<string | null>(null);
-  const [houseMessagesFrom, setHouseMessagesFrom] =
-    useState<MessageNotifFrom>("admins");
-  const [houseGistroomsFrom, setHouseGistroomsFrom] =
-    useState<GistroomNotifFrom>("admins");
-
-  // Sub-view: house notification settings
-  if (activeHouse != null) {
-    return (
-      <HouseNotificationsView
-        messagesFrom={houseMessagesFrom}
-        onMessagesFromChange={setHouseMessagesFrom}
-        gistroomsFrom={houseGistroomsFrom}
-        onGistroomsFromChange={setHouseGistroomsFrom}
-        onBack={() => setActiveHouse(null)}
-        disabled={disabled}
-      />
-    );
-  }
-
   return (
     <div>
       {/* Top toggles — no section header */}
       <div className="flex flex-col">
-        <div className="flex w-full items-center justify-between border-b border-white/15 px-8 py-6">
+        <div className="flex w-full items-center justify-between border-b border-white/15 px-4 py-6">
           <div className="flex min-w-0 flex-1 flex-col gap-2 pr-4">
             <p className="text-base font-bold leading-4 text-white">
               Friends Room
@@ -77,7 +54,7 @@ export function NotificationsView({
             label="Friends Room notifications"
           />
         </div>
-        <div className="flex w-full items-center justify-between border-b border-white/15 px-8 py-6">
+        <div className="flex w-full items-center justify-between border-b border-white/15 px-4 py-6">
           <div className="flex min-w-0 flex-1 flex-col gap-2 pr-4">
             <p className="text-base font-bold leading-4 text-white">
               Direct Notifications
@@ -98,7 +75,7 @@ export function NotificationsView({
 
       {/* Your Houses section */}
       <div className="mt-10 flex flex-col gap-2">
-        <div className="flex h-6 items-center px-8">
+        <div className="flex h-6 items-center px-4">
           <p className="text-sm font-normal leading-[16.5px] text-white/50">
             Your Houses
           </p>
@@ -108,7 +85,7 @@ export function NotificationsView({
             [0, 1].map((index) => (
               <div
                 key={index}
-                className="flex w-full items-center gap-4 border-b border-white/15 px-8 py-6"
+                className="flex w-full items-center gap-4 border-b border-white/15 px-4 py-6"
                 aria-hidden
               >
                 <div className="size-10 shrink-0 animate-pulse rounded-full bg-white/10" />
@@ -119,7 +96,7 @@ export function NotificationsView({
               </div>
             ))}
           {houses.isError && (
-            <p className="px-8 py-6 text-sm leading-5 text-white/50">
+            <p className="px-4 py-6 text-sm leading-5 text-white/50">
               Couldn&apos;t load your houses.{" "}
               <button
                 type="button"
@@ -131,15 +108,15 @@ export function NotificationsView({
             </p>
           )}
           {houses.isSuccess && rows.length === 0 && (
-            <p className="px-8 py-6 text-sm leading-5 text-white/50">
+            <p className="px-4 py-6 text-sm leading-5 text-white/50">
               You&apos;re not in any houses yet.
             </p>
           )}
           {rows.map((house) => (
             <button
               key={house.id}
-              onClick={() => setActiveHouse(house.id)}
-              className="flex w-full items-center justify-between border-b border-white/15 px-8 py-6 text-left transition-colors hover:bg-white/[0.03]"
+              onClick={() => onOpenHouse({ id: house.id, title: house.title ?? "Untitled house" })}
+              className="flex w-full items-center justify-between border-b border-white/15 px-4 py-6 text-left transition-colors hover:bg-white/[0.03]"
             >
               <div className="flex min-w-0 items-center gap-4">
                 <Avatar name={house.title ?? "House"} seed={house.id} src={house.imageUrl} size={40} />
@@ -163,7 +140,7 @@ export function NotificationsView({
               type="button"
               onClick={() => void houses.fetchNextPage()}
               disabled={houses.isFetchingNextPage}
-              className="px-8 py-4 text-left text-sm font-semibold text-white/50 transition-colors hover:text-white disabled:opacity-40"
+              className="px-4 py-4 text-left text-sm font-semibold text-white/50 transition-colors hover:text-white disabled:opacity-40"
             >
               {houses.isFetchingNextPage ? "Loading…" : "More houses"}
             </button>

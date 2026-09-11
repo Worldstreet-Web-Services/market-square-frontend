@@ -301,10 +301,7 @@ const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
 function isWide(pathname: string): boolean {
   return (
     WIDE_EXACT.includes(pathname) ||
-    WIDE_PREFIX.some((prefix) => pathname.startsWith(prefix)) ||
-    // /u/[username]/settings has its own two-column master-detail layout,
-    // so it needs the full width the right rail would otherwise take.
-    /^\/u\/[^/]+\/settings$/.test(pathname)
+    WIDE_PREFIX.some((prefix) => pathname.startsWith(prefix))
   );
 }
 

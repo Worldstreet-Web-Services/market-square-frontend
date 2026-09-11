@@ -1,17 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { SignInPrompt } from "@/components/ui/states";
 import { Toggle } from "@/components/ui/toggle";
+import { ColumnHeader } from "@/components/layout/column-header";
 import { ChatView } from "@/components/layout/chat-view";
 import { SAVING_SOON, SETTINGS_SAVE_LIVE } from "@/components/layout/settings-copy";
 import { NotificationsView } from "@/components/layout/notifications-view";
 import {
-  IconArrowLeft,
+  HouseNotificationsView,
+  type GistroomNotifFrom,
+  type MessageNotifFrom,
+} from "@/components/layout/house-notifications-view";
+import {
   IconCheckbox,
   IconCheckboxChecked,
   IconCheckCircle,
@@ -22,6 +27,18 @@ import {
   IconSettingsChevron,
   IconExternalLink,
 } from "@/components/ui/icons";
+
+/*
+  SETTINGS SIT IN THE SAME COLUMN AS HOME.
+
+  It was a WIDE route with its own two-column master-detail layout and its own
+  24px headings, so it spread past the column and dropped the right rail —
+  "it look as if it is wider, even the heading is not using the normal
+  header". Now it is the 600 column with the rail beside it, opened by the
+  shared `ColumnHeader`, and it drills in one level at a time: the menu, a
+  section, a sub-page. The header's back arrow steps back up those levels, and
+  from the menu itself leaves the page like every other column surface.
+*/
 
 // ---------------------------------------------------------------------------
 // Types & data
@@ -80,39 +97,39 @@ const LOCATION_CHOICES: Array<{ key: LocationChoice; label: string }> = [
   { key: "continent", label: "Continent" },
 ];
 
+const HELP_TITLES: Record<Exclude<HelpView, "main">, string> = {
+  terms: "Terms of Service",
+  "privacy-policy": "Privacy Policy",
+  "community-guidelines": "Community Guidelines",
+};
+
 // ---------------------------------------------------------------------------
 // Shared sub-components
 // ---------------------------------------------------------------------------
 
-/** A menu row in the left column — 81px tall, icon circle + text + chevron. */
+/** A menu row — 81px tall, icon circle + text + chevron. */
 function MenuRow({
   section,
-  isActive,
   onClick,
 }: {
   section: (typeof SECTIONS)[number];
-  isActive: boolean;
   onClick: () => void;
 }) {
   const Icon = section.icon;
   return (
     <button
       onClick={onClick}
-      aria-current={isActive ? "true" : undefined}
-      className={cn(
-        "flex h-[81px] w-full items-center justify-between border-b border-white/15 p-6 text-left transition-colors hover:bg-white/[0.03] lg:px-8",
-        isActive && "bg-white/[0.03]",
-      )}
+      className="flex h-[81px] w-full items-center justify-between border-b border-white/15 px-4 py-6 text-left transition-colors hover:bg-white/[0.03]"
     >
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-4">
         <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/10">
           <Icon className={cn(section.iconSize, "text-create")} />
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2">
           <p className="text-base font-bold leading-4 text-white">
             {section.title}
           </p>
-          <p className="text-[13px] font-normal leading-5 text-white/50 lg:text-sm lg:leading-[16.5px]">
+          <p className="text-[13px] font-normal leading-5 text-white/50">
             {section.description}
           </p>
         </div>
@@ -122,7 +139,7 @@ function MenuRow({
   );
 }
 
-/** A detail row in the right column — text block + trailing control. */
+/** A detail row — text block + trailing control. */
 function DetailRow({
   title,
   description,
@@ -139,41 +156,18 @@ function DetailRow({
     <Tag
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-4 border-b border-white/15 px-8 py-6 text-left",
+        "flex w-full items-center gap-4 border-b border-white/15 px-4 py-6 text-left",
         onClick && "transition-colors hover:bg-white/[0.03]",
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-2 pr-4">
         <p className="text-base font-bold leading-6 text-white">{title}</p>
-        <p className="text-[13px] font-normal leading-5 text-white/50 lg:text-sm lg:leading-[16.5px]">
+        <p className="text-[13px] font-normal leading-5 text-white/50">
           {description}
         </p>
       </div>
       <div className="shrink-0">{trailing}</div>
     </Tag>
-  );
-}
-
-/** Back header for sub-views — desktop only. On mobile the SettingsScreen
-    renders its own single back button that handles all navigation. */
-function BackHeader({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <div className="hidden items-center gap-2 px-8 pt-10 pb-6 lg:flex">
-      <button
-        onClick={onClick}
-        aria-label={`Back to ${label}`}
-        className="flex items-center gap-2 text-white transition-colors hover:text-white/70"
-      >
-        <IconArrowLeft className="size-5" />
-        <span className="text-base font-normal">Back</span>
-      </button>
-    </div>
   );
 }
 
@@ -251,38 +245,33 @@ function PrivacyMain({
 function LocationView({
   locationChoice,
   onLocationChoiceChange,
-  onBack,
 }: {
   locationChoice: LocationChoice;
   onLocationChoiceChange: (v: LocationChoice) => void;
-  onBack: () => void;
 }) {
   return (
-    <div>
-      <BackHeader label="Privacy & Security" onClick={onBack} />
-      <div className="flex flex-col">
-        {LOCATION_CHOICES.map((choice) => {
-          const checked = locationChoice === choice.key;
-          return (
-            <button
-              key={choice.key}
-              onClick={() => onLocationChoiceChange(choice.key)}
-              disabled={!SETTINGS_SAVE_LIVE}
-              title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
-              className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
-            >
-              <p className="text-base font-bold leading-6 text-white">
-                {choice.label}
-              </p>
-              {checked ? (
-                <IconCheckboxChecked className="size-4 text-spotlight" />
-              ) : (
-                <IconCheckbox className="size-4 text-white/50" />
-              )}
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex flex-col">
+      {LOCATION_CHOICES.map((choice) => {
+        const checked = locationChoice === choice.key;
+        return (
+          <button
+            key={choice.key}
+            onClick={() => onLocationChoiceChange(choice.key)}
+            disabled={!SETTINGS_SAVE_LIVE}
+            title={SETTINGS_SAVE_LIVE ? undefined : SAVING_SOON}
+            className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+          >
+            <p className="text-base font-bold leading-6 text-white">
+              {choice.label}
+            </p>
+            {checked ? (
+              <IconCheckboxChecked className="size-4 text-spotlight" />
+            ) : (
+              <IconCheckbox className="size-4 text-white/50" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -410,7 +399,7 @@ function PlanCard({ plan }: { plan: Plan }) {
 
 function SubscriptionDetail() {
   return (
-    <div className="flex flex-col gap-6 px-8 py-6">
+    <div className="flex flex-col gap-6 px-4 py-6">
       {PLANS.map((plan) => (
         <PlanCard key={plan.name} plan={plan} />
       ))}
@@ -440,7 +429,11 @@ function HelpCentreMain({ onNavigate }: { onNavigate: (v: HelpView) => void }) {
         <button
           key={row.label}
           onClick={() => row.view && onNavigate(row.view)}
-          className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-4 text-left transition-colors hover:bg-white/[0.03]"
+          // Contact us has no destination yet (a support address and account
+          // are still to be chosen), so it is inert rather than a dead tap.
+          disabled={!row.view}
+          title={row.view ? undefined : "Coming soon"}
+          className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
         >
           <p className="text-base font-bold leading-6 text-white">
             {row.label}
@@ -456,19 +449,13 @@ function HelpCentreMain({ onNavigate }: { onNavigate: (v: HelpView) => void }) {
   );
 }
 
-function TermsOfServiceView({ onBack }: { onBack: () => void }) {
+function TermsOfServiceView() {
   return (
     <div>
-      <BackHeader label="Help Centre" onClick={onBack} />
-      <div className="flex flex-col gap-2 px-8">
-        <h3 className="text-[24px] font-semibold leading-normal text-white">
-          Terms of Service
-        </h3>
-        <p className="text-sm leading-[16.5px] text-white/50">
-          Created on 8 September, 2026
-        </p>
-      </div>
-      <div className="px-8 pt-8 pb-12 text-[15px] font-normal leading-6 text-white">
+      <p className="px-4 pt-6 text-sm leading-[16.5px] text-white/50">
+        Created on 8 September, 2026
+      </p>
+      <div className="px-4 pt-6 pb-12 text-[15px] font-normal leading-6 text-white">
         <p className="mb-4 font-bold">1. Acceptance of Terms</p>
         <p className="mb-4">
           By accessing or using Square, Market Square, or Gistrooms
@@ -556,134 +543,11 @@ function TermsOfServiceView({ onBack }: { onBack: () => void }) {
   );
 }
 
-function HelpSubView({
-  title,
-  onBack,
-}: {
-  title: string;
-  onBack: () => void;
-}) {
+function HelpSubView() {
   return (
-    <div>
-      <BackHeader label="Help Centre" onClick={onBack} />
-      <div className="flex flex-col items-center justify-center px-8 py-16">
-        <p className="text-lg font-semibold text-white">{title}</p>
-        <p className="mt-2 text-sm text-white/50">Coming soon</p>
-      </div>
+    <div className="flex flex-col items-center justify-center px-4 py-16">
+      <p className="text-sm text-white/50">Coming soon</p>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Detail panel router
-// ---------------------------------------------------------------------------
-
-function DetailPanel({
-  section,
-  personalizePlaces,
-  onPersonalizePlacesChange,
-  visibilityOnSpace,
-  onVisibilityOnSpaceChange,
-  privacyView,
-  onPrivacyViewChange,
-  locationChoice,
-  onLocationChoiceChange,
-  helpView,
-  onHelpViewChange,
-  chatMessagesFrom,
-  onChatMessagesFromChange,
-  chatAllowHouseMembers,
-  onChatAllowHouseMembersChange,
-  chatAllowPastAudience,
-  onChatAllowPastAudienceChange,
-  friendsRoom,
-  onFriendsRoomChange,
-  directNotifications,
-  onDirectNotificationsChange,
-}: {
-  section: Section;
-  personalizePlaces: boolean;
-  onPersonalizePlacesChange: (v: boolean) => void;
-  visibilityOnSpace: boolean;
-  onVisibilityOnSpaceChange: (v: boolean) => void;
-  privacyView: PrivacyView;
-  onPrivacyViewChange: (v: PrivacyView) => void;
-  locationChoice: LocationChoice;
-  onLocationChoiceChange: (v: LocationChoice) => void;
-  helpView: HelpView;
-  onHelpViewChange: (v: HelpView) => void;
-  chatMessagesFrom: ChatMessagesFrom;
-  onChatMessagesFromChange: (v: ChatMessagesFrom) => void;
-  chatAllowHouseMembers: boolean;
-  onChatAllowHouseMembersChange: (v: boolean) => void;
-  chatAllowPastAudience: boolean;
-  onChatAllowPastAudienceChange: (v: boolean) => void;
-  friendsRoom: boolean;
-  onFriendsRoomChange: (v: boolean) => void;
-  directNotifications: boolean;
-  onDirectNotificationsChange: (v: boolean) => void;
-}) {
-  if (section === "privacy") {
-    if (privacyView === "location") {
-      return (
-        <LocationView
-          locationChoice={locationChoice}
-          onLocationChoiceChange={onLocationChoiceChange}
-          onBack={() => onPrivacyViewChange("main")}
-        />
-      );
-    }
-    if (privacyView === "chat") {
-      return (
-        <ChatView
-          messagesFrom={chatMessagesFrom}
-          onMessagesFromChange={onChatMessagesFromChange}
-          allowHouseMembers={chatAllowHouseMembers}
-          onAllowHouseMembersChange={onChatAllowHouseMembersChange}
-          allowPastAudience={chatAllowPastAudience}
-          onAllowPastAudienceChange={onChatAllowPastAudienceChange}
-          onBack={() => onPrivacyViewChange("main")}
-          disabled={!SETTINGS_SAVE_LIVE}
-        />
-      );
-    }
-    return (
-      <PrivacyMain
-        personalizePlaces={personalizePlaces}
-        onPersonalizePlacesChange={onPersonalizePlacesChange}
-        visibilityOnSpace={visibilityOnSpace}
-        onVisibilityOnSpaceChange={onVisibilityOnSpaceChange}
-        onOpenLocation={() => onPrivacyViewChange("location")}
-        onOpenChat={() => onPrivacyViewChange("chat")}
-      />
-    );
-  }
-
-  if (section === "subscription") {
-    return <SubscriptionDetail />;
-  }
-
-  if (section === "help") {
-    if (helpView === "terms") {
-      return <TermsOfServiceView onBack={() => onHelpViewChange("main")} />;
-    }
-    if (helpView === "privacy-policy") {
-      return <HelpSubView title="Privacy Policy" onBack={() => onHelpViewChange("main")} />;
-    }
-    if (helpView === "community-guidelines") {
-      return <HelpSubView title="Community Guidelines" onBack={() => onHelpViewChange("main")} />;
-    }
-    return <HelpCentreMain onNavigate={onHelpViewChange} />;
-  }
-
-  return (
-    <NotificationsView
-      friendsRoom={friendsRoom}
-      onFriendsRoomChange={onFriendsRoomChange}
-      directNotifications={directNotifications}
-      onDirectNotificationsChange={onDirectNotificationsChange}
-      disabled={!SETTINGS_SAVE_LIVE}
-    />
   );
 }
 
@@ -706,9 +570,11 @@ export function SettingsScreen({ username }: { username: string }) {
       router.replace(`/u/${me.data.username}/settings`);
     }
   }, [me.data, username, router]);
+
   const [active, setActive] = useState<Section | null>(null);
   const [privacyView, setPrivacyView] = useState<PrivacyView>("main");
   const [helpView, setHelpView] = useState<HelpView>("main");
+  const [house, setHouse] = useState<{ id: string; title: string } | null>(null);
   const [personalizePlaces, setPersonalizePlaces] = useState(true);
   const [visibilityOnSpace, setVisibilityOnSpace] = useState(true);
   const [locationChoice, setLocationChoice] =
@@ -719,134 +585,139 @@ export function SettingsScreen({ username }: { username: string }) {
     useState<ChatMessagesFrom>("everyone");
   const [chatAllowHouseMembers, setChatAllowHouseMembers] = useState(false);
   const [chatAllowPastAudience, setChatAllowPastAudience] = useState(false);
+  const [houseMessagesFrom, setHouseMessagesFrom] =
+    useState<MessageNotifFrom>("admins");
+  const [houseGistroomsFrom, setHouseGistroomsFrom] =
+    useState<GistroomNotifFrom>("admins");
 
-  // Reset privacy sub-navigation when leaving privacy
-  const selectSection = useCallback(
-    (next: Section | null) => {
-      if (next !== "privacy") setPrivacyView("main");
-      if (next !== "help") setHelpView("main");
-      setActive(next);
-    },
-    [],
-  );
+  const openSection = (next: Section) => {
+    setPrivacyView("main");
+    setHelpView("main");
+    setHouse(null);
+    setActive(next);
+    window.scrollTo({ top: 0 });
+  };
 
-  const activeSection = SECTIONS.find((s) => s.key === active);
-
-  /** The right-column title — accounts for privacy sub-views. */
-  const rightTitle =
-    (active === "privacy" && privacyView !== "main") ||
-    (active === "help" && helpView !== "main")
-      ? null // sub-views have their own back header
-      : activeSection?.title ?? "Settings";
+  /** One level up: sub-page → section → the menu. */
+  const stepBack = () => {
+    if (house) setHouse(null);
+    else if (active === "privacy" && privacyView !== "main") setPrivacyView("main");
+    else if (active === "help" && helpView !== "main") setHelpView("main");
+    else setActive(null);
+    window.scrollTo({ top: 0 });
+  };
 
   if (ready && !authenticated) {
     return (
-      <div className="px-6 py-10 lg:px-8">
-        <SignInPrompt
-          title="Sign in to see your settings"
-          body="Your notifications, privacy and plan live here."
-        />
-      </div>
+      <>
+        <ColumnHeader title="Settings" back />
+        <div className="px-4 py-6">
+          <SignInPrompt
+            title="Sign in to see your settings"
+            body="Your notifications, privacy and plan live here."
+          />
+        </div>
+      </>
     );
   }
 
+  const title =
+    active === null
+      ? "Settings"
+      : active === "notifications" && house
+        ? house.title
+        : active === "privacy" && privacyView === "location"
+          ? "Location"
+          : active === "privacy" && privacyView === "chat"
+            ? "Chat"
+            : active === "help" && helpView !== "main"
+              ? HELP_TITLES[helpView]
+              : (SECTIONS.find((section) => section.key === active)?.title ?? "Settings");
+  const subtitle = active === "notifications" && house ? "House notifications" : undefined;
+
   return (
-    <div className="flex h-[calc(92dvh-var(--ws-crumb-h))] min-h-0 flex-1">
-      {/* ---- Left column: settings menu (fixed, never scrolls) ---- */}
-      <div
-        className={cn(
-          "w-full shrink-0",
-          active != null
-            ? "hidden lg:block lg:max-w-[600px] lg:border-r lg:border-white/10"
-            : "block",
-        )}
-      >
-        <div className="px-6 pt-6 pb-[26px] lg:px-8 lg:pt-10 lg:pb-[42px]">
-          <h1 className="text-[24px] font-semibold leading-normal text-white">Settings</h1>
-        </div>
-        <nav className={cn("flex flex-col", active == null && "gap-4")} aria-label="Settings">
+    <>
+      <ColumnHeader
+        title={title}
+        subtitle={subtitle}
+        back
+        // From the menu the arrow leaves the page, as on every column
+        // surface; inside a section it climbs back up one level.
+        onBack={active === null ? undefined : stepBack}
+      />
+
+      {active === null ? (
+        <nav className="flex flex-col gap-4" aria-label="Settings">
           {SECTIONS.map((section) => (
-            <MenuRow
-              key={section.key}
-              section={section}
-              isActive={active === section.key}
-              onClick={() => selectSection(section.key)}
-            />
+            <MenuRow key={section.key} section={section} onClick={() => openSection(section.key)} />
           ))}
         </nav>
-      </div>
-
-      {/* ---- Right column: detail panel ---- */}
-      {active != null ? (
-        <div className="block w-full min-w-0 flex-1 overflow-y-auto">
-          {/* Mobile back — always visible, handles all navigation */}
-          <div className="lg:hidden">
-            <div className="flex items-center gap-2 px-6 pt-6 pb-4">
-              <button
-                onClick={() => {
-                  if (active === "privacy" && privacyView !== "main") {
-                    setPrivacyView("main");
-                  } else if (active === "help" && helpView !== "main") {
-                    setHelpView("main");
-                  } else {
-                    selectSection(null);
-                  }
-                }}
-                aria-label="Back"
-                className="flex items-center gap-2 text-white transition-colors hover:text-white/70"
-              >
-                <IconArrowLeft className="size-5" />
-                <span className="text-base font-normal">Back</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Desktop header — hidden when location sub-view (it has its own back header) */}
-          {rightTitle != null && (
-            <div className="hidden px-8 pt-10 pb-[42px] lg:block">
-              <h2 className="text-[24px] font-semibold leading-normal text-white">{rightTitle}</h2>
-            </div>
-          )}
-
-          {/* Mobile section title — 20px on mobile per Figma */}
-          {rightTitle != null && (
-            <div className="px-6 pb-6 lg:hidden">
-              <h2 className="text-xl font-semibold leading-normal text-white">{rightTitle}</h2>
-            </div>
-          )}
-
+      ) : (
+        <div className="flex flex-col pb-10">
           {/* One quiet line, only where there are controls that cannot save. */}
           {!SETTINGS_SAVE_LIVE && (active === "notifications" || active === "privacy") && (
-            <p className="px-6 pb-4 text-[13px] leading-5 text-white/50 lg:px-8">
+            <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
               Saving these settings is coming soon.
             </p>
           )}
 
-          <DetailPanel
-            section={active}
-            personalizePlaces={personalizePlaces}
-            onPersonalizePlacesChange={setPersonalizePlaces}
-            visibilityOnSpace={visibilityOnSpace}
-            onVisibilityOnSpaceChange={setVisibilityOnSpace}
-            privacyView={privacyView}
-            onPrivacyViewChange={setPrivacyView}
-            locationChoice={locationChoice}
-            onLocationChoiceChange={setLocationChoice}
-            helpView={helpView}
-            onHelpViewChange={setHelpView}
-            chatMessagesFrom={chatMessagesFrom}
-            onChatMessagesFromChange={setChatMessagesFrom}
-            chatAllowHouseMembers={chatAllowHouseMembers}
-            onChatAllowHouseMembersChange={setChatAllowHouseMembers}
-            chatAllowPastAudience={chatAllowPastAudience}
-            onChatAllowPastAudienceChange={setChatAllowPastAudience}
-            friendsRoom={friendsRoom}
-            onFriendsRoomChange={setFriendsRoom}
-            directNotifications={directNotifications}
-            onDirectNotificationsChange={setDirectNotifications}
-          />
+          {active === "subscription" && <SubscriptionDetail />}
+
+          {active === "notifications" &&
+            (house ? (
+              <HouseNotificationsView
+                messagesFrom={houseMessagesFrom}
+                onMessagesFromChange={setHouseMessagesFrom}
+                gistroomsFrom={houseGistroomsFrom}
+                onGistroomsFromChange={setHouseGistroomsFrom}
+                disabled={!SETTINGS_SAVE_LIVE}
+              />
+            ) : (
+              <NotificationsView
+                friendsRoom={friendsRoom}
+                onFriendsRoomChange={setFriendsRoom}
+                directNotifications={directNotifications}
+                onDirectNotificationsChange={setDirectNotifications}
+                onOpenHouse={(next) => {
+                  setHouse(next);
+                  window.scrollTo({ top: 0 });
+                }}
+                disabled={!SETTINGS_SAVE_LIVE}
+              />
+            ))}
+
+          {active === "privacy" && privacyView === "location" && (
+            <LocationView locationChoice={locationChoice} onLocationChoiceChange={setLocationChoice} />
+          )}
+          {active === "privacy" && privacyView === "chat" && (
+            <ChatView
+              messagesFrom={chatMessagesFrom}
+              onMessagesFromChange={setChatMessagesFrom}
+              allowHouseMembers={chatAllowHouseMembers}
+              onAllowHouseMembersChange={setChatAllowHouseMembers}
+              allowPastAudience={chatAllowPastAudience}
+              onAllowPastAudienceChange={setChatAllowPastAudience}
+              disabled={!SETTINGS_SAVE_LIVE}
+            />
+          )}
+          {active === "privacy" && privacyView === "main" && (
+            <PrivacyMain
+              personalizePlaces={personalizePlaces}
+              onPersonalizePlacesChange={setPersonalizePlaces}
+              visibilityOnSpace={visibilityOnSpace}
+              onVisibilityOnSpaceChange={setVisibilityOnSpace}
+              onOpenLocation={() => setPrivacyView("location")}
+              onOpenChat={() => setPrivacyView("chat")}
+            />
+          )}
+
+          {active === "help" && helpView === "main" && <HelpCentreMain onNavigate={setHelpView} />}
+          {active === "help" && helpView === "terms" && <TermsOfServiceView />}
+          {active === "help" && (helpView === "privacy-policy" || helpView === "community-guidelines") && (
+            <HelpSubView />
+          )}
         </div>
-      ) : null}
-    </div>
+      )}
+    </>
   );
 }

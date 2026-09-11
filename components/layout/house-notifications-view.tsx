@@ -1,7 +1,6 @@
 "use client";
 
 import { Toggle } from "@/components/ui/toggle";
-import { IconArrowLeft } from "@/components/ui/icons";
 import { SAVING_SOON } from "@/components/layout/settings-copy";
 
 // ---------------------------------------------------------------------------
@@ -22,40 +21,27 @@ export function HouseNotificationsView({
   onMessagesFromChange,
   gistroomsFrom,
   onGistroomsFromChange,
-  onBack,
   disabled = false,
 }: {
   messagesFrom: MessageNotifFrom;
   onMessagesFromChange: (v: MessageNotifFrom) => void;
   gistroomsFrom: GistroomNotifFrom;
   onGistroomsFromChange: (v: GistroomNotifFrom) => void;
-  onBack: () => void;
   /** The levels cannot be saved yet — see `settings-copy.ts`. */
   disabled?: boolean;
 }) {
   return (
     <div>
-      {/* Back header */}
-      <div className="hidden items-center gap-2 px-8 pt-10 pb-6 lg:flex">
-        <button
-          onClick={onBack}
-          aria-label="Back to Notifications"
-          className="flex items-center gap-2 text-white transition-colors hover:text-white/70"
-        >
-          <IconArrowLeft className="size-5" />
-          <span className="text-base font-normal">Back</span>
-        </button>
-      </div>
 
       {/* Section: Message notifications from */}
-      <div className="flex flex-col gap-2">
-        <div className="flex h-6 items-center px-8">
+      <div className="flex flex-col gap-2 pt-4">
+        <div className="flex h-6 items-center px-4">
           <p className="text-sm font-normal leading-[16.5px] text-white/50">
             Message notifications from
           </p>
         </div>
         <div className="flex flex-col">
-          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
+          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">All members</p>
             <Toggle
               disabled={disabled}
@@ -65,7 +51,7 @@ export function HouseNotificationsView({
               label="Message notifications from all members"
             />
           </div>
-          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
+          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">
               Admins, leaders and friends
             </p>
@@ -77,7 +63,7 @@ export function HouseNotificationsView({
               label="Message notifications from admins, leaders and friends"
             />
           </div>
-          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
+          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">None</p>
             <Toggle
               disabled={disabled}
@@ -92,13 +78,13 @@ export function HouseNotificationsView({
 
       {/* Section: Gistrooms and updates notifications from */}
       <div className="mt-10 flex flex-col gap-2">
-        <div className="flex h-6 items-center px-8">
+        <div className="flex h-6 items-center px-4">
           <p className="text-sm font-normal leading-[16.5px] text-white/50">
             Gistrooms and updates notifications from
           </p>
         </div>
         <div className="flex flex-col">
-          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
+          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">All members</p>
             <Toggle
               disabled={disabled}
@@ -108,7 +94,7 @@ export function HouseNotificationsView({
               label="Gistroom notifications from all members"
             />
           </div>
-          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
+          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">
               Admins, leaders and friends
             </p>
@@ -120,7 +106,7 @@ export function HouseNotificationsView({
               label="Gistroom notifications from admins, leaders and friends"
             />
           </div>
-          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
+          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">
               Only directed at me
             </p>
@@ -132,7 +118,7 @@ export function HouseNotificationsView({
               label="Gistroom notifications only directed at me"
             />
           </div>
-          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-8 py-6">
+          <div className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-6">
             <p className="text-base font-bold leading-6 text-white">None</p>
             <Toggle
               disabled={disabled}

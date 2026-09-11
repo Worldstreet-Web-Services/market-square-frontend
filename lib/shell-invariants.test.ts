@@ -1524,3 +1524,18 @@ describe("Settings controls never pretend to save", () => {
   });
 });
 
+describe("Settings sits in Home's column, under the shared header", () => {
+  it("is not a wide route, so the column and the right rail match Home", () => {
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    assert.doesNotMatch(shell.slice(shell.indexOf("function isWide"), shell.indexOf("function isWide") + 400), /settings/);
+  });
+
+  it("opens with ColumnHeader, whose back arrow climbs the settings levels", () => {
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /<ColumnHeader\s+title=\{title\}\s+subtitle=\{subtitle\}\s+back\s+onBack=\{active === null \? undefined : stepBack\}/);
+    assert.doesNotMatch(screen, /<h1|lg:max-w-\[600px\]|92dvh/, "settings draws its own heading or its own wide layout again");
+    const header = stripComments(read("components/layout/column-header.tsx"));
+    assert.match(header, /onClick=\{\(\) => \(onBack \? onBack\(\) : canGoBack\(\) \? router\.back\(\) : router\.push\(backFallback\)\)\}/);
+  });
+});
+
