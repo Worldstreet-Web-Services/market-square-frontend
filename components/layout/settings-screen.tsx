@@ -71,7 +71,9 @@ const SECTIONS: Array<{
   {
     key: "notifications",
     title: "Notifications",
-    description: "Customize push, email, and live room activity alerts.",
+    // In-app only: Square has no push or email delivery (confirmed with the
+    // service), so the row does not promise channels that do not exist.
+    description: "Customize in-app and live room activity alerts.",
     icon: IconSettingsBell,
     iconSize: "size-6",
   },

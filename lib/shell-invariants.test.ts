@@ -1626,6 +1626,8 @@ describe("Contact us opens a chat with support", () => {
     assert.match(read("lib/support.ts"), /export const SUPPORT_EMAIL = "support@tsionark\.com";/);
     assert.match(screen, /href=\{`mailto:\$\{SUPPORT_EMAIL\}`\}/);
     assert.match(screen, /\{ label: "Contact us", view: "contact" \}/);
+    // No push or email delivery exists, so Notifications must not promise it.
+    assert.doesNotMatch(screen, /push, email/);
   });
 });
 
