@@ -1540,7 +1540,9 @@ describe("Settings sits in Home's column, under the shared header", () => {
   it("fills Home's frame without the right rail: not wide, but full", () => {
     const shell = stripComments(read("components/layout/app-shell.tsx"));
     assert.doesNotMatch(shell.slice(shell.indexOf("function isWide"), shell.indexOf("function isWide") + 400), /settings/);
-    assert.ok(shell.includes("const FULL_PATTERNS = [/^\\/u\\/[^/]+\\/settings$/];"), "settings is no longer a full route");
+    assert.ok(shell.includes("/^\\/u\\/[^/]+\\/settings$/,"), "settings is no longer a full route");
+    assert.ok(shell.includes("/^\\/messages$/,"), "chat is no longer held to Home's frame");
+    assert.doesNotMatch(shell, /const WIDE_EXACT = \[[^\]]*"\/messages"/, "chat spreads to the window's edges again");
     assert.match(shell, /!wide && \(full \? "max-w-\[600px\] lg:max-w-\[971px\] lg:pr-6" : "max-w-\[600px\]"\)/);
     assert.match(shell, /\{!wide && !full && <RightRail \/>\}/);
   });

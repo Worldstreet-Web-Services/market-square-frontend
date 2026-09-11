@@ -280,10 +280,11 @@ function visibleNav(options: {
   );
 }
 
-// Messages is two panes side by side — the conversation list and the thread
-// it opens — so it needs the width a right rail would take. On a phone the
-// panes swap instead, which is why only the exact path is wide.
-const WIDE_EXACT = ["/store", "/operations", "/messages"];
+// Messages is NOT here any more: it is two panes (the list and the thread it
+// opens) and needs the rail's width, but spreading to the window's edges read
+// as wider than Home ("the chat self is not using the max width like home").
+// It is a FULL route instead — see FULL_PATTERNS.
+const WIDE_EXACT = ["/store", "/operations"];
 /*
   `/gist-rooms/:id` joins the wide set.
 
@@ -307,7 +308,12 @@ const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
   frame: the page starts on the logo's line and ends where the bar's controls
   do. Below lg there is no rail anyway, and the 600 column is unchanged.
 */
-const FULL_PATTERNS = [/^\/u\/[^/]+\/settings$/];
+const FULL_PATTERNS = [
+  /^\/u\/[^/]+\/settings$/,
+  // Chat's two panes: the fixed 464 list beside the thread, inside Home's
+  // frame. Only the exact path — on a phone the panes swap.
+  /^\/messages$/,
+];
 
 function isFull(pathname: string): boolean {
   return FULL_PATTERNS.some((pattern) => pattern.test(pathname));
