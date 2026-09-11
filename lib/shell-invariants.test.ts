@@ -1378,3 +1378,13 @@ describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () =>
     assert.match(tabs, /bg-\[linear-gradient\(226deg,#7E3BEB_22\.4%,#472185_84\.9%\)\] text-grey-100/);
   });
 });
+
+describe("The Home banner speaks gist room for now", () => {
+  it("says gist room and opens the gist room sheet, not the studio", () => {
+    const cta = stripComments(read("features/streams/components/live-cta.tsx"));
+    assert.equal((cta.match(/Open a gist room now and/g) ?? []).length, 2);
+    assert.equal((cta.match(/href="\/gist-rooms\?open=1"/g) ?? []).length, 2);
+    assert.doesNotMatch(cta, />\s*Go Live\s*</, "the banner says Go Live again");
+    assert.doesNotMatch(cta, /href="\/studio"/);
+  });
+});

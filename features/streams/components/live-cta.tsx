@@ -56,14 +56,15 @@ export function LiveCta() {
           className="pointer-events-none absolute left-5 top-1/2 h-[49px] w-[47px] -translate-y-1/2 select-none object-contain"
         />
         <p className="min-w-0 flex-1 text-[14px] font-semibold leading-[16.15px] text-white">
-          Build your audience live Stream now and
+          {/* Gist-room copy for now, not go-live (ogazboiz). */}
+          Open a gist room now and
           <br className="hidden sm:inline" /> watch your community grow instantly.
         </p>
         <Link
-          href="/studio"
+          href="/gist-rooms?open=1"
           className="ws-press ml-3 flex h-6 shrink-0 items-center rounded-full bg-white px-3 text-[12px] font-bold leading-none text-black transition-opacity hover:opacity-90"
         >
-          Go Live
+          Gist Room
         </Link>
       </div>
 
@@ -91,14 +92,14 @@ export function LiveCta() {
               style={{ left: u(171), top: u(64), width: u(407), height: u(39), fontSize: u(20.769), lineHeight: u(23.965) }}
             >
               <span>
-                Build your audience live Stream now and
+                Open a gist room now and
                 <br />
                 watch your community grow instantly.
               </span>
             </p>
 
             <Link
-              href="/studio"
+              href="/gist-rooms?open=1"
               className="ws-press absolute flex items-center justify-center rounded-full bg-white font-bold text-[#682A98] transition-opacity hover:opacity-90"
               style={{
                 left: u(756),
@@ -110,7 +111,7 @@ export function LiveCta() {
                 boxShadow: `0 ${u(1.713)} ${u(3.425)} ${u(-1.713)} rgba(0,0,0,0.1), 0 ${u(1.713)} ${u(5.138)} 0 rgba(0,0,0,0.1)`,
               }}
             >
-              Go Live
+              Gist Room
             </Link>
 
             {/* 677:18734 — the figure over its blurred shadow. */}
