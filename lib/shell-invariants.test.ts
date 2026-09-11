@@ -1515,15 +1515,20 @@ describe("Settings controls never pretend to save", () => {
   it("saves Notifications and Chat through /me/settings, and keeps the later stages disabled", () => {
     const copy = read("components/layout/settings-copy.ts");
     assert.doesNotMatch(copy, /HOUSE_SAVE_LIVE/, 'a house is live from its own query now');
-    assert.match(copy, /export const PRIVACY_SAVE_LIVE = false;/);
+    assert.doesNotMatch(copy, /PRIVACY_SAVE_LIVE/, "privacy is live from the settings payload now");
     const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /const stage3 = Boolean\(privacy\);/);
+    assert.match(screen, /onPrecisionChange=\{\(value\) => save\.mutate\(\{ privacy: \{ locationPrecision: value \} \}\)\}/);
+    assert.match(screen, /onCountryChange=\{\(code\) => updateMe\.mutate\(\{ country: code \}\)\}/);
+    assert.match(screen, /onVisibilityOnSpaceChange=\{\(value\) => save\.mutate\(\{ privacy: \{ showListening: value \} \}\)\}/);
+    assert.doesNotMatch(screen, /locations you visit/, "the service only uses the place on the profile");
     assert.match(screen, /const settingsLive = settings\.isSuccess;/);
     assert.match(screen, /onFriendsRoomChange=\{\(value\) => save\.mutate\(\{ notifications: \{ friendsRooms: value \} \}\)\}/);
     assert.match(screen, /onMessagesFromChange=\{\(value\) => save\.mutate\(\{ chat: \{ messagesFrom: value \} \}\)\}/);
     assert.match(screen, /onMessagesFromChange=\{\(value\) => saveHouse\.mutate\(\{ messages: value \}\)\}/);
     assert.match(screen, /onGistroomsFromChange=\{\(value\) => saveHouse\.mutate\(\{ rooms: value \}\)\}/);
     assert.match(screen, /disabled=\{!houseSettings\.isSuccess\}/);
-    assert.equal((screen.match(/<Toggle\s+disabled=\{!PRIVACY_SAVE_LIVE\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
+    assert.equal((screen.match(/<Toggle\s+disabled=\{(personalizeDisabled|visibilityDisabled)\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
     for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
       const source = read(`components/layout/${file}.tsx`);
       assert.equal((source.match(/<Toggle\s+disabled=\{disabled\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
@@ -1594,6 +1599,19 @@ describe("A house's notification levels and the house_room notification", () => 
     const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
     assert.match(types, /"house_room",/);
     assert.equal((page.match(/case "house_room":/g) ?? []).length, 2);
+  });
+});
+
+describe("A person's place respects how much they share", () => {
+  it("draws the profile's place line from whichever halves arrived", () => {
+    const page = stripComments(read("features/profile/components/profile-page.tsx"));
+    assert.match(page, /\{placeLine\(data\)\}/);
+    assert.doesNotMatch(page, /\[data\.city, data\.region\]\.filter\(Boolean\)/);
+  });
+
+  it("names the house on a gist-room notification when the service can", () => {
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.match(page, /item\.house\?\.title\s+\? `\$\{who\} opened a gist room in \$\{item\.house\.title\}\.`/);
   });
 });
 

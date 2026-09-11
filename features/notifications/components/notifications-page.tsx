@@ -193,9 +193,11 @@ function describe(item: MarketNotification): string {
     case "speaker_request":
       return `${who} asked to speak in your room.`;
     case "house_room":
-      // The payload names the room, not the house, so the copy does not guess
-      // which one.
-      return `${who} opened a gist room in one of your houses.`;
+      // The house's current name when the service can say it; otherwise the
+      // copy does not guess which one.
+      return item.house?.title
+        ? `${who} opened a gist room in ${item.house.title}.`
+        : `${who} opened a gist room in one of your houses.`;
   }
 }
 

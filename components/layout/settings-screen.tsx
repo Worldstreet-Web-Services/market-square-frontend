@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { errorCode } from "@/lib/api/envelope";
+import { countryOptions } from "@/lib/countries";
 import { SignInPrompt } from "@/components/ui/states";
 import { Toggle } from "@/components/ui/toggle";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { ChatView } from "@/components/layout/chat-view";
-import { PRIVACY_SAVE_LIVE, SAVING_SOON } from "@/components/layout/settings-copy";
+import { SAVING_SOON } from "@/components/layout/settings-copy";
 import { NotificationsView } from "@/components/layout/notifications-view";
 import { HouseNotificationsView } from "@/components/layout/house-notifications-view";
 import { useHouseNotificationSettings, useUpdateHouseNotificationSettings } from "@/features/messages";
-import { useSettings, useUpdateSettings } from "@/features/settings";
+import { useUpdateMe } from "@/features/profile";
+import { useSettings, useUpdateSettings, type LocationPrecision } from "@/features/settings";
 import {
   IconArrowLeft,
   IconCheckbox,
@@ -29,16 +31,15 @@ import {
 } from "@/components/ui/icons";
 
 /*
-  SETTINGS IS TWO PANES, IN HOME'S FRAME.
+  SETTINGS, IN HOME'S FRAME.
 
   It opens as ONE pane: the list, across the frame. Tap a row and, from lg, it
   becomes two — the list narrows to the left and the chosen setting opens in a
-  second column beside it, which is the design. Both panes
-  sit inside the shell's FULL frame (Home's column plus rail, no rail drawn),
-  and both open with the shared header style, so the page lines up with the top
-  bar and reads like every other surface. Below lg there is no room for two
-  panes, so the list and the setting swap, and the header's back arrow walks
-  back up: sub-page → section → list.
+  second column beside it, which is the design. Both panes sit inside the
+  shell's FULL frame (Home's column plus rail, no rail drawn), and both open
+  with the shared header style, so the page lines up with the top bar. Below lg
+  there is no room for two panes, so the list and the setting swap, and the
+  header's back arrow walks back up: sub-page → section → list.
 */
 
 // ---------------------------------------------------------------------------
@@ -88,11 +89,16 @@ const SECTIONS: Array<{
 type PrivacyView = "main" | "location" | "chat";
 type HelpView = "main" | "terms" | "privacy-policy" | "community-guidelines";
 
-type LocationChoice = "country" | "region-and-country" | "continent";
-
-const LOCATION_CHOICES: Array<{ key: LocationChoice; label: string }> = [
+/*
+  FOUR choices, not the design's three: the city stays on profiles (the
+  decision was "keep city, add country"), so showing it is a choice of its own.
+  "City, region and country" is the service's default, which is why nothing
+  anyone already shows changes until they pick something narrower.
+*/
+const LOCATION_CHOICES: Array<{ key: LocationPrecision; label: string }> = [
+  { key: "city_region_country", label: "City, region and country" },
+  { key: "region_country", label: "Region and country" },
   { key: "country", label: "Country" },
-  { key: "region-and-country", label: "Region and Country" },
   { key: "continent", label: "Continent" },
 ];
 
@@ -218,15 +224,19 @@ function DetailRow({
 function PrivacyMain({
   personalizePlaces,
   onPersonalizePlacesChange,
+  personalizeDisabled,
   visibilityOnSpace,
   onVisibilityOnSpaceChange,
+  visibilityDisabled,
   onOpenLocation,
   onOpenChat,
 }: {
   personalizePlaces: boolean;
   onPersonalizePlacesChange: (v: boolean) => void;
+  personalizeDisabled: boolean;
   visibilityOnSpace: boolean;
   onVisibilityOnSpaceChange: (v: boolean) => void;
+  visibilityDisabled: boolean;
   onOpenLocation: () => void;
   onOpenChat: () => void;
 }) {
@@ -234,11 +244,13 @@ function PrivacyMain({
     <div className="flex flex-col">
       <DetailRow
         title="Personalize based on places you've been"
-        description="Personalize your feed based on your sign-up info and locations you visit."
+        // The service reads ONLY the place a person put on their profile —
+        // nothing records where anybody goes — so the line says exactly that.
+        description="Personalize your feed using the place on your profile."
         trailing={
           <Toggle
-            disabled={!PRIVACY_SAVE_LIVE}
-            title={PRIVACY_SAVE_LIVE ? undefined : SAVING_SOON}
+            disabled={personalizeDisabled}
+            title={personalizeDisabled ? SAVING_SOON : undefined}
             checked={personalizePlaces}
             onChange={onPersonalizePlacesChange}
             label="Personalize based on places you've been"
@@ -266,8 +278,8 @@ function PrivacyMain({
         description="Allow followers to see which Spaces you're listening to."
         trailing={
           <Toggle
-            disabled={!PRIVACY_SAVE_LIVE}
-            title={PRIVACY_SAVE_LIVE ? undefined : SAVING_SOON}
+            disabled={visibilityDisabled}
+            title={visibilityDisabled ? SAVING_SOON : undefined}
             checked={visibilityOnSpace}
             onChange={onVisibilityOnSpaceChange}
             label="Visibility on Space"
@@ -283,22 +295,58 @@ function PrivacyMain({
 // ---------------------------------------------------------------------------
 
 function LocationView({
-  locationChoice,
-  onLocationChoiceChange,
+  country,
+  onCountryChange,
+  countryDisabled,
+  precision,
+  onPrecisionChange,
+  precisionDisabled,
 }: {
-  locationChoice: LocationChoice;
-  onLocationChoiceChange: (v: LocationChoice) => void;
+  /** ISO code, or null when none is set. */
+  country: string | null;
+  onCountryChange: (code: string | null) => void;
+  countryDisabled: boolean;
+  precision: LocationPrecision;
+  onPrecisionChange: (v: LocationPrecision) => void;
+  precisionDisabled: boolean;
 }) {
+  // Named by the platform in the reader's language; built once per mount.
+  const options = useMemo(() => countryOptions(), []);
   return (
     <div className="flex flex-col">
+      <label className="flex w-full items-center justify-between gap-4 border-b border-white/15 px-4 py-5">
+        <span className="flex min-w-0 flex-col gap-1">
+          <span className="text-base font-bold leading-6 text-white">Country</span>
+          <span className="text-[13px] leading-5 text-white/50">The country on your profile.</span>
+        </span>
+        <select
+          value={country ?? ""}
+          disabled={countryDisabled}
+          title={countryDisabled ? SAVING_SOON : undefined}
+          onChange={(event) => onCountryChange(event.target.value || null)}
+          className="max-w-[55%] shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-2 text-[14px] text-white outline-none transition-colors focus:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <option value="">Not set</option>
+          {options.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="mt-8 flex h-6 items-center px-4">
+        <p className="text-sm font-normal leading-[16.5px] text-white/50">Show on your profile</p>
+      </div>
       {LOCATION_CHOICES.map((choice) => {
-        const checked = locationChoice === choice.key;
+        const checked = precision === choice.key;
         return (
           <button
             key={choice.key}
-            onClick={() => onLocationChoiceChange(choice.key)}
-            disabled={!PRIVACY_SAVE_LIVE}
-            title={PRIVACY_SAVE_LIVE ? undefined : SAVING_SOON}
+            onClick={() => onPrecisionChange(choice.key)}
+            disabled={precisionDisabled}
+            aria-pressed={checked}
+            title={precisionDisabled ? SAVING_SOON : undefined}
             className="flex h-16 w-full items-center justify-between border-b border-white/15 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           >
             <p className="text-base font-bold leading-6 text-white">
@@ -615,20 +663,21 @@ export function SettingsScreen({ username }: { username: string }) {
   const [privacyView, setPrivacyView] = useState<PrivacyView>("main");
   const [helpView, setHelpView] = useState<HelpView>("main");
   const [house, setHouse] = useState<{ id: string; title: string } | null>(null);
-  const [personalizePlaces, setPersonalizePlaces] = useState(true);
-  const [visibilityOnSpace, setVisibilityOnSpace] = useState(true);
-  const [locationChoice, setLocationChoice] =
-    useState<LocationChoice>("region-and-country");
   /*
-    STAGE 1 IS LIVE: Notifications and Privacy → Chat read and write
-    `/me/settings`. A 404 means that route is not deployed on this server, so
-    those controls stay disabled with the reason; while it loads they are
-    disabled too, so nothing can be flipped before the real value is known.
+    EVERY STAGE DECIDES FROM WHAT THE SERVICE SENDS. Notifications and Chat
+    read and write `/me/settings` (a 404 means not deployed here). Location is
+    live once that payload carries `privacy` (stage 3), and the two privacy
+    toggles once `privacy` carries their keys (stage 4). Until then each
+    control is disabled with the reason — never a switch that saves nothing.
   */
   const settings = useSettings();
   const save = useUpdateSettings();
+  const updateMe = useUpdateMe();
   const settingsLive = settings.isSuccess;
   const settingsGone = settings.isError && errorCode(settings.error) === "NOT_FOUND";
+  const privacy = settings.data?.privacy;
+  const stage3 = Boolean(privacy);
+  const stage4 = privacy?.showListening !== undefined && privacy?.personalizeByPlace !== undefined;
   /* A house's notification levels (stage 2b), read only while one is open. */
   const houseSettings = useHouseNotificationSettings(house?.id ?? "", house !== null);
   const saveHouse = useUpdateHouseNotificationSettings(house?.id ?? "");
@@ -684,14 +733,14 @@ export function SettingsScreen({ username }: { username: string }) {
     (active === "privacy" && privacyView !== "main") ||
     (active === "help" && helpView !== "main");
 
-  const onStageOneScreen =
-    (active === "notifications" && !house) || (active === "privacy" && privacyView === "chat");
+  const onSettingsScreen = (active === "notifications" && !house) || active === "privacy";
   const savingSoon =
     (active === "notifications" && house !== null && houseGone) ||
-    (active === "privacy" && privacyView !== "chat" && !PRIVACY_SAVE_LIVE) ||
-    (onStageOneScreen && settingsGone);
+    (onSettingsScreen && settingsGone) ||
+    (active === "privacy" && privacyView === "main" && settingsLive && !stage4) ||
+    (active === "privacy" && privacyView === "location" && settingsLive && !stage3);
   const loadFailed =
-    (onStageOneScreen && settings.isError && !settingsGone) ||
+    (onSettingsScreen && settings.isError && !settingsGone) ||
     (active === "notifications" && house !== null && houseSettings.isError && !houseGone);
 
   return (
@@ -721,87 +770,96 @@ export function SettingsScreen({ username }: { username: string }) {
           back arrow. */}
       {active !== null && (
         <div className="min-w-0 flex-1">
-            <div className="lg:hidden">
-              <ColumnHeader title={title} subtitle={subtitle} back onBack={stepBack} />
-            </div>
-            <PaneHeader title={title} subtitle={subtitle} onBack={subLevel ? stepBack : undefined} />
+          <div className="lg:hidden">
+            <ColumnHeader title={title} subtitle={subtitle} back onBack={stepBack} />
+          </div>
+          <PaneHeader title={title} subtitle={subtitle} onBack={subLevel ? stepBack : undefined} />
 
-            <div className="flex flex-col pb-10">
-              {/* One quiet line, only where there are controls that cannot save. */}
-              {savingSoon && (
-                <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
-                  Saving these settings is coming soon.
-                </p>
-              )}
-              {loadFailed && (
-                <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
-                  Couldn&apos;t load your settings.{" "}
-                  <button
-                    type="button"
-                    onClick={() => void (house ? houseSettings.refetch() : settings.refetch())}
-                    className="font-bold text-white underline-offset-2 hover:underline"
-                  >
-                    Try again
-                  </button>
-                </p>
-              )}
+          <div className="flex flex-col pb-10">
+            {/* One quiet line, only where there are controls that cannot save. */}
+            {savingSoon && (
+              <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
+                Saving these settings is coming soon.
+              </p>
+            )}
+            {loadFailed && (
+              <p className="px-4 pt-4 pb-2 text-[13px] leading-5 text-white/50">
+                Couldn&apos;t load your settings.{" "}
+                <button
+                  type="button"
+                  onClick={() => void (house ? houseSettings.refetch() : settings.refetch())}
+                  className="font-bold text-white underline-offset-2 hover:underline"
+                >
+                  Try again
+                </button>
+              </p>
+            )}
 
-              {active === "subscription" && <SubscriptionDetail />}
+            {active === "subscription" && <SubscriptionDetail />}
 
-              {active === "notifications" &&
-                (house ? (
-                  <HouseNotificationsView
-                    messagesFrom={houseSettings.data?.messages ?? "all"}
-                    onMessagesFromChange={(value) => saveHouse.mutate({ messages: value })}
-                    gistroomsFrom={houseSettings.data?.rooms ?? "all"}
-                    onGistroomsFromChange={(value) => saveHouse.mutate({ rooms: value })}
-                    disabled={!houseSettings.isSuccess}
-                  />
-                ) : (
-                  <NotificationsView
-                    friendsRoom={settings.data?.notifications.friendsRooms ?? true}
-                    onFriendsRoomChange={(value) => save.mutate({ notifications: { friendsRooms: value } })}
-                    directNotifications={settings.data?.notifications.direct ?? true}
-                    onDirectNotificationsChange={(value) => save.mutate({ notifications: { direct: value } })}
-                    onOpenHouse={(next) => {
-                      setHouse(next);
-                      window.scrollTo({ top: 0 });
-                    }}
-                    disabled={!settingsLive}
-                  />
-                ))}
-
-              {active === "privacy" && privacyView === "location" && (
-                <LocationView locationChoice={locationChoice} onLocationChoiceChange={setLocationChoice} />
-              )}
-              {active === "privacy" && privacyView === "chat" && (
-                <ChatView
-                  messagesFrom={settings.data?.chat.messagesFrom ?? "everyone"}
-                  onMessagesFromChange={(value) => save.mutate({ chat: { messagesFrom: value } })}
-                  allowHouseMembers={settings.data?.chat.allowHouseMembers ?? true}
-                  onAllowHouseMembersChange={(value) => save.mutate({ chat: { allowHouseMembers: value } })}
-                  allowPastAudience={settings.data?.chat.allowPastAudience ?? false}
-                  onAllowPastAudienceChange={(value) => save.mutate({ chat: { allowPastAudience: value } })}
+            {active === "notifications" &&
+              (house ? (
+                <HouseNotificationsView
+                  messagesFrom={houseSettings.data?.messages ?? "all"}
+                  onMessagesFromChange={(value) => saveHouse.mutate({ messages: value })}
+                  gistroomsFrom={houseSettings.data?.rooms ?? "all"}
+                  onGistroomsFromChange={(value) => saveHouse.mutate({ rooms: value })}
+                  disabled={!houseSettings.isSuccess}
+                />
+              ) : (
+                <NotificationsView
+                  friendsRoom={settings.data?.notifications.friendsRooms ?? true}
+                  onFriendsRoomChange={(value) => save.mutate({ notifications: { friendsRooms: value } })}
+                  directNotifications={settings.data?.notifications.direct ?? true}
+                  onDirectNotificationsChange={(value) => save.mutate({ notifications: { direct: value } })}
+                  onOpenHouse={(next) => {
+                    setHouse(next);
+                    window.scrollTo({ top: 0 });
+                  }}
                   disabled={!settingsLive}
                 />
-              )}
-              {active === "privacy" && privacyView === "main" && (
-                <PrivacyMain
-                  personalizePlaces={personalizePlaces}
-                  onPersonalizePlacesChange={setPersonalizePlaces}
-                  visibilityOnSpace={visibilityOnSpace}
-                  onVisibilityOnSpaceChange={setVisibilityOnSpace}
-                  onOpenLocation={() => setPrivacyView("location")}
-                  onOpenChat={() => setPrivacyView("chat")}
-                />
-              )}
+              ))}
 
-              {active === "help" && helpView === "main" && <HelpCentreMain onNavigate={setHelpView} />}
-              {active === "help" && helpView === "terms" && <TermsOfServiceView />}
-              {active === "help" && (helpView === "privacy-policy" || helpView === "community-guidelines") && (
-                <HelpSubView />
-              )}
-            </div>
+            {active === "privacy" && privacyView === "location" && (
+              <LocationView
+                country={me.data?.country ?? null}
+                onCountryChange={(code) => updateMe.mutate({ country: code })}
+                countryDisabled={!stage3 || !me.data || updateMe.isPending}
+                precision={privacy?.locationPrecision ?? "city_region_country"}
+                onPrecisionChange={(value) => save.mutate({ privacy: { locationPrecision: value } })}
+                precisionDisabled={!stage3}
+              />
+            )}
+            {active === "privacy" && privacyView === "chat" && (
+              <ChatView
+                messagesFrom={settings.data?.chat.messagesFrom ?? "everyone"}
+                onMessagesFromChange={(value) => save.mutate({ chat: { messagesFrom: value } })}
+                allowHouseMembers={settings.data?.chat.allowHouseMembers ?? true}
+                onAllowHouseMembersChange={(value) => save.mutate({ chat: { allowHouseMembers: value } })}
+                allowPastAudience={settings.data?.chat.allowPastAudience ?? false}
+                onAllowPastAudienceChange={(value) => save.mutate({ chat: { allowPastAudience: value } })}
+                disabled={!settingsLive}
+              />
+            )}
+            {active === "privacy" && privacyView === "main" && (
+              <PrivacyMain
+                personalizePlaces={privacy?.personalizeByPlace ?? true}
+                onPersonalizePlacesChange={(value) => save.mutate({ privacy: { personalizeByPlace: value } })}
+                personalizeDisabled={!stage4}
+                visibilityOnSpace={privacy?.showListening ?? true}
+                onVisibilityOnSpaceChange={(value) => save.mutate({ privacy: { showListening: value } })}
+                visibilityDisabled={!stage4}
+                onOpenLocation={() => setPrivacyView("location")}
+                onOpenChat={() => setPrivacyView("chat")}
+              />
+            )}
+
+            {active === "help" && helpView === "main" && <HelpCentreMain onNavigate={setHelpView} />}
+            {active === "help" && helpView === "terms" && <TermsOfServiceView />}
+            {active === "help" && (helpView === "privacy-policy" || helpView === "community-guidelines") && (
+              <HelpSubView />
+            )}
+          </div>
         </div>
       )}
     </div>

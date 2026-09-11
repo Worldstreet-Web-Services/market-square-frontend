@@ -84,6 +84,17 @@ export const NotificationSchema = z.object({
   actor: ProfileSchema.nullable().optional().default(null),
   postId: z.string().nullable().optional().default(null),
   /**
+   * The house a `house_room` row is about — its CURRENT name, so a rename shows
+   * on older rows. Null on every other kind, and once the reader has left the
+   * house; the row then falls back to naming no house.
+   */
+  house: z
+    .object({ conversationId: z.string(), title: z.string().nullable().optional().default(null) })
+    .nullable()
+    .optional()
+    .default(null)
+    .catch(null),
+  /**
    * The comment a `comment` or `comment_reply` event is about, so the row can
    * open the permalink ON that comment (`/p/:postId?comment=:id`). Asked of
    * the backend; null until it ships, and null on every other kind.

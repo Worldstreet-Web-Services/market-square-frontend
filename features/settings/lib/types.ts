@@ -20,6 +20,21 @@ export const ProfileSettingsSchema = z.object({
     allowHouseMembers: z.boolean(),
     allowPastAudience: z.boolean(),
   }),
+  /**
+   * OPTIONAL, and its presence is the signal: a service without stage 3 sends
+   * no `privacy`, and one without stage 4 sends it without the two toggles.
+   * The screen enables each control only once its key has arrived.
+   */
+  privacy: z
+    .object({
+      /** How much of the place OTHER people see. The owner always sees it all. */
+      locationPrecision: z.enum(["city_region_country", "region_country", "country", "continent"]),
+      /** "Visibility on Space": followers can see which gist rooms you are in. */
+      showListening: z.boolean().optional(),
+      /** "Personalize based on places": the for-you lane lifts people near your declared place. */
+      personalizeByPlace: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export type ProfileSettings = z.infer<typeof ProfileSettingsSchema>;

@@ -1,5 +1,6 @@
 "use client";
 
+import { placeLine } from "@/lib/countries";
 import { useState } from "react";
 import Link from "next/link";
 import { IconProfileGlobePin, IconProfileLink } from "@/components/ui/profile-icons";
@@ -612,13 +613,14 @@ export function ProfilePage({
           is an http(s) URL — a public page must never carry a `javascript:`
           href somebody typed about themselves.
         */}
-        {(data.city || data.region || isHttpUrl(data.website)) && (
+        {(placeLine(data) || isHttpUrl(data.website)) && (
           <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px] font-normal leading-5 text-[#A1A1AA]">
-            {(data.city || data.region) && (
+            {placeLine(data) && (
               <span className="flex items-center gap-2">
                 <IconProfileGlobePin className="h-6 w-6 shrink-0 text-create" />
-                {/* "Ikeja, Lagos" from whichever halves they gave. */}
-                {[data.city, data.region].filter(Boolean).join(", ")}
+                {/* "Ikeja, Lagos, Nigeria" from whichever halves this reader
+                    may see — or the continent alone (see lib/countries.ts). */}
+                {placeLine(data)}
               </span>
             )}
             {isHttpUrl(data.website) && (

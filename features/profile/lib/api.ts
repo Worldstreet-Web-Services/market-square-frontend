@@ -141,6 +141,8 @@ export async function updateMe(input: {
    */
   city?: string | null;
   region?: string | null;
+  /** ISO 3166-1 alpha-2, any case; null clears. The service refuses anything else. */
+  country?: string | null;
   gender?: string | null;
   /**
    * Marks onboarding complete. `true` ONLY.

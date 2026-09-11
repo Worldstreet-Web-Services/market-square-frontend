@@ -19,6 +19,16 @@ describe("a settings save applied before the service answers", () => {
     });
   });
 
+  it("merges a privacy save only into a privacy section the service sent", () => {
+    const withPrivacy: SettingsShape = { ...base, privacy: { locationPrecision: "city_region_country", showListening: true, personalizeByPlace: true } };
+    assert.deepEqual(applySettingsPatch(withPrivacy, { privacy: { showListening: false } }).privacy, {
+      locationPrecision: "city_region_country",
+      showListening: false,
+      personalizeByPlace: true,
+    });
+    assert.equal("privacy" in applySettingsPatch(base, { privacy: { locationPrecision: "country" } }), false);
+  });
+
   it("never mutates what is on screen", () => {
     const before = JSON.stringify(base);
     applySettingsPatch(base, { notifications: { friendsRooms: false }, chat: { allowPastAudience: true } });

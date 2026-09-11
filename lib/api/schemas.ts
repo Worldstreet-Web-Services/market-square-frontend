@@ -120,6 +120,22 @@ const RawProfileSchema = z.object({
   */
   city: z.string().nullable().optional().default(null),
   region: z.string().nullable().optional().default(null),
+  /*
+    COUNTRY AND CONTINENT (settings stage 3). `country` is an ISO 3166-1
+    alpha-2 code; `continent` is derived from it by the service. What another
+    reader gets is the OWNER's choice (`locationPrecision`): the service nulls
+    the hidden halves, and a continent-only profile carries just the continent.
+    The owner's own reads always carry everything.
+  */
+  country: z.string().nullable().optional().default(null),
+  continent: z.enum(["AF", "AN", "AS", "EU", "NA", "OC", "SA"]).nullable().optional().default(null).catch(null),
+  /** Own profile only (`GET /me`). */
+  locationPrecision: z
+    .enum(["city_region_country", "region_country", "country", "continent"])
+    .nullable()
+    .optional()
+    .default(null)
+    .catch(null),
   gender: z.string().nullable().optional().default(null),
   /*
     When this person was last seen, for the chat thread's "Active 20m ago".
