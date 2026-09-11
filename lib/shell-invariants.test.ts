@@ -1071,3 +1071,33 @@ describe("Trending discussions close the right rail", () => {
     assert.deepEqual([...order].sort((a, b) => a - b), order, "trending discussions no longer sit last in the rail");
   });
 });
+
+/**
+ * HOME'S TIMELINE — 647:16354 in the live file (647:16351, updated 2026-09-10).
+ * Its cards are 496:13361 redrawn 1.151x larger, so every value here is the
+ * live node's divided by 1.151, the scale the post card is built at.
+ */
+describe("Home's timeline follows 647:16354", () => {
+  const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+  const post = stripComments(read("features/feed/components/post-card.tsx"));
+  const badge = stripComments(read("components/ui/badge.tsx"));
+  const css = read("app/globals.css");
+
+  it("spaces the posts 73 / 1.151 apart", () => {
+    assert.match(feed, /className="space-y-4 md:space-y-\[63\.42px\]"/);  });
+
+  it("bottom-aligns the action row and sizes the more disc 44.16 / 1.151", () => {
+    assert.match(post, /md:flex-row md:items-end md:gap-6/);
+    assert.match(post, /ws-glass-pill flex h-\[38\.37px\] w-\[38\.37px\]/);
+  });
+
+  it("rings the card at 0.79 / 1.151", () => {
+    assert.match(css, /@utility ws-post \{[^}]*border: 0\.69px solid rgba\(255, 255, 255, 0\.1\);/);
+  });
+
+  it("draws the post's org badge as its own glyph, not a capsule inside a capsule", () => {
+    assert.match(post, /<OrgBadgeChip orgBadge=\{author\.orgBadge\} bare \/>/, "the post header wraps the lockup in a second capsule again");
+    assert.match(badge, /bare\s*\?\s*orgBadge === "market"\s*\?\s*"h-\[14px\] w-\[71px\]"/);
+    assert.match(badge, /!bare && "rounded-\[21px\] border/, "the capsule is drawn around the bare lockup");
+  });
+});

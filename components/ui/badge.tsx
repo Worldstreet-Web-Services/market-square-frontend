@@ -49,13 +49,23 @@ export function VerifiedBadge({
  * separately against the file and kept its 19% white hairline, so this is a
  * per-badge value and not a shared token. The fill stays 4% white on both —
  * the blue is the ring, not a filled background.
+ *
+ * `bare` — THE GLYPH IS THE CHIP. Each exported lockup already carries its own
+ * capsule, fill and ring, so on the post card it is drawn alone at its own
+ * size: node 647:16370 is one 79.42x14.18 capsule with a 1.15 outside ring,
+ * which at the card's 1.151 scale is exactly the MARKET glyph's 71x14. The
+ * capsule above stays for the rows and sheets, whose own layouts were measured
+ * around a 45-wide chip.
  */
 export function OrgBadgeChip({
   orgBadge,
   className,
+  bare = false,
 }: {
   orgBadge: OrgBadge;
   className?: string;
+  /** Draw the exported lockup alone at its native size — see above. */
+  bare?: boolean;
 }) {
   if (!orgBadge) return null;
   const Glyph = orgBadge === "market" ? BadgeMarketGlyph : BadgeArkGlyph;
@@ -63,14 +73,25 @@ export function OrgBadgeChip({
     <span
       title={orgBadge === "market" ? "Market" : "Ark"}
       className={cn(
-        "inline-flex shrink-0 items-center rounded-[21px] border bg-white/[0.04] px-1 py-[2.5px]",
-        orgBadge === "market" ? "border-[#008CFF]" : "border-white/[0.19]",
+        "inline-flex shrink-0 items-center",
+        !bare && "rounded-[21px] border bg-white/[0.04] px-1 py-[2.5px]",
+        !bare && (orgBadge === "market" ? "border-[#008CFF]" : "border-white/[0.19]"),
         className
       )}
     >
       <span className="sr-only">{orgBadge === "market" ? "Market" : "Ark"}</span>
       {/* Width tracks the glyph's own aspect ratio, height is fixed. */}
-      <Glyph className={orgBadge === "market" ? "h-[7px] w-[35px]" : "h-[7px] w-[34px]"} />
+      <Glyph
+        className={
+          bare
+            ? orgBadge === "market"
+              ? "h-[14px] w-[71px]"
+              : "h-[9px] w-[44px]"
+            : orgBadge === "market"
+              ? "h-[7px] w-[35px]"
+              : "h-[7px] w-[34px]"
+        }
+      />
     </span>
   );
 }

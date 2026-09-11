@@ -422,7 +422,9 @@ export function FeedPage({
         {fresh.pinned && (
           <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
         )}
-        <div ref={listRef} className="space-y-4 md:space-y-[38px]">
+        {/* 647:16354 spaces the timeline 73 apart around cards drawn 873.65 wide; the
+            card here is that drawing at 759 (see PostCard), so 73/1.151 = 63.42. */}
+        <div ref={listRef} className="space-y-4 md:space-y-[63.42px]">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
             <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
@@ -468,7 +470,7 @@ export function FeedPage({
 
                 Rendered against the LAST post when the feed is shorter than the
                 cut, so a one-post lane still shows it rather than dropping it.
-                It sits in the list's own 38 rhythm and carries no padding of
+                It sits in the list's own 63.42 rhythm and carries no padding of
                 its own.
               */}
               {communitySlot &&

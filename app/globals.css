@@ -746,7 +746,8 @@ body {
 @utility ws-post {
   border-radius: 16.5px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* 647:16355 strokes INSIDE at 0.79 around a card 1.151x this one: 0.69. */
+  border: 0.69px solid rgba(255, 255, 255, 0.1);
   /* Node 496:13361's own two drop shadows, both black at 10%. They lift the
      slab off the page by about one and a half levels of grey — a black shadow
      on a near-black ground can do no more than that, and the design asks for

@@ -87,8 +87,9 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
            weight — the zero-weight trap. The rendered node is the opaque
            near-black lens `ws-glass-pill` paints, which is what the file shows:
            a solid dark disc, not a hairline ring. Same control, same material,
-           as the gist room's circular buttons. */
-        className="ws-glass-pill flex h-[38px] w-[38px] items-center justify-center rounded-full text-grey-100 transition-opacity hover:opacity-90"
+           as the gist room's circular buttons. 647:16439 is 44.16 across at
+           the live file's 1.151 scale: 38.37 here. */
+        className="ws-glass-pill flex h-[38.37px] w-[38.37px] items-center justify-center rounded-full text-grey-100 transition-opacity hover:opacity-90"
       >
         <IconMsMore className="h-6 w-6" />
       </button>
@@ -701,7 +702,7 @@ export function PostCard({
                   {author.displayName}
                 </Link>
                 <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5" />
-                <OrgBadgeChip orgBadge={author.orgBadge} />
+                <OrgBadgeChip orgBadge={author.orgBadge} bare />
                 <RoleChip role={author.role} />
               </>
             )}
@@ -899,7 +900,9 @@ export function PostCard({
           the tally is the door). It cannot shrink past its glyph and padding,
           so sharing the tallies' row would push the page wider than the
           screen; its own row, opened on demand, solves the geometry. */}
-      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+      {/* 647:16409 aligns its children to the BOTTOM (counter axis MAX): the
+          38.37 "more" disc sits on the 40.15 tallies pill's foot, not its middle. */}
+      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-end md:gap-6">
       <div className="flex items-center justify-between gap-3 md:contents">
         {/*
           THE TALLIES PILL — node 496:13417.
