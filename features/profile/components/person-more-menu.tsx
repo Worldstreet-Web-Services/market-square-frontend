@@ -1,8 +1,8 @@
 "use client";
 
+import { ShareSheet } from "@/components/ui/share-sheet";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
@@ -120,6 +120,8 @@ export function PersonMoreMenu({
     };
   }, [open, cover]);
 
+  const [sharing, setSharing] = useState(false);
+
   // There is nothing to report or block about yourself.
   if (me.data?.id === profile.id) return null;
 
@@ -128,19 +130,10 @@ export function PersonMoreMenu({
     setStep("root");
   };
 
-  const shareProfile = async () => {
+  // The same sheet a post uses on Home: WhatsApp, X, Facebook, Telegram, copy link.
+  const shareProfile = () => {
     close();
-    const url = `${window.location.origin}/u/${profile.username}`;
-    try {
-      if (typeof navigator.share === "function") {
-        await navigator.share({ title: profile.displayName || profile.username, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast.success("Profile link copied");
-    } catch {
-      // A dismissed share sheet is not an error.
-    }
+    setSharing(true);
   };
 
   const coverPanel = (
@@ -257,6 +250,18 @@ export function PersonMoreMenu({
       </button>
 
       {open && cover && createPortal(coverPanel, document.body)}
+
+      {sharing && (
+        <ShareSheet
+          open
+          onClose={() => setSharing(false)}
+          title="Share profile"
+          payload={{
+            text: `${profile.displayName || profile.username} on Square`,
+            url: `${window.location.origin}/u/${profile.username}`,
+          }}
+        />
+      )}
 
       {open && !cover && (
         <>

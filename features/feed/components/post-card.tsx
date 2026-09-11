@@ -42,7 +42,7 @@ import {
 import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
 import { MentionPicker } from "@/features/feed/components/mention-picker";
-import { ShareSheet } from "@/features/feed/components/share-sheet";
+import { ShareSheet } from "@/components/ui/share-sheet";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 

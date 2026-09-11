@@ -1388,3 +1388,21 @@ describe("The Home banner speaks gist room for now", () => {
     assert.doesNotMatch(cta, /href="\/studio"/);
   });
 });
+
+describe("Profiles share like posts, and the posts sit off the tab strip", () => {
+  it("opens the shared ShareSheet from the profile and the more menu", () => {
+    const page = stripComments(read("features/profile/components/profile-page.tsx"));
+    const menu = stripComments(read("features/profile/components/person-more-menu.tsx"));
+    for (const code of [page, menu]) {
+      assert.match(code, /from "@\/components\/ui\/share-sheet"/);
+      assert.match(code, /<ShareSheet[\s\S]{0,80}title="Share profile"/);
+      assert.doesNotMatch(code, /navigator\.share\(/, "the profile shares through the bare device sheet again");
+    }
+    assert.ok(existsSync(new URL("../components/ui/share-sheet.tsx", import.meta.url)));
+  });
+
+  it("keeps the posts 32 under the strip and 32 in, 24 apart", () => {
+    const page = stripComments(read("features/profile/components/profile-page.tsx"));
+    assert.match(page, /<ul className="flex flex-col gap-6 px-4 pt-8 md:px-8">/);
+  });
+});

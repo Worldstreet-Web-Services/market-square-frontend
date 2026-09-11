@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { IconProfileGlobePin, IconProfileLink } from "@/components/ui/profile-icons";
 import { IconMsEdit } from "@/components/ui/design-icons";
 import { formatCount, formatDateTime, formatKash } from "@/lib/format";
@@ -11,6 +10,7 @@ import { useMe } from "@/hooks/use-me";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { IconCalendar } from "@/components/ui/icons";
 import { ProfilePhotos } from "@/features/profile/components/profile-photos";
+import { ShareSheet } from "@/components/ui/share-sheet";
 import { ProfileCover } from "@/features/profile/components/profile-cover";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
@@ -123,8 +123,9 @@ function PostsTab({
   // was a <span> with no handler, so liking a post from somebody's profile did
   // nothing at all. It also dropped the media, the author, the arkmark and the
   // repost, which is why a post read differently here than anywhere else.
+  // 1029:22923 — 32 under the tab strip's rule, 32 in from the column, cards 24 apart.
   return (
-    <ul>
+    <ul className="flex flex-col gap-6 px-4 pt-8 md:px-8">
       {posts.data.items.map((post) => (
         <li key={post.id}>{postSlot(post)}</li>
       ))}
@@ -372,6 +373,7 @@ export function ProfilePage({
    * one the file draws active and the only one with a panel behind it.
    */
   const [accountTab, setAccountTab] = useState<AccountTab>("posts");
+  const [sharing, setSharing] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   // The backend has no isMe flag — ownership is the viewer's id matching.
   const isMe = Boolean(
@@ -418,23 +420,10 @@ export function ProfilePage({
   const data = profile.data;
 
   /*
-    Share the PROFILE — the same shape the post card uses: the platform sheet
-    where there is one, the clipboard where there is not, and a dismissed sheet
-    is not an error.
+    Share the PROFILE the way a post is shared on Home: the same sheet, with
+    WhatsApp, X, Facebook, Telegram, copy link and the device's own sheet.
   */
-  const onShare = async () => {
-    const url = `${window.location.origin}/u/${data.username}`;
-    try {
-      if (navigator.share)
-        await navigator.share({ text: data.displayName, url });
-      else {
-        await navigator.clipboard.writeText(url);
-        toast.success("Link copied");
-      }
-    } catch {
-      /* dismissed share sheets are not errors */
-    }
-  };
+  const onShare = () => setSharing(true);
 
   return (
     <>
@@ -802,6 +791,18 @@ export function ProfilePage({
             <ActivitiesTab username={username} isMe={isMe} />
           )}
         </>
+      )}
+
+      {sharing && (
+        <ShareSheet
+          open
+          onClose={() => setSharing(false)}
+          title="Share profile"
+          payload={{
+            text: `${data.displayName || data.username} on Square`,
+            url: `${window.location.origin}/u/${data.username}`,
+          }}
+        />
       )}
 
       {isMe && (
