@@ -96,7 +96,10 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="ws-popover absolute right-0 z-20 mt-1 w-56 rounded-2xl p-1.5">
+          {/* Opens UPWARD, over its own post — "let the modal move up instead
+              of down". Downward it hung past the card's foot and over the
+              next post, which paints above it (see the ws-enter note). */}
+          <div className="ws-popover absolute bottom-full right-0 z-20 mb-2 w-56 rounded-2xl p-1.5">
             {mine && (
               <>
                 <button
