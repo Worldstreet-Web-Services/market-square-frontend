@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/hooks/use-auth";
+import { useMe } from "@/hooks/use-me";
+import { SignInPrompt } from "@/components/ui/states";
 import { Toggle } from "@/components/ui/toggle";
 import { ChatView } from "@/components/layout/chat-view";
 import { NotificationsView } from "@/components/layout/notifications-view";
@@ -377,10 +381,20 @@ function PlanCard({ plan }: { plan: Plan }) {
         ))}
       </div>
 
-      {/* Upgrade button — only for non-current plans */}
+      {/* Upgrade — only for non-current plans. VISIBLE AND INERT: there is no
+          subscription or billing on the service, so a live button would be a
+          promise nothing can keep. A real disabled button, with the reason. */}
       {!plan.isCurrent && (
-        <button className="mt-8 h-12 w-full rounded-full bg-gradient-to-r from-create to-create-deep text-base font-semibold text-[#f6f6f6] transition-opacity hover:opacity-90">
+        <button
+          type="button"
+          disabled
+          title="Subscriptions are coming soon"
+          className="mt-8 flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-full bg-gradient-to-r from-create to-create-deep text-base font-semibold text-[#f6f6f6] opacity-60"
+        >
           Upgrade
+          <span className="rounded-full border border-white/30 px-2 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide">
+            Coming soon
+          </span>
         </button>
       )}
     </div>
@@ -668,8 +682,21 @@ function DetailPanel({
 // Main screen
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function SettingsScreen({ username }: { username: string }) {
+  const { ready, authenticated } = useAuth();
+  const me = useMe();
+  const router = useRouter();
+  /*
+    SETTINGS ARE YOUR OWN. The route carries a username, so
+    `/u/<someone-else>/settings` is a URL anybody can type — it lands on the
+    reader's own settings instead of drawing a page that looks like the other
+    person's.
+  */
+  useEffect(() => {
+    if (me.data && me.data.username.toLowerCase() !== username.toLowerCase()) {
+      router.replace(`/u/${me.data.username}/settings`);
+    }
+  }, [me.data, username, router]);
   const [active, setActive] = useState<Section | null>(null);
   const [privacyView, setPrivacyView] = useState<PrivacyView>("main");
   const [helpView, setHelpView] = useState<HelpView>("main");
@@ -702,6 +729,17 @@ export function SettingsScreen({ username }: { username: string }) {
     (active === "help" && helpView !== "main")
       ? null // sub-views have their own back header
       : activeSection?.title ?? "Settings";
+
+  if (ready && !authenticated) {
+    return (
+      <div className="px-6 py-10 lg:px-8">
+        <SignInPrompt
+          title="Sign in to see your settings"
+          body="Your notifications, privacy and plan live here."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(92dvh-var(--ws-crumb-h))] min-h-0 flex-1">

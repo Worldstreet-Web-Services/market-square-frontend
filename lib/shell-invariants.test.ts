@@ -1486,3 +1486,23 @@ describe("Tapping a post's words opens the post", () => {
     assert.match(card, /<Link href=\{`\/p\/\$\{post\.id\}`\} className="hover:text-white\/80 hover:underline">/);
   });
 });
+
+describe("Settings are the reader's own, and show real houses", () => {
+  const screen = stripComments(read("components/layout/settings-screen.tsx"));
+  const view = stripComments(read("components/layout/notifications-view.tsx"));
+
+  it("sends /u/<someone-else>/settings to the reader's own settings and asks a signed-out visitor to sign in", () => {
+    assert.match(screen, /router\.replace\(`\/u\/\$\{me\.data\.username\}\/settings`\);/);
+    assert.match(screen, /if \(ready && !authenticated\) \{/);
+  });
+
+  it("lists the reader's houses from the inbox query, never invented ones", () => {
+    assert.match(view, /const houses = useConversations\("houses"\);/);
+    assert.doesNotMatch(view, /DEMO_HOUSES|Ark Gist Partners/);
+  });
+
+  it("keeps Upgrade visible and disabled until subscriptions exist", () => {
+    assert.match(screen, /<button\s+type="button"\s+disabled\s+title="Subscriptions are coming soon"/);
+  });
+});
+
