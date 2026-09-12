@@ -1706,17 +1706,7 @@ describe("The daily email summary", () => {
   });
 });
 
-describe("Pals: stories, then Discover · Winks · Following", () => {
-  const pals = stripComments(read("components/layout/pals-screen.tsx"));
-
-  it("opens on the stories strip with the three tabs right under it", () => {
-    const stories = pals.indexOf("<StoriesRow />");
-    const tabs = pals.indexOf("<ColumnTabs tabs={TABS}");
-    assert.ok(stories > -1 && tabs > stories, "the tabs are not under the stories strip");
-    assert.match(pals, /\{ value: "discover", label: "Discover" \},\s*\{ value: "winks", label: "Winks" \},\s*\{ value: "following", label: "Following" \}/);
-    assert.match(pals, /\{tab === "discover" && <FriendsDeck heading="pals" \/>\}/);
-  });
-
+describe("Home and the dock after Pals took the stories", () => {
   it("keeps stories off Home and Discover out of the navigation", () => {
     assert.doesNotMatch(stripComments(read("features/feed/components/feed-page.tsx")), /<StoriesRow/);
     assert.doesNotMatch(stripComments(read("components/layout/app-shell.tsx")), /aria-label="Explore"/);
