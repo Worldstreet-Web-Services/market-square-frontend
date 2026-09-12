@@ -38,6 +38,7 @@ import {
 import { RoomRosterPanel } from "@/features/houses/components/room-roster-panel";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { opensAtLabel, startsInLabel } from "@/lib/format";
+import { groupRoomCode } from "@/lib/room-code";
 import { Backstage } from "@/features/houses/components/backstage";
 import { CaptionRail } from "@/features/houses/components/caption-rail";
 import { CopyRow } from "@/features/houses/components/copy-row";
@@ -390,16 +391,6 @@ function startsLater(stream: Stream): boolean {
  * open it now. Opening is a real decision, not the default, so it is the
  * secondary control and says plainly that it opens the room for everyone.
  */
-/**
- * `bcdfghjkm` -> `bcd-fghj-km`, which reads back most reliably out loud.
- *
- * DISPLAY ONLY. The service stores and matches the raw form and accepts any
- * case, spacing or dashes on lookup, so nothing here is ever sent back.
- */
-function groupRoomCode(code: string): string {
-  return code.length === 9 ? `${code.slice(0, 3)}-${code.slice(3, 7)}-${code.slice(7)}` : code;
-}
-
 function HostWaiting({ stream, onOpenNow }: { stream: Stream; onOpenNow: () => void }) {
   return (
     <div className="mx-auto w-full max-w-[520px] bg-chrome">

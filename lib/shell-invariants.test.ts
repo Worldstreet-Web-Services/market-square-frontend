@@ -1826,10 +1826,15 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // Null is ordinary — a broadcast, or a room older than codes.
     assert.match(schemas, /roomCode: z\.string\(\)\.nullable\(\)\.optional\(\)\.default\(null\)/);
     const room = stripComments(read("features/houses/components/house-room.tsx"));
-    assert.match(room, /function groupRoomCode\(code: string\): string \{/);
-    assert.match(room, /code\.slice\(0, 3\)\}-\$\{code\.slice\(3, 7\)\}-\$\{code\.slice\(7\)/);
+    assert.match(room, /import \{ groupRoomCode \} from "@\/lib\/room-code";/);
+    assert.match(room, /groupRoomCode\(stream\.roomCode\)/);
     // Rendered only when there is one; a room without a code is shared by link.
     assert.match(room, /\{stream\.roomCode && \(/);
+    // Nothing rewrites what a person typed on its way to the server — the
+    // client and the service must not each hold an opinion about what a code is.
+    const codeLib = stripComments(read("lib/room-code.ts"));
+    assert.match(codeLib, /export function looksLikeRoomCode/);
+    assert.match(codeLib, /export function groupRoomCode/);
   });
 
   it("lists post_announced BEFORE the service sends it, so it can never read as a follow", () => {
