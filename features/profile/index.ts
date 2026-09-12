@@ -19,6 +19,7 @@ export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";
 // username off the media plane and never holds the whole object.
 export { PersonSafetyRows, PersonFollow } from "./components/person-safety-rows";
 export {
+  useProfile,
   useProfileSafety,
   useUpdateMe,
   useWink,
@@ -26,6 +27,9 @@ export {
   // The Replays rail is composed in `components/layout` because it reads the
   // topic vocabulary from discovery; this is the read it needs from here.
   useProfileStreams,
+  // Pals' Winks and Following tabs.
+  useFollowingList,
+  useMyWinks,
 } from "./hooks/use-profile";
 export type { ProfileStreamFilters } from "./lib/types";
 // The follow-edge resolver every follow control must read — a missing

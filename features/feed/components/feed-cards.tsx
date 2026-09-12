@@ -146,8 +146,11 @@ export function FeedItemCard({
   tipSlot,
   onOpenMedia,
   onQuote,
+  compact = false,
 }: {
   item: FeedItem;
+  /** Drop the inline reply field — for a card in a rail. See PostCard. */
+  compact?: boolean;
   followSlot?: (author: Profile) => React.ReactNode;
   winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
@@ -167,6 +170,7 @@ export function FeedItemCard({
         onOpenMedia={onOpenMedia}
         tipSlot={tipSlot}
         onQuote={onQuote}
+        compact={compact}
       />
     );
   if (item.type === "stream" && item.stream) return <StreamFeedCard stream={item.stream} />;

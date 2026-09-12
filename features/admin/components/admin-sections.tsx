@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { Spinner } from "@/components/ui/button";
@@ -8,11 +8,15 @@ import { IconSearch } from "@/components/ui/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import type { OrgBadge, Profile } from "@/lib/api/schemas";
+import { DateTimeField } from "@/components/ui/date-time-field";
 import {
   notDeployed,
+  useAdminAnnouncements,
   useAdminProfiles,
   useAdminReports,
   useAdminStats,
+  useCreateAnnouncement,
+  useEndAnnouncement,
   useResolveReport,
   useResolveRoleApplication,
   useResolveVerificationRequest,
@@ -453,3 +457,208 @@ export function PeopleSection() {
 }
 
 export const SECTION_CLASS = cn("space-y-4");
+
+/**
+ * ANNOUNCEMENTS — the one place a banner is written for everybody.
+ *
+ * An announcement is deliberately NOT a post: it carries copy, a window and a
+ * dismissal, and no replies, likes or author. So it is published here rather
+ * than by pinning something on Home, and the band above the column is the
+ * only place it renders.
+ *
+ * EVERY ANNOUNCEMENT ENDS. The service requires an end and this form does
+ * too, rather than defaulting to one — a banner with no end is one somebody
+ * has to remember to take down, and the operator choosing the end is the
+ * whole point. The start is left to the service's "now" unless it is set.
+ *
+ * ANNOUNCING A POST REFERENCES IT. The post is never copied, so its author
+ * deleting or hiding it empties the band in the same moment; the service
+ * refuses a post it cannot show, and that refusal is surfaced rather than
+ * publishing a band that would render empty.
+ */
+export function AnnouncementsSection() {
+  const announcements = useAdminAnnouncements();
+  const create = useCreateAnnouncement();
+  const end = useEndAnnouncement();
+  const items = announcements.data?.pages.flatMap((page) => page.items) ?? [];
+
+  const [body, setBody] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [postId, setPostId] = useState("");
+
+  // The clock is STATE, ticked, never read during render: reading Date.now()
+  // while rendering makes the same props produce two different screens, which
+  // is exactly what react-hooks/purity exists to stop. A minute is plenty —
+  // this only decides whether an end the operator typed has gone stale.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // "Running now" must mean it. The service returns ended announcements too,
+  // and counting them as running sends an operator looking for a banner that
+  // is on nobody's screen.
+  const live = items.filter((item) => Date.parse(item.endsAt) > now);
+  const ended = items.filter((item) => !(Date.parse(item.endsAt) > now));
+
+  const endsAtMs = endsAt ? new Date(endsAt).getTime() : Number.NaN;
+  // The button says WHY it is off, rather than sitting dead beside a grey
+  // line — the same rule every other disabled control in this app follows.
+  const refusal = !body.trim()
+    ? "Write the announcement first"
+    : !endsAt
+      ? "Choose when it ends"
+      : Number.isNaN(endsAtMs) || endsAtMs <= now
+        ? "The end has to be in the future"
+        : null;
+
+  const publish = () => {
+    if (refusal) return;
+    // Re-checked against the REAL clock at the moment of the press: the
+    // ticked value above decides the button's LABEL, never permission.
+    if (Number.isNaN(endsAtMs) || endsAtMs <= Date.now()) return;
+    create.mutate(
+      {
+        body: body.trim(),
+        endsAt: new Date(endsAt).toISOString(),
+        linkUrl: linkUrl.trim() || undefined,
+        postId: postId.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setBody("");
+          setEndsAt("");
+          setLinkUrl("");
+          setPostId("");
+        },
+      }
+    );
+  };
+
+  const field =
+    "w-full rounded-2xl border border-white/12 bg-black/35 px-3 py-2 text-[14px] text-white outline-none placeholder:text-meta focus:border-white/25";
+
+  return (
+    <div className="space-y-3">
+      <Panel title="New announcement" allowOverflow>
+        <div className="space-y-3 p-4">
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-meta">
+              What it says
+            </span>
+            <textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              rows={3}
+              placeholder="One paragraph, in the platform's voice."
+              className={field}
+            />
+          </label>
+
+          <DateTimeField label="When it ends" value={endsAt} onChange={setEndsAt} />
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-meta">
+              Link (optional)
+            </span>
+            <input
+              value={linkUrl}
+              onChange={(event) => setLinkUrl(event.target.value)}
+              inputMode="url"
+              placeholder="https://…  — leave empty and the band is not tappable"
+              className={field}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-meta">
+              Announce a post (optional)
+            </span>
+            <input
+              value={postId}
+              onChange={(event) => setPostId(event.target.value)}
+              placeholder="Post id — referenced, never copied"
+              className={field}
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={publish}
+            disabled={Boolean(refusal) || create.isPending}
+            title={refusal ?? undefined}
+            className="ws-btn-create ws-press w-full rounded-full px-5 py-2 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {create.isPending ? "Publishing…" : (refusal ?? "Publish to everybody")}
+          </button>
+        </div>
+      </Panel>
+
+      <Panel title="Running now" count={live.length}>
+        <PanelBody
+          isPending={announcements.isPending}
+          isError={announcements.isError}
+          error={announcements.error}
+          missing={notDeployed(announcements.error)}
+          missingLabel="Announcements"
+          isEmpty={items.length === 0}
+          emptyTitle="Nothing announced"
+          emptyBody="Published announcements appear here until they end."
+          onRetry={() => announcements.refetch()}
+        >
+          {live.map((announcement) => (
+            <Row key={announcement.id}>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] text-white">{announcement.body}</p>
+                <p className="mt-1 text-[12px] text-meta">
+                  Ends <When iso={announcement.endsAt} />
+                  {announcement.post ? " · announcing a post" : ""}
+                  {announcement.linkUrl ? " · links out" : ""}
+                </p>
+              </div>
+              <ConfirmAction
+                label="End"
+                confirmLabel="End it now"
+                tone="danger"
+                pending={end.isPending}
+                onConfirm={() => end.mutate(announcement.id)}
+              />
+            </Row>
+          ))}
+
+          {/*
+            ENDED ONES ARE STILL LISTED, BUT NOT AS RUNNING.
+
+            The service returns them and that is useful — an operator wants to
+            see what went out. What it must not do is count them under
+            "Running now": a band that ended ten hours ago is not on anybody's
+            screen, and saying it is sends an operator hunting for a banner no
+            reader can see. They carry no End action either; there is nothing
+            left to end.
+          */}
+          {ended.length > 0 && (
+            <div className="px-4 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-meta">
+                Already ended
+              </p>
+              <div className="space-y-2">
+                {ended.map((announcement) => (
+                  <div key={announcement.id} className="flex items-start gap-2 opacity-60">
+                    <p className="min-w-0 flex-1 text-[13px] text-white">
+                      {announcement.body}
+                      <span className="mt-0.5 block text-[12px] text-meta">
+                        Ended <When iso={announcement.endsAt} />
+                      </span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </PanelBody>
+      </Panel>
+    </div>
+  );
+}

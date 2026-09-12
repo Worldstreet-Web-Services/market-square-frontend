@@ -7,10 +7,10 @@ describe("house invite links", () => {
     assert.equal(inviteUrl("https://square.example", "abc_DEF-123"), "https://square.example/join/abc_DEF-123");
   });
 
-  it("offers the link to any member of a public house and only the owner of a private one", () => {
-    assert.equal(canMakeInvite({ visibility: "public", isOwner: false }), true);
-    assert.equal(canMakeInvite({ visibility: "private", isOwner: true }), true);
-    assert.equal(canMakeInvite({ visibility: "private", isOwner: false }), false);
+  it("offers the link to any member of a public house and only the owner or an admin of a private one", () => {
+    assert.equal(canMakeInvite({ visibility: "public", manages: false }), true);
+    assert.equal(canMakeInvite({ visibility: "private", manages: true }), true);
+    assert.equal(canMakeInvite({ visibility: "private", manages: false }), false);
   });
 
   it("reads the landing page's state from the preview", () => {

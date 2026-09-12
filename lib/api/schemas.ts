@@ -120,6 +120,22 @@ const RawProfileSchema = z.object({
   */
   city: z.string().nullable().optional().default(null),
   region: z.string().nullable().optional().default(null),
+  /*
+    COUNTRY AND CONTINENT (settings stage 3). `country` is an ISO 3166-1
+    alpha-2 code; `continent` is derived from it by the service. What another
+    reader gets is the OWNER's choice (`locationPrecision`): the service nulls
+    the hidden halves, and a continent-only profile carries just the continent.
+    The owner's own reads always carry everything.
+  */
+  country: z.string().nullable().optional().default(null),
+  continent: z.enum(["AF", "AN", "AS", "EU", "NA", "OC", "SA"]).nullable().optional().default(null).catch(null),
+  /** Own profile only (`GET /me`). */
+  locationPrecision: z
+    .enum(["city_region_country", "region_country", "country", "continent"])
+    .nullable()
+    .optional()
+    .default(null)
+    .catch(null),
   gender: z.string().nullable().optional().default(null),
   /*
     When this person was last seen, for the chat thread's "Active 20m ago".
@@ -132,6 +148,33 @@ const RawProfileSchema = z.object({
     which would be a claim nobody made.
   */
   lastSeenAt: z.string().nullable().optional().default(null),
+  /**
+   * THE POST THIS PERSON PUT AT THE TOP OF THEIR OWN PAGE.
+   *
+   * `GET /profiles/:username` only — never on a summary, a directory row or
+   * any list, because hydrating it costs a post lookup nothing else needs.
+   *
+   * THE KEY IS ABSENT, NOT NULL, whenever it cannot be shown: the post was
+   * deleted, moderation removed it, it was a story and expired, or there is a
+   * block between the author and this reader in either direction. So this is
+   * `.optional()` with NO default — check presence, never truthiness — and
+   * nothing here invents a placeholder.
+   *
+   * That is deliberately the opposite of `quotedPost`, which reports
+   * `unavailable: true`: a quote is part of a post somebody wrote, so hiding it
+   * would edit their words, while a profile announcing "this post is
+   * unavailable" to every visitor publishes that something was taken down.
+   */
+  pinnedPost: z
+    .object({
+      id: z.string(),
+      text: z.string().nullable().optional().default(null),
+      mediaUrl: z.string().nullable().optional().default(null),
+      mediaKind: z.string().nullable().optional().default(null),
+      thumbnailUrl: z.string().nullable().optional().default(null),
+      createdAt: z.string().optional().default(""),
+    })
+    .optional(),
 });
 
 // "Member ·A1B2" beats "Someone": derived from the tail of the Privy DID so
@@ -195,6 +238,27 @@ export const TicketSchema = z.object({
 });
 
 export const StreamSchema = z.object({
+  /**
+   * Has THIS reader asked to be told when the room opens?
+   *
+   * Deliberately `.optional()` with NO default, unlike `likedByMe` and
+   * `bookmarkedByMe` beside it. The service sends it for a signed-in caller and
+   * OMITS it entirely for a signed-out one, because "you have not asked" and
+   * "there is nobody to have asked" are different facts. Defaulting it to
+   * `false` would collapse them and render a Remind me button that lies on
+   * arrival to every signed-out reader.
+   */
+  remindedByMe: z.boolean().optional(),
+  /**
+   * THE SPOKEN CODE for a gist room — nine lower-case characters, no
+   * separators (`bcdfghjkm`). Grouping for display is ours.
+   *
+   * NULL is ordinary and is rendered as simply no code: a broadcast is never
+   * given one (nobody joins a broadcast by reading a code aloud), and neither
+   * is a room made before codes shipped. A room works by link without one, so
+   * a null is never an error state.
+   */
+  roomCode: z.string().nullable().optional().default(null),
   id: z.string(),
   ownerId: z.string(),
   owner: ProfileSchema.nullable().optional().default(null),
@@ -379,6 +443,14 @@ export const PostSchema = z.object({
    */
   bookmarkCount: z.number().optional(),
   repostedByMe: z.boolean().optional().default(false),
+  /**
+   * Has the AUTHOR pinned this to the top of their own profile?
+   *
+   * Not viewer state, despite sitting beside `likedByMe`: it is the author's
+   * placement and reads the same for everybody, signed out included. It draws
+   * the "Pinned" label, and tells the author's own menu to offer Unpin.
+   */
+  pinnedByAuthor: z.boolean().optional().default(false),
   // The quoted original, hydrated one level deep only — a quote of a quote
   // shows the inner card's text, never a third nested frame. When the original
   // has been removed or expired the backend flags it rather than dropping the

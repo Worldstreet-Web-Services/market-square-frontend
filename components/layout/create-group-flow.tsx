@@ -195,6 +195,10 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
       // caller, and with the visibility they chose on the form.
       createdBy: me.data?.id ?? null,
       visibility,
+      // The creator is its owner, and every member starts at all/all — the
+      // next inbox poll brings the stored levels.
+      viewerRole: "owner" as const,
+      notificationSettings: null,
           imageUrl: imageUrl ?? null,
           description: description.trim() || null,
             title: conversation.title ?? name,
@@ -273,7 +277,7 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
                       : "border-white/10 hover:bg-white/[0.06]"
                   }`}
                 >
-                  <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+                  <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
                     <Avatar name={name} seed={profile.id} src={profile.avatarUrl} size={38} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">

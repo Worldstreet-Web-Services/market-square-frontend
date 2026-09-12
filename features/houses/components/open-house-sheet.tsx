@@ -6,6 +6,7 @@ import { Button, Spinner } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/states";
 import { Sheet } from "@/components/ui/sheet";
 import { TopicTagsField } from "@/components/ui/topic-tags-field";
+import { DateTimeField } from "@/components/ui/date-time-field";
 import { cn } from "@/lib/cn";
 import { useCreateStream } from "@/features/streams/hooks/use-streams";
 import { acceptFor, ensureUploadLimits, uploadFile, validateUpload } from "@/lib/api/upload";
@@ -164,12 +165,24 @@ export function OpenHouseSheet({
      historic behaviour, so a host who never touches this gets the room every
      room used to be. */
   const [chatAccess, setChatAccess] = useState<"open" | "followers">("open");
+  /*
+    NOW OR LATER. A gist room opens the moment it is made unless a time is put
+    on it — `scheduledAt` is optional on the service and "omitted means now".
+    A room with a time on it is listed under Upcoming until its host opens it.
+  */
+  const [startsLater, setStartsLater] = useState(false);
+  const [startsAt, setStartsAt] = useState("");
+  /* Why a chosen time was refused. Set on submit — the clock may not be read
+     while rendering, and "is this in the past" is only true at a moment. */
+  const [startsAtError, setStartsAtError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const valid = isValidTopic(topic);
+  // "Later" needs a time; whether that time has already passed is checked on
+  // submit, where the clock may be read.
+  const valid = isValidTopic(topic) && (!startsLater || startsAt !== "");
 
   const takeImage = async (file: File | undefined) => {
     if (!file || imageBusy) return;
@@ -192,6 +205,13 @@ export function OpenHouseSheet({
   };
 
   const submit = () => {
+    // A time in the past is not a schedule. Refused here rather than by the
+    // service, so the reader can fix it while the form is still open.
+    const startsAtMs = startsLater ? new Date(startsAt).getTime() : Number.NaN;
+    if (startsLater && !(Number.isFinite(startsAtMs) && startsAtMs > Date.now())) {
+      setStartsAtError("Pick a time in the future.");
+      return;
+    }
     create.mutate(
       {
         title: topic.trim(),
@@ -201,6 +221,8 @@ export function OpenHouseSheet({
         // meaning for it.
         ...(tags.length > 0 ? { topics: tags } : {}),
         ...(imageUrl ? { thumbnailUrl: imageUrl } : {}),
+        // Omitted for "now" — the service reads an absent time as immediately.
+        ...(startsLater ? { scheduledAt: new Date(startsAt).toISOString() } : {}),
         audience,
         /*
           THE HOUSE GROUP IS SENT WHENEVER WE HAVE ONE — public rooms included.
@@ -404,6 +426,29 @@ export function OpenHouseSheet({
               event.target.value = "";
             }}
           />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className={LABEL}>Starts</span>
+          <div className="flex flex-wrap gap-4">
+            <RadioPill text="Now" selected={!startsLater} onSelect={() => setStartsLater(false)} />
+            <RadioPill text="Later" selected={startsLater} onSelect={() => setStartsLater(true)} />
+          </div>
+          {startsLater && (
+            <>
+              <DateTimeField
+                value={startsAt}
+                onChange={(next) => {
+                  setStartsAt(next);
+                  setStartsAtError(null);
+                }}
+                label="When the gist room opens"
+              />
+              <p className="text-[13px] text-meta">
+                {startsAtError ?? "It waits under Upcoming Gistrooms until you open it."}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">

@@ -11,7 +11,6 @@ import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed, useFeedHead } from "@/features/feed/hooks/use-feed";
 import { useLaneSignal } from "@/features/feed/hooks/use-lane-signal";
 import { Composer } from "@/features/feed/components/composer";
-import { StoriesRow } from "@/features/feed/components/stories-row";
 import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import type { VideoItem } from "@/lib/video-context";
@@ -20,7 +19,6 @@ import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
-import { TopicTabs, type TopicTab } from "@/features/feed/components/topic-tabs";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useMe } from "@/hooks/use-me";
 import { useNewPosts } from "@/features/feed/hooks/use-new-posts";
@@ -142,29 +140,61 @@ function PostSkeleton() {
 }
 
 // Mobile Home stays the vertical snap feed; desktop is the card timeline.
+const NO_TOPICS: string[] = [];
+
 export function FeedPage({
+  mode = "feed",
+  topics = NO_TOPICS,
+  postsSlot,
   followSlot,
   winkSlot,
   tipSlot,
-  topicTabs = [],
+  headSlot,
+  searchSlot,
   roomsSlot,
-  liveCtaSlot,
   friendsSlot,
+  comingSoonSlot,
+  housesSlot,
   communitySlot,
   palsSlot,
 }: {
+  /**
+   * WHICH HALF OF THIS PAGE TO DRAW.
+   *
+   * `home` — the sections, closing with the "Post For You" rail, and NO
+   *   timeline. The 2026-09-12 design draws six sections and no feed, and
+   *   ogazboiz confirmed it: a rail showing the same lane a list underneath was
+   *   already showing put the same post on screen twice.
+   * `feed` — the timeline itself, which is what "View more" opens at `/feed`:
+   *   the endless list, the composer, the new-posts pill and the full-screen
+   *   video viewer, all unchanged.
+   *
+   * `pals` — node 1328:1885's column: the head (the search row and the
+   *   stories, composed in `pals-screen`), the friends deck, then the
+   *   FOLLOWING lane as the list (1344:21876 — every card on it carries a
+   *   "Following" author state). Nothing else: no banner, rooms, coming-soon,
+   *   houses or suggested pals; the page draws none. The same list, composer,
+   *   new-posts pill and viewer as `feed`, at the node's own width and gap.
+   *
+   * One component rather than two, because everything except the list is
+   * shared, and a second copy is how the composer or the viewer ends up fixed
+   * on one surface and broken on the other.
+   */
+  mode?: "home" | "feed" | "pals";
+  /**
+   * Topic keys narrowing the lane — `GET /feed?topics=`. `/pals` heads its
+   * list with the topic row (647:16266), whose selection is owned by the
+   * layout: `GET /topics` is the discovery slice's and this one may not
+   * import it. Empty is "no filter". Pass a stable reference.
+   */
+  topics?: readonly string[];
+  /** The rail Home shows instead of a timeline (1314:153017). */
+  postsSlot?: React.ReactNode;
   followSlot?: (author: Profile) => React.ReactNode;
   winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
-  /**
-   * The shared topic vocabulary for the tab row (node 225:3352), supplied by
-   * the layout. `GET /topics` lives in the DISCOVERY slice and slices never
-   * import each other — and this is the data rather than a node, because the
-   * row's selection drives this component's own query.
-   */
-  topicTabs?: readonly TopicTab[];
   /**
    * The three sections the file puts around the timeline, each composed in
    * `components/layout` because each reads a slice this one may not import:
@@ -173,30 +203,35 @@ export function FeedPage({
    */
   roomsSlot?: React.ReactNode;
   /**
-   * The Go Live banner (647:17219), from the streams slice, directly under the
-   * topic row. Absent for signed-out readers; see HomeScreen.
+   * What opens the column — the search row and the banner (1295:142736 and
+   * 1305:149178), composed in `home-screen` and drawn ABOVE everything else.
    */
-  liveCtaSlot?: React.ReactNode;
+  headSlot?: React.ReactNode;
+  /**
+   * What Home shows INSTEAD of its sections while the reader is searching.
+   *
+   * The sections are the resting state of the page, not the page itself, so a
+   * query replaces them rather than being appended under them — results under
+   * four shelves of unrelated content is a page that did not answer.
+   */
+  searchSlot?: React.ReactNode;
   friendsSlot?: React.ReactNode;
+  /**
+   * Gist rooms with a time on them, under the people deck. Renders nothing
+   * while nothing is scheduled, so it costs no space on a quiet square.
+   */
+  comingSoonSlot?: React.ReactNode;
+  /**
+   * "Popular Houses" (1305:149179), the last section of the new Home. Renders
+   * nothing when no public house exists.
+   */
+  housesSlot?: React.ReactNode;
   communitySlot?: React.ReactNode;
   /** The pals rail (540:19351), dropped a few posts into the timeline. */
   palsSlot?: React.ReactNode;
 }) {
   const compose = useQueryParam("compose");
   const prefill = useComposePrefill();
-  /*
-    THE TAB ROW SELECTS A TOPIC, NOT A LANE — node 225:3352.
-
-    Home used to head the timeline with `For You · Following · Trending`, which
-    are three ways of RANKING the same posts. The file heads it with the
-    subjects the square is talking about, which is the proposition of the
-    product. `null` is "For you" — the unfiltered lane.
-
-    The lane stays `for-you` throughout: a topic narrows what is in the lane, it
-    does not change how the lane is ranked. `GET /feed?topics=` does the
-    narrowing server-side.
-  */
-  const [topic, setTopic] = useState<string | null>(null);
   /*
     THE TIMELINE RUNS ON, AND "JOIN A COMMUNITY" SITS INSIDE IT.
 
@@ -211,21 +246,23 @@ export function FeedPage({
     page, and reaching the end asks for the next page rather than waiting to be
     asked.
   */
-  const lane: Lane = "for-you";
+  // `/pals` reads the FOLLOWING lane — the people the reader decided about in
+  // the deck above it are who the list is for. Home and /feed stay on
+  // for-you.
+  const lane: Lane = mode === "pals" ? "following" : "for-you";
+  // Home has no topic row any more (ogazboiz, 2026-09-12), so its lane is
+  // never narrowed and `topics` stays the module-level empty list; `/pals`'
+  // row narrows the following lane through the prop. A topic narrows what is
+  // in the lane, it does not change how the lane is ranked.
+  const narrowed = topics.length > 0;
   const [composerOpen, setComposerOpen] = useState(false);
   // The post being quoted, if the composer was opened from a repost menu.
   const [quoting, setQuoting] = useState<Post | null>(null);
-  const { authenticated } = useAuth();
-  const topics = useMemo(() => (topic ? [topic] : []), [topic]);
-  const feed = useFeed(lane, topics);
-
-  /* `For you` plus whatever vocabulary the layout supplied, in the backend's
-     own order — nothing hard-coded, so a topic added upstream appears with no
-     client change. */
-  const tabs: TopicTab[] = useMemo(
-    () => [{ key: null, label: "For you" }, ...topicTabs],
-    [topicTabs]
-  );
+  const { ready, authenticated, login } = useAuth();
+  // The following lane is the reader's own edge: signed out there is nobody
+  // it could be for, so it is not asked for and the sign-in copy stands in.
+  const gated = mode === "pals" && !authenticated;
+  const feed = useFeed(lane, topics, !gated);
 
   /*
     THE HEAD CHECK (`useFeedHead`) runs every 30 seconds while the tab is
@@ -298,7 +335,220 @@ export function FeedPage({
     document.startViewTransition(apply);
   };
   const showComposer = composerOpen || compose === "1" || compose === "story";
-  useMarketView("feed_viewed", { surface: "market_square_home", source: topic ?? lane });
+  useMarketView("feed_viewed", {
+    surface: mode === "pals" ? "market_square_pals" : "market_square_home",
+    source: narrowed ? topics.join(",") : lane,
+  });
+
+  /*
+    THE LIST'S BODY, written once. `/pals` draws it inside the node's own
+    wrapper (573.14 wide on a 47.89 gap, 1344:21877) and Home's timeline
+    inside its 63.42 rhythm, so the wrapper is per surface and the states and
+    cards inside it are not — a second copy is how the empty copy or the
+    quote handler ends up fixed on one page and broken on the other.
+  */
+  const listBody = (
+    <>
+      {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
+      {feed.isError && (
+        <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
+      )}
+      {/* A narrowed lane that is empty is empty BECAUSE of the topic, so the
+          copy says so and offers another pill rather than the lane's own
+          "follow somebody" answer, which would be the wrong diagnosis. */}
+      {feed.isSuccess && items.length === 0 && (
+        <EmptyState
+          glyph="◇"
+          title={narrowed ? "Nothing here yet" : EMPTY_COPY[lane].title}
+          body={
+            narrowed
+              ? "Nobody has posted under this topic yet. Try another, or start the conversation."
+              : EMPTY_COPY[lane].body
+          }
+          action={narrowed ? null : <LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />}
+        />
+      )}
+      {items.map((item, index) => (
+        <Fragment key={item.id}>
+          <div className="ws-enter">
+            <FeedItemCard
+              item={item}
+              followSlot={followSlot}
+              winkSlot={winkSlot}
+              onOpenMedia={openMedia}
+              tipSlot={tipSlot}
+              onQuote={(post) => {
+                setQuoting(post);
+                setComposerOpen(true);
+              }}
+            />
+          </div>
+          {/*
+            NODE 647:16515 — "Join a community", INSIDE the timeline rather
+            than under it, after the SECOND post as the live file places it.
+
+            It used to close the page, which only worked while the feed had
+            a floor: a grid below a list that pages forever is a grid nobody
+            reaches. Two posts above it keep it near the top, where
+            somebody who has just seen what the square sounds like is being
+            offered a room to say it in.
+
+            Rendered against the LAST post when the feed is shorter than the
+            cut, so a one-post lane still shows it rather than dropping it.
+            It sits in the list's own 63.42 rhythm and carries no padding of
+            its own.
+          */}
+          {communitySlot &&
+            index === Math.min(BEFORE_COMMUNITY - 1, items.length - 1) && (
+              <div>{communitySlot}</div>
+            )}
+          {/* NODE 540:19351 — the pals rail, deeper into the timeline than
+              the community grid, and pinned to the LAST post when the feed
+              is shorter than the cut. A young square has three posts in it,
+              and a section that only exists once there are four would be
+              missing exactly when meeting people matters most. */}
+          {palsSlot && index === Math.min(BEFORE_PALS - 1, items.length - 1) && (
+            <div>{palsSlot}</div>
+          )}
+        </Fragment>
+      ))}
+    </>
+  );
+
+  /*
+    The end of the list asks for the next page itself — node 242:4890's
+    "Load more" row is gone. The sentinel sits 600px ahead of the reader
+    (`useInfiniteScroll`), so the next posts are usually already there by
+    the time they arrive; the spinner is what shows when they are not.
+  */
+  const listTail = (
+    <>
+      {canLoadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
+      {feed.isFetchingNextPage && (
+        <div className="flex justify-center py-6">
+          <Spinner className="h-4 w-4" />
+        </div>
+      )}
+      {feed.isSuccess && !canLoadMore && items.length > 0 && (
+        <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
+      )}
+    </>
+  );
+
+  const composer = authenticated && showComposer && (
+    <div className="ws-post mb-4">
+      <Composer
+        autoFocus
+        asStory={compose === "story"}
+        prefill={prefill}
+        quoted={quoting}
+        onDone={() => {
+          setQuoting(null);
+          setComposerOpen(false);
+          // Drop the share parameters too, or reopening the composer
+          // re-seeds the draft that was just published.
+          if (compose !== null) {
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+        }}
+      />
+    </div>
+  );
+
+  /* Full screen, swipeable, paging the same lane. This is the promotion a
+     tap on a video card performs. */
+  const viewer = openVideoId && (
+    <VideoViewer
+      items={mediaItems}
+      activeId={openVideoId}
+      onActiveChange={setOpenVideoId}
+      onClose={() => setOpenVideoId(null)}
+      hasNextPage={Boolean(feed.hasNextPage)}
+      isFetchingNextPage={feed.isFetchingNextPage}
+      fetchNextPage={() => void feed.fetchNextPage()}
+      morphNameFor={(mediaId) => `media-${mediaId}`}
+    />
+  );
+
+  if (mode === "pals") {
+    return (
+      <>
+        {/*
+          `/pals` — node 1328:1885 in its page 1328:1882, which draws the
+          column's content in the left 618 (1331:21792) and the RAIL beside it
+          at x=618: so it is the shell's 600 column with `RightRail`, not a
+          FULL route. Column-relative: the search row at (13, 12), the
+          stories at (13, 111), and the list at (25, y) — 573.14 wide on a
+          47.89 gap, its edge on 598.14. From md the wrapper carries no
+          gutter and every child sits at the node's own x, so those numbers
+          land on a 600 column exactly; a phone keeps the 16. The vertical
+          rhythm is the node's: 12 above the head, 51 between the head's rows
+          (the search row's foot at 60 to the stories at 111).
+
+          THE NODE'S DECK IS NOT DRAWN. 1328:1885 puts the wink deck and "Make
+          some friends" between the stories and the list; ogazboiz took it
+          off this page on 2026-09-12 — the deck is already on Home, and
+          `/pals` is "just about friends and the rest that they are
+          interested in" — and asked for the TOPIC ROW (647:16266) over the
+          list instead, since the feed is here now. The row is the head's last
+          child (composed in `pals-screen`, which owns the selection) and the
+          list follows its rule on 24 — a judgement, since no frame draws this
+          row on this page.
+
+          Signed out there is no strip (its gate is `pals-screen`'s), so the
+          row follows the search row on the same 51 rather than leaving a
+          96-tall hole where a stranger's stories would be.
+        */}
+        <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col px-4 pb-6 pt-3 md:px-0">
+          {headSlot}
+
+          {/* Quoting a post from this list opens the composer where the
+              reader is, directly over the list. */}
+          {composer && <div className="mt-6 md:ml-[25px] md:w-[573.14px] md:max-w-[calc(100%-25px)]">{composer}</div>}
+
+          {fresh.pinned && (
+            <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
+          )}
+
+          {/*
+            1344:21877 — 573.14 wide at the node's 25, cards 47.89 apart. On
+            the 600 column that leaves 1.86 between the list's right edge and
+            the column's: it is left as the file's slack, not stretched away.
+            Narrower columns cap the list at what is left of them. The node's card is the
+            shared `PostCard` at 0.7551 (573.14 / 759; its 0.52 stroke, 12.46
+            radius and 47.89 gap are all `ws-post`'s times that); the card is
+            not rescaled — the list takes the node's width and gap and the
+            card keeps its own type.
+          */}
+          <div
+            ref={listRef}
+            className="mt-6 space-y-4 md:ml-[25px] md:w-[573.14px] md:max-w-[calc(100%-25px)] md:space-y-[47.89px]"
+          >
+            {!ready && <PostSkeleton />}
+            {ready && gated && (
+              <EmptyState
+                glyph="◇"
+                title="Sign in to see your pals' posts"
+                body="This lane is what the people you follow are posting."
+                action={
+                  <button
+                    onClick={login}
+                    className="ws-btn-silver ws-press rounded-full px-5 py-2 text-[13px] font-bold"
+                  >
+                    Sign in
+                  </button>
+                }
+              />
+            )}
+            {ready && !gated && listBody}
+          </div>
+          {!gated && listTail}
+        </div>
+
+        {viewer}
+      </>
+    );
+  }
 
   return (
     <>
@@ -313,6 +563,11 @@ export function FeedPage({
       {/* `ws-align-logo`: under the dock, from md up, the left gutter goes so
           the stories start on the top bar lockup's line — see globals.css. */}
       <div className="ws-align-logo relative px-4 py-4 lg:px-6">
+        {/* THE HEAD OF THE COLUMN — the search row (1295:142736), the banner
+            11 under it (1305:149178 starts at 36487 against the row's 36476),
+            then the column's own 64 to the first section. */}
+        {headSlot && <div className="mb-[64px] flex flex-col gap-[11px]">{headSlot}</div>}
+
         {/*
           HOME STARTS AT THE STORIES — node 225:3315.
 
@@ -334,11 +589,8 @@ export function FeedPage({
           What the file opens on is the people you follow, which is what a
           social page should say first.
         */}
-        {authenticated && (
-          <div className="mb-4">
-            <StoriesRow />
-          </div>
-        )}
+        {/* The stories strip moved to Pals, above its tabs (ogazboiz,
+            2026-09-11). Home opens on what the square is talking about. */}
 
         {/*
           What the square is talking about, on the overview where it belongs.
@@ -367,39 +619,9 @@ export function FeedPage({
           arena goes.
         */}
 
-        {authenticated && showComposer && (
-          <div className="ws-post mb-4">
-            <Composer
-              autoFocus
-              asStory={compose === "story"}
-              prefill={prefill}
-              quoted={quoting}
-              onDone={() => {
-                setQuoting(null);
-                setComposerOpen(false);
-                // Drop the share parameters too, or reopening the composer
-                // re-seeds the draft that was just published.
-                if (compose !== null) {
-                  window.history.replaceState(null, "", window.location.pathname);
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* NODE 225:3352 — the topic row, over its own 2px rule. */}
-        <div className="mb-4">
-          <TopicTabs
-            tabs={tabs}
-            active={topic}
-            onSelect={(key) => setTopic(key)}
-          />
-        </div>
-
-        {/* NODE 647:17219 — the Go Live banner: 34 below the topic row's block
-            (its 16px margin collapses into this) and 60 above what follows,
-            the file's own gaps. */}
-        {liveCtaSlot && <div className="mb-[60px] mt-[34px]">{liveCtaSlot}</div>}
+        {searchSlot ?? (
+          <>
+        {composer}
 
         {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
             A room happening now beats a subject being discussed, and both beat
@@ -413,97 +635,46 @@ export function FeedPage({
             in it renders nothing and leaves no spacer. */}
         {friendsSlot}
 
+        {/* Rooms that have not opened yet, directly under the deck. Its own
+            margins, like the two sections above it: nothing scheduled renders
+            nothing at all rather than an empty shelf. */}
+        {comingSoonSlot}
+
+        {/* 1305:149179 — the houses anybody can join, closing the column's
+            sections before the timeline. */}
+        {housesSlot}
+
+        {/* 1314:153017 — Home's posts, as a slide. "View more" on it opens
+            /feed, which is this same component in `feed` mode. */}
+        {mode === "home" && postsSlot}
+
+        {/* NODE 540:19351 — the pals rail closes Home's column (it has no
+            list to sit inside). "Join a community" (647:16515) is NOT on Home
+            any more — Popular Houses is the same list, and ogazboiz asked for
+            the last section to go (2026-09-12); on /feed both stay interleaved
+            into the timeline where the file puts them. */}
+        {mode === "home" && palsSlot}
+          </>
+        )}
+
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
             than as separate objects — and these are objects, not rows. */}
         {/* Floats over the column, fixed under the top bars, only while the
             reader is scrolled away from the head — at the top the held posts
             merge in place and there is nothing to announce. */}
-        {fresh.pinned && (
+        {mode === "feed" && fresh.pinned && (
           <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
         )}
         {/* 647:16354 spaces the timeline 73 apart around cards drawn 873.65 wide; the
             card here is that drawing at 759 (see PostCard), so 73/1.151 = 63.42. */}
+        {mode === "feed" && (
         <div ref={listRef} className="space-y-4 md:space-y-[63.42px]">
-          {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
-          {feed.isError && (
-            <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
-          )}
-          {feed.isSuccess && items.length === 0 && (
-            <EmptyState
-              glyph="◇"
-              title={topic ? "Nothing here yet" : EMPTY_COPY[lane].title}
-              body={
-                topic
-                  ? "Nobody has posted under this topic yet. Try another, or start the conversation."
-                  : EMPTY_COPY[lane].body
-              }
-              action={
-                topic ? null : <LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />
-              }
-            />
-          )}
-          {items.map((item, index) => (
-            <Fragment key={item.id}>
-              <div className="ws-enter">
-                <FeedItemCard
-                  item={item}
-                  followSlot={followSlot}
-                  winkSlot={winkSlot}
-                  onOpenMedia={openMedia}
-                  tipSlot={tipSlot}
-                  onQuote={(post) => {
-                    setQuoting(post);
-                    setComposerOpen(true);
-                  }}
-                />
-              </div>
-              {/*
-                NODE 647:16515 — "Join a community", INSIDE the timeline rather
-                than under it, after the SECOND post as the live file places it.
-
-                It used to close the page, which only worked while the feed had
-                a floor: a grid below a list that pages forever is a grid nobody
-                reaches. Two posts above it keep it near the top, where
-                somebody who has just seen what the square sounds like is being
-                offered a room to say it in.
-
-                Rendered against the LAST post when the feed is shorter than the
-                cut, so a one-post lane still shows it rather than dropping it.
-                It sits in the list's own 63.42 rhythm and carries no padding of
-                its own.
-              */}
-              {communitySlot &&
-                index === Math.min(BEFORE_COMMUNITY - 1, items.length - 1) && (
-                  <div>{communitySlot}</div>
-                )}
-              {/* NODE 540:19351 — the pals rail, deeper into the timeline than
-                  the community grid, and pinned to the LAST post when the feed
-                  is shorter than the cut. A young square has three posts in it,
-                  and a section that only exists once there are four would be
-                  missing exactly when meeting people matters most. */}
-              {palsSlot && index === Math.min(BEFORE_PALS - 1, items.length - 1) && (
-                <div>{palsSlot}</div>
-              )}
-            </Fragment>
-          ))}
+          {listBody}
         </div>
+        )}
 
-        {/*
-          The end of the list asks for the next page itself — node 242:4890's
-          "Load more" row is gone. The sentinel sits 600px ahead of the reader
-          (`useInfiniteScroll`), so the next posts are usually already there by
-          the time they arrive; the spinner is what shows when they are not.
-        */}
-        {canLoadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
-        {feed.isFetchingNextPage && (
-          <div className="flex justify-center py-6">
-            <Spinner className="h-4 w-4" />
-          </div>
-        )}
-        {feed.isSuccess && !canLoadMore && items.length > 0 && (
-          <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
-        )}
+        {mode === "feed" && listTail}
 
         {/* The floating compose button used to live here, which is why it
             existed on home and nowhere else. AppShell owns it now and renders
@@ -512,20 +683,7 @@ export function FeedPage({
             states open it in place via `?compose=1` / `?compose=story`. */}
       </div>
 
-      {/* Full screen, swipeable, paging the same lane. This is the promotion a
-          tap on a video card performs. */}
-      {openVideoId && (
-        <VideoViewer
-          items={mediaItems}
-          activeId={openVideoId}
-          onActiveChange={setOpenVideoId}
-          onClose={() => setOpenVideoId(null)}
-          hasNextPage={Boolean(feed.hasNextPage)}
-          isFetchingNextPage={feed.isFetchingNextPage}
-          fetchNextPage={() => void feed.fetchNextPage()}
-          morphNameFor={(mediaId) => `media-${mediaId}`}
-        />
-      )}
+      {viewer}
     </>
   );
 }

@@ -98,6 +98,10 @@ export function errorMessage(error: unknown, fallback: string): string {
       return "Session expired — sign in again.";
     case "AUTH_NOT_READY":
       return "Still connecting — try again in a moment.";
+    // Somebody's "Messages from" setting refused this chat. The service's own
+    // words say which ("not accepting messages" / "only from verified people").
+    case "MESSAGES_RESTRICTED":
+      return err.message || "This person isn't accepting messages.";
     case "FORBIDDEN":
       return "You don't have access to that.";
     case "NOT_FOUND":

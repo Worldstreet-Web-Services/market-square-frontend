@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
 import { EmptyPanel, EmptyPanelAction } from "@/components/ui/empty-panel";
@@ -13,137 +10,76 @@ import { useQueryParam } from "@/hooks/use-query-param";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
-import { PorchSheet } from "@/features/houses/components/porch-sheet";
-import { housePath } from "@/features/houses/lib/house";
 
 /**
- * The street — node 407:17074, "Happening Now!".
+ * THE GIST ROOMS PAGE — node 1317:158073, the 2026-09-12 file. It is where
+ * both of Home's "View more" pills (Top GistRooms, Coming Soon) land.
  *
- * A two-column grid of the SAME card the home rail carries (`GistRoomCard`,
- * 225:3873), 24 apart, under a 24/31.2 heading and a 14/20 line at 50% white.
+ * A 951-wide artboard on the chrome's `#121214` with the rail's hairline at its
+ * right — the column and the rail's width together, which is the shell's FULL
+ * frame — inset 22 on the left, 21 on the right, 22 from the top:
  *
- * ─── THIS USED TO ARGUE AGAINST A GRID, AND THE ARGUMENT WAS NOT WRONG ──────
- * The note here said: not a grid of live tiles, because Discord shipped exactly
- * that, found it did not connect people to audio they cared about, and killed
- * it inside six months — and because a tile grid has to fill itself with
- * something, which in an audio product can only be decoration.
+ *   · the search row (1317:158074, `HomeTopRow` — the same 48 row Home opens
+ *     with, here drawn in the pill's open state);
+ *   · 36 below it, "Live GistRooms" (1317:158104, Manrope Bold 24 / 28.61,
+ *     "GistRooms" in the 90deg #C196FD → #7E3BEB fill) with NO "View more" —
+ *     this is the page it would go to;
+ *   · 16 below, the grid (1317:158083): rows 104 tall on a 16 gap, three
+ *     cards across at 290.47 x 103.13 — the 338 x 120 invite card at 0.8594 —
+ *     20 apart. The file draws six rows of the same card; this draws every
+ *     live room the service returns;
+ *   · 59 below the grid, "Coming Soon" (1317:158175, all white, no pill), 16,
+ *     then the upcoming grid (1317:158179): rows 91 tall on a 16 gap, three
+ *     cards across at 296.52 x 91 — the 479 x 147 upcoming card at 0.619 —
+ *     12.38 apart.
  *
- * The design answers that rather than ignoring it. These are not tiles: each
- * cell is the invite card, carrying the room's title, its topics, who is
- * already inside and a Join control — the same object that works in a thread,
- * at the same size. There is no artwork in it and nothing to pad it out. What
- * the grid buys is that a page of rooms reads as a page of rooms instead of a
- * column you scroll past four at a time.
+ * ─── WHAT THE OLDER PAGE HAD AND THIS ONE DOES NOT ───────────────────────────
+ * 407:17074 opened with "Happening Now!", a topic row and a floating create
+ * circle, and ran upcoming rooms sideways. None of those is in 1317:158073, so
+ * none is drawn: no page heading, no `TopicTabs` (the page shows every room),
+ * no circle (the sidebar's "Start Gistroom" and Home's banner are the ways
+ * in), and Coming Soon is a grid. `?open=1` still opens the room composer on
+ * arrival — that is the sidebar button's contract, not a drawing.
  *
- * `HouseRow` stays, for the rooms that have not opened yet. The file draws only
- * the live grid, and a scheduled room has no roster to show and nothing to join
- * — a card promising both would be the dead promise the card was built to
- * avoid.
+ * ─── THE FRAME IS 4 NARROWER THAN THE ARTBOARD, AND THE FILE OVERFLOWS ITS
+ * OWN ──────────────────────────────────────────────────────────────────────
+ * The shell's FULL frame is 947 of usable width; the artboard is 951 and its
+ * grids are 911 and 914 inside a 908 row (the third card's right edge sits at
+ * 933 on a 930 row). So the cards keep their sizes and the COLUMNS spread to
+ * the frame: the live cards are the file's fixed 290.47 with the two gaps
+ * sharing what is left (15.8 here, the file's 20), and the upcoming cards keep
+ * the file's 12.38 gap and scale from their width as they are built to (292.7
+ * here, the file's 296.52). Every other number is the node's.
+ *
+ * The room card and the upcoming card are composed from OUTSIDE this slice
+ * (they read the streams, discovery and messages slices), as are the search
+ * row and the two headings (`components/layout`) — the route-slot pattern
+ * every screen here uses.
  */
-function HouseRow({ stream, onOpen }: { stream: Stream; onOpen: () => void }) {
-  const host = stream.owner;
-  return (
-    <Link
-      href={housePath(stream.id)}
-      onClick={(event) => {
-        // The PORCH. Tapping a house from the street opens the threshold
-        // first, before any connection is made — before a room, before this
-        // person appears in anybody's audience band. In a voice product where
-        // joining makes you visible to a room of strangers, that pause is the
-        // whole difference between walking in and being pushed in.
-        //
-        // Still a real <Link>: a direct URL, a middle-click and a shared link
-        // all go straight in, which is correct — somebody who was sent a link
-        // has already decided.
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault();
-        onOpen();
-      }}
-      className="ws-row flex items-start gap-3 px-4 py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-    >
-      <Avatar
-        name={host?.displayName ?? "Host"}
-        seed={stream.ownerId}
-        src={host?.avatarUrl}
-        size={40}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[15px] font-bold leading-5 text-heading">{stream.title}</p>
-        {/* Only what the LIST payload actually carries. `owner` and
-            `viewerCount` are absent on list rows by contract — the schema
-            keeps viewerCount nullable precisely so "no count available" cannot
-            be rendered as a confident 0 — so neither is invented here, and
-            with neither available the line is absent rather than repeating the
-            section header back at the reader. The porch fetches the detail. */}
-        {(host || typeof stream.viewerCount === "number") && (
-          <p className="ws-meta mt-1 normal-case tracking-normal">
-            {host?.displayName}
-            {host && typeof stream.viewerCount === "number" && " · "}
-            {typeof stream.viewerCount === "number" && (
-              <>
-                <span className="tnum">{stream.viewerCount}</span> inside
-              </>
-            )}
-          </p>
-        )}
-      </div>
-    </Link>
-  );
-}
-
 export function HousesStreet({
+  headSlot,
+  headingSlot,
   roomCardSlot,
-  tabsSlot,
-  createSlot,
+  upcomingCardSlot,
 }: {
-  /**
-   * The invite card for one open room, composed from OUTSIDE this slice.
-   *
-   * `GistRoomCard` reads the room (streams), the topic vocabulary (discovery)
-   * and the group's roster (messages), and slices never import each other — so
-   * it is assembled in `components/layout` and handed down, exactly as the home
-   * rail already does. Absent, the grid renders empty cells rather than
-   * inventing a second card.
-   */
+  /** The search row at the head of the page (1317:158074). */
+  headSlot?: React.ReactNode;
+  /** The two section headings (1317:158104 / 1317:158175). */
+  headingSlot?: (section: "live" | "soon") => React.ReactNode;
+  /** The invite card for one open room, at 415:12669's own scale. */
   roomCardSlot?: (stream: Stream) => React.ReactNode;
-  /**
-   * The topic row (407:17261), also composed from outside.
-   *
-   * It is `TopicTabs` — the SAME row and the same node family Home heads its
-   * timeline with — and it renders the shared vocabulary `GET /topics` serves,
-   * both of which live in slices this one may not import. The selection is
-   * owned here, because it is what the room query is keyed on.
-   */
-  tabsSlot?: (state: {
-    active: string | null;
-    onSelect: (key: string | null) => void;
-  }) => React.ReactNode;
-  /**
-   * The corner circle (407:17286), given the handler that opens the sheet.
-   *
-   * `CreateFab` is the composition layer's, like everything else here — a
-   * feature reaching up into `components/layout` is the same violation as
-   * reaching sideways into another slice.
-   */
-  createSlot?: (onOpen: () => void) => React.ReactNode;
+  /** The card for a room that has not opened yet (1295:140164). */
+  upcomingCardSlot?: (stream: Stream) => React.ReactNode;
 } = {}) {
   const gate = useGate();
-  const router = useRouter();
   const [opening, setOpening] = useState(false);
 
   /*
-    `?open=1` OPENS THE SHEET ON ARRIVAL.
-
-    The shell's "Start Gistroom" pointed at `/studio` — the CREATOR studio,
-    which is where you go live, not where you open a room. A gist room needs
-    no creator role and no house to belong to: "anyone can walk in" is what the
-    empty state on this very page promises. So the button lands here and starts
-    one, which is what its label says it does.
-
-    `useQueryParam`, never `useSearchParams`: that one forces a Suspense
-    boundary and delays hydration of this subtree. Fired ONCE via a ref rather
-    than on every render the param survives, so dismissing the sheet does not
-    immediately reopen it while the URL still carries the flag.
+    `?open=1` OPENS THE SHEET ON ARRIVAL — the sidebar's "Start Gistroom" and
+    Home's banner both land here with it. `useQueryParam`, never
+    `useSearchParams` (its Suspense boundary delays hydration). Fired ONCE via
+    a ref rather than on every render the param survives, so dismissing the
+    sheet does not immediately reopen it while the URL still carries the flag.
   */
   const openParam = useQueryParam("open");
   const autoOpened = useRef(false);
@@ -152,84 +88,16 @@ export function HousesStreet({
     autoOpened.current = true;
     gate(() => setOpening(true));
   }, [openParam, gate]);
-  const [porch, setPorch] = useState<Stream | null>(null);
-  /** null is "For you" — every room, unfiltered. */
-  const [topic, setTopic] = useState<string | null>(null);
-  /*
-    Rooms, asked for by KIND.
 
-    This used to read the whole live list and filter with `isHouse`, on a note
-    saying `category=house` 400d against the enum. The enum has carried
-    `house` for a while, and `kind=room` says the thing more directly — the
-    street wants rooms, not one taxonomy value that happens to mean rooms.
-
-    Filtering here was also wrong on its own terms: a page of live streams is
-    mostly broadcasts, so the street showed whatever handful of rooms survived
-    ONE page rather than a page of rooms.
-  */
-  /*
-    THE TOPIC NARROWS THE QUERY, SERVER-SIDE.
-
-    `GET /streams?topics=` is on the contract, so choosing a topic asks for a
-    page of rooms about it rather than filtering the page we happen to hold —
-    which would leave a topic looking empty because its rooms were on page two.
-    In the query key, so switching topics starts a new list.
-  */
-  const topicFilter = topic ? [topic] : [];
-  const live = useStreamList("live", topicFilter, undefined, "room");
-  const scheduled = useStreamList("scheduled", topicFilter, undefined, "room");
-
+  // Rooms, by KIND (`kind=room`), every topic: the page draws no topic row.
+  const live = useStreamList("live", [], undefined, "room");
+  const scheduled = useStreamList("scheduled", [], undefined, "room");
   const liveHouses = live.data?.items ?? [];
   const scheduledHouses = scheduled.data?.items ?? [];
 
   return (
-    <div className="w-full px-8">
-      {/*
-        NODE 407:17283 — the page's own head, 32 in from the edge and 40 down,
-        two lines on a 4 gap: "Happening Now!" at 24/31.2 and the invitation
-        under it at 14/20 in 50% white.
-
-        It replaced a `ColumnHeader` reading "Gist rooms" over "Rooms you can
-        talk in. Voice only." — the route's name and a definition. The file
-        heads the page with what is true right now instead, which is the reason
-        to be on it.
-
-        The create action stays in the head. The file draws it as a floating
-        circle at the page's bottom-right corner; the shell already owns exactly
-        one of those and putting a second here would be two purple circles on
-        one screen, which is the thing the compose rules exist to prevent.
-      */}
-      <header className="flex flex-col gap-1 pt-10">
-        {/*
-          TWO-TONE, and the file says so per CHARACTER — `characterStyleOverrides`
-          splits "Happening " from "Now!". Both runs override the text node's own
-          500 to Geist 600, so the heading is SemiBold throughout; only the fill
-          differs, and "Now!" carries a left-to-right gradient whose first stop
-          sits at 84.6% — so it is `--color-create` almost all the way across and
-          only darkens into #5F3C97 over the last sixth.
-
-          Reading the node's own `style` alone gives a flat white 500 heading,
-          which is what shipped first and is why the purple was missing.
-        */}
-        <h1 className="text-[24px] font-semibold leading-[31.2px] text-white">
-          Happening{" "}
-          <span className="bg-[linear-gradient(90deg,var(--color-create)_84.6%,#5F3C97_100%)] bg-clip-text text-transparent">
-            Now!
-          </span>
-        </h1>
-        <p className="text-[14px] leading-5 text-white/50">
-          Join the ongoing conversations and meet new people with similar interests.
-        </p>
-      </header>
-
-      {/* The row is full-bleed — the file runs it 924 wide across an 806 page,
-          past the 32 the header sits in — so it is pulled out of the padding
-          and given it back as its own inset. */}
-      {tabsSlot && (
-        <div className="-mx-8 mt-6 px-8">
-          {tabsSlot({ active: topic, onSelect: setTopic })}
-        </div>
-      )}
+    <div className="w-full pl-[22px] pr-[21px] pt-[22px]">
+      {headSlot}
 
       {live.isPending ? (
         <div className="flex justify-center py-10">
@@ -245,83 +113,67 @@ export function HousesStreet({
         </div>
       ) : liveHouses.length === 0 && scheduledHouses.length === 0 ? (
         /*
-          THE DESIGNER'S EMPTY STATE — node 543:45867, which they named for this
-          page specifically.
-
-          It replaced two earlier answers of mine. First the small `EmptyState`,
-          a lozenge over two short lines, which is sized to sit INSIDE a column
-          and so read as a gap between sections on a page that has nothing else
-          on it. Then chat's `PanePlaceholder`, which was the right SHAPE and
-          the wrong one for here: 543:45867 is its own component — a 120
-          illustration rather than 200, a 20/23.44 title rather than 24/32, and
-          a primary action built into it.
-
-          The action is "Start Gistroom", worded as the rail's button is, on the
-          same waveform the Join control carries. The copy is ours: the node
-          reads "No badges earned yet" because the designer built it from the
-          badges screen, and it is the component being reused, not the words.
+          THE DESIGNER'S EMPTY STATE — node 543:45867, named for this page.
+          1317:158073 draws no empty picture of its own, and a page with no
+          rooms on it has to say so somewhere. The action is "Start Gistroom",
+          worded as the rail's button is, on the Join control's own waveform.
         */
-        <EmptyPanel
-          title={topic ? "No rooms on this topic" : "No gist rooms open"}
-          body={
-            topic
-              ? "Nobody is talking about this right now. Try another topic, or open the room yourself."
-              : "A gist room is where people talk. Open one and name what it is about — anyone can walk in."
-          }
-          action={
-            <EmptyPanelAction
-              onClick={() => gate(() => setOpening(true))}
-              icon={<IconVoiceMode className="h-6 w-6" />}
-            >
-              Start Gistroom
-            </EmptyPanelAction>
-          }
-        />
+        <div className="mt-9">
+          <EmptyPanel
+            title="No gist rooms open"
+            body="A gist room is where people talk. Open one and name what it is about — anyone can walk in."
+            action={
+              <EmptyPanelAction
+                onClick={() => gate(() => setOpening(true))}
+                icon={<IconVoiceMode className="h-6 w-6" />}
+              >
+                Start Gistroom
+              </EmptyPanelAction>
+            }
+          />
+        </div>
       ) : (
         <>
           {liveHouses.length > 0 && (
-            /* Two columns 24 apart — the file's grid is 742 wide holding 359s.
-               One column below `md`, where two 359s cannot both fit and the
-               card would have to shrink past the point its title wraps
-               sensibly. */
-            <section aria-label="Gist rooms open now" className="grid gap-6 pt-6 md:grid-cols-2">
-              {liveHouses.map((stream) => (
-                <div key={stream.id}>{roomCardSlot?.(stream)}</div>
-              ))}
+            <section aria-labelledby="live-gistrooms" className="mt-9">
+              {headingSlot?.("live")}
+              {/* 1317:158083 — three fixed cells across, spread to the frame
+                  (see the header), rows 16 apart; below lg as many as fit. */}
+              <div
+                role="list"
+                aria-label="Gist rooms open now"
+                className="mt-4 grid grid-cols-[repeat(auto-fill,290.47px)] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between"
+              >
+                {liveHouses.map((stream) => (
+                  <div key={stream.id} role="listitem" className="h-[103.13px] w-[290.47px]">
+                    {roomCardSlot?.(stream)}
+                  </div>
+                ))}
+              </div>
             </section>
           )}
           {scheduledHouses.length > 0 && (
-            <section>
-              <h2 className="ws-meta pb-2 pt-8">Not open yet</h2>
-              {scheduledHouses.map((stream) => (
-                // A house that has not opened has nothing to listen to yet, so
-                // there is no threshold to pause on — go straight to the page,
-                // which says so.
-                <HouseRow
-                  key={stream.id}
-                  stream={stream}
-                  onOpen={() => router.push(housePath(stream.id))}
-                />
-              ))}
+            <section
+              aria-labelledby="coming-soon-page"
+              className={liveHouses.length > 0 ? "mt-[59px]" : "mt-9"}
+            >
+              {headingSlot?.("soon")}
+              {/* 1317:158179 — three across on the file's 12.38, rows 16
+                  apart; the card scales from its cell. */}
+              <div
+                role="list"
+                aria-label="Gist rooms opening later"
+                className="mt-4 grid grid-cols-1 gap-x-[12.38px] gap-y-4 md:grid-cols-2 lg:grid-cols-3"
+              >
+                {scheduledHouses.map((stream) => (
+                  <div key={stream.id} role="listitem" className="min-w-0">
+                    {upcomingCardSlot?.(stream)}
+                  </div>
+                ))}
+              </div>
             </section>
           )}
         </>
-      )}
-
-      {/* The file's own create control — 407:17286, the same 52.79 circle on the
-          same ramp the shell uses, in the same corner. It is here rather than in
-          the header because the file draws no button up there, and the shell's
-          circle is suppressed on this route so there is exactly one. */}
-      {createSlot?.(() => gate(() => setOpening(true)))}
-
-      {porch && (
-        <PorchSheet
-          stream={porch}
-          open
-          onClose={() => setPorch(null)}
-          entering={false}
-          onEnter={() => router.push(housePath(porch.id))}
-        />
       )}
 
       <OpenHouseSheet open={opening} onClose={() => setOpening(false)} />

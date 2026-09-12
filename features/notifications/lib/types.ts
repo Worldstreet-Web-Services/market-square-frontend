@@ -68,6 +68,26 @@ export const NotificationKindSchema = z
     "chat_request",
     "group_added",
     "speaker_request",
+    /**
+     * Someone opened a gist room from one of your houses (settings stage 2b).
+     * Listed as the service ships it, so it never lands as "followed you".
+     * Carries the opener and `streamId`; it does NOT carry the house.
+     */
+    "house_room",
+    /**
+     * AN ADMIN IS SHOWING YOUR POST TO EVERYONE (backend, 2026-09-12).
+     *
+     * Listed before the service sends one, for the reason the three notes above
+     * record: unlisted, `.catch("follow")` would tell an author whose post is
+     * being broadcast platform-wide that somebody followed them. Of every kind
+     * in this enum that is the worst one to get wrong — the author did not
+     * choose the placement, and the notification is the only way they find out.
+     *
+     * It carries NO actor by design. The decision belongs to the platform, not
+     * to a named admin the author could argue with; the audit row keeps who did
+     * it where it belongs.
+     */
+    "post_announced",
   ])
   .catch("follow");
 
@@ -77,6 +97,17 @@ export const NotificationSchema = z.object({
   // Hydrated on every read, but a deleted account can leave it null.
   actor: ProfileSchema.nullable().optional().default(null),
   postId: z.string().nullable().optional().default(null),
+  /**
+   * The house a `house_room` row is about — its CURRENT name, so a rename shows
+   * on older rows. Null on every other kind, and once the reader has left the
+   * house; the row then falls back to naming no house.
+   */
+  house: z
+    .object({ conversationId: z.string(), title: z.string().nullable().optional().default(null) })
+    .nullable()
+    .optional()
+    .default(null)
+    .catch(null),
   /**
    * The comment a `comment` or `comment_reply` event is about, so the row can
    * open the permalink ON that comment (`/p/:postId?comment=:id`). Asked of

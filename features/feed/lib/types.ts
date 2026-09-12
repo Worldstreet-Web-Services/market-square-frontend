@@ -116,6 +116,9 @@ export const CommentsPageSchema = z.object({
 export const LikeResultSchema = z.object({ liked: z.boolean(), likeCount: z.number() });
 // POST/DELETE /posts/:id/bookmark. The backend contract returns the resulting
 // state; older builds answer with an empty body, hence the optional field.
+/** `POST|DELETE /posts/:id/pin` — both answer the resulting state. */
+export const PinResultSchema = z.object({ pinned: z.boolean() });
+
 export const BookmarkResultSchema = z.object({
   bookmarked: z.boolean().optional(),
 });

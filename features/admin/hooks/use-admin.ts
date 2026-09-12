@@ -11,8 +11,12 @@ import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { invalidateContentSurfaces, invalidateIdentitySurfaces } from "@/lib/api/invalidate";
 import { useMe } from "@/hooks/use-me";
+import { ANNOUNCEMENTS_KEY } from "@/hooks/use-announcements";
 import type { OrgBadge } from "@/lib/api/schemas";
 import {
+  createAnnouncement,
+  endAnnouncement,
+  fetchAdminAnnouncements,
   fetchAdminProfiles,
   fetchAdminReports,
   fetchAdminStats,
@@ -93,6 +97,55 @@ export function useAdminReports() {
     getNextPageParam: (last) => last.nextCursor,
     enabled: isAdmin,
     retry: retryUnlessMissing,
+  });
+}
+
+export function useAdminAnnouncements() {
+  const { isAdmin } = useIsAdmin();
+  return useInfiniteQuery({
+    queryKey: ["ms", "admin", "announcements"],
+    queryFn: ({ pageParam }) => fetchAdminAnnouncements(pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: isAdmin,
+    retry: retryUnlessMissing,
+  });
+}
+
+export function useCreateAnnouncement() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: createAnnouncement,
+    onSuccess: () => toast.success("Announcement published"),
+    // A 404 here is not "the route is missing" — it is the service refusing a
+    // post it cannot show. Saying so is the difference between an operator
+    // fixing the id and an operator thinking the console is broken.
+    onError: (error) =>
+      toast.error(
+        errorCode(error) === "NOT_FOUND"
+          ? "That post can't be announced — it may have been deleted or hidden."
+          : errorMessage(error, "Couldn't publish that announcement.")
+      ),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "admin", "announcements"] });
+      // The band reads its own key, and it is what every reader sees — so the
+      // operator's own Home shows the banner at once rather than on the next
+      // poll. Checking your own copy is the only proof it reads correctly.
+      client.invalidateQueries({ queryKey: ANNOUNCEMENTS_KEY });
+    },
+  });
+}
+
+export function useEndAnnouncement() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => endAnnouncement(id),
+    onSuccess: () => toast.success("Announcement ended"),
+    onError: (error) => toast.error(errorMessage(error, "Couldn't end that announcement.")),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "admin", "announcements"] });
+      client.invalidateQueries({ queryKey: ANNOUNCEMENTS_KEY });
+    },
   });
 }
 

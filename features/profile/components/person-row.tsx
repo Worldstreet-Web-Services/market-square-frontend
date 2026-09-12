@@ -65,7 +65,7 @@ export function PersonRow({ profile }: { profile: Profile }) {
       {/* The row links to the profile — except the button, which is why the
           link wraps the identity block rather than the whole row. */}
       <Link href={`/u/${profile.username}`} className="flex min-w-0 flex-1 items-center gap-[9px]">
-        <span className="shrink-0 overflow-hidden rounded-full border border-white/20 bg-white/10">
+        <span className="shrink-0 overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
           <Avatar
             name={profile.displayName}
             seed={profile.id}

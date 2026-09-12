@@ -1,6 +1,7 @@
 "use client";
 
 import { msApi } from "@/lib/api/service";
+import { errorCode } from "@/lib/api/envelope";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   ActivityListSchema,
@@ -12,9 +13,11 @@ import {
   MyTicketsSchema,
   PlaybackSchema,
   QuoteSchema,
+  RemindSchema,
   StreamEventsSchema,
   SpeakerRequestListSchema,
   SpeakerRequestSchema,
+  StreamByCodeSchema,
   StreamListSchema,
   StreamSchema,
   StreamReactionSchema,
@@ -27,8 +30,34 @@ import {
 
 // Backend status enum is live | scheduled | ended — "replay" is a UI concept
 // (ended + non-null replayUrl), filtered by the caller.
+/**
+ * Has this deployment refused `sort=listeners` yet?
+ *
+ * The busiest-first order ships with the service; a deployment that predates it
+ * answers 400 VALIDATION_ERROR on `sort`. The FIRST such refusal is remembered
+ * for the page load and every later call asks for the default order, so a
+ * carousel is never empty on an older server and never pays for a second
+ * request once we know. It is only ever set by that exact refusal.
+ */
+let listenerSortRefused = false;
+
+function refusedListenerSort(error: unknown): boolean {
+  const details = (error as { code?: string; details?: unknown } | null)?.details;
+  return (
+    errorCode(error) === "VALIDATION_ERROR" &&
+    Array.isArray(details) &&
+    details.some((detail) => (detail as { path?: string } | null)?.path === "sort")
+  );
+}
+
 export async function fetchStreams(params: {
   status?: "live" | "scheduled" | "ended";
+  /**
+   * `listeners` — busiest first, ranked within the newest 200 live rooms, ties
+   * to the most recently started. The service accepts it only with
+   * `status: "live"`; anything else is a 400 by design.
+   */
+  sort?: "listeners";
   category?: StreamCategory;
   /** Broadcasts or gist rooms — see StreamKind. */
   kind?: StreamKind;
@@ -37,15 +66,22 @@ export async function fetchStreams(params: {
   cursor?: string;
   limit?: number;
 }) {
-  const { topics, ...rest } = params;
-  return StreamListSchema.parse(
-    await msApi.get("/streams", {
-      ...rest,
-      // Comma-joined, and omitted entirely when nothing is chosen — an empty
-      // `topics=` would read as "match no topics" rather than "no filter".
-      ...(topics && topics.length > 0 ? { topics: topics.join(",") } : {}),
-    })
-  );
+  const { topics, sort, ...rest } = params;
+  const query = {
+    ...rest,
+    // Comma-joined, and omitted entirely when nothing is chosen — an empty
+    // `topics=` would read as "match no topics" rather than "no filter".
+    ...(topics && topics.length > 0 ? { topics: topics.join(",") } : {}),
+  };
+  if (sort && !listenerSortRefused) {
+    try {
+      return StreamListSchema.parse(await msApi.get("/streams", { ...query, sort }));
+    } catch (error) {
+      if (!refusedListenerSort(error)) throw error;
+      listenerSortRefused = true;
+    }
+  }
+  return StreamListSchema.parse(await msApi.get("/streams", query));
 }
 
 export async function fetchStream(id: string) {
@@ -92,8 +128,55 @@ export async function reportTicketTransfer(streamId: string, ticketId: string, t
   );
 }
 
+/**
+ * Ask to be told when a scheduled room opens, or take the ask back.
+ *
+ * Idempotent both ways, and fired by go-live rather than by the clock — so the
+ * notification says the room IS open, never that it ought to be. A room that
+ * has already ended answers 409: a promise to announce something that is over
+ * is one the service cannot keep.
+ */
+export async function remindStream(streamId: string, remind: boolean) {
+  const path = `/streams/${streamId}/remind`;
+  return RemindSchema.parse(remind ? await msApi.post(path) : await msApi.del(path));
+}
+
+/**
+ * Resolve a spoken room code.
+ *
+ * The input is sent AS TYPED — any case, spacing or dashes — because the
+ * service matches leniently and normalising here would give the client and the
+ * service two different opinions about what a code is. Encoded, not rewritten.
+ *
+ * A 404 is the same answer for an unknown code and a malformed one, by design:
+ * a refusal that tells them apart tells somebody probing which guesses are
+ * worth repeating.
+ */
+export async function fetchStreamByCode(code: string) {
+  return StreamByCodeSchema.parse(
+    await msApi.authedGet(`/streams/by-code/${encodeURIComponent(code)}`)
+  );
+}
+
 export async function fetchPlaybackToken(streamId: string) {
   return PlaybackSchema.parse(await msApi.post(`/streams/${streamId}/playback-token`));
+}
+
+/**
+ * A LISTEN-ONLY grant for the room card's hover preview — `POST
+ * /streams/:id/preview-token`, the same `{ url, token, expiresAt }` shape as
+ * the playback grant. Subscribe-only, hidden from the roster, minted on a
+ * `preview-<uuid>` identity so previewing a room you are already in cannot
+ * evict your real connection. 120s TTL; 404 unknown or private, 409 not a
+ * live gist room yet, 429 throttled. Auth optional (the BFF opens it).
+ *
+ * IT MUST NEVER BE PAIRED WITH A HEARTBEAT: heartbeats feed viewerCount,
+ * participants and watch time, and a previewing card would count itself as
+ * audience. `use-room-preview.ts` does not import `sendHeartbeat`, and
+ * `lib/shell-invariants.test.ts` pins that.
+ */
+export async function fetchPreviewToken(streamId: string) {
+  return PlaybackSchema.parse(await msApi.post(`/streams/${streamId}/preview-token`));
 }
 
 export async function sendHeartbeat(streamId: string, sessionId: string | null, mode: "live" | "replay") {

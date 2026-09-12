@@ -42,27 +42,51 @@ export function DeckDots({
   active,
   className,
   variant = "default",
+  onSelect,
 }: {
   count: number;
   /** Clamped by the component, so a caller cannot light a pill that is not there. */
   active: number;
   className?: string;
   variant?: keyof typeof DOT_VARIANTS;
+  /**
+   * Given, each pill is a BUTTON that picks its page — Home's banner
+   * (1305:149178), where the dots are the only way between slides. The
+   * geometry is unchanged; the hit area is the button around the pill, and the
+   * row stops being `aria-hidden` because it is now a control.
+   */
+  onSelect?: (index: number) => void;
 }) {
   const current = Math.min(Math.max(active, 0), count - 1);
   const v = DOT_VARIANTS[variant];
+  const pill = (index: number) => (
+    <span
+      key={onSelect ? undefined : index}
+      className={cn(
+        v.pill,
+        "block transition-all",
+        index === current ? cn(v.on, "bg-spotlight") : cn(v.off, "bg-[#D9D9D9]")
+      )}
+    />
+  );
   return (
-    <div aria-hidden className={cn("flex items-center justify-center", v.row, className)}>
-      {Array.from({ length: count }, (_, index) => (
-        <span
-          key={index}
-          className={cn(
-            v.pill,
-            "transition-all",
-            index === current ? cn(v.on, "bg-spotlight") : cn(v.off, "bg-[#D9D9D9]")
-          )}
-        />
-      ))}
+    <div aria-hidden={onSelect ? undefined : true} className={cn("flex items-center justify-center", v.row, className)}>
+      {Array.from({ length: count }, (_, index) =>
+        onSelect ? (
+          <button
+            key={index}
+            type="button"
+            aria-label={`Slide ${index + 1} of ${count}`}
+            aria-current={index === current ? "true" : undefined}
+            onClick={() => onSelect(index)}
+            className="ws-press flex h-4 items-center"
+          >
+            {pill(index)}
+          </button>
+        ) : (
+          pill(index)
+        )
+      )}
     </div>
   );
 }

@@ -23,9 +23,13 @@ import {
   openConversation,
   removeGroupMember,
   renameGroup,
+  setMemberRole,
+  transferOwnership,
   sendMessage,
+  fetchHouseNotificationSettings,
+  updateHouseNotificationSettings,
 } from "@/features/messages/lib/api";
-import type { OutgoingMessage } from "@/features/messages/lib/types";
+import type { HouseNotificationSettings, OutgoingMessage } from "@/features/messages/lib/types";
 import { tabQuery, type InboxTab } from "@/features/messages/lib/filter";
 
 // The service publishes `market-square.message.sent` for the ws-gateway
@@ -231,6 +235,75 @@ export function useLeaveGroup(conversationId: string) {
     (profileId) => removeGroupMember(conversationId, profileId),
     "You left the group"
   );
+}
+
+/** Remove somebody from the house — owner (anyone but themself) or admin (members only). */
+export function useRemoveGroupMember(conversationId: string) {
+  return useConversationAction<string>(
+    conversationId,
+    (profileId) => removeGroupMember(conversationId, profileId),
+    "Removed from the house"
+  );
+}
+
+/** "Make admin" / "Remove admin" — owner only. */
+export function useSetMemberRole(conversationId: string) {
+  return useConversationAction<{ profileId: string; role: "admin" | "member" }>(
+    conversationId,
+    ({ profileId, role }) => setMemberRole(conversationId, profileId, role),
+    "Role updated"
+  );
+}
+
+/** "Make owner" — the owner hands the house over and stays on as an admin. */
+export function useTransferOwnership(conversationId: string) {
+  return useConversationAction<string>(
+    conversationId,
+    (profileId) => transferOwnership(conversationId, profileId),
+    "Ownership handed over"
+  );
+}
+
+const houseSettingsKey = (conversationId: string) =>
+  ["ms", "house-notification-settings", conversationId] as const;
+
+/**
+ * One house's notification levels. A 404 means the route is not deployed here
+ * (or the reader is not a member) — the screen reads it as "coming", never as
+ * an error to retry.
+ */
+export function useHouseNotificationSettings(conversationId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: houseSettingsKey(conversationId),
+    queryFn: () => fetchHouseNotificationSettings(conversationId),
+    enabled: enabled && conversationId.length > 0,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+  });
+}
+
+/** Save a house's levels — optimistic, and put back with a toast when refused. */
+export function useUpdateHouseNotificationSettings(conversationId: string) {
+  const client = useQueryClient();
+  const key = houseSettingsKey(conversationId);
+  return useMutation({
+    mutationFn: (patch: Partial<HouseNotificationSettings>) =>
+      updateHouseNotificationSettings(conversationId, patch),
+    onMutate: async (patch) => {
+      await client.cancelQueries({ queryKey: key });
+      const previous = client.getQueryData<HouseNotificationSettings>(key);
+      if (previous) client.setQueryData<HouseNotificationSettings>(key, { ...previous, ...patch });
+      return { previous };
+    },
+    onError: (error, _patch, context) => {
+      if (context?.previous) client.setQueryData(key, context.previous);
+      toast.error(errorMessage(error, "Couldn't save that setting."));
+    },
+    onSuccess: (saved) => {
+      client.setQueryData(key, saved);
+      // The inbox rows carry the same levels; keep them in step.
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+    },
+  });
 }
 
 /** "Join House" on Home's community grid — `POST /conversations/:id/join`. */

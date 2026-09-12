@@ -1,15 +1,19 @@
 "use client";
 
+import { useState } from "react";
+
 import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/feed";
 import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
-import { useTopics } from "@/features/discovery";
-import { LiveCta } from "@/features/streams";
-import { useAuth } from "@/hooks/use-auth";
-import { JoinACommunity } from "@/components/layout/join-a-community";
+import { HomeTopRow } from "@/components/layout/home-top-row";
+import { HomeSearch } from "@/components/layout/home-search";
+import { HOME_BANNER_SLIDES, HomeBanner } from "@/components/layout/home-banner";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
+import { ComingSoonRooms } from "@/components/layout/coming-soon-rooms";
+import { PopularHouses } from "@/components/layout/popular-houses";
+import { PostForYou } from "@/components/layout/post-for-you";
 import { SuggestedPals } from "@/components/layout/suggested-pals";
 
 // Slices never import each other, so the follow control — which belongs to the
@@ -46,6 +50,14 @@ const tipSlot = (post: Post) => (
 );
 
 /**
+ * The three post-header controls, for every screen that hands the feed slice
+ * a list to draw — Home, Arkmarks, a post, and `/pals`' following lane. One
+ * composition, exported, so the pals screen does not carry a second copy of
+ * the slice-joining above.
+ */
+export const POST_SLOTS = { followSlot, winkSlot, tipSlot } as const;
+
+/**
  * Home, composed — node 225:3315.
  *
  * The file's order is stories, the TOPIC row, the rooms open now, "Make some
@@ -53,9 +65,9 @@ const tipSlot = (post: Post) => (
  * the feed may not import, so they are assembled here and handed down as slots
  * — the same route-slot pattern the follow pill and the tip button above use.
  *
- * The Go Live banner (647:17219) belongs to the streams slice and sits under
- * the topic row. Signed-out readers do not get it, for the Live page's reason:
- * a "Go Live" that opens a login wall is bait.
+ * The column opens on the search row and the gistroom banner (1295:142736,
+ * 1305:149178), for everybody: the banner is the strongest invitation on the
+ * page, and the tap gates a signed-out reader into sign-in.
  *
  * The topic vocabulary is DATA rather than a node, because the row's selection
  * drives the feed's own query: `GET /topics` belongs to the discovery slice and
@@ -63,19 +75,42 @@ const tipSlot = (post: Post) => (
  * both.
  */
 export function HomeScreen() {
+  /*
+    HOME ANSWERS ITS OWN SEARCH.
+
+    The field was a link into Explore, which meant every search left the page
+    the reader was on. ogazboiz: "that search is not suppose to take me to
+    discover ... everything that i am searching for suppose to be there even
+    room codes ... in that home that search there".
+
+    So Home owns the string, and while it is non-empty the sections give way
+    to the results. It is deliberately LOCAL state rather than `?q=` in the
+    URL: Explore owns `?q=`, and a second writer of the same parameter is how
+    two surfaces start fighting over one query. Clearing the field restores
+    the page exactly as it was.
+  */
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
+
   // Home's own eight, in the design's order (`?surface=home`).
-  const topics = useTopics("home");
-  const { authenticated } = useAuth();
   return (
     <FeedPage
+      mode="home"
       followSlot={followSlot}
       winkSlot={winkSlot}
       tipSlot={tipSlot}
-      topicTabs={(topics.data ?? []).map((topic) => ({ key: topic.key, label: topic.label }))}
-      liveCtaSlot={authenticated ? <LiveCta /> : null}
+      headSlot={
+        <>
+          <HomeTopRow value={query} onChange={setQuery} />
+          {!searching && <HomeBanner slides={HOME_BANNER_SLIDES} />}
+        </>
+      }
+      searchSlot={searching ? <HomeSearch query={query} /> : undefined}
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
-      communitySlot={<JoinACommunity />}
+      comingSoonSlot={<ComingSoonRooms />}
+      housesSlot={<PopularHouses />}
+      postsSlot={<PostForYou followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />}
       palsSlot={<SuggestedPals />}
     />
   );

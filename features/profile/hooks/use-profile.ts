@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import {
@@ -36,6 +36,8 @@ import {
   setBlocked,
   setFollow,
   updateMe,
+  fetchFollowing,
+  fetchMyWinks,
 } from "@/features/profile/lib/api";
 import type { ProfileStreamFilters } from "@/features/profile/lib/types";
 import type { ReportReason } from "@/features/profile/lib/api";
@@ -48,6 +50,29 @@ import {
   winkEligibility,
 } from "@/lib/winks";
 
+
+/** Who someone follows, a page at a time. Pals' "Following" tab reads the reader's own. */
+export function useFollowingList(profileId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["ms", "following", profileId],
+    queryFn: ({ pageParam }) => fetchFollowing(profileId ?? "", pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: Boolean(profileId),
+  });
+}
+
+/** People who winked at the reader (`GET /me/winks`). A 404 means not deployed here — never retried. */
+export function useMyWinks(enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: ["ms", "winks-received"],
+    queryFn: ({ pageParam }) => fetchMyWinks(pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+  });
+}
 
 export function useProfile(username: string) {
   return useQuery({

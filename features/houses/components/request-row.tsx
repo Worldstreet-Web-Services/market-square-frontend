@@ -43,7 +43,7 @@ export function RequestRow({
   const profile = request.profile;
   return (
     <div className="flex h-[54.5px] items-center gap-[9px] rounded-xl border border-white/10 bg-white/[0.03] px-3">
-      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
         <Avatar
           name={profile?.displayName ?? "Listener"}
           seed={request.userId}

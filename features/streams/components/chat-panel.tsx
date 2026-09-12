@@ -52,7 +52,7 @@ function TopViewers({ messages }: { messages: ChatMessage[] }) {
             <div className="flex shrink-0 items-center gap-2">
               <span className="ws-display text-3xl leading-none text-create">1</span>
               <span className="text-center">
-                <span className="block rounded-full p-[2px] ring-2 ring-create/60">
+                <span className="block rounded-[25%] p-[2px] ring-2 ring-create/60">
                   <Avatar
                     name={leaders[0].author?.displayName ?? "Viewer"}
                     seed={leaders[0].authorId} src={leaders[0].author?.avatarUrl}
@@ -509,7 +509,7 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
   const name = message.author?.displayName ?? `Member ·${message.authorId.slice(-4)}`;
   return (
     <li className="flex items-end gap-2">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
         <Avatar name={name} seed={message.authorId} src={message.author?.avatarUrl} size={24} />
       </span>
 

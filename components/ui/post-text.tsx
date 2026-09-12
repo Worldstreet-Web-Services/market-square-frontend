@@ -50,7 +50,7 @@ export function PostText({
   className?: string;
   /** Override for tests and stories; normally fetched. */
   tradeable?: string[];
-  clampLines?: 3 | 4 | 5 | 6;
+  clampLines?: 2 | 3 | 4 | 5 | 6;
 }) {
   // One shared, long-cached query rather than a prop threaded through every
   // component that happens to render a post body.
@@ -264,7 +264,10 @@ function SegmentView({ segment }: { segment: Segment }) {
 
 
 /** Tailwind cannot see a class it never reads, so the clamps are spelled out. */
-const CLAMP: Record<3 | 4 | 5 | 6, string> = {
+const CLAMP: Record<2 | 3 | 4 | 5 | 6, string> = {
+  // TWO is the rail's (1313:152779): a card there is a fixed 367 and the
+  // caption is what gives, so it clamps harder than the column's.
+  2: "line-clamp-2",
   3: "line-clamp-3",
   4: "line-clamp-4",
   5: "line-clamp-5",
@@ -289,7 +292,7 @@ function ClampedText({
 }: {
   children: React.ReactNode;
   className?: string;
-  lines: 3 | 4 | 5 | 6;
+  lines: 2 | 3 | 4 | 5 | 6;
   /** `div` when the body holds lists or quotes, which a `<p>` cannot. */
   as?: "p" | "div";
 }) {

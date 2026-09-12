@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyRequest, verifyRequestDetailed } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
-import { isPublicGet, isSafePath } from "@/lib/api/public-routes";
+import { isPublicGet, isSafePath, isPublicPost } from "@/lib/api/public-routes";
 import { forwardToUpstream } from "@/lib/server/proxy";
 import { cacheControlFor } from "@/lib/server/cache-policy";
 import { FALLBACK_LIMITS } from "@/lib/upload-rules";
@@ -232,7 +232,9 @@ async function forward(req: NextRequest, path: string[], method: string) {
   const joined = path.join("/");
 
   // Authed paths need a verified Privy session before anything is forwarded.
-  const needsAuth = method !== "GET" || !isPublicGet(path);
+  // Reads: public per `isPublicGet`. Writes: a session, except the one public
+  // POST (`isPublicPost` — the email unsubscribe link).
+  const needsAuth = method === "GET" ? !isPublicGet(path) : !(method === "POST" && isPublicPost(path));
   if (needsAuth) {
     const auth = await verifyRequestDetailed(req);
     if (!auth.ok) return auth.reason === "unavailable" ? authUnavailable() : unauthorized();

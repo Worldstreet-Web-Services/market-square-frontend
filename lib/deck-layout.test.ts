@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DECK_NODE, HOME_DECK_NODE, deckLayout, rotatedBox } from "./deck-layout.ts";
+import { DECK_NODE, HOME_DECK_NODE, PALS_PAGE, deckLayout, rotatedBox } from "./deck-layout.ts";
 
 /**
  * The file's own boxes, node 844:18440. The deck stores SIZES and ROTATIONS;
@@ -40,6 +40,62 @@ describe("the back cards' sizes are solved from their rotated boxes", () => {
     assert.equal(LEFT.place.opacity, 0.39);
     assert.equal(RIGHT.place.opacity, 0.3);
     assert.equal(DECK_NODE.places[0]!.opacity, 1);
+  });
+});
+
+/**
+ * `/pals`' CURRENT NODE, 1328:1885: its deck group 1331:21321 is 596 wide and
+ * every box in it is 844:18440's at 0.6248. These are the node's own readings
+ * (`size` and `relativeTransform` from REST `geometry=paths`), and the deck
+ * laid out in a 596 room has to reproduce them — or the node is a second
+ * drawing and needs its own `DeckNode`.
+ */
+describe("node 1328:1885's deck is DECK_NODE at 0.6248, in a 596 room", () => {
+  const room = 596;
+  const layout = deckLayout({ room, arrows: true });
+  const { k } = layout;
+
+  it("scales by the node's own factor", () => {
+    close(k, 0.6248, 0.0002, "k");
+  });
+
+  it("draws the front card 1331:21353 at 339.53 x 448.60, 127.99 in", () => {
+    close(DECK_NODE.card.width * k, 339.53, 0.1, "front width");
+    close(DECK_NODE.card.height * k, 448.6, 0.1, "front height");
+    close(layout.height, 448.6, 0.1, "deck box height");
+    close(layout.frontX - (DECK_NODE.card.width / 2) * k, 127.99, 0.1, "front card's left edge");
+  });
+
+  it("draws the back cards at the node's sizes and tilts — 1331:21339 and 1331:21322", () => {
+    const left = DECK_NODE.places[-1]!;
+    const right = DECK_NODE.places[1]!;
+    close(DECK_NODE.card.width * left.scale * k, 277.41, 0.1, "left width");
+    close(DECK_NODE.card.height * left.scale * k, 366.53, 0.1, "left height");
+    close(DECK_NODE.card.width * right.scale * k, 281.82, 0.1, "right width");
+    close(DECK_NODE.card.height * right.scale * k, 372.35, 0.1, "right height");
+    // The node's rotated boxes, which are NOT the sizes: 319.07 x 396.95 and 361.08 x 427.93.
+    const leftBox = rotatedBox(DECK_NODE.card.width * left.scale * k, DECK_NODE.card.height * left.scale * k, left.rot);
+    const rightBox = rotatedBox(DECK_NODE.card.width * right.scale * k, DECK_NODE.card.height * right.scale * k, right.rot);
+    close(leftBox.width, 319.07, 0.1, "left box width");
+    close(leftBox.height, 396.95, 0.1, "left box height");
+    close(rightBox.width, 361.08, 0.1, "right box width");
+    close(rightBox.height, 427.93, 0.1, "right box height");
+  });
+
+  it("puts the 39.99 discs 1331:21381 / 1331:21336 at (0, 222.43) and (532.95, 222.43)", () => {
+    const { arrow } = DECK_NODE;
+    close(arrow.size * k, 39.99, 0.05, "disc size");
+    close(layout.frontX + (arrow.leftDx - arrow.size / 2) * k, 0, 0.05, "left disc's left");
+    close(layout.frontX + (arrow.rightDx - arrow.size / 2) * k, 532.95, 0.1, "right disc's left");
+    close(layout.frontY + (arrow.dy - arrow.size / 2) * k, 222.43, 0.1, "discs' top");
+    assert.equal(arrow.lens, "sampled", "the discs lost the node's measured glass");
+  });
+
+  it("spaces the pill, the deck and the heading as the node does", () => {
+    close(PALS_PAGE.groupLeft * k, 15, 0.05, "the group's inset past the deck");
+    close(PALS_PAGE.groupRight * k, 2, 0.05, "the group's right edge inside the deck's");
+    close(PALS_PAGE.pillToDeck * k, 45, 0.05, "pill to deck");
+    close(PALS_PAGE.deckToHeading * k, 177.4, 0.05, "deck to heading");
   });
 });
 

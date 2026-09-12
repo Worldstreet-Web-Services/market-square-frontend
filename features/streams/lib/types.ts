@@ -96,6 +96,33 @@ export const IngestSchema = z.object({
   url: z.preprocess((v) => v ?? "", z.string()),
 });
 
+/** `POST|DELETE /streams/:id/remind` — both answer the resulting state. */
+export const RemindSchema = z.object({ reminded: z.boolean() });
+
+/**
+ * `GET /streams/by-code/:code` — what a spoken code resolves to.
+ *
+ * `access` is the SERVER's answer to "may this person go in", and it has to be:
+ * it depends on house membership, which is exactly the fact a non-member must
+ * not receive. A client cannot compute it from the payload without being handed
+ * the roster it is not allowed to see.
+ *
+ *   · `open`         — go in.
+ *   · `members_only` — a private room they are not in. The payload is the
+ *                      DOORPLATE: title, picture, owner, status. `viewerCount`
+ *                      and `houseConversationId` come back null on purpose;
+ *                      the refusal itself lives at the join.
+ *   · `over`         — ended or cancelled. It resolves rather than 404ing so
+ *                      somebody holding a written-down code is told the room is
+ *                      over instead of being left unable to tell that from a
+ *                      typo. Codes are never reused, so an old note can never
+ *                      open a different room.
+ */
+export const StreamByCodeSchema = z.object({
+  stream: StreamSchema,
+  access: z.enum(["open", "members_only", "over"]).catch("open"),
+});
+
 export const GoLiveSchema = z.object({
   stream: StreamSchema,
   ingest: IngestSchema.nullable().optional().default(null),

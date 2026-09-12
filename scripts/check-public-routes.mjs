@@ -228,6 +228,52 @@ function collectCalls(root) {
  */
 const PENDING_ROUTES = {
 
+  // ── scheduled-room reminders (backend PR #206, served locally) ────────────
+  // "Remind me" on an upcoming gist room. Both verbs are live on the local
+  // stack and in the served spec, but #206 has not merged, so production
+  // answers 404 until it does — which the card already handles by going quiet.
+  // DELETE BOTH ENTRIES when #206 is deployed.
+  "post /streams/{}/remind": {
+    reason:
+      "Ask to be told when a scheduled gist room opens. Served locally on " +
+      "backend PR #206; 404s in production until that merges. DELETE THIS " +
+      "ENTRY when #206 deploys.",
+  },
+  // ── announcements (backend PR #206, served locally) ──────────────────────
+  "get /announcements": {
+    reason:
+      "The announcement band on Home. Served locally on backend PR #206; " +
+      "404s in production until that merges, which the band handles by " +
+      "rendering nothing. DELETE THIS ENTRY when #206 deploys.",
+  },
+  "post /announcements/{}/dismiss": {
+    reason:
+      "Close the band for this reader. Same PR as the read above. DELETE " +
+      "THIS ENTRY when #206 deploys.",
+  },
+  "post /posts/{}/pin": {
+    reason:
+      "Pin one of your own posts to your profile. Served locally on backend " +
+      "PR #206; 404s in production until that merges, which the menu already " +
+      "handles by going quiet. DELETE THIS ENTRY when #206 deploys.",
+  },
+  "delete /posts/{}/pin": {
+    reason:
+      "Unpin it. Same route and same PR as the post above. DELETE THIS ENTRY " +
+      "when #206 deploys.",
+  },
+  "get /streams/by-code/{}": {
+    reason:
+      "Resolve a spoken room code to its room. Served locally on backend PR " +
+      "#206; 404s in production until that merges. DELETE THIS ENTRY when " +
+      "#206 deploys.",
+  },
+  "delete /streams/{}/remind": {
+    reason:
+      "Cancel that ask. Same route and same PR as the post above. DELETE " +
+      "THIS ENTRY when #206 deploys.",
+  },
+
   // ── the operations console ────────────────────────────────────────────────
   // `app/operations/page.tsx` renders this slice, and all three of its calls
   // 404 today: no `/operations/*` route exists in market-square's spec, and no
@@ -352,6 +398,74 @@ const PENDING_ROUTES = {
       "composed with kind:'post'). DELETE THIS the day /profiles/{id}/tips " +
       "appears in openapi.json, or delete the profile branch from the slice " +
       "if product decides a tip is always addressed to a post.",
+  },
+  // ── who winked at me (Pals' Winks tab) ───────────────────────────────────
+  "get /me/winks": {
+    reason:
+      "People who winked at the reader, one row per person. BUILT on the service " +
+      "(migration 070, PR #206), NOT yet deployed. Until then Pals' Winks tab " +
+      "reads the 404 as 'not available here yet'. DELETE THIS ENTRY once it is in openapi.json.",
+  },
+  // ── daily email summary (notifications stage B) ─────────────────────────
+  "post /email/unsubscribe": {
+    reason:
+      "Turns off the daily email summary from the email's link (public, signed " +
+      "token). BUILT on the service (migration 069, PR #206) and served locally, " +
+      "NOT yet deployed. DELETE THIS ENTRY once it is in openapi.json.",
+  },
+  "* /email/unsubscribe": {
+    reason: "The same route, called as a raw BFF fetch because it must work signed out. See post /email/unsubscribe.",
+  },
+  // ── web push (notifications stage A) ─────────────────────────────────────
+  "get /push/vapid-public-key": {
+    reason:
+      "The deployment's public web-push key (null where push is not " +
+      "configured). BUILT on the service (migration 068, PR #206) and served " +
+      "locally, NOT yet deployed. Until then the Settings push row reads the " +
+      "404 as 'not available here'. DELETE THIS ENTRY once it is in openapi.json.",
+  },
+  "post /me/push-subscriptions": {
+    reason: "Records this browser's push subscription. Same undeployed change as get /push/vapid-public-key.",
+  },
+  "delete /me/push-subscriptions": {
+    reason: "Forgets this browser's push subscription (switch-off and sign-out). Same undeployed change.",
+  },
+  // ── per-house notification settings (settings stage 2b) ─────────────────
+  "get /conversations/{}/notification-settings": {
+    reason:
+      "A house's notification levels. BUILT on the service (migration 065, " +
+      "PR #205) and served locally, NOT yet deployed. Until then Settings → " +
+      "a house reads the 404 as 'coming soon' and keeps its levels disabled. " +
+      "DELETE THIS ENTRY once the route appears in openapi.json.",
+  },
+  "put /conversations/{}/notification-settings": {
+    reason: "Saving a house's notification levels. Same undeployed change as the get.",
+  },
+  // ── house roles (settings stage 2a) ──────────────────────────────────────
+  "put /conversations/{}/members/{}/role": {
+    reason:
+      "Make a house member an admin, or back to a member (owner only). BUILT on " +
+      "the service (migration 064, PR #205) and served locally, NOT yet " +
+      "deployed. Until then the members sheet's Make admin / Remove admin " +
+      "answer with the service's 404. DELETE THIS ENTRY once the route appears " +
+      "in openapi.json.",
+  },
+  "post /conversations/{}/transfer-ownership": {
+    reason:
+      "Hand a house to another member (owner only). Same undeployed service " +
+      "change as put /conversations/{}/members/{}/role.",
+  },
+  // ── settings, stage 1 ─────────────────────────────────────────────────────
+  "get /me/settings": {
+    reason:
+      "The reader's settings (notifications, who can message you). BUILT on the " +
+      "service (migration 063, PR #205) and served locally, NOT yet deployed, " +
+      "so it is absent from the production spec. Until then the settings " +
+      "screen reads the 404 as 'coming soon' and keeps those controls " +
+      "disabled. DELETE THIS ENTRY once the route appears in openapi.json.",
+  },
+  "patch /me/settings": {
+    reason: "Saving a setting. Same undeployed service change as get /me/settings.",
   },
   // ── house invite links ────────────────────────────────────────────────────
   "post /conversations/{}/invites": {

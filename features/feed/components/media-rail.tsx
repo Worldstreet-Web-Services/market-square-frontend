@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { ImageViewer } from "@/components/ui/image-viewer";
 import { cn } from "@/lib/cn";
-import { railDotWidth, railIndexAt, type PostMediaLike } from "@/lib/post-media";
+import { RAIL_SIZES, railDotWidth, railIndexAt, type PostMediaLike, type RailSize } from "@/lib/post-media";
+import { IconPlay } from "@/components/ui/icons";
+import { isVideoUrl } from "@/lib/media";
 
 /**
  * A POST'S PHOTOS, SIDE BY SIDE — node 1029:22591.
@@ -19,7 +21,8 @@ import { railDotWidth, railIndexAt, type PostMediaLike } from "@/lib/post-media"
  * Only ever photos: the service refuses a video in a post of two or more. A
  * tap opens that photo full size in the shared viewer.
  */
-export function MediaRail({ items }: { items: PostMediaLike[] }) {
+export function MediaRail({ items, size = "post" }: { items: PostMediaLike[]; size?: RailSize }) {
+  const g = RAIL_SIZES[size];
   const scroller = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState<number | null>(null);
@@ -27,20 +30,20 @@ export function MediaRail({ items }: { items: PostMediaLike[] }) {
   const onScroll = () => {
     const node = scroller.current;
     if (!node) return;
-    setActive(railIndexAt(node.scrollLeft, node.scrollWidth - node.clientWidth, items.length));
+    setActive(railIndexAt(node.scrollLeft, node.scrollWidth - node.clientWidth, items.length, size));
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-[3.12px]" aria-hidden>
+    <div className={cn(size === "compact" && "flex min-h-0 flex-1 flex-col")}>
+      <div className="flex items-center" style={{ gap: g.dotGap }} aria-hidden>
         {items.map((item, index) => (
           <span
             key={`${item.url}-${index}`}
             className={cn(
-              "h-[4.99px] rounded-[15.59px] transition-[width,background-color] duration-200 motion-reduce:transition-none",
+              "rounded-[15.59px] transition-[width,background-color] duration-200 motion-reduce:transition-none",
               index === active ? "bg-[#9F5AFF]" : "bg-[#D9D9D9]"
             )}
-            style={{ width: railDotWidth(index, active) }}
+            style={{ width: railDotWidth(index, active, size), height: g.dotHeight }}
           />
         ))}
       </div>
@@ -48,26 +51,78 @@ export function MediaRail({ items }: { items: PostMediaLike[] }) {
         ref={scroller}
         onScroll={onScroll}
         aria-label={`${items.length} photos`}
-        className="-mr-4 mt-5 flex snap-x snap-mandatory gap-[10.36px] overflow-x-auto pr-4 [scrollbar-width:none] md:-mr-[39px] md:pr-[39px] [&::-webkit-scrollbar]:hidden"
+        style={{ gap: g.gap, marginTop: size === "compact" ? 10.7 : 20 }}
+        className={cn(
+          "flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          size === "compact" && "min-h-0 flex-1",
+          // The column's rail bleeds to the card's edge so the next photo peeks
+          // in; the compact one sits inside its own card and does not.
+          size === "post" && "-mr-4 pr-4 md:-mr-[39px] md:pr-[39px]"
+        )}
       >
-        {items.map((item, index) => (
+        {items.map((item, index) => {
+          // A VIDEO IS NOT AN IMAGE. The column's rail only ever gets photos —
+          // the service refuses a video in a post of two or more — but the
+          // card in Home's row rails a single item too, and a clip's URL in an
+          // <img> is the broken tile ogazboiz saw. A clip shows its poster
+          // with a play mark, and the tap falls through to the card, which
+          // opens the post where the player is.
+          const video = item.kind === "video" || isVideoUrl(item.url);
+          const poster = item.thumbnailUrl ?? null;
+          return (
           <button
             key={`${item.url}-${index}`}
             type="button"
+            disabled={video}
             onClick={() => setOpen(index)}
-            aria-label={`View photo ${index + 1} of ${items.length}`}
-            className="ws-press h-[352.22px] w-[250.93px] shrink-0 snap-start overflow-hidden rounded-[20.72px] bg-white/[0.04]"
+            aria-label={video ? `Video ${index + 1} of ${items.length}` : `View photo ${index + 1} of ${items.length}`}
+            style={{
+              width: g.tile,
+              // Fixed in the column; in the rail the tile fills the height the
+              // card has left, so the caption is never squeezed out.
+              ...(size === "compact" ? {} : { height: g.tileHeight }),
+              borderRadius: g.radius,
+            }}
+            className={cn(
+              "ws-press shrink-0 snap-start overflow-hidden bg-white/[0.04]",
+              size === "compact" && "h-full"
+            )}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */}
-            <img
-              src={item.url}
-              alt=""
-              decoding="async"
-              loading={index > 2 ? "lazy" : undefined}
-              className="h-full w-full object-cover"
-            />
+            {video ? (
+              <span className="relative block h-full w-full">
+                {poster ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- service-issued poster */
+                  <img
+                    src={poster}
+                    alt=""
+                    decoding="async"
+                    loading={index > 2 ? "lazy" : undefined}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  // No poster is a real answer: draw the ground rather than a
+                  // broken picture.
+                  <span className="block h-full w-full bg-white/[0.06]" />
+                )}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="ws-glass flex h-9 w-9 items-center justify-center rounded-full text-white">
+                    <IconPlay className="h-4 w-4" />
+                  </span>
+                </span>
+              </span>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */
+              <img
+                src={item.url}
+                alt=""
+                decoding="async"
+                loading={index > 2 ? "lazy" : undefined}
+                className="h-full w-full object-cover"
+              />
+            )}
           </button>
-        ))}
+          );
+        })}
       </div>
       {open !== null && items[open] && (
         <ImageViewer

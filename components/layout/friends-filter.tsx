@@ -28,9 +28,23 @@ import { friendsFilterLabel, type FriendsFilter } from "@/lib/friends-filter";
  * The file draws the chevron pointing UP beside the OPEN menu. Closed, it
  * turns to point down: that is the one state the file does not draw, and a
  * chevron that never moves tells the reader nothing about what a press does.
- * The label is the file's "Location" at rest and the active value once a
- * clause is on (`friendsFilterLabel`), so the narrowing is visible without
- * opening the menu.
+ * The label is `friendsFilterLabel`: "Filter" at rest (ogazboiz, 2026-09-12 —
+ * it narrows by more than a place, so the file's "Location" would be the
+ * untrue word) and the active value once a clause is on, so the narrowing is
+ * visible without opening the menu.
+ *
+ * ─── THE `/pals` PILL, node 1344:21865 ───────────────────────────────────────
+ * A different drawing of the same control — `variant="pals"`. 86 x 32 hugging
+ * "Location": 4% white at a full radius, padding 4 / 3 / 4 / 10, a 14 gap,
+ * the label Manrope SemiBold 10 / 24 at 0.15 tracking, and the file's own 16
+ * `arrow-left-01-round` turned to point right, `#9F5AFF` at a 1.5 round
+ * stroke — which is byte for byte the "View more" arrow already exported at
+ * `public/home/view-more-arrow.svg`, so that file is reused rather than a
+ * second copy of it. The pill HUGS its label in the file, so "Filter" draws it
+ * narrower than the file's 86 and an active value wider; the height, padding
+ * and gap are the file's regardless. Open, the arrow turns to point down at
+ * the menu — the one state the file does not draw, for the reason above. The
+ * menu under it is the same one on both drawings.
  *
  * ─── THE MENU ────────────────────────────────────────────────────────────────
  * 172 wide, `#1C1C1C` (which is `--color-grey-800`), an 8px radius and a
@@ -70,12 +84,15 @@ export function FriendsFilter({
   onChange,
   viewerCity,
   className,
+  variant = "home",
 }: {
   value: FriendsFilter;
   onChange: (next: FriendsFilter) => void;
   /** The viewer's own published city, for "Near me". Null when they have none. */
   viewerCity: string | null;
   className?: string;
+  /** Which drawing of the pill: Home's 647:17482 or `/pals`' 1344:21865. */
+  variant?: "home" | "pals";
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("root");
@@ -122,15 +139,32 @@ export function FriendsFilter({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
-        className="ws-press flex h-[38px] w-[136px] items-center justify-between rounded-full bg-[#979797]/5 pl-[25px] pr-[19px] text-[16px] font-semibold leading-[24px] text-white transition-colors hover:bg-[#979797]/10"
+        className={
+          variant === "pals"
+            ? "ws-press flex h-8 shrink-0 items-center gap-[14px] rounded-full bg-white/[0.04] py-1 pl-2.5 pr-[3px] font-[family-name:var(--font-heading)] text-[10px] font-semibold leading-6 tracking-[0.015em] text-white transition-colors hover:bg-white/[0.08]"
+            : "ws-press flex h-[38px] w-[136px] items-center justify-between rounded-full bg-[#979797]/5 pl-[25px] pr-[19px] text-[16px] font-semibold leading-[24px] text-white transition-colors hover:bg-[#979797]/10"
+        }
       >
         <span className="min-w-0 truncate">{friendsFilterLabel(value)}</span>
-        <IconFilterChevron
-          className={cn(
-            "h-[6px] w-[9px] shrink-0 transition-transform motion-reduce:transition-none",
-            !open && "rotate-180"
-          )}
-        />
+        {variant === "pals" ? (
+          // eslint-disable-next-line @next/next/no-img-element -- the file's own export
+          <img
+            src="/home/view-more-arrow.svg"
+            alt=""
+            aria-hidden
+            className={cn(
+              "h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none",
+              open && "rotate-90"
+            )}
+          />
+        ) : (
+          <IconFilterChevron
+            className={cn(
+              "h-[6px] w-[9px] shrink-0 transition-transform motion-reduce:transition-none",
+              !open && "rotate-180"
+            )}
+          />
+        )}
       </button>
 
       {open && (

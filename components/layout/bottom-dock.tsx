@@ -97,10 +97,9 @@ export function BottomDock({
   const all: DockItem[] = [
     /* 964:24181 — the home mark, 31.57 x 23.5, exported with its own ramp. */
     { href: "/", label: "Home", glyph: "/notifications/dock-home.svg", size: { width: 31.57, height: 23.5 } },
-    /* 964:24203 — "iconamoon:discover-light", a 38 frame with its 2.4 stroke.
-       Explore was hidden as "coming soon"; the dock shows it now, as the file
-       draws it (ogazboiz's call). */
-    { href: "/discover", label: "Discover", glyph: "/notifications/dock-discover.svg", size: { width: 38, height: 38 } },
+    /* Discover left the dock (ogazboiz, 2026-09-11): people are met on Pals,
+       whose first tab is Discover, and Explore is no longer a destination in
+       the navigation. The bar keeps the file's 286 and centres what is left. */
     /*
       THE FILE DRAWS A "4" ON THIS ONE AND WE DO NOT DRAW ANYTHING.
 

@@ -493,9 +493,18 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
     assert.match(deck, /const card: PalCardNodeGeometry = /, "the deck's card is no longer a node-844 geometry");
   });
 
-  it("is the ONE deck: /pals renders it rather than a second fan", () => {
+  it("is the ONE deck, on Home only: /pals draws the topic row over the following lane instead", () => {
+    // The deck is already on Home, so ogazboiz took it off /pals
+    // (2026-09-12: "the second section is already on home so no need for
+    // that again") and asked for the topic row over the feed there. The
+    // selection is the layout's — `/topics` is discovery's, `/feed` the
+    // feed's — and goes down as `topics`.
     const pals = stripComments(read("components/layout/pals-screen.tsx"));
-    assert.match(pals, /<FriendsDeck heading="pals" \/>/, "/pals grew its own deck again");
+    assert.doesNotMatch(pals, /FriendsDeck/, "the wink deck is back on /pals");
+    assert.match(pals, /<TopicTabs tabs=\{tabs\} active=\{topic\} onSelect=\{setTopic\} \/>/, "/pals lost its topic row");
+    assert.match(pals, /useTopics\("home"\)/, "the row is not the shared vocabulary");
+    assert.match(pals, /mode="pals"\n\s*topics=\{topics\}/, "the selection does not narrow the lane");
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /friendsSlot=\{<FriendsDeck \/>\}/, "Home lost the deck");
     assert.ok(!existsSync(resolve("components/layout/make-some-friends.tsx")), "the older deck is back");
   });
 });
@@ -777,10 +786,17 @@ describe("the group picker leaves the size rule to the service", () => {
  * THE TOP BAR IS NODE 647:17439 — the live file, updated 2026-09-10 21:10.
  *
  * It replaced the "Ark Ecosystem / <page>" breadcrumb with the lockup and the
- * account cluster. An earlier build added a search field from a cached copy
- * of this node dated 2026-09-08; the live node has NO search, which matches
- * ogazboiz's two earlier requests to keep search out of the chrome, so its
- * absence is pinned. So are the parts the file adds: the purple count badge on
+ * account cluster.
+ *
+ * ─── NO SEARCH IN THE CHROME ─────────────────────────────────────────────────
+ * This bar has none, on every route. An early build added one from a CACHED
+ * copy of the node dated 2026-09-08; a later one put the 2026-09-12 field
+ * (1295:142737) here for room codes. The 2026-09-12 Home draws that field at
+ * the HEAD OF THE COLUMN (1295:142736, `HomeTopRow`), as a link into Explore's
+ * search, so the bar keeps the breadcrumb-less lockup, the bell and the
+ * avatar and nothing else — and both stale shapes stay pinned out.
+ *
+ * Also pinned are the parts the file adds: the purple count badge on
  * the bell, the avatar and caret inside one 7%-white pill, and a bottom
  * hairline that runs the whole window while the bar itself stays capped
  * ("the border line should full the screen for point A to point B").
@@ -795,9 +811,13 @@ describe("the top bar is node 647:17439", () => {
     assert.doesNotMatch(shell, /function Breadcrumb\b/);
   });
 
-  it("carries no search field, as the live node has none", () => {
-    assert.doesNotMatch(bar, /role="search"|placeholder=/, "a search field is back in the top bar");
-    assert.doesNotMatch(shell, /function TopBarSearch\b/);
+  it("carries no search field, on any route", () => {
+    // Neither the 2026-09-08 cached shape nor the room-code field that stood
+    // in the bar for a morning: the field is the column's (1295:142736).
+    assert.doesNotMatch(bar, /RoomSearchField|TopBarSearch|role="search"/);
+    assert.doesNotMatch(shell, /function TopBarSearch\b|function RoomSearchField\b/);
+    assert.doesNotMatch(shell, /looksLikeRoomCode/, "the bar is routing room codes again");
+    assert.match(bar, /<TopBarActions \/>/);
   });
 
   it("draws the bottom hairline across the whole window, not just the capped frame", () => {
@@ -842,7 +862,12 @@ describe("the top bar is node 647:17439", () => {
     const railWidth = Number(aside.match(/\bw-\[(\d+)px\]/)?.[1] ?? 0);
     assert.ok(railWidth > 0, "could not read the right rail's width");
     assert.match(aside, /\bpr-6\b/, "the rail's right padding changed; the bar mirrors it");
-    assert.match(shell, /!wide && "max-w-\[600px\]"/, "the column is no longer 600 wide");
+    // The column is 600; a FULL route (no rail, e.g. Settings) takes the
+    // column AND the rail's width — the bar's own frame — so it lines up too.
+    assert.ok(
+      shell.includes(`!wide && (full ? "max-w-[600px] lg:max-w-[${600 + railWidth}px] lg:pr-6" : "max-w-[600px]")`),
+      "the column is no longer 600 wide, or a full route no longer matches the bar's frame"
+    );
     assert.ok(
       bar.includes(`mx-auto max-w-[600px] lg:max-w-[${600 + railWidth}px] lg:pr-6`),
       `the bar's content is not the column (600) plus the rail (${railWidth}) wide`
@@ -875,7 +900,7 @@ describe("the body under the dock", () => {
     assert.doesNotMatch(mainBase, /border-x|border-l\b/, "the column's left hairline is unconditional again");
     assert.match(mainBase, /\bws-hair\b/);
     // The right one divides the column from the rail, which is shown from lg.
-    assert.match(mainBase, /(^|[\s"])lg:border-r\b/, "the hairline between the column and the rail is gone, or drawn where there is no rail");
+    assert.match(shell, /!full && "lg:border-r"/, "the hairline between the column and the rail is gone, or drawn where there is no rail");
     assert.match(shell, /railOn && "border-l"/);
   });
 
@@ -890,14 +915,18 @@ describe("the body under the dock", () => {
 });
 
 /**
- * HOME'S TOPIC ROW IS NODE 647:16266 — the live file, updated 2026-09-10.
+ * THE TOPIC ROW IS NODE 647:16266 — the live file, updated 2026-09-10.
  *
  * The row was first built from 225:3352. The live node keeps its pill (101 x
  * 38, full round, the 201deg #7E3BEB -> #472185 gradient while selected) and
  * adds one thing: the "For you" pill carries the file's wink glyph (677:18745,
  * exported), 3px before the label, tinted #D8BCFF while selected.
+ *
+ * It no longer heads HOME (ogazboiz, 2026-09-12) — the gist rooms screen and
+ * the houses street carry it now, which is why the component and this test
+ * stay.
  */
-describe("Home's topic row is node 647:16266", () => {
+describe("The topic row is node 647:16266", () => {
   const tabs = stripComments(read("features/feed/components/topic-tabs.tsx"));
 
   it("gives For you the file's wink, tinted #D8BCFF while selected", () => {
@@ -911,14 +940,6 @@ describe("Home's topic row is node 647:16266", () => {
   });
 
   it("keeps the file's pill: 101 x 38, round, and its gradient in PIXEL space", () => {
-    /*
-      The MCP summary converts the file's gradient handles to "201deg 13% ->
-      100%", which is the angle in the UNIT square. On a 101 x 38 pill that is
-      wrong: projected onto the real box the handles give 226deg with the
-      stops at 22.4% and 84.9%, which reproduces the file's render at both ends
-      (sampled: left 73,33,137 against 74,34,139; right 125,58,234 against
-      126,59,235). 201deg rendered the left end visibly lighter (88,41,166).
-    */
     assert.match(tabs, /h-\[38px\] min-w-\[101px\]/);
     assert.match(tabs, /bg-\[linear-gradient\(226deg,#7E3BEB_22\.4%,#472185_84\.9%\)\]/);
     assert.doesNotMatch(tabs, /201deg/, "the unit-square angle is back");
@@ -926,7 +947,11 @@ describe("Home's topic row is node 647:16266", () => {
 });
 
 /**
- * HOME'S GO LIVE BANNER IS NODE 647:17219 — the live file, updated 2026-09-10.
+ * HOME'S BANNER IS NODE 1305:149178 — the 2026-09-12 Home.
+ *
+ * It REPLACED 647:17219's 938 x 168 artboard, which this block used to pin. The
+ * drawing is asserted in "draws Home's banner on 1305:149178's own numbers";
+ * what stays here is where it SITS and what it is not.
  *
  * The file draws it 938 x 168 directly under the topic row. The column is 600,
  * so from md up the banner keeps the file's composition and scales as ONE
@@ -934,34 +959,42 @@ describe("Home's topic row is node 647:16266", () => {
  * units), rather than reflowing a two-line headline around a 138px figure.
  * Phones keep the compact strip: no mobile frame was given.
  */
-describe("Home's Go Live banner is node 647:17219", () => {
-  const cta = stripComments(read("features/streams/components/live-cta.tsx"));
+describe("Home's banner is node 1305:149178", () => {
+  const banner = stripComments(read("components/layout/home-banner.tsx"));
   const feed = stripComments(read("features/feed/components/feed-page.tsx"));
   const home = stripComments(read("components/layout/home-screen.tsx"));
 
-  it("draws the file's 938 x 168 artboard, scaled as one picture from md", () => {
-    assert.match(cta, /const DESIGN_W = 938;/);
-    assert.match(cta, /const DESIGN_H = 168;/);
-    assert.match(cta, /@container/, "the banner no longer scales against its own width");
-    assert.match(cta, /hidden md:block/);
+  it("draws the card at the file's pixels from md, and keeps a phone strip the artboard cannot become", () => {
+    assert.match(banner, /hidden h-\[102px\] overflow-hidden rounded-\[10px\] md:block/);
+    assert.match(banner, /md:hidden/, "the phone strip is gone");
+    assert.doesNotMatch(banner, /@container|cqw/, "the composition is being scaled instead of drawn");
   });
 
-  it("paints the gradient in pixel space, not the unit square", () => {
-    assert.match(cta, /bg-\[linear-gradient\(92deg,#AD46FF_-16\.3%,#682A99_82%\)\]/);
+  it("no longer carries 647:17219's artboard", () => {
+    assert.doesNotMatch(banner, /DESIGN_W = 938/);
+    assert.doesNotMatch(banner, /92deg,#AD46FF_-16\.3%/);
+    assert.doesNotMatch(home, /LiveCta/, "the streams slice's banner is back on Home");
   });
 
-  it("places the two soft-light strokes from the file's path geometry", () => {
-    assert.match(cta, /mixBlendMode: "soft-light"/);
-    assert.match(cta, /transform="matrix\(1 0 0 1 -41 -92\)"/);
-    assert.match(cta, /transform="matrix\(-1 0 0 -1 992 275\.203125\)"/);
-  });
-
-  it("sits on Home right under the topic row, for signed-in readers only", () => {
-    assert.match(home, /liveCtaSlot=\{authenticated \? <LiveCta \/> : null\}/);
-    const tabs = feed.indexOf("<TopicTabs");
-    const banner = feed.indexOf("{liveCtaSlot && ");
+  it("opens the column with the search row and the banner, above everything, for EVERYBODY", () => {
+    // The head slot: the row (1295:142736), then the banner 11 under it, then
+    // the column's 64 to the first section — drawn before anything else.
+    // The row now carries Home's own query — the field answers HERE rather
+    // than throwing the reader into Explore. The banner is part of the
+    // RESTING page, so it steps aside with the sections while a search is
+    // open instead of sitting on top of a list of results.
+    assert.match(
+      home,
+      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && <HomeBanner slides=\{HOME_BANNER_SLIDES\} \/>\}/
+    );
+    assert.match(feed, /\{headSlot && <div className="mb-\[64px\] flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
+    const head = feed.indexOf("{headSlot && ");
+    const trending = feed.indexOf("<TrendingDiscussions");
     const rooms = feed.indexOf("{roomsSlot}");
-    assert.ok(tabs > 0 && banner > tabs && rooms > banner, "the banner is not between the topic row and the rooms");
+    assert.ok(head > 0 && trending > head && rooms > trending, "the head is not above everything else");
+    assert.doesNotMatch(feed, /liveCtaSlot/, "the old under-the-tabs mount is back");
+    // The topic row is gone from Home (ogazboiz, 2026-09-12).
+    assert.doesNotMatch(feed, /TopicTabs/);
   });
 });
 
@@ -971,24 +1004,40 @@ describe("Home's Go Live banner is node 647:17219", () => {
  * more 1069:11818, the pager dots 647:16289 and the card row 647:17211 of
  * component 415:12668 (default variant 496:13802).
  */
-describe("Home's Suggested GistRooms section is 647:16288's first block", () => {
+describe("Home's Top GistRooms section is 647:16288's first block", () => {
   const rail = stripComments(read("components/layout/live-gist-rooms.tsx"));
   const card = stripComments(read("components/layout/gist-room-card.tsx"));
   const feed = stripComments(read("features/feed/components/feed-page.tsx"));
   const icons = stripComments(read("components/ui/topic-tags-field.tsx"));
 
   it("heads the carousel with the file's title and View more", () => {
-    assert.match(rail, /<span className="text-white">Suggested <\/span>GistRooms/);
-    assert.match(rail, /bg-\[linear-gradient\(90deg,#C196FD_0%,#7E3BEB_100%\)\] bg-clip-text/);
-    assert.match(rail, /href="\/gist-rooms"/);
+    // "Top", not the file's "Suggested": these are the rooms actually live (ogazboiz, 2026-09-12).
+    assert.match(rail, /lead="Top"/);
+    assert.match(rail, /accent="GistRooms"/);
+    assert.match(rail, /useStreamList\("live", \[\], "house", undefined, "listeners"\)/, "the carousel no longer asks for live rooms, busiest first");
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    // A deployment without the busiest-first order must fall back, not empty the shelf.
+    assert.match(api, /if \(!refusedListenerSort\(error\)\) throw error;/);
+    assert.match(rail, /action=\{\{ label: "View more", href: "\/gist-rooms" \}\}/);
+    // The gradient half, the pill and the file's own arrow live in the one
+    // heading component now — four copies of this markup is how one section
+    // ends up a different size from its neighbours.
+    const heading = stripComments(read("components/layout/section-heading.tsx"));
+    assert.match(heading, /bg-\[linear-gradient\(90deg,#C196FD_0%,#7E3BEB_100%\)\] bg-clip-text/);
+    assert.match(heading, /font-\[family-name:var\(--font-heading\)\] text-\[24px\] font-bold leading-\[28\.61px\]/);
+    assert.match(heading, /\/home\/view-more-arrow\.svg/);
+    // Manrope has to be LOADED or the heading silently falls back to Geist.
+    assert.match(stripComments(read("app/layout.tsx")), /Manrope\(\{/);
+    assert.match(stripComments(read("app/layout.tsx")), /variable: "--font-heading"/);
   });
 
-  it("spaces it by the file: 85 under the banner, 19 to the dots, 8.67 to cards 17 apart, 78 to what follows", () => {
-    assert.match(rail, /mb-\[78px\] mt-\[85px\]/);
-    assert.match(rail, /mb-\[19px\]/);
-    assert.match(rail, /gap-\[8\.67px\]/);
+  it("spaces it by 1305:149177: 16 to the rail, cards 17 apart, 63 to what follows", () => {
+    assert.match(rail, /mb-\[64px\]/);
+    assert.match(rail, /className="mb-4"/);
     assert.match(rail, /gap-\[17px\] overflow-x-auto/);
-    assert.match(rail, /justify-start pl-\[5px\]/);
+    // The pager dots belong to the BANNER in this design, not here.
+    assert.doesNotMatch(rail, /DeckDots/, "the old section's pager dots are back");
+    assert.doesNotMatch(rail, /mt-\[85px\]|mb-\[78px\]|gap-\[8\.67px\]/, "647:16288's spacing is back");
     assert.doesNotMatch(feed, /\{roomsSlot && <div className="mb-6">/, "an empty rooms slot takes space again");
   });
 
@@ -1038,11 +1087,13 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     assert.match(pal, /controls: \{ size: 60\.55, gap: 15\.61, bottom: 25\.76, passGlyph: 35\.84, winkGlyph: 40\.32, lift: 5\.59 \}/);
   });
 
-  it("spaces it by the file: 90 to the deck, 9.38 to five pills, 67 to the rule, 60 to the timeline", () => {
+  it("spaces it by the file: 90 to the deck, 9.38 to five pills, then the column's 64 to Coming Soon", () => {
     assert.match(deck, /mt-\[90px\]/);
     assert.match(deck, /mt-\[9\.38px\]/);
-    assert.match(deck, /mt-\[67px\] h-\[0\.5px\] bg-white\/25/);
-    assert.match(deck, /"mb-\[60px\]"/);
+    // The rule and its 67 are gone (ogazboiz, 2026-09-12): 1305:149185 runs
+    // from the pills straight on to Coming Soon on its own 64.
+    assert.doesNotMatch(deck, /mt-\[67px\] h-\[0\.5px\]/);
+    assert.match(deck, /"mb-\[64px\]"/);
     assert.match(deck, /<DeckDots variant="home" count=\{5\}/);
     assert.match(dots, /w-\[36\.29px\]/);
     assert.match(dots, /h-\[5\.81px\]/);
@@ -1053,7 +1104,9 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     const css = read("app/globals.css");
     const shell = stripComments(read("components/layout/app-shell.tsx"));
     const houses = stripComments(read("components/layout/join-a-community.tsx"));
-    assert.match(deck, /ws-rule-to-left-edge -mx-4 mt-\[67px\]/);
+    // The rule 647:17210 drew under the deck is GONE: 1305:149185 runs on to
+    // the next section on the column's own gap (ogazboiz, 2026-09-12).
+    assert.doesNotMatch(deck, /ws-rule-to-left-edge/);
     assert.match(css, /\[data-rail="off"\] \.ws-rule-to-left-edge::before \{[^}]*right: 100%;[^}]*width: 100vw;/, "the extension lies over the rule again, doubling it");
     const mainBase = shell.match(/"[^"]*min-h-\[calc\(var\(--ws-vvh,100dvh\)-var\(--ws-crumb-h\)\)\][^"]*"/)?.[0] ?? "";
     assert.ok(mainBase, "could not find the column's base classes");
@@ -1201,12 +1254,12 @@ describe("Your Story works like WhatsApp's My status", () => {
 describe("The dock follows 964:24177", () => {
   const dock = stripComments(read("components/layout/bottom-dock.tsx"));
 
-  it("carries Home, Discover, Pals and Chat, with the node's own glyphs", () => {
-    for (const glyph of ["dock-home.svg", "dock-discover.svg", "dock-pals.svg", "dock-chat.svg"]) {
+  it("carries Home, Pals and Chat, with the node's own glyphs", () => {
+    for (const glyph of ["dock-home.svg", "dock-pals.svg", "dock-chat.svg"]) {
       assert.ok(dock.includes(`/notifications/${glyph}`), `${glyph} is not the dock's glyph`);
       assert.ok(existsSync(new URL(`../public/notifications/${glyph}`, import.meta.url)), `${glyph} is missing from public`);
     }
-    assert.match(dock, /href: "\/discover", label: "Discover"/);
+    assert.doesNotMatch(dock, /href: "\/discover"/, "Discover is back in the dock; people are met on Pals now");
   });
 
   it("is the file's bar and circle at 72/113", () => {
@@ -1236,7 +1289,7 @@ describe("The account dropdown follows 747:14001", () => {
 
   it("hangs in the file's 172 panel on both account menus", () => {
     assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 2);
-    assert.match(shell, /const width = panel === "gist" \? 172 : 224;/);
+    assert.match(shell, /const width = panel === "gist" \? 172 : panel === "explore" \? 347 : 224;/);
     assert.match(shell, /border-\[0\.745px\] border-white\/\[0\.18\] bg-grey-800 p-\[11\.913px\]/);
   });
 });
@@ -1270,12 +1323,14 @@ describe("Gender is one choice everywhere: Male or Female", () => {
 });
 
 describe("Each surface asks for its own topics", () => {
-  it("Home asks for home, the house tag field for composer, and the key carries the surface", () => {
+  it("asks per surface, the house tag field for composer, and the key carries the surface", () => {
     const api = stripComments(read("features/discovery/lib/api.ts"));
     const hook = stripComments(read("features/discovery/hooks/use-discovery.ts"));
     assert.match(api, /msApi\.get\("\/topics", surface \? \{ surface \} : undefined\)/);
     assert.match(hook, /queryKey: \["ms", "topics", surface \?\? "all"\]/, "one surface's list could be served to another");
-    assert.match(stripComments(read("components/layout/home-screen.tsx")), /useTopics\("home"\)/);
+    // Home lost its topic row (ogazboiz, 2026-09-12), so it asks for no
+    // vocabulary at all; the composer field is the surface-specific caller left.
+    assert.doesNotMatch(stripComments(read("components/layout/home-screen.tsx")), /useTopics/);
     assert.match(stripComments(read("components/ui/topic-tags-field.tsx")), /useTopics\("composer"\)/);
   });
 });
@@ -1380,12 +1435,17 @@ describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () =>
 });
 
 describe("The Home banner speaks gist room for now", () => {
-  it("says gist room and opens the gist room sheet, not the studio", () => {
-    const cta = stripComments(read("features/streams/components/live-cta.tsx"));
-    assert.equal((cta.match(/Open a gist room now and/g) ?? []).length, 2);
-    assert.equal((cta.match(/href="\/gist-rooms\?open=1"/g) ?? []).length, 2);
-    assert.doesNotMatch(cta, />\s*Go Live\s*</, "the banner says Go Live again");
-    assert.doesNotMatch(cta, /href="\/studio"/);
+  it("opens the gist room sheet, not the studio, and never says Go Live", () => {
+    const banner = stripComments(read("components/layout/home-banner.tsx"));
+    // The same thing the sidebar's "Start Gistroom" does.
+    assert.match(banner, /href: "\/gist-rooms\?open=1"/, "the banner stopped opening the gist room sheet");
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /href="\/gist-rooms\?open=1"/);
+    assert.doesNotMatch(banner, />\s*Go Live\s*</, "the banner says Go Live again");
+    assert.doesNotMatch(banner, /\/studio/);
+    // Both breakpoints go through ONE gated handler, so a signed-out reader is
+    // asked to sign in rather than meeting a dead control.
+    assert.equal((banner.match(/onClick=\{open\}/g) ?? []).length, 2, "a breakpoint lost its handler");
+    assert.match(banner, /const open = \(\) => gate\(\(\) => router\.push\(slide\.action\.href\)\);/);
   });
 });
 
@@ -1444,7 +1504,7 @@ describe("A house can be shared with an invite link", () => {
     const thread = stripComments(read("features/messages/components/thread.tsx"));
     assert.match(menu, /\{actions\.onShareInvite && \(/);
     assert.doesNotMatch(menu, /label="Copy link"/, "the thread-address copy is back; nobody outside the house can use it");
-    assert.match(thread, /const canShareInvite = group && canMakeInvite\(\{ visibility: conversation\.visibility, isOwner \}\);/);
+    assert.match(thread, /const canShareInvite = group && canMakeInvite\(\{ visibility: conversation\.visibility, manages \}\);/);
     assert.match(thread, /onShareInvite: canShareInvite \? shareInvite : undefined,/);
     assert.match(thread, /<ShareSheet\s+open\s+onClose=\{\(\) => setInviteLink\(null\)\}\s+title="Share invite link"/);
   });
@@ -1476,7 +1536,8 @@ describe("Tapping a post's words opens the post", () => {
   const card = stripComments(read("features/feed/components/post-card.tsx"));
 
   it("opens /p/:id from the caption, leaving links, buttons and selections alone", () => {
-    assert.match(card, /<div data-post-body onClick=\{full \? undefined : openPost\}/);
+    assert.match(card, /data-post-body/);
+    assert.match(card, /onClick=\{full \? undefined : openPost\}/);
     assert.match(card, /target\.closest\("a, button, input, textarea, \[role='button'\]"\)\) return;/);
     assert.match(card, /if \(window\.getSelection\(\)\?\.toString\(\)\) return;/);
     assert.match(card, /router\.push\(`\/p\/\$\{post\.id\}`\);/);
@@ -1486,3 +1547,860 @@ describe("Tapping a post's words opens the post", () => {
     assert.match(card, /<Link href=\{`\/p\/\$\{post\.id\}`\} className="hover:text-white\/80 hover:underline">/);
   });
 });
+
+describe("Settings are the reader's own, and show real houses", () => {
+  const screen = stripComments(read("components/layout/settings-screen.tsx"));
+  const view = stripComments(read("components/layout/notifications-view.tsx"));
+
+  it("sends /u/<someone-else>/settings to the reader's own settings and asks a signed-out visitor to sign in", () => {
+    assert.match(screen, /router\.replace\(`\/u\/\$\{me\.data\.username\}\/settings`\);/);
+    assert.match(screen, /if \(ready && !authenticated\) \{/);
+  });
+
+  it("lists the reader's houses from the inbox query, never invented ones", () => {
+    assert.match(view, /const houses = useConversations\("houses"\);/);
+    assert.doesNotMatch(view, /DEMO_HOUSES|Ark Gist Partners/);
+  });
+
+  it("keeps Upgrade visible and disabled until subscriptions exist", () => {
+    assert.match(screen, /<button\s+type="button"\s+disabled\s+title="Subscriptions are coming soon"/);
+  });
+});
+
+describe("Settings controls never pretend to save", () => {
+  it("saves Notifications and Chat through /me/settings, and keeps the later stages disabled", () => {
+    const copy = read("components/layout/settings-copy.ts");
+    assert.doesNotMatch(copy, /HOUSE_SAVE_LIVE/, 'a house is live from its own query now');
+    assert.doesNotMatch(copy, /PRIVACY_SAVE_LIVE/, "privacy is live from the settings payload now");
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /const stage3 = Boolean\(privacy\);/);
+    assert.match(screen, /onPrecisionChange=\{\(value\) => save\.mutate\(\{ privacy: \{ locationPrecision: value \} \}\)\}/);
+    assert.match(screen, /onCountryChange=\{\(code\) => updateMe\.mutate\(\{ country: code \}\)\}/);
+    assert.match(screen, /onVisibilityOnSpaceChange=\{\(value\) => save\.mutate\(\{ privacy: \{ showListening: value \} \}\)\}/);
+    assert.doesNotMatch(screen, /locations you visit/, "the service only uses the place on the profile");
+    assert.match(screen, /const settingsLive = settings\.isSuccess;/);
+    assert.match(screen, /onFriendsRoomChange=\{\(value\) => save\.mutate\(\{ notifications: \{ friendsRooms: value \} \}\)\}/);
+    assert.match(screen, /onMessagesFromChange=\{\(value\) => save\.mutate\(\{ chat: \{ messagesFrom: value \} \}\)\}/);
+    assert.match(screen, /onMessagesFromChange=\{\(value\) => saveHouse\.mutate\(\{ messages: value \}\)\}/);
+    assert.match(screen, /onGistroomsFromChange=\{\(value\) => saveHouse\.mutate\(\{ rooms: value \}\)\}/);
+    assert.match(screen, /disabled=\{!houseSettings\.isSuccess\}/);
+    assert.equal((screen.match(/<Toggle\s+disabled=\{(personalizeDisabled|visibilityDisabled)\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
+    for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
+      const source = read(`components/layout/${file}.tsx`);
+      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
+    }
+  });
+
+  it("names a chat refused by someone's Messages-from setting in the service's words", () => {
+    const envelope = read("lib/api/envelope.ts");
+    assert.match(envelope, /case "MESSAGES_RESTRICTED":\s+return err\.message \|\| "This person isn't accepting messages\.";/);
+  });
+});
+
+describe("Settings sits in Home's column, under the shared header", () => {
+  it("fills Home's frame without the right rail: not wide, but full", () => {
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    assert.doesNotMatch(shell.slice(shell.indexOf("function isWide"), shell.indexOf("function isWide") + 400), /settings/);
+    assert.ok(shell.includes("/^\\/u\\/[^/]+\\/settings$/,"), "settings is no longer a full route");
+    assert.ok(shell.includes("/^\\/messages$/,"), "chat is no longer held to Home's frame");
+    assert.doesNotMatch(shell, /const WIDE_EXACT = \[[^\]]*"\/messages"/, "chat spreads to the window's edges again");
+    assert.match(shell, /!wide && \(full \? "max-w-\[600px\] lg:max-w-\[971px\] lg:pr-6" : "max-w-\[600px\]"\)/);
+    assert.match(shell, /\{!wide && !full && <RightRail \/>\}/);
+  });
+
+  it("opens with ColumnHeader, whose back arrow climbs the settings levels", () => {
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    // Two panes from lg: the list beside the chosen setting, the design's layout.
+    assert.match(screen, /lg:w-\[360px\] lg:shrink-0 lg:border-r/);
+    // ONE pane until a row is tapped: the list spans the frame, and the second column exists only for a chosen setting.
+    assert.match(screen, /active === null \? "w-full" : "hidden lg:block lg:w-\[360px\] lg:shrink-0 lg:border-r lg:border-white\/10"/);
+    assert.match(screen, /\{active !== null && \(\s*<div className="min-w-0 flex-1">/);
+    assert.doesNotMatch(screen, /Choose a setting to see it here/);
+    assert.match(screen, /<PaneHeader title=\{title\} subtitle=\{subtitle\} onBack=\{subLevel \? stepBack : undefined\} \/>/);
+    // One pane below lg, where the shared header's arrow walks back up.
+    assert.match(screen, /<ColumnHeader title=\{title\} subtitle=\{subtitle\} back onBack=\{stepBack\} \/>/);
+    assert.doesNotMatch(screen, /<h1|lg:max-w-\[600px\]|92dvh/, "settings draws its own heading or its own wide layout again");
+    const header = stripComments(read("components/layout/column-header.tsx"));
+    assert.match(header, /onClick=\{\(\) => \(onBack \? onBack\(\) : canGoBack\(\) \? router\.back\(\) : router\.push\(backFallback\)\)\}/);
+  });
+});
+
+describe("House roles: owner, admin, member", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+  const menu = stripComments(read("features/messages/components/thread-menu.tsx"));
+
+  it("reads the reader's role from the roster, not from who made the house", () => {
+    assert.match(thread, /const myRole = viewerRole\(members\.data\?\.items, me\.data\?\.id, conversation\.createdBy\);/);
+    assert.doesNotMatch(thread, /conversation\.createdBy === me\.data\?\.id/, "ownership is inferred from createdBy again; it goes stale after a handover");
+  });
+
+  it("lets owners and admins rename the house, and offers member controls from the roles rules", () => {
+    assert.match(thread, /canEdit=\{manages\}/);
+    assert.match(menu, /\{\(canEdit \?\? isOwner\) && \(/);
+    assert.match(thread, /memberActions\(\{ viewer: myRole, target: member\.role, isSelf: profile\.id === meId \}\)/);
+    assert.match(thread, /setConfirming\(\{ kind: "owner", profile \}\)/);
+    assert.match(thread, /setConfirming\(\{ kind: "remove", profile \}\)/);
+  });
+});
+
+describe("A house's notification levels and the house_room notification", () => {
+  it("sends the service's own level names, never the old local ones", () => {
+    const view = read("components/layout/house-notifications-view.tsx");
+    assert.doesNotMatch(view, /"admins"/);
+    assert.equal((view.match(/"leaders_and_friends"/g) ?? []).length, 6);
+  });
+
+  it("names a gist room opened in a house instead of calling it a follow", () => {
+    const types = read("features/notifications/lib/types.ts");
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.match(types, /"house_room",/);
+    assert.equal((page.match(/case "house_room":/g) ?? []).length, 2);
+  });
+});
+
+describe("A person's place respects how much they share", () => {
+  it("draws the profile's place line from whichever halves arrived", () => {
+    const page = stripComments(read("features/profile/components/profile-page.tsx"));
+    assert.match(page, /\{placeLine\(data\)\}/);
+    assert.doesNotMatch(page, /\[data\.city, data\.region\]\.filter\(Boolean\)/);
+  });
+
+  it("names the house on a gist-room notification when the service can", () => {
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.match(page, /item\.house\?\.title\s+\? `\$\{who\} opened a gist room in \$\{item\.house\.title\}\.`/);
+  });
+});
+
+describe("Contact us opens a chat with support", () => {
+  it("resolves the support account by username and opens a chat with it", () => {
+    assert.match(read("lib/support.ts"), /export const SUPPORT_USERNAME = "tsionarksupport";/);
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /const support = useProfile\(SUPPORT_USERNAME\);/);
+    assert.match(screen, /openChat\.mutate\(support\.data\.id, \{\s*onSuccess: \(conversation\) => router\.push\(`\/messages\?c=\$\{conversation\.id\}`\),/);
+    assert.doesNotMatch(screen, /did:privy:/, "the support account's id is hard-coded; it differs per environment");
+    // The email is the one the support account publishes in its own bio.
+    assert.match(read("lib/support.ts"), /export const SUPPORT_EMAIL = "support@tsionark\.com";/);
+    assert.match(screen, /href=\{`mailto:\$\{SUPPORT_EMAIL\}`\}/);
+    assert.match(screen, /\{ label: "Contact us", view: "contact" \}/);
+    // Push and a daily email summary exist now, so the row names them.
+    assert.match(screen, /Customize push, email, and live room activity alerts\./);
+    // The policy pages are written, not "Coming soon".
+    assert.match(screen, /<LegalDocumentView doc=\{PRIVACY_POLICY\} \/>/);
+    assert.match(screen, /<LegalDocumentView doc=\{COMMUNITY_GUIDELINES\} \/>/);
+    assert.doesNotMatch(screen, /function HelpSubView/);
+  });
+});
+
+describe("Square has a favicon and tagged share links", () => {
+  it("serves the brand mark as the tab icon and a home-screen icon", () => {
+    const icon = read("app/icon.svg");
+    assert.match(icon, /viewBox="0 0 60 60"/);
+    assert.ok(read("app/apple-icon.png").length > 0);
+  });
+
+  it("tags every link the share sheet hands out, with what was shared", () => {
+    const sheet = stripComments(read("components/ui/share-sheet.tsx"));
+    assert.match(sheet, /shareTags\("native_share", campaign\)/);
+    assert.match(sheet, /shareTags\("copy_link", campaign\)/);
+    assert.match(sheet, /shareTags\(target, campaign\)/);
+    for (const [file, campaign] of [
+      ["features/feed/components/post-card.tsx", "post_share"],
+      ["features/profile/components/profile-page.tsx", "profile_share"],
+      ["features/profile/components/person-more-menu.tsx", "profile_share"],
+      ["features/messages/components/thread.tsx", "house_invite"],
+    ] as const) {
+      assert.match(read(file), new RegExp(`campaign="${campaign}"`), file);
+    }
+  });
+
+  it("keeps the UTM tags a visit arrived with and sends them with analytics", () => {
+    const analytics = stripComments(read("lib/analytics.ts"));
+    assert.match(analytics, /const utm = captureVisitUtm\(\);/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /captureVisitUtm\(\);/);
+  });
+});
+
+describe("Web push", () => {
+  it("shows a push with Square's icon and only ever opens a page on Square", () => {
+    const sw = read("public/sw.js");
+    assert.match(sw, /addEventListener\("push"/);
+    assert.match(sw, /icon: "\/apple-icon\.png"/);
+    assert.match(sw, /if \(target\.origin !== self\.location\.origin\)/);
+  });
+
+  it("forgets this browser on sign-out and re-records it on load", () => {
+    assert.match(stripComments(read("hooks/use-logout.ts")), /await unsubscribeThisBrowser\(\);/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /if \(authenticated\) void refreshPushSubscription\(\);/);
+  });
+
+  it("offers the push row in Settings, disabled with its reason", () => {
+    const view = stripComments(read("components/layout/notifications-view.tsx"));
+    assert.match(view, /checked=\{push\.checked\}/);
+    assert.match(view, /\{push\.description\}/);
+    assert.match(stripComments(read("components/layout/settings-screen.tsx")), /const push = usePushNotifications\(\);/);
+  });
+});
+
+describe("The daily email summary", () => {
+  it("offers the switch in Settings → Notifications, from the service's own answer", () => {
+    const view = stripComments(read("components/layout/notifications-view.tsx"));
+    assert.match(view, /checked=\{emailDigest\.checked\}/);
+    const screen = stripComments(read("components/layout/settings-screen.tsx"));
+    assert.match(screen, /onChange: \(value\) => save\.mutate\(\{ notifications: \{ emailDigest: value \} \}\)/);
+  });
+
+  it("unsubscribes only when the button is pressed, never on page load", () => {
+    const page = stripComments(read("features/settings/components/unsubscribe-page.tsx"));
+    assert.match(page, /onClick=\{\(\) => unsubscribe\.mutate\(token\)\}/);
+    assert.doesNotMatch(page, /useEffect/, "a mail link-scanner opening the page would switch summaries off");
+    assert.match(read("app/unsubscribe/page.tsx"), /<UnsubscribePage \/>/);
+  });
+
+  it("lets the BFF pass exactly that one write through signed out", () => {
+    const route = stripComments(read("app/api/market-square/[...path]/route.ts"));
+    assert.match(route, /const needsAuth = method === "GET" \? !isPublicGet\(path\) : !\(method === "POST" && isPublicPost\(path\)\);/);
+  });
+});
+
+describe("Home and the dock after Pals took the stories", () => {
+  it("keeps stories off Home and Discover out of the navigation", () => {
+    assert.doesNotMatch(stripComments(read("features/feed/components/feed-page.tsx")), /<StoriesRow/);
+    assert.doesNotMatch(stripComments(read("components/layout/app-shell.tsx")), /aria-label="Explore"/);
+  });
+});
+
+describe("Gist rooms can be scheduled, and upcoming ones look like open ones", () => {
+  it("offers Now or Later when opening a room, and refuses a past time", () => {
+    const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));
+    assert.match(sheet, /<RadioPill text="Now" selected=\{!startsLater\}/);
+    assert.match(sheet, /<RadioPill text="Later" selected=\{startsLater\}/);
+    // The clock is read on submit, never during render (the purity rule).
+    assert.match(sheet, /if \(startsLater && !\(Number\.isFinite\(startsAtMs\) && startsAtMs > Date\.now\(\)\)\) \{/);
+    assert.doesNotMatch(sheet.slice(0, sheet.indexOf("const submit")), /Date\.now\(\)/, "the clock is read while rendering again");
+    assert.match(sheet, /scheduledAt: new Date\(startsAt\)\.toISOString\(\)/);
+  });
+
+  it("draws the gist rooms page as 1317:158073: search row, two headings, two three-across grids", () => {
+    const street = stripComments(read("features/houses/components/houses-street.tsx"));
+    const screen = stripComments(read("components/layout/gist-rooms-screen.tsx"));
+    // The artboard's own insets, and the FULL frame it sits in.
+    assert.match(street, /pl-\[22px\] pr-\[21px\] pt-\[22px\]/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /\/\^\\\/gist-rooms\$\/,/, "/gist-rooms is not a FULL-frame route");
+    // Home's search row heads it; no page heading, no topic row, no circle.
+    assert.match(screen, /headSlot=\{<HomeTopRow \/>\}/);
+    assert.doesNotMatch(street, /Happening|TopicTabs|tabsSlot|createSlot/);
+    assert.doesNotMatch(screen, /TopicTabs|CreateFab/);
+    // "Live GistRooms" and "Coming Soon" in the shared heading, WITHOUT View more.
+    assert.match(screen, /<SectionHeading id="live-gistrooms" lead="Live" accent="GistRooms" \/>/);
+    assert.match(screen, /<SectionHeading id="coming-soon-page" lead="Coming Soon" \/>/);
+    // The live grid: 290.47 x 103.13 cells (the 338 card at 0.8594), 16 between rows.
+    assert.match(street, /grid grid-cols-\[repeat\(auto-fill,290\.47px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
+    assert.match(street, /className="h-\[103\.13px\] w-\[290\.47px\]"/);
+    assert.match(screen, /const ROOM_CARD_SCALE = 290\.47 \/ 338;/);
+    assert.match(screen, /<div style=\{\{ zoom: ROOM_CARD_SCALE \}\}>\s*<GistRoomCard\s+preview/);
+    // Coming Soon is a GRID here (1317:158179), on the file's 12.38, 59 under the live grid.
+    assert.match(street, /className=\{liveHouses\.length > 0 \? "mt-\[59px\]" : "mt-9"\}/);
+    assert.match(street, /grid grid-cols-1 gap-x-\[12\.38px\] gap-y-4 md:grid-cols-2 lg:grid-cols-3/);
+    assert.doesNotMatch(street, /overflow-x-auto|w-\[479px\]/, "upcoming rooms are a sideways rail again");
+    assert.match(screen, /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
+    // `?open=1` still opens the composer on arrival.
+    assert.match(street, /if \(openParam !== "1" \|\| autoOpened\.current\) return;/);
+  });
+
+  it("draws the houses directory as 1368:2270, where Popular Houses' View more lands", () => {
+    const screen = stripComments(read("components/layout/houses-screen.tsx"));
+    const row = stripComments(read("components/layout/home-top-row.tsx"));
+    // The link, the route, the FULL frame.
+    assert.match(stripComments(read("components/layout/popular-houses.tsx")), /action=\{\{ label: "View more", href: "\/houses" \}\}/);
+    assert.match(read("app/houses/page.tsx"), /<HousesScreen \/>/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /\/\^\\\/houses\$\/,/, "/houses is not a FULL-frame route");
+    // The artboard's insets; the row ends in the FILTER pill (1368:2275), a
+    // real disabled control — the route takes cursor and limit only.
+    assert.match(screen, /pl-\[22px\] pr-\[21px\] pt-\[22px\]/);
+    assert.match(screen, /<HomeTopRow trailing="filter" \/>/);
+    assert.match(row, /disabled\n\s*aria-label="Filter houses"\n\s*title="Filtering houses needs a filter the directory doesn't offer yet"/);
+    assert.match(row, /h-12 w-16 shrink-0 items-center justify-center gap-3 rounded-\[36px\] bg-\[rgba\(159,90,255,0\.09\)\] px-2 py-1/);
+    // "Explore communities" (ogazboiz, 2026-09-12) over the file's pasted "Live GistRooms".
+    assert.match(screen, /<SectionHeading id="explore-communities" lead="Explore" accent="communities" \/>/);
+    assert.doesNotMatch(screen, /Live GistRooms/);
+    // 1373:3367's card: 290 x 86 at 16.86, three across, rows 16 apart, paged.
+    assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,290px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
+    assert.match(screen, /h-\[86px\] w-\[290px\] overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
+    assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
+    assert.match(screen, /left-\[75\.75px\] top-\[16\.25px\] flex w-\[127\.52px\] flex-col gap-\[4\.93px\]/);
+    assert.match(screen, /ws-btn-welcome ws-press absolute right-4 top-\[31px\] flex h-6 w-16 items-center justify-center rounded-\[61\.6px\]/, "the Join House pill lost its ramp");
+    // The phone (1381:37677 in SQUARE 2.0 Copy, ogazboiz 2026-09-12): one
+    // column, each card FILLING the row at 106 tall, the node's own type,
+    // the pill 40 down. Below lg, not md — a 290 cell in the 600 column
+    // between them leaves two thirds of the row empty.
+    assert.match(screen, /max-lg:grid-cols-1 max-lg:justify-stretch/, "the phone's one column is gone");
+    assert.match(screen, /max-lg:h-\[106px\] max-lg:w-full/, "the phone's card no longer fills the row");
+    assert.match(screen, /max-lg:left-\[76px\] max-lg:right-\[94px\] max-lg:top-4 max-lg:w-auto max-lg:gap-2/);
+    assert.match(screen, /max-lg:text-\[14px\] max-lg:leading-\[18\.2px\]/, "the phone's 14/18.2 name is gone");
+    assert.match(screen, /max-lg:text-\[12px\] max-lg:font-medium max-lg:leading-\[15\.6px\]/, "the phone's 12/15.6 description is gone");
+    assert.match(screen, /max-lg:top-\[40px\]/, "the phone's pill offset is gone");
+    // The picture is the node's 48.05 square inset on the white plate; with
+    // no picture the plate is 1373:3990's — `#D8D8D8` with the gist glyph
+    // centred — never a seeded person, never the node's sample photo
+    // (ogazboiz, 2026-09-12).
+    assert.match(screen, /left-\[1\.23px\] top-\[3\.08px\] h-\[48\.05px\] w-\[48\.05px\] object-cover/, "the picture no longer sits square on its plate");
+    assert.match(screen, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
+    assert.match(screen, /src="\/gist-rooms\/card-default-cover\.svg"[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
+    assert.doesNotMatch(screen, /default-picture|<Avatar[\s\S]{0,120}src=\{house\.imageUrl\}/, "a house picture is being invented again");
+    assert.ok(!existsSync(resolve("public/houses")), "the node's sample photo is back as a default");
+    // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
+    assert.match(screen, /useDiscoverHousesPages\(\)/);
+    assert.match(screen, /useInfiniteScroll\(/);
+    assert.doesNotMatch(screen, /\.sort\(/);
+    assert.match(screen, /house\.memberCount !== null && \(/);
+  });
+
+  it("gives the room card 415:12704's hover state, only where the file wires it", () => {
+    const card = stripComments(read("components/layout/gist-room-card.tsx"));
+    assert.match(card, /preview && "group\/room relative h-\[120px\] overflow-hidden"/);
+    assert.match(card, /hidden group-hover\/room:block group-focus-within\/room:block/);
+    // The file's numbers: the 16.79/17.16 title, the one 34.5 tile, Speaking Now, unmute, Join.
+    assert.match(card, /text-\[16\.79px\] font-semibold leading-\[17\.16px\]/);
+    assert.match(card, /left-\[16\.4px\] top-\[70\.4px\] h-\[34\.5px\] w-\[34\.5px\] rounded-\[11\.49px\]/);
+    assert.match(card, /speaking-wave\.png/);
+    assert.match(card, /left-\[165px\] top-\[85px\] flex h-5 w-\[65px\]/);
+    assert.match(card, /left-\[232px\] top-\[85px\] flex h-5 w-\[88px\]/);
+    // Home's rail does not opt in.
+    assert.doesNotMatch(stripComments(read("components/layout/live-gist-rooms.tsx")), /preview/);
+  });
+
+  it("lets unmute LISTEN through the preview grant, and never heartbeats", () => {
+    const card = stripComments(read("components/layout/gist-room-card.tsx"));
+    const hook = stripComments(read("features/streams/hooks/use-room-preview.ts"));
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    // POST /streams/:id/preview-token — on the served spec (2026-09-12), optional auth.
+    assert.match(api, /msApi\.post\(`\/streams\/\$\{streamId\}\/preview-token`\)/);
+    assert.match(stripComments(read("lib/api/public-routes.ts")), /path\[0\] === "streams" && path\[2\] === "preview-token"/);
+    // THE HARD RULE: a previewing card must not count itself as audience.
+    assert.doesNotMatch(hook, /heartbeat|sendHeartbeat/i, "the preview sends heartbeats");
+    // Subscribe side only, audio only, registered under its own key, torn down on leave.
+    assert.match(hook, /autoSubscribe: true/);
+    assert.match(hook, /if \(track\.kind !== Track\.Kind\.Audio\) return;/);
+    assert.match(hook, /const key = `\$\{streamId\}#preview`;/);
+    assert.match(hook, /RoomEvent\.ActiveSpeakersChanged/);
+    assert.match(hook, /export const PREVIEW_BACKOFF_MS = 30_000;/);
+    // The card: pressed on, off on mouse leave; refusals quiet the control with the reason.
+    assert.match(card, /onMouseLeave=\{preview \? \(\) => setListening\(false\) : undefined\}/);
+    assert.match(card, /useRoomPreview\(streamId, preview && listening,/);
+    assert.match(card, /disabled=\{previewOff\}/);
+    assert.match(card, /title=\{live\.reason \?\? undefined\}/);
+    // The caption is the pure rule, fed by viewerCount and the SFU's speaker — no roster guess.
+    assert.match(card, /previewCaption\(\{\n\s*connected: live\.state === "listening",\n\s*speaker: live\.speaker,\n\s*listening: room\?\.viewerCount \?\? null,/);
+    assert.doesNotMatch(card, />\s*Speaking Now\s*</, "the card claims a speaker it cannot hear");
+    // The name resolves the way the house room resolves it.
+    assert.match(card, /participantName\(participant\.name\) \?\? parseParticipantMeta\(participant\.metadata\)\?\.username \?\? null/);
+  });
+
+  it("shows scheduled rooms on Home, under the friends deck, or not at all", () => {
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    // Order matters: the deck, then what is coming.
+    assert.ok(
+      feed.indexOf("{friendsSlot}") < feed.indexOf("{comingSoonSlot}"),
+      "Coming soon moved above the friends deck"
+    );
+    const home = stripComments(read("components/layout/home-screen.tsx"));
+    assert.match(home, /comingSoonSlot=\{<ComingSoonRooms \/>\}/);
+    const soon = stripComments(read("components/layout/coming-soon-rooms.tsx"));
+    // Nothing scheduled is no section — never an empty shelf or a spacer.
+    assert.match(soon, /if \(items\.length === 0\) return null;/);
+    assert.match(soon, /useStreamList\("scheduled"/);
+    // The same card the gist rooms page draws, at Popular Houses' rail width —
+    // 356 on a 15.7 gap — not the node's 264.35, which read as too small on
+    // the column (ogazboiz, 2026-09-12). The card scales from its width.
+    assert.match(soon, /<UpcomingRoomCard stream=\{room\} \/>/);
+    assert.match(soon, /gap-\[15\.7px\] overflow-x-auto/);
+    assert.match(soon, /w-\[356px\] shrink-0/);
+    assert.doesNotMatch(soon, /w-\[479px\]|w-\[264\.35px\]/);
+    // The card's one Regular run.
+    assert.match(stripComments(read("components/layout/upcoming-room-card.tsx")), /font-normal text-\[#D9D9D9\]/);
+  });
+
+  it("does not drop a host into the soundcheck for a room scheduled for later", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    // Backstage is the moment of OPENING. Scheduling for Saturday must not land
+    // the host on a screen whose only action is "open the gist room" (ogazboiz:
+    // "when i schedule a gistroom why is it telling me to open gist room").
+    assert.match(room, /if \(!opened && !openNow && startsLater\(stream\)\) \{/);
+    assert.match(room, /<HostWaiting\s+stream=\{stream\}\s+onOpenNow=/);
+    // A room that has not opened is drawn as the product's own upcoming card,
+    // NOT as eight dashed chairs — the ring drew eight absences and read as
+    // broken (ogazboiz: "it is like a ring so follow our ui").
+    assert.match(room, /\{upcomingCardSlot && <div className="px-4 pt-2">\{upcomingCardSlot\(stream\)\}<\/div>\}/);
+    // The ring still belongs to the SKELETON, where the room's own shape is
+    // the honest thing to hold the space with.
+    assert.match(room, /function RoomSkeleton\(\)[\s\S]*?<EmptyRing \/>/);
+    assert.match(
+      stripComments(read("components/layout/house-room-screen.tsx")),
+      /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/
+    );
+    // A room with no time on it was opened with "Now" and still goes straight
+    // to the soundcheck.
+    assert.match(room, /if \(!stream\.scheduledAt\) return false;/);
+    // Opening early stays available, but it is not the default.
+    assert.match(room, /Open it now instead/);
+  });
+
+  it("closes Home with Popular Houses, on the directory that is already ranked", () => {
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    assert.ok(
+      feed.indexOf("{comingSoonSlot}") < feed.indexOf("{housesSlot}"),
+      "Popular Houses moved above Coming Soon"
+    );
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /housesSlot=\{<PopularHouses \/>\}/);
+    const houses = stripComments(read("components/layout/popular-houses.tsx"));
+    // The endpoint is ALREADY ordered by member count and excludes houses the
+    // reader is in, so nothing is re-sorted and no second endpoint was added.
+    assert.match(houses, /useDiscoverHouses\(/);
+    assert.doesNotMatch(houses, /\.sort\(/, "one loaded page is being re-sorted");
+    // 1305:149179's own scale: 356x120 at radius 22.
+    assert.match(houses, /w-\[356px\] shrink-0/);
+    assert.match(houses, /"--u": "calc\(100cqw \/ 356\)"/);
+    assert.match(houses, /height: u\(120\)/);
+    assert.match(houses, /borderRadius: u\(22\)/);
+    // Empty or undeployed is ABSENT, never an empty shelf.
+    assert.match(houses, /if \(houses\.unavailable \|\| items\.length === 0\) return null;/);
+  });
+
+  it("schedules a room with the app's own picker, never the browser's", () => {
+    const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));
+    // The native control paints its own dd/mm/yyyy chrome in the platform's
+    // type, which no token in this app can reach.
+    assert.doesNotMatch(sheet, /datetime-local/, "the browser's own date control is back");
+    assert.match(sheet, /<DateTimeField/);
+    // It still emits what the sheet already submits, so submit() is unchanged.
+    const field = stripComments(read("components/ui/date-time-field.tsx"));
+    assert.match(field, /composeLocal\(/);
+    assert.match(field, /role="dialog"/);
+    assert.match(field, /disabled=\{past\}/, "past days are selectable");
+    // A grid cell stretches to its column: without a square ratio the selected
+    // day renders as an oval rather than a disc.
+    assert.match(field, /aspect-square/);
+  });
+
+  it("spaces every Home section by the column's own 64, headings flush at x=0", () => {
+    // 1305:149185's `itemSpacing` is 64.0 in the raw node (it was read as 63
+    // once), and its heading rows start at x=0. The 5px inset and the 78px
+    // margin were 647:16288's and misaligned the sections.
+    for (const file of [
+      "components/layout/live-gist-rooms.tsx",
+      "components/layout/coming-soon-rooms.tsx",
+      "components/layout/popular-houses.tsx",
+      "components/layout/post-for-you.tsx",
+    ]) {
+      const section = stripComments(read(file));
+      assert.match(section, /mb-\[64px\]/, `${file} is not on the column's rhythm`);
+      assert.match(section, /className="mb-4"/, `${file} lost the 16 under its heading`);
+      assert.doesNotMatch(section, /pl-\[5px\]/, `${file} still carries the old 5px inset`);
+    }
+  });
+
+  it("heads Make some friends with 1305:149175's own type, deck untouched", () => {
+    const deck = stripComments(read("components/layout/friends-deck.tsx"));
+    // The one heading object, not a fourth copy of the markup.
+    assert.match(deck, /<SectionHeading\n\s*id="make-some-friends"/);
+    assert.match(deck, /lead="Make some"/);
+    assert.match(deck, /accent="friends"/);
+    assert.doesNotMatch(deck, /text-\[22px\] font-medium leading-7 text-white/, "the old hand-built heading is back");
+    // The filter goes in as the live control it is, keeping ogazboiz's name.
+    assert.match(deck, /actionSlot=\{filterPill\}/);
+    assert.match(stripComments(read("components/layout/section-heading.tsx")), /actionSlot \?\? \(action && <SectionAction/);
+    // The DECK stays 647:16288's: its pills and the left-edge rule were asked
+    // for and the new node has nothing to replace them with.
+    assert.match(deck, /<DeckDots variant="home" count=\{5\}/);
+    // The rule 647:17210 drew under the deck is GONE: 1305:149185 runs on to
+    // the next section on the column's own gap (ogazboiz, 2026-09-12).
+    assert.doesNotMatch(deck, /ws-rule-to-left-edge/);
+  });
+
+  it("draws Home's banner on 1305:149178's own numbers, for everybody", () => {
+    const banner = stripComments(read("components/layout/home-banner.tsx"));
+    // 102 tall at radius 10 on the file's ramp. The gradient's width handle
+    // sits straight below its start, so on a 573 x 102 box the bands are
+    // vertical and the ramp runs LEFT TO RIGHT: 90deg, -16.5% to 82%. The
+    // 126deg an earlier build used is the square-space reading of the same
+    // handles, which the render does not show.
+    assert.match(banner, /linear-gradient\(90deg,#AD46FF_-16\.5%,#682A99_82%\)/);
+    assert.doesNotMatch(banner, /126deg/);
+    // The file's own word on the button, at its own box and 25 from the edge.
+    assert.match(banner, /label: "Host Room"/);
+    assert.doesNotMatch(banner, /Gist Room/, "the old button label is back");
+    assert.match(banner, /right-\[25px\] top-\[32px\] flex h-\[38px\] w-\[90px\]/);
+    assert.match(banner, /inset_0_0_0_2px_rgba\(194,160,250,0\.55\),0_6px_6\.2px_rgba\(0,0,0,0\.25\)/);
+    // BOTH arcs, the file's exports, each at its STROKE's bounds (the export is
+    // trimmed to the stroke, not to the node's box), blended by the element —
+    // a blend inside an <img> blends against nothing.
+    assert.match(banner, /banner-arc-left\.svg/);
+    assert.match(banner, /left-\[-4\.12px\] top-\[-57\.22px\] h-\[106px\] w-\[256px\] max-w-none select-none mix-blend-soft-light/);
+    assert.match(banner, /banner-arc-right\.svg/);
+    assert.match(banner, /left-\[204\.87px\] top-\[16\.41px\] h-\[153px\] w-\[369px\] max-w-none select-none mix-blend-soft-light/);
+    // The frame clips (`clipsContent: true`): the mascot sits at -12 and its
+    // top is cut, and both arcs run outside the box.
+    assert.match(banner, /left-\[5px\] top-\[-12px\] h-\[96\.29px\] w-\[98\.96px\] overflow-hidden/);
+    assert.match(banner, /h-\[148\.46px\] w-\[98\.96px\]/, "the STRETCH fill's top 64.86% is not what is shown");
+    assert.match(banner, /hidden h-\[102px\] overflow-hidden rounded-\[10px\] md:block/, "the arcs escape the banner again");
+    // One text node, two runs: Manrope Bold 24/32.784, then Geist Medium 10 in
+    // the file's #E9CEFF, centred in the 44 box at (103.55, 27.76).
+    assert.match(banner, /left-\[103\.55px\] top-\[27\.76px\] flex h-\[44px\] w-\[329px\] flex-col justify-center/);
+    assert.match(banner, /font-\[family-name:var\(--font-heading\)\] text-\[24px\] font-bold leading-\[32\.784px\] text-white/);
+    assert.match(banner, /text-\[10px\] font-medium leading-\[14\.51px\] text-\[#E9CEFF\]/);
+    // The pager is DeckDots' geometry and renders ONLY with something to page
+    // through: the file draws one slide, and a row of dots over one slide
+    // claims pages that do not exist.
+    assert.match(banner, /\{paged && <DeckDots count=\{slides\.length\} active=\{index\} onSelect=\{setIndex\}/);
+    assert.match(banner, /const paged = slides\.length > 1;/);
+    assert.equal((banner.match(/^\s*id: "/gm) ?? []).length, 1, "the seed is no longer the file's one slide");
+    // Shown to EVERYONE, with sign-in on the tap (ogazboiz, 2026-09-12).
+    assert.match(banner, /const gate = useGate\(\);/);
+  });
+
+  it("puts an announcement in its own band, never in the feed", () => {
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    // Above what the route draws, inside the column — never inside the feed or
+    // the Post For You rail, where "why am I seeing this" is unanswerable.
+    assert.match(shell, /<AnnouncementBand \/>\n\s*\{children\}/);
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    assert.doesNotMatch(feed, /Announcement/, "an announcement reached the feed");
+    const band = stripComments(read("components/layout/announcement-band.tsx"));
+    // It never names the operator; on the shared-key path there is no name.
+    assert.doesNotMatch(band, /createdBy/, "the band is naming an admin");
+    // Trust `post`, never `postId`: the id outlives a post that cannot be shown.
+    assert.doesNotMatch(band, /item\.postId/, "the band renders from postId");
+    // A signed-out reader gets no close button — dismissal needs somebody.
+    assert.match(band, /\{authenticated && \(/);
+    const hook = stripComments(read("hooks/use-announcements.ts"));
+    // Dismissed rows still arrive; the skipping is ours, so a dismissal on one
+    // device holds on another.
+    assert.match(hook, /item\.dismissedByMe !== true/);
+    assert.match(hook, /Date\.parse\(item\.endsAt\) > now/);
+    // (The render-time-clock rule itself is enforced by react-hooks/purity,
+    // which is stricter and can tell a lazy initialiser from a render read.)
+    // Absent means signed out, so no default may be added.
+    assert.match(hook, /dismissedByMe: z\.boolean\(\)\.optional\(\),/);
+  });
+
+  it("pins a post without inventing one, and says nothing when it cannot be shown", () => {
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    // ABSENT, not null: presence is the test, so a pin that cannot be shown
+    // renders nothing rather than "this post is unavailable".
+    const pinnedField = schemas.slice(schemas.indexOf("  pinnedPost: z"));
+    const outer = pinnedField.slice(0, pinnedField.indexOf(".optional(),") + ".optional(),".length);
+    assert.match(outer, /pinnedPost: z\n?\s*\.object\(/);
+    assert.match(outer, /\}\)\n\s*\.optional\(\),/, "the pinned post key stopped being optional");
+    assert.doesNotMatch(
+      outer.slice(outer.indexOf("})")),
+      /\.default\(/,
+      "an absent pin now defaults, which makes 'cannot be shown' look like 'has one'"
+    );
+    // The author's placement, not viewer state — it reads the same signed out.
+    assert.match(schemas, /pinnedByAuthor: z\.boolean\(\)\.optional\(\)\.default\(false\)/);
+    const profile = stripComments(read("features/profile/components/profile-page.tsx"));
+    assert.match(profile, /\{pinned && <PinnedPost pinned=\{pinned\} \/>\}/);
+    // A summary is NOT a post: it must never be fed to postSlot, which would
+    // mean inventing an author, counts and the viewer's own state.
+    assert.doesNotMatch(profile, /postSlot\(pinned/);
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /\{post\.pinnedByAuthor && \(/);
+    // One pin per profile, so pinning clears the previous label immediately.
+    const feedHooks = stripComments(read("features/feed/hooks/use-feed.ts"));
+    assert.match(feedHooks, /if \(pinned\) clearPinnedEverywhere\(queryClient\);/);
+    assert.match(feedHooks, /errorCode\(error\) === "NOT_FOUND"/);
+  });
+
+  it("makes every card in the rail one height, on 1313:149186's own numbers", () => {
+    // The file's cards are all 367 tall (the fourth is 365.39 at y=1.61, so its
+    // bottom still lands at 367) and the row is bottom-aligned. Ours were
+    // ragged because each card sized to its own content.
+    const rail = stripComments(read("components/layout/post-for-you.tsx"));
+    assert.match(rail, /h-\[367px\] w-\[467px\]/, "the cards size to their content again");
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /compact \? "flex h-full flex-col p-3"/, "a compact card no longer fills its box");
+    // Every compact card reserves the same media strip, one photo or four.
+    assert.match(card, /compact && rail\.length > 0 \? \(/);
+    assert.match(card, /<MediaRail items=\{rail\} size="compact" \/>/);
+    // 1313:152774's tiles, and the column's own geometry untouched beside them.
+    const media = stripComments(read("lib/post-media.ts"));
+    assert.match(media, /compact: \{\n\s*tile: 134\.3,\n\s*tileHeight: 188\.52,/);
+    assert.match(media, /post: \{\n\s*tile: 250\.93,\n\s*tileHeight: 352\.22,/);
+    // In a fixed box the PICTURES give, never the words: the strip flexes and
+    // the caption keeps its two lines.
+    assert.match(card, /compact && "shrink-0 overflow-hidden"/, "the caption gives way instead of the pictures");
+    assert.match(card, /compact && "line-clamp-2"/);
+    // No "Show more" in the rail — it expands in place and the card cannot grow.
+    assert.match(card, /clampLines=\{full \|\| compact \? undefined : 6\}/);
+    // A clip's URL in an <img> is a broken tile: a video shows its poster.
+    assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /const video = item\.kind === "video" \|\| isVideoUrl\(item\.url\);/);
+    assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /src=\{poster\}/);
+    const strip = stripComments(read("features/feed/components/media-rail.tsx"));
+    assert.match(strip, /size === "compact" && "min-h-0 flex-1"/);
+    assert.match(strip, /size === "compact" && "h-full"/);
+    // The column's card must NOT be dragged to a fixed height by any of this.
+    assert.match(card, /"p-4 md:px-\[39px\] md:pb-4 md:pt-6"/);
+  });
+
+  it("shows the rail on Home after the houses, with the timeline on /feed", () => {
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    // Home draws the sections and the rail; the list is `feed` mode only, so
+    // one lane is never on screen twice (ogazboiz, 2026-09-12).
+    assert.ok(
+      feed.indexOf("{housesSlot}") < feed.indexOf('{mode === "home" && postsSlot}'),
+      "the rail is not after Popular Houses"
+    );
+    assert.match(feed, /\{mode === "feed" && \(\n\s*<div ref=\{listRef\}/, "the timeline is not behind feed mode");
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /mode="home"/);
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /postsSlot=\{<PostForYou/);
+    // View more opens the page that actually scrolls.
+    assert.match(stripComments(read("components/layout/post-for-you.tsx")), /href: "\/feed"/);
+    // ONE component, so the composer and the viewer are never a second copy.
+    const screen = stripComments(read("components/layout/feed-screen.tsx"));
+    assert.match(screen, /<FeedPage\n\s*mode="feed"/);
+    assert.match(feed, /<Composer/);
+    assert.match(feed, /<VideoViewer/);
+    // The pals rail closes Home's column. "Join a community" is GONE from Home
+    // (ogazboiz, 2026-09-12: Popular Houses is that list); /feed still
+    // interleaves it.
+    assert.doesNotMatch(feed, /mode === "home" && communitySlot/, "Join a community is back on Home");
+    assert.doesNotMatch(stripComments(read("components/layout/home-screen.tsx")), /JoinACommunity/);
+    assert.match(stripComments(read("components/layout/feed-screen.tsx")), /communitySlot=\{<JoinACommunity \/>\}/);
+    assert.match(feed, /\{mode === "home" && palsSlot\}/);
+    // In feed mode they stay interleaved where the file puts them.
+    assert.match(feed, /index === Math\.min\(BEFORE_COMMUNITY - 1/);
+    // Pals is back to the deck and the stories strip alone.
+    const pals = stripComments(read("components/layout/pals-screen.tsx"));
+    assert.doesNotMatch(pals, /PostForYou/, "the rail is still on Pals");
+  });
+
+  it("heads Home's column with the search row — typed on Home, a link elsewhere — and the settings pill", () => {
+    const row = stripComments(read("components/layout/home-top-row.tsx"));
+    /*
+      ONE SURFACE OWNS THE STRING AT A TIME, and `onChange` is what selects it.
+
+      The row is a real INPUT on the page that answers the query itself —
+      Home — and stays a link into Explore everywhere else (ogazboiz: "that
+      search is not suppose to take me to discover ... in that home that
+      search there"). Two live inputs owning one query is the trap the top bar
+      fell into before the chrome lost its search, so the branch is on whether
+      the page passed a handler, never on the route.
+    */
+    assert.match(row, /href="\/discover"/, "the link branch is gone for pages that do not search");
+    assert.match(row, /onChange \? \(/, "the row lost its typed branch");
+    assert.match(row, /<input/);
+    assert.doesNotMatch(row, /<form/, "a form submits and navigates; this field answers in place");
+    assert.match(row, /Search Gistrooms, houses, friends\.\.\./);
+    // The node's leading space is a gap the width of a Geist space, not a
+    // character in the copy.
+    assert.doesNotMatch(row, /" Search Gistrooms/);
+    assert.match(row, /flex h-12 min-w-0 flex-1 items-center gap-\[3\.78px\] rounded-full border-\[0\.68px\] border-white\/40 px-2/);
+    assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\] text-\[#7A7A7A\]/);
+    assert.match(row, /<IconTopSearch className="h-4 w-4 shrink-0 text-\[#6D6D6D\]" \/>/);
+    // 1295:142740: 67 wide at radius 36, padding 3/4/3/8, gear and caret 23
+    // apart, the file's GLASS matched to its render rather than a border.
+    assert.match(row, /"ws-glass-rim relative flex h-12 w-\[67px\] shrink-0 items-center gap-\[23px\] rounded-\[36px\] py-\[3px\] pl-1 pr-2",\n\s*open \? "bg-\[rgba\(159,90,255,0\.09\)\]" : "ws-glass-pill"/);
+    // Open, it is 1317:158078: the purple tint, purple gear and caret, caret up.
+    assert.match(row, /open \? "-scale-y-100 text-\[#9F65FD\]" : "text-white"/);
+    assert.match(row, /<IconHomeSettings className=\{cn\("h-6 w-6 shrink-0", open \? "text-\[#9F65FD\]" : "text-\[#D9D9D9\]"\)\} \/>/);
+    assert.doesNotMatch(row, /border-white\/\d+[^"]*w-\[67px\]|w-\[67px\][^"]*border/, "the pill drew a border the file does not");
+    // It opens EXPLORE SETTINGS (1317:158022) in RailMenu's own panel — not the
+    // account menu any more (ogazboiz, 2026-09-12) — for everyone.
+    assert.match(row, /import \{ RailMenu \} from "@\/components\/layout\/app-shell";/);
+    assert.doesNotMatch(row, /AccountMenuItems|useAuth/);
+    assert.match(row, /panel="explore"/);
+    assert.match(row, /<ExploreSettingsMenu close=\{close\} onLocation=\{\(\) => gate\(\(\) => setLocationOpen\(true\)\)\} \/>/);
+    assert.match(row, /<LocationSheet open onClose=\{\(\) => setLocationOpen\(false\)\} \/>/);
+    // The panel: 1317:158022's own box and rows.
+    const shellSrc = stripComments(read("components/layout/app-shell.tsx"));
+    assert.match(shellSrc, /panel === "explore" \? 347/);
+    assert.match(shellSrc, /rounded-\[22px\] bg-\[#201F1F\] p-4 shadow-\[inset_0_0_0_1px_rgba\(255,255,255,0\.18\)\] backdrop-blur-\[7px\]/);
+    const menu = stripComments(read("components/layout/explore-settings-menu.tsx"));
+    assert.match(menu, /Explore Settings/);
+    assert.match(menu, /h-\[34px\] w-full items-center justify-between rounded-xl bg-white\/\[0\.03\] px-2/);
+    assert.match(menu, /height=\{59\}/);
+    assert.match(menu, /height=\{62\}/);
+    assert.match(menu, /title="Show content in this location"/);
+    assert.match(menu, /title="Trends For You"/);
+    // "Show content in this location" is the service's `privacy.personalizeByPlace`,
+    // read and written through the settings slice's ONE owner, under `privacy`
+    // exactly as the settings screen writes it; Trends stays a real disabled
+    // control with its reason. The "13"s the render hides are not drawn.
+    assert.match(menu, /import \{ useSettings, useUpdateSettings \} from "@\/features\/settings";/);
+    assert.match(menu, /const byPlace = settings\.data\?\.privacy\?\.personalizeByPlace;/);
+    assert.match(menu, /onChange=\{\(value\) => gate\(\(\) => save\.mutate\(\{ privacy: \{ personalizeByPlace: value \} \}\)\)\}/);
+    assert.doesNotMatch(menu, /explore\./, "the preference is being written under a key the service does not have");
+    assert.match(menu, /title="Trends For You"\n\s*body=[^\n]*\n\s*checked=\{false\}\n\s*disabledReason=\{MISSING\}/);
+    assert.match(menu, /role="checkbox"\n\s*aria-checked=\{checked\}\n\s*aria-label=\{title\}\n\s*disabled=\{disabledReason !== null\}/);
+    assert.doesNotMatch(menu, />\s*13\s*</);
+    // The glyphs are the file's; the checkbox and caret are the existing exports.
+    assert.match(menu, /IconExploreClose|IconExploreLocation|IconExploreTrends/);
+    assert.match(menu, /checked \? <IconCheckboxChecked className="h-4 w-4" \/> : <IconCheckbox className="h-4 w-4" \/>/);
+    const screen = stripComments(read("components/layout/room-code-screen.tsx"));
+    // A private room shows the doorplate and never a join that would refuse.
+    assert.match(screen, /This room is private/);
+    const privateBranch = screen.slice(screen.indexOf("{shut && ("), screen.indexOf("{!over && !shut && ("));
+    assert.doesNotMatch(privateBranch, /housePath/, "a refused join is offered on a private room");
+    // An ended room resolves and says so, rather than reading as a typo.
+    assert.match(screen, /That room has ended/);
+    // One message for unknown AND malformed, so it cannot be used as an oracle.
+    assert.match(screen, /That code doesn&apos;t match a room/);
+  });
+
+  it("shows a host their room code, grouped for the eye but never re-sent", () => {
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    // Null is ordinary — a broadcast, or a room older than codes.
+    assert.match(schemas, /roomCode: z\.string\(\)\.nullable\(\)\.optional\(\)\.default\(null\)/);
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /import \{ groupRoomCode \} from "@\/lib\/room-code";/);
+    assert.match(room, /groupRoomCode\(stream\.roomCode\)/);
+    // Rendered only when there is one; a room without a code is shared by link.
+    assert.match(room, /\{stream\.roomCode && \(/);
+    // Nothing rewrites what a person typed on its way to the server — the
+    // client and the service must not each hold an opinion about what a code is.
+    const codeLib = stripComments(read("lib/room-code.ts"));
+    assert.match(codeLib, /export function looksLikeRoomCode/);
+    assert.match(codeLib, /export function groupRoomCode/);
+  });
+
+  it("lists post_announced BEFORE the service sends it, so it can never read as a follow", () => {
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    // .catch("follow") has shipped as a lie three times (tip_received, wink,
+    // then four kinds at once). An author whose post is being broadcast must
+    // never be told somebody followed them.
+    assert.match(types, /"post_announced",/);
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.match(page, /case "post_announced":/g);
+    assert.match(page, /Your post is being shown to everyone on Market Square/);
+    // No actor by design, so the row must not name one.
+    assert.doesNotMatch(page, /\$\{who\} is showing your post/);
+    // A glyph, or an actor-less row renders an empty disc.
+    assert.match(page, /post_announced: /);
+  });
+
+  it("offers Remind me honestly: absent means signed out, never 'not asked'", () => {
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    // NO .default(false) — that would collapse "nobody is signed in" into
+    // "you have not asked" and render a button that lies on arrival.
+    assert.match(schemas, /remindedByMe: z\.boolean\(\)\.optional\(\),/);
+    assert.doesNotMatch(schemas, /remindedByMe: z\.boolean\(\)\.optional\(\)\.default/);
+    const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
+    assert.match(card, /const asked = stream\.remindedByMe === true;/);
+    // Signed-out readers are gated into sign-in, not shown a false state.
+    assert.match(card, /onClick=\{\(\) => gate\(\(\) => remind\.mutate\(!asked\)\)\}/);
+    // A 404 is "not deployed": the control goes, rather than promising a
+    // reminder nothing will send.
+    assert.match(card, /!remind\.unavailable && \(/);
+    const hook = stripComments(read("features/streams/hooks/use-streams.ts"));
+    assert.match(hook, /errorCode\(error\) === "NOT_FOUND"/);
+    assert.match(hook, /errorCode\(error\) === "CONFLICT"/, "a room already over is not reported");
+  });
+
+  it("builds the upcoming card at 1295:140164's own scale, nothing rounded up", () => {
+    const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
+    // Every value in the node divides by its 0.80037 stroke to a round design
+    // unit, so the card is 479x147 and one unit is 1/479th of its own width.
+    assert.match(card, /max-w-\[479px\]/);
+    assert.match(card, /"--u": "calc\(100cqw \/ 479\)"/);
+    assert.match(card, /height: u\(147\)/);
+    assert.match(card, /borderRadius: u\(20\)/);
+    // Spine, artwork, the mic BESIDE it, the rule, the ramps.
+    assert.match(card, /width: u\(12\), height: u\(169\)/);
+    assert.match(card, /width: u\(97\.78\), height: u\(106\.24\)/);
+    assert.match(card, /left: u\(131\), top: u\(21\), width: u\(24\)/);
+    assert.match(card, /bg-\[#3C3C3C\]/);
+    assert.match(card, /linear-gradient\(90deg,#9F65FD 0%,#5B05E6 100%\)/);
+    assert.match(card, /rgba\(159,90,255,0\.09\)/);
+    // The file's own small type, NOT lifted to a house minimum.
+    assert.match(card, /fontSize: u\(5\.334\)/);
+    assert.match(card, /fontSize: u\(6\)/);
+    assert.match(card, /fontSize: u\(16\.677\)/);
+    // Every glyph is the file's own export, never a repo icon stand-in.
+    for (const glyph of ["card-mark", "card-calendar", "card-share", "card-topic-trading"]) {
+      assert.match(card, new RegExp(`/gist-rooms/${glyph}\\.svg`), `${glyph} is not the exported node`);
+    }
+    // The title is clamped INSIDE its 39u box, never spilling past it.
+    assert.match(card, /className="absolute flex flex-col justify-center overflow-hidden font-semibold/);
+    assert.match(card, /className="line-clamp-2"\n/);
+    // It never offers to join a room that has not opened.
+    assert.doesNotMatch(card, /Join/);
+  });
+
+  it("says when an upcoming room opens, on the card", () => {
+    assert.match(stripComments(read("components/layout/gist-room-card.tsx")), /opensAtLabel\(room\.scheduledAt\)/);
+  });
+
+  it("never lets somebody else's URL become an href or a new window unchecked", () => {
+    // Both destinations are written by another person — an admin's
+    // announcement link, a publisher's store listing — and `javascript:` in
+    // either one runs on THIS origin, under our name, at the moment the
+    // reader presses the thing. `isHttpUrl` is the single gate, and these
+    // pin it to the sink rather than to a schema that can be relaxed later.
+    const band = stripComments(read("components/layout/announcement-band.tsx"));
+    assert.match(band, /isHttpUrl\(item\.linkUrl\)/, "the announcement link is unvalidated");
+    const store = stripComments(read("features/store/components/store-item-page.tsx"));
+    assert.match(store, /const openable = isHttpUrl\(item\.actionUrl\)/, "the store link is unvalidated");
+    assert.doesNotMatch(store, /item\.actionUrl\.length > 0/, "a length check is not a scheme check");
+  });
+
+  it("lets an operator publish an announcement, and take it down", () => {
+    const page = stripComments(read("features/admin/components/admin-page.tsx"));
+    const section = stripComments(read("features/admin/components/admin-sections.tsx"));
+    const api = stripComments(read("features/admin/lib/api.ts"));
+    // The band could be READ long before anything could write one — the
+    // console had no way to make an announcement at all.
+    assert.match(page, /\{ value: "announcements", label: "Announcements" \}/);
+    assert.match(page, /\{tab === "announcements" && <AnnouncementsSection \/>\}/);
+    assert.match(api, /msApi\.post<unknown>\("\/admin\/announcements"/);
+    assert.match(api, /"\/admin\/announcements\/" \+ id \+ "\/end"/);
+    // EVERY ANNOUNCEMENT ENDS: the service requires it and the form does too,
+    // rather than defaulting to an end nobody chose.
+    assert.match(section, /"Choose when it ends"/);
+    assert.match(section, /"The end has to be in the future"/);
+    // An empty link would be a band that looks tappable and goes nowhere.
+    assert.match(api, /\.\.\.\(input\.linkUrl \? \{ linkUrl: input\.linkUrl \} : \{\}\)/);
+    // The console reads the SAME object the band renders — one shape, so an
+    // operator's own console cannot disagree with what everybody else got.
+    assert.match(
+      stripComments(read("features/admin/lib/types.ts")),
+      /items: z\.array\(AnnouncementSchema\)/
+    );
+    // The clock is ticked state, never read during render.
+    assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
+  });
+
+  it("answers Home's search on Home, room codes included", () => {
+    const home = stripComments(read("components/layout/home-screen.tsx"));
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    const search = stripComments(read("components/layout/home-search.tsx"));
+    // The query is answered here, and while it is open the sections give way
+    // to the results rather than sitting above them.
+    assert.match(home, /searchSlot=\{searching \? <HomeSearch query=\{query\} \/> : undefined\}/);
+    assert.match(feed, /\{searchSlot \?\? \(/, "results no longer replace Home's sections");
+    // Everything, in one list — that was the ask, so the type is not narrowed.
+    assert.match(search, /useDiscovery\(trimmed, "all"\)/);
+    // A spoken code names exactly one room, so it is OFFERED first and never
+    // followed automatically — a well-formed typo would move the reader.
+    assert.match(search, /looksLikeRoomCode\(trimmed\)/);
+    assert.match(search, /href=\{`\/code\/\$\{code\}`\}/);
+    // A person is the same row here as everywhere else, never a second style.
+    assert.match(search, /<PersonRow key=\{item\.id\} profile=\{item\.profile\} \/>/);
+  });
+
+  it("draws no chip for a role nearly every author has", () => {
+    // A badge everyone wears distinguishes nobody. Creator sat on almost
+    // every author line, so it is mapped to null exactly as citizen is —
+    // the ROLE still exists and still arrives, it just has no chip.
+    const badge = stripComments(read("components/ui/badge.tsx"));
+    assert.match(badge, /creator: null/);
+    assert.doesNotMatch(badge, /creator: "Creator"/);
+  });
+
+  it("keeps the wink card's photo off our own network", () => {
+    // That URL is FETCHED server-side, so its host is an SSRF target and a
+    // scheme check alone is not enough — a private address serves https too.
+    const wink = stripComments(read("lib/wink-card.ts"));
+    assert.match(wink, /isPrivateHost\(url\.hostname\)/, "safePhoto no longer blocks private hosts");
+  });
+});
+

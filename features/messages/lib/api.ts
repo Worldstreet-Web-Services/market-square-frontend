@@ -9,6 +9,8 @@ import {
   ReadResultSchema,
   InvitePreviewSchema,
   InviteSchema,
+  HouseNotificationSettingsSchema,
+  type HouseNotificationSettings,
 } from "@/features/messages/lib/types";
 import {
   buildMessagePayload,
@@ -157,6 +159,40 @@ export async function addGroupMembers(conversationId: string, memberIds: string[
  */
 export async function removeGroupMember(conversationId: string, profileId: string) {
   return msApi.del<unknown>(`/conversations/${conversationId}/members/${profileId}`);
+}
+
+/**
+ * Make somebody an admin, or back to a member —
+ * `PUT /conversations/:id/members/:profileId/role { role }`. Owner only.
+ * Ownership itself moves through `transferOwnership`, never through here.
+ */
+export async function setMemberRole(conversationId: string, profileId: string, role: "admin" | "member") {
+  return msApi.put<unknown>(`/conversations/${conversationId}/members/${profileId}/role`, { role });
+}
+
+/**
+ * Hand the house over — `POST /conversations/:id/transfer-ownership { profileId }`.
+ * Owner only; the previous owner stays on as an admin, in one write.
+ */
+export async function transferOwnership(conversationId: string, profileId: string) {
+  return msApi.post<unknown>(`/conversations/${conversationId}/transfer-ownership`, { profileId });
+}
+
+/** The reader's notification levels for one house — members of a group only (404 otherwise). */
+export async function fetchHouseNotificationSettings(conversationId: string) {
+  return HouseNotificationSettingsSchema.parse(
+    await msApi.authedGet(`/conversations/${conversationId}/notification-settings`)
+  );
+}
+
+/** Save one or both levels. Strict on the service; answers the whole object. */
+export async function updateHouseNotificationSettings(
+  conversationId: string,
+  patch: Partial<HouseNotificationSettings>
+) {
+  return HouseNotificationSettingsSchema.parse(
+    await msApi.put(`/conversations/${conversationId}/notification-settings`, patch)
+  );
 }
 
 /**

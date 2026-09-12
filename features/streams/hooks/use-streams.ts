@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { baseIdentity } from "@/features/streams/lib/stage";
-import { errorMessage } from "@/lib/api/envelope";
+import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { trackMarketEvent } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -40,6 +40,8 @@ import {
   fetchMySpeakerRequest,
   fetchSpeakerRequests,
   resolveSpeakerRequest,
+  fetchStreamByCode,
+  remindStream,
 } from "@/features/streams/lib/api";
 import type { Stream, StreamCategory, StreamKind, TicketTier } from "@/features/streams/lib/types";
 import {
@@ -86,18 +88,26 @@ export function useStreamList(
    * server-side: filtering here would make a page of broadcasts yield the two
    * that were not rooms.
    */
-  kind?: StreamKind
+  kind?: StreamKind,
+  /**
+   * `listeners` — busiest first, for Home's Top GistRooms. Live only: the
+   * service refuses it with any other status, and a count exists only while a
+   * room is live. On a deployment without it the client falls back to the
+   * default order once (see `fetchStreams`).
+   */
+  sort?: "listeners"
 ) {
   const status = section === "replay" ? "ended" : section;
   // Sorted so the same selection always produces the same cache key.
   const key = [...topics].sort().join(",");
   return useQuery({
-    queryKey: ["ms", "streams", section, key, category ?? "all", kind ?? "any"],
+    queryKey: ["ms", "streams", section, key, category ?? "all", kind ?? "any", sort ?? "default"],
     queryFn: async () => {
       const page = await fetchStreams({
         status,
         topics,
         ...(category ? { category } : {}),
+        ...(sort ? { sort } : {}),
         ...(kind ? { kind } : {}),
       });
       if (section !== "replay") return page;
@@ -347,10 +357,72 @@ export function useCreateStream() {
         `category: "house"` — so the confirmation reads off what was actually
         made rather than off the function that made it.
       */
-      toast.success(isHouse(stream) ? "Gist room opened" : "Stream created");
+      toast.success(
+        isHouse(stream)
+          ? stream.status === "scheduled"
+            ? "Gist room scheduled"
+            : "Gist room opened"
+          : "Stream created"
+      );
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't create the stream.")),
   });
+}
+
+/**
+ * "Remind me" on a room that has not opened yet.
+ *
+ * The service tells the askers when the host actually opens the room — fired by
+ * go-live, never by the clock — so this promises nothing the product cannot
+ * keep. Idempotent both ways.
+ *
+ * A 404 is "not deployed" rather than "no such room", the same rule the
+ * Arkmark follows, so the control goes quiet instead of raising an error on a
+ * server that has not shipped it. A 409 means the room is already over, which
+ * is worth saying out loud.
+ */
+/**
+ * Look up a room by the code somebody typed.
+ *
+ * Not retried: a 404 is a settled answer about a code, and retrying spends the
+ * caller's throttle budget (a miss is charged, deliberately, because a free
+ * miss is an unlimited number of guesses).
+ */
+export function useStreamByCode(code: string) {
+  return useQuery({
+    queryKey: ["ms", "stream-by-code", code],
+    queryFn: () => fetchStreamByCode(code),
+    enabled: code.length > 0,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useRemindMe(streamId: string) {
+  const queryClient = useQueryClient();
+  const [unavailable, setUnavailable] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: (remind: boolean) => remindStream(streamId, remind),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
+      toast.success(result.reminded ? "We'll tell you when it opens" : "Reminder off");
+    },
+    onError: (error) => {
+      if (errorCode(error) === "NOT_FOUND") {
+        setUnavailable(true);
+        return;
+      }
+      if (errorCode(error) === "CONFLICT") {
+        toast.error(errorMessage(error, "That room is already over."));
+        return;
+      }
+      toast.error(errorMessage(error, "Couldn't set that reminder."));
+    },
+  });
+
+  return { ...mutation, unavailable };
 }
 
 export function useGoLive() {

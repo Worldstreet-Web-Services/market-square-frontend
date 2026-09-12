@@ -37,6 +37,8 @@ import {
 } from "@/features/houses/components/room-people";
 import { RoomRosterPanel } from "@/features/houses/components/room-roster-panel";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
+import { opensAtLabel } from "@/lib/format";
+import { groupRoomCode } from "@/lib/room-code";
 import { Backstage } from "@/features/houses/components/backstage";
 import { CaptionRail } from "@/features/houses/components/caption-rail";
 import { CopyRow } from "@/features/houses/components/copy-row";
@@ -172,6 +174,15 @@ interface SlotProps {
    * viewer is not in); the layout owns the mutation and its toast.
    */
   joinHouse?: { onJoin: (conversationId: string) => void; pending: boolean };
+  /**
+   * The room as it stands BEFORE it opens.
+   *
+   * A slot because the product's drawing of an unopened room lives in the
+   * layout layer and reaches back into this slice for its own link, so
+   * importing it here would close a cycle. The room decides WHERE the card
+   * sits; the layout decides what it is.
+   */
+  upcomingCardSlot?: (stream: Stream) => React.ReactNode;
   safetySlot: (
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
@@ -189,6 +200,7 @@ export function HouseRoom({
   personActionsSlot,
   tipSlot,
   joinHouse,
+  upcomingCardSlot,
 }: { houseId: string } & SlotProps) {
   const stream = useStream(houseId, 10_000);
   const me = useMe();
@@ -232,9 +244,9 @@ export function HouseRoom({
 
   if (data.status === "scheduled") {
     return isHost ? (
-      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} tipSlot={tipSlot} />
+      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} tipSlot={tipSlot} upcomingCardSlot={upcomingCardSlot} />
     ) : (
-      <NotOpenYet stream={data} />
+      <NotOpenYet stream={data} upcomingCardSlot={upcomingCardSlot} />
     );
   }
 
@@ -300,6 +312,7 @@ function HostScheduled({
   personActionsSlot,
   safetySlot,
   tipSlot,
+  upcomingCardSlot,
 }: {
   stream: Stream;
   followSlot: SlotProps["followSlot"];
@@ -307,6 +320,7 @@ function HostScheduled({
   houseSlot?: SlotProps["houseSlot"];
   personActionsSlot?: SlotProps["personActionsSlot"];
   tipSlot?: SlotProps["tipSlot"];
+  upcomingCardSlot?: SlotProps["upcomingCardSlot"];
 }) {
   const [ingest, setIngest] = useState<Ingest | null>(null);
   const [micId, setMicId] = useState("");
@@ -316,6 +330,9 @@ function HostScheduled({
   // microphone the host just checked, rather than waiting for another round
   // trip.
   const [opened, setOpened] = useState(false);
+  // The host chose to open a scheduled room ahead of its time, which takes them
+  // to the soundcheck rather than opening anything on its own.
+  const [openNow, setOpenNow] = useState(false);
   if (opened && ingest) {
     return (
       <LiveHouse houseSlot={houseSlot} personActionsSlot={personActionsSlot} tipSlot={tipSlot}
@@ -333,6 +350,29 @@ function HostScheduled({
       />
     );
   }
+  /*
+    A ROOM SCHEDULED FOR LATER IS NOT A ROOM ABOUT TO OPEN.
+
+    This used to render Backstage for every scheduled room, so a host who set a
+    time for Saturday was dropped straight into the soundcheck — a screen whose
+    only action is "open the gist room" — the instant they finished scheduling
+    it (ogazboiz: "when i schedule a gistroom why is it telling me to open gist
+    room"). It also meant they never saw the room they had just scheduled.
+
+    Backstage belongs at the moment of opening. Before that the host gets the
+    room as it stands: what it is about, when it opens, and the countdown —
+    with opening it early available but deliberately secondary.
+  */
+  if (!opened && !openNow && startsLater(stream)) {
+    return (
+      <HostWaiting
+        stream={stream}
+        onOpenNow={() => setOpenNow(true)}
+        upcomingCardSlot={upcomingCardSlot}
+      />
+    );
+  }
+
   return (
     <Backstage
       stream={stream}
@@ -345,7 +385,85 @@ function HostScheduled({
   );
 }
 
-function NotOpenYet({ stream }: { stream: Stream }) {
+/**
+ * Is this room's time still in the future?
+ *
+ * Read on RENDER, which is allowed here for the same reason the room's own
+ * clocks are: the stream poll re-renders this page every ten seconds, so the
+ * answer refreshes on its own and a host watching the countdown reach zero
+ * lands on Backstage without touching anything. A room with no time on it is
+ * not "later" — it was opened with "Now" and belongs in the soundcheck.
+ */
+function startsLater(stream: Stream): boolean {
+  if (!stream.scheduledAt) return false;
+  const at = new Date(stream.scheduledAt).getTime();
+  return Number.isFinite(at) && at > Date.now();
+}
+
+/**
+ * The host's view of their own room before it is due — the counterpart to
+ * `NotOpenYet`, which is what everybody else sees.
+ *
+ * It answers the two questions the host actually has (is it saved, and when
+ * does it open) and offers the one thing they might genuinely want early: to
+ * open it now. Opening is a real decision, not the default, so it is the
+ * secondary control and says plainly that it opens the room for everyone.
+ */
+function HostWaiting({
+  stream,
+  onOpenNow,
+  upcomingCardSlot,
+}: {
+  stream: Stream;
+  onOpenNow: () => void;
+  upcomingCardSlot?: SlotProps["upcomingCardSlot"];
+}) {
+  return (
+    <div className="mx-auto w-full max-w-[520px] bg-chrome">
+      <div className="px-4 pb-3 pt-4">
+        <h1 className="ws-display text-[22px] leading-7">{houseTopic(stream)}</h1>
+        <p className="ws-meta mt-2">
+          {stream.scheduledAt ? opensAtLabel(stream.scheduledAt) : "Scheduled"}
+        </p>
+      </div>
+
+      {/* THE ROOM, AS THE REST OF THE PRODUCT DRAWS IT (1295:140164).
+          It used to be the eight dashed chairs, which on a room that has not
+          opened draw eight ABSENCES — a screen that reads as broken rather
+          than as waiting. The ring still belongs to the SKELETON, where a
+          room's own shape is the honest thing to hold the space with. */}
+      {upcomingCardSlot && <div className="px-4 pt-2">{upcomingCardSlot(stream)}</div>}
+
+      <div className="px-4 pb-10 pt-6 text-center">
+        <p className="ws-meta">
+          It waits under Upcoming Gistrooms. We will remind you when it is time to open it.
+        </p>
+        {/* The code, for reading aloud or writing down. Grouped for the eye
+            only — the service stores and matches it unseparated. A room
+            without one is simply shared by link, so nothing is said here. */}
+        {stream.roomCode && (
+          <p className="ws-meta mt-3">
+            Room code{" "}
+            <span className="tnum font-semibold tracking-[0.08em] text-white">
+              {groupRoomCode(stream.roomCode)}
+            </span>
+          </p>
+        )}
+        <Button variant="secondary" size="sm" className="mt-5" onClick={onOpenNow}>
+          Open it now instead
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function NotOpenYet({
+  stream,
+  upcomingCardSlot,
+}: {
+  stream: Stream;
+  upcomingCardSlot?: SlotProps["upcomingCardSlot"];
+}) {
   return (
     <div className="mx-auto w-full max-w-[520px] bg-chrome">
       <div className="px-4 pb-3 pt-4">
@@ -354,10 +472,9 @@ function NotOpenYet({ stream }: { stream: Stream }) {
           {stream.owner ? `${stream.owner.displayName} · ` : ""}Not open yet
         </p>
       </div>
-      {/* The eight dashed seats, again. No spinner, and no ghost faces
-          standing in for people who are not there. */}
-      <EmptyRing />
-      <p className="px-4 pb-10 text-center text-[13px] leading-5 text-meta">
+      {/* The same card the host waits on, for the same reason. */}
+      {upcomingCardSlot && <div className="px-4 pt-2">{upcomingCardSlot(stream)}</div>}
+      <p className="px-4 pb-10 pt-6 text-center text-[13px] leading-5 text-meta">
         This house has not opened. When it does, you will be able to listen and ask to speak.
       </p>
     </div>

@@ -1,5 +1,20 @@
 import { z } from "zod";
 import { ProfileSchema } from "@/lib/api/schemas";
+import { AnnouncementSchema } from "@/hooks/use-announcements";
+
+/**
+ * The console reads the SAME announcement object the band renders, rather
+ * than a second admin-shaped copy of it. An operator who publishes a banner
+ * and then sees it differently in their own console has no way to tell which
+ * of the two is what everybody else got.
+ *
+ * It pages like every other admin list, though the queue is short by
+ * construction: every announcement ends.
+ */
+export const AdminAnnouncementPageSchema = z.object({
+  items: z.array(AnnouncementSchema).optional().default([]),
+  nextCursor: z.string().nullable().optional().default(null),
+});
 
 /**
  * Admin console contracts.

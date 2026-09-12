@@ -87,15 +87,57 @@ export function checkMediaSelection(
 export const RAIL_TILE_WIDTH = 250.93;
 export const RAIL_GAP = 10.36;
 
-export function railDotWidth(index: number, active: number): number {
-  if (index === active) return 31.17;
-  return index === active + 1 ? 11.85 : 10.6;
+/**
+ * THE RAIL AT TWO SIZES, because two nodes draw the same object.
+ *
+ * `post` — 1029:22591, the card in the column: 250.93 x 352.22 tiles at radius
+ *   20.72, 10.36 apart, dots 4.99 tall (31.17 / 11.85 / 10.60).
+ * `compact` — 1313:152774, the card in Home's "Post For You" row, which is the
+ *   same strip drawn smaller: 134.3 x 188.52 at radius 11.09, 5.54 apart, dots
+ *   2.67 tall (16.69 / 6.34 / 5.67).
+ *
+ * One component reads these rather than a second rail being built, and the
+ * column's numbers are untouched so its own tests still hold.
+ */
+export const RAIL_SIZES = {
+  post: {
+    tile: 250.93,
+    tileHeight: 352.22,
+    radius: 20.72,
+    gap: 10.36,
+    dotHeight: 4.99,
+    dotGap: 3.12,
+    dots: { active: 31.17, next: 11.85, rest: 10.6 },
+  },
+  compact: {
+    tile: 134.3,
+    tileHeight: 188.52,
+    radius: 11.09,
+    gap: 5.54,
+    dotHeight: 2.67,
+    dotGap: 1.67,
+    dots: { active: 16.69, next: 6.34, rest: 5.67 },
+  },
+} as const;
+
+export type RailSize = keyof typeof RAIL_SIZES;
+
+export function railDotWidth(index: number, active: number, size: RailSize = "post"): number {
+  const { dots } = RAIL_SIZES[size];
+  if (index === active) return dots.active;
+  return index === active + 1 ? dots.next : dots.rest;
 }
 
 /** Which tile the rail is on, from its scroll offset. The far end is always the last tile. */
-export function railIndexAt(scrollLeft: number, maxScroll: number, count: number): number {
+export function railIndexAt(
+  scrollLeft: number,
+  maxScroll: number,
+  count: number,
+  size: RailSize = "post"
+): number {
   if (count <= 0) return 0;
   if (maxScroll > 0 && scrollLeft >= maxScroll - 1) return count - 1;
-  const index = Math.round(scrollLeft / (RAIL_TILE_WIDTH + RAIL_GAP));
+  const { tile, gap } = RAIL_SIZES[size];
+  const index = Math.round(scrollLeft / (tile + gap));
   return Math.min(count - 1, Math.max(0, index));
 }

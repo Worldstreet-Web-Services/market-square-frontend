@@ -81,26 +81,22 @@ describe("the create button is rendered once, fixed, in the shell", () => {
     }
   });
 
-  it("lets a route borrow the SHAPE only where the shell's is suppressed", () => {
+  it("draws no circle at all on the gist rooms page, and the shell draws none there either", () => {
     /*
-      The gist rooms page mounts `CreateFab` itself, and that is not the drift
-      this suite exists to catch: it is the same circle in the same corner
-      performing the act that page is for. What would be drift is two of them —
-      so any route that mounts its own must be excluded from `allowsCompose`,
-      which is what keeps exactly one on screen.
+      The rooms page used to mount `CreateFab` itself (407:17286 drew the same
+      circle in the same corner, opening a room). The 2026-09-12 page,
+      1317:158073, draws NO circle: starting a room is the sidebar's "Start
+      Gistroom" and Home's banner, both of which land here with `?open=1`. So
+      the page mounts none, and it stays excluded from `allowsCompose` — a post
+      circle on the rooms page would be the wrong act in that corner.
     */
     const surfaces = read("lib/compose-surfaces.ts");
     const screen = read("components/layout/gist-rooms-screen.tsx");
-    assert.match(screen, /<CreateFab\b/, "the rooms page stopped drawing the file's circle");
-    assert.match(
-      screen,
-      /label="Open a gist room"/,
-      "the rooms page's circle no longer says what it does"
-    );
+    assert.doesNotMatch(screen, /<CreateFab\b/, "the rooms page draws a circle 1317:158073 does not");
     assert.match(
       surfaces,
       /NO_COMPOSE_EXACT[^\]]*"\/gist-rooms"/,
-      "the rooms page mounts its own circle while the shell still draws one too"
+      "the shell draws a post circle on the rooms page"
     );
   });
 

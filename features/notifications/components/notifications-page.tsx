@@ -58,6 +58,7 @@ import {
 const SOURCE_ICON = { room: IconMic, stream: IconLive, post: IconQuote } as const;
 
 const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
+  post_announced: "/notifications/notif-mention.svg",
   wink: "/notifications/notif-wink.svg",
   follow: "/notifications/notif-follow.svg",
   stream_live: "/notifications/notif-trending.svg",
@@ -81,6 +82,8 @@ const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   group_added: "/notifications/notif-follow.svg",
   // A raised hand belongs to a live room, so it takes the trending mark.
   speaker_request: "/notifications/notif-trending.svg",
+  // A room opening in a house is a live room, like a raised hand.
+  house_room: "/notifications/notif-trending.svg",
 };
 
 /**
@@ -136,6 +139,13 @@ function headline(item: MarketNotification): string {
       return "Added to a house";
     case "speaker_request":
       return "Speaker request";
+    case "house_room":
+      return "Gist room opened";
+    case "post_announced":
+      // Present tense, and it says what is happening. "Featured" reads like a
+      // prize and hides the thing the author most needs to understand: that it
+      // is happening now, and to everybody.
+      return "Your post is being shown to everyone on Market Square";
   }
 }
 
@@ -188,6 +198,16 @@ function describe(item: MarketNotification): string {
       return `${who} added you to a house.`;
     case "speaker_request":
       return `${who} asked to speak in your room.`;
+    case "house_room":
+      // The house's current name when the service can say it; otherwise the
+      // copy does not guess which one.
+      return item.house?.title
+        ? `${who} opened a gist room in ${item.house.title}.`
+        : `${who} opened a gist room in one of your houses.`;
+    case "post_announced":
+      // No `who`: this row deliberately carries no actor, so naming one would
+      // invent a person. It reads as coming from Market Square.
+      return "An admin is showing your post to everyone on Square right now.";
   }
 }
 

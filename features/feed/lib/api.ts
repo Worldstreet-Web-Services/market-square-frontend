@@ -7,6 +7,7 @@ import { noteMediaContract } from "@/lib/media-contract";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   BookmarkResultSchema,
+  PinResultSchema,
   CommentSchema,
   CommentLikeResultSchema,
   CommentsPageSchema,
@@ -230,6 +231,19 @@ export async function editPost(
  * ONE route for both, because a story IS a post (`kind: "story"`). A soft
  * remove by the author or an admin; the post then 404s.
  */
+/**
+ * Pin one of your own posts to the top of your profile, or take it down.
+ *
+ * Pinning REPLACES — one per profile, no unpin-first. Unpinning is idempotent
+ * and does not require this to be the pinned post, so pressing it against a
+ * stale view still answers cleanly. Somebody else's post is a 404, not a 403:
+ * a 403 would confirm the post exists and is not yours.
+ */
+export async function pinPost(postId: string, pin: boolean) {
+  const path = `/posts/${postId}/pin`;
+  return PinResultSchema.parse((pin ? await msApi.post(path) : await msApi.del(path)) ?? {});
+}
+
 export async function deletePost(postId: string) {
   return msApi.del<unknown>(`/posts/${postId}`);
 }

@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { captureVisitUtm } from "@/lib/analytics";
+import { refreshPushSubscription } from "@/lib/push-client";
 import { MenuRow } from "@/components/ui/menu-row";
 import { IconFilterChevronRight, IconFilterFriends, IconFilterGender, IconFilterLocation } from "@/components/ui/home-icons";
 import { useUpdateMe } from "@/features/profile";
@@ -50,6 +52,7 @@ import { BottomDock } from "@/components/layout/bottom-dock";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
+import { AnnouncementBand } from "@/components/layout/announcement-band";
 import {
   IconBell,
   IconDots,
@@ -58,7 +61,6 @@ import {
   IconMic,
   IconPlus,
   IconLogout,
-  IconSearch,
   IconShield,
   IconStore,
   IconUser,
@@ -280,10 +282,11 @@ function visibleNav(options: {
   );
 }
 
-// Messages is two panes side by side — the conversation list and the thread
-// it opens — so it needs the width a right rail would take. On a phone the
-// panes swap instead, which is why only the exact path is wide.
-const WIDE_EXACT = ["/store", "/operations", "/messages"];
+// Messages is NOT here any more: it is two panes (the list and the thread it
+// opens) and needs the rail's width, but spreading to the window's edges read
+// as wider than Home ("the chat self is not using the max width like home").
+// It is a FULL route instead — see FULL_PATTERNS.
+const WIDE_EXACT = ["/store", "/operations"];
 /*
   `/gist-rooms/:id` joins the wide set.
 
@@ -297,6 +300,40 @@ const WIDE_EXACT = ["/store", "/operations", "/messages"];
   in the column with the rail beside it.
 */
 const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
+
+/*
+  FULL: no right rail, but HOME'S FRAME. Settings has no use for the rail
+  ("the setting doesnt have that second column so it should full"), and a WIDE
+  route spreads to the window's edges, which read as wider than Home. So these
+  routes take the column AND the rail's width together — 971 from lg, with the
+  rail's own 24 of right padding — which is exactly the top bar's capped
+  frame: the page starts on the logo's line and ends where the bar's controls
+  do. Below lg there is no rail anyway, and the 600 column is unchanged.
+*/
+const FULL_PATTERNS = [
+  /^\/u\/[^/]+\/settings$/,
+  // The gist rooms page, node 1317:158073: a 951-wide artboard on the chrome's
+  // own #121214 — the column and the rail's width together, three room cards
+  // across — and no rail beside it.
+  /^\/gist-rooms$/,
+  // The houses directory, node 1368:2270 — the same 951-wide artboard as the
+  // rooms page, three house cards across.
+  /^\/houses$/,
+  // `/pals` is NOT here any more. 1328:1885 is a 951 artboard, but its page
+  // (1328:1882) draws the RAIL inside it at x=618 — Citizen Spotlight,
+  // Explore Categories, Suggested Curators — which is `RightRail`, and the
+  // column's own content stops at 598. Listed here it lost the rail ("the
+  // side bar at the right hand is not showing why in pal", ogazboiz,
+  // 2026-09-12); as a 600 column beside the rail the node's numbers land
+  // exactly, list edge included.
+  // Chat's two panes: the fixed 464 list beside the thread, inside Home's
+  // frame. Only the exact path — on a phone the panes swap.
+  /^\/messages$/,
+];
+
+function isFull(pathname: string): boolean {
+  return FULL_PATTERNS.some((pattern) => pattern.test(pathname));
+}
 
 function isWide(pathname: string): boolean {
   return (
@@ -461,7 +498,7 @@ const BADGE_FOR: Record<
  * re-measured on open, scroll and resize, and clamped into the viewport so a
  * short window cannot push it off the top.
  */
-function RailMenu({
+export function RailMenu({
   label,
   trigger,
   children,
@@ -480,8 +517,11 @@ function RailMenu({
    * `gist` is node 747:14001 ("gist dm"), the account dropdown: 172 wide,
    * `#1C1C1C`, a 0.745 inside ring at 18% white, radius 8, 11.913 of padding
    * and rows 5.957 apart — the same menu the friends filter draws (651:18441).
+   * `explore` is node 1317:158022 ("Explore Settings"), the panel Home's
+   * settings pill opens: 347 wide, `#201F1F` behind a 14 blur, a 1px inside
+   * ring at 18% white, radius 22, 16 of padding and rows 12 apart.
    */
-  panel?: "default" | "gist";
+  panel?: "default" | "gist" | "explore";
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLDivElement | null>(null);
@@ -493,7 +533,7 @@ function RailMenu({
       const node = anchor.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
-      const width = panel === "gist" ? 172 : 224;
+      const width = panel === "gist" ? 172 : panel === "explore" ? 347 : 224;
       const left =
         align === "right"
           ? Math.min(rect.right + 8, window.innerWidth - width - 8)
@@ -540,12 +580,14 @@ function RailMenu({
                 ...(align === "below"
                   ? { top: at.top }
                   : { bottom: Math.max(8, window.innerHeight - at.top) }),
-                width: panel === "gist" ? 172 : 224,
+                width: panel === "gist" ? 172 : panel === "explore" ? 347 : 224,
               }}
               className={
                 panel === "gist"
                   ? "ws-popover-enter fixed z-[61] flex flex-col gap-[5.957px] rounded-lg border-[0.745px] border-white/[0.18] bg-grey-800 p-[11.913px]"
-                  : "ws-popover fixed z-[61] rounded-2xl p-1.5"
+                  : panel === "explore"
+                    ? "ws-popover-enter fixed z-[61] flex flex-col gap-3 overflow-hidden rounded-[22px] bg-[#201F1F] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[7px]"
+                    : "ws-popover fixed z-[61] rounded-2xl p-1.5"
               }
             >
               {children(() => setOpen(false))}
@@ -681,7 +723,7 @@ function AccountChip() {
  * The account menu's entries. The rail's account chip and the top bar's
  * avatar open the same menu, so it is written once.
  */
-function AccountMenuItems({ close }: { close: () => void }) {
+export function AccountMenuItems({ close }: { close: () => void }) {
   const logout = useLogout();
   const me = useMe();
   const router = useRouter();
@@ -1133,8 +1175,12 @@ export function Sidebar({
  * the column's edge and the cluster ends on the rail cards' edge. A WIDE route
  * has no column cap and no rail, so there the bar just keeps 24 either side.
  *
- * NO SEARCH. A build from a cached copy of this node (2026-09-08) put a field
- * here; the live node has none, which is also what ogazboiz asked for twice.
+ * NO SEARCH, ON ANY ROUTE. A build from a cached copy of this node
+ * (2026-09-08) put a field here, and a later one put the 2026-09-12 field in
+ * for room codes; the live node has none, which is also what ogazboiz asked
+ * for twice. That field is the HEAD OF HOME'S COLUMN now (1295:142736,
+ * `HomeTopRow`), a link into Explore's search — beside a settings pill that
+ * opens the same `AccountMenuItems` the avatar below does.
  *
  * THE HAIRLINE RUNS THE WHOLE WINDOW — "the border line should full the
  * screen for point A to point B". It is the file's 10% bottom stroke drawn as
@@ -1168,7 +1214,10 @@ function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
           </Link>
         )}
 
-        <div className="ml-auto flex shrink-0 items-start pl-6 pt-[19px]">
+        {/* NO SEARCH FIELD. The 2026-09-12 Home puts it at the head of the
+            column (`HomeTopRow`, node 1295:142736), not in the chrome, and it
+            is a link into Explore's search there. See `HomeTopRow`. */}
+        <div className="ml-auto flex min-w-0 shrink items-start gap-3 pl-6 pt-[19px]">
           <TopBarActions />
         </div>
       </div>
@@ -1294,7 +1343,7 @@ function TopBarActions() {
             aria-label={`Account menu for @${me.data?.username ?? "you"}`}
             className="ws-press flex items-center gap-[23px] rounded-[36px] bg-white/[0.07] py-[3px] pl-[3px] pr-2 transition-colors hover:bg-white/[0.11]"
           >
-            <span className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+            <span className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
               <Avatar
                 name={me.data?.displayName ?? "Me"}
                 seed={me.data?.id}
@@ -1727,6 +1776,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // there (no rails over the player, no bars).
   const inRoom = /^\/live\/[^/]+$/.test(pathname);
   const wide = isWide(pathname);
+  // Keep the UTM tags this visit landed with before any navigation drops them.
+  useEffect(() => {
+    captureVisitUtm();
+  }, []);
+  // Re-record this browser's push subscription while signed in, so the service
+  // keeps its keys fresh and it follows whoever is signed in here.
+  useEffect(() => {
+    if (authenticated) void refreshPushSubscription();
+  }, [authenticated]);
+  const full = !wide && isFull(pathname);
 
   if (inRoom) {
     return (
@@ -1879,12 +1938,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {broadcast.live && (
               <OnAirPill streamId={broadcast.streamId} compact />
             )}
-            {/* Search only. Notifications live in the bottom tab bar, where they
-              carry their unread badge — the bell here was the same
-              destination a second time, without the count. */}
-            <Link href="/discover" className="text-meta" aria-label="Explore">
-              <IconSearch className="h-5 w-5" />
-            </Link>
           </div>
         </div>
 
@@ -1950,7 +2003,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // window and every short route grew a scrollbar with 76px of
                 // nothing under it. `--ws-crumb-h` is 0 on a phone, where the
                 // bar is `hidden md:flex`, so this is identical there.
-                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 pt-[var(--ws-topbar-h)] lg:border-r",
+                "ws-hair min-h-[calc(var(--ws-vvh,100dvh)-var(--ws-crumb-h))] min-w-0 flex-1 pt-[var(--ws-topbar-h)]",
+                // The right hairline divides the column from the rail; a FULL
+                // route has no rail to divide from.
+                !full && "lg:border-r",
                 // The LEFT hairline separates the column from the SIDEBAR, so
                 // it exists only while the sidebar does. Under the dock it
                 // would cut down the line the top bar's logo starts on ("there
@@ -1964,13 +2020,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // band under the composer. WhatsApp's rule: the field sits on
                 // the screen's bottom edge at every height.
                 chatOpen ? "pb-0" : "pb-[var(--ws-nav-h)]",
-                !wide && "max-w-[600px]"
+                !wide && (full ? "max-w-[600px] lg:max-w-[971px] lg:pr-6" : "max-w-[600px]")
               )}
             >
+              {/* Above everything the route draws, inside the column so it
+                  inherits its cap and the wide-route exemptions. Renders
+                  nothing when there is nothing to say. */}
+              <AnnouncementBand />
               {children}
             </main>
 
-            {!wide && <RightRail />}
+            {!wide && !full && <RightRail />}
           </div>
         </div>
 

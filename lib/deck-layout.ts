@@ -1,7 +1,20 @@
 /**
- * WHERE HOME'S FRIENDS DECK'S CARDS SIT — node 844:18440 (the file's "Home"
+ * WHERE `/pals`' FRIENDS DECK'S CARDS SIT — node 844:18440 (the file's "Home"
  * frame), in the file's own units. Pure, so every number here can be checked against the
  * file without a browser (`lib/deck-layout.test.ts`).
+ *
+ * ─── `/pals`' CURRENT NODE IS THIS DRAWING AT 0.6248 ────────────────────────
+ * 1328:1885 (2026-09-12) draws the deck as group 1331:21321, 596 × 448.60 at
+ * (11, 390) — and every one of its numbers is 844:18440's times 0.6248 (the
+ * group even reports that factor as its inherited strokeWeight, 0.62479).
+ * The front card 1331:21353 is 339.53 × 448.60; the left back card
+ * 1331:21339 is 277.41 × 366.53 turned -6.836° at 0.39; the right
+ * 1331:21322 is 281.82 × 372.35 turned 13.524° at 0.30; the discs are 39.99,
+ * 18.12 below the front card's centre at -277.75 and +255.20. So the node is
+ * NOT a second set of numbers: `deckLayout` at a 596 room gives k = 0.6247,
+ * and the test pins that the node's own boxes fall out of it. What that node
+ * changes is around the deck (`PALS_PAGE`) and in the card (`DECK_CARD`'s
+ * rim colour, crown and blink), not the fan.
  *
  * Everything is relative to the FRONT card's centre (844:23435, 543.42 × 718 at
  * 4327.84, 49425 → centre 4599.55, 49784), because the front card is the thing
@@ -56,7 +69,14 @@ export interface DeckPlace {
 export interface DeckNode {
   card: { width: number; height: number };
   fan: { left: number; right: number };
-  arrow: { size: number; dy: number; leftDx: number; rightDx: number };
+  arrow: {
+    size: number;
+    dy: number;
+    leftDx: number;
+    rightDx: number;
+    /** `sampled`: the discs' GLASS as measured on 1328:1885's render (`ws-deck-lens-*`); absent: the sheen Home draws. */
+    lens?: "sampled";
+  };
   places: Record<number, DeckPlace>;
   /**
    * The deck box's vertical extent from the front card's centre, when the back
@@ -71,8 +91,8 @@ export const DECK_NODE: DeckNode = {
   card: { width: 543.42, height: 718 },
   /** The fan's own extent from the front card's centre: the left card's box edge (4134) to the right card's (5077). */
   fan: { left: -465.55, right: 477.45 },
-  /** 844:22642 / 844:22639 — 64 discs centred 29 below the front card's centre, at -444.55 and +408.45. */
-  arrow: { size: 64, dy: 29, leftDx: -444.55, rightDx: 408.45 },
+  /** 844:22642 / 844:22639 — 64 discs centred 29 below the front card's centre, at -444.55 and +408.45 (1331:21381 / 1331:21336 at 0.6248). */
+  arrow: { size: 64, dy: 29, leftDx: -444.55, rightDx: 408.45, lens: "sampled" },
   places: {
     /** 850:23475 — box 510.68 × 635.33 at 4134, 49467; size 444.01 × 586.65. */
     [-1]: { dx: -210.21, dy: 0.67, scale: 0.8171, rot: -6.836, opacity: 0.39 },
@@ -81,6 +101,29 @@ export const DECK_NODE: DeckNode = {
     1: { dx: 188.41, dy: -2.54, scale: 0.83, rot: 13.524, opacity: 0.3 },
   } as Record<number, DeckPlace>,
 };
+
+/**
+ * WHAT SITS AROUND THE DECK ON `/pals` — node 1328:1885, in the DECK'S units
+ * (the node's pixels divided by its 0.6248), so the page scales with the fan
+ * by the same `k` and keeps the file's proportions on any column.
+ *
+ * The deck group 1331:21321 is 596 wide from 11 in. Group 1344:21864 — the
+ * Location pill and the heading — is 579 wide from 26 in, so it starts 15
+ * past the deck's left edge and ends 2 short of its right. The pill
+ * (1344:21865, 86 × 32) is flush right in it at y=313 and the deck's top is
+ * y=390: 45 between them. The deck ends at 838.60 and the heading
+ * (1344:21868) starts at 1016: 177.40 between.
+ */
+export const PALS_PAGE = {
+  /** 26 - 11, at the node's scale: 15 / 0.6248. */
+  groupLeft: 24.01,
+  /** (11 + 596) - (26 + 579) = 2, at the node's scale. */
+  groupRight: 3.2,
+  /** 390 - (313 + 32) = 45, at the node's scale. */
+  pillToDeck: 72.02,
+  /** 1016 - (390 + 448.60) = 177.40, at the node's scale. */
+  deckToHeading: 283.93,
+} as const;
 
 export interface DeckLayout {
   /** Screen pixels per file unit. */

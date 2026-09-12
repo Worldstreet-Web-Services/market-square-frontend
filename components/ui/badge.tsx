@@ -112,7 +112,12 @@ export function OrgBadgeChip({
 
 const ROLE_LABEL: Record<string, string | null> = {
   citizen: null,
-  creator: "Creator",
+  // NOT DRAWN. Nearly everybody who posts is a creator, so the chip sat on
+  // almost every author line and distinguished nobody from anybody — a badge
+  // that everyone wears is decoration, not a signal (ogazboiz: "it is not
+  // needed again"). The role still exists on the profile and still arrives in
+  // the payload; it simply has no chip, exactly as `citizen` has none.
+  creator: null,
   ambassador: "Ambassador",
   worldstreet: "WorldStreet",
 };

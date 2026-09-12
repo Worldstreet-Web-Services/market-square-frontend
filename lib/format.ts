@@ -89,3 +89,77 @@ export function formatCountdown(msRemaining: number): string {
   if (days > 0) return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
+
+/**
+ * WHEN A SCHEDULED ROOM OPENS, short enough for a card's pill.
+ *
+ * "Opens 14:30" today, "Opens Fri 14:30" inside the next week, "Opens 12 Oct"
+ * beyond it — the room card's pill is 11px in a 20px box, so a full date and
+ * time does not fit and a countdown would need a ticking clock to stay true.
+ * A time already past reads "Opening soon": the host has not started it yet,
+ * and saying "Opens 10:00" about ten minutes ago is the one thing that is
+ * certainly wrong.
+ */
+export function opensAtLabel(iso: string, now: number = Date.now()): string {
+  const at = new Date(iso);
+  const ms = at.getTime();
+  if (Number.isNaN(ms)) return "Not open yet";
+  if (ms <= now) return "Opening soon";
+  const time = at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const sameDay = new Date(now).toDateString() === at.toDateString();
+  if (sameDay) return `Opens ${time}`;
+  if (ms - now < 7 * 24 * 60 * 60 * 1000) {
+    return `Opens ${at.toLocaleDateString(undefined, { weekday: "short" })} ${time}`;
+  }
+  return `Opens ${at.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+}
+
+/**
+ * "Starts in 3h 55m" — the countdown the upcoming room card carries
+ * (1295:140172 writes "Starts in 203h 55m", so hours run past a day rather
+ * than rolling into days until a week is reached).
+ *
+ * Under a minute, and anything already due, reads "Starting soon": a host who
+ * has not opened the room yet makes "Starts in 0m" a lie the moment it renders.
+ */
+/** How long a host may be late before the countdown stops promising. */
+const OPENING_GRACE_MS = 2 * 60_000;
+
+export function startsInLabel(iso: string, now: number = Date.now()): string {
+  const ms = new Date(iso).getTime() - now;
+  if (Number.isNaN(ms)) return "Starting soon";
+  /*
+    PAST ITS TIME AND STILL NOT OPEN IS ITS OWN FACT.
+
+    One branch used to answer two very different questions — "a room a minute
+    from opening" and "a room whose host never showed" — so a 5:13 gist room
+    still read "Starting soon" at 17:26 (ogazboiz saw exactly that). A card
+    that promises a room is about to start, thirteen minutes after it did not,
+    is the small dishonesty that makes every other time on the page suspect.
+
+    The grace is for the host who is opening right now: at the moment the
+    clock passes, they are plausibly mid-soundcheck. Past that, the truth is
+    that the room is waiting on them, and the card says so.
+  */
+  if (ms < -OPENING_GRACE_MS) return "Waiting for host";
+  if (ms < 60_000) return "Starting soon";
+  const minutes = Math.floor(ms / 60_000);
+  const hours = Math.floor(minutes / 60);
+  if (hours >= 168) return `Starts in ${Math.floor(hours / 24)}d`;
+  if (hours === 0) return `Starts in ${minutes}m`;
+  return `Starts in ${hours}h ${minutes % 60}m`;
+}
+
+/** "9:00 AM" — the upcoming card's own clock (1295:140166). */
+export function clockLabel(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  return at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** "Sep 19, 2026" — the upcoming card's date line (1295:140186). */
+export function shortDateLabel(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  return at.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}

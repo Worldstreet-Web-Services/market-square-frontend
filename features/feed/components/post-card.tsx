@@ -37,6 +37,7 @@ import {
   useAddComment,
   useBookmarkPost,
   useDeletePost,
+  usePinPost,
   useEditPost,
   useLikePost,
   useReport,
@@ -77,6 +78,7 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const report = useReport();
   const remove = useDeletePost();
+  const pin = usePinPost();
   const gate = useGate();
   return (
     <div className="relative">
@@ -105,6 +107,21 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
           <div className="ws-popover absolute bottom-full right-0 z-20 mb-2 w-56 rounded-2xl p-1.5">
             {mine && (
               <>
+                {/* One pin per profile: pinning a second replaces the first,
+                    so this never asks the author to unpin anything first.
+                    Absent where the routes are not deployed (404-quiet), and
+                    absent on a story, which expires and cannot be pinned. */}
+                {!pin.unavailable && post.kind !== "story" && (
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      pin.mutate({ postId: targetId, pin: !post.pinnedByAuthor });
+                    }}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
+                  >
+                    {post.pinnedByAuthor ? "Unpin from profile" : "Pin to your profile"}
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setOpen(false);
@@ -581,6 +598,7 @@ export function PostCard({
   onOpenMedia,
   onQuote,
   full = false,
+  compact = false,
 }: {
   post: Post;
   /**
@@ -591,6 +609,17 @@ export function PostCard({
    * place that owes you the whole thing, so it sets this.
    */
   full?: boolean;
+  /**
+   * Drop the inline reply field.
+   *
+   * For a card in a RAIL rather than the column. The field is `flex-1` capped
+   * at the file's 220 and has no floor, so once the tallies pill and the four
+   * controls have taken their width it collapses to a sliver — a stray shape
+   * beside the icons that cannot be typed into. It is also the wrong control
+   * there: replying in place needs room to write and to read the thread, and a
+   * rail has neither. Tapping the card opens the post, where the real field is.
+   */
+  compact?: boolean;
   /** Opens the composer with this post quoted. Omitted where there is no composer. */
   onQuote?: (post: Post) => void;
   /** Set when this post reached the timeline through someone's repost. */
@@ -687,7 +716,24 @@ export function PostCard({
       The design has no phone frame, so the 39 is desktop-only — at 360 it
       would spend a fifth of the screen on margins.
     */
-    <article ref={viewRef} className="ws-post p-4 md:px-[39px] md:pb-4 md:pt-6">
+    <article
+      ref={viewRef}
+      className={cn(
+        "ws-post",
+        // 1313:152732 — in the rail every card is the SAME height (367), which
+        // is what makes the row even. The card fills its box and the caption
+        // takes the slack, so a short post and a four-photo post are one size.
+        compact ? "flex h-full flex-col p-3" : "p-4 md:px-[39px] md:pb-4 md:pt-6"
+      )}
+    >
+      {/* The author put this at the top of their profile. Sits with the
+          repost line because both say WHY this card is here rather than
+          anything about the post. It is the AUTHOR's placement, so every
+          reader sees it, signed out included. */}
+      {post.pinnedByAuthor && (
+        <p className="mb-2 pl-1 text-[12px] font-semibold text-white/50">Pinned</p>
+      )}
+
       {/* Repost attribution. The card still belongs to the original author —
           this line only says who passed it along. */}
       {repostedBy && (
@@ -821,7 +867,11 @@ export function PostCard({
         post payload would remove it — asked for; `MessageMedia` already carries
         both, so the service is storing them somewhere.
       */}
-      {rail.length > 1 ? (
+      {compact && rail.length > 0 ? (
+        // Every compact card reserves the same media strip — the file's own
+        // 134.3 x 188.52 tiles — which is the other half of the equal height.
+        <MediaRail items={rail} size="compact" />
+      ) : rail.length > 1 ? (
         <MediaRail items={rail} />
       ) : post.mediaUrl &&
         (isVideoPost(post) ? (
@@ -909,16 +959,24 @@ export function PostCard({
         exactly 18 below the hairline, the same distance the media does on the
         first). So the 12 belongs to the media, not to the text.
       */}
-      <div data-post-body onClick={full ? undefined : openPost} className={cn(!full && "cursor-pointer")}>
+      <div
+        data-post-body
+        onClick={full ? undefined : openPost}
+        className={cn(!full && "cursor-pointer", compact && "shrink-0 overflow-hidden")}
+      >
         <PostText
           text={post.text}
           mentions={post.mentions}
           className={cn(
             "text-[13.8px] leading-[23px] text-white/90",
             // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
-            rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
+            rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3",
+            // Two lines in the rail, clamped by the class rather than by
+            // `clampLines`: that one brings a "Show more" which expands in
+            // place, and this card cannot grow.
+            compact && "line-clamp-2"
           )}
-          clampLines={full ? undefined : 6}
+          clampLines={full || compact ? undefined : 6}
         />
       </div>
       {/* The coins the post names, with today's move — the row Ark draws. */}
@@ -951,7 +1009,14 @@ export function PostCard({
           screen; its own row, opened on demand, solves the geometry. */}
       {/* 647:16409 aligns its children to the BOTTOM (counter axis MAX): the
           38.37 "more" disc sits on the 40.15 tallies pill's foot, not its middle. */}
-      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-end md:gap-6">
+      <div
+        className={cn(
+          "mt-5 flex flex-col gap-3 md:flex-row md:items-end md:gap-6",
+          // In the rail the card is a fixed 367: the actions sit on its foot
+          // and never get pushed out by a long caption or four photos.
+          compact && "mt-auto shrink-0"
+        )}
+      >
       <div className="flex items-center justify-between gap-3 md:contents">
         {/*
           THE TALLIES PILL — node 496:13417.
@@ -1090,6 +1155,7 @@ export function PostCard({
             text: post.text,
             url: `${window.location.origin}/p/${post.id}`,
           }}
+          campaign="post_share"
         />
       )}
 
@@ -1110,14 +1176,16 @@ export function PostCard({
           any card width, which is what the file's fixed 113px gap expresses at
           its one width.
         */}
-        <InlineComment
-          postId={post.id}
-          onOpenThread={() => setCommentsOpen(true)}
-          revealed={replyOpen}
-          rootRef={inlineRef}
-          // Hidden on a phone until the tally reveals it; the file's row from md.
-          className={cn("md:order-2", !replyOpen && "hidden md:flex")}
-        />
+        {!compact && (
+          <InlineComment
+            postId={post.id}
+            onOpenThread={() => setCommentsOpen(true)}
+            revealed={replyOpen}
+            rootRef={inlineRef}
+            // Hidden on a phone until the tally reveals it; the file's row from md.
+            className={cn("md:order-2", !replyOpen && "hidden md:flex")}
+          />
+        )}
       </div>
 
       <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />

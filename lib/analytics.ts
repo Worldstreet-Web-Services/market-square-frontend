@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { apiFetch } from "@/lib/api/client";
+import { readUtm, type UtmParams } from "@/lib/utm";
 
 export type MarketEventName =
   | "feed_viewed"
@@ -30,6 +31,28 @@ interface MarketEventInput {
   source?: string;
   accessType?: string;
   metadata?: Record<string, string | number | boolean | null>;
+}
+
+const UTM_KEY = "ms.analytics.utm";
+
+/**
+ * The FIRST UTM tags this visit arrived with, kept for the rest of it.
+ *
+ * Captured as soon as the shell mounts (`captureVisitUtm`), because a visit's
+ * first page does not always record an event, and one client navigation later
+ * the query string — and the tags — are gone.
+ */
+export function captureVisitUtm(): UtmParams | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = sessionStorage.getItem(UTM_KEY);
+    if (stored) return JSON.parse(stored) as UtmParams;
+    const found = readUtm(window.location.search);
+    if (found) sessionStorage.setItem(UTM_KEY, JSON.stringify(found));
+    return found;
+  } catch {
+    return null;
+  }
 }
 
 function sessionId() {
@@ -63,6 +86,8 @@ let collectorMissing = false;
 export function trackMarketEvent(name: MarketEventName, input: MarketEventInput) {
   if (typeof window === "undefined") return;
   if (collectorMissing) return;
+  const utm = captureVisitUtm();
+  const metadata = utm || input.metadata ? { ...utm, ...input.metadata } : undefined;
   const payload = {
     version: 1,
     name,
@@ -70,6 +95,9 @@ export function trackMarketEvent(name: MarketEventName, input: MarketEventInput)
     timestamp: new Date().toISOString(),
     device: window.matchMedia("(max-width: 767px)").matches ? "mobile" : "desktop",
     ...input,
+    // The visit's UTM tags ride along as metadata — a shape the collector
+    // already takes — so a view can be traced back to the share that brought it.
+    ...(metadata ? { metadata } : {}),
   };
   void apiFetch("/api/market-square/analytics/events", {
     method: "POST",

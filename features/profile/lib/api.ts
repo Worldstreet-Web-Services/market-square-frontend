@@ -5,6 +5,7 @@ import { msApi } from "@/lib/api/service";
 import { ProfileSchema } from "@/lib/api/schemas";
 import {
   CreatorApplicationSchema,
+  FollowingPageSchema,
   FollowResultSchema,
   MaybeCreatorApplicationSchema,
   MyVerificationSchema,
@@ -18,10 +19,23 @@ import {
   type ProfileStreamFilters,
   SpotlightSchema,
   VerificationRuleSchema,
+  WinksPageSchema,
 } from "@/features/profile/lib/types";
 
 export async function fetchProfile(username: string) {
   return ProfileSchema.parse(await msApi.get(`/profiles/${username}`));
+}
+
+/** `GET /profiles/:id/following` — public and paged. Pals' "Following" tab reads the reader's own. */
+export async function fetchFollowing(profileId: string, cursor?: string) {
+  return FollowingPageSchema.parse(
+    await msApi.get(`/profiles/${encodeURIComponent(profileId)}/following`, { cursor, limit: 30 })
+  );
+}
+
+/** `GET /me/winks` — who winked at the reader, newest first. A 404 before it deploys is "not deployed". */
+export async function fetchMyWinks(cursor?: string) {
+  return WinksPageSchema.parse(await msApi.authedGet("/me/winks", { cursor, limit: 25 }));
 }
 
 export async function fetchProfilePosts(username: string, cursor?: string) {
@@ -141,6 +155,8 @@ export async function updateMe(input: {
    */
   city?: string | null;
   region?: string | null;
+  /** ISO 3166-1 alpha-2, any case; null clears. The service refuses anything else. */
+  country?: string | null;
   gender?: string | null;
   /**
    * Marks onboarding complete. `true` ONLY.

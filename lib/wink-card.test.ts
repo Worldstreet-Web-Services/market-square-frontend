@@ -69,6 +69,26 @@ describe("the card's URL is hostile input", () => {
     assert.equal(safePhoto("not a url"), null);
   });
 
+  it("refuses a photo aimed at a private address — the route FETCHES it", () => {
+    // `https:` alone is no defence: a private host serves TLS perfectly well,
+    // and the fetch is made by our server, which can reach these and the
+    // open internet cannot.
+    assert.equal(safePhoto("https://169.254.169.254/latest/meta-data/"), null);
+    assert.equal(safePhoto("https://127.0.0.1/a.png"), null);
+    assert.equal(safePhoto("https://localhost/a.png"), null);
+    assert.equal(safePhoto("https://10.0.0.5/a.png"), null);
+    assert.equal(safePhoto("https://172.16.4.1/a.png"), null);
+    assert.equal(safePhoto("https://192.168.1.1/a.png"), null);
+    assert.equal(safePhoto("https://[::1]/a.png"), null);
+    assert.equal(safePhoto("https://redis.internal/a.png"), null);
+    // The same loopback address written to slip past a dotted-quad check.
+    assert.equal(safePhoto("https://2130706433/a.png"), null);
+    assert.equal(safePhoto("https://0x7f000001/a.png"), null);
+    // And the block is not over-broad: 172.32 is public, unlike 172.16-31.
+    assert.equal(safePhoto("https://cdn.example/a.png"), "https://cdn.example/a.png");
+    assert.equal(safePhoto("https://172.32.0.1/a.png"), "https://172.32.0.1/a.png");
+  });
+
   it("collapses whitespace and caps names", () => {
     const card = parseWinkCard(new URLSearchParams({ k: "wink", on: `  Fola\n\n${"x".repeat(200)}` }));
     assert.equal(card!.other.name.length, 40);

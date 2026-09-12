@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { errorCode } from "@/lib/api/envelope";
 import { msApi } from "@/lib/api/service";
 import { ConversationSchema } from "@/features/messages/lib/types";
@@ -41,6 +41,29 @@ export function useDiscoverHouses(limit = 6) {
     // A directory of communities does not change minute to minute.
     staleTime: 5 * 60_000,
     // A 404 is terminal: retrying a route that does not exist is noise.
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+  });
+  return { ...query, unavailable: errorCode(query.error) === "NOT_FOUND" };
+}
+
+/**
+ * THE WHOLE DIRECTORY, PAGED — the houses page (node 1368:2270), where
+ * Popular Houses' "View more" lands. Same route, same order (member count
+ * descending, the reader's own houses excluded), followed through
+ * `nextCursor` by the shared infinite-scroll sentinel. The route takes
+ * `cursor` and `limit` and nothing else, which is why the page's filter pill
+ * is inert: there is no dimension to filter on yet.
+ */
+export function useDiscoverHousesPages(limit = 18) {
+  const query = useInfiniteQuery({
+    queryKey: ["ms", "discover-houses", "pages", limit],
+    queryFn: async ({ pageParam }) =>
+      DiscoverHousesSchema.parse(
+        await msApi.get("/conversations/discover", pageParam ? { limit, cursor: pageParam } : { limit })
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor ?? null,
+    staleTime: 5 * 60_000,
     retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
   });
   return { ...query, unavailable: errorCode(query.error) === "NOT_FOUND" };

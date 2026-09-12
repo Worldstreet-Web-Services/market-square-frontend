@@ -14,6 +14,7 @@ import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
 import { ShareSheet } from "@/components/ui/share-sheet";
 import { canMakeInvite, inviteUrl } from "@/features/messages/lib/invites";
+import { memberActions, viewerRole, type GroupRole } from "@/features/messages/lib/roles";
 import { ErrorState } from "@/components/ui/states";
 import Link from "next/link";
 import { housePath } from "@/lib/house-path";
@@ -38,6 +39,9 @@ import {
   useRenameGroup,
   useSendMessage,
   useCreateInvite,
+  useRemoveGroupMember,
+  useSetMemberRole,
+  useTransferOwnership,
 } from "@/features/messages/hooks/use-messages";
 import {
   formatClockTime,
@@ -471,12 +475,23 @@ function MembersSheet({
   conversation,
   open,
   onClose,
+  meId,
+  myRole,
 }: {
   conversation: Conversation;
   open: boolean;
   onClose: () => void;
+  meId: string | undefined;
+  /** The reader's own role — decides which controls each row offers. */
+  myRole: GroupRole | null;
 }) {
   const members = useConversationMembers(conversation.id, open && isGroupThread(conversation));
+  const setRole = useSetMemberRole(conversation.id);
+  const transfer = useTransferOwnership(conversation.id);
+  const remove = useRemoveGroupMember(conversation.id);
+  /* Removing someone and handing the house over both ask first: neither can
+     be undone from this sheet. */
+  const [confirming, setConfirming] = useState<{ kind: "remove" | "owner"; profile: Profile } | null>(null);
 
   // The summary's four-deep preview roster stands in until the full list
   // lands, so the sheet opens with content rather than with skeletons.
@@ -487,52 +502,104 @@ function MembersSheet({
       role: "member" as const,
       joinedAt: null,
     }));
+  const house = conversation.title ?? "this house";
+  const ACTION =
+    "ws-press rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-body transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <Sheet open={open} onClose={onClose} title={threadTitle(conversation)}>
-      <div className="flex flex-col gap-3 p-4">
-        {members.isError ? (
-          <ErrorState
-            error={members.error}
-            fallback="Couldn't load the member list."
-            onRetry={() => members.refetch()}
-          />
-        ) : rows.length === 0 && members.isPending ? (
-          [0, 1, 2].map((i) => <RowSkeleton key={i} />)
-        ) : (
-          rows.map((member, index) => (
-            <div
-              key={member.profile?.id ?? `member-${index}`}
-              className="flex items-center gap-3"
+      {confirming ? (
+        <div className="p-4">
+          <p className="text-[13px] leading-5 text-body">
+            {confirming.kind === "owner"
+              ? `${confirming.profile.displayName} becomes the owner of ${house}. You stay on as an admin, and only they can make or remove admins after this.`
+              : `${confirming.profile.displayName} will be removed from ${house}. A member can add them back.`}
+          </p>
+          <div className="mt-5 flex gap-2">
+            <Button variant="ghost" className="flex-1" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              loading={transfer.isPending || remove.isPending}
+              onClick={() => {
+                const done = { onSuccess: () => setConfirming(null) };
+                if (confirming.kind === "owner") transfer.mutate(confirming.profile.id, done);
+                else remove.mutate(confirming.profile.id, done);
+              }}
             >
-              <Avatar
-                name={member.profile?.displayName ?? "?"}
-                seed={member.profile?.id}
-                src={member.profile?.avatarUrl}
-                size={38}
-              />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[14px] font-semibold text-white">
-                  {member.profile?.displayName ?? "Former member"}
-                </span>
-                {member.profile?.username && (
-                  <span className="truncate text-[12px] text-meta">
-                    @{member.profile.username}
-                  </span>
-                )}
-              </div>
-              {/* The service's own word, not a rank we invented. Only `owner`
-                  is worth a chip — labelling every other row "member" is a
-                  column of the same word. */}
-              {member.role === "owner" && (
-                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-create">
-                  Owner
-                </span>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+              {confirming.kind === "owner" ? "Make owner" : "Remove"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 p-4">
+          {members.isError ? (
+            <ErrorState
+              error={members.error}
+              fallback="Couldn't load the member list."
+              onRetry={() => members.refetch()}
+            />
+          ) : rows.length === 0 && members.isPending ? (
+            [0, 1, 2].map((i) => <RowSkeleton key={i} />)
+          ) : (
+            rows.map((member, index) => {
+              const profile = member.profile;
+              // Controls come only from the full roster: the preview rows all
+              // read "member" and would offer actions on the wrong people.
+              const actions =
+                profile && members.data
+                  ? memberActions({ viewer: myRole, target: member.role, isSelf: profile.id === meId })
+                  : null;
+              return (
+                <div key={profile?.id ?? `member-${index}`} className="flex items-start gap-3">
+                  <Avatar name={profile?.displayName ?? "?"} seed={profile?.id} src={profile?.avatarUrl} size={38} />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[14px] font-semibold text-white">
+                      {profile?.displayName ?? "Former member"}
+                    </span>
+                    {profile?.username && (
+                      <span className="truncate text-[12px] text-meta">@{profile.username}</span>
+                    )}
+                    {profile && actions && (actions.makeAdmin || actions.removeAdmin || actions.makeOwner || actions.remove) && (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {actions.makeAdmin && (
+                          <button type="button" disabled={setRole.isPending} onClick={() => setRole.mutate({ profileId: profile.id, role: "admin" })} className={ACTION}>
+                            Make admin
+                          </button>
+                        )}
+                        {actions.removeAdmin && (
+                          <button type="button" disabled={setRole.isPending} onClick={() => setRole.mutate({ profileId: profile.id, role: "member" })} className={ACTION}>
+                            Remove admin
+                          </button>
+                        )}
+                        {actions.makeOwner && (
+                          <button type="button" onClick={() => setConfirming({ kind: "owner", profile })} className={ACTION}>
+                            Make owner
+                          </button>
+                        )}
+                        {actions.remove && (
+                          <button type="button" onClick={() => setConfirming({ kind: "remove", profile })} className={cn(ACTION, "text-down")}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* The service's own words. Members carry no chip — a column
+                      of the same word is noise. */}
+                  {member.role === "owner" && (
+                    <span className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-create">Owner</span>
+                  )}
+                  {member.role === "admin" && (
+                    <span className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-grey-300">Admin</span>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
     </Sheet>
   );
 }
@@ -996,7 +1063,7 @@ function MessageRow({
   return (
     <div className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
       {group && !mine && (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border-[0.63px] border-white/20 bg-white/10">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10">
           <Avatar
             name={sender?.displayName ?? "?"}
             seed={sender?.id ?? message.senderId}
@@ -1256,7 +1323,7 @@ function Composer({ conversationId }: { conversationId: string }) {
             placeholder={attachment ? "Add a caption…" : "Write a message…"}
             // The design's caret is #008CFF — the one place in this pane a
             // colour is specified for something the house has no token for.
-            className="max-h-32 min-w-0 flex-1 resize-none bg-transparent text-[13px] leading-5 text-white caret-[#008CFF] outline-none placeholder:text-meta"
+            className="max-h-32 min-w-0 flex-1 resize-none bg-transparent text-base leading-5 text-white caret-[#008CFF] outline-none placeholder:text-meta"
           />
           {/* Decoration, not a control — there is no emoji picker on this
               surface, and the live-stream composer draws the same glyph the
@@ -1358,12 +1425,16 @@ export function Thread({
   // The roster, for turning a bubble's `senderId` into a face. Groups only —
   // a 1:1 reads identity from `peer` and never issues the request.
   const members = useConversationMembers(conversation.id, group);
-  // The service lets only the group's creator rename it, and `createdBy` says
-  // who that is; the roster's owner row is the fallback for an older payload.
-  const isOwner = conversation.createdBy
-    ? conversation.createdBy === me.data?.id
-    : (members.data?.items.some((row) => row.role === "owner" && row.profile?.id === me.data?.id) ?? false);
-  const canShareInvite = group && canMakeInvite({ visibility: conversation.visibility, isOwner });
+  /*
+    YOUR ROLE IN THE HOUSE comes from the roster: owner, admin or member.
+    `createdBy` only says who MADE the house — ownership can be handed over,
+    and passes on when an owner leaves — so it stands in only until the roster
+    has loaded.
+  */
+  const myRole = viewerRole(members.data?.items, me.data?.id, conversation.createdBy);
+  const isOwner = myRole === "owner";
+  const manages = myRole === "owner" || myRole === "admin";
+  const canShareInvite = group && canMakeInvite({ visibility: conversation.visibility, manages });
   const senders = new Map<string, Profile>();
   // The summary's capped preview first, so avatars are right for the four most
   // recent talkers before the full roster arrives; the full list overwrites it.
@@ -1437,6 +1508,7 @@ export function Thread({
               predates the field.
             */
             isOwner={isOwner}
+            canEdit={manages}
             safetyRows={
               !group && conversation.peer ? safetyRowsSlot?.(conversation.peer) : undefined
             }
@@ -1458,6 +1530,7 @@ export function Thread({
           onClose={() => setInviteLink(null)}
           title="Share invite link"
           payload={{ text: `Join ${conversation.title ?? "my house"} on Square`, url: inviteLink }}
+          campaign="house_invite"
         />
       )}
 
@@ -1527,6 +1600,8 @@ export function Thread({
           conversation={conversation}
           open={membersOpen}
           onClose={() => setMembersOpen(false)}
+          meId={me.data?.id}
+          myRole={myRole}
         />
       )}
 
@@ -1584,6 +1659,8 @@ export function Thread({
         <p className="text-[13px] leading-5 text-body">
           You will stop receiving messages from {conversation.title ?? "this group"}. A member
           can add you back.
+          {isOwner &&
+            " You own it, so it passes to its longest-standing admin, or to its longest-standing member if it has no admins."}
         </p>
         <div className="mt-5 flex gap-2">
           <Button variant="ghost" className="flex-1" onClick={() => setLeaving(false)}>
