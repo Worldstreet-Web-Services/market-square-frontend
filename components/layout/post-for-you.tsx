@@ -54,7 +54,7 @@ export function PostForYou({
   if (!feed.isPending && items.length === 0) return null;
 
   return (
-    <section aria-labelledby="post-for-you" className="mb-[63px]">
+    <section aria-labelledby="post-for-you" className="mb-[64px]">
       <div className="mb-4">
         <SectionHeading
           id="post-for-you"

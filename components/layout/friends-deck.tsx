@@ -115,7 +115,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
   // gap — 60. HOME (647:16300) spaces its own parts explicitly — 90 to the
   // deck, 9.38 to the pills, 67 to the rule, 60 to the timeline — so its
   // section carries no gap of its own, only the 60 under it.
-  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "mb-[60px]");
+  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "mb-[64px]");
   /* HOME DRAWS ITS OWN DECK (647:16300), not `/pals`' at another scale. */
   const node: DeckNode = heading === "home" ? HOME_DECK_NODE : DECK_NODE;
   const card: PalCardNodeGeometry = heading === "home" ? HOME_DECK_CARD : DECK_CARD;
@@ -397,12 +397,9 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           <DeckDots count={3} active={Math.round((index / (items.length - 1)) * 2)} />
         ))}
 
-      {/* 647:17210 — the rule under the section: 0.5 at 25% white, 67 under the
-          pills, running past the column's content to its edges as the file's
-          line runs past its column. */}
-      {heading === "home" && (
-        <div aria-hidden className="ws-rule-to-left-edge -mx-4 mt-[67px] h-[0.5px] bg-white/25 md:ml-0 lg:-mr-6" />
-      )}
+      {/* No rule under the section any more: 647:17210 drew one, but the
+          2026-09-12 column (1305:149185) runs straight on to the next section
+          on its 64 of gap, with nothing between (ogazboiz, 2026-09-12). */}
     </section>
   );
 }

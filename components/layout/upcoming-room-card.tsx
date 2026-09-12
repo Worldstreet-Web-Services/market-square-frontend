@@ -165,7 +165,11 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
             }}
           >
             {TopicIcon ? (
-              <TopicIcon className="shrink-0" />
+              /* The fallback glyph at the file's own 7.11u — unsized it drew at
+                 its intrinsic 24px and blew the chip up to a tile. */
+              <span className="flex shrink-0 items-center justify-center" style={{ width: u(7.11), height: u(7.11) }}>
+                <TopicIcon className="h-full w-full" />
+              </span>
             ) : (
               /* eslint-disable-next-line @next/next/no-img-element -- the node's own export */
               <img
@@ -216,9 +220,9 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
 
         {startsAt && (
           <>
-            {/* 1295:140179 — the date. */}
+            {/* 1295:140179 — the date, Geist Regular (the one 400 on the card). */}
             <span
-              className="absolute flex items-center text-[#D9D9D9]"
+              className="absolute flex items-center font-normal text-[#D9D9D9]"
               style={{ left: u(396), top: u(20), gap: u(5), fontSize: u(8), lineHeight: u(10.4) }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}

@@ -55,7 +55,7 @@ export function PopularHouses() {
   if (houses.unavailable || items.length === 0) return null;
 
   return (
-    <section aria-labelledby="popular-houses" className="mb-[63px]">
+    <section aria-labelledby="popular-houses" className="mb-[64px]">
       <div className="mb-4">
         <SectionHeading
           id="popular-houses"

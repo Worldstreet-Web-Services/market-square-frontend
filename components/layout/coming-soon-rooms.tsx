@@ -18,9 +18,19 @@ import { SectionHeading } from "@/components/layout/section-heading";
  * that an empty list renders NOTHING AT ALL — no heading, no empty shelf, no
  * spacer. A square where nobody has scheduled anything costs no height.
  *
- * The card is `UpcomingRoomCard` unchanged, the 1295:140164 card the gist rooms
- * page uses, at its own 479 width. One card, two surfaces — a second copy is
- * how the two drift apart.
+ * ─── NODE 1305:149184, THE 2026-09-12 COLUMN'S OWN DRAWING ─────────────────
+ * A 581-wide section: the heading row (32 tall — "Coming Soon" in Manrope Bold
+ * 24/28.61, all white, and the "View more" pill at its right edge), 16 below
+ * it the rail (1305:148882): a 606-wide horizontal row that runs PAST the
+ * section's right edge and is clipped there, cards 264.35 x 81.13 on an
+ * 11.04 gap. Every number inside a card divides by its 0.5519 stroke to the
+ * 479 x 147 design of 1295:140164 — the same card, placed at 0.5519 — so the
+ * card is `UpcomingRoomCard` unchanged (it scales itself from its width) and
+ * only the WIDTH and the GAP are this section's. One card, two surfaces — a
+ * second copy is how the two drift apart.
+ *
+ * The node carries no `interactions`; "View more" going to the rooms page is
+ * this product's convention, as on the other three headings.
  */
 export function ComingSoonRooms() {
   // The same list /gist-rooms reads for its Upcoming rail.
@@ -31,15 +41,17 @@ export function ComingSoonRooms() {
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby="coming-soon-rooms" className="mb-[63px]">
+    <section aria-labelledby="coming-soon-rooms" className="mb-[64px]">
       <div className="mb-4">
         {/* 1305:149167 sets this heading ALL WHITE — no gradient half. */}
         <SectionHeading id="coming-soon-rooms" lead="Coming Soon" action={{ label: "View more", href: "/gist-rooms" }} />
       </div>
 
-      <div className="flex items-center gap-5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* 1305:148882 — the rail, clipped at the column's edge; the file's own
+          third card is cut there too. */}
+      <div className="flex items-center gap-[11.04px] overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((room) => (
-          <div key={room.id} className="w-[479px] shrink-0">
+          <div key={room.id} className="w-[264.35px] shrink-0">
             <UpcomingRoomCard stream={room} />
           </div>
         ))}

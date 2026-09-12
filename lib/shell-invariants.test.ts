@@ -1016,7 +1016,7 @@ describe("Home's Top GistRooms section is 647:16288's first block", () => {
   });
 
   it("spaces it by 1305:149177: 16 to the rail, cards 17 apart, 63 to what follows", () => {
-    assert.match(rail, /mb-\[63px\]/);
+    assert.match(rail, /mb-\[64px\]/);
     assert.match(rail, /className="mb-4"/);
     assert.match(rail, /gap-\[17px\] overflow-x-auto/);
     // The pager dots belong to the BANNER in this design, not here.
@@ -1071,11 +1071,13 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     assert.match(pal, /controls: \{ size: 60\.55, gap: 15\.61, bottom: 25\.76, passGlyph: 35\.84, winkGlyph: 40\.32, lift: 5\.59 \}/);
   });
 
-  it("spaces it by the file: 90 to the deck, 9.38 to five pills, 67 to the rule, 60 to the timeline", () => {
+  it("spaces it by the file: 90 to the deck, 9.38 to five pills, then the column's 64 to Coming Soon", () => {
     assert.match(deck, /mt-\[90px\]/);
     assert.match(deck, /mt-\[9\.38px\]/);
-    assert.match(deck, /mt-\[67px\] h-\[0\.5px\] bg-white\/25/);
-    assert.match(deck, /"mb-\[60px\]"/);
+    // The rule and its 67 are gone (ogazboiz, 2026-09-12): 1305:149185 runs
+    // from the pills straight on to Coming Soon on its own 64.
+    assert.doesNotMatch(deck, /mt-\[67px\] h-\[0\.5px\]/);
+    assert.match(deck, /"mb-\[64px\]"/);
     assert.match(deck, /<DeckDots variant="home" count=\{5\}/);
     assert.match(dots, /w-\[36\.29px\]/);
     assert.match(dots, /h-\[5\.81px\]/);
@@ -1086,7 +1088,9 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     const css = read("app/globals.css");
     const shell = stripComments(read("components/layout/app-shell.tsx"));
     const houses = stripComments(read("components/layout/join-a-community.tsx"));
-    assert.match(deck, /ws-rule-to-left-edge -mx-4 mt-\[67px\]/);
+    // The rule 647:17210 drew under the deck is GONE: 1305:149185 runs on to
+    // the next section on the column's own gap (ogazboiz, 2026-09-12).
+    assert.doesNotMatch(deck, /ws-rule-to-left-edge/);
     assert.match(css, /\[data-rail="off"\] \.ws-rule-to-left-edge::before \{[^}]*right: 100%;[^}]*width: 100vw;/, "the extension lies over the rule again, doubling it");
     const mainBase = shell.match(/"[^"]*min-h-\[calc\(var\(--ws-vvh,100dvh\)-var\(--ws-crumb-h\)\)\][^"]*"/)?.[0] ?? "";
     assert.ok(mainBase, "could not find the column's base classes");
@@ -1787,9 +1791,14 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // Nothing scheduled is no section — never an empty shelf or a spacer.
     assert.match(soon, /if \(items\.length === 0\) return null;/);
     assert.match(soon, /useStreamList\("scheduled"/);
-    // The same card the gist rooms page draws, at its own width.
+    // The same card the gist rooms page draws, at 1305:149184's own placement:
+    // 264.35 wide (the 479 design at 0.5519) on an 11.04 gap.
     assert.match(soon, /<UpcomingRoomCard stream=\{room\} \/>/);
-    assert.match(soon, /w-\[479px\] shrink-0/);
+    assert.match(soon, /gap-\[11\.04px\] overflow-x-auto/);
+    assert.match(soon, /w-\[264\.35px\] shrink-0/);
+    assert.doesNotMatch(soon, /w-\[479px\]/);
+    // The card's one Regular run.
+    assert.match(stripComments(read("components/layout/upcoming-room-card.tsx")), /font-normal text-\[#D9D9D9\]/);
   });
 
   it("does not drop a host into the soundcheck for a room scheduled for later", () => {
@@ -1843,9 +1852,10 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
-  it("spaces every Home section by the column's own 63, headings flush at x=0", () => {
-    // 1305:149185 is a 63-gap column whose heading rows start at x=0. The 5px
-    // inset and the 78px margin were 647:16288's and misaligned the sections.
+  it("spaces every Home section by the column's own 64, headings flush at x=0", () => {
+    // 1305:149185's `itemSpacing` is 64.0 in the raw node (it was read as 63
+    // once), and its heading rows start at x=0. The 5px inset and the 78px
+    // margin were 647:16288's and misaligned the sections.
     for (const file of [
       "components/layout/live-gist-rooms.tsx",
       "components/layout/coming-soon-rooms.tsx",
@@ -1853,7 +1863,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
       "components/layout/post-for-you.tsx",
     ]) {
       const section = stripComments(read(file));
-      assert.match(section, /mb-\[63px\]/, `${file} is not on the column's rhythm`);
+      assert.match(section, /mb-\[64px\]/, `${file} is not on the column's rhythm`);
       assert.match(section, /className="mb-4"/, `${file} lost the 16 under its heading`);
       assert.doesNotMatch(section, /pl-\[5px\]/, `${file} still carries the old 5px inset`);
     }
@@ -1872,7 +1882,9 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // The DECK stays 647:16288's: its pills and the left-edge rule were asked
     // for and the new node has nothing to replace them with.
     assert.match(deck, /<DeckDots variant="home" count=\{5\}/);
-    assert.match(deck, /ws-rule-to-left-edge -mx-4 mt-\[67px\]/);
+    // The rule 647:17210 drew under the deck is GONE: 1305:149185 runs on to
+    // the next section on the column's own gap (ogazboiz, 2026-09-12).
+    assert.doesNotMatch(deck, /ws-rule-to-left-edge/);
   });
 
   it("draws Home's banner on 1305:149178's own numbers, for everybody", () => {
