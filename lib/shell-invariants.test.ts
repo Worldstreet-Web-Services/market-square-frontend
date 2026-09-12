@@ -989,9 +989,13 @@ describe("Home's banner is node 1305:149178", () => {
     );
     assert.match(feed, /\{headSlot && <div className="mb-\[64px\] flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
     const head = feed.indexOf("{headSlot && ");
-    const trending = feed.indexOf("<TrendingDiscussions");
     const rooms = feed.indexOf("{roomsSlot}");
-    assert.ok(head > 0 && trending > head && rooms > trending, "the head is not above everything else");
+    assert.ok(head > 0 && rooms > head, "the head is not above everything else");
+    // Trending is NOT in the column: Home answers a search now, and typing a
+    // topic beats scanning four hashtags somebody else ranked. It stays in
+    // the rail and on Explore, where it costs the column nothing.
+    assert.doesNotMatch(feed, /<TrendingDiscussions/, "trending is back in Home's column");
+    assert.match(stripComments(read("components/layout/right-rail.tsx")), /<TrendingDiscussions limit=\{5\} \/>/);
     assert.doesNotMatch(feed, /liveCtaSlot/, "the old under-the-tabs mount is back");
     // The topic row is gone from Home (ogazboiz, 2026-09-12).
     assert.doesNotMatch(feed, /TopicTabs/);
@@ -2367,6 +2371,21 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     );
     // The clock is ticked state, never read during render.
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
+  });
+
+  it("puts the partners card under Coming Soon, on phones only", () => {
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    const home = stripComments(read("components/layout/home-screen.tsx"));
+    assert.match(home, /partnersSlot=\{<EcosystemPartnersRail \/>\}/);
+    // Under Coming Soon, above Popular Houses.
+    const soon = feed.indexOf("{comingSoonSlot}");
+    const partners = feed.indexOf("{mode === \"home\" && partnersSlot");
+    const houses = feed.indexOf("{housesSlot}");
+    assert.ok(soon > 0 && partners > soon && houses > partners, "the partners card moved out of place");
+    // The rail already carries it from lg up; two on one screen is not a
+    // placement, so the column's copy is phones only.
+    assert.match(feed, /className="mb-\[64px\] lg:hidden">\{partnersSlot\}/);
+    assert.match(stripComments(read("components/layout/right-rail.tsx")), /<EcosystemPartnersRail \/>/);
   });
 
   it("answers Home's search on Home, room codes included", () => {
