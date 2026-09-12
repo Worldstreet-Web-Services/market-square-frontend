@@ -89,3 +89,27 @@ export function formatCountdown(msRemaining: number): string {
   if (days > 0) return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
+
+/**
+ * WHEN A SCHEDULED ROOM OPENS, short enough for a card's pill.
+ *
+ * "Opens 14:30" today, "Opens Fri 14:30" inside the next week, "Opens 12 Oct"
+ * beyond it — the room card's pill is 11px in a 20px box, so a full date and
+ * time does not fit and a countdown would need a ticking clock to stay true.
+ * A time already past reads "Opening soon": the host has not started it yet,
+ * and saying "Opens 10:00" about ten minutes ago is the one thing that is
+ * certainly wrong.
+ */
+export function opensAtLabel(iso: string, now: number = Date.now()): string {
+  const at = new Date(iso);
+  const ms = at.getTime();
+  if (Number.isNaN(ms)) return "Not open yet";
+  if (ms <= now) return "Opening soon";
+  const time = at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const sameDay = new Date(now).toDateString() === at.toDateString();
+  if (sameDay) return `Opens ${time}`;
+  if (ms - now < 7 * 24 * 60 * 60 * 1000) {
+    return `Opens ${at.toLocaleDateString(undefined, { weekday: "short" })} ${time}`;
+  }
+  return `Opens ${at.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+}

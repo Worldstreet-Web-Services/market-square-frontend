@@ -8,6 +8,7 @@ import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { useConversationMembers } from "@/features/messages";
+import { opensAtLabel } from "@/lib/format";
 import { housePath } from "@/features/houses";
 import { useStream } from "@/features/streams";
 
@@ -191,7 +192,15 @@ export function GistRoomCard({
   const status = room?.status;
   const over = status === "ended" || status === "cancelled";
   const pending = status === "scheduled";
-  const label = over ? "Gist room ended" : pending ? "Not open yet" : "Join Gistroom";
+  // A room that has not opened says WHEN, which is the one thing somebody
+  // looking at it wants to know. Without a time it falls back to the state.
+  const label = over
+    ? "Gist room ended"
+    : pending
+      ? room?.scheduledAt
+        ? opensAtLabel(room.scheduledAt)
+        : "Not open yet"
+      : "Join Gistroom";
 
   const labelled = (room?.topics ?? []).slice(0, 2).map((key: string) => {
     const match = topics.data?.find((topic) => topic.key === key);

@@ -1717,3 +1717,26 @@ describe("Home and the dock after Pals took the stories", () => {
   });
 });
 
+describe("Gist rooms can be scheduled, and upcoming ones look like open ones", () => {
+  it("offers Now or Later when opening a room, and refuses a past time", () => {
+    const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));
+    assert.match(sheet, /<RadioPill text="Now" selected=\{!startsLater\}/);
+    assert.match(sheet, /<RadioPill text="Later" selected=\{startsLater\}/);
+    // The clock is read on submit, never during render (the purity rule).
+    assert.match(sheet, /if \(startsLater && !\(Number\.isFinite\(startsAtMs\) && startsAtMs > Date\.now\(\)\)\) \{/);
+    assert.doesNotMatch(sheet.slice(0, sheet.indexOf("const submit")), /Date\.now\(\)/, "the clock is read while rendering again");
+    assert.match(sheet, /scheduledAt: new Date\(startsAt\)\.toISOString\(\)/);
+  });
+
+  it("draws upcoming rooms as the same card and grid as the open ones", () => {
+    const street = stripComments(read("features/houses/components/houses-street.tsx"));
+    assert.match(street, /aria-label="Gist rooms opening later" className="pt-10"/);
+    assert.match(street, /<div className="grid gap-6 pt-6 md:grid-cols-2">\s*\{scheduledHouses\.map/);
+    assert.doesNotMatch(street, /HouseRow/, "upcoming rooms are a list of bare rows again");
+  });
+
+  it("says when an upcoming room opens, on the card", () => {
+    assert.match(stripComments(read("components/layout/gist-room-card.tsx")), /opensAtLabel\(room\.scheduledAt\)/);
+  });
+});
+

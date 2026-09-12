@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
 import { EmptyPanel, EmptyPanelAction } from "@/components/ui/empty-panel";
@@ -35,61 +33,7 @@ import { housePath } from "@/features/houses/lib/house";
  * the grid buys is that a page of rooms reads as a page of rooms instead of a
  * column you scroll past four at a time.
  *
- * `HouseRow` stays, for the rooms that have not opened yet. The file draws only
- * the live grid, and a scheduled room has no roster to show and nothing to join
- * — a card promising both would be the dead promise the card was built to
- * avoid.
  */
-function HouseRow({ stream, onOpen }: { stream: Stream; onOpen: () => void }) {
-  const host = stream.owner;
-  return (
-    <Link
-      href={housePath(stream.id)}
-      onClick={(event) => {
-        // The PORCH. Tapping a house from the street opens the threshold
-        // first, before any connection is made — before a room, before this
-        // person appears in anybody's audience band. In a voice product where
-        // joining makes you visible to a room of strangers, that pause is the
-        // whole difference between walking in and being pushed in.
-        //
-        // Still a real <Link>: a direct URL, a middle-click and a shared link
-        // all go straight in, which is correct — somebody who was sent a link
-        // has already decided.
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault();
-        onOpen();
-      }}
-      className="ws-row flex items-start gap-3 px-4 py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-    >
-      <Avatar
-        name={host?.displayName ?? "Host"}
-        seed={stream.ownerId}
-        src={host?.avatarUrl}
-        size={40}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[15px] font-bold leading-5 text-heading">{stream.title}</p>
-        {/* Only what the LIST payload actually carries. `owner` and
-            `viewerCount` are absent on list rows by contract — the schema
-            keeps viewerCount nullable precisely so "no count available" cannot
-            be rendered as a confident 0 — so neither is invented here, and
-            with neither available the line is absent rather than repeating the
-            section header back at the reader. The porch fetches the detail. */}
-        {(host || typeof stream.viewerCount === "number") && (
-          <p className="ws-meta mt-1 normal-case tracking-normal">
-            {host?.displayName}
-            {host && typeof stream.viewerCount === "number" && " · "}
-            {typeof stream.viewerCount === "number" && (
-              <>
-                <span className="tnum">{stream.viewerCount}</span> inside
-              </>
-            )}
-          </p>
-        )}
-      </div>
-    </Link>
-  );
-}
 
 export function HousesStreet({
   roomCardSlot,
@@ -291,18 +235,28 @@ export function HousesStreet({
             </section>
           )}
           {scheduledHouses.length > 0 && (
-            <section>
-              <h2 className="ws-meta pb-2 pt-8">Not open yet</h2>
-              {scheduledHouses.map((stream) => (
-                // A house that has not opened has nothing to listen to yet, so
-                // there is no threshold to pause on — go straight to the page,
-                // which says so.
-                <HouseRow
-                  key={stream.id}
-                  stream={stream}
-                  onOpen={() => router.push(housePath(stream.id))}
-                />
-              ))}
+            /*
+              UPCOMING ROOMS ARE THE SAME OBJECT AS OPEN ONES, so they are the
+              same card in the same two-column grid. They used to be bare rows
+              under a small grey label, which read as a different kind of thing
+              entirely. The card draws its own not-open-yet state and names the
+              time, so nothing here has to explain it.
+            */
+            <section aria-label="Gist rooms opening later" className="pt-10">
+              <h2 className="text-[20px] font-semibold leading-[26px] text-white">
+                Upcoming{" "}
+                <span className="bg-[linear-gradient(90deg,var(--color-create)_84.6%,#5F3C97_100%)] bg-clip-text text-transparent">
+                  Gistrooms
+                </span>
+              </h2>
+              <p className="pt-1 text-[14px] leading-5 text-white/50">
+                Rooms with a time on them. Open the page to see what it is about.
+              </p>
+              <div className="grid gap-6 pt-6 md:grid-cols-2">
+                {scheduledHouses.map((stream) => (
+                  <div key={stream.id}>{roomCardSlot?.(stream)}</div>
+                ))}
+              </div>
             </section>
           )}
         </>
