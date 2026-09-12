@@ -6,6 +6,7 @@ import { Button, Spinner } from "@/components/ui/button";
 import { InlineError } from "@/components/ui/states";
 import { Sheet } from "@/components/ui/sheet";
 import { TopicTagsField } from "@/components/ui/topic-tags-field";
+import { DateTimeField } from "@/components/ui/date-time-field";
 import { cn } from "@/lib/cn";
 import { useCreateStream } from "@/features/streams/hooks/use-streams";
 import { acceptFor, ensureUploadLimits, uploadFile, validateUpload } from "@/lib/api/upload";
@@ -435,15 +436,13 @@ export function OpenHouseSheet({
           </div>
           {startsLater && (
             <>
-              <input
-                type="datetime-local"
+              <DateTimeField
                 value={startsAt}
-                onChange={(event) => {
-                  setStartsAt(event.target.value);
+                onChange={(next) => {
+                  setStartsAt(next);
                   setStartsAtError(null);
                 }}
-                aria-label="When the gist room opens"
-                className={FIELD}
+                label="When the gist room opens"
               />
               <p className="text-[13px] text-meta">
                 {startsAtError ?? "It waits under Upcoming Gistrooms until you open it."}

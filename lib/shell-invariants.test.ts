@@ -1737,6 +1737,22 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(stripComments(read("components/layout/gist-rooms-screen.tsx")), /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
   });
 
+  it("schedules a room with the app's own picker, never the browser's", () => {
+    const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));
+    // The native control paints its own dd/mm/yyyy chrome in the platform's
+    // type, which no token in this app can reach.
+    assert.doesNotMatch(sheet, /datetime-local/, "the browser's own date control is back");
+    assert.match(sheet, /<DateTimeField/);
+    // It still emits what the sheet already submits, so submit() is unchanged.
+    const field = stripComments(read("components/ui/date-time-field.tsx"));
+    assert.match(field, /composeLocal\(/);
+    assert.match(field, /role="dialog"/);
+    assert.match(field, /disabled=\{past\}/, "past days are selectable");
+    // A grid cell stretches to its column: without a square ratio the selected
+    // day renders as an oval rather than a disc.
+    assert.match(field, /aspect-square/);
+  });
+
   it("builds the upcoming card at 1295:140164's own scale, nothing rounded up", () => {
     const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
     // Every value in the node divides by its 0.80037 stroke to a round design
