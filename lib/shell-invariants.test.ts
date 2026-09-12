@@ -2113,9 +2113,12 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(screen, /<FeedPage\n\s*mode="feed"/);
     assert.match(feed, /<Composer/);
     assert.match(feed, /<VideoViewer/);
-    // Home has no list for these to sit inside, so they close its column —
-    // passed in and never drawn is how both vanished from Home once already.
-    assert.match(feed, /\{mode === "home" && communitySlot\}/);
+    // The pals rail closes Home's column. "Join a community" is GONE from Home
+    // (ogazboiz, 2026-09-12: Popular Houses is that list); /feed still
+    // interleaves it.
+    assert.doesNotMatch(feed, /mode === "home" && communitySlot/, "Join a community is back on Home");
+    assert.doesNotMatch(stripComments(read("components/layout/home-screen.tsx")), /JoinACommunity/);
+    assert.match(stripComments(read("components/layout/feed-screen.tsx")), /communitySlot=\{<JoinACommunity \/>\}/);
     assert.match(feed, /\{mode === "home" && palsSlot\}/);
     // In feed mode they stay interleaved where the file puts them.
     assert.match(feed, /index === Math\.min\(BEFORE_COMMUNITY - 1/);

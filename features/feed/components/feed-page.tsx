@@ -419,13 +419,11 @@ export function FeedPage({
             /feed, which is this same component in `feed` mode. */}
         {mode === "home" && postsSlot}
 
-        {/* NODE 647:16515 and 540:19351 — "Join a community" and the pals rail.
-            In `feed` mode they are interleaved INTO the timeline, after the
-            second and fourth posts, where the file puts them. Home has no list
-            to sit inside, so they close its column instead — without this they
-            are passed in and then never drawn, which is how both silently
-            disappeared from Home the first time. */}
-        {mode === "home" && communitySlot}
+        {/* NODE 540:19351 — the pals rail closes Home's column (it has no
+            list to sit inside). "Join a community" (647:16515) is NOT on Home
+            any more — Popular Houses is the same list, and ogazboiz asked for
+            the last section to go (2026-09-12); on /feed both stay interleaved
+            into the timeline where the file puts them. */}
         {mode === "home" && palsSlot}
 
         {/* 38 between cards, measured between the two slabs' outer edges in

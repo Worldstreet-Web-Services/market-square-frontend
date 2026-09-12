@@ -4,7 +4,6 @@ import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/fe
 import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
-import { JoinACommunity } from "@/components/layout/join-a-community";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HOME_BANNER_SLIDES, HomeBanner } from "@/components/layout/home-banner";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
@@ -83,7 +82,6 @@ export function HomeScreen() {
       comingSoonSlot={<ComingSoonRooms />}
       housesSlot={<PopularHouses />}
       postsSlot={<PostForYou followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />}
-      communitySlot={<JoinACommunity />}
       palsSlot={<SuggestedPals />}
     />
   );
