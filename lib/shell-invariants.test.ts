@@ -1888,16 +1888,19 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(feedHooks, /errorCode\(error\) === "NOT_FOUND"/);
   });
 
-  it("slides Post For You in after the houses, ABOVE the timeline", () => {
+  it("keeps the posts rail OFF Home, where it repeated the timeline", () => {
     const feed = stripComments(read("features/feed/components/feed-page.tsx"));
-    assert.ok(
-      feed.indexOf("{housesSlot}") < feed.indexOf("{postsSlot}"),
-      "Post For You moved above Popular Houses"
-    );
-    // The timeline is still there. The design's frame draws no feed under the
-    // rail, but ogazboiz kept it when asked, and it must not be deleted on a
-    // reading of a frame.
-    assert.ok(feed.indexOf("{postsSlot}") < feed.indexOf("ref={listRef}"), "the timeline went away");
+    // It showed the same lane the timeline under it was already showing, so a
+    // post appeared twice on one screen. Home reads as a plain timeline again
+    // (ogazboiz, 2026-09-12), and the rail moved to /pals.
+    assert.doesNotMatch(feed, /postsSlot/, "the posts rail is back on Home");
+    assert.doesNotMatch(stripComments(read("components/layout/home-screen.tsx")), /PostForYou/);
+    const pals = stripComments(read("components/layout/pals-screen.tsx"));
+    assert.match(pals, /<PostForYou followSlot=\{followSlot\} winkSlot=\{winkSlot\} tipSlot=\{tipSlot\} \/>/);
+    // Without the slots the cards there lose follow, wink and tip.
+    assert.match(pals, /const followSlot = /);
+    assert.match(pals, /const winkSlot = /);
+    assert.match(pals, /const tipSlot = /);
     const rail = stripComments(read("components/layout/post-for-you.tsx"));
     // ONE post card, two surfaces — never a second card built for a rail.
     assert.match(rail, /<FeedItemCard/);
