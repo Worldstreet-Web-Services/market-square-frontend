@@ -189,3 +189,29 @@ export function IconHomeSettings({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * `hugeicons:filter` — the funnel in the houses page's filter pill, node
+ * 1368:2276 (a 20px frame around a 15px vector at a 1.5 white stroke),
+ * exported and inlined verbatim, mapped to `currentColor`.
+ */
+export function IconHomeFilter({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3.02257 6.20833C3.83007 7.16667 5.30841 8.87167 7.38091 10.4217C7.47777 10.4972 7.55766 10.5922 7.61538 10.7006C7.67309 10.809 7.70735 10.9283 7.71591 11.0508C7.86905 12.9754 8.0563 14.8971 8.27757 16.815C8.33674 17.3183 8.89507 17.705 9.35507 17.38C10.1284 16.8342 11.5709 16.2217 11.7617 15.2033C11.8801 14.5733 12.0701 13.3267 12.2759 11.0508C12.2854 10.9295 12.3201 10.8114 12.3777 10.7042C12.4354 10.5971 12.5148 10.5031 12.6109 10.4283C14.6884 8.87583 16.1692 7.1675 16.9776 6.2075C17.2267 5.91083 17.3084 5.69333 17.3584 5.31083V5.31083C17.5267 4.00083 17.6109 3.34583 17.2267 2.9225C16.8426 2.5 16.1634 2.5 14.8051 2.5H5.19507C3.83674 2.5 3.15757 2.5 2.77341 2.92333C2.38924 3.34667 2.47341 4.00167 2.64174 5.31167C2.69091 5.69417 2.77257 5.91167 3.02257 6.20833Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/**
+ * The filter pill's caret — node 1368:2278, an 8 x 4 chevron at a 2.0 stroke
+ * with round caps (747:14031's is 2.29), exporting as 10 x 6 because the
+ * stroke is centred on the path. Lay it out at 8 x 4 and let it overflow.
+ */
+export function IconHomeFilterCaret({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 10 6" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8.9999 0.999914L5.15833 4.84149C5.07085 4.92896 4.92903 4.92896 4.84155 4.84149L0.999975 0.999915" stroke="currentColor" strokeWidth="1.99995" strokeLinecap="round"/>
+    </svg>
+  );
+}

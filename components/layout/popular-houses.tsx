@@ -61,7 +61,7 @@ export function PopularHouses() {
           id="popular-houses"
           lead="Popular"
           accent="Houses"
-          action={{ label: "View more", href: "/messages" }}
+          action={{ label: "View more", href: "/houses" }}
         />
       </div>
 

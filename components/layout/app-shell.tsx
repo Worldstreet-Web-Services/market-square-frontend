@@ -316,6 +316,9 @@ const FULL_PATTERNS = [
   // own #121214 — the column and the rail's width together, three room cards
   // across — and no rail beside it.
   /^\/gist-rooms$/,
+  // The houses directory, node 1368:2270 — the same 951-wide artboard as the
+  // rooms page, three house cards across.
+  /^\/houses$/,
   // Chat's two panes: the fixed 464 list beside the thread, inside Home's
   // frame. Only the exact path — on a phone the panes swap.
   /^\/messages$/,

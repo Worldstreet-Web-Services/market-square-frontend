@@ -4,7 +4,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { AccountMenuItems, RailMenu } from "@/components/layout/app-shell";
-import { IconHomeSettings } from "@/components/ui/home-icons";
+import { IconHomeFilter, IconHomeFilterCaret, IconHomeSettings } from "@/components/ui/home-icons";
 import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
 
 /**
@@ -58,8 +58,17 @@ import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
  * Two frames of one control in two states, and up-caret-plus-tint is what an
  * opened menu looks like — so that drawing is the pill's `aria-expanded`
  * state here, on every page it appears on, rather than a per-page colour.
+ *
+ * ─── THE HOUSES PAGE'S ROW ENDS IN A FILTER, NOT THE ACCOUNT ────────────────
+ * 1368:2271 is the same row with a 64 x 48 FILTER pill at its right
+ * (1368:2275): `#9F5AFF` at 9% under the same GLASS, padding 4/8, the 20px
+ * `hugeicons:filter` and an 8 x 4 white caret 12 apart. `GET
+ * /conversations/discover` takes `cursor` and `limit` and nothing else, so
+ * there is no dimension to filter on yet: the pill is a real `disabled`
+ * control with the reason on it, per the flagged-capability rule — visible
+ * and inert, never a button that does nothing.
  */
-export function HomeTopRow() {
+export function HomeTopRow({ trailing = "account" }: { trailing?: "account" | "filter" }) {
   const { ready, authenticated, login } = useAuth();
 
   const pill = (open: boolean) => (
@@ -91,7 +100,20 @@ export function HomeTopRow() {
         </span>
       </Link>
 
-      {ready && !authenticated ? (
+      {trailing === "filter" ? (
+        <button
+          type="button"
+          disabled
+          aria-label="Filter houses"
+          title="Filtering houses needs a filter the directory doesn't offer yet"
+          className="ws-glass-rim relative flex h-12 w-16 shrink-0 items-center justify-center gap-3 rounded-[36px] bg-[rgba(159,90,255,0.09)] px-2 py-1 text-white disabled:cursor-not-allowed"
+        >
+          <IconHomeFilter className="h-5 w-5 shrink-0" />
+          <span className="relative h-[4px] w-[8px] shrink-0">
+            <IconHomeFilterCaret className="absolute -left-px -top-px h-[6px] w-[10px]" />
+          </span>
+        </button>
+      ) : ready && !authenticated ? (
         <button type="button" onClick={login} aria-label="Sign in" className="ws-press shrink-0">
           {pill(false)}
         </button>
