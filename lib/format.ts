@@ -113,3 +113,35 @@ export function opensAtLabel(iso: string, now: number = Date.now()): string {
   }
   return `Opens ${at.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
 }
+
+/**
+ * "Starts in 3h 55m" — the countdown the upcoming room card carries
+ * (1295:140172 writes "Starts in 203h 55m", so hours run past a day rather
+ * than rolling into days until a week is reached).
+ *
+ * Under a minute, and anything already due, reads "Starting soon": a host who
+ * has not opened the room yet makes "Starts in 0m" a lie the moment it renders.
+ */
+export function startsInLabel(iso: string, now: number = Date.now()): string {
+  const ms = new Date(iso).getTime() - now;
+  if (Number.isNaN(ms) || ms < 60_000) return "Starting soon";
+  const minutes = Math.floor(ms / 60_000);
+  const hours = Math.floor(minutes / 60);
+  if (hours >= 168) return `Starts in ${Math.floor(hours / 24)}d`;
+  if (hours === 0) return `Starts in ${minutes}m`;
+  return `Starts in ${hours}h ${minutes % 60}m`;
+}
+
+/** "9:00 AM" — the upcoming card's own clock (1295:140166). */
+export function clockLabel(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  return at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** "Sep 19, 2026" — the upcoming card's date line (1295:140186). */
+export function shortDateLabel(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  return at.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}

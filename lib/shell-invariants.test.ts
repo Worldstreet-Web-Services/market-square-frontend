@@ -1728,11 +1728,29 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(sheet, /scheduledAt: new Date\(startsAt\)\.toISOString\(\)/);
   });
 
-  it("draws upcoming rooms as the same card and grid as the open ones", () => {
+  it("draws upcoming rooms in the same grid, with the file's own upcoming card", () => {
     const street = stripComments(read("features/houses/components/houses-street.tsx"));
     assert.match(street, /aria-label="Gist rooms opening later" className="pt-10"/);
     assert.match(street, /<div className="grid gap-6 pt-6 md:grid-cols-2">\s*\{scheduledHouses\.map/);
     assert.doesNotMatch(street, /HouseRow/, "upcoming rooms are a list of bare rows again");
+    assert.match(street, /\(upcomingCardSlot \?\? roomCardSlot\)\?\.\(stream\)/);
+    assert.match(stripComments(read("components/layout/gist-rooms-screen.tsx")), /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
+  });
+
+  it("builds the upcoming card on 1295:140164's own numbers", () => {
+    const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
+    // The card: 383.38 x 117.65, radius 16.007, the file's fill, hairline and blur.
+    assert.match(card, /min-h-\[118px\] w-full max-w-\[383px\]/);
+    assert.match(card, /rounded-\[16px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
+    assert.match(card, /shadow-\[inset_0_0_0_0\.8px_rgba\(255,255,255,0\.18\)\] backdrop-blur-\[5\.6px\]/);
+    // The spine, the artwork, the rule and the Share ramp.
+    assert.match(card, /w-\[9\.6px\] shrink-0 bg-\[#7E3BEB\]/);
+    assert.match(card, /h-\[85px\] w-\[78px\]/);
+    assert.match(card, /h-\[85px\] w-\[0\.8px\] shrink-0 bg-\[#3C3C3C\]/);
+    assert.match(card, /bg-\[linear-gradient\(90deg,#9F65FD_0%,#5B05E6_100%\)\]/);
+    assert.match(card, /bg-\[rgba\(159,90,255,0\.09\)\]/);
+    // It never offers to join a room that has not opened.
+    assert.doesNotMatch(card, /Join/);
   });
 
   it("says when an upcoming room opens, on the card", () => {

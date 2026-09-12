@@ -27,7 +27,7 @@ export interface UtmTags {
 }
 
 /** What was shared, as a campaign name. */
-export type ShareCampaign = "post_share" | "profile_share" | "house_invite";
+export type ShareCampaign = "post_share" | "profile_share" | "house_invite" | "room_share";
 
 /** Where a share went: one of the apps, a copied link, or the device's share sheet. */
 export type ShareChannel = ShareTarget | "copy_link" | "native_share";

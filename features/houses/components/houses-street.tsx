@@ -39,6 +39,7 @@ export function HousesStreet({
   roomCardSlot,
   tabsSlot,
   createSlot,
+  upcomingCardSlot,
 }: {
   /**
    * The invite card for one open room, composed from OUTSIDE this slice.
@@ -70,6 +71,12 @@ export function HousesStreet({
    * reaching sideways into another slice.
    */
   createSlot?: (onOpen: () => void) => React.ReactNode;
+  /**
+   * The card for a room that has not opened yet (1295:140164) — a different
+   * object from the live invite card, and composed in from outside for the
+   * same reason: it reads the topic vocabulary and shares a link.
+   */
+  upcomingCardSlot?: (stream: Stream) => React.ReactNode;
 } = {}) {
   const gate = useGate();
   const router = useRouter();
@@ -254,7 +261,7 @@ export function HousesStreet({
               </p>
               <div className="grid gap-6 pt-6 md:grid-cols-2">
                 {scheduledHouses.map((stream) => (
-                  <div key={stream.id}>{roomCardSlot?.(stream)}</div>
+                  <div key={stream.id}>{(upcomingCardSlot ?? roomCardSlot)?.(stream)}</div>
                 ))}
               </div>
             </section>

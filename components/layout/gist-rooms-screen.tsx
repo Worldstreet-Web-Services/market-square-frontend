@@ -4,6 +4,7 @@ import { HousesStreet } from "@/features/houses";
 import { TopicTabs } from "@/features/feed";
 import { useTopics } from "@/features/discovery";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
+import { UpcomingRoomCard } from "@/components/layout/upcoming-room-card";
 import { CreateFab } from "@/components/layout/create-fab";
 
 /**
@@ -41,6 +42,7 @@ export function GistRoomsScreen() {
         />
       )}
       createSlot={(onOpen) => <CreateFab label="Open a gist room" onClick={onOpen} />}
+      upcomingCardSlot={(stream) => <UpcomingRoomCard stream={stream} />}
       roomCardSlot={(stream) => (
         <GistRoomCard
           fluid
