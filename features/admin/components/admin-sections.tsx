@@ -497,6 +497,12 @@ export function AnnouncementsSection() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // "Running now" must mean it. The service returns ended announcements too,
+  // and counting them as running sends an operator looking for a banner that
+  // is on nobody's screen.
+  const live = items.filter((item) => Date.parse(item.endsAt) > now);
+  const ended = items.filter((item) => !(Date.parse(item.endsAt) > now));
+
   const endsAtMs = endsAt ? new Date(endsAt).getTime() : Number.NaN;
   // The button says WHY it is off, rather than sitting dead beside a grey
   // line — the same rule every other disabled control in this app follows.
@@ -590,7 +596,7 @@ export function AnnouncementsSection() {
         </div>
       </Panel>
 
-      <Panel title="Running now" count={items.length}>
+      <Panel title="Running now" count={live.length}>
         <PanelBody
           isPending={announcements.isPending}
           isError={announcements.isError}
@@ -602,7 +608,7 @@ export function AnnouncementsSection() {
           emptyBody="Published announcements appear here until they end."
           onRetry={() => announcements.refetch()}
         >
-          {items.map((announcement) => (
+          {live.map((announcement) => (
             <Row key={announcement.id}>
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] text-white">{announcement.body}</p>
@@ -621,6 +627,36 @@ export function AnnouncementsSection() {
               />
             </Row>
           ))}
+
+          {/*
+            ENDED ONES ARE STILL LISTED, BUT NOT AS RUNNING.
+
+            The service returns them and that is useful — an operator wants to
+            see what went out. What it must not do is count them under
+            "Running now": a band that ended ten hours ago is not on anybody's
+            screen, and saying it is sends an operator hunting for a banner no
+            reader can see. They carry no End action either; there is nothing
+            left to end.
+          */}
+          {ended.length > 0 && (
+            <div className="px-4 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-meta">
+                Already ended
+              </p>
+              <div className="space-y-2">
+                {ended.map((announcement) => (
+                  <div key={announcement.id} className="flex items-start gap-2 opacity-60">
+                    <p className="min-w-0 flex-1 text-[13px] text-white">
+                      {announcement.body}
+                      <span className="mt-0.5 block text-[12px] text-meta">
+                        Ended <When iso={announcement.endsAt} />
+                      </span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </PanelBody>
       </Panel>
     </div>
