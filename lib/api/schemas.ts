@@ -222,6 +222,16 @@ export const StreamSchema = z.object({
    * arrival to every signed-out reader.
    */
   remindedByMe: z.boolean().optional(),
+  /**
+   * THE SPOKEN CODE for a gist room — nine lower-case characters, no
+   * separators (`bcdfghjkm`). Grouping for display is ours.
+   *
+   * NULL is ordinary and is rendered as simply no code: a broadcast is never
+   * given one (nobody joins a broadcast by reading a code aloud), and neither
+   * is a room made before codes shipped. A room works by link without one, so
+   * a null is never an error state.
+   */
+  roomCode: z.string().nullable().optional().default(null),
   id: z.string(),
   ownerId: z.string(),
   owner: ProfileSchema.nullable().optional().default(null),

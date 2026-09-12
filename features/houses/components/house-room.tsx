@@ -390,6 +390,16 @@ function startsLater(stream: Stream): boolean {
  * open it now. Opening is a real decision, not the default, so it is the
  * secondary control and says plainly that it opens the room for everyone.
  */
+/**
+ * `bcdfghjkm` -> `bcd-fghj-km`, which reads back most reliably out loud.
+ *
+ * DISPLAY ONLY. The service stores and matches the raw form and accepts any
+ * case, spacing or dashes on lookup, so nothing here is ever sent back.
+ */
+function groupRoomCode(code: string): string {
+  return code.length === 9 ? `${code.slice(0, 3)}-${code.slice(3, 7)}-${code.slice(7)}` : code;
+}
+
 function HostWaiting({ stream, onOpenNow }: { stream: Stream; onOpenNow: () => void }) {
   return (
     <div className="mx-auto w-full max-w-[520px] bg-chrome">
@@ -409,6 +419,17 @@ function HostWaiting({ stream, onOpenNow }: { stream: Stream; onOpenNow: () => v
         <p className="ws-meta mt-2">
           It waits under Upcoming Gistrooms. We will remind you when it is time to open it.
         </p>
+        {/* The code, for reading aloud or writing down. Grouped for the eye
+            only — the service stores and matches it unseparated. A room
+            without one is simply shared by link, so nothing is said here. */}
+        {stream.roomCode && (
+          <p className="ws-meta mt-3">
+            Room code{" "}
+            <span className="tnum font-semibold tracking-[0.08em] text-white">
+              {groupRoomCode(stream.roomCode)}
+            </span>
+          </p>
+        )}
         <Button variant="secondary" size="sm" className="mt-5" onClick={onOpenNow}>
           Open it now instead
         </Button>

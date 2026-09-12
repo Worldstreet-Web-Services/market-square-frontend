@@ -239,6 +239,12 @@ const PENDING_ROUTES = {
       "backend PR #206; 404s in production until that merges. DELETE THIS " +
       "ENTRY when #206 deploys.",
   },
+  "get /streams/by-code/{}": {
+    reason:
+      "Resolve a spoken room code to its room. Served locally on backend PR " +
+      "#206; 404s in production until that merges. DELETE THIS ENTRY when " +
+      "#206 deploys.",
+  },
   "delete /streams/{}/remind": {
     reason:
       "Cancel that ask. Same route and same PR as the post above. DELETE " +
