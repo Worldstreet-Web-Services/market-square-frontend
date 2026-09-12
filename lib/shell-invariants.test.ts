@@ -1955,32 +1955,27 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(feedHooks, /errorCode\(error\) === "NOT_FOUND"/);
   });
 
-  it("keeps the posts rail OFF Home, where it repeated the timeline", () => {
+  it("shows the rail on Home after the houses, with the timeline on /feed", () => {
     const feed = stripComments(read("features/feed/components/feed-page.tsx"));
-    // It showed the same lane the timeline under it was already showing, so a
-    // post appeared twice on one screen. Home reads as a plain timeline again
-    // (ogazboiz, 2026-09-12), and the rail moved to /pals.
-    assert.doesNotMatch(feed, /postsSlot/, "the posts rail is back on Home");
-    assert.doesNotMatch(stripComments(read("components/layout/home-screen.tsx")), /PostForYou/);
+    // Home draws the sections and the rail; the list is `feed` mode only, so
+    // one lane is never on screen twice (ogazboiz, 2026-09-12).
+    assert.ok(
+      feed.indexOf("{housesSlot}") < feed.indexOf('{mode === "home" && postsSlot}'),
+      "the rail is not after Popular Houses"
+    );
+    assert.match(feed, /\{mode === "feed" && \(\n\s*<div ref=\{listRef\}/, "the timeline is not behind feed mode");
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /mode="home"/);
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /postsSlot=\{<PostForYou/);
+    // View more opens the page that actually scrolls.
+    assert.match(stripComments(read("components/layout/post-for-you.tsx")), /href: "\/feed"/);
+    // ONE component, so the composer and the viewer are never a second copy.
+    const screen = stripComments(read("components/layout/feed-screen.tsx"));
+    assert.match(screen, /<FeedPage\n\s*mode="feed"/);
+    assert.match(feed, /<Composer/);
+    assert.match(feed, /<VideoViewer/);
+    // Pals is back to the deck and the stories strip alone.
     const pals = stripComments(read("components/layout/pals-screen.tsx"));
-    assert.match(pals, /<PostForYou followSlot=\{followSlot\} winkSlot=\{winkSlot\} tipSlot=\{tipSlot\} \/>/);
-    // Without the slots the cards there lose follow, wink and tip.
-    assert.match(pals, /const followSlot = /);
-    assert.match(pals, /const winkSlot = /);
-    assert.match(pals, /const tipSlot = /);
-    const rail = stripComments(read("components/layout/post-for-you.tsx"));
-    // ONE post card, two surfaces — never a second card built for a rail.
-    assert.match(rail, /<FeedItemCard/);
-    assert.doesNotMatch(rail, /ws-post\b/, "the rail is drawing its own post slab");
-    assert.match(rail, /const SHOWN = 10;/);
-    assert.match(rail, /gap-\[17\.37px\]/);
-    // The inline reply field is dropped in a rail: capped at 220 with no floor,
-    // it collapses to an untypable sliver beside the icons.
-    assert.match(rail, /compact\n/);
-    const card = stripComments(read("features/feed/components/post-card.tsx"));
-    assert.match(card, /\{!compact && \(\n\s*<InlineComment/);
-    // Nothing to show is no section.
-    assert.match(rail, /if \(!feed\.isPending && items\.length === 0\) return null;/);
+    assert.doesNotMatch(pals, /PostForYou/, "the rail is still on Pals");
   });
 
   it("puts one search field in the bar, for a code or a name", () => {

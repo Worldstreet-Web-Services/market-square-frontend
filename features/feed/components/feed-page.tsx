@@ -143,6 +143,8 @@ function PostSkeleton() {
 const NO_TOPICS: string[] = [];
 
 export function FeedPage({
+  mode = "feed",
+  postsSlot,
   followSlot,
   winkSlot,
   tipSlot,
@@ -154,6 +156,24 @@ export function FeedPage({
   communitySlot,
   palsSlot,
 }: {
+  /**
+   * WHICH HALF OF THIS PAGE TO DRAW.
+   *
+   * `home` — the sections, closing with the "Post For You" rail, and NO
+   *   timeline. The 2026-09-12 design draws six sections and no feed, and
+   *   ogazboiz confirmed it: a rail showing the same lane a list underneath was
+   *   already showing put the same post on screen twice.
+   * `feed` — the timeline itself, which is what "View more" opens at `/feed`:
+   *   the endless list, the composer, the new-posts pill and the full-screen
+   *   video viewer, all unchanged.
+   *
+   * One component rather than two, because everything except the list is
+   * shared, and a second copy is how the composer or the viewer ends up fixed
+   * on one surface and broken on the other.
+   */
+  mode?: "home" | "feed";
+  /** The rail Home shows instead of a timeline (1314:153017). */
+  postsSlot?: React.ReactNode;
   followSlot?: (author: Profile) => React.ReactNode;
   winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
@@ -395,17 +415,22 @@ export function FeedPage({
             sections before the timeline. */}
         {housesSlot}
 
+        {/* 1314:153017 — Home's posts, as a slide. "View more" on it opens
+            /feed, which is this same component in `feed` mode. */}
+        {mode === "home" && postsSlot}
+
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
             than as separate objects — and these are objects, not rows. */}
         {/* Floats over the column, fixed under the top bars, only while the
             reader is scrolled away from the head — at the top the held posts
             merge in place and there is nothing to announce. */}
-        {fresh.pinned && (
+        {mode === "feed" && fresh.pinned && (
           <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
         )}
         {/* 647:16354 spaces the timeline 73 apart around cards drawn 873.65 wide; the
             card here is that drawing at 759 (see PostCard), so 73/1.151 = 63.42. */}
+        {mode === "feed" && (
         <div ref={listRef} className="space-y-4 md:space-y-[63.42px]">
           {feed.isPending && [0, 1, 2].map((i) => <PostSkeleton key={i} />)}
           {feed.isError && (
@@ -464,6 +489,7 @@ export function FeedPage({
             </Fragment>
           ))}
         </div>
+        )}
 
         {/*
           The end of the list asks for the next page itself — node 242:4890's
@@ -471,13 +497,13 @@ export function FeedPage({
           (`useInfiniteScroll`), so the next posts are usually already there by
           the time they arrive; the spinner is what shows when they are not.
         */}
-        {canLoadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
-        {feed.isFetchingNextPage && (
+        {mode === "feed" && canLoadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
+        {mode === "feed" && feed.isFetchingNextPage && (
           <div className="flex justify-center py-6">
             <Spinner className="h-4 w-4" />
           </div>
         )}
-        {feed.isSuccess && !canLoadMore && items.length > 0 && (
+        {mode === "feed" && feed.isSuccess && !canLoadMore && items.length > 0 && (
           <p className="py-8 text-center text-sm text-meta">You&apos;re all caught up.</p>
         )}
 

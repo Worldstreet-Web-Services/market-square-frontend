@@ -59,7 +59,7 @@ export function PostForYou({
         <SectionHeading
           id="post-for-you"
           lead="Post For You"
-          action={{ label: "View more", href: "/discover?tab=posts" }}
+          action={{ label: "View more", href: "/feed" }}
         />
       </div>
 
