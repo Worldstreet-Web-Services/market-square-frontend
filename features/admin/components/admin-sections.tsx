@@ -542,7 +542,7 @@ export function AnnouncementsSection() {
 
   return (
     <div className="space-y-3">
-      <Panel title="New announcement">
+      <Panel title="New announcement" allowOverflow>
         <div className="space-y-3 p-4">
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-meta">
