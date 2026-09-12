@@ -39,7 +39,7 @@ const AnnouncementPostSchema = z.object({
   createdAt: z.string().optional().default(""),
 });
 
-const AnnouncementSchema = z.object({
+export const AnnouncementSchema = z.object({
   id: z.string(),
   body: z.string(),
   linkUrl: z.string().nullable().optional().default(null),

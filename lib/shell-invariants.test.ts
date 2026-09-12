@@ -2343,6 +2343,32 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(store, /item\.actionUrl\.length > 0/, "a length check is not a scheme check");
   });
 
+  it("lets an operator publish an announcement, and take it down", () => {
+    const page = stripComments(read("features/admin/components/admin-page.tsx"));
+    const section = stripComments(read("features/admin/components/admin-sections.tsx"));
+    const api = stripComments(read("features/admin/lib/api.ts"));
+    // The band could be READ long before anything could write one — the
+    // console had no way to make an announcement at all.
+    assert.match(page, /\{ value: "announcements", label: "Announcements" \}/);
+    assert.match(page, /\{tab === "announcements" && <AnnouncementsSection \/>\}/);
+    assert.match(api, /msApi\.post<unknown>\("\/admin\/announcements"/);
+    assert.match(api, /"\/admin\/announcements\/" \+ id \+ "\/end"/);
+    // EVERY ANNOUNCEMENT ENDS: the service requires it and the form does too,
+    // rather than defaulting to an end nobody chose.
+    assert.match(section, /"Choose when it ends"/);
+    assert.match(section, /"The end has to be in the future"/);
+    // An empty link would be a band that looks tappable and goes nowhere.
+    assert.match(api, /\.\.\.\(input\.linkUrl \? \{ linkUrl: input\.linkUrl \} : \{\}\)/);
+    // The console reads the SAME object the band renders — one shape, so an
+    // operator's own console cannot disagree with what everybody else got.
+    assert.match(
+      stripComments(read("features/admin/lib/types.ts")),
+      /items: z\.array\(AnnouncementSchema\)/
+    );
+    // The clock is ticked state, never read during render.
+    assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
+  });
+
   it("answers Home's search on Home, room codes included", () => {
     const home = stripComments(read("components/layout/home-screen.tsx"));
     const feed = stripComments(read("features/feed/components/feed-page.tsx"));
