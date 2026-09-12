@@ -14,9 +14,13 @@ const NO_TOPICS: readonly string[] = [];
  * THE PALS SURFACE — node 1328:1885 (in the 1440 page 1328:1882): your
  * friends and what they are interested in.
  *
- * The node is a 951-wide artboard on the chrome's own `#121214` (the shell's
- * FULL frame, as the gist rooms and houses pages are). Everything it draws is
- * in its left 618 (1331:21792), top to bottom:
+ * The node is a 951-wide artboard on the chrome's own `#121214`, but its page
+ * (1328:1882) draws the RAIL inside it at x=618 (1328:6093: Citizen
+ * Spotlight, Explore Categories, Suggested Curators — `RightRail`), so this is
+ * the shell's ordinary 600 column with the rail beside it, NOT a FULL route;
+ * it was one until 2026-09-12 ("the side bar at the right hand is not
+ * showing why in pal"). Everything the column draws is in that left 618
+ * (1331:21792), top to bottom:
  *
  *   · the SEARCH ROW (1331:21793) at (13, 12), 574 x 48 — the same field and
  *     settings pill Home's column opens on (1295:142736), number for number:
@@ -48,10 +52,10 @@ const NO_TOPICS: readonly string[] = [];
  *
  * 1331:21318 is the node's own edge: a 33-wide strip at x=589, 4190 tall from
  * y=68, `#121214` fading from opaque at its foot to nothing at its head — the
- * column's right edge over the rail's hairline. The shell draws nothing like
- * it on a FULL route, so it is drawn here, from lg where the column is wide
- * enough to have an x=589, and capped to the page so it never scrolls past
- * it.
+ * column's right edge crossing the rail's hairline by 4. The shell draws
+ * nothing like it, so it is drawn here on the same relation to this column's
+ * edge, from lg where the rail is, and capped to the page so it never scrolls
+ * past it.
  */
 export function PalsScreen() {
   // The strip is who you follow, so it exists only for someone signed in —
@@ -78,28 +82,34 @@ export function PalsScreen() {
         {...POST_SLOTS}
         headSlot={
           <>
-            {/* 1331:21793 — 574 wide, 2 past the wrapper's 11 (the node's 13). */}
-            <div className="md:ml-0.5 md:w-[574px]">
+            {/* 1331:21793 — 574 wide at the node's 13. */}
+            <div className="md:ml-[13px] md:w-[574px]">
               <HomeTopRow />
             </div>
-            {/* 1331:21802 — 596 wide on the same 13, 51 under the row (60 -> 111). */}
+            {/* 1331:21802 — from the same 13, 51 under the row (60 -> 111).
+                The node's strip is 596 wide and its overlay clips it at 618;
+                the 600 column clips it at its own edge and the strip scrolls. */}
             {authenticated && (
-              <div className="mt-[51px] md:ml-0.5 md:w-[596px]">
+              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
                 <StoriesRow />
               </div>
             )}
             {/* 647:16266 — the topic row, on the column's own 51 under the
                 strip (or under the search row, signed out), as wide as the
                 stories so its rule ends where they do. */}
-            <div className="mt-[51px] md:ml-0.5 md:w-[596px]">
+            <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
               <TopicTabs tabs={tabs} active={topic} onSelect={setTopic} />
             </div>
           </>
         }
       />
+      {/* 1331:21318 sits at x=589 on the node's 618 column, i.e. its 33 cross
+          the rail's hairline by 4. Anchored to THIS column's edge the same
+          way (600 - 29 = 571), rather than at a literal 589 that would hang
+          22 into the rail. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-[589px] top-[68px] hidden h-[4190px] max-h-[calc(100%-68px)] w-[33px] bg-[linear-gradient(to_top,#121214_0%,rgba(18,18,20,0)_100%)] lg:block"
+        className="pointer-events-none absolute -right-1 top-[68px] hidden h-[4190px] max-h-[calc(100%-68px)] w-[33px] bg-[linear-gradient(to_top,#121214_0%,rgba(18,18,20,0)_100%)] lg:block"
       />
     </div>
   );

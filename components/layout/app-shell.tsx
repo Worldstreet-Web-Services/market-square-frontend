@@ -319,9 +319,13 @@ const FULL_PATTERNS = [
   // The houses directory, node 1368:2270 — the same 951-wide artboard as the
   // rooms page, three house cards across.
   /^\/houses$/,
-  // Pals, node 1328:1885 — again the 951-wide artboard on `#121214` with the
-  // file's 1px white/10 right edge, the deck and its heading in its left 607.
-  /^\/pals$/,
+  // `/pals` is NOT here any more. 1328:1885 is a 951 artboard, but its page
+  // (1328:1882) draws the RAIL inside it at x=618 — Citizen Spotlight,
+  // Explore Categories, Suggested Curators — which is `RightRail`, and the
+  // column's own content stops at 598. Listed here it lost the rail ("the
+  // side bar at the right hand is not showing why in pal", ogazboiz,
+  // 2026-09-12); as a 600 column beside the rail the node's numbers land
+  // exactly, list edge included.
   // Chat's two panes: the fixed 464 list beside the thread, inside Home's
   // frame. Only the exact path — on a phone the panes swap.
   /^\/messages$/,
