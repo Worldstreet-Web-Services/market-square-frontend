@@ -19,6 +19,7 @@ export function SectionHeading({
   id,
   subtitle,
   action,
+  actionSlot,
 }: {
   /** The plain white half. */
   lead: string;
@@ -28,6 +29,12 @@ export function SectionHeading({
   subtitle?: string;
   /** The pill at the right: usually "View more", sometimes a filter. */
   action?: { label: string; href?: string; onPress?: () => void };
+  /**
+   * A control to sit where the pill goes, when it is a real one rather than a
+   * label — Home's friends row hands over the filter itself, which owns its
+   * own state and popover. `action` still covers the plain case.
+   */
+  actionSlot?: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -49,7 +56,7 @@ export function SectionHeading({
           </p>
         )}
       </div>
-      {action && <SectionAction {...action} />}
+      {actionSlot ?? (action && <SectionAction {...action} />)}
     </div>
   );
 }

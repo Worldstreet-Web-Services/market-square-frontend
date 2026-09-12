@@ -7,6 +7,7 @@ import { DeckDots } from "@/components/ui/deck-dots";
 import { canGoBack } from "@/lib/nav-history";
 import { PalCard, DECK_CARD, HOME_DECK_CARD, type PalCardNodeGeometry } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
+import { SectionHeading } from "@/components/layout/section-heading";
 import {
   EMPTY_FRIENDS_FILTER,
   friendsFilterFacets,
@@ -178,19 +179,29 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
       </div>
     ) : (
       /*
-        HOME'S HEADING ROW (node 647:16342 left, the filter pill 647:17482
-        right, flush with the column's edge and 3px above the heading's top).
-        Unchanged by the deck under it.
+        HOME'S HEADING ROW — node 1305:149175's, which replaced 647:16342's.
+
+        The file sets it in Manrope Bold 24 / 28.61 with "friends" on the
+        90deg #C196FD -> #7E3BEB character fill, over a Roboto Bold 10 / 10.16
+        sub-line at 40% white. That is the same object the other three sections
+        head with, so it is `SectionHeading` rather than a fourth copy of the
+        markup — the filter goes in as the live control it is.
+
+        THE PILL SAYS "Filter", NOT the file's "Location" (ogazboiz, 2026-09-12):
+        it filters by more than a place now, so the file's older word would be
+        the untrue one.
+
+        Only the heading is the new node's. The deck under it, its five pager
+        pills and the rule that runs to the window's left edge are 647:16288's
+        and stay exactly as they are — the rule in particular was asked for.
       */
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-px">
-          <h2 className="text-[22px] font-medium leading-7 text-white">Make some friends</h2>
-          <p className="text-[12px] font-bold leading-4 text-white/40">
-            Follow cool people and watch your feed go from boring to elite ✨
-          </p>
-        </div>
-        {filterPill}
-      </div>
+      <SectionHeading
+        id="make-some-friends"
+        lead="Make some"
+        accent="friends"
+        subtitle="Follow cool people and watch your feed go from boring to elite ✨"
+        actionSlot={filterPill}
+      />
     );
 
   /*
