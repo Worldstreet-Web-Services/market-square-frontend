@@ -1,6 +1,7 @@
 "use client";
 
 import { msApi } from "@/lib/api/service";
+import { errorCode } from "@/lib/api/envelope";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   ActivityListSchema,
@@ -27,8 +28,34 @@ import {
 
 // Backend status enum is live | scheduled | ended — "replay" is a UI concept
 // (ended + non-null replayUrl), filtered by the caller.
+/**
+ * Has this deployment refused `sort=listeners` yet?
+ *
+ * The busiest-first order ships with the service; a deployment that predates it
+ * answers 400 VALIDATION_ERROR on `sort`. The FIRST such refusal is remembered
+ * for the page load and every later call asks for the default order, so a
+ * carousel is never empty on an older server and never pays for a second
+ * request once we know. It is only ever set by that exact refusal.
+ */
+let listenerSortRefused = false;
+
+function refusedListenerSort(error: unknown): boolean {
+  const details = (error as { code?: string; details?: unknown } | null)?.details;
+  return (
+    errorCode(error) === "VALIDATION_ERROR" &&
+    Array.isArray(details) &&
+    details.some((detail) => (detail as { path?: string } | null)?.path === "sort")
+  );
+}
+
 export async function fetchStreams(params: {
   status?: "live" | "scheduled" | "ended";
+  /**
+   * `listeners` — busiest first, ranked within the newest 200 live rooms, ties
+   * to the most recently started. The service accepts it only with
+   * `status: "live"`; anything else is a 400 by design.
+   */
+  sort?: "listeners";
   category?: StreamCategory;
   /** Broadcasts or gist rooms — see StreamKind. */
   kind?: StreamKind;
@@ -37,15 +64,22 @@ export async function fetchStreams(params: {
   cursor?: string;
   limit?: number;
 }) {
-  const { topics, ...rest } = params;
-  return StreamListSchema.parse(
-    await msApi.get("/streams", {
-      ...rest,
-      // Comma-joined, and omitted entirely when nothing is chosen — an empty
-      // `topics=` would read as "match no topics" rather than "no filter".
-      ...(topics && topics.length > 0 ? { topics: topics.join(",") } : {}),
-    })
-  );
+  const { topics, sort, ...rest } = params;
+  const query = {
+    ...rest,
+    // Comma-joined, and omitted entirely when nothing is chosen — an empty
+    // `topics=` would read as "match no topics" rather than "no filter".
+    ...(topics && topics.length > 0 ? { topics: topics.join(",") } : {}),
+  };
+  if (sort && !listenerSortRefused) {
+    try {
+      return StreamListSchema.parse(await msApi.get("/streams", { ...query, sort }));
+    } catch (error) {
+      if (!refusedListenerSort(error)) throw error;
+      listenerSortRefused = true;
+    }
+  }
+  return StreamListSchema.parse(await msApi.get("/streams", query));
 }
 
 export async function fetchStream(id: string) {

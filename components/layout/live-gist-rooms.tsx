@@ -60,7 +60,10 @@ import { DeckDots } from "@/components/ui/deck-dots";
 const DOTS = 5;
 
 export function LiveGistRooms() {
-  const rooms = useStreamList("live", [], "house");
+  // Busiest first — "Top" means the rooms with the most people in them right
+  // now, ranked by the service (`sort=listeners`). A deployment without that
+  // order falls back to the service's default, which is creation order.
+  const rooms = useStreamList("live", [], "house", undefined, "listeners");
   const railRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(0);
 

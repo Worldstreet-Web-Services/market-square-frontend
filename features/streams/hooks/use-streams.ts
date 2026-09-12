@@ -86,18 +86,26 @@ export function useStreamList(
    * server-side: filtering here would make a page of broadcasts yield the two
    * that were not rooms.
    */
-  kind?: StreamKind
+  kind?: StreamKind,
+  /**
+   * `listeners` — busiest first, for Home's Top GistRooms. Live only: the
+   * service refuses it with any other status, and a count exists only while a
+   * room is live. On a deployment without it the client falls back to the
+   * default order once (see `fetchStreams`).
+   */
+  sort?: "listeners"
 ) {
   const status = section === "replay" ? "ended" : section;
   // Sorted so the same selection always produces the same cache key.
   const key = [...topics].sort().join(",");
   return useQuery({
-    queryKey: ["ms", "streams", section, key, category ?? "all", kind ?? "any"],
+    queryKey: ["ms", "streams", section, key, category ?? "all", kind ?? "any", sort ?? "default"],
     queryFn: async () => {
       const page = await fetchStreams({
         status,
         topics,
         ...(category ? { category } : {}),
+        ...(sort ? { sort } : {}),
         ...(kind ? { kind } : {}),
       });
       if (section !== "replay") return page;

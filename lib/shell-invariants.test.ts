@@ -982,7 +982,10 @@ describe("Home's Top GistRooms section is 647:16288's first block", () => {
   it("heads the carousel with the file's title and View more", () => {
     // "Top", not the file's "Suggested": these are the rooms actually live (ogazboiz, 2026-09-12).
     assert.match(rail, /<span className="text-white">Top <\/span>GistRooms/);
-    assert.match(rail, /useStreamList\("live", \[\], "house"\)/, "the carousel no longer asks for live rooms only");
+    assert.match(rail, /useStreamList\("live", \[\], "house", undefined, "listeners"\)/, "the carousel no longer asks for live rooms, busiest first");
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    // A deployment without the busiest-first order must fall back, not empty the shelf.
+    assert.match(api, /if \(!refusedListenerSort\(error\)\) throw error;/);
     assert.match(rail, /bg-\[linear-gradient\(90deg,#C196FD_0%,#7E3BEB_100%\)\] bg-clip-text/);
     assert.match(rail, /href="\/gist-rooms"/);
   });
