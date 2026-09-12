@@ -34,14 +34,16 @@ export function friendsFilterCount(filter: FriendsFilter): number {
 }
 
 /**
- * The pill's label. The file writes "Location" on it; that stays the resting
- * label. With ONE clause on, the pill names the value, so the reader can see
- * what the deck is narrowed to without opening the menu. With more than one,
- * a count — three values do not fit in 136px.
+ * The pill's label. The file writes "Location" on it, but the menu behind it
+ * narrows by location, gender AND new people, so the resting label is
+ * "Filter" (ogazboiz, 2026-09-12) — naming one of the three was telling the
+ * reader the wrong thing about the other two. With ONE clause on, the pill
+ * names the value, so the deck's narrowing is readable without opening the
+ * menu. With more than one, a count — three values do not fit in 136px.
  */
 export function friendsFilterLabel(filter: FriendsFilter): string {
   const count = friendsFilterCount(filter);
-  if (count === 0) return "Location";
+  if (count === 0) return "Filter";
   if (count > 1) return `${count} filters`;
   if (filter.city.trim()) return filter.city.trim();
   // Stored lowercase ("female"); shown as its label ("Female").

@@ -11,7 +11,7 @@ import {
 test("the empty filter is inactive, labelled by the file's word, and sends no facets", () => {
   assert.equal(isFriendsFilterActive(EMPTY_FRIENDS_FILTER), false);
   assert.equal(friendsFilterCount(EMPTY_FRIENDS_FILTER), 0);
-  assert.equal(friendsFilterLabel(EMPTY_FRIENDS_FILTER), "Location");
+  assert.equal(friendsFilterLabel(EMPTY_FRIENDS_FILTER), "Filter", "the pill names one clause of three again");
   assert.deepEqual(friendsFilterFacets(EMPTY_FRIENDS_FILTER), {});
 });
 

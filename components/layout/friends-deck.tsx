@@ -141,7 +141,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         (844:23465: white at 16%, the `arrow-left-01-round` chevron upright,
         its 32 inner ring at zero stroke weight and not drawn), 16 to the
         title block (844:23461: Roboto 400 over Roboto 700 12 / 16 at 40%, 1
-        apart), the Location pill (844:22603, 136 × 38) flush right. The disc's
+        apart), the filter pill (844:22603, 136 × 38) flush right. The disc's
         top is 9 above the block's and the pill's 10 below it — each centred on
         the title line rather than on the two-line block.
 
