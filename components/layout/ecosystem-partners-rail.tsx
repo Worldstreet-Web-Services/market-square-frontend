@@ -61,7 +61,7 @@ const SLIDES: PartnerSlide[] = [
 /** How long a slide holds before the next one. */
 const SLIDE_MS = 7000;
 
-export function EcosystemPartnersRail() {
+export function EcosystemPartnersRail({ heading = true }: { heading?: boolean } = {}) {
   const [index, setIndex] = useState(0);
   const slide = SLIDES[index] ?? SLIDES[0];
 
@@ -89,11 +89,23 @@ export function EcosystemPartnersRail() {
   return (
     <section
       aria-label="Ecosystem Partners"
-      className="rounded-[22px] bg-[rgba(16,16,18,0.62)] pb-0 pt-[17px] backdrop-blur-[7px]"
+      className={cn(
+        "rounded-[22px] bg-[rgba(16,16,18,0.62)] pb-0 backdrop-blur-[7px]",
+        heading && "pt-[17px]"
+      )}
     >
       {/* The heading is inset 17px; the card is NOT — it runs the full width of
-          the block, which is why the two cannot share one padding. */}
-      <h2 className="px-[17px] text-[14px] font-bold leading-5 text-white">Ecosystem Partners</h2>
+          the block, which is why the two cannot share one padding.
+
+          IT IS DROPPED ON THE PHONE. In the rail the title says which module
+          this is, among other titled modules. In Home’s column the card sits
+          under Coming Soon and speaks for itself — a second heading there
+          reads as another section of OURS rather than as a partner’s card.
+          The label stays on the section for screen readers, so nothing is
+          lost to somebody who cannot see it. */}
+      {heading && (
+        <h2 className="px-[17px] text-[14px] font-bold leading-5 text-white">Ecosystem Partners</h2>
+      )}
 
       {/* The card's top edge sits 49px down the block: 17 of inset, a 20px
           heading, 12 of gap. */}
@@ -114,7 +126,12 @@ export function EcosystemPartnersRail() {
         the link. `overflow-hidden` is gone with it: nothing should be able to
         be clipped here without somebody choosing it.
       */}
-      <div className="relative mt-3 flex min-h-[156px] gap-4 rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 pt-6 backdrop-blur-[7px]">
+      <div
+        className={cn(
+          "relative flex min-h-[156px] gap-4 rounded-[22px] border border-white/[0.18] bg-[rgba(16,16,18,0.62)] p-4 pt-6 backdrop-blur-[7px]",
+          heading && "mt-3"
+        )}
+      >
         {/*
           Takes the room the art does not, at every rail width.
 
