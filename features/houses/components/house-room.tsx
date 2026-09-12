@@ -37,7 +37,7 @@ import {
 } from "@/features/houses/components/room-people";
 import { RoomRosterPanel } from "@/features/houses/components/room-roster-panel";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
-import { opensAtLabel, startsInLabel } from "@/lib/format";
+import { opensAtLabel } from "@/lib/format";
 import { groupRoomCode } from "@/lib/room-code";
 import { Backstage } from "@/features/houses/components/backstage";
 import { CaptionRail } from "@/features/houses/components/caption-rail";
@@ -174,6 +174,15 @@ interface SlotProps {
    * viewer is not in); the layout owns the mutation and its toast.
    */
   joinHouse?: { onJoin: (conversationId: string) => void; pending: boolean };
+  /**
+   * The room as it stands BEFORE it opens.
+   *
+   * A slot because the product's drawing of an unopened room lives in the
+   * layout layer and reaches back into this slice for its own link, so
+   * importing it here would close a cycle. The room decides WHERE the card
+   * sits; the layout decides what it is.
+   */
+  upcomingCardSlot?: (stream: Stream) => React.ReactNode;
   safetySlot: (
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
@@ -191,6 +200,7 @@ export function HouseRoom({
   personActionsSlot,
   tipSlot,
   joinHouse,
+  upcomingCardSlot,
 }: { houseId: string } & SlotProps) {
   const stream = useStream(houseId, 10_000);
   const me = useMe();
@@ -234,9 +244,9 @@ export function HouseRoom({
 
   if (data.status === "scheduled") {
     return isHost ? (
-      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} tipSlot={tipSlot} />
+      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} tipSlot={tipSlot} upcomingCardSlot={upcomingCardSlot} />
     ) : (
-      <NotOpenYet stream={data} />
+      <NotOpenYet stream={data} upcomingCardSlot={upcomingCardSlot} />
     );
   }
 
@@ -302,6 +312,7 @@ function HostScheduled({
   personActionsSlot,
   safetySlot,
   tipSlot,
+  upcomingCardSlot,
 }: {
   stream: Stream;
   followSlot: SlotProps["followSlot"];
@@ -309,6 +320,7 @@ function HostScheduled({
   houseSlot?: SlotProps["houseSlot"];
   personActionsSlot?: SlotProps["personActionsSlot"];
   tipSlot?: SlotProps["tipSlot"];
+  upcomingCardSlot?: SlotProps["upcomingCardSlot"];
 }) {
   const [ingest, setIngest] = useState<Ingest | null>(null);
   const [micId, setMicId] = useState("");
@@ -352,7 +364,13 @@ function HostScheduled({
     with opening it early available but deliberately secondary.
   */
   if (!opened && !openNow && startsLater(stream)) {
-    return <HostWaiting stream={stream} onOpenNow={() => setOpenNow(true)} />;
+    return (
+      <HostWaiting
+        stream={stream}
+        onOpenNow={() => setOpenNow(true)}
+        upcomingCardSlot={upcomingCardSlot}
+      />
+    );
   }
 
   return (
@@ -391,7 +409,15 @@ function startsLater(stream: Stream): boolean {
  * open it now. Opening is a real decision, not the default, so it is the
  * secondary control and says plainly that it opens the room for everyone.
  */
-function HostWaiting({ stream, onOpenNow }: { stream: Stream; onOpenNow: () => void }) {
+function HostWaiting({
+  stream,
+  onOpenNow,
+  upcomingCardSlot,
+}: {
+  stream: Stream;
+  onOpenNow: () => void;
+  upcomingCardSlot?: SlotProps["upcomingCardSlot"];
+}) {
   return (
     <div className="mx-auto w-full max-w-[520px] bg-chrome">
       <div className="px-4 pb-3 pt-4">
@@ -401,13 +427,15 @@ function HostWaiting({ stream, onOpenNow }: { stream: Stream; onOpenNow: () => v
         </p>
       </div>
 
-      <EmptyRing />
+      {/* THE ROOM, AS THE REST OF THE PRODUCT DRAWS IT (1295:140164).
+          It used to be the eight dashed chairs, which on a room that has not
+          opened draw eight ABSENCES — a screen that reads as broken rather
+          than as waiting. The ring still belongs to the SKELETON, where a
+          room's own shape is the honest thing to hold the space with. */}
+      {upcomingCardSlot && <div className="px-4 pt-2">{upcomingCardSlot(stream)}</div>}
 
-      <div className="px-4 pb-10 text-center">
-        {stream.scheduledAt && (
-          <p className="text-[15px] font-bold text-heading">{startsInLabel(stream.scheduledAt)}</p>
-        )}
-        <p className="ws-meta mt-2">
+      <div className="px-4 pb-10 pt-6 text-center">
+        <p className="ws-meta">
           It waits under Upcoming Gistrooms. We will remind you when it is time to open it.
         </p>
         {/* The code, for reading aloud or writing down. Grouped for the eye
@@ -429,7 +457,13 @@ function HostWaiting({ stream, onOpenNow }: { stream: Stream; onOpenNow: () => v
   );
 }
 
-function NotOpenYet({ stream }: { stream: Stream }) {
+function NotOpenYet({
+  stream,
+  upcomingCardSlot,
+}: {
+  stream: Stream;
+  upcomingCardSlot?: SlotProps["upcomingCardSlot"];
+}) {
   return (
     <div className="mx-auto w-full max-w-[520px] bg-chrome">
       <div className="px-4 pb-3 pt-4">
@@ -438,10 +472,9 @@ function NotOpenYet({ stream }: { stream: Stream }) {
           {stream.owner ? `${stream.owner.displayName} · ` : ""}Not open yet
         </p>
       </div>
-      {/* The eight dashed seats, again. No spinner, and no ghost faces
-          standing in for people who are not there. */}
-      <EmptyRing />
-      <p className="px-4 pb-10 text-center text-[13px] leading-5 text-meta">
+      {/* The same card the host waits on, for the same reason. */}
+      {upcomingCardSlot && <div className="px-4 pt-2">{upcomingCardSlot(stream)}</div>}
+      <p className="px-4 pb-10 pt-6 text-center text-[13px] leading-5 text-meta">
         This house has not opened. When it does, you will be able to listen and ask to speak.
       </p>
     </div>

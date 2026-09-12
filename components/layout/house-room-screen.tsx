@@ -15,6 +15,7 @@ import { useConversationMembers, useJoinGroup } from "@/features/messages";
 import { PersonQuickActions as QuickActions } from "@/features/profile";
 import { PersonFollow, PersonQuickActions, PersonSafetyRows } from "@/features/profile";
 import { TipButton } from "@/features/tips";
+import { UpcomingRoomCard } from "@/components/layout/upcoming-room-card";
 
 export function HouseRoomScreen({ houseId }: { houseId: string }) {
   const join = useJoinGroup();
@@ -53,6 +54,11 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
       // to offer it (a public house this viewer is not in); joining is the
       // messages slice's, so the mutation is composed here.
       joinHouse={{ onJoin: (id) => join.mutate(id), pending: join.isPending }}
+      // A room that has not opened is drawn the way the rest of the product
+      // draws one — the same card Home and the gist-rooms rail use. It is
+      // composed HERE because that card links back into the houses slice for
+      // its own href, so importing it inside the slice would close a cycle.
+      upcomingCardSlot={(stream) => <UpcomingRoomCard stream={stream} />}
     />
   );
 }

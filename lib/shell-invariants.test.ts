@@ -1910,7 +1910,18 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // the host on a screen whose only action is "open the gist room" (ogazboiz:
     // "when i schedule a gistroom why is it telling me to open gist room").
     assert.match(room, /if \(!opened && !openNow && startsLater\(stream\)\) \{/);
-    assert.match(room, /<HostWaiting stream=\{stream\} onOpenNow=/);
+    assert.match(room, /<HostWaiting\s+stream=\{stream\}\s+onOpenNow=/);
+    // A room that has not opened is drawn as the product's own upcoming card,
+    // NOT as eight dashed chairs — the ring drew eight absences and read as
+    // broken (ogazboiz: "it is like a ring so follow our ui").
+    assert.match(room, /\{upcomingCardSlot && <div className="px-4 pt-2">\{upcomingCardSlot\(stream\)\}<\/div>\}/);
+    // The ring still belongs to the SKELETON, where the room's own shape is
+    // the honest thing to hold the space with.
+    assert.match(room, /function RoomSkeleton\(\)[\s\S]*?<EmptyRing \/>/);
+    assert.match(
+      stripComments(read("components/layout/house-room-screen.tsx")),
+      /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/
+    );
     // A room with no time on it was opened with "Now" and still goes straight
     // to the soundcheck.
     assert.match(room, /if \(!stream\.scheduledAt\) return false;/);

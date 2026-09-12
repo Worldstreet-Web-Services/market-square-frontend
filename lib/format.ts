@@ -122,9 +122,27 @@ export function opensAtLabel(iso: string, now: number = Date.now()): string {
  * Under a minute, and anything already due, reads "Starting soon": a host who
  * has not opened the room yet makes "Starts in 0m" a lie the moment it renders.
  */
+/** How long a host may be late before the countdown stops promising. */
+const OPENING_GRACE_MS = 2 * 60_000;
+
 export function startsInLabel(iso: string, now: number = Date.now()): string {
   const ms = new Date(iso).getTime() - now;
-  if (Number.isNaN(ms) || ms < 60_000) return "Starting soon";
+  if (Number.isNaN(ms)) return "Starting soon";
+  /*
+    PAST ITS TIME AND STILL NOT OPEN IS ITS OWN FACT.
+
+    One branch used to answer two very different questions — "a room a minute
+    from opening" and "a room whose host never showed" — so a 5:13 gist room
+    still read "Starting soon" at 17:26 (ogazboiz saw exactly that). A card
+    that promises a room is about to start, thirteen minutes after it did not,
+    is the small dishonesty that makes every other time on the page suspect.
+
+    The grace is for the host who is opening right now: at the moment the
+    clock passes, they are plausibly mid-soundcheck. Past that, the truth is
+    that the room is waiting on them, and the card says so.
+  */
+  if (ms < -OPENING_GRACE_MS) return "Waiting for host";
+  if (ms < 60_000) return "Starting soon";
   const minutes = Math.floor(ms / 60_000);
   const hours = Math.floor(minutes / 60);
   if (hours >= 168) return `Starts in ${Math.floor(hours / 24)}d`;
