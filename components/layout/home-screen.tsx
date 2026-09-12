@@ -47,6 +47,14 @@ const tipSlot = (post: Post) => (
 );
 
 /**
+ * The three post-header controls, for every screen that hands the feed slice
+ * a list to draw — Home, Arkmarks, a post, and `/pals`' following lane. One
+ * composition, exported, so the pals screen does not carry a second copy of
+ * the slice-joining above.
+ */
+export const POST_SLOTS = { followSlot, winkSlot, tipSlot } as const;
+
+/**
  * Home, composed — node 225:3315.
  *
  * The file's order is stories, the TOPIC row, the rooms open now, "Make some

@@ -47,13 +47,16 @@ import { clearPinnedEverywhere, invalidatePostLists, isInfiniteFeed, patchPostEv
  * name until the refetch landed, and page with a cursor minted for a different
  * filter.
  */
-export function useFeed(lane: Lane, topics: readonly string[] = []) {
+export function useFeed(lane: Lane, topics: readonly string[] = [], enabled = true) {
   const key = topics.join(",");
   return useInfiniteQuery({
     queryKey: ["ms", "feed", lane, key],
     queryFn: ({ pageParam }) => fetchFeed(lane, pageParam ?? undefined, [...topics]),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+    // The `following` lane is the reader's own edge, so `/pals` holds it back
+    // until there is a reader: signed out it would be a 401 nobody sees.
+    enabled,
   });
 }
 

@@ -79,7 +79,7 @@ export interface PalCardNodeGeometry extends PalCardBase {
   /**
    * The crown beside the name (1331:21359 on `/pals`), in file units: its box,
    * the gap after the name's ink, and how far below the name's cap centre it
-   * sits. Drawn only when the card is handed `premium` — see the prop.
+   * sits. Drawn only for a verified profile — see `premium` in the body.
    */
   crown?: { width: number; height: number; gap: number; dy: number };
   /** True where the wink face is the file's two-variant component and BLINKS (see `IconPalWinkOpen`). */
@@ -115,7 +115,6 @@ export function PalCard({
   onPass,
   onWinked,
   onFollowed,
-  premium = false,
 }: {
   profile: Profile;
   geometry: PalCardGeometry | PalCardNodeGeometry;
@@ -134,19 +133,17 @@ export function PalCard({
    * a card that stayed put after Follow read as the action not landing.
    */
   onFollowed?: () => void;
-  /**
-   * The crown beside the name — node 1331:21359 on `/pals`' front card.
-   *
-   * NOTHING PASSES THIS YET, ON PURPOSE. `Profile` carries no premium,
-   * subscriber or tier field the crown could truthfully stand for, and the
-   * only honest reading of a badge with no data behind it is "not drawn". It
-   * is a prop rather than a deletion so that the day the field lands the
-   * crown is one line at the call site, with its geometry already the file's.
-   * Do not derive it from `verification`, `role` or `orgBadge` — none of those
-   * is what a crown means.
-   */
-  premium?: boolean;
 }) {
+  /*
+    THE CROWN beside the name (node 1331:21359 on `/pals`' front card) IS THE
+    VERIFIED MARK. ogazboiz decided it on 2026-09-12, after the backend
+    confirmed there is no other tier: verification is the platform's one paid
+    standing (granted, then kept current by KASH; `lib/api/schemas.ts`), and a
+    crown next to a check would be the same fact drawn twice. So the card
+    draws the crown on `verified` ONLY — `lapsed` is a verified account whose
+    payment ran out and must not carry it, exactly as the silver check rule.
+  */
+  const premium = profile.verification === "verified";
   /*
     Both hooks are per-PERSON, so they live on the card and not on whatever is
     holding it. `useWink` keeps the service's own 429 wording — the hourly
@@ -457,7 +454,7 @@ export function PalCard({
  * 45.51 face. Read from `size`, never the rotated boxes, and pinned in
  * `lib/deck-layout.test.ts`. Three things are that node's own and not a
  * scale: the rim is `#121214` (the chrome the page is painted), the name
- * carries a crown (1331:21359, behind `premium`), and the face blinks.
+ * carries a crown (1331:21359, on a verified profile), and the face blinks.
  *
  *   card    543.42 × 718, radius 89.53, outside stroke 4.54 (#121214 on /pals)
  *   photo   844:23436  496.13 × 521.15 at 24.18, 20.59, radius 82.52

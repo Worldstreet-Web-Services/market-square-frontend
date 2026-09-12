@@ -305,22 +305,37 @@ function TileMedia({ url, video }: { url: string; video: boolean }) {
  */
 function LiveCard({ entry }: { entry: LiveEntry }) {
   return (
-    <span className="relative block p-[4.5px]">
-      <span className="ws-story-live relative block h-24 w-[100px] overflow-hidden rounded-[16.5px]">
+    <span className="relative block">
+      {/* 1331:21817 — the same 100.09 x 96 tile with the red drawn INSIDE its
+          edge (`ws-story-tile-live`), so the tile is the node's size ring
+          included. The node draws no pill; it stays because a 40% red edge
+          on its own says nothing a reader can name, and the pill is the
+          strip's documented live marker. */}
+      <span className="ws-story-card ws-story-tile-live relative block h-24 w-[100.09px] overflow-hidden rounded-[16.34px]">
         <GradientThumb seed={entry.id} className="absolute inset-0 h-full w-full" />
         {entry.thumbnailUrl && <TileMedia url={entry.thumbnailUrl} video={false} />}
         <span className="absolute inset-0 bg-black/[0.27]" />
-        <span className="absolute left-2 top-2">
+        <span className="absolute left-[7.47px] top-[9px]">
           <Avatar name={entry.displayName} seed={entry.hostId} src={entry.avatarUrl} size={24} />
         </span>
       </span>
-      <LivePill className="bottom-[3px]" />
+      <LivePill className="-bottom-px" />
     </span>
   );
 }
 
-/** Portrait story card. Unseen carries the bright gradient edge; seen drains
-    to a flat grey, which is the Instagram signal in the design's card shape. */
+/**
+ * Portrait story card — 1331:21812's tiles on /pals (1328:1885).
+ *
+ * 100.09 x 96 at 16.34 radius, the node's two black/10 shadows
+ * (`ws-story-card`), the cover under a flat 27% black scrim (1331:21814) with
+ * the author's 24 avatar at (7.47, 9). The ring is an INSIDE stroke on the
+ * tile's own edge — unseen is 2px of the file's #C27AFF -> #7E3BEB, seen the
+ * 0.68 hairline at 40% white — drawn over the media by the tile utilities,
+ * with no black gap and no padding: the tile is 100.09 x 96 ring included.
+ * It was a silver conic ring around a black gap around a 100 x 96 tile, a
+ * 109 x 105 object the node does not draw.
+ */
 function StoryCard({
   group,
   seen,
@@ -334,20 +349,69 @@ function StoryCard({
   // an image is what put clips into an <img> and broke the tile.
   const cover = storyCover(group.stories);
   return (
-    // Landscape-ish 100×96 tile in the design, cover art under a flat 27%
-    // black scrim with the author's avatar pinned top-left.
-    <span className={cn("ws-story-ring block !rounded-[18px]", seen && "ws-story-seen")}>
-      <span className="ws-story-gap block !rounded-[17px]">
-        <span className="relative block h-24 w-[100px] overflow-hidden rounded-[16.5px]">
-          <GradientThumb seed={group.id} className="absolute inset-0 h-full w-full" />
-          {cover && <TileMedia url={cover.url} video={cover.video} />}
-          <span className="absolute inset-0 bg-black/[0.27]" />
-          <span className="absolute left-2 top-2">
-            <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={24} />
-          </span>
-          <span className="sr-only">{group.username}</span>
-        </span>
+    <span
+      className={cn(
+        "ws-story-card relative block h-24 w-[100.09px] overflow-hidden rounded-[16.34px]",
+        seen ? "ws-story-tile-seen" : "ws-story-tile-unseen"
+      )}
+    >
+      <GradientThumb seed={group.id} className="absolute inset-0 h-full w-full" />
+      {cover && <TileMedia url={cover.url} video={cover.video} />}
+      <span className="absolute inset-0 bg-black/[0.27]" />
+      <span className="absolute left-[7.47px] top-[9px]">
+        <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={24} />
       </span>
+      <span className="sr-only">{group.username}</span>
+    </span>
+  );
+}
+
+/**
+ * The "+" on "Your Story" — 1331:21809: a 16.34 white disc with a 1.36 black
+ * stroke and the file's two black/10 shadows, the "+" set as TEXT (Roboto
+ * Bold 8.17) rather than a glyph, so it is the character and nothing else.
+ */
+function AddStoryBadge({ className }: { className?: string }) {
+  return (
+    <span
+      data-add-story
+      title="Add to your story"
+      className={cn(
+        "flex h-[16.34px] w-[16.34px] items-center justify-center rounded-full border-[1.36px] border-black bg-white font-[family-name:var(--font-roboto)] text-[8.17px] font-bold leading-none text-black shadow-[0_1.36px_2.72px_-1.36px_rgba(0,0,0,0.1),0_2.72px_4.09px_-0.68px_rgba(0,0,0,0.1)]",
+        className
+      )}
+    >
+      +
+    </span>
+  );
+}
+
+/**
+ * "What's up?" — 1331:21849, hanging over "Your Story" from (31, -43) of the
+ * tile: an 88 x 42 bubble (`#BABABA` at 20% under Figma's GLASS, radius 12,
+ * 13/12 padding, Geist Bold 12/18, the 0 4 6 -3 shadow at `#0A0A0A` 6%) with
+ * a 12 and a 4 disc for a tail at x=13. The render shows the bubble a shade
+ * brighter than the 20% wash alone (59-71 on a 18 ground; the flat wash
+ * composites to 52) with a lit rim, so the fill is 24% and the rim is
+ * `ws-glass-rim`'s — the API publishes no GLASS parameters.
+ *
+ * It is the tile's hover and focus tooltip, not a permanent drawing: the
+ * node lays it over the strip as a prompt, and a prompt that never goes
+ * away is a label. `aria-hidden`: the button already names itself.
+ */
+function WhatsUpTooltip() {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute -top-[43px] left-[31px] z-10 block h-[52px] w-[114px] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+    >
+      {/* The node's label box is 256 wide inside the 88 bubble (clipped), so
+          the copy sits on ONE line whatever the bubble's width. */}
+      <span className="ws-glass-rim relative block h-[42px] w-[88px] overflow-hidden whitespace-nowrap rounded-[12px] bg-[rgba(186,186,186,0.24)] px-[13px] py-3 text-left text-[12px] font-bold leading-[18px] text-white shadow-[0_4px_6px_-3px_rgba(10,10,10,0.06)] backdrop-blur-[7px]">
+        What’s up?
+      </span>
+      <span className="absolute left-[13px] top-[36px] block h-3 w-3 rounded-full bg-[rgba(186,186,186,0.24)] backdrop-blur-[7px]" />
+      <span className="absolute left-[13px] top-[48px] block h-1 w-1 rounded-full bg-[rgba(186,186,186,0.24)]" />
     </span>
   );
 }
@@ -1094,9 +1158,9 @@ export function StoriesRow() {
 
   if (stories.isPending) {
     return (
-      <div className="flex gap-[5px]">
+      <div className="flex gap-[5.45px]">
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-24 w-[100px] shrink-0 rounded-[16.5px]" />
+          <Skeleton key={i} className="h-24 w-[100.09px] shrink-0 rounded-[16.34px]" />
         ))}
       </div>
     );
@@ -1106,47 +1170,60 @@ export function StoriesRow() {
   // that first tile is how Instagram teaches the gesture.
   return (
     <>
-      <div className="flex gap-[5px] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/*
+        1331:21802 — "Your Story" then the strip (1331:21812) on a 12, the
+        tiles inside it on a 5.45, the row clipping what runs past it. The 43
+        of top padding is the tooltip's room: it hangs 43 above the first
+        tile, and a scroll container clips on both axes, so the row starts
+        43 higher and pads the tiles back down to where the node puts them.
+      */}
+      <div className="-mt-[43px] flex gap-[5.45px] overflow-x-auto pt-[43px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* "Your Story" leads: an outlined tile carrying the viewer's own
-            avatar, a white + badge cut into it, and the label beneath. */}
+            avatar, a white + badge on its foot, and the label beneath. */}
         <button
           type="button"
           onClick={openYourStory}
           aria-label={mine >= 0 ? "View your story" : "Add to your story"}
-          className="ws-press shrink-0"
+          className="group ws-press relative mr-[6.55px] shrink-0"
         >
           {mine >= 0 ? (
             /* With a story up it is YOUR story card — your latest cover in the
                ring, the + still on it to add another, as WhatsApp's My status. */
             <span className="relative block">
               <StoryCard group={groups[mine]!} seen={groups[mine]!.stories.every((story) => seen.has(story.id))} />
-              <span className="ws-text-shadow pointer-events-none absolute bottom-3 left-3.5 text-[9px] font-bold text-white">
+              <span className="ws-text-shadow pointer-events-none absolute bottom-3 left-3.5 font-[family-name:var(--font-roboto)] text-[9px] font-bold text-white">
                 Your Story
               </span>
-              <span
-                data-add-story
-                title="Add to your story"
-                className="absolute bottom-2.5 right-2.5 flex h-5 w-5 items-center justify-center rounded-full border border-black bg-white text-black"
-              >
-                <IconPlus className="h-3 w-3 [&]:stroke-[3]" />
-              </span>
+              <AddStoryBadge className="absolute bottom-2.5 right-2.5" />
             </span>
           ) : (
-          <span className="ws-story-card relative flex h-24 w-[100px] flex-col items-center justify-center gap-1">
+          /*
+            1331:21803 — 100.09 x 96, the file's dashed ring; a 55.15 white
+            disc holding the viewer's avatar at y=12.26, centred; the + badge
+            at y=59.23, centred, straddling the disc's foot (67.41); "Your
+            Story" in Roboto Bold 8.17/10.89 at 40% white at y=77.56, centred.
+            The node also lays a #0F0F0F wash (1331:21806) across the tile
+            from its right edge, and the render shows none of it — the avatar
+            and the tile read the same left and right — so it is not drawn.
+            The node's avatar image is 63.66 in the 55.15 disc, offset up-left:
+            that is the file's own crop of its mascot, not a rule, so the
+            reader's avatar simply fills the disc.
+          */
+          <span className="ws-story-card relative block h-24 w-[100.09px]">
             {/* The file's dashed ring, drawn rather than bordered so the dash
                 length (6.13 on, 6.13 off), the 0.68px weight and the 16.34
                 radius are all the file's exactly. Inset by half the stroke so
                 it sits inside the tile instead of straddling its edge. */}
             <svg
               aria-hidden
-              viewBox="0 0 100 96"
+              viewBox="0 0 100.09 96"
               fill="none"
               className="pointer-events-none absolute inset-0 h-full w-full"
             >
               <rect
                 x="0.34"
                 y="0.34"
-                width="99.32"
+                width="99.41"
                 height="95.32"
                 rx="16.34"
                 stroke="rgba(255,255,255,0.4)"
@@ -1154,18 +1231,16 @@ export function StoriesRow() {
                 strokeDasharray="6.13 6.13"
               />
             </svg>
-            <span className="relative">
-              <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={48} />
-              <span
-                data-add-story
-                className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-black bg-white text-black"
-              >
-                <IconPlus className="h-2.5 w-2.5 [&]:stroke-[3]" />
-              </span>
+            <span className="absolute left-1/2 top-[12.26px] flex h-[55.15px] w-[55.15px] -translate-x-1/2 items-center justify-center overflow-hidden rounded-full bg-white">
+              <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={55} />
             </span>
-            <span className="text-[8px] font-bold text-white/40">Your Story</span>
+            <AddStoryBadge className="absolute left-1/2 top-[59.23px] -translate-x-1/2" />
+            <span className="absolute inset-x-0 top-[77.56px] text-center font-[family-name:var(--font-roboto)] text-[8.17px] font-bold leading-[10.89px] text-white/40">
+              Your Story
+            </span>
           </span>
           )}
+          <WhatsUpTooltip />
         </button>
 
         {/* Live leads the rail — the highest-urgency thing on the square, and

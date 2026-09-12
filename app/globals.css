@@ -738,6 +738,54 @@ body {
   padding: 2px;
 }
 
+/* THE CARD STRIP'S RINGS — node 1331:21812 on /pals (1328:1885), the three
+   states of a 100.09 x 96 tile at 16.34 radius. Every ring is an INSIDE
+   stroke on the tile's own edge, over the artwork, with no black gap and no
+   padding — the tile is 100.09 x 96 ring included — so each is drawn as an
+   overlay ABOVE the media (`::after`), never as a wrapper that grows the tile.
+   Seen / plain (1331:21813): a 0.68 hairline at 40% white. Live (1331:21817):
+   2px of `--color-live` at 40%. Unseen (1331:21823): 2px of the file's
+   #C27AFF -> #7E3BEB, top to bottom — the product's own two purple stops,
+   `--color-spotlight-chip-ink` and `--color-spotlight`, masked to the ring.
+   Seen state drives the ring only, never a tile's position. */
+@utility ws-story-tile-seen {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 0.68px rgba(255, 255, 255, 0.4);
+  }
+}
+
+@utility ws-story-tile-live {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-live) 40%, transparent);
+  }
+}
+
+@utility ws-story-tile-unseen {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    pointer-events: none;
+    background: linear-gradient(180deg, var(--color-spotlight-chip-ink) 0%, var(--color-spotlight) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Home (Market Square design)
 
