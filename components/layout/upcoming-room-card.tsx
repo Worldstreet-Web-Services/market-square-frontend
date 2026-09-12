@@ -123,7 +123,25 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
             /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
             <img src={stream.thumbnailUrl} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="block h-full w-full bg-[linear-gradient(180deg,#9F65FD_0%,#7E3BEB_100%)]" />
+            /*
+              NO COVER → node 1373:3990, the file's default tile: `#D8D8D8`
+              with the gist glyph (1373:3991, exported verbatim) centred in
+              it. The node is this same tile drawn at 0.5102 (49.89 x 54.21
+              against 97.78 x 106.24), so the glyph's 32.78 x 24 is 64.24 x
+              47.04 in card units, and its 9 / 15 offsets are the centring.
+              The node's own radius (12.32 → 24.1u) is NOT taken: the tile's
+              corner belongs to the card (20u), and a fallback that changes
+              the tile's shape would flicker when a cover loads.
+            */
+            <span className="flex h-full w-full items-center justify-center bg-[#D8D8D8]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+              <img
+                src="/gist-rooms/card-default-cover.svg"
+                alt=""
+                aria-hidden
+                style={{ width: u(64.24), height: u(47.04) }}
+              />
+            </span>
           )}
         </Link>
 
