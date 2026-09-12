@@ -1990,6 +1990,9 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(card, /compact && "line-clamp-2"/);
     // No "Show more" in the rail — it expands in place and the card cannot grow.
     assert.match(card, /clampLines=\{full \|\| compact \? undefined : 6\}/);
+    // A clip's URL in an <img> is a broken tile: a video shows its poster.
+    assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /const video = item\.kind === "video" \|\| isVideoUrl\(item\.url\);/);
+    assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /src=\{poster\}/);
     const strip = stripComments(read("features/feed/components/media-rail.tsx"));
     assert.match(strip, /size === "compact" && "min-h-0 flex-1"/);
     assert.match(strip, /size === "compact" && "h-full"/);

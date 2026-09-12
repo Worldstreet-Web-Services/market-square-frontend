@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { ImageViewer } from "@/components/ui/image-viewer";
 import { cn } from "@/lib/cn";
 import { RAIL_SIZES, railDotWidth, railIndexAt, type PostMediaLike, type RailSize } from "@/lib/post-media";
+import { IconPlay } from "@/components/ui/icons";
+import { isVideoUrl } from "@/lib/media";
 
 /**
  * A POST'S PHOTOS, SIDE BY SIDE — node 1029:22591.
@@ -58,12 +60,22 @@ export function MediaRail({ items, size = "post" }: { items: PostMediaLike[]; si
           size === "post" && "-mr-4 pr-4 md:-mr-[39px] md:pr-[39px]"
         )}
       >
-        {items.map((item, index) => (
+        {items.map((item, index) => {
+          // A VIDEO IS NOT AN IMAGE. The column's rail only ever gets photos —
+          // the service refuses a video in a post of two or more — but the
+          // card in Home's row rails a single item too, and a clip's URL in an
+          // <img> is the broken tile ogazboiz saw. A clip shows its poster
+          // with a play mark, and the tap falls through to the card, which
+          // opens the post where the player is.
+          const video = item.kind === "video" || isVideoUrl(item.url);
+          const poster = item.thumbnailUrl ?? null;
+          return (
           <button
             key={`${item.url}-${index}`}
             type="button"
+            disabled={video}
             onClick={() => setOpen(index)}
-            aria-label={`View photo ${index + 1} of ${items.length}`}
+            aria-label={video ? `Video ${index + 1} of ${items.length}` : `View photo ${index + 1} of ${items.length}`}
             style={{
               width: g.tile,
               // Fixed in the column; in the rail the tile fills the height the
@@ -76,16 +88,41 @@ export function MediaRail({ items, size = "post" }: { items: PostMediaLike[]; si
               size === "compact" && "h-full"
             )}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */}
-            <img
-              src={item.url}
-              alt=""
-              decoding="async"
-              loading={index > 2 ? "lazy" : undefined}
-              className="h-full w-full object-cover"
-            />
+            {video ? (
+              <span className="relative block h-full w-full">
+                {poster ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- service-issued poster */
+                  <img
+                    src={poster}
+                    alt=""
+                    decoding="async"
+                    loading={index > 2 ? "lazy" : undefined}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  // No poster is a real answer: draw the ground rather than a
+                  // broken picture.
+                  <span className="block h-full w-full bg-white/[0.06]" />
+                )}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="ws-glass flex h-9 w-9 items-center justify-center rounded-full text-white">
+                    <IconPlay className="h-4 w-4" />
+                  </span>
+                </span>
+              </span>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */
+              <img
+                src={item.url}
+                alt=""
+                decoding="async"
+                loading={index > 2 ? "lazy" : undefined}
+                className="h-full w-full object-cover"
+              />
+            )}
           </button>
-        ))}
+          );
+        })}
       </div>
       {open !== null && items[open] && (
         <ImageViewer
