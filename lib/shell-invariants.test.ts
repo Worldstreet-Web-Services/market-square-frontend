@@ -1822,6 +1822,16 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
     assert.match(screen, /left-\[75\.75px\] top-\[16\.25px\] flex w-\[127\.52px\] flex-col gap-\[4\.93px\]/);
     assert.match(screen, /ws-btn-welcome ws-press absolute right-4 top-\[31px\] flex h-6 w-16 items-center justify-center rounded-\[61\.6px\]/, "the Join House pill lost its ramp");
+    // The phone (1381:37677 in SQUARE 2.0 Copy, ogazboiz 2026-09-12): one
+    // column, each card FILLING the row at 106 tall, the node's own type,
+    // the pill 40 down. Below lg, not md — a 290 cell in the 600 column
+    // between them leaves two thirds of the row empty.
+    assert.match(screen, /max-lg:grid-cols-1 max-lg:justify-stretch/, "the phone's one column is gone");
+    assert.match(screen, /max-lg:h-\[106px\] max-lg:w-full/, "the phone's card no longer fills the row");
+    assert.match(screen, /max-lg:left-\[76px\] max-lg:right-\[94px\] max-lg:top-4 max-lg:w-auto max-lg:gap-2/);
+    assert.match(screen, /max-lg:text-\[14px\] max-lg:leading-\[18\.2px\]/, "the phone's 14/18.2 name is gone");
+    assert.match(screen, /max-lg:text-\[12px\] max-lg:font-medium max-lg:leading-\[15\.6px\]/, "the phone's 12/15.6 description is gone");
+    assert.match(screen, /max-lg:top-\[40px\]/, "the phone's pill offset is gone");
     // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
     assert.match(screen, /useDiscoverHousesPages\(\)/);
     assert.match(screen, /useInfiniteScroll\(/);

@@ -50,6 +50,29 @@ import { SectionHeading } from "@/components/layout/section-heading";
  * The data is `GET /conversations/discover`, exactly as Popular Houses reads
  * it: ranked by member count, the reader's own houses excluded, nothing
  * re-sorted. `memberCount` null prints nothing, never "0 members".
+ *
+ * ─── THE PHONE, 1381:37677 (SQUARE 2.0 Copy, xN01VyIcKwHXIMuWD6Lgbl) ───────
+ * One column: 342-wide cards, each FILLING the row ("the card suppose to
+ * full the row", ogazboiz 2026-09-12), 16 apart, 106 tall — the same
+ * surface (radius 16.86, `#101012`/62%, 0.77 `white/18`, the 10.73 blur) and
+ * the same picture at (16, 16). The text column starts at 76 and is 172 wide
+ * in the node, i.e. it ends 14 short of the pill: here it is anchored to
+ * BOTH edges (76 from the left, 94 = 16 + 64 + 14 from the right) so it
+ * still ends 14 short of the pill on any phone. Type is the node's own,
+ * not the desktop card's: the name Geist SemiBold 14/18.2, the description
+ * Medium 12/15.6 on two lines, 8 between the name block and the
+ * description and 4 inside the block; the count is drawn at 4.93px, which
+ * gets the same legibility rule as the desktop card (8/10.4). The pill is
+ * the same 64 x 24 at 16 from the right, 40 from the top.
+ *
+ * These are `max-lg:` overrides on the desktop classes rather than a
+ * mobile-first base, because the desktop strings are pinned verbatim by
+ * `lib/shell-invariants.test.ts` — and `lg`, not `md`, because between md
+ * and lg the FULL column is 600 wide, where a 290 cell leaves two thirds of
+ * the row empty; the three-across row only exists at the 971 frame. The
+ * node is the list alone, so the search row and the heading above it are
+ * unchanged, and the page keeps the phone's 16 gutter the other columns use
+ * (the node has no page frame to say otherwise).
  */
 export function HousesScreen() {
   const houses = useDiscoverHousesPages();
@@ -61,7 +84,7 @@ export function HousesScreen() {
   );
 
   return (
-    <div className="w-full pl-[22px] pr-[21px] pt-[22px]">
+    <div className="w-full pl-[22px] pr-[21px] pt-[22px] max-lg:px-4">
       <HomeTopRow trailing="filter" />
 
       <section aria-labelledby="explore-communities" className="mt-9">
@@ -93,17 +116,18 @@ export function HousesScreen() {
           <>
             {/* 1373:3499… — three fixed cells across, spread to the frame
                 (the file's 910 does not fit its own 908 row either), rows 16
-                apart; below lg as many as fit. */}
+                apart; below lg the phone's ONE column (1381:37677), each
+                card filling the row. */}
             <div
               role="list"
               aria-label="Houses to join"
-              className="mt-4 grid grid-cols-[repeat(auto-fill,290px)] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between"
+              className="mt-4 grid grid-cols-[repeat(auto-fill,290px)] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between max-lg:grid-cols-1 max-lg:justify-stretch"
             >
               {items.map((house) => (
                 <article
                   key={house.id}
                   role="listitem"
-                  className="relative h-[86px] w-[290px] overflow-hidden rounded-[16.86px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.77px_rgba(255,255,255,0.18)] backdrop-blur-[5.37px]"
+                  className="relative h-[86px] w-[290px] overflow-hidden rounded-[16.86px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.77px_rgba(255,255,255,0.18)] backdrop-blur-[5.37px] max-lg:h-[106px] max-lg:w-full"
                 >
                   {/* 1373:3368 — the picture on its white plate. */}
                   <span className="absolute left-4 top-4 h-[54.21px] w-[49.89px] overflow-hidden rounded-[12.32px] bg-white">
@@ -118,9 +142,9 @@ export function HousesScreen() {
                   </span>
 
                   {/* 1373:3370 — the text column. */}
-                  <div className="absolute left-[75.75px] top-[16.25px] flex w-[127.52px] flex-col gap-[4.93px]">
-                    <div className="flex flex-col gap-[2.46px]">
-                      <p className="truncate text-[10px] font-semibold leading-3 text-white">
+                  <div className="absolute left-[75.75px] top-[16.25px] flex w-[127.52px] flex-col gap-[4.93px] max-lg:left-[76px] max-lg:right-[94px] max-lg:top-4 max-lg:w-auto max-lg:gap-2">
+                    <div className="flex flex-col gap-[2.46px] max-lg:gap-1">
+                      <p className="truncate text-[10px] font-semibold leading-3 text-white max-lg:text-[14px] max-lg:leading-[18.2px]">
                         {house.title ?? "Untitled house"}
                       </p>
                       <div className="flex h-[12.32px] items-center gap-[2.46px]">
@@ -153,7 +177,7 @@ export function HousesScreen() {
                       </div>
                     </div>
                     {house.description && (
-                      <p className="line-clamp-2 text-[10px] font-normal leading-[12.32px] text-white">
+                      <p className="line-clamp-2 text-[10px] font-normal leading-[12.32px] text-white max-lg:text-[12px] max-lg:font-medium max-lg:leading-[15.6px]">
                         {house.description}
                       </p>
                     )}
@@ -168,7 +192,7 @@ export function HousesScreen() {
                        ramp, so only the ramp is ever seen — `ws-btn-welcome`, the
                        existing utility for exactly that pair. (A two-layer `background`
                        in an arbitrary class compiles to nothing.) */
-                    className="ws-btn-welcome ws-press absolute right-4 top-[31px] flex h-6 w-16 items-center justify-center rounded-[61.6px] text-[8px] font-semibold leading-[10.4px] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                    className="ws-btn-welcome ws-press absolute right-4 top-[31px] flex h-6 w-16 items-center justify-center rounded-[61.6px] text-[8px] font-semibold leading-[10.4px] text-white transition-opacity hover:opacity-90 disabled:opacity-40 max-lg:top-[40px]"
                   >
                     Join House
                   </button>
