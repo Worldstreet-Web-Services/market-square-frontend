@@ -149,6 +149,7 @@ export function FeedPage({
   roomsSlot,
   liveCtaSlot,
   friendsSlot,
+  comingSoonSlot,
   communitySlot,
   palsSlot,
 }: {
@@ -170,6 +171,11 @@ export function FeedPage({
    */
   liveCtaSlot?: React.ReactNode;
   friendsSlot?: React.ReactNode;
+  /**
+   * Gist rooms with a time on them, under the people deck. Renders nothing
+   * while nothing is scheduled, so it costs no space on a quiet square.
+   */
+  comingSoonSlot?: React.ReactNode;
   communitySlot?: React.ReactNode;
   /** The pals rail (540:19351), dropped a few posts into the timeline. */
   palsSlot?: React.ReactNode;
@@ -373,6 +379,11 @@ export function FeedPage({
         {/* Its own margins, like the rooms above it: a directory with nobody
             in it renders nothing and leaves no spacer. */}
         {friendsSlot}
+
+        {/* Rooms that have not opened yet, directly under the deck. Its own
+            margins, like the two sections above it: nothing scheduled renders
+            nothing at all rather than an empty shelf. */}
+        {comingSoonSlot}
 
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather

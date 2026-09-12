@@ -1742,6 +1742,24 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(stripComments(read("components/layout/gist-rooms-screen.tsx")), /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
   });
 
+  it("shows scheduled rooms on Home, under the friends deck, or not at all", () => {
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    // Order matters: the deck, then what is coming.
+    assert.ok(
+      feed.indexOf("{friendsSlot}") < feed.indexOf("{comingSoonSlot}"),
+      "Coming soon moved above the friends deck"
+    );
+    const home = stripComments(read("components/layout/home-screen.tsx"));
+    assert.match(home, /comingSoonSlot=\{<ComingSoonRooms \/>\}/);
+    const soon = stripComments(read("components/layout/coming-soon-rooms.tsx"));
+    // Nothing scheduled is no section — never an empty shelf or a spacer.
+    assert.match(soon, /if \(items\.length === 0\) return null;/);
+    assert.match(soon, /useStreamList\("scheduled"/);
+    // The same card the gist rooms page draws, at its own width.
+    assert.match(soon, /<UpcomingRoomCard stream=\{room\} \/>/);
+    assert.match(soon, /w-\[479px\] shrink-0/);
+  });
+
   it("schedules a room with the app's own picker, never the browser's", () => {
     const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));
     // The native control paints its own dd/mm/yyyy chrome in the platform's
