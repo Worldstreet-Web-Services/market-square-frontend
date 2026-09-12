@@ -112,6 +112,14 @@ export function isPublicGet(path: string[]): boolean {
     return path.length === 3 && third === "chat";
   }
 
+  // THE ANNOUNCEMENT BAND, and only the collection. A platform message is for
+  // everybody, so it is read signed out — gating it would give a visitor a 401
+  // on the one thing the product most wants them to see, which is the same
+  // failure `categories`, `search` and `topics` each shipped with. Dismissing
+  // one is a POST and never reaches this predicate: a dismissal has to be
+  // remembered for somebody.
+  if (head === "announcements" && path.length === 1) return true;
+
   if (head === "verification" && second === "rule") return true;
 
   // The PUBLIC HOUSE DIRECTORY, and only that exact shape. Home's "Join a

@@ -239,6 +239,18 @@ const PENDING_ROUTES = {
       "backend PR #206; 404s in production until that merges. DELETE THIS " +
       "ENTRY when #206 deploys.",
   },
+  // ── announcements (backend PR #206, served locally) ──────────────────────
+  "get /announcements": {
+    reason:
+      "The announcement band on Home. Served locally on backend PR #206; " +
+      "404s in production until that merges, which the band handles by " +
+      "rendering nothing. DELETE THIS ENTRY when #206 deploys.",
+  },
+  "post /announcements/{}/dismiss": {
+    reason:
+      "Close the band for this reader. Same PR as the read above. DELETE " +
+      "THIS ENTRY when #206 deploys.",
+  },
   "post /posts/{}/pin": {
     reason:
       "Pin one of your own posts to your profile. Served locally on backend " +

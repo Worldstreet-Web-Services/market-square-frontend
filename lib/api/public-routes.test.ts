@@ -65,6 +65,7 @@ const PUBLIC: string[][] = [
   ["verification", "rule"],
   // Home's "Join a community" grid renders signed out, so the directory it
   // reads has to answer signed out. This exact shape only.
+  ["announcements"],
   ["conversations", "discover"],
   // A house invite's landing page, read by strangers and signed-out visitors.
   ["invites", "tok_1"],
@@ -216,6 +217,12 @@ describe("isPublicGet", () => {
       // A hashtag's own feed is served by /feed?hashtag=, which is already
       // public on its own head — this head must not open a second door.
       assert.equal(isPublicGet(["hashtags", "solana"]), false);
+    });
+
+    it("opens the announcement band, and only the collection", () => {
+      assert.equal(isPublicGet(["announcements"]), true);
+      // Dismissing is a POST; a single announcement read is not a route.
+      assert.equal(isPublicGet(["announcements", "a_1"]), false);
     });
 
     it("opens the house directory and NOTHING else under /conversations", () => {
