@@ -56,7 +56,7 @@ export function PopularHouses() {
 
   return (
     <section aria-labelledby="popular-houses" className="mb-[63px]">
-      <div className="mb-4 pl-[5px]">
+      <div className="mb-4">
         <SectionHeading
           id="popular-houses"
           lead="Popular"

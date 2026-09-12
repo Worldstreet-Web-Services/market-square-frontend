@@ -31,8 +31,8 @@ export function ComingSoonRooms() {
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby="coming-soon-rooms" className="mb-[78px]">
-      <div className="mb-4 pl-[5px]">
+    <section aria-labelledby="coming-soon-rooms" className="mb-[63px]">
+      <div className="mb-4">
         {/* 1305:149167 sets this heading ALL WHITE — no gradient half. */}
         <SectionHeading id="coming-soon-rooms" lead="Coming Soon" action={{ label: "View more", href: "/gist-rooms" }} />
       </div>
