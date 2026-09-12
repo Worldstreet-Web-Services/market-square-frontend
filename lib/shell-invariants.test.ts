@@ -979,7 +979,14 @@ describe("Home's banner is node 1305:149178", () => {
   it("opens the column with the search row and the banner, above everything, for EVERYBODY", () => {
     // The head slot: the row (1295:142736), then the banner 11 under it, then
     // the column's 64 to the first section — drawn before anything else.
-    assert.match(home, /headSlot=\{\n\s*<>\n\s*<HomeTopRow \/>\n\s*<HomeBanner slides=\{HOME_BANNER_SLIDES\} \/>/);
+    // The row now carries Home's own query — the field answers HERE rather
+    // than throwing the reader into Explore. The banner is part of the
+    // RESTING page, so it steps aside with the sections while a search is
+    // open instead of sitting on top of a list of results.
+    assert.match(
+      home,
+      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && <HomeBanner slides=\{HOME_BANNER_SLIDES\} \/>\}/
+    );
     assert.match(feed, /\{headSlot && <div className="mb-\[64px\] flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
     const head = feed.indexOf("{headSlot && ");
     const trending = feed.indexOf("<TrendingDiscussions");
@@ -2158,11 +2165,22 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(pals, /PostForYou/, "the rail is still on Pals");
   });
 
-  it("heads Home's column with the search row — a link into Explore — and the settings pill", () => {
+  it("heads Home's column with the search row — typed on Home, a link elsewhere — and the settings pill", () => {
     const row = stripComments(read("components/layout/home-top-row.tsx"));
-    // 1295:142737 is a LINK: Explore owns the query, so nothing here types.
-    assert.match(row, /href="\/discover"/);
-    assert.doesNotMatch(row, /<input|<form/, "the row grew a live input");
+    /*
+      ONE SURFACE OWNS THE STRING AT A TIME, and `onChange` is what selects it.
+
+      The row is a real INPUT on the page that answers the query itself —
+      Home — and stays a link into Explore everywhere else (ogazboiz: "that
+      search is not suppose to take me to discover ... in that home that
+      search there"). Two live inputs owning one query is the trap the top bar
+      fell into before the chrome lost its search, so the branch is on whether
+      the page passed a handler, never on the route.
+    */
+    assert.match(row, /href="\/discover"/, "the link branch is gone for pages that do not search");
+    assert.match(row, /onChange \? \(/, "the row lost its typed branch");
+    assert.match(row, /<input/);
+    assert.doesNotMatch(row, /<form/, "a form submits and navigates; this field answers in place");
     assert.match(row, /Search Gistrooms, houses, friends\.\.\./);
     // The node's leading space is a gap the width of a Geist space, not a
     // character in the copy.
@@ -2314,6 +2332,24 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     const store = stripComments(read("features/store/components/store-item-page.tsx"));
     assert.match(store, /const openable = isHttpUrl\(item\.actionUrl\)/, "the store link is unvalidated");
     assert.doesNotMatch(store, /item\.actionUrl\.length > 0/, "a length check is not a scheme check");
+  });
+
+  it("answers Home's search on Home, room codes included", () => {
+    const home = stripComments(read("components/layout/home-screen.tsx"));
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    const search = stripComments(read("components/layout/home-search.tsx"));
+    // The query is answered here, and while it is open the sections give way
+    // to the results rather than sitting above them.
+    assert.match(home, /searchSlot=\{searching \? <HomeSearch query=\{query\} \/> : undefined\}/);
+    assert.match(feed, /\{searchSlot \?\? \(/, "results no longer replace Home's sections");
+    // Everything, in one list — that was the ask, so the type is not narrowed.
+    assert.match(search, /useDiscovery\(trimmed, "all"\)/);
+    // A spoken code names exactly one room, so it is OFFERED first and never
+    // followed automatically — a well-formed typo would move the reader.
+    assert.match(search, /looksLikeRoomCode\(trimmed\)/);
+    assert.match(search, /href=\{`\/code\/\$\{code\}`\}/);
+    // A person is the same row here as everywhere else, never a second style.
+    assert.match(search, /<PersonRow key=\{item\.id\} profile=\{item\.profile\} \/>/);
   });
 
   it("draws no chip for a role nearly every author has", () => {

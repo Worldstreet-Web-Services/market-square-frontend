@@ -150,6 +150,7 @@ export function FeedPage({
   winkSlot,
   tipSlot,
   headSlot,
+  searchSlot,
   roomsSlot,
   friendsSlot,
   comingSoonSlot,
@@ -206,6 +207,14 @@ export function FeedPage({
    * 1305:149178), composed in `home-screen` and drawn ABOVE everything else.
    */
   headSlot?: React.ReactNode;
+  /**
+   * What Home shows INSTEAD of its sections while the reader is searching.
+   *
+   * The sections are the resting state of the page, not the page itself, so a
+   * query replaces them rather than being appended under them — results under
+   * four shelves of unrelated content is a page that did not answer.
+   */
+  searchSlot?: React.ReactNode;
   friendsSlot?: React.ReactNode;
   /**
    * Gist rooms with a time on them, under the people deck. Renders nothing
@@ -610,6 +619,8 @@ export function FeedPage({
           arena goes.
         */}
 
+        {searchSlot ?? (
+          <>
         {composer}
 
         {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
@@ -643,6 +654,8 @@ export function FeedPage({
             the last section to go (2026-09-12); on /feed both stay interleaved
             into the timeline where the file puts them. */}
         {mode === "home" && palsSlot}
+          </>
+        )}
 
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather

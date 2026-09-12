@@ -73,7 +73,24 @@ import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
  * control with the reason on it, per the flagged-capability rule — visible
  * and inert, never a button that does nothing.
  */
-export function HomeTopRow({ trailing = "account" }: { trailing?: "account" | "filter" }) {
+export function HomeTopRow({
+  trailing = "account",
+  value,
+  onChange,
+}: {
+  trailing?: "account" | "filter";
+  /**
+   * Present on a page that ANSWERS the query itself — Home. The field becomes
+   * a real input there, and the page below it becomes the results.
+   *
+   * Absent everywhere else, where the field stays what the file draws: a link
+   * into Explore's search. Two live inputs owning one string is the trap the
+   * top bar fell into before the chrome lost its search, so exactly one
+   * surface at a time owns it.
+   */
+  value?: string;
+  onChange?: (value: string) => void;
+}) {
   const gate = useGate();
   const [locationOpen, setLocationOpen] = useState(false);
 
@@ -95,6 +112,29 @@ export function HomeTopRow({ trailing = "account" }: { trailing?: "account" | "f
 
   return (
     <div className="flex h-12 items-center gap-3">
+      {onChange ? (
+        <div className="ws-press flex h-12 min-w-0 flex-1 items-center gap-[3.78px] rounded-full border-[0.68px] border-white/40 px-2 shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors focus-within:border-white/55">
+          <IconTopSearch className="h-4 w-4 shrink-0 text-[#6D6D6D]" />
+          <input
+            type="search"
+            value={value ?? ""}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label="Search Gistrooms, houses, friends"
+            placeholder="Search Gistrooms, houses, friends..."
+            className="min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.112px] text-white outline-none placeholder:text-[#7A7A7A] [&::-webkit-search-cancel-button]:appearance-none"
+          />
+          {(value ?? "").length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              aria-label="Clear search"
+              className="ws-press shrink-0 rounded-full px-2 text-[13px] text-meta hover:text-white"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      ) : (
       <Link
         href="/discover"
         aria-label="Search Gistrooms, houses, friends"
@@ -105,6 +145,7 @@ export function HomeTopRow({ trailing = "account" }: { trailing?: "account" | "f
           Search Gistrooms, houses, friends...
         </span>
       </Link>
+      )}
 
       {trailing === "filter" ? (
         <button

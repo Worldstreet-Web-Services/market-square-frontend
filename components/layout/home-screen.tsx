@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
+
 import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/feed";
 import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
 import { HomeTopRow } from "@/components/layout/home-top-row";
+import { HomeSearch } from "@/components/layout/home-search";
 import { HOME_BANNER_SLIDES, HomeBanner } from "@/components/layout/home-banner";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
@@ -72,6 +75,23 @@ export const POST_SLOTS = { followSlot, winkSlot, tipSlot } as const;
  * both.
  */
 export function HomeScreen() {
+  /*
+    HOME ANSWERS ITS OWN SEARCH.
+
+    The field was a link into Explore, which meant every search left the page
+    the reader was on. ogazboiz: "that search is not suppose to take me to
+    discover ... everything that i am searching for suppose to be there even
+    room codes ... in that home that search there".
+
+    So Home owns the string, and while it is non-empty the sections give way
+    to the results. It is deliberately LOCAL state rather than `?q=` in the
+    URL: Explore owns `?q=`, and a second writer of the same parameter is how
+    two surfaces start fighting over one query. Clearing the field restores
+    the page exactly as it was.
+  */
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
+
   // Home's own eight, in the design's order (`?surface=home`).
   return (
     <FeedPage
@@ -81,10 +101,11 @@ export function HomeScreen() {
       tipSlot={tipSlot}
       headSlot={
         <>
-          <HomeTopRow />
-          <HomeBanner slides={HOME_BANNER_SLIDES} />
+          <HomeTopRow value={query} onChange={setQuery} />
+          {!searching && <HomeBanner slides={HOME_BANNER_SLIDES} />}
         </>
       }
+      searchSlot={searching ? <HomeSearch query={query} /> : undefined}
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
       comingSoonSlot={<ComingSoonRooms />}
