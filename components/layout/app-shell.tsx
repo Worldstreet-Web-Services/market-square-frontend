@@ -312,6 +312,10 @@ const WIDE_PREFIX = ["/store/", "/operations/", "/studio/", "/gist-rooms/"];
 */
 const FULL_PATTERNS = [
   /^\/u\/[^/]+\/settings$/,
+  // The gist rooms page, node 1317:158073: a 951-wide artboard on the chrome's
+  // own #121214 — the column and the rail's width together, three room cards
+  // across — and no rail beside it.
+  /^\/gist-rooms$/,
   // Chat's two panes: the fixed 464 list beside the thread, inside Home's
   // frame. Only the exact path — on a phone the panes swap.
   /^\/messages$/,

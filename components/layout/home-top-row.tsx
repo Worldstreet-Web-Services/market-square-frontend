@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
 import { AccountMenuItems, RailMenu } from "@/components/layout/app-shell";
 import { IconHomeSettings } from "@/components/ui/home-icons";
@@ -49,16 +50,29 @@ import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
  * and the rail's chip open — because the file wires no prototype to it and a
  * settings pill beside your own avatar is that menu. Signed out there is no
  * account to open, so the tap is the sign-in, as the top bar's is.
+ *
+ * ─── THE OPEN STATE ──────────────────────────────────────────────────────────
+ * The gist rooms page (1317:158078) draws the same pill PURPLE: `#9F5AFF` at
+ * 9% under the same GLASS, the gear and the caret in `#9F65FD`, and the caret
+ * turned to point UP (its export, 1317:158082, is 747:14031's path mirrored).
+ * Two frames of one control in two states, and up-caret-plus-tint is what an
+ * opened menu looks like — so that drawing is the pill's `aria-expanded`
+ * state here, on every page it appears on, rather than a per-page colour.
  */
 export function HomeTopRow() {
   const { ready, authenticated, login } = useAuth();
 
-  const pill = (
-    <span className="ws-glass-pill ws-glass-rim relative flex h-12 w-[67px] shrink-0 items-center gap-[23px] rounded-[36px] py-[3px] pl-1 pr-2">
-      <IconHomeSettings className="h-6 w-6 shrink-0 text-[#D9D9D9]" />
+  const pill = (open: boolean) => (
+    <span
+      className={cn(
+        "ws-glass-rim relative flex h-12 w-[67px] shrink-0 items-center gap-[23px] rounded-[36px] py-[3px] pl-1 pr-2",
+        open ? "bg-[rgba(159,90,255,0.09)]" : "ws-glass-pill"
+      )}
+    >
+      <IconHomeSettings className={cn("h-6 w-6 shrink-0", open ? "text-[#9F65FD]" : "text-[#D9D9D9]")} />
       {/* 8 x 4 in the file; the export is 11 x 7 because the 2.29 stroke is
           centred on the path, so it overflows the box it is laid out at. */}
-      <span className="relative h-[4px] w-[8px] shrink-0 text-white">
+      <span className={cn("relative h-[4px] w-[8px] shrink-0", open ? "-scale-y-100 text-[#9F65FD]" : "text-white")}>
         <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
       </span>
     </span>
@@ -79,7 +93,7 @@ export function HomeTopRow() {
 
       {ready && !authenticated ? (
         <button type="button" onClick={login} aria-label="Sign in" className="ws-press shrink-0">
-          {pill}
+          {pill(false)}
         </button>
       ) : (
         <RailMenu
@@ -95,7 +109,7 @@ export function HomeTopRow() {
               aria-label="Account menu"
               className="ws-press block shrink-0"
             >
-              {pill}
+              {pill(open)}
             </button>
           )}
         >

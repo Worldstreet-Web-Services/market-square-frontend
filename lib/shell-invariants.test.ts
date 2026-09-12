@@ -1764,18 +1764,47 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(sheet, /scheduledAt: new Date\(startsAt\)\.toISOString\(\)/);
   });
 
-  it("draws upcoming rooms as the file's sideways rail, with its own card", () => {
+  it("draws the gist rooms page as 1317:158073: search row, two headings, two three-across grids", () => {
     const street = stripComments(read("features/houses/components/houses-street.tsx"));
-    assert.match(street, /aria-label="Gist rooms opening later" className="pt-10"/);
-    assert.doesNotMatch(street, /HouseRow/, "upcoming rooms are a list of bare rows again");
-    assert.match(street, /\(upcomingCardSlot \?\? roomCardSlot\)\?\.\(stream\)/);
-    // 1295:140163 is a sideways-scrolling row of fixed-width cards, not a grid.
-    assert.match(street, /flex items-center gap-5 overflow-x-auto/);
-    assert.match(street, /w-\[479px\] shrink-0/);
-    const upcoming = street.slice(street.indexOf('aria-label="Gist rooms opening later"'));
-    assert.doesNotMatch(upcoming, /grid-cols/, "the upcoming rail is a grid again");
-    assert.match(street, /aria-label="Gist rooms open now" className="grid gap-6 pt-6 md:grid-cols-2"/, "the open-rooms grid was collapsed into the rail change");
-    assert.match(stripComments(read("components/layout/gist-rooms-screen.tsx")), /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
+    const screen = stripComments(read("components/layout/gist-rooms-screen.tsx"));
+    // The artboard's own insets, and the FULL frame it sits in.
+    assert.match(street, /pl-\[22px\] pr-\[21px\] pt-\[22px\]/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /\/\^\\\/gist-rooms\$\/,/, "/gist-rooms is not a FULL-frame route");
+    // Home's search row heads it; no page heading, no topic row, no circle.
+    assert.match(screen, /headSlot=\{<HomeTopRow \/>\}/);
+    assert.doesNotMatch(street, /Happening|TopicTabs|tabsSlot|createSlot/);
+    assert.doesNotMatch(screen, /TopicTabs|CreateFab/);
+    // "Live GistRooms" and "Coming Soon" in the shared heading, WITHOUT View more.
+    assert.match(screen, /<SectionHeading id="live-gistrooms" lead="Live" accent="GistRooms" \/>/);
+    assert.match(screen, /<SectionHeading id="coming-soon-page" lead="Coming Soon" \/>/);
+    // The live grid: 290.47 x 103.13 cells (the 338 card at 0.8594), 16 between rows.
+    assert.match(street, /grid grid-cols-\[repeat\(auto-fill,290\.47px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
+    assert.match(street, /className="h-\[103\.13px\] w-\[290\.47px\]"/);
+    assert.match(screen, /const ROOM_CARD_SCALE = 290\.47 \/ 338;/);
+    assert.match(screen, /<div style=\{\{ zoom: ROOM_CARD_SCALE \}\}>\s*<GistRoomCard\s+preview/);
+    // Coming Soon is a GRID here (1317:158179), on the file's 12.38, 59 under the live grid.
+    assert.match(street, /className=\{liveHouses\.length > 0 \? "mt-\[59px\]" : "mt-9"\}/);
+    assert.match(street, /grid grid-cols-1 gap-x-\[12\.38px\] gap-y-4 md:grid-cols-2 lg:grid-cols-3/);
+    assert.doesNotMatch(street, /overflow-x-auto|w-\[479px\]/, "upcoming rooms are a sideways rail again");
+    assert.match(screen, /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
+    // `?open=1` still opens the composer on arrival.
+    assert.match(street, /if \(openParam !== "1" \|\| autoOpened\.current\) return;/);
+  });
+
+  it("gives the room card 415:12704's hover state, only where the file wires it", () => {
+    const card = stripComments(read("components/layout/gist-room-card.tsx"));
+    assert.match(card, /preview && "group\/room relative h-\[120px\] overflow-hidden"/);
+    assert.match(card, /hidden group-hover\/room:block group-focus-within\/room:block/);
+    // The file's numbers: the 16.79/17.16 title, the one 34.5 tile, Speaking Now, unmute, Join.
+    assert.match(card, /text-\[16\.79px\] font-semibold leading-\[17\.16px\]/);
+    assert.match(card, /left-\[16\.4px\] top-\[70\.4px\] h-\[34\.5px\] w-\[34\.5px\] rounded-\[11\.49px\]/);
+    assert.match(card, /speaking-wave\.png/);
+    assert.match(card, /left-\[165px\] top-\[85px\] flex h-5 w-\[65px\]/);
+    assert.match(card, /left-\[232px\] top-\[85px\] flex h-5 w-\[88px\]/);
+    // unmute is a flagged capability: really disabled, with its reason on it.
+    assert.match(card, /disabled\n\s*title="Listening from the card needs a room token/);
+    // Home's rail does not opt in.
+    assert.doesNotMatch(stripComments(read("components/layout/live-gist-rooms.tsx")), /preview/);
   });
 
   it("shows scheduled rooms on Home, under the friends deck, or not at all", () => {
@@ -2055,8 +2084,10 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(row, /<IconTopSearch className="h-4 w-4 shrink-0 text-\[#6D6D6D\]" \/>/);
     // 1295:142740: 67 wide at radius 36, padding 3/4/3/8, gear and caret 23
     // apart, the file's GLASS matched to its render rather than a border.
-    assert.match(row, /ws-glass-pill ws-glass-rim relative flex h-12 w-\[67px\] shrink-0 items-center gap-\[23px\] rounded-\[36px\] py-\[3px\] pl-1 pr-2/);
-    assert.match(row, /<IconHomeSettings className="h-6 w-6 shrink-0 text-\[#D9D9D9\]" \/>/);
+    assert.match(row, /"ws-glass-rim relative flex h-12 w-\[67px\] shrink-0 items-center gap-\[23px\] rounded-\[36px\] py-\[3px\] pl-1 pr-2",\n\s*open \? "bg-\[rgba\(159,90,255,0\.09\)\]" : "ws-glass-pill"/);
+    // Open, it is 1317:158078: the purple tint, purple gear and caret, caret up.
+    assert.match(row, /open \? "-scale-y-100 text-\[#9F65FD\]" : "text-white"/);
+    assert.match(row, /<IconHomeSettings className=\{cn\("h-6 w-6 shrink-0", open \? "text-\[#9F65FD\]" : "text-\[#D9D9D9\]"\)\} \/>/);
     assert.doesNotMatch(row, /border-white\/\d+[^"]*w-\[67px\]|w-\[67px\][^"]*border/, "the pill drew a border the file does not");
     // It opens the ONE account menu the top bar's avatar and the rail's chip open.
     assert.match(row, /import \{ AccountMenuItems, RailMenu \} from "@\/components\/layout\/app-shell";/);

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
-import { IconRoomBadgeMic, IconVoiceMode } from "@/components/ui/room-icons";
+import { IconRoomBadgeMic, IconUnmute, IconVoiceMode } from "@/components/ui/room-icons";
 import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
@@ -127,10 +127,36 @@ export function RoomTopicChip({ icon, label }: { icon: React.ReactNode; label: s
   );
 }
 
+/**
+ * THE HOVER STATE — node 415:12704, the second variant of component set
+ * 415:12668, reached by MOUSE_ENTER on 415:12669 and left by MOUSE_LEAVE. The
+ * gist rooms page (1317:158073) wires every card in its grid to it; nothing
+ * else in the file does, so it is opt-in (`preview`).
+ *
+ * In the same 338 x 120 box: the mic disc at 22.33 and the title at Geist
+ * SemiBold 16.79 / 17.16 across 282 (two lines), ONE face tile 34.5 at
+ * (16.4, 70.4) on an 11.49 radius with a 1.44 white ring and the cluster's
+ * shadow, "Speaking Now" beside it at (57.09, 88.49) behind the file's own
+ * 16.59 wave (a still frame of a Lottie the file embeds as an image — exported
+ * as that frame; the file carries no animation data), an "unmute" pill 65 x 20
+ * at (165, 85) on `#333234`, and the Join pill at (232, 85).
+ *
+ * TWO THINGS THE SERVICE CANNOT BACK, stated rather than faked:
+ *  · "Speaking Now" names the face shown — the first sampled participant, else
+ *    the host — but no field says who is on mic. Until the payload carries an
+ *    active speaker the label is the file's copy over the one person certainly
+ *    in the room.
+ *  · "unmute" would play the room's audio from the card. Listening needs a
+ *    room token the service only issues on entry, so it is a real `disabled`
+ *    control with the reason on it, never a button that does nothing.
+ */
+const PREVIEW_FACE_RING = 1.44;
+
 export function GistRoomCard({
   streamId,
   conversationId,
   fluid = false,
+  preview = false,
 }: {
   streamId: string;
   conversationId: string;
@@ -144,6 +170,8 @@ export function GistRoomCard({
    * that, so the width belongs to the surface rather than to the card.
    */
   fluid?: boolean;
+  /** Carry 415:12704's hover state — the gist rooms page's grid. */
+  preview?: boolean;
 }) {
   /*
     POLLED WHILE THE ROOM IS LIVE, and not otherwise.
@@ -235,8 +263,73 @@ export function GistRoomCard({
       `max-w-full` still caps it, because this same card is composed into a
       message thread whose column can be narrower than 338.
     */
-    <RoomCardShell className={fluid ? "w-full" : "w-[338px] shrink-0"}>
-      <div className="flex items-center justify-between gap-4">
+    <RoomCardShell
+      className={cn(
+        fluid ? "w-full" : "w-[338px] shrink-0",
+        // Both variants clip (`clipsContent`), and the hover face's picture
+        // runs past its tile.
+        preview && "group/room relative h-[120px] overflow-hidden"
+      )}
+    >
+      {preview && !over && !pending && faces[0] && (
+        <div className="absolute inset-0 hidden group-hover/room:block group-focus-within/room:block">
+          {/* 415:12706 — the disc and the two-line title, 7.67 apart. */}
+          <div className="absolute left-[14px] top-[16px] flex h-[35px] w-[310px] items-center gap-[7.67px]">
+            <IconRoomBadgeMic className="h-[22.33px] w-[22.33px] shrink-0" />
+            <p className="line-clamp-2 min-w-0 flex-1 text-[16.79px] font-semibold leading-[17.16px] text-white">
+              {title}
+            </p>
+          </div>
+          {/* 415:12727 — the one face, upright (the group's -4.09 cancels the
+              tile's 4). */}
+          <span
+            aria-hidden
+            className="absolute left-[16.4px] top-[70.4px] h-[34.5px] w-[34.5px] rounded-[11.49px] bg-white shadow-[0_4.31px_16.15px_0_rgba(147,147,147,0.25)]"
+            style={{ padding: PREVIEW_FACE_RING }}
+          >
+            <span className="block h-full w-full overflow-hidden bg-[#EDEDED]" style={{ borderRadius: 11.49 - PREVIEW_FACE_RING }}>
+              <Avatar
+                name={faces[0].displayName || faces[0].username}
+                seed={faces[0].id}
+                src={faces[0].avatarUrl}
+                size={34}
+                sizeClassName="h-full w-full"
+                className="rounded-none border-0"
+              />
+            </span>
+          </span>
+          {/* 415:12722 — "Speaking Now" behind the file's wave frame. */}
+          <span className="absolute left-[57.09px] top-[88.49px] flex h-[16.59px] items-center text-[8px] font-medium leading-[10.4px] text-white">
+            {/* eslint-disable-next-line @next/next/no-img-element -- the file's own frame */}
+            <img src="/gist-rooms/speaking-wave.png" alt="" aria-hidden className="-mr-0.5 h-[16.59px] w-[16.59px]" />
+            Speaking Now
+          </span>
+          {/* 415:12713 — unmute: a flagged capability, disabled with its reason. */}
+          <button
+            type="button"
+            disabled
+            title="Listening from the card needs a room token the service only issues on entry"
+            className="absolute left-[165px] top-[85px] flex h-5 w-[65px] items-center justify-center gap-[3px] rounded-[30px] bg-[#333234] text-[8px] font-medium leading-[10.4px] text-white disabled:cursor-not-allowed"
+          >
+            unmute
+            <IconUnmute className="h-2 w-2" />
+          </button>
+          {/* 415:12718 — Join, at the file's own box. */}
+          <Link
+            href={housePath(streamId)}
+            className="ws-press absolute left-[232px] top-[85px] flex h-5 w-[88px] items-center justify-center gap-[3px] rounded-[30px] bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90"
+          >
+            Join Gistroom
+            <IconVoiceMode className="h-2 w-2" />
+          </Link>
+        </div>
+      )}
+      <div
+        className={cn(
+          "flex items-center justify-between gap-4",
+          preview && !over && !pending && faces[0] && "group-hover/room:invisible group-focus-within/room:invisible"
+        )}
+      >
         <div className="min-w-0 flex-1">
           {/*
             The title box is a FIXED TWO LINES, which is the file's 186x32 at
