@@ -1874,12 +1874,13 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // Nothing scheduled is no section — never an empty shelf or a spacer.
     assert.match(soon, /if \(items\.length === 0\) return null;/);
     assert.match(soon, /useStreamList\("scheduled"/);
-    // The same card the gist rooms page draws, at 1305:149184's own placement:
-    // 264.35 wide (the 479 design at 0.5519) on an 11.04 gap.
+    // The same card the gist rooms page draws, at Popular Houses' rail width —
+    // 356 on a 15.7 gap — not the node's 264.35, which read as too small on
+    // the column (ogazboiz, 2026-09-12). The card scales from its width.
     assert.match(soon, /<UpcomingRoomCard stream=\{room\} \/>/);
-    assert.match(soon, /gap-\[11\.04px\] overflow-x-auto/);
-    assert.match(soon, /w-\[264\.35px\] shrink-0/);
-    assert.doesNotMatch(soon, /w-\[479px\]/);
+    assert.match(soon, /gap-\[15\.7px\] overflow-x-auto/);
+    assert.match(soon, /w-\[356px\] shrink-0/);
+    assert.doesNotMatch(soon, /w-\[479px\]|w-\[264\.35px\]/);
     // The card's one Regular run.
     assert.match(stripComments(read("components/layout/upcoming-room-card.tsx")), /font-normal text-\[#D9D9D9\]/);
   });

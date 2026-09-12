@@ -22,12 +22,19 @@ import { SectionHeading } from "@/components/layout/section-heading";
  * A 581-wide section: the heading row (32 tall — "Coming Soon" in Manrope Bold
  * 24/28.61, all white, and the "View more" pill at its right edge), 16 below
  * it the rail (1305:148882): a 606-wide horizontal row that runs PAST the
- * section's right edge and is clipped there, cards 264.35 x 81.13 on an
- * 11.04 gap. Every number inside a card divides by its 0.5519 stroke to the
- * 479 x 147 design of 1295:140164 — the same card, placed at 0.5519 — so the
- * card is `UpcomingRoomCard` unchanged (it scales itself from its width) and
- * only the WIDTH and the GAP are this section's. One card, two surfaces — a
- * second copy is how the two drift apart.
+ * section's right edge and is clipped there. Every number inside a card
+ * divides by its 0.5519 stroke to the 479 x 147 design of 1295:140164 — the
+ * same card, placed at 0.5519 (264.35 x 81.13 on an 11.04 gap) — so the card
+ * is `UpcomingRoomCard` unchanged (it scales itself from its width) and only
+ * the WIDTH and the GAP are this section's. One card, two surfaces — a second
+ * copy is how the two drift apart.
+ *
+ * THE WIDTH IS POPULAR HOUSES', NOT THE NODE'S. Built at the file's 264.35
+ * the cards read as too small next to the rest of the column ("the card
+ * height for those coming soon is too small"), so they take the treatment
+ * Popular Houses got (1305:149179): the same 356 rail width on the same 15.7
+ * gap, and the card scales up with it — 356 x 109.3, every internal length
+ * still the file's proportion (ogazboiz, 2026-09-12).
  *
  * The node carries no `interactions`; "View more" going to the rooms page is
  * this product's convention, as on the other three headings.
@@ -47,11 +54,11 @@ export function ComingSoonRooms() {
         <SectionHeading id="coming-soon-rooms" lead="Coming Soon" action={{ label: "View more", href: "/gist-rooms" }} />
       </div>
 
-      {/* 1305:148882 — the rail, clipped at the column's edge; the file's own
-          third card is cut there too. */}
-      <div className="flex items-center gap-[11.04px] overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* 1305:148882 — the rail, clipped at the column's edge; the cards at
+          Popular Houses' 356 on its 15.7 gap (see the header). */}
+      <div className="flex items-center gap-[15.7px] overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((room) => (
-          <div key={room.id} className="w-[264.35px] shrink-0">
+          <div key={room.id} className="w-[356px] shrink-0">
             <UpcomingRoomCard stream={room} />
           </div>
         ))}
