@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { ShareSheet } from "@/components/ui/share-sheet";
-import { RoomTopicChip } from "@/components/layout/gist-room-card";
 import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
@@ -13,36 +12,54 @@ import { clockLabel, shortDateLabel, startsInLabel } from "@/lib/format";
 import type { Stream } from "@/features/streams";
 
 /**
- * A GIST ROOM THAT HAS NOT OPENED YET — node 1295:140164.
+ * A GIST ROOM THAT HAS NOT OPENED YET — node 1295:140164, drawn exactly.
  *
- * A wide landscape card (383.38 x 117.65, radius 16.007, rgba(16,16,18,0.62)
- * behind a 5.6 blur with an 18% white hairline) built around WHEN: the artwork
- * and title on the left, the clock on the right, and Share under it. It is a
- * different object from the live invite card (225:3873, 338 x 120) and stays
- * one — that card offers "Join Gistroom", which is the promise an unopened
- * room cannot keep.
+ * ─── THE SCALE, WHICH IS THE WHOLE TRICK ─────────────────────────────────────
+ * The node reads 383.38 x 117.65 with a 0.8003684878 stroke, and EVERY number
+ * in it divides by that stroke to a round design unit:
  *
- * ─── THE FILE'S NUMBERS ──────────────────────────────────────────────────────
- *   · a 9.6 #7E3BEB spine down the left edge, running the card's full height;
- *   · artwork 78.26 x 85.03 at (16.81, 16.8), radius 16.007;
- *   · the mic mark 19.21 round at (104.85, 16.8) on its #9F65FD -> #7E3BEB ramp;
- *   · the title 148.07 wide at (129.66, 13.61), SemiBold 13.35/13.11;
- *   · one topic chip at (131.26, 50.42); the host row at (129.66, 83.24) with a
- *     16.01 avatar;
- *   · a 0.8 #3C3C3C rule at x=287.33 from y=16, 84.84 tall;
- *   · the date at (316.95, 16) with the calendar glyph, the clock 16/11.21 at
- *     (303.34, 32.81), the "Starts in" chip in 9% #9F5AFF at (316.95, 53.62),
- *     and Share at (307.34, 75.23) on the 90deg #9F65FD -> #5B05E6 ramp.
+ *     383.38 -> 479      117.65 -> 147       16.007 -> 20 (radius)
+ *      19.21 -> 24 (mic)  16.01 -> 20 (avatar)  12.81 -> 16 (share icon)
+ *       3.20 -> 4          6.40 -> 8            12.81 -> 16 (paddings)
  *
- * ─── THE ONE JUDGEMENT CALL ──────────────────────────────────────────────────
- * The file's smallest type is 4.27-6.4px (the chip label, "Hosted by", "Starts
- * in", "Share"). That is not readable in a browser, and the same frame sets its
- * title at 13.35 — so those runs are drawn at a reduced scale rather than
- * specified as final sizes. Every position, size, colour, radius and gradient
- * here is the file's; only sub-8px type is lifted to the sizes this app already
- * ships (the 9px topic chip, 10-12px meta), which is what keeps the card
- * legible without inventing a second visual language.
+ * So the card was drawn at 479 x 147 and the row places a 0.8 instance of it.
+ * Everything below is in those design units at 1u each, and NOTHING is rounded
+ * up or lifted to a house minimum — including the 5.334u topic label and the
+ * 6u countdown, which are the file's own sizes.
+ *
+ * ─── HOW IT STAYS EXACT AT EVERY WIDTH ───────────────────────────────────────
+ * `--u` is one design unit, defined as 1/479th of the card's own width, so the
+ * whole composition scales as one piece: at 479 it is the file at 1:1, at
+ * 383.38 it is the instance in this row exactly, and on a phone it is the same
+ * card smaller. That is why the geometry is inline `calc()` rather than
+ * utilities — every value is one number from the file times a live unit, and a
+ * fixed-px translation would only be exact at one viewport.
+ *
+ * Children are absolutely positioned because the file positions them that way
+ * (`layout mode: none`), at the node's own coordinates. Note the mic mark sits
+ * BESIDE the artwork at x=131, not over its corner.
+ *
+ * ─── THE TWO DEVIATIONS, BOTH DELIBERATE ─────────────────────────────────────
+ *  · TYPEFACE. The topic label is Roboto Bold in the file; Square ships Geist
+ *    and does not load Roboto, and this repo's standing rule is Geist over the
+ *    file's Roboto. Size, weight and colour are the file's.
+ *  · TOPIC GLYPH. The file draws ONE chip, "Trading & Finance", and its glyph
+ *    is exported and used verbatim (`card-topic-trading.svg` — a filled
+ *    candlestick pair, which is NOT the repo's four-stroke IconStats). A room
+ *    on any other topic has no glyph in this file, so it falls back to the
+ *    product's existing topic icon rather than to an invented export.
+ *
+ * The node carries NO `interactions`, so nothing here is prototype-wired: the
+ * artwork and title opening the room, and Share opening the share sheet, are
+ * this product's own conventions, not the file's instructions.
  */
+
+/** One design unit — see the header. */
+const u = (n: number) => `calc(${n}*var(--u))`;
+
+/** The topic the file actually draws; its glyph is the file's own export. */
+const FIGMA_TOPIC = "trading";
+
 export function UpcomingRoomCard({ stream }: { stream: Stream }) {
   const topics = useTopics();
   const [sharing, setSharing] = useState(false);
@@ -50,106 +67,215 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
   const startsAt = stream.scheduledAt;
   const host = stream.owner;
   const topicKey = stream.topics?.[0];
-  const topic = topicKey
-    ? {
-        label: topics.data?.find((entry) => entry.key === topicKey)?.label ?? topicKey,
-        Icon: TOPIC_ICONS[topicKey] ?? IconSpark,
-      }
+  const topicLabel = topicKey
+    ? (topics.data?.find((entry) => entry.key === topicKey)?.label ?? topicKey)
     : null;
+  const TopicIcon = topicKey && topicKey !== FIGMA_TOPIC ? (TOPIC_ICONS[topicKey] ?? IconSpark) : null;
 
   return (
-    <div className="relative flex min-h-[118px] w-full max-w-[383px] overflow-hidden rounded-[16px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.8px_rgba(255,255,255,0.18)] backdrop-blur-[5.6px]">
-      {/* The spine — 9.6 of #7E3BEB down the whole left edge. */}
-      <span aria-hidden className="w-[9.6px] shrink-0 bg-[#7E3BEB]" />
+    <div className="@container w-full max-w-[479px]">
+      <div
+        className="relative overflow-hidden bg-[rgba(16,16,18,0.62)]"
+        style={
+          {
+            "--u": "calc(100cqw / 479)",
+            height: u(147),
+            borderRadius: u(20),
+            boxShadow: `inset 0 0 0 ${u(1)} rgba(255,255,255,0.18)`,
+            // BACKGROUND_BLUR radius 11.205 = 14u; CSS takes half.
+            backdropFilter: `blur(${u(7)})`,
+          } as React.CSSProperties
+        }
+      >
+        {/* 1295:140165 — the spine: 12 wide, 169 tall from y=-7, clipped by the card. */}
+        <span
+          aria-hidden
+          className="absolute left-0 bg-[#7E3BEB]"
+          style={{ top: u(-7), width: u(12), height: u(169) }}
+        />
 
-      <div className="flex min-w-0 flex-1 items-center gap-[8px] p-[16px]">
-        {/* Artwork, with the room's mark over its right edge as the file draws it. */}
-        <Link href={href} className="ws-press relative block shrink-0">
-          <span className="block h-[85px] w-[78px] overflow-hidden rounded-[16px] bg-white">
-            {stream.thumbnailUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
-              <img src={stream.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span className="block h-full w-full bg-[linear-gradient(180deg,#9F65FD_0%,#7E3BEB_100%)]" />
-            )}
-          </span>
-          {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export, fixed ramp */}
-          <img
-            src="/gist-rooms/card-mark.svg"
-            alt=""
-            aria-hidden
-            className="absolute -right-[10px] top-0 h-[19.21px] w-[19.21px]"
-          />
+        {/* 1295:140173 — the artwork tile. */}
+        <Link
+          href={href}
+          className="ws-press absolute block overflow-hidden bg-white"
+          style={{ left: u(21), top: u(21), width: u(97.78), height: u(106.24), borderRadius: u(20) }}
+        >
+          {stream.thumbnailUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
+            <img src={stream.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="block h-full w-full bg-[linear-gradient(180deg,#9F65FD_0%,#7E3BEB_100%)]" />
+          )}
         </Link>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-[8px] pl-[14px]">
-          <Link href={href} className="line-clamp-2 text-[13.35px] font-semibold leading-[16px] text-white hover:underline">
+        {/* 1295:140189 — the mic mark, in its own column between artwork and title. */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export, fixed ramp */}
+        <img
+          src="/gist-rooms/card-mark.svg"
+          alt=""
+          aria-hidden
+          className="absolute"
+          style={{ left: u(131), top: u(21), width: u(24), height: u(24) }}
+        />
+
+        {/* 1295:140188 — the title, centred in its 39-unit box. */}
+        <Link
+          href={href}
+          className="absolute flex flex-col justify-center overflow-hidden font-semibold text-white hover:underline"
+          style={{ left: u(162), top: u(17), width: u(185), height: u(39) }}
+        >
+          <span
+            className="line-clamp-2"
+            style={{ fontSize: u(16.677), lineHeight: u(16.38) }}
+          >
             {stream.title}
-          </Link>
-          {topic && (
-            <span className="flex">
-              <RoomTopicChip icon={<topic.Icon className="h-2.5 w-2.5" />} label={topic.label} />
-            </span>
-          )}
-          {/* "Hosted by <name>" — the label in the file's #5A5A5A, the name white. */}
-          <span className="flex min-w-0 items-center gap-[2.4px]">
+          </span>
+        </Link>
+
+        {/* 1295:140194 — one topic chip. */}
+        {topicLabel && (
+          <span
+            className="absolute flex items-center rounded-full bg-white/10 font-bold text-[#F4F4F4]"
+            style={{
+              left: u(164),
+              top: u(63),
+              gap: u(1.778),
+              padding: `${u(4.444)} ${u(5.334)}`,
+              fontSize: u(5.334),
+              lineHeight: u(7.11),
+            }}
+          >
+            {TopicIcon ? (
+              <TopicIcon className="shrink-0" />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element -- the node's own export */
+              <img
+                src="/gist-rooms/card-topic-trading.svg"
+                alt=""
+                aria-hidden
+                className="shrink-0"
+                style={{ width: u(7.11), height: u(7.11) }}
+              />
+            )}
+            {topicLabel}
+          </span>
+        )}
+
+        {/* 1295:140167 — "Hosted by <name>". */}
+        <span
+          className="absolute flex items-center"
+          style={{ left: u(162), top: u(104), gap: u(3), maxWidth: u(185) }}
+        >
+          <span
+            className="shrink-0 overflow-hidden rounded-full bg-[#DCDAD5]"
+            style={{
+              width: u(20),
+              height: u(20),
+              boxShadow: `0 0 0 ${u(1)} #FFFFFF, 0 ${u(4)} ${u(15)} rgba(147,147,147,0.25)`,
+            }}
+          >
             <Avatar
               name={host?.displayName ?? "Host"}
               seed={stream.ownerId}
               src={host?.avatarUrl}
-              size={16}
-              className="ring-[0.8px] ring-white"
+              size={20}
+              sizeClassName="size-full"
             />
-            <span className="truncate text-[11px] leading-4">
-              <span className="text-[#5A5A5A]">Hosted by </span>
-              <span className="text-white">{host?.displayName ?? "a host"}</span>
-            </span>
           </span>
-        </div>
+          <span className="truncate font-medium" style={{ fontSize: u(8), lineHeight: u(10.4) }}>
+            <span className="text-[#5A5A5A]">Hosted by </span>
+            <span className="text-white">{host?.displayName ?? "a host"}</span>
+          </span>
+        </span>
 
-        {/* The file's 0.8 rule, then the when-and-share column. */}
-        <span aria-hidden className="h-[85px] w-[0.8px] shrink-0 bg-[#3C3C3C]" />
-
-        <div className="flex shrink-0 flex-col items-end gap-[6px] pl-[10px]">
-          {startsAt && (
-            <>
-              <span className="flex items-center gap-[4px] text-[10px] leading-4 text-[#D9D9D9]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-                <img src="/gist-rooms/card-calendar.svg" alt="" aria-hidden className="h-2 w-2" />
-                {shortDateLabel(startsAt)}
-              </span>
-              <span className="text-[16px] font-semibold leading-[18px] text-white">
-                {clockLabel(startsAt)}
-              </span>
-              <span className="rounded-[1.6px] bg-[rgba(159,90,255,0.09)] px-[3.2px] py-[3.2px] text-[10px] leading-3 text-[#9F65FD]">
-                {startsInLabel(startsAt)}
-              </span>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => setSharing(true)}
-            className="ws-press flex items-center gap-[3.2px] rounded-full bg-[linear-gradient(90deg,#9F65FD_0%,#5B05E6_100%)] px-[12.8px] py-[6.4px] text-[12px] font-medium leading-4 text-white transition-opacity hover:opacity-90"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-            <img src="/gist-rooms/card-share.svg" alt="" aria-hidden className="h-[12.81px] w-[12.81px]" />
-            Share
-          </button>
-        </div>
-      </div>
-
-      {sharing && (
-        <ShareSheet
-          open
-          onClose={() => setSharing(false)}
-          title="Share gist room"
-          payload={{
-            text: `${stream.title} on Square`,
-            url: `${window.location.origin}${href}`,
-          }}
-          campaign="room_share"
+        {/* 1295:140187 — the rule between the room and its clock. */}
+        <span
+          aria-hidden
+          className="absolute bg-[#3C3C3C]"
+          style={{ left: u(359), top: u(20), width: u(1), height: u(106) }}
         />
-      )}
+
+        {startsAt && (
+          <>
+            {/* 1295:140179 — the date. */}
+            <span
+              className="absolute flex items-center text-[#D9D9D9]"
+              style={{ left: u(396), top: u(20), gap: u(5), fontSize: u(8), lineHeight: u(10.4) }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+              <img
+                src="/gist-rooms/card-calendar.svg"
+                alt=""
+                aria-hidden
+                className="shrink-0"
+                style={{ width: u(10), height: u(10) }}
+              />
+              {shortDateLabel(startsAt)}
+            </span>
+
+            {/* 1295:140166 — the clock. */}
+            <span
+              className="absolute font-semibold text-white"
+              style={{ left: u(379), top: u(41), fontSize: u(20), lineHeight: u(14) }}
+            >
+              {clockLabel(startsAt)}
+            </span>
+
+            {/* 1295:140171 — the countdown. */}
+            <span
+              className="absolute font-medium text-[#9F65FD]"
+              style={{
+                left: u(396),
+                top: u(67),
+                padding: u(4),
+                borderRadius: u(2),
+                background: "rgba(159,90,255,0.09)",
+                fontSize: u(6),
+                lineHeight: u(7.8),
+              }}
+            >
+              {startsInLabel(startsAt)}
+            </span>
+          </>
+        )}
+
+        {/* 1295:140175 — Share: the gradient over the #7E3BEB the file stacks under it. */}
+        <button
+          type="button"
+          onClick={() => setSharing(true)}
+          className="ws-press absolute flex items-center font-medium text-white transition-opacity hover:opacity-90"
+          style={{
+            left: u(384),
+            top: u(94),
+            gap: u(4),
+            padding: `${u(8)} ${u(16)}`,
+            borderRadius: u(100),
+            background: "linear-gradient(90deg,#9F65FD 0%,#5B05E6 100%), #7E3BEB",
+            fontSize: u(11),
+            lineHeight: u(14.3),
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+          <img
+            src="/gist-rooms/card-share.svg"
+            alt=""
+            aria-hidden
+            className="shrink-0"
+            style={{ width: u(16), height: u(16) }}
+          />
+          Share
+        </button>
+
+        {sharing && (
+          <ShareSheet
+            open
+            onClose={() => setSharing(false)}
+            title="Share gist room"
+            payload={{ text: `${stream.title} on Square`, url: `${window.location.origin}${href}` }}
+            campaign="room_share"
+          />
+        )}
+      </div>
     </div>
   );
 }

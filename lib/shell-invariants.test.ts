@@ -1737,18 +1737,32 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(stripComments(read("components/layout/gist-rooms-screen.tsx")), /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
   });
 
-  it("builds the upcoming card on 1295:140164's own numbers", () => {
+  it("builds the upcoming card at 1295:140164's own scale, nothing rounded up", () => {
     const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
-    // The card: 383.38 x 117.65, radius 16.007, the file's fill, hairline and blur.
-    assert.match(card, /min-h-\[118px\] w-full max-w-\[383px\]/);
-    assert.match(card, /rounded-\[16px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
-    assert.match(card, /shadow-\[inset_0_0_0_0\.8px_rgba\(255,255,255,0\.18\)\] backdrop-blur-\[5\.6px\]/);
-    // The spine, the artwork, the rule and the Share ramp.
-    assert.match(card, /w-\[9\.6px\] shrink-0 bg-\[#7E3BEB\]/);
-    assert.match(card, /h-\[85px\] w-\[78px\]/);
-    assert.match(card, /h-\[85px\] w-\[0\.8px\] shrink-0 bg-\[#3C3C3C\]/);
-    assert.match(card, /bg-\[linear-gradient\(90deg,#9F65FD_0%,#5B05E6_100%\)\]/);
-    assert.match(card, /bg-\[rgba\(159,90,255,0\.09\)\]/);
+    // Every value in the node divides by its 0.80037 stroke to a round design
+    // unit, so the card is 479x147 and one unit is 1/479th of its own width.
+    assert.match(card, /max-w-\[479px\]/);
+    assert.match(card, /"--u": "calc\(100cqw \/ 479\)"/);
+    assert.match(card, /height: u\(147\)/);
+    assert.match(card, /borderRadius: u\(20\)/);
+    // Spine, artwork, the mic BESIDE it, the rule, the ramps.
+    assert.match(card, /width: u\(12\), height: u\(169\)/);
+    assert.match(card, /width: u\(97\.78\), height: u\(106\.24\)/);
+    assert.match(card, /left: u\(131\), top: u\(21\), width: u\(24\)/);
+    assert.match(card, /bg-\[#3C3C3C\]/);
+    assert.match(card, /linear-gradient\(90deg,#9F65FD 0%,#5B05E6 100%\)/);
+    assert.match(card, /rgba\(159,90,255,0\.09\)/);
+    // The file's own small type, NOT lifted to a house minimum.
+    assert.match(card, /fontSize: u\(5\.334\)/);
+    assert.match(card, /fontSize: u\(6\)/);
+    assert.match(card, /fontSize: u\(16\.677\)/);
+    // Every glyph is the file's own export, never a repo icon stand-in.
+    for (const glyph of ["card-mark", "card-calendar", "card-share", "card-topic-trading"]) {
+      assert.match(card, new RegExp(`/gist-rooms/${glyph}\\.svg`), `${glyph} is not the exported node`);
+    }
+    // The title is clamped INSIDE its 39u box, never spilling past it.
+    assert.match(card, /className="absolute flex flex-col justify-center overflow-hidden font-semibold/);
+    assert.match(card, /className="line-clamp-2"\n/);
     // It never offers to join a room that has not opened.
     assert.doesNotMatch(card, /Join/);
   });
