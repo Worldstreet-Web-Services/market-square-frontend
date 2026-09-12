@@ -13,7 +13,9 @@ import { DeckDots } from "@/components/ui/deck-dots";
  * ─── THE LIVE FILE'S NUMBERS ─────────────────────────────────────────────────
  * A heading row (1069:11814 + 1069:11818) over the dots (647:16289) over the
  * card row (647:17211):
- *   · "Suggested GistRooms", Medium 32 / 28.615 — "Suggested " white and
+ *   · "Top GistRooms" (the file draws "Suggested GistRooms"; ogazboiz renamed
+ *     it on 2026-09-12, because the rooms here are the ones actually live
+ *     rather than a suggestion), Medium 32 / 28.615 — the first word white and
  *     "GistRooms" in the file's 90deg #C196FD -> #7E3BEB character fill —
  *     beside a "View more" pill: 32 tall, 4% white, 10 either side and 10
  *     between the label (Semibold 16/24, 0.15 tracking) and the exported arrow.
@@ -83,13 +85,13 @@ export function LiveGistRooms() {
   const active = Math.min(page, DOTS - 1);
 
   return (
-    <section aria-labelledby="suggested-gist-rooms" className="mb-[78px] mt-[85px]">
+    <section aria-labelledby="top-gist-rooms" className="mb-[78px] mt-[85px]">
       <div className="mb-[19px] flex items-start justify-between gap-4 pl-[5px]">
         <h2
-          id="suggested-gist-rooms"
+          id="top-gist-rooms"
           className="inline-block bg-[linear-gradient(90deg,#C196FD_0%,#7E3BEB_100%)] bg-clip-text text-[32px] font-medium leading-[28.615px] text-transparent"
         >
-          <span className="text-white">Suggested </span>GistRooms
+          <span className="text-white">Top </span>GistRooms
         </h2>
         <Link
           href="/gist-rooms"

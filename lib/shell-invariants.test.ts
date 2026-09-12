@@ -973,14 +973,16 @@ describe("Home's Go Live banner is node 647:17219", () => {
  * more 1069:11818, the pager dots 647:16289 and the card row 647:17211 of
  * component 415:12668 (default variant 496:13802).
  */
-describe("Home's Suggested GistRooms section is 647:16288's first block", () => {
+describe("Home's Top GistRooms section is 647:16288's first block", () => {
   const rail = stripComments(read("components/layout/live-gist-rooms.tsx"));
   const card = stripComments(read("components/layout/gist-room-card.tsx"));
   const feed = stripComments(read("features/feed/components/feed-page.tsx"));
   const icons = stripComments(read("components/ui/topic-tags-field.tsx"));
 
   it("heads the carousel with the file's title and View more", () => {
-    assert.match(rail, /<span className="text-white">Suggested <\/span>GistRooms/);
+    // "Top", not the file's "Suggested": these are the rooms actually live (ogazboiz, 2026-09-12).
+    assert.match(rail, /<span className="text-white">Top <\/span>GistRooms/);
+    assert.match(rail, /useStreamList\("live", \[\], "house"\)/, "the carousel no longer asks for live rooms only");
     assert.match(rail, /bg-\[linear-gradient\(90deg,#C196FD_0%,#7E3BEB_100%\)\] bg-clip-text/);
     assert.match(rail, /href="\/gist-rooms"/);
   });
