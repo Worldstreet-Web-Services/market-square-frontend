@@ -37,6 +37,7 @@ import {
   useAddComment,
   useBookmarkPost,
   useDeletePost,
+  usePinPost,
   useEditPost,
   useLikePost,
   useReport,
@@ -77,6 +78,7 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const report = useReport();
   const remove = useDeletePost();
+  const pin = usePinPost();
   const gate = useGate();
   return (
     <div className="relative">
@@ -105,6 +107,21 @@ function ReportMenu({ post, mine }: { post: Post; mine: boolean }) {
           <div className="ws-popover absolute bottom-full right-0 z-20 mb-2 w-56 rounded-2xl p-1.5">
             {mine && (
               <>
+                {/* One pin per profile: pinning a second replaces the first,
+                    so this never asks the author to unpin anything first.
+                    Absent where the routes are not deployed (404-quiet), and
+                    absent on a story, which expires and cannot be pinned. */}
+                {!pin.unavailable && post.kind !== "story" && (
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      pin.mutate({ postId: targetId, pin: !post.pinnedByAuthor });
+                    }}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm text-body transition-colors hover:bg-white/10"
+                  >
+                    {post.pinnedByAuthor ? "Unpin from profile" : "Pin to your profile"}
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setOpen(false);
@@ -700,6 +717,14 @@ export function PostCard({
       would spend a fifth of the screen on margins.
     */
     <article ref={viewRef} className="ws-post p-4 md:px-[39px] md:pb-4 md:pt-6">
+      {/* The author put this at the top of their profile. Sits with the
+          repost line because both say WHY this card is here rather than
+          anything about the post. It is the AUTHOR's placement, so every
+          reader sees it, signed out included. */}
+      {post.pinnedByAuthor && (
+        <p className="mb-2 pl-1 text-[12px] font-semibold text-white/50">Pinned</p>
+      )}
+
       {/* Repost attribution. The card still belongs to the original author —
           this line only says who passed it along. */}
       {repostedBy && (

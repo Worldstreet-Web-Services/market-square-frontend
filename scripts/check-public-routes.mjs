@@ -239,6 +239,17 @@ const PENDING_ROUTES = {
       "backend PR #206; 404s in production until that merges. DELETE THIS " +
       "ENTRY when #206 deploys.",
   },
+  "post /posts/{}/pin": {
+    reason:
+      "Pin one of your own posts to your profile. Served locally on backend " +
+      "PR #206; 404s in production until that merges, which the menu already " +
+      "handles by going quiet. DELETE THIS ENTRY when #206 deploys.",
+  },
+  "delete /posts/{}/pin": {
+    reason:
+      "Unpin it. Same route and same PR as the post above. DELETE THIS ENTRY " +
+      "when #206 deploys.",
+  },
   "get /streams/by-code/{}": {
     reason:
       "Resolve a spoken room code to its room. Served locally on backend PR " +

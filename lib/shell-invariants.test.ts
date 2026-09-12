@@ -1835,6 +1835,34 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
+  it("pins a post without inventing one, and says nothing when it cannot be shown", () => {
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    // ABSENT, not null: presence is the test, so a pin that cannot be shown
+    // renders nothing rather than "this post is unavailable".
+    const pinnedField = schemas.slice(schemas.indexOf("  pinnedPost: z"));
+    const outer = pinnedField.slice(0, pinnedField.indexOf(".optional(),") + ".optional(),".length);
+    assert.match(outer, /pinnedPost: z\n?\s*\.object\(/);
+    assert.match(outer, /\}\)\n\s*\.optional\(\),/, "the pinned post key stopped being optional");
+    assert.doesNotMatch(
+      outer.slice(outer.indexOf("})")),
+      /\.default\(/,
+      "an absent pin now defaults, which makes 'cannot be shown' look like 'has one'"
+    );
+    // The author's placement, not viewer state — it reads the same signed out.
+    assert.match(schemas, /pinnedByAuthor: z\.boolean\(\)\.optional\(\)\.default\(false\)/);
+    const profile = stripComments(read("features/profile/components/profile-page.tsx"));
+    assert.match(profile, /\{pinned && <PinnedPost pinned=\{pinned\} \/>\}/);
+    // A summary is NOT a post: it must never be fed to postSlot, which would
+    // mean inventing an author, counts and the viewer's own state.
+    assert.doesNotMatch(profile, /postSlot\(pinned/);
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /\{post\.pinnedByAuthor && \(/);
+    // One pin per profile, so pinning clears the previous label immediately.
+    const feedHooks = stripComments(read("features/feed/hooks/use-feed.ts"));
+    assert.match(feedHooks, /if \(pinned\) clearPinnedEverywhere\(queryClient\);/);
+    assert.match(feedHooks, /errorCode\(error\) === "NOT_FOUND"/);
+  });
+
   it("slides Post For You in after the houses, ABOVE the timeline", () => {
     const feed = stripComments(read("features/feed/components/feed-page.tsx"));
     assert.ok(

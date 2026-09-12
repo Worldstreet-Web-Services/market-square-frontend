@@ -110,6 +110,42 @@ export function patchPostEverywhere(
 }
 
 /**
+ * Clear the "Pinned" flag from every cached post.
+ *
+ * A profile has ONE pinned post, so pinning a second silently unpins the
+ * first. Without this, both cards wear the label until the next natural
+ * refetch — a state the product never actually has. Narrow on purpose: this
+ * touches one boolean, rather than being a general "patch every post" hook
+ * that would invite sweeping edits nobody can audit.
+ */
+export function clearPinnedEverywhere(client: QueryClient): void {
+  const clear = (post: Post): Post =>
+    post.pinnedByAuthor ? { ...post, pinnedByAuthor: false } : post;
+
+  for (const key of [POST_LIST_KEYS.feed, POST_LIST_KEYS.bookmarks]) {
+    client.setQueriesData<InfiniteData<FeedPage>>({ queryKey: key }, (data) =>
+      isInfiniteFeed(data)
+        ? {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) => (item.post ? { ...item, post: clear(item.post) } : item)),
+            })),
+          }
+        : data
+    );
+  }
+
+  for (const key of [POST_LIST_KEYS.profilePosts, POST_LIST_KEYS.stories]) {
+    client.setQueriesData<{ items: Post[] }>({ queryKey: key }, (data) =>
+      hasItems<{ items: Post[] }>(data) ? { ...data, items: data.items.map(clear) } : data
+    );
+  }
+
+  client.setQueriesData<Post>({ queryKey: POST_LIST_KEYS.post }, (post) => (post ? clear(post) : post));
+}
+
+/**
  * Reconcile a post's server-owned fields after a mutation settles.
  *
  * The optimistic patch above is a guess at what the server will do; this is

@@ -26,15 +26,11 @@ import {
   reportTarget,
   deletePost,
   editPost,
+  pinPost,
 } from "@/features/feed/lib/api";
 import type { FeedPage, Lane, Post } from "@/features/feed/lib/types";
 import { invalidateContentSurfaces } from "@/lib/api/invalidate";
-import {
-  invalidatePostLists,
-  isInfiniteFeed,
-  patchPostEverywhere,
-  reconcilePost,
-} from "@/features/feed/lib/cache";
+import { clearPinnedEverywhere, invalidatePostLists, isInfiniteFeed, patchPostEverywhere, reconcilePost } from "@/features/feed/lib/cache";
 
 /**
  * The timeline.
@@ -367,6 +363,50 @@ export function useLikePost() {
  * unavailable instead of raising an error toast. `unavailable` is what the
  * button reads to go quiet; it never invents a saved state.
  */
+/**
+ * PIN ONE OF YOUR OWN POSTS to the top of your profile.
+ *
+ * Pinning REPLACES, so the optimistic patch clears the flag from whatever was
+ * pinned before — otherwise two cards would wear the "Pinned" label until the
+ * next refetch, which is a state the product never has.
+ *
+ * A 404 is "not deployed" here as everywhere (the routes ship on backend PR
+ * #206), so the menu entry goes quiet rather than raising an error. It is ALSO
+ * the answer for somebody else's post, which the menu already prevents by only
+ * offering this on your own.
+ */
+export function usePinPost() {
+  const queryClient = useQueryClient();
+  const [unavailable, setUnavailable] = useState(false);
+
+  const applyPin = (postId: string, pinned: boolean) => {
+    // One pin per profile: clear every other card's flag as this one takes it.
+    if (pinned) clearPinnedEverywhere(queryClient);
+    patchPostEverywhere(queryClient, postId, (post) => ({ ...post, pinnedByAuthor: pinned }));
+  };
+
+  const mutation = useMutation({
+    mutationFn: ({ postId, pin }: { postId: string; pin: boolean }) => pinPost(postId, pin),
+    onMutate: ({ postId, pin }) => applyPin(postId, pin),
+    onError: (error, { postId, pin }) => {
+      applyPin(postId, !pin);
+      if (errorCode(error) === "NOT_FOUND") {
+        setUnavailable(true);
+        return;
+      }
+      toast.error(errorMessage(error, "Couldn't change your pinned post."));
+    },
+    onSuccess: (_result, { pin }) => {
+      // The profile carries the pinned post itself, so it refetches for real.
+      queryClient.invalidateQueries({ queryKey: ["ms", "profile"] });
+      toast.success(pin ? "Pinned to your profile" : "Unpinned");
+    },
+    onSettled: (_result, _error, { postId }) => reconcilePost(queryClient, postId),
+  });
+
+  return { ...mutation, unavailable };
+}
+
 export function useBookmarkPost() {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);

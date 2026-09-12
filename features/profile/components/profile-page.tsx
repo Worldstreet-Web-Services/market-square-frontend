@@ -69,6 +69,7 @@ function PostsTab({
   isMe,
   composeSlot,
   postSlot,
+  pinned,
 }: {
   username: string;
   isMe: boolean;
@@ -76,6 +77,20 @@ function PostsTab({
   composeSlot?: React.ReactNode;
   /** The feed slice's post card, composed in by the route. */
   postSlot: (post: Post) => React.ReactNode;
+  /**
+   * What this person put at the top of their page.
+   *
+   * A SUMMARY, not a post: id, text, media and a date. It is deliberately not
+   * fed to `postSlot`, which needs a whole `Post` — author, counts, the
+   * viewer's own like and bookmark state — none of which this carries, and all
+   * of which would have to be invented to render one.
+   *
+   * ABSENT rather than null when it cannot be shown (deleted, moderated, an
+   * expired story, or a block either way), so this checks presence and renders
+   * nothing at all — never "this post is unavailable", which would publish
+   * that something was taken down.
+   */
+  pinned?: Profile["pinnedPost"];
 }) {
   const posts = useProfilePosts(username);
   if (posts.isPending)
@@ -126,11 +141,51 @@ function PostsTab({
   // repost, which is why a post read differently here than anywhere else.
   // 1029:22923 — 32 under the tab strip's rule, 32 in from the column, cards 24 apart.
   return (
-    <ul className="flex flex-col gap-6 px-4 pt-8 md:px-8">
-      {posts.data.items.map((post) => (
-        <li key={post.id}>{postSlot(post)}</li>
-      ))}
-    </ul>
+    <>
+      {pinned && <PinnedPost pinned={pinned} />}
+      <ul className="flex flex-col gap-6 px-4 pt-8 md:px-8">
+        {posts.data.items.map((post) => (
+          <li key={post.id}>{postSlot(post)}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * The pinned post, drawn from the summary the profile payload carries.
+ *
+ * Quiet by design: it is a pointer to the post, not a second post card. The
+ * whole thing is the link, so tapping anywhere opens the post where every real
+ * control lives.
+ */
+function PinnedPost({ pinned }: { pinned: NonNullable<Profile["pinnedPost"]> }) {
+  return (
+    <div className="px-4 pt-8 md:px-8">
+      <p className="pb-2 text-[12px] font-semibold text-white/50">Pinned</p>
+      <Link
+        href={`/p/${pinned.id}`}
+        className="ws-press flex items-center gap-3 rounded-[16px] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.07]"
+      >
+        {pinned.thumbnailUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time
+          <img
+            src={pinned.thumbnailUrl}
+            alt=""
+            className="h-14 w-14 shrink-0 rounded-[12px] object-cover"
+          />
+        )}
+        <span className="min-w-0 flex-1">
+          {pinned.text ? (
+            <span className="line-clamp-2 text-[14px] leading-5 text-white">{pinned.text}</span>
+          ) : (
+            // A picture-only post has no words. Say what it is rather than
+            // printing an empty line or inventing a caption.
+            <span className="text-[14px] leading-5 text-white/50">A photo</span>
+          )}
+        </span>
+      </Link>
+    </div>
   );
 }
 
@@ -739,7 +794,13 @@ export function ProfilePage({
             onChange={setAccountTab}
           />
           {accountTab === "posts" && (
-            <PostsTab username={username} isMe={isMe} composeSlot={composeSlot} postSlot={postSlot} />
+            <PostsTab
+              username={username}
+              isMe={isMe}
+              composeSlot={composeSlot}
+              postSlot={postSlot}
+              pinned={profile.data?.pinnedPost}
+            />
           )}
           {/* The account panels are YOUR OWN, gated where ownership is decided:
               a stranger's strip is Posts alone and can never mount these. */}
