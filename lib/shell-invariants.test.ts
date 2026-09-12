@@ -2316,6 +2316,15 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(store, /item\.actionUrl\.length > 0/, "a length check is not a scheme check");
   });
 
+  it("draws no chip for a role nearly every author has", () => {
+    // A badge everyone wears distinguishes nobody. Creator sat on almost
+    // every author line, so it is mapped to null exactly as citizen is —
+    // the ROLE still exists and still arrives, it just has no chip.
+    const badge = stripComments(read("components/ui/badge.tsx"));
+    assert.match(badge, /creator: null/);
+    assert.doesNotMatch(badge, /creator: "Creator"/);
+  });
+
   it("keeps the wink card's photo off our own network", () => {
     // That URL is FETCHED server-side, so its host is an SSRF target and a
     // scheme check alone is not enough — a private address serves https too.
