@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
-import { useAuth } from "@/hooks/use-auth";
-import { AccountMenuItems, RailMenu } from "@/components/layout/app-shell";
+import { useGate } from "@/hooks/use-gate";
+import { RailMenu } from "@/components/layout/app-shell";
+import { ExploreSettingsMenu } from "@/components/layout/explore-settings-menu";
+import { LocationSheet } from "@/components/layout/location-sheet";
 import { IconHomeFilter, IconHomeFilterCaret, IconHomeSettings } from "@/components/ui/home-icons";
 import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
 
@@ -46,10 +49,12 @@ import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
  * radius 36, padding 3/4/3/8, the 24px gear in `#D9D9D9` and the 8 x 4 white
  * caret 23 apart.
  *
- * It opens the ACCOUNT MENU — the same `AccountMenuItems` the top bar's avatar
- * and the rail's chip open — because the file wires no prototype to it and a
- * settings pill beside your own avatar is that menu. Signed out there is no
- * account to open, so the tap is the sign-in, as the top bar's is.
+ * It opens EXPLORE SETTINGS — node 1317:158022 (`ExploreSettingsMenu`, in
+ * `RailMenu`'s `explore` panel), which ogazboiz named as the pill's dropdown
+ * on 2026-09-12. It used to open the account menu. The panel is exploration
+ * preferences, not an account, so it opens for everyone; its one live row,
+ * "Explore location", gates a signed-out reader into sign-in on the tap, since
+ * the sheet behind it writes `PATCH /me`.
  *
  * ─── THE OPEN STATE ──────────────────────────────────────────────────────────
  * The gist rooms page (1317:158078) draws the same pill PURPLE: `#9F5AFF` at
@@ -69,7 +74,8 @@ import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
  * and inert, never a button that does nothing.
  */
 export function HomeTopRow({ trailing = "account" }: { trailing?: "account" | "filter" }) {
-  const { ready, authenticated, login } = useAuth();
+  const gate = useGate();
+  const [locationOpen, setLocationOpen] = useState(false);
 
   const pill = (open: boolean) => (
     <span
@@ -113,30 +119,34 @@ export function HomeTopRow({ trailing = "account" }: { trailing?: "account" | "f
             <IconHomeFilterCaret className="absolute -left-px -top-px h-[6px] w-[10px]" />
           </span>
         </button>
-      ) : ready && !authenticated ? (
-        <button type="button" onClick={login} aria-label="Sign in" className="ws-press shrink-0">
-          {pill(false)}
-        </button>
       ) : (
         <RailMenu
-          label="Account"
+          label="Explore settings"
           align="below"
-          panel="gist"
+          panel="explore"
           trigger={({ open, toggle }) => (
             <button
               type="button"
               onClick={toggle}
               aria-expanded={open}
-              aria-haspopup="menu"
-              aria-label="Account menu"
+              aria-haspopup="dialog"
+              aria-label="Explore settings"
               className="ws-press block shrink-0"
             >
               {pill(open)}
             </button>
           )}
         >
-          {(close) => <AccountMenuItems close={close} />}
+          {(close) => (
+            <ExploreSettingsMenu close={close} onLocation={() => gate(() => setLocationOpen(true))} />
+          )}
         </RailMenu>
+      )}
+
+      {/* The location sheet lives OUTSIDE the panel: the panel closes when
+          the row is chosen, and a sheet inside it would close with it. */}
+      {trailing === "account" && locationOpen && (
+        <LocationSheet open onClose={() => setLocationOpen(false)} />
       )}
     </div>
   );

@@ -510,8 +510,11 @@ export function RailMenu({
    * `gist` is node 747:14001 ("gist dm"), the account dropdown: 172 wide,
    * `#1C1C1C`, a 0.745 inside ring at 18% white, radius 8, 11.913 of padding
    * and rows 5.957 apart — the same menu the friends filter draws (651:18441).
+   * `explore` is node 1317:158022 ("Explore Settings"), the panel Home's
+   * settings pill opens: 347 wide, `#201F1F` behind a 14 blur, a 1px inside
+   * ring at 18% white, radius 22, 16 of padding and rows 12 apart.
    */
-  panel?: "default" | "gist";
+  panel?: "default" | "gist" | "explore";
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLDivElement | null>(null);
@@ -523,7 +526,7 @@ export function RailMenu({
       const node = anchor.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
-      const width = panel === "gist" ? 172 : 224;
+      const width = panel === "gist" ? 172 : panel === "explore" ? 347 : 224;
       const left =
         align === "right"
           ? Math.min(rect.right + 8, window.innerWidth - width - 8)
@@ -570,12 +573,14 @@ export function RailMenu({
                 ...(align === "below"
                   ? { top: at.top }
                   : { bottom: Math.max(8, window.innerHeight - at.top) }),
-                width: panel === "gist" ? 172 : 224,
+                width: panel === "gist" ? 172 : panel === "explore" ? 347 : 224,
               }}
               className={
                 panel === "gist"
                   ? "ws-popover-enter fixed z-[61] flex flex-col gap-[5.957px] rounded-lg border-[0.745px] border-white/[0.18] bg-grey-800 p-[11.913px]"
-                  : "ws-popover fixed z-[61] rounded-2xl p-1.5"
+                  : panel === "explore"
+                    ? "ws-popover-enter fixed z-[61] flex flex-col gap-3 overflow-hidden rounded-[22px] bg-[#201F1F] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[7px]"
+                    : "ws-popover fixed z-[61] rounded-2xl p-1.5"
               }
             >
               {children(() => setOpen(false))}

@@ -1273,7 +1273,7 @@ describe("The account dropdown follows 747:14001", () => {
 
   it("hangs in the file's 172 panel on both account menus", () => {
     assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 2);
-    assert.match(shell, /const width = panel === "gist" \? 172 : 224;/);
+    assert.match(shell, /const width = panel === "gist" \? 172 : panel === "explore" \? 347 : 224;/);
     assert.match(shell, /border-\[0\.745px\] border-white\/\[0\.18\] bg-grey-800 p-\[11\.913px\]/);
   });
 });
@@ -2147,9 +2147,31 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(row, /open \? "-scale-y-100 text-\[#9F65FD\]" : "text-white"/);
     assert.match(row, /<IconHomeSettings className=\{cn\("h-6 w-6 shrink-0", open \? "text-\[#9F65FD\]" : "text-\[#D9D9D9\]"\)\} \/>/);
     assert.doesNotMatch(row, /border-white\/\d+[^"]*w-\[67px\]|w-\[67px\][^"]*border/, "the pill drew a border the file does not");
-    // It opens the ONE account menu the top bar's avatar and the rail's chip open.
-    assert.match(row, /import \{ AccountMenuItems, RailMenu \} from "@\/components\/layout\/app-shell";/);
-    assert.match(row, /\{\(close\) => <AccountMenuItems close=\{close\} \/>\}/);
+    // It opens EXPLORE SETTINGS (1317:158022) in RailMenu's own panel — not the
+    // account menu any more (ogazboiz, 2026-09-12) — for everyone.
+    assert.match(row, /import \{ RailMenu \} from "@\/components\/layout\/app-shell";/);
+    assert.doesNotMatch(row, /AccountMenuItems|useAuth/);
+    assert.match(row, /panel="explore"/);
+    assert.match(row, /<ExploreSettingsMenu close=\{close\} onLocation=\{\(\) => gate\(\(\) => setLocationOpen\(true\)\)\} \/>/);
+    assert.match(row, /<LocationSheet open onClose=\{\(\) => setLocationOpen\(false\)\} \/>/);
+    // The panel: 1317:158022's own box and rows.
+    const shellSrc = stripComments(read("components/layout/app-shell.tsx"));
+    assert.match(shellSrc, /panel === "explore" \? 347/);
+    assert.match(shellSrc, /rounded-\[22px\] bg-\[#201F1F\] p-4 shadow-\[inset_0_0_0_1px_rgba\(255,255,255,0\.18\)\] backdrop-blur-\[7px\]/);
+    const menu = stripComments(read("components/layout/explore-settings-menu.tsx"));
+    assert.match(menu, /Explore Settings/);
+    assert.match(menu, /h-\[34px\] w-full items-center justify-between rounded-xl bg-white\/\[0\.03\] px-2/);
+    assert.match(menu, /height=\{59\}/);
+    assert.match(menu, /height=\{62\}/);
+    assert.match(menu, /title="Show content in this location"/);
+    assert.match(menu, /title="Trends For You"/);
+    // The two preferences the service does not carry are real disabled
+    // checkboxes with the reason on them; the "13"s the render hides are not drawn.
+    assert.match(menu, /role="checkbox"\n\s*aria-checked=\{false\}\n\s*aria-label=\{title\}\n\s*disabled\n\s*title=\{MISSING\}/);
+    assert.doesNotMatch(menu, />\s*13\s*</);
+    // The glyphs are the file's; the checkbox and caret are the existing exports.
+    assert.match(menu, /IconExploreClose|IconExploreLocation|IconExploreTrends/);
+    assert.match(menu, /<IconCheckbox className="h-4 w-4" \/>/);
     const screen = stripComments(read("components/layout/room-code-screen.tsx"));
     // A private room shows the doorplate and never a join that would refuse.
     assert.match(screen, /This room is private/);
