@@ -1821,6 +1821,21 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
+  it("lists post_announced BEFORE the service sends it, so it can never read as a follow", () => {
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    // .catch("follow") has shipped as a lie three times (tip_received, wink,
+    // then four kinds at once). An author whose post is being broadcast must
+    // never be told somebody followed them.
+    assert.match(types, /"post_announced",/);
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.match(page, /case "post_announced":/g);
+    assert.match(page, /Your post is being shown to everyone on Market Square/);
+    // No actor by design, so the row must not name one.
+    assert.doesNotMatch(page, /\$\{who\} is showing your post/);
+    // A glyph, or an actor-less row renders an empty disc.
+    assert.match(page, /post_announced: /);
+  });
+
   it("offers Remind me honestly: absent means signed out, never 'not asked'", () => {
     const schemas = stripComments(read("lib/api/schemas.ts"));
     // NO .default(false) — that would collapse "nobody is signed in" into

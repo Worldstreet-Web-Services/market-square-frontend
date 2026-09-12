@@ -74,6 +74,20 @@ export const NotificationKindSchema = z
      * Carries the opener and `streamId`; it does NOT carry the house.
      */
     "house_room",
+    /**
+     * AN ADMIN IS SHOWING YOUR POST TO EVERYONE (backend, 2026-09-12).
+     *
+     * Listed before the service sends one, for the reason the three notes above
+     * record: unlisted, `.catch("follow")` would tell an author whose post is
+     * being broadcast platform-wide that somebody followed them. Of every kind
+     * in this enum that is the worst one to get wrong — the author did not
+     * choose the placement, and the notification is the only way they find out.
+     *
+     * It carries NO actor by design. The decision belongs to the platform, not
+     * to a named admin the author could argue with; the audit row keeps who did
+     * it where it belongs.
+     */
+    "post_announced",
   ])
   .catch("follow");
 
