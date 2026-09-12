@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { ImageViewer } from "@/components/ui/image-viewer";
 import { cn } from "@/lib/cn";
-import { railDotWidth, railIndexAt, type PostMediaLike } from "@/lib/post-media";
+import { RAIL_SIZES, railDotWidth, railIndexAt, type PostMediaLike, type RailSize } from "@/lib/post-media";
 
 /**
  * A POST'S PHOTOS, SIDE BY SIDE — node 1029:22591.
@@ -19,7 +19,8 @@ import { railDotWidth, railIndexAt, type PostMediaLike } from "@/lib/post-media"
  * Only ever photos: the service refuses a video in a post of two or more. A
  * tap opens that photo full size in the shared viewer.
  */
-export function MediaRail({ items }: { items: PostMediaLike[] }) {
+export function MediaRail({ items, size = "post" }: { items: PostMediaLike[]; size?: RailSize }) {
+  const g = RAIL_SIZES[size];
   const scroller = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState<number | null>(null);
@@ -27,20 +28,20 @@ export function MediaRail({ items }: { items: PostMediaLike[] }) {
   const onScroll = () => {
     const node = scroller.current;
     if (!node) return;
-    setActive(railIndexAt(node.scrollLeft, node.scrollWidth - node.clientWidth, items.length));
+    setActive(railIndexAt(node.scrollLeft, node.scrollWidth - node.clientWidth, items.length, size));
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-[3.12px]" aria-hidden>
+    <div className={cn(size === "compact" && "shrink-0")}>
+      <div className="flex items-center" style={{ gap: g.dotGap }} aria-hidden>
         {items.map((item, index) => (
           <span
             key={`${item.url}-${index}`}
             className={cn(
-              "h-[4.99px] rounded-[15.59px] transition-[width,background-color] duration-200 motion-reduce:transition-none",
+              "rounded-[15.59px] transition-[width,background-color] duration-200 motion-reduce:transition-none",
               index === active ? "bg-[#9F5AFF]" : "bg-[#D9D9D9]"
             )}
-            style={{ width: railDotWidth(index, active) }}
+            style={{ width: railDotWidth(index, active, size), height: g.dotHeight }}
           />
         ))}
       </div>
@@ -48,7 +49,13 @@ export function MediaRail({ items }: { items: PostMediaLike[] }) {
         ref={scroller}
         onScroll={onScroll}
         aria-label={`${items.length} photos`}
-        className="-mr-4 mt-5 flex snap-x snap-mandatory gap-[10.36px] overflow-x-auto pr-4 [scrollbar-width:none] md:-mr-[39px] md:pr-[39px] [&::-webkit-scrollbar]:hidden"
+        style={{ gap: g.gap, marginTop: size === "compact" ? 10.7 : 20 }}
+        className={cn(
+          "flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // The column's rail bleeds to the card's edge so the next photo peeks
+          // in; the compact one sits inside its own card and does not.
+          size === "post" && "-mr-4 pr-4 md:-mr-[39px] md:pr-[39px]"
+        )}
       >
         {items.map((item, index) => (
           <button
@@ -56,7 +63,8 @@ export function MediaRail({ items }: { items: PostMediaLike[] }) {
             type="button"
             onClick={() => setOpen(index)}
             aria-label={`View photo ${index + 1} of ${items.length}`}
-            className="ws-press h-[352.22px] w-[250.93px] shrink-0 snap-start overflow-hidden rounded-[20.72px] bg-white/[0.04]"
+            style={{ width: g.tile, height: g.tileHeight, borderRadius: g.radius }}
+            className="ws-press shrink-0 snap-start overflow-hidden bg-white/[0.04]"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */}
             <img

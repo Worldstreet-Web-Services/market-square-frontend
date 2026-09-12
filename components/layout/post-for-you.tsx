@@ -67,11 +67,11 @@ export function PostForYou({
         {feed.isPending
           ? [0, 1].map((index) => (
               <div key={index} className="w-[467px] shrink-0">
-                <Skeleton className="h-52 w-full rounded-[16.5px]" />
+                <Skeleton className="h-[367px] w-full rounded-[16.5px]" />
               </div>
             ))
           : items.map((item) => (
-              <div key={item.id} className="w-[467px] max-w-[85vw] shrink-0">
+              <div key={item.id} className="h-[367px] w-[467px] max-w-[85vw] shrink-0">
                 <FeedItemCard
                   item={item}
                   followSlot={followSlot}

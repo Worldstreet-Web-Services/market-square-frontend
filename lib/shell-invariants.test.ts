@@ -1514,7 +1514,8 @@ describe("Tapping a post's words opens the post", () => {
   const card = stripComments(read("features/feed/components/post-card.tsx"));
 
   it("opens /p/:id from the caption, leaving links, buttons and selections alone", () => {
-    assert.match(card, /<div data-post-body onClick=\{full \? undefined : openPost\}/);
+    assert.match(card, /data-post-body/);
+    assert.match(card, /onClick=\{full \? undefined : openPost\}/);
     assert.match(card, /target\.closest\("a, button, input, textarea, \[role='button'\]"\)\) return;/);
     assert.match(card, /if \(window\.getSelection\(\)\?\.toString\(\)\) return;/);
     assert.match(card, /router\.push\(`\/p\/\$\{post\.id\}`\);/);
@@ -1953,6 +1954,25 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     const feedHooks = stripComments(read("features/feed/hooks/use-feed.ts"));
     assert.match(feedHooks, /if \(pinned\) clearPinnedEverywhere\(queryClient\);/);
     assert.match(feedHooks, /errorCode\(error\) === "NOT_FOUND"/);
+  });
+
+  it("makes every card in the rail one height, on 1313:149186's own numbers", () => {
+    // The file's cards are all 367 tall (the fourth is 365.39 at y=1.61, so its
+    // bottom still lands at 367) and the row is bottom-aligned. Ours were
+    // ragged because each card sized to its own content.
+    const rail = stripComments(read("components/layout/post-for-you.tsx"));
+    assert.match(rail, /h-\[367px\] w-\[467px\]/, "the cards size to their content again");
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /compact \? "flex h-full flex-col p-3"/, "a compact card no longer fills its box");
+    // Every compact card reserves the same media strip, one photo or four.
+    assert.match(card, /compact && rail\.length > 0 \? \(/);
+    assert.match(card, /<MediaRail items=\{rail\} size="compact" \/>/);
+    // 1313:152774's tiles, and the column's own geometry untouched beside them.
+    const media = stripComments(read("lib/post-media.ts"));
+    assert.match(media, /compact: \{\n\s*tile: 134\.3,\n\s*tileHeight: 188\.52,/);
+    assert.match(media, /post: \{\n\s*tile: 250\.93,\n\s*tileHeight: 352\.22,/);
+    // The column's card must NOT be dragged to a fixed height by any of this.
+    assert.match(card, /"p-4 md:px-\[39px\] md:pb-4 md:pt-6"/);
   });
 
   it("shows the rail on Home after the houses, with the timeline on /feed", () => {

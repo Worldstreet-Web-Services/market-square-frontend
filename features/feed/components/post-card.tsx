@@ -716,7 +716,16 @@ export function PostCard({
       The design has no phone frame, so the 39 is desktop-only — at 360 it
       would spend a fifth of the screen on margins.
     */
-    <article ref={viewRef} className="ws-post p-4 md:px-[39px] md:pb-4 md:pt-6">
+    <article
+      ref={viewRef}
+      className={cn(
+        "ws-post",
+        // 1313:152732 — in the rail every card is the SAME height (367), which
+        // is what makes the row even. The card fills its box and the caption
+        // takes the slack, so a short post and a four-photo post are one size.
+        compact ? "flex h-full flex-col p-3" : "p-4 md:px-[39px] md:pb-4 md:pt-6"
+      )}
+    >
       {/* The author put this at the top of their profile. Sits with the
           repost line because both say WHY this card is here rather than
           anything about the post. It is the AUTHOR's placement, so every
@@ -858,7 +867,11 @@ export function PostCard({
         post payload would remove it — asked for; `MessageMedia` already carries
         both, so the service is storing them somewhere.
       */}
-      {rail.length > 1 ? (
+      {compact && rail.length > 0 ? (
+        // Every compact card reserves the same media strip — the file's own
+        // 134.3 x 188.52 tiles — which is the other half of the equal height.
+        <MediaRail items={rail} size="compact" />
+      ) : rail.length > 1 ? (
         <MediaRail items={rail} />
       ) : post.mediaUrl &&
         (isVideoPost(post) ? (
@@ -946,7 +959,11 @@ export function PostCard({
         exactly 18 below the hairline, the same distance the media does on the
         first). So the 12 belongs to the media, not to the text.
       */}
-      <div data-post-body onClick={full ? undefined : openPost} className={cn(!full && "cursor-pointer")}>
+      <div
+        data-post-body
+        onClick={full ? undefined : openPost}
+        className={cn(!full && "cursor-pointer", compact && "min-h-0 shrink overflow-hidden")}
+      >
         <PostText
           text={post.text}
           mentions={post.mentions}
@@ -955,7 +972,7 @@ export function PostCard({
             // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
             rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
           )}
-          clampLines={full ? undefined : 6}
+          clampLines={full ? undefined : compact ? 2 : 6}
         />
       </div>
       {/* The coins the post names, with today's move — the row Ark draws. */}
@@ -988,7 +1005,14 @@ export function PostCard({
           screen; its own row, opened on demand, solves the geometry. */}
       {/* 647:16409 aligns its children to the BOTTOM (counter axis MAX): the
           38.37 "more" disc sits on the 40.15 tallies pill's foot, not its middle. */}
-      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-end md:gap-6">
+      <div
+        className={cn(
+          "mt-5 flex flex-col gap-3 md:flex-row md:items-end md:gap-6",
+          // In the rail the card is a fixed 367: the actions sit on its foot
+          // and never get pushed out by a long caption or four photos.
+          compact && "mt-auto shrink-0"
+        )}
+      >
       <div className="flex items-center justify-between gap-3 md:contents">
         {/*
           THE TALLIES PILL — node 496:13417.
