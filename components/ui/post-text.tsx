@@ -44,6 +44,7 @@ export function PostText({
    * reader loses the thread to one person's essay.
    */
   clampLines,
+  linkClassName,
 }: {
   text: string;
   mentions?: Mention[];
@@ -51,6 +52,14 @@ export function PostText({
   /** Override for tests and stories; normally fetched. */
   tradeable?: string[];
   clampLines?: 2 | 3 | 4 | 5 | 6;
+  /**
+   * The ink for the tappable parts (mentions, tags, links), when the default
+   * purple fails where the text sits. Chat bubbles are white and #7E3BEB,
+   * and `--color-spotlight-chip-ink` is 2.7:1 on the first and 2.1:1 on the
+   * second — so the thread passes its own AA-clearing class per bubble. The
+   * cashtag chip keeps its own paint; it is a control, not a link.
+   */
+  linkClassName?: string;
 }) {
   // One shared, long-cached query rather than a prop threaded through every
   // component that happens to render a post body.
@@ -62,7 +71,8 @@ export function PostText({
   // Blocks need a block container: a list inside a `<p>` is invalid markup, and
   // an `inline` caller (a comment beside its author) gets `block` for them.
   const structured = only === null;
-  const body = only ? <Lines lines={only.lines} /> : <Blocks blocks={blocks} />;
+  const link = linkClassName ?? TAPPABLE;
+  const body = only ? <Lines lines={only.lines} link={link} /> : <Blocks blocks={blocks} link={link} />;
   const containerClass = cn(className, structured && "block");
 
   if (clampLines) {
@@ -77,34 +87,34 @@ export function PostText({
   return <Tag className={cn("whitespace-pre-wrap break-words", containerClass)}>{body}</Tag>;
 }
 
-function Lines({ lines }: { lines: Inline[][] }) {
+function Lines({ lines, link }: { lines: Inline[][]; link: string }) {
   return (
     <>
       {lines.map((line, index) => (
         <Fragment key={index}>
           {index > 0 && "\n"}
-          <InlineView nodes={line} />
+          <InlineView nodes={line} link={link} />
         </Fragment>
       ))}
     </>
   );
 }
 
-function Blocks({ blocks }: { blocks: Block[] }) {
+function Blocks({ blocks, link }: { blocks: Block[]; link: string }) {
   return (
     <>
       {blocks.map((block, index) => {
         if (block.kind === "paragraph") {
           return (
             <p key={index}>
-              <Lines lines={block.lines} />
+              <Lines lines={block.lines} link={link} />
             </p>
           );
         }
         if (block.kind === "quote") {
           return (
             <blockquote key={index} className="my-1.5 border-l-2 border-white/25 pl-3 text-white/70">
-              <Lines lines={block.lines} />
+              <Lines lines={block.lines} link={link} />
             </blockquote>
           );
         }
@@ -117,7 +127,7 @@ function Blocks({ blocks }: { blocks: Block[] }) {
           >
             {block.items.map((item, itemIndex) => (
               <li key={itemIndex}>
-                <InlineView nodes={item} />
+                <InlineView nodes={item} link={link} />
               </li>
             ))}
           </List>
@@ -127,7 +137,7 @@ function Blocks({ blocks }: { blocks: Block[] }) {
   );
 }
 
-function InlineView({ nodes }: { nodes: Inline[] }) {
+function InlineView({ nodes, link }: { nodes: Inline[]; link: string }) {
   return (
     <>
       {nodes.map((node, index) => {
@@ -135,7 +145,7 @@ function InlineView({ nodes }: { nodes: Inline[] }) {
           case "text":
             return <Fragment key={index}>{node.value}</Fragment>;
           case "segment":
-            return <SegmentView key={index} segment={node.segment} />;
+            return <SegmentView key={index} segment={node.segment} link={link} />;
           case "code":
             return (
               <code key={index} className="rounded bg-white/10 px-1 py-px font-mono text-[0.9em] text-white">
@@ -145,19 +155,19 @@ function InlineView({ nodes }: { nodes: Inline[] }) {
           case "strong":
             return (
               <strong key={index} className="font-bold text-white">
-                <InlineView nodes={node.children} />
+                <InlineView nodes={node.children} link={link} />
               </strong>
             );
           case "em":
             return (
               <em key={index} className="italic">
-                <InlineView nodes={node.children} />
+                <InlineView nodes={node.children} link={link} />
               </em>
             );
           case "strike":
             return (
               <s key={index} className="text-white/60 line-through">
-                <InlineView nodes={node.children} />
+                <InlineView nodes={node.children} link={link} />
               </s>
             );
         }
@@ -180,7 +190,7 @@ function InlineView({ nodes }: { nodes: Inline[] }) {
  */
 const TAPPABLE = "text-spotlight-chip-ink hover:underline";
 
-function SegmentView({ segment }: { segment: Segment }) {
+function SegmentView({ segment, link }: { segment: Segment; link: string }) {
   switch (segment.kind) {
     case "text":
       return <>{segment.value}</>;
@@ -190,14 +200,14 @@ function SegmentView({ segment }: { segment: Segment }) {
       // nobody; refusing to link is the worse failure, because the feature
       // then just looks broken.
       return (
-        <Link href={`/u/${segment.handle}`} className={TAPPABLE}>
+        <Link href={`/u/${segment.handle}`} className={link}>
           {segment.value}
         </Link>
       );
 
     case "hashtag":
       return (
-        <Link href={`/t/${segment.tag}`} className={TAPPABLE}>
+        <Link href={`/t/${segment.tag}`} className={link}>
           {segment.value}
         </Link>
       );
@@ -251,7 +261,7 @@ function SegmentView({ segment }: { segment: Segment }) {
           // and must not get a handle on this tab; `nofollow` because a feed
           // is otherwise a link farm anybody can write to.
           rel="noopener noreferrer nofollow"
-          className={TAPPABLE}
+          className={link}
           // The shortened label is what is READ; the full address is what is
           // followed, and it stays visible on hover rather than being hidden.
           title={segment.href}

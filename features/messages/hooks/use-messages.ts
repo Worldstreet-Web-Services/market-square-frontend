@@ -100,8 +100,22 @@ export function useSendMessage(conversationId: string) {
       client.invalidateQueries({ queryKey: ["ms", "conversations"] });
       refreshUnread();
     },
-    onError: (error) => toast.error(errorMessage(error, "Couldn't send that message.")),
+    onError: (error, body) => toast.error(sendErrorCopy(error, body)),
   });
+}
+
+/**
+ * A reply whose `replyToId` is not in this conversation answers 404 with the
+ * service's own sentence ("That message is not in this conversation."). The
+ * generic NOT_FOUND copy — "it may have been removed" — would be wrong here,
+ * so the service's words are surfaced as they are, and nothing retries.
+ */
+function sendErrorCopy(error: unknown, body: OutgoingMessage): string {
+  if (body.replyToId && errorCode(error) === "NOT_FOUND") {
+    const said = (error as { message?: unknown } | null)?.message;
+    return typeof said === "string" && said ? said : "That message is not in this conversation.";
+  }
+  return errorMessage(error, "Couldn't send that message.");
 }
 
 /** Opening a thread is the acknowledgement — the inbox refreshes after it. */
