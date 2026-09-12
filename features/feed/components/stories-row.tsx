@@ -1231,7 +1231,7 @@ export function StoriesRow() {
                 strokeDasharray="6.13 6.13"
               />
             </svg>
-            <span className="absolute left-1/2 top-[12.26px] flex h-[55.15px] w-[55.15px] -translate-x-1/2 items-center justify-center overflow-hidden rounded-full bg-white">
+            <span className="absolute left-1/2 top-[12.26px] flex h-[55.15px] w-[55.15px] -translate-x-1/2 items-center justify-center overflow-hidden rounded-[25%] bg-white">
               <Avatar name={me.data?.displayName ?? "You"} seed={me.data?.id} src={me.data?.avatarUrl} size={55} />
             </span>
             <AddStoryBadge className="absolute left-1/2 top-[59.23px] -translate-x-1/2" />

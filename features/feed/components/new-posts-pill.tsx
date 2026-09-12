@@ -74,7 +74,7 @@ export function NewPostsPill({
                 seed={author.id}
                 src={author.avatarUrl}
                 size={22}
-                className="rounded-full ring-2 ring-[#141416]"
+                className="rounded-[25%] ring-2 ring-[#141416]"
               />
             ))}
           </span>

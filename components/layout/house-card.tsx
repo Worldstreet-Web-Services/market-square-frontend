@@ -51,7 +51,7 @@ function MemberLine({ members, count }: { members: Profile[]; count: number | nu
               seed={person.id}
               src={person.avatarUrl}
               size={20}
-              className="rounded-full ring-1 ring-white"
+              className="rounded-[25%] ring-1 ring-white"
             />
           ))}
         </div>

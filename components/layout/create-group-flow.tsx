@@ -277,7 +277,7 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
                       : "border-white/10 hover:bg-white/[0.06]"
                   }`}
                 >
-                  <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+                  <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
                     <Avatar name={name} seed={profile.id} src={profile.avatarUrl} size={38} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">

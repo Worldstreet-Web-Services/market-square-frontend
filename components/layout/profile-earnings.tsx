@@ -110,10 +110,10 @@ function EarnedRow({ tip }: { tip: ReceivedTip }) {
           seed={fromUser.id}
           src={fromUser.avatarUrl}
           size={34}
-          className="shrink-0 rounded-full border border-white/20"
+          className="shrink-0 rounded-[25%] border border-white/20"
         />
       ) : (
-        <span className="grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+        <span className="grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
           {gift ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={gift.art} alt="" aria-hidden className="h-full w-full object-contain p-1" />

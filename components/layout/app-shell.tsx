@@ -1343,7 +1343,7 @@ function TopBarActions() {
             aria-label={`Account menu for @${me.data?.username ?? "you"}`}
             className="ws-press flex items-center gap-[23px] rounded-[36px] bg-white/[0.07] py-[3px] pl-[3px] pr-2 transition-colors hover:bg-white/[0.11]"
           >
-            <span className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+            <span className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
               <Avatar
                 name={me.data?.displayName ?? "Me"}
                 seed={me.data?.id}

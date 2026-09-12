@@ -18,6 +18,17 @@ import { cn } from "@/lib/cn";
  * every unnamed member onto one image, because the schema turns a null name
  * into the formulaic "Member ·A1B2". See lib/avatar-seed.ts.
  */
+/**
+ * A PICTURE IS A ROUNDED SQUARE, NEVER A CIRCLE — ogazboiz, 2026-09-12:
+ * "we are using Square, so anything that is a circle image, make it like
+ * the way our avatar is, just like a square shape" — after seeing every
+ * face in search come up as a disc. The shape is the house plate's
+ * (1381:37629 / 1373:3990: 12.32 on 49.89, i.e. a quarter of the side), so
+ * a 24 face rounds at 6 and a 88 one at 22, and every surface that used to
+ * clip this to `rounded-full` — rings, plates, the faces stacked on a house
+ * card — now takes the same quarter. The file's own nodes still draw some
+ * of these as discs; the product decision overrides them, on purpose.
+ */
 export function Avatar({
   name,
   seed,
@@ -58,7 +69,7 @@ export function Avatar({
         src={src}
         alt={name}
         style={style}
-        className={cn("shrink-0 rounded-full object-cover", sizeClassName, ringClass, className)}
+        className={cn("shrink-0 rounded-[25%] object-cover", sizeClassName, ringClass, className)}
       />
     );
   }
@@ -75,7 +86,7 @@ export function Avatar({
         width={size}
         height={size}
         style={style}
-        className={cn("shrink-0 rounded-full object-cover", sizeClassName, ringClass, className)}
+        className={cn("shrink-0 rounded-[25%] object-cover", sizeClassName, ringClass, className)}
       />
     );
   }
@@ -84,7 +95,7 @@ export function Avatar({
     <div
       style={style}
       className={cn(
-        "flex shrink-0 select-none items-center justify-center rounded-full border border-white/10 bg-grey-700 text-grey-200",
+        "flex shrink-0 select-none items-center justify-center rounded-[25%] border border-white/10 bg-grey-700 text-grey-200",
         sizeClassName,
         ringClass,
         className

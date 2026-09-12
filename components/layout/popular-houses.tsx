@@ -118,7 +118,7 @@ export function PopularHouses() {
                         {house.members.slice(0, 3).map((member, index) => (
                           <span
                             key={member.id}
-                            className="flex items-center justify-center overflow-hidden rounded-full bg-[#DCDAD5]"
+                            className="flex items-center justify-center overflow-hidden rounded-[25%] bg-[#DCDAD5]"
                             style={{
                               width: u(16.07),
                               height: u(16.07),

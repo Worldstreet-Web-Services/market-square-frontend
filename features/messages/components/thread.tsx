@@ -1063,7 +1063,7 @@ function MessageRow({
   return (
     <div className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
       {group && !mine && (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border-[0.63px] border-white/20 bg-white/10">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10">
           <Avatar
             name={sender?.displayName ?? "?"}
             seed={sender?.id ?? message.senderId}

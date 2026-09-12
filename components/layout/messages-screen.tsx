@@ -208,7 +208,7 @@ function NewChatSheet({ open, onClose, onStarted }: NewChatPickerProps) {
                 // The file's 54.5px row: 3% fill, 10% hairline, 12px radius.
                 className="ws-press flex h-[54.5px] items-center gap-[9px] rounded-xl border border-white/10 bg-white/[0.03] px-3 text-left transition-colors hover:bg-white/[0.06] disabled:opacity-60"
               >
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
                   <Avatar name={name} seed={profile.id} src={profile.avatarUrl} size={38} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
@@ -350,7 +350,7 @@ function AddMembersSheet({
                   on ? "border-white/40" : "border-white/10"
                 )}
               >
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
                   <Avatar name={name} seed={profile.id} src={profile.avatarUrl} size={38} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">

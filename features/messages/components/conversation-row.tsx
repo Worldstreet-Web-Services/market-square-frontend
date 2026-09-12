@@ -66,7 +66,7 @@ export function ConversationRow({
           : "border-white/10 bg-white/3 hover:bg-white/6"
       )}
     >
-      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10">
+      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
         <Avatar name={name} seed={seed} src={avatarUrl} size={38} />
       </span>
 

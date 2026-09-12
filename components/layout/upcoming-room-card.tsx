@@ -208,7 +208,7 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
           style={{ left: u(162), top: u(104), gap: u(3), maxWidth: u(185) }}
         >
           <span
-            className="shrink-0 overflow-hidden rounded-full bg-[#DCDAD5]"
+            className="shrink-0 overflow-hidden rounded-[25%] bg-[#DCDAD5]"
             style={{
               width: u(20),
               height: u(20),
