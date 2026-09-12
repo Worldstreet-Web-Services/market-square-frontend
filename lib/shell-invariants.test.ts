@@ -2272,5 +2272,25 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
   it("says when an upcoming room opens, on the card", () => {
     assert.match(stripComments(read("components/layout/gist-room-card.tsx")), /opensAtLabel\(room\.scheduledAt\)/);
   });
+
+  it("never lets somebody else's URL become an href or a new window unchecked", () => {
+    // Both destinations are written by another person — an admin's
+    // announcement link, a publisher's store listing — and `javascript:` in
+    // either one runs on THIS origin, under our name, at the moment the
+    // reader presses the thing. `isHttpUrl` is the single gate, and these
+    // pin it to the sink rather than to a schema that can be relaxed later.
+    const band = stripComments(read("components/layout/announcement-band.tsx"));
+    assert.match(band, /isHttpUrl\(item\.linkUrl\)/, "the announcement link is unvalidated");
+    const store = stripComments(read("features/store/components/store-item-page.tsx"));
+    assert.match(store, /const openable = isHttpUrl\(item\.actionUrl\)/, "the store link is unvalidated");
+    assert.doesNotMatch(store, /item\.actionUrl\.length > 0/, "a length check is not a scheme check");
+  });
+
+  it("keeps the wink card's photo off our own network", () => {
+    // That URL is FETCHED server-side, so its host is an SSRF target and a
+    // scheme check alone is not enough — a private address serves https too.
+    const wink = stripComments(read("lib/wink-card.ts"));
+    assert.match(wink, /isPrivateHost\(url\.hostname\)/, "safePhoto no longer blocks private hosts");
+  });
 });
 

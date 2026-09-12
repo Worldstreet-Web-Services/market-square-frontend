@@ -4,6 +4,7 @@ import Link from "next/link";
 import { IconX } from "@/components/ui/icons";
 import { useAnnouncements, useDismissAnnouncement } from "@/hooks/use-announcements";
 import { useAuth } from "@/hooks/use-auth";
+import { isHttpUrl } from "@/lib/http-url";
 
 /**
  * WHAT THE PLATFORM IS SAYING, ABOVE EVERYTHING ELSE.
@@ -74,7 +75,10 @@ export function AnnouncementBand() {
               <Link href={`/p/${item.post.id}`} className="ws-press flex min-w-0 flex-1 items-center">
                 {body}
               </Link>
-            ) : item.linkUrl ? (
+            ) : isHttpUrl(item.linkUrl) ? (
+              /* The link is typed by an admin and this band renders to
+                 EVERYONE, signed out included, so a stored `javascript:` here
+                 would run on our origin for every reader. http(s) only. */
               <a
                 href={item.linkUrl}
                 target="_blank"

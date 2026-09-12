@@ -24,8 +24,10 @@ import {
  * The query is a URL anybody can edit, and the result is an image that looks
  * like it came from us. The kind is an allowlist (unknown reads as the
  * smallest claim, a first wink, never a match the URL invented), text is
- * whitespace-collapsed and length-capped, and a photo must be `https:` or it
- * is dropped for the seeded artwork.
+ * whitespace-collapsed and length-capped, and a photo must be `https:` at a
+ * public address or it is dropped for the seeded artwork — the route fetches
+ * that photo from our own server, so the host is an SSRF target and not
+ * merely a link. See `isPrivateHost`.
  */
 
 export interface WinkCardPerson {
@@ -68,12 +70,66 @@ function clean(value: string | null | undefined, max: number): string {
   return (value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-/** Only an https image — anything else is not drawn. */
+/**
+ * Hosts a server-side fetch must never be aimed at.
+ *
+ * `/api/wink-card` FETCHES the photo named in its own query string, so the
+ * host in that URL is chosen by whoever opens the link — and a fetch made by
+ * our server reaches what the open internet cannot: the cloud metadata
+ * endpoint on 169.254.169.254, a database on 10.x, anything bound to
+ * localhost. That is SSRF, and `https:` is no defence against it — a private
+ * address serves TLS perfectly well.
+ *
+ * Blocked by ADDRESS rather than by an allowlist of CDNs, deliberately:
+ * avatars legitimately come from hosts this repo does not enumerate, and a
+ * guessed allowlist breaks real pictures the day somebody changes storage.
+ *
+ * A DNS name that RESOLVES to a private address is out of scope here — that
+ * needs the address at connect time, which `fetch` does not expose. This
+ * closes the literal-address hole, which is the one anybody can use straight
+ * from a browser's address bar.
+ */
+export function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host.endsWith(".local") || host.endsWith(".internal")) return true;
+  // IPv6 loopback and the unspecified address, then unique-local (fc00::/7)
+  // and link-local (fe80::/10).
+  if (host === "::" || host === "::1") return true;
+  if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host)) return true;
+  // IPv4-mapped IPv6 — `::ffff:127.0.0.1`, which the URL parser normalises to
+  // `::ffff:7f00:1`. Both spellings name the same address.
+  let v4 = host;
+  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(host);
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (dotted) v4 = dotted[1]!;
+  else if (hex) {
+    const high = parseInt(hex[1]!, 16);
+    const low = parseInt(hex[2]!, 16);
+    v4 = `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+  }
+  const parts = v4.split(".");
+  if (parts.length !== 4 || !parts.every((part) => /^\d{1,3}$/.test(part))) return false;
+  const [a, b] = parts.map(Number);
+  // 0.0.0.0/8, loopback, RFC1918 and link-local. The URL parser has already
+  // normalised `0x7f000001` and `2130706433` to dotted form by this point.
+  if (a === 0 || a === 127 || a === 10) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b! >= 16 && b! <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  return false;
+}
+
+/** Only an https image, and never one aimed at a private address. */
 export function safePhoto(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
+    if (url.protocol !== "https:") return null;
+    // The route fetches this URL server-side, so the host is an SSRF target
+    // rather than just a link. See `isPrivateHost`.
+    if (isPrivateHost(url.hostname)) return null;
+    return url.toString();
   } catch {
     return null;
   }

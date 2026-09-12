@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatCount, formatKash } from "@/lib/format";
 import { useGate } from "@/hooks/use-gate";
+import { isHttpUrl } from "@/lib/http-url";
 import { Pill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
@@ -28,7 +29,10 @@ function OrderCta({ item }: { item: StoreItem }) {
 
   // `actionUrl` schema-defaults to "" — a listing can be owned with nowhere to
   // send the buyer yet. The button says so instead of swallowing the tap.
-  const openable = item.actionUrl.length > 0;
+  // It must also be a real http(s) link: the publisher writes it, and
+  // `window.open("javascript:…")` runs on OUR origin, so a listing could
+  // otherwise script the buyer's session at the moment they press Open.
+  const openable = isHttpUrl(item.actionUrl);
   const openAction = () => {
     if (openable) window.open(item.actionUrl, "_blank", "noopener");
   };
