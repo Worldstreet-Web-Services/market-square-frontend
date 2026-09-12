@@ -162,6 +162,23 @@ export async function fetchPlaybackToken(streamId: string) {
   return PlaybackSchema.parse(await msApi.post(`/streams/${streamId}/playback-token`));
 }
 
+/**
+ * A LISTEN-ONLY grant for the room card's hover preview — `POST
+ * /streams/:id/preview-token`, the same `{ url, token, expiresAt }` shape as
+ * the playback grant. Subscribe-only, hidden from the roster, minted on a
+ * `preview-<uuid>` identity so previewing a room you are already in cannot
+ * evict your real connection. 120s TTL; 404 unknown or private, 409 not a
+ * live gist room yet, 429 throttled. Auth optional (the BFF opens it).
+ *
+ * IT MUST NEVER BE PAIRED WITH A HEARTBEAT: heartbeats feed viewerCount,
+ * participants and watch time, and a previewing card would count itself as
+ * audience. `use-room-preview.ts` does not import `sendHeartbeat`, and
+ * `lib/shell-invariants.test.ts` pins that.
+ */
+export async function fetchPreviewToken(streamId: string) {
+  return PlaybackSchema.parse(await msApi.post(`/streams/${streamId}/preview-token`));
+}
+
 export async function sendHeartbeat(streamId: string, sessionId: string | null, mode: "live" | "replay") {
   return HeartbeatSchema.parse(
     await msApi.post(`/streams/${streamId}/heartbeat`, { sessionId: sessionId ?? undefined, mode })

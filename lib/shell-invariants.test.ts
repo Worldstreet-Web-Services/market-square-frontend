@@ -1791,6 +1791,35 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(street, /if \(openParam !== "1" \|\| autoOpened\.current\) return;/);
   });
 
+  it("draws the houses directory as 1368:2270, where Popular Houses' View more lands", () => {
+    const screen = stripComments(read("components/layout/houses-screen.tsx"));
+    const row = stripComments(read("components/layout/home-top-row.tsx"));
+    // The link, the route, the FULL frame.
+    assert.match(stripComments(read("components/layout/popular-houses.tsx")), /action=\{\{ label: "View more", href: "\/houses" \}\}/);
+    assert.match(read("app/houses/page.tsx"), /<HousesScreen \/>/);
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /\/\^\\\/houses\$\/,/, "/houses is not a FULL-frame route");
+    // The artboard's insets; the row ends in the FILTER pill (1368:2275), a
+    // real disabled control — the route takes cursor and limit only.
+    assert.match(screen, /pl-\[22px\] pr-\[21px\] pt-\[22px\]/);
+    assert.match(screen, /<HomeTopRow trailing="filter" \/>/);
+    assert.match(row, /disabled\n\s*aria-label="Filter houses"\n\s*title="Filtering houses needs a filter the directory doesn't offer yet"/);
+    assert.match(row, /h-12 w-16 shrink-0 items-center justify-center gap-3 rounded-\[36px\] bg-\[rgba\(159,90,255,0\.09\)\] px-2 py-1/);
+    // "Explore communities" (ogazboiz, 2026-09-12) over the file's pasted "Live GistRooms".
+    assert.match(screen, /<SectionHeading id="explore-communities" lead="Explore" accent="communities" \/>/);
+    assert.doesNotMatch(screen, /Live GistRooms/);
+    // 1373:3367's card: 290 x 86 at 16.86, three across, rows 16 apart, paged.
+    assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,290px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
+    assert.match(screen, /h-\[86px\] w-\[290px\] overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
+    assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
+    assert.match(screen, /left-\[75\.75px\] top-\[16\.25px\] flex w-\[127\.52px\] flex-col gap-\[4\.93px\]/);
+    assert.match(screen, /ws-btn-welcome ws-press absolute right-4 top-\[31px\] flex h-6 w-16 items-center justify-center rounded-\[61\.6px\]/, "the Join House pill lost its ramp");
+    // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
+    assert.match(screen, /useDiscoverHousesPages\(\)/);
+    assert.match(screen, /useInfiniteScroll\(/);
+    assert.doesNotMatch(screen, /\.sort\(/);
+    assert.match(screen, /house\.memberCount !== null && \(/);
+  });
+
   it("gives the room card 415:12704's hover state, only where the file wires it", () => {
     const card = stripComments(read("components/layout/gist-room-card.tsx"));
     assert.match(card, /preview && "group\/room relative h-\[120px\] overflow-hidden"/);
@@ -1801,10 +1830,35 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(card, /speaking-wave\.png/);
     assert.match(card, /left-\[165px\] top-\[85px\] flex h-5 w-\[65px\]/);
     assert.match(card, /left-\[232px\] top-\[85px\] flex h-5 w-\[88px\]/);
-    // unmute is a flagged capability: really disabled, with its reason on it.
-    assert.match(card, /disabled\n\s*title="Listening from the card needs a room token/);
     // Home's rail does not opt in.
     assert.doesNotMatch(stripComments(read("components/layout/live-gist-rooms.tsx")), /preview/);
+  });
+
+  it("lets unmute LISTEN through the preview grant, and never heartbeats", () => {
+    const card = stripComments(read("components/layout/gist-room-card.tsx"));
+    const hook = stripComments(read("features/streams/hooks/use-room-preview.ts"));
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    // POST /streams/:id/preview-token — on the served spec (2026-09-12), optional auth.
+    assert.match(api, /msApi\.post\(`\/streams\/\$\{streamId\}\/preview-token`\)/);
+    assert.match(stripComments(read("lib/api/public-routes.ts")), /path\[0\] === "streams" && path\[2\] === "preview-token"/);
+    // THE HARD RULE: a previewing card must not count itself as audience.
+    assert.doesNotMatch(hook, /heartbeat|sendHeartbeat/i, "the preview sends heartbeats");
+    // Subscribe side only, audio only, registered under its own key, torn down on leave.
+    assert.match(hook, /autoSubscribe: true/);
+    assert.match(hook, /if \(track\.kind !== Track\.Kind\.Audio\) return;/);
+    assert.match(hook, /const key = `\$\{streamId\}#preview`;/);
+    assert.match(hook, /RoomEvent\.ActiveSpeakersChanged/);
+    assert.match(hook, /export const PREVIEW_BACKOFF_MS = 30_000;/);
+    // The card: pressed on, off on mouse leave; refusals quiet the control with the reason.
+    assert.match(card, /onMouseLeave=\{preview \? \(\) => setListening\(false\) : undefined\}/);
+    assert.match(card, /useRoomPreview\(streamId, preview && listening,/);
+    assert.match(card, /disabled=\{previewOff\}/);
+    assert.match(card, /title=\{live\.reason \?\? undefined\}/);
+    // The caption is the pure rule, fed by viewerCount and the SFU's speaker — no roster guess.
+    assert.match(card, /previewCaption\(\{\n\s*connected: live\.state === "listening",\n\s*speaker: live\.speaker,\n\s*listening: room\?\.viewerCount \?\? null,/);
+    assert.doesNotMatch(card, />\s*Speaking Now\s*</, "the card claims a speaker it cannot hear");
+    // The name resolves the way the house room resolves it.
+    assert.match(card, /participantName\(participant\.name\) \?\? parseParticipantMeta\(participant\.metadata\)\?\.username \?\? null/);
   });
 
   it("shows scheduled rooms on Home, under the friends deck, or not at all", () => {

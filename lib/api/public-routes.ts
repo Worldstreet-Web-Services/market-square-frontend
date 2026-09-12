@@ -52,14 +52,22 @@ export function isSafePath(path: string[]): boolean {
 }
 
 /**
- * The ONLY write a signed-out visitor may make through the BFF: turning off the
- * daily email summary from the link in the email. The signed token in its
- * query names the one person it changes, and that person may not be signed in
- * on this device. This exact shape only — every other write needs a session.
+ * The TWO writes a signed-out visitor may make through the BFF, both optional-
+ * auth in the spec (`[{}, { bearerAuth: [] }]`):
+ *
+ *  · `POST /email/unsubscribe` — turning off the daily email summary from the
+ *    link in the email. The signed token in its query names the one person it
+ *    changes, and that person may not be signed in on this device.
+ *  · `POST /streams/:id/preview-token` — the room card's listen-only hover
+ *    preview. It mints a subscribe-only, roster-hidden grant on a throwaway
+ *    identity, changes nothing, and the page it sits on is public.
+ *
+ * These exact shapes only — every other write needs a session.
  */
 export function isPublicPost(path: string[]): boolean {
   if (!isSafePath(path)) return false;
-  return path.length === 2 && path[0] === "email" && path[1] === "unsubscribe";
+  if (path.length === 2 && path[0] === "email" && path[1] === "unsubscribe") return true;
+  return path.length === 3 && path[0] === "streams" && path[2] === "preview-token";
 }
 
 export function isPublicGet(path: string[]): boolean {

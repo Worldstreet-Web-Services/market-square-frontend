@@ -329,8 +329,11 @@ describe("isPublicGet", () => {
 });
 
 describe("isPublicPost", () => {
-  it("opens exactly the email unsubscribe, and no other write", () => {
+  it("opens exactly the email unsubscribe and the room preview grant, and no other write", () => {
     assert.equal(isPublicPost(["email", "unsubscribe"]), true);
+    // `[{}, {bearerAuth}]` on the served spec: a subscribe-only grant on a
+    // throwaway identity, for a page a signed-out reader can see.
+    assert.equal(isPublicPost(["streams", "s1", "preview-token"]), true);
     for (const path of [
       ["email"],
       ["email", "unsubscribe", "x"],
@@ -338,6 +341,11 @@ describe("isPublicPost", () => {
       ["me", "settings"],
       ["webhooks", "resend"],
       ["..", "email", "unsubscribe"],
+      // The playback grant and the heartbeat stay behind a session.
+      ["streams", "s1", "playback-token"],
+      ["streams", "s1", "heartbeat"],
+      ["streams", "s1", "preview-token", "x"],
+      ["streams", "..", "preview-token"],
     ]) {
       assert.equal(isPublicPost(path), false, path.join("/"));
     }

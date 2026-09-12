@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
@@ -9,8 +10,9 @@ import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { useConversationMembers } from "@/features/messages";
 import { opensAtLabel } from "@/lib/format";
-import { housePath } from "@/features/houses";
-import { useStream } from "@/features/streams";
+import { housePath, parseParticipantMeta, participantName } from "@/features/houses";
+import { useRoomPreview, useStream } from "@/features/streams";
+import { previewCaption } from "@/lib/room-preview-caption";
 
 /**
  * "X opened a gist room" — the invite card a room posts into its house group.
@@ -98,12 +100,16 @@ const TILES = [
 export function RoomCardShell({
   className,
   children,
+  onMouseLeave,
 }: {
   className?: string;
   children: React.ReactNode;
+  /** The card's preview stops the moment the pointer leaves. */
+  onMouseLeave?: () => void;
 }) {
   return (
     <div
+      onMouseLeave={onMouseLeave}
       className={cn(
         // The ring is an INSET shadow, not a border: the file's stroke sits
         // inside the card and takes no layout, so a border cost 2px of the
@@ -141,14 +147,18 @@ export function RoomTopicChip({ icon, label }: { icon: React.ReactNode; label: s
  * as that frame; the file carries no animation data), an "unmute" pill 65 x 20
  * at (165, 85) on `#333234`, and the Join pill at (232, 85).
  *
- * TWO THINGS THE SERVICE CANNOT BACK, stated rather than faked:
- *  · "Speaking Now" names the face shown — the first sampled participant, else
- *    the host — but no field says who is on mic. Until the payload carries an
- *    active speaker the label is the file's copy over the one person certainly
- *    in the room.
- *  · "unmute" would play the room's audio from the card. Listening needs a
- *    room token the service only issues on entry, so it is a real `disabled`
- *    control with the reason on it, never a button that does nothing.
+ * "unmute" LISTENS: it mints a listen-only grant (`POST /streams/:id/
+ * preview-token`, `useRoomPreview`) and plays the room's audio until the
+ * pointer leaves, the card unmounts or it is pressed again. It never sends a
+ * heartbeat. A refusal (404 / 409) makes the control quiet with its reason on
+ * it; a 429 backs off.
+ *
+ * "Speaking Now" NAMES NOBODY IT CANNOT HEAR (`lib/room-preview-caption.ts`):
+ * before the preview connects the slot counts listeners from `viewerCount`
+ * (nothing when the payload has none); connected, it names the SFU's active
+ * speaker, resolved through the participant's token metadata exactly as the
+ * house room does, and says nothing in silence. The face tile is the first
+ * sampled participant, else the host — a face, not a claim.
  */
 const PREVIEW_FACE_RING = 1.44;
 
@@ -218,6 +228,18 @@ export function GistRoomCard({
     the card is a record of what happened, not a tombstone.
   */
   const status = room?.status;
+  // The hover preview: pressed on, off on leave. Only where the file wires
+  // the hover state, and only on a live room.
+  const [listening, setListening] = useState(false);
+  const live = useRoomPreview(streamId, preview && listening, (participant) =>
+    participantName(participant.name) ?? parseParticipantMeta(participant.metadata)?.username ?? null
+  );
+  const caption = previewCaption({
+    connected: live.state === "listening",
+    speaker: live.speaker,
+    listening: room?.viewerCount ?? null,
+  });
+  const previewOff = live.state === "quiet" || live.state === "backoff" || live.state === "failed";
   const over = status === "ended" || status === "cancelled";
   const pending = status === "scheduled";
   // A room that has not opened says WHEN, which is the one thing somebody
@@ -264,6 +286,7 @@ export function GistRoomCard({
       message thread whose column can be narrower than 338.
     */
     <RoomCardShell
+      onMouseLeave={preview ? () => setListening(false) : undefined}
       className={cn(
         fluid ? "w-full" : "w-[338px] shrink-0",
         // Both variants clip (`clipsContent`), and the hover face's picture
@@ -271,7 +294,7 @@ export function GistRoomCard({
         preview && "group/room relative h-[120px] overflow-hidden"
       )}
     >
-      {preview && !over && !pending && faces[0] && (
+      {preview && !over && !pending && (
         <div className="absolute inset-0 hidden group-hover/room:block group-focus-within/room:block">
           {/* 415:12706 — the disc and the two-line title, 7.67 apart. */}
           <div className="absolute left-[14px] top-[16px] flex h-[35px] w-[310px] items-center gap-[7.67px]">
@@ -281,37 +304,50 @@ export function GistRoomCard({
             </p>
           </div>
           {/* 415:12727 — the one face, upright (the group's -4.09 cancels the
-              tile's 4). */}
-          <span
-            aria-hidden
-            className="absolute left-[16.4px] top-[70.4px] h-[34.5px] w-[34.5px] rounded-[11.49px] bg-white shadow-[0_4.31px_16.15px_0_rgba(147,147,147,0.25)]"
-            style={{ padding: PREVIEW_FACE_RING }}
-          >
-            <span className="block h-full w-full overflow-hidden bg-[#EDEDED]" style={{ borderRadius: 11.49 - PREVIEW_FACE_RING }}>
-              <Avatar
-                name={faces[0].displayName || faces[0].username}
-                seed={faces[0].id}
-                src={faces[0].avatarUrl}
-                size={34}
-                sizeClassName="h-full w-full"
-                className="rounded-none border-0"
-              />
+              tile's 4). A face, not a claim about who is speaking. */}
+          {faces[0] && (
+            <span
+              aria-hidden
+              className="absolute left-[16.4px] top-[70.4px] h-[34.5px] w-[34.5px] rounded-[11.49px] bg-white shadow-[0_4.31px_16.15px_0_rgba(147,147,147,0.25)]"
+              style={{ padding: PREVIEW_FACE_RING }}
+            >
+              <span className="block h-full w-full overflow-hidden bg-[#EDEDED]" style={{ borderRadius: 11.49 - PREVIEW_FACE_RING }}>
+                <Avatar
+                  name={faces[0].displayName || faces[0].username}
+                  seed={faces[0].id}
+                  src={faces[0].avatarUrl}
+                  size={34}
+                  sizeClassName="h-full w-full"
+                  className="rounded-none border-0"
+                />
+              </span>
             </span>
-          </span>
-          {/* 415:12722 — "Speaking Now" behind the file's wave frame. */}
-          <span className="absolute left-[57.09px] top-[88.49px] flex h-[16.59px] items-center text-[8px] font-medium leading-[10.4px] text-white">
-            {/* eslint-disable-next-line @next/next/no-img-element -- the file's own frame */}
-            <img src="/gist-rooms/speaking-wave.png" alt="" aria-hidden className="-mr-0.5 h-[16.59px] w-[16.59px]" />
-            Speaking Now
-          </span>
-          {/* 415:12713 — unmute: a flagged capability, disabled with its reason. */}
+          )}
+          {/* 415:12722 — the slot the file captions "Speaking Now": the wave
+              frame and a name only while somebody can be heard; a listener
+              count before that; nothing in silence or without a count. */}
+          {caption && (
+            <span
+              aria-live="polite"
+              className="absolute left-[57.09px] top-[88.49px] flex h-[16.59px] max-w-[104px] items-center text-[8px] font-medium leading-[10.4px] text-white"
+            >
+              {caption.kind === "speaking" && (
+                /* eslint-disable-next-line @next/next/no-img-element -- the file's own frame */
+                <img src="/gist-rooms/speaking-wave.png" alt="" aria-hidden className="-mr-0.5 h-[16.59px] w-[16.59px] shrink-0" />
+              )}
+              <span className="truncate">{caption.text}</span>
+            </span>
+          )}
+          {/* 415:12713 — unmute. Live: presses on and off. Refused: quiet, with why. */}
           <button
             type="button"
-            disabled
-            title="Listening from the card needs a room token the service only issues on entry"
-            className="absolute left-[165px] top-[85px] flex h-5 w-[65px] items-center justify-center gap-[3px] rounded-[30px] bg-[#333234] text-[8px] font-medium leading-[10.4px] text-white disabled:cursor-not-allowed"
+            disabled={previewOff}
+            aria-pressed={listening}
+            title={live.reason ?? undefined}
+            onClick={() => setListening((on) => !on)}
+            className="absolute left-[165px] top-[85px] flex h-5 w-[65px] items-center justify-center gap-[3px] rounded-[30px] bg-[#333234] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            unmute
+            {listening && !previewOff ? (live.state === "listening" ? "mute" : "…") : "unmute"}
             <IconUnmute className="h-2 w-2" />
           </button>
           {/* 415:12718 — Join, at the file's own box. */}
