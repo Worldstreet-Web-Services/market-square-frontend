@@ -1835,6 +1835,26 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
+  it("slides Post For You in after the houses, ABOVE the timeline", () => {
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    assert.ok(
+      feed.indexOf("{housesSlot}") < feed.indexOf("{postsSlot}"),
+      "Post For You moved above Popular Houses"
+    );
+    // The timeline is still there. The design's frame draws no feed under the
+    // rail, but ogazboiz kept it when asked, and it must not be deleted on a
+    // reading of a frame.
+    assert.ok(feed.indexOf("{postsSlot}") < feed.indexOf("ref={listRef}"), "the timeline went away");
+    const rail = stripComments(read("components/layout/post-for-you.tsx"));
+    // ONE post card, two surfaces — never a second card built for a rail.
+    assert.match(rail, /<FeedItemCard/);
+    assert.doesNotMatch(rail, /ws-post\b/, "the rail is drawing its own post slab");
+    assert.match(rail, /const SHOWN = 10;/);
+    assert.match(rail, /gap-\[17\.37px\]/);
+    // Nothing to show is no section.
+    assert.match(rail, /if \(!feed\.isPending && items\.length === 0\) return null;/);
+  });
+
   it("puts one search field in the bar, for a code or a name", () => {
     const shell = stripComments(read("components/layout/app-shell.tsx"));
     // It lives in the BAR: TopBarActions returns null for a signed-out reader,

@@ -151,6 +151,7 @@ export function FeedPage({
   friendsSlot,
   comingSoonSlot,
   housesSlot,
+  postsSlot,
   communitySlot,
   palsSlot,
 }: {
@@ -182,6 +183,11 @@ export function FeedPage({
    * nothing when no public house exists.
    */
   housesSlot?: React.ReactNode;
+  /**
+   * "Post For You" (1314:153017) — a rail of the same post card the timeline
+   * draws, ABOVE the timeline rather than instead of it.
+   */
+  postsSlot?: React.ReactNode;
   communitySlot?: React.ReactNode;
   /** The pals rail (540:19351), dropped a few posts into the timeline. */
   palsSlot?: React.ReactNode;
@@ -394,6 +400,10 @@ export function FeedPage({
         {/* 1305:149179 — the houses anybody can join, closing the column's
             sections before the timeline. */}
         {housesSlot}
+
+        {/* 1314:153017 — a taste of the lane as a slide. The timeline below is
+            unchanged: ogazboiz kept it when asked. */}
+        {postsSlot}
 
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
