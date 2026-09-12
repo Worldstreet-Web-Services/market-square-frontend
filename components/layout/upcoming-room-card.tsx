@@ -7,8 +7,11 @@ import { ShareSheet } from "@/components/ui/share-sheet";
 import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
+import { useGate } from "@/hooks/use-gate";
+import { useAuth } from "@/hooks/use-auth";
 import { housePath } from "@/features/houses";
 import { clockLabel, shortDateLabel, startsInLabel } from "@/lib/format";
+import { useRemindMe } from "@/features/streams";
 import type { Stream } from "@/features/streams";
 
 /**
@@ -63,6 +66,22 @@ const FIGMA_TOPIC = "trading";
 export function UpcomingRoomCard({ stream }: { stream: Stream }) {
   const topics = useTopics();
   const [sharing, setSharing] = useState(false);
+  const gate = useGate();
+  const { authenticated } = useAuth();
+  const remind = useRemindMe(stream.id);
+  /*
+    THREE STATES, AND THE THIRD IS WHY THE FIELD IS OPTIONAL.
+
+    `remindedByMe` is ABSENT for a signed-out reader and a boolean for a
+    signed-in one, so this can tell "you have not asked" from "there is nobody
+    to have asked" — the distinction the service deliberately preserves. A
+    signed-out reader is offered the ask and gated into sign-in on the tap,
+    never shown a filled-in "not asked" state that is not about them.
+
+    A 404 means the route is not deployed, so the control disappears rather
+    than promising a reminder that nothing will send.
+  */
+  const asked = stream.remindedByMe === true;
   const href = housePath(stream.id);
   const startsAt = stream.scheduledAt;
   const host = stream.owner;
@@ -237,6 +256,33 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
               {startsInLabel(startsAt)}
             </span>
           </>
+        )}
+
+        {/* Remind me — not in the file, which draws only Share. It sits left of
+            Share on the same baseline, quiet rather than coloured, because the
+            room's own gradient belongs to the one action the design chose. */}
+        {!remind.unavailable && (
+          <button
+            type="button"
+            aria-pressed={authenticated ? asked : undefined}
+            disabled={remind.isPending}
+            onClick={() => gate(() => remind.mutate(!asked))}
+            className="ws-press absolute flex items-center font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
+            style={{
+              left: u(287),
+              top: u(94),
+              gap: u(4),
+              padding: `${u(8)} ${u(10)}`,
+              borderRadius: u(100),
+              background: asked ? "rgba(159,90,255,0.09)" : "rgba(255,255,255,0.05)",
+              boxShadow: `inset 0 0 0 ${u(1)} ${asked ? "rgba(159,90,255,0.5)" : "rgba(255,255,255,0.2)"}`,
+              color: asked ? "#9F65FD" : "#FFFFFF",
+              fontSize: u(9),
+              lineHeight: u(12),
+            }}
+          >
+            {asked ? "Reminding" : "Remind me"}
+          </button>
         )}
 
         {/* 1295:140175 — Share: the gradient over the #7E3BEB the file stacks under it. */}

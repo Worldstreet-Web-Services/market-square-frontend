@@ -211,6 +211,17 @@ export const TicketSchema = z.object({
 });
 
 export const StreamSchema = z.object({
+  /**
+   * Has THIS reader asked to be told when the room opens?
+   *
+   * Deliberately `.optional()` with NO default, unlike `likedByMe` and
+   * `bookmarkedByMe` beside it. The service sends it for a signed-in caller and
+   * OMITS it entirely for a signed-out one, because "you have not asked" and
+   * "there is nobody to have asked" are different facts. Defaulting it to
+   * `false` would collapse them and render a Remind me button that lies on
+   * arrival to every signed-out reader.
+   */
+  remindedByMe: z.boolean().optional(),
   id: z.string(),
   ownerId: z.string(),
   owner: ProfileSchema.nullable().optional().default(null),

@@ -96,6 +96,9 @@ export const IngestSchema = z.object({
   url: z.preprocess((v) => v ?? "", z.string()),
 });
 
+/** `POST|DELETE /streams/:id/remind` — both answer the resulting state. */
+export const RemindSchema = z.object({ reminded: z.boolean() });
+
 export const GoLiveSchema = z.object({
   stream: StreamSchema,
   ingest: IngestSchema.nullable().optional().default(null),

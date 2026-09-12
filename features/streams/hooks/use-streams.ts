@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { baseIdentity } from "@/features/streams/lib/stage";
-import { errorMessage } from "@/lib/api/envelope";
+import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { trackMarketEvent } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -40,6 +40,7 @@ import {
   fetchMySpeakerRequest,
   fetchSpeakerRequests,
   resolveSpeakerRequest,
+  remindStream,
 } from "@/features/streams/lib/api";
 import type { Stream, StreamCategory, StreamKind, TicketTier } from "@/features/streams/lib/types";
 import {
@@ -365,6 +366,45 @@ export function useCreateStream() {
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't create the stream.")),
   });
+}
+
+/**
+ * "Remind me" on a room that has not opened yet.
+ *
+ * The service tells the askers when the host actually opens the room — fired by
+ * go-live, never by the clock — so this promises nothing the product cannot
+ * keep. Idempotent both ways.
+ *
+ * A 404 is "not deployed" rather than "no such room", the same rule the
+ * Arkmark follows, so the control goes quiet instead of raising an error on a
+ * server that has not shipped it. A 409 means the room is already over, which
+ * is worth saying out loud.
+ */
+export function useRemindMe(streamId: string) {
+  const queryClient = useQueryClient();
+  const [unavailable, setUnavailable] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: (remind: boolean) => remindStream(streamId, remind),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "streams"] });
+      toast.success(result.reminded ? "We'll tell you when it opens" : "Reminder off");
+    },
+    onError: (error) => {
+      if (errorCode(error) === "NOT_FOUND") {
+        setUnavailable(true);
+        return;
+      }
+      if (errorCode(error) === "CONFLICT") {
+        toast.error(errorMessage(error, "That room is already over."));
+        return;
+      }
+      toast.error(errorMessage(error, "Couldn't set that reminder."));
+    },
+  });
+
+  return { ...mutation, unavailable };
 }
 
 export function useGoLive() {

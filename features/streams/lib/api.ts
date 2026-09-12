@@ -13,6 +13,7 @@ import {
   MyTicketsSchema,
   PlaybackSchema,
   QuoteSchema,
+  RemindSchema,
   StreamEventsSchema,
   SpeakerRequestListSchema,
   SpeakerRequestSchema,
@@ -124,6 +125,19 @@ export async function reportTicketTransfer(streamId: string, ticketId: string, t
   return TicketSchema.parse(
     await msApi.post(`/streams/${streamId}/tickets/${ticketId}/transfer`, { txHash })
   );
+}
+
+/**
+ * Ask to be told when a scheduled room opens, or take the ask back.
+ *
+ * Idempotent both ways, and fired by go-live rather than by the clock — so the
+ * notification says the room IS open, never that it ought to be. A room that
+ * has already ended answers 409: a promise to announce something that is over
+ * is one the service cannot keep.
+ */
+export async function remindStream(streamId: string, remind: boolean) {
+  const path = `/streams/${streamId}/remind`;
+  return RemindSchema.parse(remind ? await msApi.post(path) : await msApi.del(path));
 }
 
 export async function fetchPlaybackToken(streamId: string) {

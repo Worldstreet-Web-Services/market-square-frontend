@@ -228,6 +228,23 @@ function collectCalls(root) {
  */
 const PENDING_ROUTES = {
 
+  // ── scheduled-room reminders (backend PR #206, served locally) ────────────
+  // "Remind me" on an upcoming gist room. Both verbs are live on the local
+  // stack and in the served spec, but #206 has not merged, so production
+  // answers 404 until it does — which the card already handles by going quiet.
+  // DELETE BOTH ENTRIES when #206 is deployed.
+  "post /streams/{}/remind": {
+    reason:
+      "Ask to be told when a scheduled gist room opens. Served locally on " +
+      "backend PR #206; 404s in production until that merges. DELETE THIS " +
+      "ENTRY when #206 deploys.",
+  },
+  "delete /streams/{}/remind": {
+    reason:
+      "Cancel that ask. Same route and same PR as the post above. DELETE " +
+      "THIS ENTRY when #206 deploys.",
+  },
+
   // ── the operations console ────────────────────────────────────────────────
   // `app/operations/page.tsx` renders this slice, and all three of its calls
   // 404 today: no `/operations/*` route exists in market-square's spec, and no

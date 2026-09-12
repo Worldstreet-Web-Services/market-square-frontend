@@ -1821,6 +1821,24 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
+  it("offers Remind me honestly: absent means signed out, never 'not asked'", () => {
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    // NO .default(false) — that would collapse "nobody is signed in" into
+    // "you have not asked" and render a button that lies on arrival.
+    assert.match(schemas, /remindedByMe: z\.boolean\(\)\.optional\(\),/);
+    assert.doesNotMatch(schemas, /remindedByMe: z\.boolean\(\)\.optional\(\)\.default/);
+    const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
+    assert.match(card, /const asked = stream\.remindedByMe === true;/);
+    // Signed-out readers are gated into sign-in, not shown a false state.
+    assert.match(card, /onClick=\{\(\) => gate\(\(\) => remind\.mutate\(!asked\)\)\}/);
+    // A 404 is "not deployed": the control goes, rather than promising a
+    // reminder nothing will send.
+    assert.match(card, /!remind\.unavailable && \(/);
+    const hook = stripComments(read("features/streams/hooks/use-streams.ts"));
+    assert.match(hook, /errorCode\(error\) === "NOT_FOUND"/);
+    assert.match(hook, /errorCode\(error\) === "CONFLICT"/, "a room already over is not reported");
+  });
+
   it("builds the upcoming card at 1295:140164's own scale, nothing rounded up", () => {
     const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
     // Every value in the node divides by its 0.80037 stroke to a round design

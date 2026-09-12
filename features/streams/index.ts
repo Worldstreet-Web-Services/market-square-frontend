@@ -8,5 +8,5 @@ export { TicketWallet } from "./components/ticket-wallet";
 export { LiveNowRail } from "./components/live-now-rail";
 export { TicketsRail } from "./components/tickets-rail";
 export { StreamCard } from "./components/stream-card";
-export { useStream, useStreamList } from "./hooks/use-streams";
+export { useRemindMe, useStream, useStreamList } from "./hooks/use-streams";
 export type { Stream } from "./lib/types";
