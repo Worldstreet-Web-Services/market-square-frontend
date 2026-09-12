@@ -941,7 +941,11 @@ describe("The topic row is node 647:16266", () => {
 });
 
 /**
- * HOME'S GO LIVE BANNER IS NODE 647:17219 — the live file, updated 2026-09-10.
+ * HOME'S BANNER IS NODE 1305:149178 — the 2026-09-12 Home.
+ *
+ * It REPLACED 647:17219's 938 x 168 artboard, which this block used to pin. The
+ * drawing is asserted in "draws Home's banner on 1305:149178's own numbers";
+ * what stays here is where it SITS and what it is not.
  *
  * The file draws it 938 x 168 directly under the topic row. The column is 600,
  * so from md up the banner keeps the file's composition and scales as ONE
@@ -949,30 +953,27 @@ describe("The topic row is node 647:16266", () => {
  * units), rather than reflowing a two-line headline around a 138px figure.
  * Phones keep the compact strip: no mobile frame was given.
  */
-describe("Home's Go Live banner is node 647:17219", () => {
+describe("Home's banner is node 1305:149178", () => {
   const cta = stripComments(read("features/streams/components/live-cta.tsx"));
   const feed = stripComments(read("features/feed/components/feed-page.tsx"));
-  const home = stripComments(read("components/layout/home-screen.tsx"));
 
-  it("draws the file's 938 x 168 artboard, scaled as one picture from md", () => {
-    assert.match(cta, /const DESIGN_W = 938;/);
-    assert.match(cta, /const DESIGN_H = 168;/);
+  it("scales against its own width, and keeps a phone strip the artboard cannot become", () => {
     assert.match(cta, /@container/, "the banner no longer scales against its own width");
     assert.match(cta, /hidden md:block/);
+    assert.match(cta, /md:hidden/, "the phone strip is gone");
   });
 
-  it("paints the gradient in pixel space, not the unit square", () => {
-    assert.match(cta, /bg-\[linear-gradient\(92deg,#AD46FF_-16\.3%,#682A99_82%\)\]/);
+  it("no longer carries 647:17219's artboard", () => {
+    // Replaced, not restyled — see the 1305:149178 test for what it draws now.
+    assert.doesNotMatch(cta, /DESIGN_W = 938/);
+    assert.doesNotMatch(cta, /92deg,#AD46FF_-16\.3%/);
   });
 
-  it("places the two soft-light strokes from the file's path geometry", () => {
-    assert.match(cta, /mixBlendMode: "soft-light"/);
-    assert.match(cta, /transform="matrix\(1 0 0 1 -41 -92\)"/);
-    assert.match(cta, /transform="matrix\(-1 0 0 -1 992 275\.203125\)"/);
-  });
-
-  it("opens Home above the rooms, for signed-in readers only", () => {
-    assert.match(home, /liveCtaSlot=\{authenticated \? <LiveCta \/> : null\}/);
+  it("opens Home above the rooms, for EVERYBODY", () => {
+    // It was signed-in only; ogazboiz opened it to visitors on 2026-09-12, so
+    // the strongest invitation on the page is seen by people who have not yet
+    // accepted it. The tap gates instead.
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /liveCtaSlot=\{<LiveCta \/>\}/);
     const banner = feed.indexOf("{liveCtaSlot && ");
     const rooms = feed.indexOf("{roomsSlot}");
     assert.ok(banner > 0 && rooms > banner, "the banner is not above the rooms");
@@ -1413,12 +1414,15 @@ describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () =>
 });
 
 describe("The Home banner speaks gist room for now", () => {
-  it("says gist room and opens the gist room sheet, not the studio", () => {
+  it("opens the gist room sheet, not the studio, and never says Go Live", () => {
     const cta = stripComments(read("features/streams/components/live-cta.tsx"));
-    assert.equal((cta.match(/Open a gist room now and/g) ?? []).length, 2);
-    assert.equal((cta.match(/href="\/gist-rooms\?open=1"/g) ?? []).length, 2);
+    assert.match(cta, /\/gist-rooms\?open=1/, "the banner stopped opening the gist room sheet");
     assert.doesNotMatch(cta, />\s*Go Live\s*</, "the banner says Go Live again");
     assert.doesNotMatch(cta, /href="\/studio"/);
+    // Both breakpoints go through ONE gated handler, so a signed-out reader is
+    // asked to sign in rather than meeting a dead control.
+    assert.equal((cta.match(/onClick=\{open\}/g) ?? []).length, 2, "a breakpoint lost its handler");
+    assert.match(cta, /const open = \(\) => gate\(/);
   });
 });
 
@@ -1833,6 +1837,34 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // A grid cell stretches to its column: without a square ratio the selected
     // day renders as an oval rather than a disc.
     assert.match(field, /aspect-square/);
+  });
+
+  it("draws Home's banner on 1305:149178's own numbers, for everybody", () => {
+    const cta = stripComments(read("features/streams/components/live-cta.tsx"));
+    // 573 x 102 at radius 10 on the file's 126deg ramp — the 938x168 banner
+    // from 647:17219 is replaced, not restyled.
+    assert.match(cta, /const W = 573;/);
+    assert.match(cta, /height: u\(102\), borderRadius: u\(10\)/);
+    assert.match(cta, /linear-gradient\(126deg,#AD46FF_0%,#682A99_82%\)/);
+    // The file's own word on the button.
+    assert.match(cta, /Host Room/);
+    assert.doesNotMatch(cta, /Gist Room/, "the old button label is back");
+    // BOTH arcs, as exported: each carries its own 25% and soft-light blend.
+    assert.match(cta, /banner-arc-left\.svg/);
+    assert.match(cta, /banner-arc-right\.svg/);
+    // The mascot overhangs the top edge, so the banner must not clip.
+    assert.match(cta, /top: u\(-12\)/);
+    assert.doesNotMatch(cta, /relative overflow-hidden bg-\[linear-gradient\(126deg/, "the banner clips its own mascot");
+    // The headline is Manrope; the sub-line is the file's #E9CEFF.
+    assert.match(cta, /font-\[family-name:var\(--font-heading\)\] font-bold text-white/);
+    assert.match(cta, /text-\[#E9CEFF\]/);
+    // The four pager dots.
+    assert.match(cta, /const DOTS = \[27\.08, 10\.29, 9\.21, 9\.21\];/);
+    // Shown to EVERYONE, with sign-in on the tap (ogazboiz, 2026-09-12) — it
+    // was the strongest invitation on the page and showed to nobody who had
+    // not already joined.
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /liveCtaSlot=\{<LiveCta \/>\}/);
+    assert.match(cta, /const gate = useGate\(\);/);
   });
 
   it("puts an announcement in its own band, never in the feed", () => {

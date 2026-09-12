@@ -5,7 +5,6 @@ import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
 import { LiveCta } from "@/features/streams";
-import { useAuth } from "@/hooks/use-auth";
 import { JoinACommunity } from "@/components/layout/join-a-community";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
@@ -65,13 +64,12 @@ const tipSlot = (post: Post) => (
  */
 export function HomeScreen() {
   // Home's own eight, in the design's order (`?surface=home`).
-  const { authenticated } = useAuth();
   return (
     <FeedPage
       followSlot={followSlot}
       winkSlot={winkSlot}
       tipSlot={tipSlot}
-      liveCtaSlot={authenticated ? <LiveCta /> : null}
+      liveCtaSlot={<LiveCta />}
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
       comingSoonSlot={<ComingSoonRooms />}
