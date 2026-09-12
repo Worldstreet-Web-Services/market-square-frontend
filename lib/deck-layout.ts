@@ -84,6 +84,12 @@ export interface DeckNode {
    * card, as on `/pals`.
    */
   box?: { top: number; bottom: number };
+  /**
+   * No right disc: the next card is in the fan but blurred, and going on is
+   * the pass or a swipe left. The fan's right reach is then the card's, not
+   * the disc's. Home, since 2026-09-12.
+   */
+  hideNext?: boolean;
 }
 
 export const DECK_NODE: DeckNode = {
@@ -149,19 +155,29 @@ export interface DeckLayout {
  */
 export const HOME_DECK_NODE: DeckNode = {
   card: { width: 310.24, height: 422.24 },
-  /** The left card's box edge (138.12) to the right card's (957.18), from the front card's centre (524.17). */
-  fan: { left: -386.05, right: 433.06 },
-  /** 695:27703 / 695:27693 — 64 discs centred 15.88 below the front card's centre, at -357.17 and +412.83. */
-  arrow: { size: 64, dy: 15.88, leftDx: -357.17, rightDx: 412.83 },
+  /*
+    HOME'S FAN, TIGHTENED (ogazboiz, 2026-09-12): the file's 647:16300 reaches
+    386.05 left and 433.06 right of the front card's centre, with the discs at
+    -357.17 and +412.83. The maintainers asked for a bigger front card, the
+    next person blurred rather than readable, and no right disc. So the fan
+    now reaches 300 each side: the previous card and the left disc on the
+    left, the blurred next card on the right, and the front card's centre is
+    the column's centre. Each back card sits so its ROTATED box (347.15 and
+    350.87 wide) ends exactly on the reach. The cards' own sizes, tilts and
+    dimming are the file's; only where they sit and how far the fan reaches
+    changed.
+  */
+  fan: { left: -300, right: 300 },
+  arrow: { size: 64, dy: 15.88, leftDx: -268, rightDx: 268 },
   places: {
     /** 647:16314 — size 287.79 x 391.69, turned -9.274deg. */
-    [-1]: { dx: -212.47, dy: 5.71, scale: 0.9276, rot: -9.274, opacity: 0.2 },
+    [-1]: { dx: -126.4, dy: 5.71, scale: 0.9276, rot: -9.274, opacity: 0.2 },
     0: { dx: 0, dy: 0, scale: 1, rot: 0, opacity: 1 },
     /** 647:16301 — size 287.79 x 391.69, turned 9.904deg. */
-    1: { dx: 257.62, dy: 12.02, scale: 0.9276, rot: 9.904, opacity: 0.2 },
+    1: { dx: 124.6, dy: 12.02, scale: 0.9276, rot: 9.904, opacity: 0.2 },
   },
-  /** The group 647:16300 runs from the front card's top to 229.70 below its centre. */
   box: { top: -211.12, bottom: 229.7 },
+  hideNext: true,
 };
 
 /** The deck's full extent from the front card's centre, with or without the step discs. */
@@ -170,7 +186,7 @@ export function deckExtent(arrows: boolean, node: DeckNode = DECK_NODE): { left:
   const discRight = node.arrow.rightDx + node.arrow.size / 2;
   return {
     left: arrows ? Math.min(node.fan.left, discLeft) : node.fan.left,
-    right: arrows ? Math.max(node.fan.right, discRight) : node.fan.right,
+    right: arrows && !node.hideNext ? Math.max(node.fan.right, discRight) : node.fan.right,
   };
 }
 

@@ -176,9 +176,13 @@ describe("Home's own deck — node 647:16300", () => {
   const layout = deckLayout({ room, arrows: true, node: H });
   const edge = (dx: number, half: number, side: 1 | -1) => layout.frontX + (dx + side * half) * layout.k;
 
-  it("fits the fan and both discs in the column, cutting nothing", () => {
+  // Since 2026-09-12 Home draws no right disc: the fan's right reach is the
+  // blurred next card's own box, and the left disc still sits on the edge.
+  it("fits the fan, the left disc and the blurred next card in the column, cutting nothing", () => {
+    assert.equal(H.hideNext, true);
     close(edge(H.arrow.leftDx, H.arrow.size / 2, -1), 0, 1e-6, "left disc");
-    close(edge(H.arrow.rightDx, H.arrow.size / 2, 1), room, 1e-6, "right disc");
+    close(edge(H.places[1]!.dx, RIGHT_BOX.width / 2, 1), room, 0.5, "next card");
+    close(layout.frontX, room / 2, 1e-6, "front card centred");
     for (const [dx, half] of [
       [H.places[-1]!.dx, LEFT_BOX.width / 2],
       [H.places[1]!.dx, RIGHT_BOX.width / 2],
