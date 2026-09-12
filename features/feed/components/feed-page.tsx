@@ -465,14 +465,16 @@ export function FeedPage({
     return (
       <>
         {/*
-          `/pals` — node 1328:1885, a 951 artboard on the chrome's `#121214`
-          with everything in its left 618 (1331:21792). Column-relative: the
-          search row at (13, 12), the stories at (13, 111), and the list at
-          (25, y) — 573.14 wide on a 47.89 gap. The wrapper's 11 is the node's
-          own inset (its deck group and its list clip both start there), and
-          every other x is measured from it: the head's 2, the list's 14. The
-          vertical rhythm is the node's: 12 above the head, 51 between the
-          head's rows (the search row's foot at 60 to the stories at 111).
+          `/pals` — node 1328:1885 in its page 1328:1882, which draws the
+          column's content in the left 618 (1331:21792) and the RAIL beside it
+          at x=618: so it is the shell's 600 column with `RightRail`, not a
+          FULL route. Column-relative: the search row at (13, 12), the
+          stories at (13, 111), and the list at (25, y) — 573.14 wide on a
+          47.89 gap, its edge on 598.14. From md the wrapper carries no
+          gutter and every child sits at the node's own x, so those numbers
+          land on a 600 column exactly; a phone keeps the 16. The vertical
+          rhythm is the node's: 12 above the head, 51 between the head's rows
+          (the search row's foot at 60 to the stories at 111).
 
           THE NODE'S DECK IS NOT DRAWN. 1328:1885 puts the wink deck and "Make
           some friends" between the stories and the list; ogazboiz took it
@@ -488,23 +490,22 @@ export function FeedPage({
           row follows the search row on the same 51 rather than leaving a
           96-tall hole where a stranger's stories would be.
         */}
-        <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col px-4 pb-6 pt-3 md:px-[11px]">
+        <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col px-4 pb-6 pt-3 md:px-0">
           {headSlot}
 
           {/* Quoting a post from this list opens the composer where the
               reader is, directly over the list. */}
-          {composer && <div className="mt-6 md:ml-[14px] md:w-[573.14px] md:max-w-[calc(100%-14px)]">{composer}</div>}
+          {composer && <div className="mt-6 md:ml-[25px] md:w-[573.14px] md:max-w-[calc(100%-25px)]">{composer}</div>}
 
           {fresh.pinned && (
             <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
           )}
 
           {/*
-            1344:21877 — 573.14 wide, 14 past the wrapper's 11 (the node's 25),
-            cards 47.89 apart. On a 600 column that leaves 1.86 between the
-            list's right edge and the column's: it is left as the file's slack,
-            not stretched away. Narrower columns cap the list at what is left
-            of them, the same way the deck caps its 596. The node's card is the
+            1344:21877 — 573.14 wide at the node's 25, cards 47.89 apart. On
+            the 600 column that leaves 1.86 between the list's right edge and
+            the column's: it is left as the file's slack, not stretched away.
+            Narrower columns cap the list at what is left of them. The node's card is the
             shared `PostCard` at 0.7551 (573.14 / 759; its 0.52 stroke, 12.46
             radius and 47.89 gap are all `ws-post`'s times that); the card is
             not rescaled — the list takes the node's width and gap and the
@@ -512,7 +513,7 @@ export function FeedPage({
           */}
           <div
             ref={listRef}
-            className="mt-6 space-y-4 md:ml-[14px] md:w-[573.14px] md:max-w-[calc(100%-14px)] md:space-y-[47.89px]"
+            className="mt-6 space-y-4 md:ml-[25px] md:w-[573.14px] md:max-w-[calc(100%-25px)] md:space-y-[47.89px]"
           >
             {!ready && <PostSkeleton />}
             {ready && gated && (
