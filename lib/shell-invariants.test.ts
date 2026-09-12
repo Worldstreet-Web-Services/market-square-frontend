@@ -1728,12 +1728,17 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(sheet, /scheduledAt: new Date\(startsAt\)\.toISOString\(\)/);
   });
 
-  it("draws upcoming rooms in the same grid, with the file's own upcoming card", () => {
+  it("draws upcoming rooms as the file's sideways rail, with its own card", () => {
     const street = stripComments(read("features/houses/components/houses-street.tsx"));
     assert.match(street, /aria-label="Gist rooms opening later" className="pt-10"/);
-    assert.match(street, /<div className="grid gap-6 pt-6 md:grid-cols-2">\s*\{scheduledHouses\.map/);
     assert.doesNotMatch(street, /HouseRow/, "upcoming rooms are a list of bare rows again");
     assert.match(street, /\(upcomingCardSlot \?\? roomCardSlot\)\?\.\(stream\)/);
+    // 1295:140163 is a sideways-scrolling row of fixed-width cards, not a grid.
+    assert.match(street, /flex items-center gap-5 overflow-x-auto/);
+    assert.match(street, /w-\[479px\] shrink-0/);
+    const upcoming = street.slice(street.indexOf('aria-label="Gist rooms opening later"'));
+    assert.doesNotMatch(upcoming, /grid-cols/, "the upcoming rail is a grid again");
+    assert.match(street, /aria-label="Gist rooms open now" className="grid gap-6 pt-6 md:grid-cols-2"/, "the open-rooms grid was collapsed into the rail change");
     assert.match(stripComments(read("components/layout/gist-rooms-screen.tsx")), /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
   });
 

@@ -259,9 +259,15 @@ export function HousesStreet({
               <p className="pt-1 text-[14px] leading-5 text-white/50">
                 Rooms with a time on them. Open the page to see what it is about.
               </p>
-              <div className="grid gap-6 pt-6 md:grid-cols-2">
+              <div
+                className="flex items-center gap-5 overflow-x-auto pt-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                role="list"
+                aria-label="Gist rooms opening later"
+              >
                 {scheduledHouses.map((stream) => (
-                  <div key={stream.id}>{(upcomingCardSlot ?? roomCardSlot)?.(stream)}</div>
+                  <div key={stream.id} role="listitem" className="w-[479px] shrink-0">
+                    {(upcomingCardSlot ?? roomCardSlot)?.(stream)}
+                  </div>
                 ))}
               </div>
             </section>
