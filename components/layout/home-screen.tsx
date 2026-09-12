@@ -13,6 +13,7 @@ import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
 import { ComingSoonRooms } from "@/components/layout/coming-soon-rooms";
 import { PopularHouses } from "@/components/layout/popular-houses";
+import { EcosystemPartnersRail } from "@/components/layout/ecosystem-partners-rail";
 import { PostForYou } from "@/components/layout/post-for-you";
 import { SuggestedPals } from "@/components/layout/suggested-pals";
 
@@ -109,6 +110,7 @@ export function HomeScreen() {
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
       comingSoonSlot={<ComingSoonRooms />}
+      partnersSlot={<EcosystemPartnersRail />}
       housesSlot={<PopularHouses />}
       postsSlot={<PostForYou followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />}
       palsSlot={<SuggestedPals />}
