@@ -2165,13 +2165,20 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(menu, /height=\{62\}/);
     assert.match(menu, /title="Show content in this location"/);
     assert.match(menu, /title="Trends For You"/);
-    // The two preferences the service does not carry are real disabled
-    // checkboxes with the reason on them; the "13"s the render hides are not drawn.
-    assert.match(menu, /role="checkbox"\n\s*aria-checked=\{false\}\n\s*aria-label=\{title\}\n\s*disabled\n\s*title=\{MISSING\}/);
+    // "Show content in this location" is the service's `privacy.personalizeByPlace`,
+    // read and written through the settings slice's ONE owner, under `privacy`
+    // exactly as the settings screen writes it; Trends stays a real disabled
+    // control with its reason. The "13"s the render hides are not drawn.
+    assert.match(menu, /import \{ useSettings, useUpdateSettings \} from "@\/features\/settings";/);
+    assert.match(menu, /const byPlace = settings\.data\?\.privacy\?\.personalizeByPlace;/);
+    assert.match(menu, /onChange=\{\(value\) => gate\(\(\) => save\.mutate\(\{ privacy: \{ personalizeByPlace: value \} \}\)\)\}/);
+    assert.doesNotMatch(menu, /explore\./, "the preference is being written under a key the service does not have");
+    assert.match(menu, /title="Trends For You"\n\s*body=[^\n]*\n\s*checked=\{false\}\n\s*disabledReason=\{MISSING\}/);
+    assert.match(menu, /role="checkbox"\n\s*aria-checked=\{checked\}\n\s*aria-label=\{title\}\n\s*disabled=\{disabledReason !== null\}/);
     assert.doesNotMatch(menu, />\s*13\s*</);
     // The glyphs are the file's; the checkbox and caret are the existing exports.
     assert.match(menu, /IconExploreClose|IconExploreLocation|IconExploreTrends/);
-    assert.match(menu, /<IconCheckbox className="h-4 w-4" \/>/);
+    assert.match(menu, /checked \? <IconCheckboxChecked className="h-4 w-4" \/> : <IconCheckbox className="h-4 w-4" \/>/);
     const screen = stripComments(read("components/layout/room-code-screen.tsx"));
     // A private room shows the doorplate and never a join that would refuse.
     assert.match(screen, /This room is private/);

@@ -1,6 +1,8 @@
 "use client";
 
-import { IconCheckbox } from "@/components/ui/icons";
+import { IconCheckbox, IconCheckboxChecked } from "@/components/ui/icons";
+import { useGate } from "@/hooks/use-gate";
+import { useSettings, useUpdateSettings } from "@/features/settings";
 import { IconTopCaret } from "@/components/ui/topbar-icons";
 import { IconExploreClose, IconExploreLocation, IconExploreTrends } from "@/components/ui/home-icons";
 
@@ -26,14 +28,24 @@ import { IconExploreClose, IconExploreLocation, IconExploreTrends } from "@/comp
  * that the file's own render does not show (the checkbox sits on top of it,
  * and the location row clips it). It is not drawn.
  *
- * ─── WHAT THE TWO CHECKBOXES CAN AND CANNOT DO ───────────────────────────────
- * Neither preference exists on the service: `PATCH /me/settings` carries
- * `notifications`, `privacy` and `chat`; `PATCH /me` carries the location
- * itself and `privateBrowsing`; `GET /hashtags/trending` and `/feed` take no
- * location or personalisation parameter. So both are real `disabled` controls
- * with the reason on them — visible and inert, never a switch that flips
- * nothing (the flagged-capability rule). They come alive the day the service
- * publishes the two booleans and honours them; the ask is in the report.
+ * ─── THE TWO CHECKBOXES ──────────────────────────────────────────────────────
+ * "Show content in this location" IS LIVE, under the service's own name:
+ * `privacy.personalizeByPlace` on `GET /me/settings` (defaults true), written
+ * as `PATCH /me/settings { privacy: { personalizeByPlace } }` — the body is a
+ * strict object, so the key goes under `privacy` exactly as the settings
+ * screen writes it, through the SAME `useSettings` / `useUpdateSettings`
+ * (one owner; the mutation is optimistic and rolls back on refusal, and the
+ * service invalidates the viewer's for-you page itself). What it does: lifts
+ * posts whose author's DECLARED place matches the viewer's — city, then
+ * region, then country — declared only, never anything observed. The row's
+ * copy is the file's. Signed out there is nothing to read, so the tap is the
+ * sign-in; a service without the key (an older stage) leaves the box inert
+ * with the reason, as the settings screen does.
+ *
+ * "Trends For You" stays a real `disabled` control with the reason on it: the
+ * trending route is global with no viewer parameter, and what "personalised"
+ * would rank on is a product question with the owner (flagged-capability
+ * rule — visible and inert, never a switch that flips nothing).
  *
  * "Explore location" IS live: it opens the location sheet, which writes
  * `city`/`region` through `PATCH /me` — the field Explore's people filters
@@ -43,6 +55,11 @@ import { IconExploreClose, IconExploreLocation, IconExploreTrends } from "@/comp
 const MISSING = "Not offered by the service yet";
 
 export function ExploreSettingsMenu({ close, onLocation }: { close: () => void; onLocation: () => void }) {
+  const gate = useGate();
+  const settings = useSettings();
+  const save = useUpdateSettings();
+  // Present only once the service carries the key; `undefined` is "not here".
+  const byPlace = settings.data?.privacy?.personalizeByPlace;
   return (
     <>
       {/* 1317:158024 — the heading row. */}
@@ -80,29 +97,42 @@ export function ExploreSettingsMenu({ close, onLocation }: { close: () => void; 
           icon={<IconExploreLocation className="h-5 w-5" />}
           title="Show content in this location"
           body="When this is on, you’ll see what’s happening around you right now."
+          // Unread (signed out, still loading) shows the service's default, on.
+          checked={byPlace ?? true}
+          disabledReason={settings.isSuccess && byPlace === undefined ? MISSING : null}
+          onChange={(value) => gate(() => save.mutate({ privacy: { personalizeByPlace: value } }))}
         />
         <PreferenceRow
           height={62}
           icon={<IconExploreTrends className="h-5 w-5" />}
           title="Trends For You"
           body="You can personalize trends based on your location and who you follow."
+          checked={false}
+          disabledReason={MISSING}
         />
       </div>
     </>
   );
 }
 
-/** 1317:158035 / 1317:158045 — a preference the service does not carry yet. */
+/** 1317:158035 / 1317:158045 — a preference row with the file's tick-square. */
 function PreferenceRow({
   height,
   icon,
   title,
   body,
+  checked,
+  disabledReason,
+  onChange,
 }: {
   height: number;
   icon: React.ReactNode;
   title: string;
   body: string;
+  checked: boolean;
+  /** Set, the box is a real `disabled` control carrying this reason. */
+  disabledReason: string | null;
+  onChange?: (value: boolean) => void;
 }) {
   return (
     <div
@@ -117,13 +147,14 @@ function PreferenceRow({
       <button
         type="button"
         role="checkbox"
-        aria-checked={false}
+        aria-checked={checked}
         aria-label={title}
-        disabled
-        title={MISSING}
-        className="flex h-4 w-4 shrink-0 items-center justify-center text-white/50 disabled:cursor-not-allowed"
+        disabled={disabledReason !== null}
+        title={disabledReason ?? undefined}
+        onClick={() => onChange?.(!checked)}
+        className="ws-press flex h-4 w-4 shrink-0 items-center justify-center text-white/50 transition-colors hover:text-white disabled:cursor-not-allowed disabled:hover:text-white/50"
       >
-        <IconCheckbox className="h-4 w-4" />
+        {checked ? <IconCheckboxChecked className="h-4 w-4" /> : <IconCheckbox className="h-4 w-4" />}
       </button>
     </div>
   );
