@@ -53,6 +53,7 @@ import { BottomDock } from "@/components/layout/bottom-dock";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
+import { AnnouncementBand } from "@/components/layout/announcement-band";
 import {
   IconBell,
   IconDots,
@@ -2066,6 +2067,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 !wide && (full ? "max-w-[600px] lg:max-w-[971px] lg:pr-6" : "max-w-[600px]")
               )}
             >
+              {/* Above everything the route draws, inside the column so it
+                  inherits its cap and the wide-route exemptions. Renders
+                  nothing when there is nothing to say. */}
+              <AnnouncementBand />
               {children}
             </main>
 

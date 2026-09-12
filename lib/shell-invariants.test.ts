@@ -1835,6 +1835,31 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
+  it("puts an announcement in its own band, never in the feed", () => {
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    // Above what the route draws, inside the column — never inside the feed or
+    // the Post For You rail, where "why am I seeing this" is unanswerable.
+    assert.match(shell, /<AnnouncementBand \/>\n\s*\{children\}/);
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    assert.doesNotMatch(feed, /Announcement/, "an announcement reached the feed");
+    const band = stripComments(read("components/layout/announcement-band.tsx"));
+    // It never names the operator; on the shared-key path there is no name.
+    assert.doesNotMatch(band, /createdBy/, "the band is naming an admin");
+    // Trust `post`, never `postId`: the id outlives a post that cannot be shown.
+    assert.doesNotMatch(band, /item\.postId/, "the band renders from postId");
+    // A signed-out reader gets no close button — dismissal needs somebody.
+    assert.match(band, /\{authenticated && \(/);
+    const hook = stripComments(read("hooks/use-announcements.ts"));
+    // Dismissed rows still arrive; the skipping is ours, so a dismissal on one
+    // device holds on another.
+    assert.match(hook, /item\.dismissedByMe !== true/);
+    assert.match(hook, /Date\.parse\(item\.endsAt\) > now/);
+    // (The render-time-clock rule itself is enforced by react-hooks/purity,
+    // which is stricter and can tell a lazy initialiser from a render read.)
+    // Absent means signed out, so no default may be added.
+    assert.match(hook, /dismissedByMe: z\.boolean\(\)\.optional\(\),/);
+  });
+
   it("pins a post without inventing one, and says nothing when it cannot be shown", () => {
     const schemas = stripComments(read("lib/api/schemas.ts"));
     // ABSENT, not null: presence is the test, so a pin that cannot be shown
