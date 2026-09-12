@@ -343,15 +343,19 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           left={layout.frontX + (node.arrow.leftDx - node.arrow.size / 2) * layout.k}
           top={layout.frontY + (node.arrow.dy - node.arrow.size / 2) * layout.k}
         />
-        <DeckArrow
-          direction="next"
-          disabled={!canStep(1)}
-          onClick={() => step(1)}
-          size={arrowSize}
-          lens={node.arrow.lens}
-          left={layout.frontX + (node.arrow.rightDx - node.arrow.size / 2) * layout.k}
-          top={layout.frontY + (node.arrow.dy - node.arrow.size / 2) * layout.k}
-        />
+        {/* No right disc where the node hides the next person (Home, 2026-09-12):
+            going on is the pass, or a swipe left. */}
+        {!node.hideNext && (
+          <DeckArrow
+            direction="next"
+            disabled={!canStep(1)}
+            onClick={() => step(1)}
+            size={arrowSize}
+            lens={node.arrow.lens}
+            left={layout.frontX + (node.arrow.rightDx - node.arrow.size / 2) * layout.k}
+            top={layout.frontY + (node.arrow.dy - node.arrow.size / 2) * layout.k}
+          />
+        )}
       </div>
 
       {/*
@@ -573,7 +577,10 @@ function DeckCard({
         swipe.dragging
           ? "transition-none"
           : "transition-[transform,opacity] duration-300 motion-reduce:transition-none",
-        front ? "z-20" : "z-10"
+        front ? "z-20" : "z-10",
+        // The next person is blurred so who is next stays a surprise; the
+        // previous card stays dim and readable, as the file draws it.
+        node.hideNext && slot === 1 && "blur-[7px]"
       )}
       style={{
         // The card's box is the file's 543.42 × 718; it is centred on the front
