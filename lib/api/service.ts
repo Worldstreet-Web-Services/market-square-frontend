@@ -46,7 +46,7 @@ export interface ServiceClient {
   del<T>(path: string, body?: unknown): Promise<T>;
 }
 
-const FALLBACK = "Market Square is unreachable.";
+const FALLBACK = "Square is unreachable.";
 
 export interface ServiceClientOptions {
   /** Copy for a failure with no message of its own. Names the service that failed. */

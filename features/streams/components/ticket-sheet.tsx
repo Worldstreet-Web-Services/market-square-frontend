@@ -23,8 +23,8 @@ function calendarUrl(stream: Stream) {
     action: "TEMPLATE",
     text: stream.title,
     dates: `${stamp(start)}/${stamp(end)}`,
-    details: `${stream.description ?? "Market Square live session"}\n\nOpen: ${typeof window === "undefined" ? "" : window.location.href}`,
-    location: "Market Square Live",
+    details: `${stream.description ?? "Square live session"}\n\nOpen: ${typeof window === "undefined" ? "" : window.location.href}`,
+    location: "Square Live",
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }

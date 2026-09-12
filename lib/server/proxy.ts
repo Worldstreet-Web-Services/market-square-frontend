@@ -215,7 +215,7 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
   // asking. Answering here costs about a millisecond; asking would cost the
   // full timeout in billed memory to arrive at the same answer.
   if (upstreamIsOpen()) {
-    return fail(503, "SERVICE_UNAVAILABLE", "Market Square is unreachable.", { requestId });
+    return fail(503, "SERVICE_UNAVAILABLE", "Square is unreachable.", { requestId });
   }
 
   let res: Response;
@@ -237,8 +237,8 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
       errorLabel(error)
     );
     return timedOut
-      ? fail(504, "UPSTREAM_TIMEOUT", "Market Square took too long to respond. Try again.", { requestId })
-      : fail(502, "SERVICE_UNAVAILABLE", "Market Square is unreachable.", { requestId });
+      ? fail(504, "UPSTREAM_TIMEOUT", "Square took too long to respond. Try again.", { requestId })
+      : fail(502, "SERVICE_UNAVAILABLE", "Square is unreachable.", { requestId });
   }
 
   /**
@@ -287,7 +287,7 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
     return fail(
       res.status,
       "UPSTREAM_ERROR",
-      `Market Square returned ${res.status}${res.statusText ? ` ${res.statusText}` : ""} without an error body.`,
+      `Square returned ${res.status}${res.statusText ? ` ${res.statusText}` : ""} without an error body.`,
       { requestId: upstreamRequestId }
     );
   }
@@ -298,7 +298,7 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
     return fail(
       res.status,
       "INTERNAL_ERROR",
-      `Market Square failed while handling this request (reference ${upstreamRequestId}).`,
+      `Square failed while handling this request (reference ${upstreamRequestId}).`,
       { requestId: upstreamRequestId }
     );
   }

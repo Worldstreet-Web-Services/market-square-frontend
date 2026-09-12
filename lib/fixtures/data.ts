@@ -764,7 +764,7 @@ export const storeItems: FxStoreItem[] = [
     name: "Creator Kit",
     tagline: "Overlays, alerts and a stream deck for Ark Live",
     description:
-      "Everything a Market Square creator needs: branded overlays, follower and ticket alerts, and a browser-based stream deck wired to your Ark account.",
+      "Everything a Square creator needs: branded overlays, follower and ticket alerts, and a browser-based stream deck wired to your Ark account.",
     category: "product",
     iconGlyph: "◈",
     bannerHue: 120,
@@ -780,7 +780,7 @@ export const storeItems: FxStoreItem[] = [
     name: "Translate Live",
     tagline: "Real-time captions in five languages for any stream",
     description:
-      "Adds live translated captions to any Market Square stream. English, Spanish, Portuguese, French and German at launch.",
+      "Adds live translated captions to any Square stream. English, Spanish, Portuguese, French and German at launch.",
     category: "service",
     iconGlyph: "◐",
     bannerHue: 60,

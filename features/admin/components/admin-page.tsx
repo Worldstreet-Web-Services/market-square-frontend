@@ -15,6 +15,7 @@ import {
   useVerificationRequests,
 } from "@/features/admin/hooks/use-admin";
 import {
+  AnnouncementsSection,
   ApplicationsSection,
   OverviewSection,
   PeopleSection,
@@ -22,7 +23,7 @@ import {
   VerificationSection,
 } from "@/features/admin/components/admin-sections";
 
-type Tab = "overview" | "applications" | "verification" | "reports" | "people";
+type Tab = "overview" | "applications" | "verification" | "reports" | "people" | "announcements";
 
 const TABS: Array<{ value: Tab; label: string }> = [
   { value: "overview", label: "Overview" },
@@ -30,6 +31,11 @@ const TABS: Array<{ value: Tab; label: string }> = [
   { value: "verification", label: "Verification" },
   { value: "reports", label: "Reports" },
   { value: "people", label: "People" },
+  // Publishing a banner to everybody is an operator act, so it lives beside
+  // the other operator acts rather than behind a pin on Home. It carries no
+  // badge: the others count a QUEUE waiting on somebody, and there is no
+  // queue here — an announcement is written, not resolved.
+  { value: "announcements", label: "Announcements" },
 ];
 
 /**
@@ -74,7 +80,7 @@ export function AdminPage() {
           <EmptyState
             glyph="○"
             title="Sign in to continue"
-            body="The operator console is for Market Square staff."
+            body="The operator console is for Square staff."
             action={
               <button
                 onClick={login}
@@ -110,7 +116,7 @@ export function AdminPage() {
           <EmptyState
             glyph="○"
             title="Not authorised"
-            body="This area is limited to Market Square operators."
+            body="This area is limited to Square operators."
             action={
               <Link
                 href="/"
@@ -173,6 +179,7 @@ export function AdminPage() {
         {tab === "verification" && <VerificationSection />}
         {tab === "reports" && <ReportsSection />}
         {tab === "people" && <PeopleSection />}
+        {tab === "announcements" && <AnnouncementsSection />}
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isPublicGet, isSafePath } from "./public-routes.ts";
+import { isPublicGet, isPublicPost, isSafePath } from "./public-routes.ts";
 
 /**
  * SOURCE OF TRUTH for this table: the backend's OpenAPI document. A GET is public when the spec lets an ANONYMOUS
@@ -63,6 +63,16 @@ const PUBLIC: string[][] = [
   ["streams", "st_1"],
   ["streams", "st_1", "chat"],
   ["verification", "rule"],
+  // Home's "Join a community" grid renders signed out, so the directory it
+  // reads has to answer signed out. This exact shape only.
+  ["announcements"],
+  ["conversations", "discover"],
+  ["conversations", "cv_1"],
+  // A house invite's landing page, read by strangers and signed-out visitors.
+  ["invites", "tok_1"],
+  // Public upstream and public here: the trending rail is a discovery surface
+  // that renders signed out.
+  ["hashtags", "trending"],
   // Whether tipping works at all, and the amount band. Read before drawing the
   // control, by signed-out readers too.
   ["tips", "capability"],
@@ -70,6 +80,8 @@ const PUBLIC: string[][] = [
   // file before sign-in; gating it here would silently pin signed-out users to
   // the client's fallback caps.
   ["uploads", "limits"],
+  // The public web-push key, read before anyone subscribes.
+  ["push", "vapid-public-key"],
 ];
 
 // Every GET the service publishes BEHIND bearerAuth or adminKey (13 of them).
@@ -164,6 +176,12 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["posts", "post_1", "comments"]), true);
     });
 
+    it("allows one comment, a thread's replies, and nothing else under /comments", () => {
+      assert.equal(isPublicGet(["comments", "c_1", "replies"]), true);
+      assert.equal(isPublicGet(["comments", "c_1"]), true);
+      assert.equal(isPublicGet(["comments", "c_1", "like"]), false);
+    });
+
     it("does not open anything else under /posts", () => {
       // These are writes, so the handler never consults the predicate for
       // them — but the predicate must not claim them either.
@@ -191,6 +209,55 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["tips"]), false);
       assert.equal(isPublicGet(["tips", "capability", "extra"]), false);
       assert.equal(isPublicGet(["tips", "received"]), false);
+    });
+
+    it("opens exactly /hashtags/trending and nothing else under /hashtags", () => {
+      assert.equal(isPublicGet(["hashtags", "trending"]), true);
+      assert.equal(isPublicGet(["hashtags"]), false);
+      assert.equal(isPublicGet(["hashtags", "trending", "extra"]), false);
+      // A hashtag's own feed is served by /feed?hashtag=, which is already
+      // public on its own head — this head must not open a second door.
+      assert.equal(isPublicGet(["hashtags", "solana"]), false);
+    });
+
+    it("opens the announcement band, and only the collection", () => {
+      assert.equal(isPublicGet(["announcements"]), true);
+      // Dismissing is a POST; a single announcement read is not a route.
+      assert.equal(isPublicGet(["announcements", "a_1"]), false);
+    });
+
+    it("opens one conversation's DOORPLATE, because a shared link must name what it invites you to", () => {
+      // The response is title, description, picture, a member COUNT, visibility
+      // and two flags — never messages, members, unread or last activity. The
+      // service 404s a direct conversation for a non-participant.
+      assert.equal(isPublicGet(["conversations", "cv_1"]), true);
+      // Everything UNDER it still needs a session.
+      assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
+      assert.equal(isPublicGet(["conversations", "cv_1", "members"]), false);
+      assert.equal(isPublicGet(["conversations", "cv_1", "invites"]), false);
+    });
+
+    it("opens the house directory and NOTHING else under /conversations", () => {
+      // The directory answers for people who are not members and carries no
+      // message, unread or last activity. Every other conversation route is a
+      // membership-gated read and must stay behind a session — letting the
+      // head through would expose whole threads.
+      assert.equal(isPublicGet(["conversations", "discover"]), true);
+      assert.equal(isPublicGet(["conversations"]), false);
+      assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
+      assert.equal(isPublicGet(["conversations", "discover", "anything"]), false);
+    });
+
+    it("opens the push key and nothing else under /push", () => {
+      assert.equal(isPublicGet(["push", "vapid-public-key"]), true);
+      assert.equal(isPublicGet(["push"]), false);
+      assert.equal(isPublicGet(["push", "vapid-public-key", "x"]), false);
+    });
+
+    it("opens one invite's preview and nothing else under /invites", () => {
+      assert.equal(isPublicGet(["invites", "tok_1"]), true);
+      assert.equal(isPublicGet(["invites"]), false);
+      assert.equal(isPublicGet(["invites", "tok_1", "accept"]), false);
     });
 
     it("gates /verification unless it is the rule", () => {
@@ -258,5 +325,29 @@ describe("isPublicGet", () => {
     const secured = new Set(SECURED.map(show));
     const overlap = PUBLIC.map(show).filter((path) => secured.has(path));
     assert.deepEqual(overlap, [], "a path cannot be both public and secured");
+  });
+});
+
+describe("isPublicPost", () => {
+  it("opens exactly the email unsubscribe and the room preview grant, and no other write", () => {
+    assert.equal(isPublicPost(["email", "unsubscribe"]), true);
+    // `[{}, {bearerAuth}]` on the served spec: a subscribe-only grant on a
+    // throwaway identity, for a page a signed-out reader can see.
+    assert.equal(isPublicPost(["streams", "s1", "preview-token"]), true);
+    for (const path of [
+      ["email"],
+      ["email", "unsubscribe", "x"],
+      ["posts"],
+      ["me", "settings"],
+      ["webhooks", "resend"],
+      ["..", "email", "unsubscribe"],
+      // The playback grant and the heartbeat stay behind a session.
+      ["streams", "s1", "playback-token"],
+      ["streams", "s1", "heartbeat"],
+      ["streams", "s1", "preview-token", "x"],
+      ["streams", "..", "preview-token"],
+    ]) {
+      assert.equal(isPublicPost(path), false, path.join("/"));
+    }
   });
 });

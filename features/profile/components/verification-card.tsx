@@ -182,7 +182,7 @@ export function VerificationCard() {
         <h2 className="ws-display text-base">Verification</h2>
       </div>
       <p className="text-sm text-grey-400">
-        Verification is granted by Market Square — there&apos;s nothing to apply for. We look for
+        Verification is granted by Square — there&apos;s nothing to apply for. We look for
         accounts that show up consistently and are worth following.
       </p>
       {/* The rule is advisory: state what counts without promising a threshold

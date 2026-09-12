@@ -4,8 +4,44 @@ import { DeepLinkSchema, ProfileSchema } from "@/lib/api/schemas";
 // Mirrors the backend contract (openapi.json). Streams carry no owner object
 // and no live viewer count in lists; StreamDetail adds viewerCount + myTicket.
 
-export const STREAM_CATEGORIES = ["worldstreet", "music", "podcast", "gaming", "other"] as const;
+/**
+ * Every category a stream object can carry, "house" included.
+ *
+ * A house IS a stream — same room, same tokens, same speaker requests — told
+ * apart only by this field (features/houses/lib/house.ts). It is in the union
+ * so a house parses, is compared and is filtered like anything else.
+ *
+ * It is NOT in `BROADCAST_CATEGORIES`, which is what every picker renders. A
+ * house is opened from "Open a gist room", never chosen from the Go Live sheet's
+ * dropdown: picking "house" there would create a room whose whole surface —
+ * the ring, the audience band, the audio-only publisher — lives on a different
+ * route, and the creator would land in a video cockpit for a room with no
+ * video. Two lists, because they answer two different questions: what can
+ * arrive, and what can be chosen.
+ */
+export const STREAM_CATEGORIES = [
+  "worldstreet",
+  "music",
+  "podcast",
+  "gaming",
+  "other",
+  "house",
+] as const;
 export type StreamCategory = (typeof STREAM_CATEGORIES)[number];
+
+/**
+ * What kind of live thing, as opposed to what it is about.
+ *
+ * `broadcast` is every stream except a house; `room` is a gist room. The
+ * distinction exists because a room IS a stream — same table, same chat — and
+ * `category` can name one but cannot exclude one. See `useStreamList`.
+ */
+export type StreamKind = "broadcast" | "room";
+
+/** The categories a BROADCAST picker offers. See above for why "house" is absent. */
+export const BROADCAST_CATEGORIES = STREAM_CATEGORIES.filter(
+  (category) => category !== "house"
+) as readonly Exclude<StreamCategory, "house">[];
 
 import { StreamSchema, TicketSchema } from "@/lib/api/schemas";
 export { StreamSchema, TicketSchema };
@@ -58,6 +94,33 @@ export const IngestSchema = z.object({
   // and an absent gateway reads as "no ingest", which is what they already test.
   roomToken: z.preprocess((v) => v ?? "", z.string()),
   url: z.preprocess((v) => v ?? "", z.string()),
+});
+
+/** `POST|DELETE /streams/:id/remind` — both answer the resulting state. */
+export const RemindSchema = z.object({ reminded: z.boolean() });
+
+/**
+ * `GET /streams/by-code/:code` — what a spoken code resolves to.
+ *
+ * `access` is the SERVER's answer to "may this person go in", and it has to be:
+ * it depends on house membership, which is exactly the fact a non-member must
+ * not receive. A client cannot compute it from the payload without being handed
+ * the roster it is not allowed to see.
+ *
+ *   · `open`         — go in.
+ *   · `members_only` — a private room they are not in. The payload is the
+ *                      DOORPLATE: title, picture, owner, status. `viewerCount`
+ *                      and `houseConversationId` come back null on purpose;
+ *                      the refusal itself lives at the join.
+ *   · `over`         — ended or cancelled. It resolves rather than 404ing so
+ *                      somebody holding a written-down code is told the room is
+ *                      over instead of being left unable to tell that from a
+ *                      typo. Codes are never reused, so an old note can never
+ *                      open a different room.
+ */
+export const StreamByCodeSchema = z.object({
+  stream: StreamSchema,
+  access: z.enum(["open", "members_only", "over"]).catch("open"),
 });
 
 export const GoLiveSchema = z.object({

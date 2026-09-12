@@ -476,7 +476,7 @@ function StreamNav({ stream }: { stream: Stream }) {
           elements. There are no routes behind any of them, so they were three
           dead controls dressed as links; the copyright is the only true line. */}
       <div className="mt-auto hidden border-t border-white/10 px-1 pt-5 text-[12px] leading-6 text-grey-600 xl:block">
-        <p>© {new Date().getFullYear()} Market Square</p>
+        <p>© {new Date().getFullYear()} Square</p>
       </div>
     </aside>
   );
@@ -672,7 +672,7 @@ export function StreamRoom({
 
   const share = useCallback(() => {
     const url = window.location.href;
-    const title = stream.data?.title ?? "Market Square stream";
+    const title = stream.data?.title ?? "Square stream";
     if (navigator.share) {
       void navigator.share({ title, url }).catch(() => {});
     } else {

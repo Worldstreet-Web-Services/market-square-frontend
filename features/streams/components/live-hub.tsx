@@ -107,7 +107,15 @@ export function LiveHub() {
   const [query, setQuery] = useState("");
   const [topic, setTopic] = useState<string | null>(null);
   const { authenticated } = useAuth();
-  const list = useStreamList(section);
+  /*
+    BROADCASTS ONLY. A gist room is a stream too — same table, same chat —
+    so this list returned audio rooms beside video streams: something offered
+    to watch with nothing to watch, on a page that is not the way into it.
+    Rooms have their own surface. Server-side, because "not a house" cannot be
+    said with `category` and filtering here would make a page of broadcasts
+    yield the few that were not rooms.
+  */
+  const list = useStreamList(section, [], undefined, "broadcast");
   // Upcoming is BOTH scheduled streams and scheduled activities. It used to
   // read the stream list alone, so an activity — which is what the schedule
   // form creates — could never show up here no matter how many were made.
@@ -272,7 +280,11 @@ export function LiveHub() {
           <div className="space-y-7 pt-7">
             {/* Signed-out readers do not see the prompt — "Go Live" that opens
                 a login wall is bait. */}
-            {authenticated && <LiveCta />}
+            {authenticated && (
+              <div className="px-4 lg:px-6">
+                <LiveCta />
+              </div>
+            )}
 
             <LiveHero streams={visible} />
           </div>

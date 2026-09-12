@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { IconMsHandDeposit } from "@/components/ui/design-icons";
+// `la:donate`, the file's own tip glyph — the same mark the button that
+// opened this sheet carries, so the flow does not change symbol halfway through.
+import { IconDonate } from "@/components/ui/room-icons";
 import { KashCoin } from "@/components/ui/kash-coin";
 import Image from "next/image";
 import { GiftGrid } from "@/components/ui/gift-grid";
@@ -372,7 +374,7 @@ export function TipSheet({
       {stage === "confirm" && parsed.ok && (
         <>
           <div className="ws-inset flex flex-col items-center gap-2 px-5 py-7">
-            <IconMsHandDeposit className="h-7 w-7 text-spotlight-chip-ink" />
+            <IconDonate className="h-7 w-7 text-spotlight-chip-ink" />
             <p className="ws-display tnum text-3xl text-white">
               {formatKash(parsed.amountKash)}
             </p>
@@ -436,7 +438,7 @@ export function TipSheet({
               <Image src={receiptGift.art} alt="" fill sizes="56px" className="object-contain" />
             </span>
           ) : (
-            <IconMsHandDeposit className="h-9 w-9 text-spotlight-chip-ink" />
+            <IconDonate className="h-9 w-9 text-spotlight-chip-ink" />
           )}
           <p className="ws-display tnum text-3xl text-white">
             {formatKash(receipt.amountKash)}

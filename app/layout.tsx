@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Manrope, Roboto } from "next/font/google";
 import Providers from "./providers";
 import { AppShell } from "@/components/layout/app-shell";
+import { SplashScreen } from "@/components/layout/splash-screen";
+import { SignInOverlay } from "@/components/layout/sign-in-overlay";
+import { WelcomeGate } from "@/components/layout/welcome/welcome-gate";
 import "./globals.css";
 
 const geist = Geist({
@@ -9,8 +12,47 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
+/**
+ * Roboto, for the handful of surfaces the design actually sets in it.
+ *
+ * Geist is the product's typeface and nearly every string in the design is set
+ * in it. Two things are not, and in both cases it is measurable rather than a
+ * matter of taste:
+ *
+ *   · the welcome screens' sub-copy. In Geist, screen 1's two lines run 389px
+ *     against the file's 372 — 4.5% wide, enough to move where the copy wraps.
+ *   · the people-deck cards on Home (node 225:3374), whose name is Roboto 600
+ *     and handle Roboto 400. Those cards are the same purple-gradient object
+ *     the welcome screens use, and the design sets their type the same way.
+ *
+ * Two weights, latin only. Nothing else in the app may reach for this.
+ */
+const roboto = Roboto({
+  variable: "--font-roboto",
+  weight: ["400", "600"],
+  subsets: ["latin"],
+});
+
+/**
+ * Manrope, for Home's section headings.
+ *
+ * The 2026-09-12 Home design sets every section heading in it — "Top
+ * GistRooms", "Make some friends", "Coming Soon", "Popular Houses" — all at
+ * Bold 24/28.61. It is a display face used consistently rather than a
+ * one-string stand-in, and ogazboiz's instruction was to follow the file, so it
+ * is loaded rather than substituted with Geist.
+ *
+ * Two weights, latin only, and it belongs to those headings alone: body copy is
+ * still Geist.
+ */
+const manrope = Manrope({
+  variable: "--font-heading",
+  weight: ["600", "700"],
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: { default: "Market Square", template: "%s · Market Square" },
+  title: { default: "Square", template: "%s · Square" },
   description:
     "The social square of the Ark platform: live streams, the ARK Store, creators and community.",
 };
@@ -26,15 +68,26 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={geist.variable}>
+    <html lang="en" className={`${geist.variable} ${roboto.variable} ${manrope.variable}`}>
       <body className="ws-wash min-h-dvh">
         <Providers>
+          {/* Above everything, including the bare routes the shell steps out of
+              — a splash that the live room could render over would be a splash
+              that only covers some of the boot. */}
+          <SplashScreen />
+          {/* Under the splash, over the app: what a first-time, signed-out
+              visitor to the front door sees once the boot sequence ends. */}
+          <WelcomeGate />
+          {/* The app's one sign-in surface, opened from anywhere by
+              `useAuth().login`. Under the welcome, over everything else. */}
+          <SignInOverlay />
           <AppShell>{children}</AppShell>
         </Providers>
       </body>

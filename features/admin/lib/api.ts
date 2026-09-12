@@ -1,6 +1,7 @@
 import { msApi } from "@/lib/api/service";
 import { ProfileSchema, type OrgBadge } from "@/lib/api/schemas";
 import {
+  AdminAnnouncementPageSchema,
   AdminProfilePageSchema,
   AdminStatsSchema,
   ReportPageSchema,
@@ -30,6 +31,48 @@ export async function fetchAdminReports(cursor?: string) {
   return ReportPageSchema.parse(
     await msApi.authedGet("/admin/reports", { status: "open", limit: 30, cursor })
   );
+}
+
+export async function fetchAdminAnnouncements(cursor?: string) {
+  return AdminAnnouncementPageSchema.parse(
+    await msApi.authedGet("/admin/announcements", { limit: 30, cursor })
+  );
+}
+
+/**
+ * Publish a banner to everybody.
+ *
+ * The end is REQUIRED by the service and that is the right call: a banner
+ * with no end is one somebody has to remember to take down. The start
+ * defaults to now, so it is only sent when an operator schedules ahead.
+ *
+ * A post id BROADCASTS an existing post — referenced, never copied — so the
+ * author deleting it empties the announcement in the same moment. The service
+ * refuses a post it cannot show with a 404, which the form surfaces rather
+ * than publishing a band that would render empty.
+ *
+ * Empty optional fields are OMITTED, never sent as "": an empty link would be
+ * a band that looks tappable and goes nowhere.
+ */
+export async function createAnnouncement(input: {
+  body: string;
+  endsAt: string;
+  startsAt?: string;
+  linkUrl?: string;
+  postId?: string;
+}) {
+  return msApi.post<unknown>("/admin/announcements", {
+    body: input.body,
+    endsAt: input.endsAt,
+    ...(input.startsAt ? { startsAt: input.startsAt } : {}),
+    ...(input.linkUrl ? { linkUrl: input.linkUrl } : {}),
+    ...(input.postId ? { postId: input.postId } : {}),
+  });
+}
+
+/** Take a live banner down now, rather than waiting for its own end. */
+export async function endAnnouncement(id: string) {
+  return msApi.post<unknown>("/admin/announcements/" + id + "/end");
 }
 
 export async function fetchAdminProfiles(query: string, cursor?: string) {

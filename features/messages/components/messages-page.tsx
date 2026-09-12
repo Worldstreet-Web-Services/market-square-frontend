@@ -1,21 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { setChatOpen } from "@/lib/chat-open-store";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
+import { useQueryParam } from "@/hooks/use-query-param";
 import { useMe } from "@/hooks/use-me";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { ColumnHeader } from "@/components/layout/column-header";
-import { InboxFilters, InboxSearch, type InboxFilter } from "@/features/messages/components/inbox-chrome";
+import { InboxFilters, InboxSearch } from "@/features/messages/components/inbox-chrome";
+import { NewChatMenu } from "@/features/messages/components/new-chat-menu";
 import { ConversationRow } from "@/features/messages/components/conversation-row";
 import { Thread } from "@/features/messages/components/thread";
 import { ThreadPlaceholder } from "@/features/messages/components/thread-placeholder";
-import { visibleConversations } from "@/features/messages/lib/filter";
+import { visibleConversations, type InboxTab } from "@/features/messages/lib/filter";
+import type { Profile } from "@/lib/api/schemas";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { useConversations } from "@/features/messages/hooks/use-messages";
+import { useAnswerRequest, useConversations } from "@/features/messages/hooks/use-messages";
 import { type Conversation } from "@/features/messages/lib/types";
+
+/**
+ * The picker behind the column's `+`.
+ *
+ * Passed in rather than imported: starting a chat means choosing a PERSON, the
+ * people directory lives in the discovery slice, and slices never import each
+ * other. `components/layout/messages-screen.tsx` joins the two — the same
+ * route-slot pattern `profile-screen` uses for this slice's own Message
+ * button.
+ */
+export interface NewChatPickerProps {
+  open: boolean;
+  /**
+   * Which of the `+` menu's two items opened this.
+   *
+   * One picker with a mode rather than two components: the panel, its search
+   * field, its rows and its people query are identical, and only the selection
+   * rule and the commit differ. Two copies would be two places to restyle when
+   * node 36:7004 changes.
+   */
+  mode: NewChatMode;
+  onClose: () => void;
+  /** Called with a thread to open once a person has been chosen. */
+  onStarted: (conversation: Conversation) => void;
+}
+
+export type NewChatMode = "gist" | "group";
 
 function Inbox({
   onOpen,
@@ -24,29 +55,61 @@ function Inbox({
   onOpen: (conversation: Conversation) => void;
   selectedId?: string;
 }) {
-  const conversations = useConversations();
+  // `?tab=houses` opens straight on Houses — the profile's "View All" (1021:20295).
+  const tabParam = useQueryParam("tab");
+  const [tab, setTab] = useState<InboxTab>(tabParam === "houses" ? "houses" : "all");
+  const conversations = useConversations(tab);
+  const requests = useAnswerRequest();
   const me = useMe();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<InboxFilter>("all");
   const sentinel = useInfiniteScroll(
     () => conversations.fetchNextPage(),
     Boolean(conversations.hasNextPage && !conversations.isFetchingNextPage)
   );
 
   const items = conversations.data?.pages.flatMap((page) => page.items) ?? [];
-  const shown = visibleConversations(items, filter, query);
-  const unreadTotal = items.filter((conversation) => conversation.unreadCount > 0).length;
+  // The TAB is server-side; only the search box narrows what came back.
+  const shown = visibleConversations(items, "all", query);
+  const answering = requests.accept.isPending || requests.decline.isPending;
 
   return (
     <>
-      <ColumnHeader title="Messages" subtitle="Your conversations across the square" />
+      {/*
+        NO ColumnHeader, and this is the one column surface that goes without
+        one — the convention in CLAUDE.md is stated for the routes that need a
+        title bar over a list, and node 15:1302 deliberately does not give the
+        inbox one. The breadcrumb above already reads "Ark Ecosystem/ Chat"
+        with the leaf in white, so a second "Messages" heading inside the
+        column was the page saying its own name twice and cost 24px of the
+        room the list wants.
 
-      <div className="flex flex-col gap-6 px-6 pb-4 pt-6">
+        `ColumnHeader` is still imported by the signed-out branch below, which
+        has no list to head and does need to say where you are.
+
+        THE FILE'S VERTICAL RHYTHM, which is why the padding is spelled out
+        rather than left to gap-6 everywhere: search at y=24, tabs at y=86,
+        list at y=148 — 24px of air above the search and 24 between each of
+        the three blocks, inside 24px gutters on a 464 column (416 of content).
+      */}
+      <div className="flex flex-col gap-6 px-6 pt-6">
         <InboxSearch value={query} onChange={setQuery} />
-        <InboxFilters value={filter} onChange={setFilter} unreadCount={unreadTotal} />
+        <InboxFilters
+          value={tab}
+          onChange={(next) => {
+            setTab(next);
+            // A search typed against one tab means nothing in another, and
+            // leaving it set makes the new tab look empty for no visible
+            // reason.
+            setQuery("");
+          }}
+          pendingCount={conversations.data?.pages[0]?.pendingRequests ?? 0}
+        />
       </div>
 
-      <div className="flex flex-col gap-4 px-6 pb-6">
+      {/* 24 from the tabs, 16 between rows — the file's `gap: 16px` on the
+          list frame. The bottom padding clears the `+` so the last row is
+          never sitting underneath it. */}
+      <div className="flex flex-col gap-4 px-6 pb-28 pt-6">
         {conversations.isPending && [0, 1, 2, 3].map((i) => <RowSkeleton key={i} />)}
 
         {conversations.isError && (
@@ -58,10 +121,27 @@ function Inbox({
         )}
 
         {conversations.isSuccess && items.length === 0 && (
+          // Each tab says what IT is empty of. "No conversations yet" under
+          // Gist Requests would read as an inbox problem rather than the good
+          // news that nobody is waiting on you.
           <EmptyState
             glyph="◇"
-            title="No conversations yet"
-            body="Open someone's profile and start one."
+            title={
+              tab === "requests"
+                ? "No requests"
+                : tab === "houses"
+                  ? "No houses yet"
+                  : tab === "gists"
+                    ? "No gists yet"
+                    : "No conversations yet"
+            }
+            body={
+              tab === "requests"
+                ? "Chats from people who don't follow you land here first."
+                : tab === "houses"
+                  ? "Press + and create a group to start one."
+                  : "Press + to start one, or open someone's profile."
+            }
           />
         )}
 
@@ -81,13 +161,45 @@ function Inbox({
         )}
 
         {shown.map((conversation) => (
-          <ConversationRow
-            key={conversation.id}
-            conversation={conversation}
-            meId={me.data?.id}
-            selected={conversation.id === selectedId}
-            onOpen={() => onOpen(conversation)}
-          />
+          <div key={conversation.id} className="flex flex-col gap-2">
+            <ConversationRow
+              conversation={conversation}
+              meId={me.data?.id}
+              selected={conversation.id === selectedId}
+              onOpen={() => onOpen(conversation)}
+            />
+            {/*
+              A request you cannot answer is just a row. Accept and decline are
+              the whole point of the tab, so they are ON the row rather than
+              behind opening it — and only where the SERVICE says the caller may
+              act: `requestedBy` is the person who asked, and only the other
+              side may answer.
+            */}
+            {tab === "requests" &&
+              conversation.requestState === "pending" &&
+              conversation.requestedBy !== me.data?.id && (
+                <div className="flex items-center gap-2 pl-[52px]">
+                  <button
+                    type="button"
+                    disabled={answering}
+                    onClick={() => requests.accept.mutate(conversation.id)}
+                    className="ws-press rounded-full bg-spotlight px-3 py-1.5 text-[12px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    disabled={answering}
+                    onClick={() => requests.decline.mutate(conversation.id)}
+                    // Declining DELETES the thread and tells the sender
+                    // nothing, so it is worded as the plain refusal it is.
+                    className="ws-press rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white/70 transition-colors hover:text-white disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
+          </div>
         ))}
 
         <div ref={sentinel} />
@@ -101,14 +213,180 @@ function Inbox({
   );
 }
 
-export function MessagesPage() {
+/**
+ * The inbox column's own create button.
+ *
+ * It is NOT the shell's `CreateFab`, and the difference is the point. The
+ * shell's floating `+` writes a POST and holds the right edge of the VIEWPORT
+ * — on this route that puts it over the thread pane, beside a composer, where
+ * a `+` means "send this message". The file draws its `+` inside the 464
+ * column instead (right edge flush with the column's border, 12px of padding
+ * inside a 76.79 hit frame), and in a conversation list a `+` means one thing:
+ * start a new one.
+ *
+ * `allowsCompose` therefore excludes `/messages`, so exactly one purple circle
+ * is on screen and it does the thing its position implies.
+ *
+ * Geometry and paint are the file's, with one deliberate reuse: the circle is
+ * 52.79487px inside 12px of padding as node 24:6372 draws it, but the gradient
+ * comes from `ws-btn-fab` rather than this node's `201deg 13%→100%`. Both
+ * describe the same object with the same two stops of the same purple ramp
+ * (`--color-spotlight` → `--color-spotlight-chip-ink`); shipping a second
+ * angle for the same button is how one control ends up with two paints.
+ */
+function NewChatFab({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="New chat"
+      // ABSOLUTE against the column, and mounted as a SIBLING of the column's
+      // scroller rather than inside it — an absolute child of a scroll box
+      // scrolls away with the content, and `fixed` would put it back on the
+      // viewport's edge, which is the placement this exists to avoid.
+      //
+      // 12px from the column's right border and 12 from its bottom: the file's
+      // own inset, expressed there as 12px of padding on every side of the
+      // 76.79 hit frame around the 52.79 circle.
+      className="ws-btn-fab ws-press absolute bottom-3 right-3 z-20 flex h-[52.79487px] w-[52.79487px] items-center justify-center rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-opacity hover:opacity-90"
+    >
+        {/* The file's `ci:add-plus`: a 24px box with a 12px cross stroked at
+            2px. Drawn rather than typed, because the glyph "+" is centred on
+            its own metrics and lands high in a circle this size. */}
+      <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        className="h-6 w-6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+      >
+        <path d="M12 6v12M6 12h12" />
+      </svg>
+    </button>
+  );
+}
+
+export function MessagesPage({
+  /** The people picker for the column's `+` — see NewChatPickerProps. */
+  renderNewChat,
+  /**
+   * The gist-room composer, opened by a GROUP thread's "Create Gist Room".
+   * Passed in for the same reason the picker is: it belongs to the houses
+   * slice, and slices never import each other.
+   */
+  renderGistRoom,
+  /**
+   * The designed card for a gist-room announcement in a thread (node 225:3873).
+   * It reads the room, the shared topic vocabulary and this group's roster —
+   * three slices — so the layout composes it and hands it down.
+   */
+  renderRoomCard,
+  /**
+   * Block and Report inside a 1:1 thread's overflow menu (node 77:8287). The
+   * profile slice owns both, so the layout draws the rows and this hands them
+   * down.
+   */
+  renderThreadSafety,
+  /**
+   * The people picker behind "Add / Invite gist partners" (78:8527, 78:8345).
+   * Choosing a person is the DISCOVERY slice's directory, which is the same
+   * reason the inbox's own `+` takes a slot.
+   */
+  renderAddMembers,
+}: {
+  renderNewChat?: (props: NewChatPickerProps) => React.ReactNode;
+  renderGistRoom?: (props: {
+    open: boolean;
+    onClose: () => void;
+    /** The group the room is being opened from — what makes Private possible. */
+    houseConversationId?: string;
+  }) => React.ReactNode;
+  renderRoomCard?: (props: { streamId: string; conversationId: string }) => React.ReactNode;
+  renderThreadSafety?: (peer: Profile) => React.ReactNode;
+  renderAddMembers?: (props: {
+    open: boolean;
+    onClose: () => void;
+    conversationId: string;
+  }) => React.ReactNode;
+} = {}) {
   const { ready, authenticated, login } = useAuth();
-  const [open, setOpen] = useState<Conversation | null>(null);
+  const [picked, setPicked] = useState<Conversation | null>(null);
+
+  /*
+    A THREAD CAN BE LINKED TO — `/messages?c=<id>`.
+
+    Which thread is open was React state and nothing else, so nothing outside
+    this component could ask for one. The profile's Message button therefore
+    created the conversation and then sent the reader to `/messages`, the
+    INBOX, leaving them to find the person they had just pressed Message on.
+    That is what ogazboiz reported as the button "not opening a conversation":
+    it did open one, and then showed a list.
+
+    Read through `useQueryParam`, never `useSearchParams` — that one forces a
+    Suspense boundary which delays hydration of this subtree.
+
+    The conversation itself comes from the INBOX's own cache: the same query
+    key, so this shares the list rather than fetching a second copy, and a
+    thread just created by `POST /conversations` is at the head of it after the
+    invalidation that mutation already does. There is no `GET /conversations/
+    :id` on the contract, so the list is the only place to find it.
+  */
+  const wanted = useQueryParam("c");
+  const inbox = useConversations("all");
+  /*
+    DERIVED, not set in an effect. Calling `setState` synchronously from an
+    effect makes React render twice for one input and lint refuses it — so the
+    linked thread is simply part of what "which thread is open" MEANS, rather
+    than something copied into state after the fact.
+
+    `picked` is a thread the reader tapped. The parameter supplies one until
+    they have. Closing a linked thread sets `picked` to null and the parameter
+    is already gone by then (see below), so it cannot spring back open.
+  */
+  const linked =
+    wanted && !picked
+      ? ((inbox.data?.pages.flatMap((page) => page.items) ?? []).find(
+          (conversation) => conversation.id === wanted
+        ) ?? null)
+      : null;
+  const open = picked ?? linked;
+
+  /*
+    Drop the parameter once it has been used — and only then, or a reload
+    before the inbox arrives would lose the thread. No state is touched here,
+    so this cannot cascade.
+
+    `replaceState`, not a push: the reader came from a profile, and Back
+    should return them to that profile rather than to this page with the
+    thread reopening under them.
+  */
+  useEffect(() => {
+    if (!linked) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("c");
+    window.history.replaceState(null, "", url.toString());
+  }, [linked]);
+  // Tell the shell a thread is open so the dock leaves the composer alone —
+  // see lib/chat-open-store. Cleared on close and on leaving the page.
+  useEffect(() => {
+    setChatOpen(open !== null);
+    return () => setChatOpen(false);
+  }, [open]);
+  // The `+` opens a MENU first — node 24:6403 — and the menu chooses which
+  // picker. Null means neither is open.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [addingMembers, setAddingMembers] = useState(false);
+  const [picking, setPicking] = useState<NewChatMode | null>(null);
+  // The gist-room composer lives in the houses slice, so the layout supplies
+  // it; this only owns whether it is open. Same slot pattern as the picker.
+  const [gistRoomOpen, setGistRoomOpen] = useState(false);
 
   if (ready && !authenticated) {
     return (
       <>
-        <ColumnHeader title="Messages" />
+        <ColumnHeader title="Chat" />
         <div className="p-4">
           <EmptyState
             glyph="◇"
@@ -132,46 +410,133 @@ export function MessagesPage() {
     /*
       Two panes on a desktop, one at a time on a phone.
 
-      The list is a fixed 395 because that is what the design fixes it at —
-      347 of content inside 24px gutters — and a conversation list that
-      reflows with the window makes the previews rewrap on every drag. The
-      thread takes whatever is left.
+      The list is a fixed 464 because that is what node 15:1302 fixes it at —
+      416 of content inside 24px gutters, widened from the 395/347 of the
+      earlier frame — and a conversation list that reflows with the window
+      makes the previews rewrap on every drag. The thread takes whatever is
+      left.
 
       On a phone the list gives way to the thread entirely, which is why the
       route is only wide at its exact path.
 
       HEIGHT. Messages is the one route that does not scroll as a page. It
       claims exactly the room the shell leaves — the viewport less the mobile
-      top strip and the mobile tab bar, both of which are already the padding
-      on `main` and are 0 from md up — and then each pane scrolls inside
-      itself. That is what lets the chat pane pin its header and its composer
-      and move only the messages between them. Without the bound, both panes
-      grow to fit their content and the whole document scrolls instead.
+      top strip, the mobile tab bar and the desktop breadcrumb bar — and then
+      each pane scrolls inside itself. That is what lets the chat pane pin its
+      header and its composer and move only the messages between them. Without
+      the bound, both panes grow to fit their content and the whole document
+      scrolls instead.
+
+      `--ws-crumb-h` is the third term and was missing: the breadcrumb is 0 on
+      a phone but 76px from md up, so on every desktop the two panes ran 76px
+      past the bottom of the window and the document scrolled by exactly that
+      much — which is also why the composer could not be reached without
+      scrolling a pane that was supposed to be pinned.
     */
-    <div className="flex h-[calc(100dvh-var(--ws-topbar-h)-var(--ws-nav-h))] overflow-hidden">
+    <div
+      className={cn(
+        "flex overflow-hidden",
+        // With a thread open the dock is hidden (lib/chat-open-store) and its
+        // `--ws-nav-h` must NOT be subtracted, or the composer floats a dock's
+        // height above the screen's foot. The inbox alone keeps the dock and
+        // the reservation.
+        // `--ws-vvh` is the visual viewport — literally what is on the glass,
+        // with the URL bar AND the keyboard already accounted for. It replaces
+        // `100dvh` rather than adjusting it: `dvh` tracks a URL bar that
+        // slides, so a pane sized in it is short or long by the bar's height
+        // between recomputations, which is the dead band under the composer
+        // and the vertical scroll that should not exist. `100dvh` remains the
+        // fallback for a browser with no visualViewport, where it is right
+        // anyway. See hooks/use-keyboard-inset.ts.
+        open
+          ? "h-[calc(var(--ws-vvh,100dvh)-var(--ws-topbar-h)-var(--ws-crumb-h))]"
+          : "h-[calc(var(--ws-vvh,100dvh)-var(--ws-topbar-h)-var(--ws-crumb-h)-var(--ws-nav-h))]"
+      )}
+    >
       <div
         className={cn(
-          // Its own scroller, so a long inbox does not drag the chat pane with
-          // it. `--ws-topbar-h` is reset to 0 inside: it exists to hold sticky
-          // children clear of the shell's FIXED top strip, and this box already
-          // starts below that strip, so the offset would push the inbox header
-          // 48px down its own scroll box on a phone.
-          "w-full shrink-0 overflow-y-auto [--ws-topbar-h:0px] lg:w-[395px] lg:border-r lg:border-white/10",
+          // `relative` so the `+` can be positioned against the COLUMN. It is
+          // the wrapper that is relative, not the scroller, because an
+          // absolute child of a scroll box scrolls with the content.
+          "relative w-full shrink-0 lg:w-[464px] lg:border-r lg:border-white/10",
           open && "hidden lg:block"
         )}
       >
-        <Inbox onOpen={setOpen} selectedId={open?.id} />
+        <div
+          // The scroller, so a long inbox does not drag the chat pane with it.
+          // `--ws-topbar-h` is reset to 0 inside: it exists to hold sticky
+          // children clear of the shell's FIXED top strip, and this box already
+          // starts below that strip, so the offset would push the inbox header
+          // 48px down its own scroll box on a phone.
+          className="h-full overflow-y-auto [--ws-topbar-h:0px]"
+        >
+          <Inbox onOpen={setPicked} selectedId={open?.id} />
+        </div>
+
+        {renderNewChat && (
+          <>
+            <NewChatFab onClick={() => setMenuOpen((wasOpen) => !wasOpen)} />
+            <NewChatMenu
+              open={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              onNewGist={() => setPicking("gist")}
+              onCreateGroup={() => setPicking("group")}
+            />
+          </>
+        )}
       </div>
 
       {/* `min-h-0` so the chat pane can be shorter than its content and scroll
           internally rather than stretching this row. */}
       <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", !open && "hidden lg:flex")}>
         {open ? (
-          <Thread conversation={open} onBack={() => setOpen(null)} />
+          <Thread
+            conversation={open}
+            onBack={() => setPicked(null)}
+            // Only offered when the layout actually supplied a composer.
+            onCreateGistRoom={renderGistRoom ? () => setGistRoomOpen(true) : undefined}
+            // The announcement card, bound to the thread it is being read in —
+            // the card needs the group as well as the room.
+            roomCardSlot={
+              renderRoomCard
+                ? (streamId) => renderRoomCard({ streamId, conversationId: open.id })
+                : undefined
+            }
+            safetyRowsSlot={renderThreadSafety}
+            onAddMembers={renderAddMembers ? () => setAddingMembers(true) : undefined}
+          />
         ) : (
           <ThreadPlaceholder />
         )}
       </div>
+
+      {open?.kind === "group" &&
+        renderAddMembers?.({
+          open: addingMembers,
+          onClose: () => setAddingMembers(false),
+          conversationId: open.id,
+        })}
+
+      {renderGistRoom?.({
+        open: gistRoomOpen,
+        onClose: () => setGistRoomOpen(false),
+        // Only a GROUP thread offers the button, so this is always a house
+        // group — which is exactly what a private room needs to be private to.
+        houseConversationId: open?.kind === "group" ? open.id : undefined,
+      })}
+
+      {renderNewChat?.({
+        open: picking !== null,
+        // `gist` while closed is arbitrary and never read — the panel is only
+        // rendered when `open`, and defaulting keeps the prop non-optional so
+        // a caller cannot forget it.
+        mode: picking ?? "gist",
+        onClose: () => setPicking(null),
+        onStarted: (conversation) => {
+          setPicking(null);
+          setPicked(conversation);
+        },
+      })}
     </div>
   );
 }

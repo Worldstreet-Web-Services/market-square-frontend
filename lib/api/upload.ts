@@ -6,10 +6,13 @@ import { DEMO_AUTH } from "@/lib/auth-mode";
 import { apiError, errorCode } from "@/lib/api/envelope";
 import {
   PROXY_MAX_BYTES,
+  UploadResultSchema,
   formatBytes,
   shouldUploadDirect,
   uploadKind,
   validateUpload,
+  type UploadAccept,
+  type UploadResult,
 } from "@/lib/upload-rules";
 import { ensureUploadLimits } from "@/lib/upload-limits";
 
@@ -22,21 +25,18 @@ import { ensureUploadLimits } from "@/lib/upload-limits";
  */
 if (typeof window !== "undefined") void ensureUploadLimits();
 
-export const UploadResultSchema = z.object({
-  url: z.string(),
-  kind: z.enum(["image", "video"]).catch("image"),
-  contentType: z.string().optional().default(""),
-  bytes: z.number().optional().default(0),
-});
-
-export type UploadResult = z.infer<typeof UploadResultSchema>;
+// `UploadResultSchema` and `UploadResult` now live in lib/upload-rules.ts so
+// they are testable without this module's client-only dependencies. Re-exported
+// below so every existing import site is unchanged.
 
 // The pure rules live in lib/upload-rules.ts so they can be unit-tested
 // without this module's client-only dependencies. Re-exported so existing
 // call sites keep one import.
 export {
+  ACCEPT_ATTACHMENT,
   ACCEPT_IMAGE,
   ACCEPT_MEDIA,
+  AUDIO_TYPES,
   IMAGE_TYPES,
   VIDEO_TYPES,
   // The caps are no longer constants: the backend owns them and publishes them
@@ -53,7 +53,8 @@ export {
   validateVideoDuration,
 } from "@/lib/upload-rules";
 export { readVideoDuration } from "@/lib/video-duration";
-export type { UploadLimits } from "@/lib/upload-rules";
+export type { UploadLimits, UploadAccept, UploadResult } from "@/lib/upload-rules";
+export { UploadResultSchema };
 export { ensureUploadLimits } from "@/lib/upload-limits";
 
 // ---------------------------------------------------------------- presign
@@ -168,7 +169,12 @@ function putToStorage(
 }
 
 /** Bytes → storage directly, then ask the service to verify and publish it. */
-async function uploadDirect(file: File, onProgress?: (fraction: number) => void): Promise<UploadResult> {
+async function uploadDirect(
+  file: File,
+  onProgress?: (fraction: number) => void,
+  /** Fired once the bytes have landed in storage — after that, no path may re-send them. */
+  onBytesSent?: () => void
+): Promise<UploadResult> {
   const request = {
     contentType: file.type,
     sizeBytes: file.size,
@@ -186,6 +192,7 @@ async function uploadDirect(file: File, onProgress?: (fraction: number) => void)
     onProgress?.(0);
     await putToStorage(presign, file, onProgress);
   }
+  onBytesSent?.();
 
   // The object is not usable until the service has seen it — never trust the
   // client's word that the bytes landed.
@@ -262,7 +269,11 @@ function uploadProxied(file: File, onProgress?: (fraction: number) => void): Pro
 export async function uploadFile(
   file: File,
   onProgress?: (fraction: number) => void,
-  accept: "image" | "media" = "media"
+  // Defaults to `media` (image + video) because that is what posts, avatars
+  // and covers take. A CHAT attachment must pass "attachment" — audio is a
+  // message but never a post, so widening the default would quietly let a
+  // voice note be uploaded as somebody's avatar.
+  accept: UploadAccept = "media"
 ): Promise<UploadResult> {
   // Belt and braces: call sites validate at PICK time (that is where the user
   // gets an instant error), but this is the only door every upload goes
@@ -273,14 +284,22 @@ export async function uploadFile(
 
   if (!shouldUploadDirect(file)) return uploadProxied(file, onProgress);
 
+  // ONE UPLOAD PER FILE. The proxy is a fallback for a service with no presign
+  // route, and that can only be known BEFORE the bytes move: once they have
+  // landed in storage, a NOT_FOUND from `/uploads/complete` must surface as
+  // the error it is rather than send the same file a second time through the
+  // proxy — which would store it twice and bill it twice.
+  let bytesSent = false;
   try {
-    return await uploadDirect(file, onProgress);
+    return await uploadDirect(file, onProgress, () => {
+      bytesSent = true;
+    });
   } catch (error) {
     // Presign has not shipped everywhere yet, and fixture mode has no storage
     // at all. Where it is absent, fall back to the proxy — which genuinely
     // works for any size locally, and tells the truth when the platform limit
     // bites in production.
-    if (errorCode(error) !== "NOT_FOUND") throw error;
+    if (bytesSent || errorCode(error) !== "NOT_FOUND") throw error;
     return uploadProxied(file, onProgress);
   }
 }

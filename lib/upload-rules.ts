@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * What may be uploaded, and by which route.
  *
@@ -9,6 +11,13 @@
 
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 export const VIDEO_TYPES = ["video/mp4", "video/webm"];
+/**
+ * Voice notes. A chat message may be audio, and audio is its OWN kind on both
+ * sides — not a video with no picture. The service gives it a separate cap for
+ * a reason a client must not flatten: a voice note that shared the 200 MB video
+ * cap could be a file nobody can play on mobile data.
+ */
+export const AUDIO_TYPES = ["audio/mpeg", "audio/mp4", "audio/webm", "audio/ogg", "audio/wav"];
 
 /** The upload contract: what may be sent, and how big. */
 export interface UploadLimits {
@@ -24,6 +33,8 @@ export interface UploadLimits {
    * upload) rather than a control. The enforced limit is `maxVideoBytes`.
    */
   maxVideoSeconds: number;
+  maxAudioBytes: number;
+  audioContentTypes: string[];
 }
 
 /**
@@ -47,6 +58,8 @@ export const FALLBACK_LIMITS: UploadLimits = {
   imageContentTypes: IMAGE_TYPES,
   videoContentTypes: VIDEO_TYPES,
   maxVideoSeconds: 90,
+  maxAudioBytes: 10 * 1024 * 1024,
+  audioContentTypes: AUDIO_TYPES,
 };
 
 let current: UploadLimits = FALLBACK_LIMITS;
@@ -80,6 +93,10 @@ export function setUploadLimits(limits: Partial<UploadLimits> | null | undefined
     videoContentTypes: types(limits?.videoContentTypes)
       ? limits.videoContentTypes
       : current.videoContentTypes,
+    maxAudioBytes: positive(limits?.maxAudioBytes) ? limits.maxAudioBytes : current.maxAudioBytes,
+    audioContentTypes: types(limits?.audioContentTypes)
+      ? limits.audioContentTypes
+      : current.audioContentTypes,
     maxVideoSeconds: positive(limits?.maxVideoSeconds)
       ? limits.maxVideoSeconds
       : current.maxVideoSeconds,
@@ -163,6 +180,35 @@ export interface UploadCandidate {
 }
 
 /**
+ * What a given picker will take.
+ *
+ * `attachment` is the chat composer and the only one that accepts AUDIO — a
+ * voice note is a message, not an avatar or a post. Stated as a union rather
+ * than a boolean so a third picker cannot be added by passing `true`.
+ */
+export type UploadAccept = "image" | "media" | "attachment";
+
+/**
+ * A content type as the ALLOWLIST spells it: lowercased, with any parameter
+ * dropped.
+ *
+ * `MediaRecorder` hands back `audio/webm;codecs=opus`, and a `File` built from
+ * that blob carries the parameter on `file.type`. Compared verbatim against an
+ * allowlist holding plain `audio/webm`, every recorded voice note was refused
+ * — and `uploadKind` fell through its video and audio branches and typed the
+ * recording as an IMAGE, which would have applied the wrong cap and drawn the
+ * wrong bubble.
+ *
+ * The service normalises exactly this way before it validates
+ * (`contentType.toLowerCase().split(';')[0].trim()`), so doing the same here
+ * keeps the two ends agreeing about what a file IS. A parameter is metadata
+ * about the encoding, never part of the type's identity.
+ */
+export function normalizeType(contentType: string): string {
+  return contentType.toLowerCase().split(";")[0]?.trim() ?? "";
+}
+
+/**
  * Client-side pre-check, run BEFORE any network call.
  *
  * Every rejection names the limit AND the file's real size, because "too
@@ -171,25 +217,34 @@ export interface UploadCandidate {
  */
 export function validateUpload(
   file: UploadCandidate,
-  accept: "image" | "media",
+  accept: UploadAccept,
   limits: UploadLimits = getUploadLimits()
 ): string | null {
-  const isImage = limits.imageContentTypes.includes(file.type);
-  const isVideo = limits.videoContentTypes.includes(file.type);
+  const type = normalizeType(file.type);
+  const isImage = limits.imageContentTypes.includes(type);
+  const isVideo = limits.videoContentTypes.includes(type);
+  // Audio counts only where audio is actually accepted. A voice note in an
+  // avatar picker is not "a file we can nearly take" — it is the wrong file.
+  const isAudio = accept === "attachment" && limits.audioContentTypes.includes(type);
 
-  if (!isImage && !isVideo) {
-    const hint = EXTENSION_HINT[file.type];
+  if (!isImage && !isVideo && !isAudio) {
+    const hint = EXTENSION_HINT[type];
     if (hint) return hint;
-    return accept === "image"
-      ? "Use a JPEG, PNG, WebP or GIF image."
+    if (accept === "image") return "Use a JPEG, PNG, WebP or GIF image.";
+    return accept === "attachment"
+      ? "Use an image (JPEG, PNG, WebP, GIF), a video (MP4, WebM) or audio (MP3, M4A, OGG, WAV)."
       : "Use an image (JPEG, PNG, WebP, GIF) or a video (MP4, WebM).";
   }
   if (accept === "image" && isVideo) return "This field takes an image, not a video.";
 
+  if (isAudio && file.size > limits.maxAudioBytes) {
+    return `Voice notes must be under ${formatBytes(limits.maxAudioBytes)} — this one is ${formatBytes(file.size)}.`;
+  }
+
   if (isImage && file.size > limits.maxImageBytes) {
     // GIFs blow past the image cap far more often than stills, so name the
     // kind of file the reader actually picked.
-    const label = file.type === "image/gif" ? "GIFs" : "Images";
+    const label = type === "image/gif" ? "GIFs" : "Images";
     return `${label} must be under ${formatBytes(limits.maxImageBytes)} — this one is ${formatBytes(file.size)}.`;
   }
   if (isVideo && file.size > limits.maxVideoBytes) {
@@ -201,8 +256,11 @@ export function validateUpload(
 export function uploadKind(
   file: UploadCandidate,
   limits: UploadLimits = getUploadLimits()
-): "image" | "video" {
-  return limits.videoContentTypes.includes(file.type) ? "video" : "image";
+): "image" | "video" | "audio" {
+  const type = normalizeType(file.type);
+  if (limits.videoContentTypes.includes(type)) return "video";
+  if (limits.audioContentTypes.includes(type)) return "audio";
+  return "image";
 }
 
 /**
@@ -226,12 +284,37 @@ export function shouldUploadDirect(file: UploadCandidate): boolean {
  */
 export const ACCEPT_IMAGE = IMAGE_TYPES.join(",");
 export const ACCEPT_MEDIA = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
+export const ACCEPT_ATTACHMENT = [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES].join(",");
 
-export function acceptFor(
-  accept: "image" | "media",
-  limits: UploadLimits = getUploadLimits()
-): string {
-  return accept === "image"
-    ? limits.imageContentTypes.join(",")
-    : [...limits.imageContentTypes, ...limits.videoContentTypes].join(",");
+export function acceptFor(accept: UploadAccept, limits: UploadLimits = getUploadLimits()): string {
+  if (accept === "image") return limits.imageContentTypes.join(",");
+  const types = [...limits.imageContentTypes, ...limits.videoContentTypes];
+  if (accept === "attachment") types.push(...limits.audioContentTypes);
+  return types.join(",");
 }
+
+/**
+ * What `POST /uploads` and `POST /uploads/complete` answer.
+ *
+ * It lives HERE, beside the rules, rather than in `lib/api/upload.ts`, for the
+ * reason stated at the top of that file: this module is dependency-free, so
+ * the schema can be unit-tested under `node --test` without dragging in Privy
+ * and the `@/` aliases. It was not testable before, which is how the `kind`
+ * bug below shipped unnoticed.
+ *
+ * `kind` degrades to NULL, never to a concrete value. It used to be
+ * `z.enum(["image","video"]).catch("image")`: when audio shipped the service
+ * correctly answered `kind: "audio"`, the enum rejected it, and the catch
+ * relabelled every voice note as an IMAGE — so the composer rendered
+ * `<img src="....weba">` and the upload looked broken with no error to explain
+ * it. A silent catch to a concrete value does not degrade, it asserts
+ * something specific and wrong. Unknown stays unknown, and callers decide.
+ */
+export const UploadResultSchema = z.object({
+  url: z.string(),
+  kind: z.enum(["image", "video", "audio"]).nullable().catch(null),
+  contentType: z.string().optional().default(""),
+  bytes: z.number().optional().default(0),
+});
+
+export type UploadResult = z.infer<typeof UploadResultSchema>;

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { setBroadcastLive, useBroadcastStatus } from "@/hooks/use-broadcast-status";
+import { unsubscribeThisBrowser } from "@/lib/push-client";
 
 // One logout flow for every surface: confirm if a broadcast is on air, then
 // Privy logout, drop every cached query (identity, tickets, feeds), clear the
@@ -18,6 +19,9 @@ export function useLogout(): () => Promise<void> {
     if (broadcast.live && !window.confirm("You're live — leaving stops your broadcast.")) {
       return;
     }
+    // Forget this browser for push BEFORE the session ends (the request needs
+    // it), so a shared browser never keeps getting the last person's pushes.
+    await unsubscribeThisBrowser();
     setBroadcastLive(null);
     queryClient.clear();
     await Promise.resolve(logout()).catch(() => {});

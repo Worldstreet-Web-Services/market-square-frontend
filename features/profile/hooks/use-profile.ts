@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import {
   invalidateFollowSurfaces,
   invalidateIdentitySurfaces,
+  patchBlockInCaches,
   patchFollowInCaches,
 } from "@/lib/api/invalidate";
 import { trackMarketEvent } from "@/lib/analytics";
 import type { Profile } from "@/lib/api/schemas";
 import { useAuth } from "@/hooks/use-auth";
+import { uploadFile } from "@/lib/api/upload";
+import { useMe } from "@/hooks/use-me";
 import { clearFollowIntent, setFollowIntent } from "@/features/profile/lib/follow-state";
 import {
   applyForCreator,
@@ -21,15 +24,55 @@ import {
   fetchProfileActivities,
   fetchProfilePosts,
   fetchProfileStreams,
+  fetchProfileBadges,
+  fetchProfilePhotos,
+  addMyPhoto,
+  removeMyPhoto,
   fetchSpotlight,
   fetchVerificationRule,
   renewVerification,
   reportProfile,
+  sendWink,
   setBlocked,
   setFollow,
   updateMe,
+  fetchFollowing,
+  fetchMyWinks,
 } from "@/features/profile/lib/api";
+import type { ProfileStreamFilters } from "@/features/profile/lib/types";
+import type { ReportReason } from "@/features/profile/lib/api";
+import { rememberWink, useSentWinks } from "@/features/profile/lib/wink-store";
+import {
+  describeWinkRefusal,
+  hasWinked,
+  humaniseWait,
+  retryAfterFromDetails,
+  winkEligibility,
+} from "@/lib/winks";
 
+
+/** Who someone follows, a page at a time. Pals' "Following" tab reads the reader's own. */
+export function useFollowingList(profileId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["ms", "following", profileId],
+    queryFn: ({ pageParam }) => fetchFollowing(profileId ?? "", pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: Boolean(profileId),
+  });
+}
+
+/** People who winked at the reader (`GET /me/winks`). A 404 means not deployed here — never retried. */
+export function useMyWinks(enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: ["ms", "winks-received"],
+    queryFn: ({ pageParam }) => fetchMyWinks(pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+  });
+}
 
 export function useProfile(username: string) {
   return useQuery({
@@ -55,8 +98,20 @@ export function useProfileSafety(profile: Profile) {
     mutationFn: (blocked: boolean) => setBlocked(profile.id, blocked),
     onSuccess: (_, blocked) => {
       queryClient.setQueryData<Profile>(["ms", "profile", profile.username], (old) => old ? { ...old, isBlocked: blocked, isFollowing: blocked ? false : old.isFollowing } : old);
+      /*
+        The LIST caches too, rewritten in place rather than only invalidated.
+
+        Explore's people cards read `isBlocked` off the `["ms","people"]` page,
+        not off the profile query, and the wink control refuses to send into a
+        block by reading exactly that field. Waiting for the refetch left a
+        window where a just-blocked card still offered a wink — the one moment
+        it must not. See `patchBlockInCaches`.
+      */
+      patchBlockInCaches(queryClient, profile.id, blocked);
       // Blocking hides their posts and drops the follow edge, so every list
       // that could carry either has to come back from the server.
+      queryClient.invalidateQueries({ queryKey: ["ms", "people"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "discovery"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "feed"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "stories"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "profile-posts", profile.username] });
@@ -73,11 +128,165 @@ export function useProfileSafety(profile: Profile) {
     },
   });
   const report = useMutation({
-    mutationFn: () => reportProfile(profile.id),
+    mutationFn: (reason: ReportReason) => reportProfile(profile.id, reason),
     onSuccess: () => toast.success("Report sent for review"),
     onError: (error) => toast.error(errorMessage(error, "Couldn't send the report.")),
   });
   return { block, blockUnavailable, report };
+}
+
+/**
+ * The wink.
+ *
+ * Three layers, and they are deliberately not collapsed into one:
+ *
+ *   RULES      `lib/winks.ts` — pure, tested, and the only place the limits
+ *              are written down.
+ *   MEMORY     `wink-store.ts` — what this device has already sent, persisted,
+ *              so a reload does not refund a spent budget.
+ *   TRANSPORT  here — and the SERVICE is the authority. A 429 from upstream
+ *              overrules whatever this browser believed; the pre-flight below
+ *              exists so the common refusal is instant and specific, not so
+ *              the limit lives on the client. See the header of `lib/winks.ts`
+ *              for why that distinction is not academic.
+ *
+ * BLOCKS. `winkEligibility` refuses to send into a block this viewer set. It
+ * cannot do the other direction — whether the RECIPIENT blocked the sender is
+ * not in any payload the sender receives, and must not be, because telling a
+ * sender "you are blocked" hands them the confirmation blocking exists to
+ * withhold. Suppressing a wink from a blocked account at delivery is the
+ * service's job and is on the list of what this slice still needs.
+ */
+export function useWink(profile: Profile) {
+  const queryClient = useQueryClient();
+  const [unavailable, setUnavailable] = useState(false);
+  /*
+    The service's own refusal, kept WITH ITS WORDING and not just its clock.
+
+    A 429 can mean two different things — the hourly budget is spent, or this
+    person was already winked today — and only the service knows which one it
+    applied. Reporting both as "that's your winks for now" tells somebody who
+    winked one person twice that they are out of winks entirely, which is
+    false and sends them away. So the message travels with the deadline, and
+    ours is the fallback for a 429 that arrives with nothing to say.
+  */
+  const [serverRefusal, setServerRefusal] = useState<{ until: number; text: string } | null>(
+    null
+  );
+  const me = useMe();
+  const viewerId = me.data?.id ?? null;
+  const sent = useSentWinks(viewerId);
+
+  const mutation = useMutation({
+    mutationFn: () => sendWink(profile.id),
+    onSuccess: () => {
+      rememberWink(viewerId, profile.id);
+      // A wink is an event on the recipient's side, not a change to the
+      // profile we are looking at, so nothing here is patched optimistically —
+      // there is no counter on a profile that a wink moves.
+      queryClient.invalidateQueries({ queryKey: ["ms", "notifications"] });
+      toast.success("Wink sent");
+      // Deliberately NOT tracked. `MarketEventName` is a closed union shared
+      // with the collector's own vocabulary; inventing a name here would send
+      // the analytics service an event it has never been told about. Add
+      // `wink_sent` there first, then here.
+    },
+    onError: (error) => {
+      const code = errorCode(error);
+      // "Not deployed" is not a failure — the control goes away rather than
+      // reporting an error the reader cannot act on.
+      if (code === "NOT_FOUND") {
+        setUnavailable(true);
+        toast.error("Winks aren't switched on yet.");
+        return;
+      }
+      if (code === "RATE_LIMITED" || code === "TOO_MANY_REQUESTS") {
+        const wait = retryAfterFromDetails((error as { details?: unknown }).details);
+        const said = (error as { message?: string }).message?.trim();
+        const text = said
+          ? `${said} You can again ${humaniseWait(wait)}.`
+          : describeWinkRefusal("budget-spent", wait);
+        setServerRefusal({ until: Date.now() + wait, text });
+        toast.error(text);
+        return;
+      }
+      toast.error(errorMessage(error, "Couldn't send the wink."));
+    },
+  });
+
+  /*
+    The clock, as state rather than a `Date.now()` read during render.
+
+    Two reasons and both are real. Reading the clock in a render body is impure
+    — React may render twice and get two answers — and the rules lint says so.
+    And the rendered state genuinely EXPIRES: a cooldown ends, a budget slot
+    ages back in, and without something to re-render on, a button stays
+    disabled after the refusal that disabled it has lapsed.
+
+    30 seconds, and only while a wait is actually outstanding. The waits here
+    are measured in hours and the copy is coarse on purpose ("in about 3
+    hours"), so a second-by-second tick would buy nothing and cost a timer per
+    visible row on a directory of thirty people.
+  */
+  const [now, setNow] = useState(() => Date.now());
+  const eligibility = winkEligibility({
+    viewerId,
+    targetId: profile.id,
+    targetBlocked: Boolean(profile.isBlocked),
+    sent,
+    now,
+    available: !unavailable,
+  });
+  const throttled = serverRefusal !== null && serverRefusal.until > now;
+  // A refusal that time will lift — as opposed to "self", "blocked" or a route
+  // that does not exist, none of which a timer would ever change.
+  const waiting =
+    throttled ||
+    (!eligibility.ok &&
+      (eligibility.reason === "cooling-down" || eligibility.reason === "budget-spent"));
+
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [waiting]);
+
+  /*
+    THE SERVICE'S OWN ANSWER, when it carries one. `winkedByMe` on a profile
+    says the viewer has an active wink at this person — inside the cooldown
+    that refuses a second one — resolved server-side, so it survives a new
+    browser where this tab's memory of sent winks does not. Present, it is
+    the truth about "already winked"; absent (an anonymous reader, an older
+    payload), the local memory stands in. Never defaulted: undefined is not
+    "no".
+  */
+  const winkedOnServer = profile.winkedByMe === true;
+
+  return {
+    /** Gone entirely once the service has answered "no such route". */
+    unavailable,
+    /** True while this viewer's wink is inside its per-person cooldown. */
+    winked: winkedOnServer || hasWinked(sent, profile.id, now),
+    /**
+     * Null when a wink may be sent right now.
+     *
+     * The SERVICE's refusal outranks ours: it is the one that actually stopped
+     * the request, and it knows which of its limits it applied.
+     */
+    refusal: throttled
+      ? serverRefusal!.text
+      : eligibility.ok
+        ? winkedOnServer
+          ? `You already winked at ${profile.displayName || profile.username}`
+          : null
+        : describeWinkRefusal(eligibility.reason, eligibility.retryAfterMs),
+    isPending: mutation.isPending,
+    send: () => {
+      // Refuse locally rather than spending a request the service will reject.
+      if (!eligibility.ok || throttled) return;
+      mutation.mutate();
+    },
+  };
 }
 
 export function useProfilePosts(username: string) {
@@ -87,12 +296,36 @@ export function useProfilePosts(username: string) {
   });
 }
 
-export function useProfileStreams(username: string) {
+export function useProfileStreams(username: string, filters: ProfileStreamFilters = {}) {
   return useQuery({
-    queryKey: ["ms", "profile-streams", username],
-    queryFn: () => fetchProfileStreams(username),
+    // The filters are in the key: the service's cursor encodes them, so a
+    // different filter is a different list rather than a page of the old one.
+    queryKey: ["ms", "profile-streams", username, filters.status ?? "", filters.kind ?? ""],
+    queryFn: () => fetchProfileStreams(username, filters),
   });
 }
+
+/**
+ * A ROUTE THAT MAY NOT BE DEPLOYED YET.
+ *
+ * The badge route was asked of the backend and answers 404 until it ships. A 404 here is "not deployed", not "this person has none" — so the
+ * query does not retry it (a missing route resolves immediately instead of
+ * three times), and `unavailable` is what a surface reads to stay absent. It
+ * never invents an empty list: absent-because-unknown and known-empty are
+ * different facts and both are kept.
+ */
+const notDeployed = (error: unknown) => errorCode(error) === "NOT_FOUND";
+
+export function useProfileBadges(username: string, enabled = true) {
+  const query = useQuery({
+    queryKey: ["ms", "profile-badges", username],
+    queryFn: () => fetchProfileBadges(username),
+    enabled,
+    retry: (count, error) => !notDeployed(error) && count < 2,
+  });
+  return { ...query, unavailable: query.isError && notDeployed(query.error) };
+}
+
 
 export function useProfileActivities(username: string) {
   return useQuery({
@@ -119,8 +352,11 @@ export function useFollow(profile: Profile) {
     // have to move too or the control sits on the stale server answer until
     // the refetch lands.
     patchFollowInCaches(queryClient, profile.id, following);
+    // The walk above has usually stamped this already — a signed-in profile
+    // carries `isFollowing` — so this is only for a payload without the field,
+    // and the guard keeps the follower count from moving twice.
     queryClient.setQueryData<Profile>(["ms", "profile", profile.username], (old) =>
-      old
+      old && old.isFollowing !== following
         ? {
             ...old,
             isFollowing: following,
@@ -161,6 +397,24 @@ export function useUpdateMe() {
       // is stamped into every cached list, not just the profile page.
       invalidateIdentitySurfaces(queryClient);
       toast.success("Profile updated");
+    },
+    /*
+      A FAILED SAVE HAS TO SAY SO.
+
+      This had no `onError` at all, so a rejected edit did nothing visible: the
+      sheet stayed open, the field kept what was typed, and the reader had no
+      way to tell whether it had landed. `EditProfileSheet` renders an
+      `InlineError` from the mutation, but the location sheet and anything else
+      that only calls `mutate` got silence — and silence after pressing Save
+      reads as success.
+
+      The username conflict keeps its own wording, because "Username taken" is
+      the one failure the reader can act on directly and the surfaces that show
+      it inline should not also get a toast.
+    */
+    onError: (error) => {
+      if (errorCode(error) === "CONFLICT") return;
+      toast.error(errorMessage(error, "Couldn't save your profile."));
     },
   });
 }
@@ -233,5 +487,37 @@ export function useApplyCreator() {
       toast.success("Application sent — we'll review it shortly.");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't send the application.")),
+  });
+}
+
+/**
+ * A person's photo gallery. ABSENT, not empty, while the route is not deployed:
+ * `unavailable` is what the Photos row reads to stay off the page.
+ */
+export function useProfilePhotos(username: string) {
+  const query = useQuery({
+    queryKey: ["ms", "profile-photos", username],
+    queryFn: () => fetchProfilePhotos(username),
+    retry: (count, error) => !notDeployed(error) && count < 2,
+  });
+  return { ...query, unavailable: query.isError && notDeployed(query.error) };
+}
+
+/** Upload an image, then attach it to your gallery. The service's own messages (the 12 cap) are shown as they come. */
+export function useAddProfilePhoto(username: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => addMyPhoto((await uploadFile(file, undefined, "image")).url),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["ms", "profile-photos", username] }),
+    onError: (error) => toast.error(errorMessage(error, "Couldn't add that photo.")),
+  });
+}
+
+export function useRemoveProfilePhoto(username: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => removeMyPhoto(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["ms", "profile-photos", username] }),
+    onError: (error) => toast.error(errorMessage(error, "Couldn't remove that photo.")),
   });
 }

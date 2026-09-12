@@ -51,6 +51,25 @@ export function isSafePath(path: string[]): boolean {
   );
 }
 
+/**
+ * The TWO writes a signed-out visitor may make through the BFF, both optional-
+ * auth in the spec (`[{}, { bearerAuth: [] }]`):
+ *
+ *  · `POST /email/unsubscribe` — turning off the daily email summary from the
+ *    link in the email. The signed token in its query names the one person it
+ *    changes, and that person may not be signed in on this device.
+ *  · `POST /streams/:id/preview-token` — the room card's listen-only hover
+ *    preview. It mints a subscribe-only, roster-hidden grant on a throwaway
+ *    identity, changes nothing, and the page it sits on is public.
+ *
+ * These exact shapes only — every other write needs a session.
+ */
+export function isPublicPost(path: string[]): boolean {
+  if (!isSafePath(path)) return false;
+  if (path.length === 2 && path[0] === "email" && path[1] === "unsubscribe") return true;
+  return path.length === 3 && path[0] === "streams" && path[2] === "preview-token";
+}
+
 export function isPublicGet(path: string[]): boolean {
   // A traversal attempt is never public, whatever its head looks like.
   if (!isSafePath(path)) return false;
@@ -82,6 +101,14 @@ export function isPublicGet(path: string[]): boolean {
   if (head === "posts" && second) {
     return path.length === 2 || (path.length === 3 && third === "comments");
   }
+  // One comment, and a thread's replies, read like the comments they hang
+  // under: public with optional auth, so `likedByMe` resolves for a signed-in
+  // reader. `/replies` is documented so; `GET /comments/{id}` answers 200 to
+  // an anonymous curl on :8080 (2026-09-09) while the spec document has not
+  // caught up with it — see PENDING_ROUTES.
+  if (head === "comments" && second) {
+    return path.length === 2 || (path.length === 3 && third === "replies");
+  }
 
   // Stream reads are public at three EXACT shapes only: the list, one stream,
   // and its chat. Matching on the head alone let anything under /streams
@@ -93,7 +120,57 @@ export function isPublicGet(path: string[]): boolean {
     return path.length === 3 && third === "chat";
   }
 
+  // THE ANNOUNCEMENT BAND, and only the collection. A platform message is for
+  // everybody, so it is read signed out — gating it would give a visitor a 401
+  // on the one thing the product most wants them to see, which is the same
+  // failure `categories`, `search` and `topics` each shipped with. Dismissing
+  // one is a POST and never reaches this predicate: a dismissal has to be
+  // remembered for somebody.
+  if (head === "announcements" && path.length === 1) return true;
+
   if (head === "verification" && second === "rule") return true;
+
+  // The PUBLIC HOUSE DIRECTORY, and only that exact shape. Home's "Join a
+  // community" grid renders for signed-out visitors, so gating it would give
+  // them a 401 on content the service serves to anyone who asks — the same
+  // failure `categories`, `search` and `topics` each shipped with. Every other
+  // /conversations route needs a session and stays behind the predicate below:
+  // this one answers for people who are not members, and it deliberately
+  // carries no message, unread count or last activity.
+  if (head === "conversations" && second === "discover" && path.length === 2) return true;
+
+  // ONE CONVERSATION'S DOORPLATE, and only that exact shape. Somebody opening a
+  // shared group link is BY DEFINITION not in the group yet, so a membership
+  // gate makes the link useless to the only person who needs it (backend
+  // 6422adf, confirmed 2026-09-12 with the observed response rather than the
+  // spec). What an anonymous caller gets is the plate and nothing else: title,
+  // description, picture, a member COUNT, visibility, and two false flags.
+  // Never messages, never the members themselves, never unread or last
+  // activity.
+  //
+  // The service decides the rest, and its rules are worth knowing here: a
+  // DIRECT conversation 404s for a non-participant (a preview would answer
+  // "are these two talking" to anybody holding an id), a PRIVATE group still
+  // previews with `canJoin: false` because existence is not the secret —
+  // ENTRY is — and a block collapses only `canJoin`, so the response can never
+  // be used as a block detector.
+  //
+  // Every other /conversations route stays gated: messages, join, invites,
+  // members, delete.
+  if (head === "conversations" && second && path.length === 2) return true;
+
+  // What a house INVITE LINK opens onto — `GET /invites/:token`, optional auth.
+  // The link is sent to people who are not members and often not signed in,
+  // and the landing page has to show them the house before asking either. Only
+  // this exact shape; accepting is a POST and never reaches this predicate.
+  if (head === "invites" && second && path.length === 2) return true;
+
+  // The trending hashtag rail. Public upstream and public here: it is a
+  // DISCOVERY surface that renders for signed-out visitors, and gating it gave
+  // them a 401 on content the service was serving to anyone who asked. Only
+  // this exact shape — every other /hashtags route stays behind the predicate
+  // below.
+  if (head === "hashtags" && second === "trending" && path.length === 2) return true;
 
   // The tip capability probe, and only that exact shape. A signed-out reader
   // has to see the same tip control a signed-in one does, so the sign-in
@@ -108,6 +185,10 @@ export function isPublicGet(path: string[]): boolean {
   // exists to remove. Only this EXACT shape; every other /uploads route is a
   // POST and never reaches this predicate.
   if (head === "uploads" && second === "limits" && path.length === 2) return true;
+
+  // The deployment's public web-push key — handed to the browser by design,
+  // and read before the reader has chosen to subscribe. This exact shape only.
+  if (head === "push" && second === "vapid-public-key" && path.length === 2) return true;
 
   return false;
 }

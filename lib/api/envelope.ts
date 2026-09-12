@@ -43,6 +43,11 @@ function fallbackCode(status: number): string {
 
 export async function unwrap<T>(res: Response, fallbackMessage: string): Promise<T> {
   const text = await res.text();
+  // A 204 is a SUCCESS that has no body by definition — declining a chat
+  // request, leaving a group, removing a member all answer with one. Without
+  // this they fell through to the envelope check below, found no
+  // `success: true`, and threw BAD_RESPONSE on a call that had worked.
+  if (res.ok && text.trim() === "") return undefined as T;
   const body = parseBody(text) as {
     success?: boolean;
     data?: T;
@@ -93,6 +98,10 @@ export function errorMessage(error: unknown, fallback: string): string {
       return "Session expired — sign in again.";
     case "AUTH_NOT_READY":
       return "Still connecting — try again in a moment.";
+    // Somebody's "Messages from" setting refused this chat. The service's own
+    // words say which ("not accepting messages" / "only from verified people").
+    case "MESSAGES_RESTRICTED":
+      return err.message || "This person isn't accepting messages.";
     case "FORBIDDEN":
       return "You don't have access to that.";
     case "NOT_FOUND":
@@ -148,8 +157,24 @@ export function errorMessage(error: unknown, fallback: string): string {
        * proxy's own transport failure carries "Market Square is unreachable."
        * as its message, so a real outage still reads as one.
        */
-      return err.message || "Market Square is unreachable right now.";
+      return err.message || "Square is unreachable right now.";
     default:
-      return err.message || fallback;
+      /*
+        AN ERROR WITH NO CODE IS NOT OURS, AND ITS MESSAGE IS NOT COPY.
+
+        Every branch above reads `err.message` safely because reaching it means
+        the service sent a code, so the message was written for a reader. This
+        branch is reached by two very different things: a code we do not know
+        yet, whose message is still the service's own sentence and is better
+        than a generic line — and a plain JS exception, which has a `message`
+        and no `code` at all.
+
+        Returning `err.message` for both put "Cannot read properties of
+        undefined (reading '0')" in a toast under the composer. It told the
+        reader nothing they could act on, and it read as though they had broken
+        something. So an unknown CODE still shows the service's sentence, and
+        an error with no code shows the caller's fallback.
+      */
+      return err.code ? err.message || fallback : fallback;
   }
 }

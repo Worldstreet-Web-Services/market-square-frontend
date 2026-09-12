@@ -29,11 +29,14 @@ describe("live page layout", () => {
     assert.match(source, /hasMore && viewAllHref/);
   });
 
-  test("the CTA banner carries the measured gradient and the real artwork", () => {
+  test("the CTA banner carries the file's own gradient and real artwork", () => {
     const source = read("live-cta.tsx");
-    assert.match(source, /#ad46ff/);
-    assert.match(source, /#682a99/);
-    assert.match(source, /live-go-live-avatar\.png/);
+    // 1305:149178's ramp, written as the file states it.
+    assert.match(source, /126deg,#AD46FF_0%,#682A99_82%/);
+    // Real exported art, never a placeholder — the mascot and both arcs.
+    assert.match(source, /banner-mascot\.png/);
+    assert.match(source, /banner-arc-left\.svg/);
+    assert.match(source, /banner-arc-right\.svg/);
   });
 
   test("the hero uses the measured join pill, dots and chevron placement", () => {

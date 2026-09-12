@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { arkAppConfigured } from "@/lib/deeplink";
 import { openTicker } from "@/lib/ticker-store";
 import { parsePostText, type Segment } from "@/lib/post-segments";
+import { formatPostText, type Block, type Inline } from "@/lib/post-format";
 import { useTradeableSymbols } from "@/hooks/use-tradeable-symbols";
 import type { Mention } from "@/lib/api/schemas";
 
@@ -18,6 +19,11 @@ import type { Mention } from "@/lib/api/schemas";
  *
  * The rules live in `lib/post-segments.ts` and mirror Ark's, so a post also
  * reads the same on the dashboard.
+ *
+ * FORMATTING — `**bold**`, `_italic_`, `~~strike~~`, `` `code` ``, lists and
+ * quotes, read by `lib/post-format.ts` (posts and comments, ogazboiz's call).
+ * A post with none of it renders exactly as before: one paragraph, every line
+ * kept. Only a list or a quote turns the body into blocks.
  */
 export function PostText({
   text,
@@ -44,31 +50,119 @@ export function PostText({
   className?: string;
   /** Override for tests and stories; normally fetched. */
   tradeable?: string[];
-  clampLines?: 3 | 4 | 5 | 6;
+  clampLines?: 2 | 3 | 4 | 5 | 6;
 }) {
   // One shared, long-cached query rather than a prop threaded through every
   // component that happens to render a post body.
   const listed = useTradeableSymbols();
   const symbols = tradeable ?? listed;
   if (!text) return null;
-  const segments = parsePostText(text, { mentions, tradeable: symbols });
+  const blocks = formatPostText(text, (value) => parsePostText(value, { mentions, tradeable: symbols }));
+  const only = blocks.length === 1 && blocks[0]!.kind === "paragraph" ? blocks[0]! : null;
+  // Blocks need a block container: a list inside a `<p>` is invalid markup, and
+  // an `inline` caller (a comment beside its author) gets `block` for them.
+  const structured = only === null;
+  const body = only ? <Lines lines={only.lines} /> : <Blocks blocks={blocks} />;
+  const containerClass = cn(className, structured && "block");
 
   if (clampLines) {
     return (
-      <ClampedText className={className} lines={clampLines}>
-        {segments.map((segment, index) => (
-          <SegmentView key={index} segment={segment} />
-        ))}
+      <ClampedText className={containerClass} lines={clampLines} as={structured ? "div" : "p"}>
+        {body}
       </ClampedText>
     );
   }
 
+  const Tag = structured ? "div" : "p";
+  return <Tag className={cn("whitespace-pre-wrap break-words", containerClass)}>{body}</Tag>;
+}
+
+function Lines({ lines }: { lines: Inline[][] }) {
   return (
-    <p className={cn("whitespace-pre-wrap break-words", className)}>
-      {segments.map((segment, index) => (
-        <SegmentView key={index} segment={segment} />
+    <>
+      {lines.map((line, index) => (
+        <Fragment key={index}>
+          {index > 0 && "\n"}
+          <InlineView nodes={line} />
+        </Fragment>
       ))}
-    </p>
+    </>
+  );
+}
+
+function Blocks({ blocks }: { blocks: Block[] }) {
+  return (
+    <>
+      {blocks.map((block, index) => {
+        if (block.kind === "paragraph") {
+          return (
+            <p key={index}>
+              <Lines lines={block.lines} />
+            </p>
+          );
+        }
+        if (block.kind === "quote") {
+          return (
+            <blockquote key={index} className="my-1.5 border-l-2 border-white/25 pl-3 text-white/70">
+              <Lines lines={block.lines} />
+            </blockquote>
+          );
+        }
+        const List = block.ordered ? "ol" : "ul";
+        return (
+          <List
+            key={index}
+            start={block.ordered && block.start !== 1 ? block.start : undefined}
+            className={cn("my-1.5 space-y-0.5 pl-5 marker:text-white/50", block.ordered ? "list-decimal" : "list-disc")}
+          >
+            {block.items.map((item, itemIndex) => (
+              <li key={itemIndex}>
+                <InlineView nodes={item} />
+              </li>
+            ))}
+          </List>
+        );
+      })}
+    </>
+  );
+}
+
+function InlineView({ nodes }: { nodes: Inline[] }) {
+  return (
+    <>
+      {nodes.map((node, index) => {
+        switch (node.kind) {
+          case "text":
+            return <Fragment key={index}>{node.value}</Fragment>;
+          case "segment":
+            return <SegmentView key={index} segment={node.segment} />;
+          case "code":
+            return (
+              <code key={index} className="rounded bg-white/10 px-1 py-px font-mono text-[0.9em] text-white">
+                {node.value}
+              </code>
+            );
+          case "strong":
+            return (
+              <strong key={index} className="font-bold text-white">
+                <InlineView nodes={node.children} />
+              </strong>
+            );
+          case "em":
+            return (
+              <em key={index} className="italic">
+                <InlineView nodes={node.children} />
+              </em>
+            );
+          case "strike":
+            return (
+              <s key={index} className="text-white/60 line-through">
+                <InlineView nodes={node.children} />
+              </s>
+            );
+        }
+      })}
+    </>
   );
 }
 
@@ -170,7 +264,10 @@ function SegmentView({ segment }: { segment: Segment }) {
 
 
 /** Tailwind cannot see a class it never reads, so the clamps are spelled out. */
-const CLAMP: Record<3 | 4 | 5 | 6, string> = {
+const CLAMP: Record<2 | 3 | 4 | 5 | 6, string> = {
+  // TWO is the rail's (1313:152779): a card there is a fixed 367 and the
+  // caption is what gives, so it clamps harder than the column's.
+  2: "line-clamp-2",
   3: "line-clamp-3",
   4: "line-clamp-4",
   5: "line-clamp-5",
@@ -191,12 +288,15 @@ function ClampedText({
   children,
   className,
   lines,
+  as: Tag = "p",
 }: {
   children: React.ReactNode;
   className?: string;
-  lines: 3 | 4 | 5 | 6;
+  lines: 2 | 3 | 4 | 5 | 6;
+  /** `div` when the body holds lists or quotes, which a `<p>` cannot. */
+  as?: "p" | "div";
 }) {
-  const ref = useRef<HTMLParagraphElement>(null);
+  const ref = useRef<HTMLParagraphElement & HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -219,12 +319,12 @@ function ClampedText({
 
   return (
     <>
-      <p
+      <Tag
         ref={ref}
         className={cn("whitespace-pre-wrap break-words", className, !expanded && CLAMP[lines])}
       >
         {children}
-      </p>
+      </Tag>
       {overflows && (
         <button
           type="button"

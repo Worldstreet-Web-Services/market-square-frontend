@@ -3,10 +3,13 @@
 import { z } from "zod";
 import { msApi } from "@/lib/api/service";
 import { uploadFile } from "@/lib/api/upload";
+import { noteMediaContract } from "@/lib/media-contract";
 import type { DeepLink } from "@/lib/api/schemas";
 import {
   BookmarkResultSchema,
+  PinResultSchema,
   CommentSchema,
+  CommentLikeResultSchema,
   CommentsPageSchema,
   FeedPageSchema,
   LikeResultSchema,
@@ -27,17 +30,37 @@ export async function fetchFeed(
   cursor?: string,
   topics: string[] = [],
   /** One discussion. Replaces the lane rather than narrowing it. */
-  hashtag?: string
+  hashtag?: string,
+  /** The timeline pages at 30; the head check that looks for new posts asks for fewer. */
+  limit = 30
 ) {
-  return FeedPageSchema.parse(
+  const page = FeedPageSchema.parse(
     await msApi.get("/feed", {
       lane,
-      limit: 30,
+      limit,
       cursor,
       ...(topics.length > 0 ? { topics: topics.join(",") } : {}),
       ...(hashtag ? { hashtag } : {}),
     })
   );
+  noteMediaContract(page.items.map((item) => item.post));
+  return page;
+}
+
+/**
+ * Asks for ONE post, only to learn whether this server returns the `media`
+ * list — the composer's question when nothing on the page has answered it.
+ * Once per page load; a failed ask is forgotten so the next composer retries.
+ */
+let mediaProbe: Promise<void> | null = null;
+export function probeMediaContract(): Promise<void> {
+  mediaProbe ??= fetchFeed("for-you", undefined, [], undefined, 1).then(
+    () => undefined,
+    () => {
+      mediaProbe = null;
+    }
+  );
+  return mediaProbe;
 }
 
 // GET /stories returns FeedItems; the row only needs the posts inside them.
@@ -56,17 +79,23 @@ export async function createPost(input: {
   kind: "update" | "story";
   text: string;
   mediaUrl?: string;
+  /** Two or more photos, in order — sent INSTEAD of `mediaUrl` (`mediaFields`). */
+  media?: { url: string; kind: "image" | "video" }[];
   deepLink?: DeepLink;
   quotedPostId?: string;
   mentions?: Mention[];
 }) {
-  return PostSchema.parse(await msApi.post("/posts", input));
+  const post = PostSchema.parse(await msApi.post("/posts", input));
+  noteMediaContract([post]);
+  return post;
 }
 
 // Single post, by id — the permalink's source. Public GET: a signed-out
 // reader can open a shared link, and a signed-in one still gets likedByMe.
 export async function fetchPost(postId: string) {
-  return PostSchema.parse(await msApi.get(`/posts/${postId}`));
+  const post = PostSchema.parse(await msApi.get(`/posts/${postId}`));
+  noteMediaContract([post]);
+  return post;
 }
 
 export async function repostPost(postId: string, repost: boolean) {
@@ -112,12 +141,55 @@ export async function likePost(postId: string, like: boolean) {
   return LikeResultSchema.parse(like ? await msApi.post(path) : await msApi.del(path));
 }
 
-export async function fetchComments(postId: string) {
-  return CommentsPageSchema.parse(await msApi.get(`/posts/${postId}/comments`));
+export async function fetchComments(postId: string, cursor?: string) {
+  return CommentsPageSchema.parse(
+    await msApi.get(`/posts/${postId}/comments`, cursor ? { cursor } : {})
+  );
 }
 
-export async function addComment(postId: string, text: string) {
-  return CommentSchema.parse(await msApi.post(`/posts/${postId}/comments`, { text }));
+/**
+ * A comment, or a REPLY when `parentId` names the comment the reader TAPPED
+ * Reply on — top-level or reply alike; the service files it under the
+ * top-level parent and records who was answered. `parentId` is only sent
+ * when present.
+ */
+export async function addComment(
+  postId: string,
+  text: string,
+  parentId?: string | null,
+  mentions?: Mention[]
+) {
+  return CommentSchema.parse(
+    await msApi.post(`/posts/${postId}/comments`, {
+      text,
+      ...(parentId ? { parentId } : {}),
+      // Structured picks, so the service records exactly who was meant.
+      ...(mentions && mentions.length > 0 ? { mentions } : {}),
+    })
+  );
+}
+
+/** `GET /comments/:id` — one comment, for a permalink opened ON it (`?comment=`). */
+export async function fetchComment(commentId: string) {
+  return CommentSchema.parse(await msApi.get(`/comments/${commentId}`));
+}
+
+/** `GET /comments/:id/replies` — a thread's replies, oldest first. */
+export async function fetchReplies(commentId: string, cursor?: string) {
+  return CommentsPageSchema.parse(
+    await msApi.get(`/comments/${commentId}/replies`, cursor ? { cursor } : {})
+  );
+}
+
+/** `POST|DELETE /comments/:id/like` — idempotent both ways. */
+export async function likeComment(commentId: string, like: boolean) {
+  const path = `/comments/${commentId}/like`;
+  return CommentLikeResultSchema.parse(like ? await msApi.post(path) : await msApi.del(path));
+}
+
+/** `DELETE /comments/:id` — the comment's author, or the post's. */
+export async function deleteComment(commentId: string) {
+  await msApi.del(`/comments/${commentId}`);
 }
 
 export async function reportTarget(input: {
@@ -127,4 +199,51 @@ export async function reportTarget(input: {
   note?: string;
 }) {
   return msApi.post<{ id: string; status: string }>("/reports", input);
+}
+
+/**
+ * Edit a post — `PATCH /posts/:id`.
+ *
+ * TEXT AND TOPICS ONLY, and that is a product decision rather than a gap:
+ * media, the quoted post and the deep link are not editable, because swapping
+ * the picture under something people have already liked changes what they
+ * endorsed. New media means delete and repost.
+ *
+ * Author only — 403 for anybody else, admins included: admins remove, they do
+ * not rephrase. Same 2000-character cap as create, 400 on empty, 404 once
+ * deleted. Works on a story too.
+ */
+export async function editPost(
+  postId: string,
+  input: { text: string; topics?: string[] }
+) {
+  return PostSchema.parse(
+    await msApi.patch(`/posts/${postId}`, {
+      text: input.text.trim(),
+      ...(input.topics ? { topics: input.topics } : {}),
+    })
+  );
+}
+
+/**
+ * Delete a post or a story — `DELETE /posts/:id`.
+ *
+ * ONE route for both, because a story IS a post (`kind: "story"`). A soft
+ * remove by the author or an admin; the post then 404s.
+ */
+/**
+ * Pin one of your own posts to the top of your profile, or take it down.
+ *
+ * Pinning REPLACES — one per profile, no unpin-first. Unpinning is idempotent
+ * and does not require this to be the pinned post, so pressing it against a
+ * stale view still answers cleanly. Somebody else's post is a 404, not a 403:
+ * a 403 would confirm the post exists and is not yours.
+ */
+export async function pinPost(postId: string, pin: boolean) {
+  const path = `/posts/${postId}/pin`;
+  return PinResultSchema.parse((pin ? await msApi.post(path) : await msApi.del(path)) ?? {});
+}
+
+export async function deletePost(postId: string) {
+  return msApi.del<unknown>(`/posts/${postId}`);
 }

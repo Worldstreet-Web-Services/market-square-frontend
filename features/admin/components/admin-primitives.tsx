@@ -17,14 +17,25 @@ export function Panel({
   count,
   action,
   children,
+  allowOverflow = false,
 }: {
   title: string;
   count?: number;
   action?: React.ReactNode;
   children: React.ReactNode;
+  /**
+   * Let a child escape the card's bounds.
+   *
+   * The clip is the default and earns its place: it holds list rows inside
+   * the card's rounded corners. But a panel holding a control that OPENS —
+   * the date field's calendar — clips that open state instead, which read as
+   * a calendar you could not scroll to (ogazboiz: "i cant even scroll the
+   * calendat in admin"). Opt in only where something has to escape.
+   */
+  allowOverflow?: boolean;
 }) {
   return (
-    <section className="ws-card overflow-hidden">
+    <section className={cn("ws-card", !allowOverflow && "overflow-hidden")}>
       <header className="ws-hair flex items-center gap-2 border-b px-4 py-3">
         <h2 className="ws-display text-[15px]">{title}</h2>
         {count !== undefined && count > 0 && (

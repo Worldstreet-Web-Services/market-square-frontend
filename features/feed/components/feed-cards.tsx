@@ -27,7 +27,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
   const reshare = async () => {
     const url = `${window.location.origin}/live/${stream.id}`;
     try {
-      if (navigator.share) await navigator.share({ title: stream.title, text: `Watch ${stream.title} live on Market Square`, url });
+      if (navigator.share) await navigator.share({ title: stream.title, text: `Watch ${stream.title} live on Square`, url });
       else {
         await navigator.clipboard.writeText(url);
         toast.success("Live stream link copied");
@@ -142,12 +142,17 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
 export function FeedItemCard({
   item,
   followSlot,
+  winkSlot,
   tipSlot,
   onOpenMedia,
   onQuote,
+  compact = false,
 }: {
   item: FeedItem;
+  /** Drop the inline reply field — for a card in a rail. See PostCard. */
+  compact?: boolean;
   followSlot?: (author: Profile) => React.ReactNode;
+  winkSlot?: (author: Profile) => React.ReactNode;
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
@@ -161,9 +166,11 @@ export function FeedItemCard({
         post={item.post}
         repostedBy={item.repostedBy}
         followSlot={followSlot}
+        winkSlot={winkSlot}
         onOpenMedia={onOpenMedia}
         tipSlot={tipSlot}
         onQuote={onQuote}
+        compact={compact}
       />
     );
   if (item.type === "stream" && item.stream) return <StreamFeedCard stream={item.stream} />;

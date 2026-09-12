@@ -1,9 +1,21 @@
 "use client";
 
+import { useState } from "react";
+
 import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/feed";
-import { FollowPill } from "@/features/profile";
+import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
+import { HomeTopRow } from "@/components/layout/home-top-row";
+import { HomeSearch } from "@/components/layout/home-search";
+import { HOME_BANNER_SLIDES, HomeBanner } from "@/components/layout/home-banner";
+import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
+import { FriendsDeck } from "@/components/layout/friends-deck";
+import { ComingSoonRooms } from "@/components/layout/coming-soon-rooms";
+import { PopularHouses } from "@/components/layout/popular-houses";
+import { EcosystemPartnersRail } from "@/components/layout/ecosystem-partners-rail";
+import { PostForYou } from "@/components/layout/post-for-you";
+import { SuggestedPals } from "@/components/layout/suggested-pals";
 
 // Slices never import each other, so the follow control — which belongs to the
 // profile slice — is composed into the timeline here, the same way the stream
@@ -23,21 +35,100 @@ const followSlot = (author: Parameters<typeof FollowPill>[0]["profile"]) => (
 // where there is no wallet or no engine, which is the honest answer.
 const balanceSlot = (amountKash: string | null) => <KashBalance amountKash={amountKash} />;
 
+// The wink sits between the tip and the follow on every post header — node
+// 496:13389 draws all three. It belongs to the profile slice, which owns the
+// rate limit and the refusal copy, so it arrives the same way the other two do.
+const winkSlot = (author: Parameters<typeof WinkButton>[0]["profile"]) => (
+  <WinkButton profile={author} size="post" />
+);
+
 const tipSlot = (post: Post) => (
   <TipButton
     target={{ kind: "post", id: post.id, recipient: post.author }}
     balance={balanceSlot}
+    variant="post"
   />
 );
 
+/**
+ * The three post-header controls, for every screen that hands the feed slice
+ * a list to draw — Home, Arkmarks, a post, and `/pals`' following lane. One
+ * composition, exported, so the pals screen does not carry a second copy of
+ * the slice-joining above.
+ */
+export const POST_SLOTS = { followSlot, winkSlot, tipSlot } as const;
+
+/**
+ * Home, composed — node 225:3315.
+ *
+ * The file's order is stories, the TOPIC row, the rooms open now, "Make some
+ * friends", the timeline, then "Join a community". Three of those read slices
+ * the feed may not import, so they are assembled here and handed down as slots
+ * — the same route-slot pattern the follow pill and the tip button above use.
+ *
+ * The column opens on the search row and the gistroom banner (1295:142736,
+ * 1305:149178), for everybody: the banner is the strongest invitation on the
+ * page, and the tap gates a signed-out reader into sign-in.
+ *
+ * The topic vocabulary is DATA rather than a node, because the row's selection
+ * drives the feed's own query: `GET /topics` belongs to the discovery slice and
+ * `GET /feed?topics=` is the feed's, and this is the one layer allowed to know
+ * both.
+ */
 export function HomeScreen() {
-  return <FeedPage followSlot={followSlot} tipSlot={tipSlot} />;
+  /*
+    HOME ANSWERS ITS OWN SEARCH.
+
+    The field was a link into Explore, which meant every search left the page
+    the reader was on. ogazboiz: "that search is not suppose to take me to
+    discover ... everything that i am searching for suppose to be there even
+    room codes ... in that home that search there".
+
+    So Home owns the string, and while it is non-empty the sections give way
+    to the results. It is deliberately LOCAL state rather than `?q=` in the
+    URL: Explore owns `?q=`, and a second writer of the same parameter is how
+    two surfaces start fighting over one query. Clearing the field restores
+    the page exactly as it was.
+  */
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
+
+  // Home's own eight, in the design's order (`?surface=home`).
+  return (
+    <FeedPage
+      mode="home"
+      followSlot={followSlot}
+      winkSlot={winkSlot}
+      tipSlot={tipSlot}
+      headSlot={
+        <>
+          <HomeTopRow value={query} onChange={setQuery} />
+          {!searching && <HomeBanner slides={HOME_BANNER_SLIDES} />}
+        </>
+      }
+      searchSlot={searching ? <HomeSearch query={query} /> : undefined}
+      roomsSlot={<LiveGistRooms />}
+      friendsSlot={<FriendsDeck />}
+      comingSoonSlot={<ComingSoonRooms />}
+      partnersSlot={<EcosystemPartnersRail heading={false} />}
+      housesSlot={<PopularHouses />}
+      postsSlot={<PostForYou followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />}
+      palsSlot={<SuggestedPals />}
+    />
+  );
 }
 
 export function ArkmarksScreen() {
-  return <ArkmarksPage followSlot={followSlot} tipSlot={tipSlot} />;
+  return <ArkmarksPage followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />;
 }
 
 export function PostScreen({ postId }: { postId: string }) {
-  return <PostDetailPage postId={postId} followSlot={followSlot} tipSlot={tipSlot} />;
+  return (
+    <PostDetailPage
+      postId={postId}
+      followSlot={followSlot}
+      winkSlot={winkSlot}
+      tipSlot={tipSlot}
+    />
+  );
 }

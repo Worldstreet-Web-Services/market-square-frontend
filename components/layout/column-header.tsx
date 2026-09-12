@@ -14,6 +14,7 @@ export function ColumnHeader({
   subtitle,
   back = false,
   backFallback = "/",
+  onBack,
   action,
   children,
   hideTitle = false,
@@ -33,6 +34,12 @@ export function ColumnHeader({
   back?: boolean;
   /** Where the back arrow lands when there is no in-app page behind this one. */
   backFallback?: string;
+  /**
+   * Take over the back arrow — for a surface that drills in WITHIN one page
+   * (Settings: menu → section → sub-page), where "back" means one level up
+   * rather than the previous route. Absent, the arrow leaves the page.
+   */
+  onBack?: () => void;
   action?: React.ReactNode;
   /** A tab strip or filter row pinned under the title. */
   children?: React.ReactNode;
@@ -81,7 +88,7 @@ export function ColumnHeader({
               // On a directly loaded page — a shared link, a new tab, a
               // refresh — there is no in-app history to pop, and back() would
               // do nothing or leave the app. Fall back to the timeline.
-              onClick={() => (canGoBack() ? router.back() : router.push(backFallback))}
+              onClick={() => (onBack ? onBack() : canGoBack() ? router.back() : router.push(backFallback))}
               aria-label="Back"
               className="ws-press -ml-2 rounded-full p-2 text-heading transition-colors hover:bg-white/10"
             >

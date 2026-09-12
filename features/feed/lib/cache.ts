@@ -22,7 +22,44 @@ import type { FeedPage, Post } from "@/features/feed/lib/types";
  *
  * Keys are matched by PREFIX, so one call covers every lane and every loaded
  * cursor without the caller having to know which pages are in memory.
+ *
+ * ─── AND PREFIX MATCHING IS WHY EVERY WRITER MUST CHECK THE SHAPE ───────────
+ * A FIFTH cache now lives under the feed prefix and is NOT an infinite list:
+ *
+ *   ["ms","feed", lane, key, "head"]   FeedPage   — the 30s freshness check
+ *
+ * `useFeedHead` is a plain `useQuery`, so its value is a bare `FeedPage` with
+ * `items` and no `pages`. Every `setQueriesData` here matches it, and every
+ * one of them used to reach straight for `data.pages` behind nothing but a
+ * `data ?` null check — which passes, because the value is a perfectly good
+ * object. The result was a TypeError, "Cannot read properties of undefined
+ * (reading '0')" on publish and "(reading 'map')" on like and bookmark,
+ * thrown INSIDE onSuccess: the post was created on the server, then the
+ * mutation went to error, the sheet never closed, and the reader was invited
+ * to press Post again.
+ *
+ * So a null check is not a shape check. `isInfiniteFeed` is the shape check,
+ * and anything it does not recognise is returned untouched rather than
+ * guessed at. Adding a sixth shape under one of these prefixes is fine; the
+ * writers will leave it alone.
  */
+
+/**
+ * Is this cache entry an infinite feed, as opposed to some other value that
+ * happens to sit under the same key prefix?
+ *
+ * Deliberately structural rather than a key comparison: the whole point of
+ * prefix matching is that these writers do not enumerate the keys they touch,
+ * so the guard must not either.
+ */
+export function isInfiniteFeed(data: unknown): data is InfiniteData<FeedPage> {
+  return Array.isArray((data as InfiniteData<FeedPage> | undefined)?.pages);
+}
+
+/** Same question for the flat `{ items }` caches. */
+function hasItems<T extends { items: unknown[] }>(data: unknown): data is T {
+  return Array.isArray((data as { items?: unknown[] } | undefined)?.items);
+}
 export const POST_LIST_KEYS = {
   feed: ["ms", "feed"] as const,
   bookmarks: ["ms", "bookmarks"] as const,
@@ -41,7 +78,7 @@ export function patchPostEverywhere(
 
   for (const key of [POST_LIST_KEYS.feed, POST_LIST_KEYS.bookmarks]) {
     client.setQueriesData<InfiniteData<FeedPage>>({ queryKey: key }, (data) =>
-      data
+      isInfiniteFeed(data)
         ? {
             ...data,
             pages: data.pages.map((page) => ({
@@ -55,18 +92,57 @@ export function patchPostEverywhere(
     );
   }
 
+  // Same shape check on the flat caches. Neither prefix has a foreign shape
+  // under it today; both are guarded anyway, because the feed prefix did not
+  // either until somebody added a perfectly reasonable query to it.
   client.setQueriesData<{ items: Post[]; nextCursor?: string | null }>(
     { queryKey: POST_LIST_KEYS.profilePosts },
-    (data) => (data ? { ...data, items: data.items.map(applyIfMatch) } : data)
+    (data) => (hasItems<{ items: Post[] }>(data) ? { ...data, items: data.items.map(applyIfMatch) } : data)
   );
 
   client.setQueriesData<{ items: Post[] }>({ queryKey: POST_LIST_KEYS.stories }, (data) =>
-    data ? { ...data, items: data.items.map(applyIfMatch) } : data
+    hasItems<{ items: Post[] }>(data) ? { ...data, items: data.items.map(applyIfMatch) } : data
   );
 
   client.setQueryData<Post>([...POST_LIST_KEYS.post, postId], (post) =>
     post ? patch(post) : post
   );
+}
+
+/**
+ * Clear the "Pinned" flag from every cached post.
+ *
+ * A profile has ONE pinned post, so pinning a second silently unpins the
+ * first. Without this, both cards wear the label until the next natural
+ * refetch — a state the product never actually has. Narrow on purpose: this
+ * touches one boolean, rather than being a general "patch every post" hook
+ * that would invite sweeping edits nobody can audit.
+ */
+export function clearPinnedEverywhere(client: QueryClient): void {
+  const clear = (post: Post): Post =>
+    post.pinnedByAuthor ? { ...post, pinnedByAuthor: false } : post;
+
+  for (const key of [POST_LIST_KEYS.feed, POST_LIST_KEYS.bookmarks]) {
+    client.setQueriesData<InfiniteData<FeedPage>>({ queryKey: key }, (data) =>
+      isInfiniteFeed(data)
+        ? {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) => (item.post ? { ...item, post: clear(item.post) } : item)),
+            })),
+          }
+        : data
+    );
+  }
+
+  for (const key of [POST_LIST_KEYS.profilePosts, POST_LIST_KEYS.stories]) {
+    client.setQueriesData<{ items: Post[] }>({ queryKey: key }, (data) =>
+      hasItems<{ items: Post[] }>(data) ? { ...data, items: data.items.map(clear) } : data
+    );
+  }
+
+  client.setQueriesData<Post>({ queryKey: POST_LIST_KEYS.post }, (post) => (post ? clear(post) : post));
 }
 
 /**

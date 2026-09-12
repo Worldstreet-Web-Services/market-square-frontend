@@ -25,7 +25,7 @@ test("a real outage still reads as one", () => {
 
 test("with no message at all, the generic line is still there", () => {
   const error = apiError("SERVICE_UNAVAILABLE", "", 503);
-  assert.equal(errorMessage(error, "fallback"), "Market Square is unreachable right now.");
+  assert.equal(errorMessage(error, "fallback"), "Square is unreachable right now.");
 });
 
 test("the codes a reader can act on keep their own copy", () => {

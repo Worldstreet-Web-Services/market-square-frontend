@@ -8,27 +8,46 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useCircuit } from "@/lib/api/circuit-store";
 
-// Designed empty state: a quiet mark, a line of copy, an optional way forward.
+/**
+ * Designed empty state: a mark in a soft disc, a line of copy, an optional way
+ * forward.
+ *
+ * An OUTLINE on the page, like the post card — transparent, one 10% hairline,
+ * the card's 16.5 radius. It was `ws-inset`, a black/35 fill, which on the
+ * `#121214` page read as a black slab dropped into the column ("even the empty
+ * state too"). Depth comes from the border, never a darker or lighter fill.
+ */
 export function EmptyState({
   glyph = "◇",
+  icon,
   title,
   body,
   action,
   className,
 }: {
   glyph?: string;
+  /** A real glyph from the icon set; wins over `glyph`. */
+  icon?: React.ReactNode;
   title: string;
   body?: string;
   action?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("ws-inset flex flex-col items-center gap-2 px-6 py-12 text-center", className)}>
-      <span className="text-3xl text-grey-600" aria-hidden>
-        {glyph}
+    <div
+      className={cn(
+        "flex flex-col items-center gap-2 rounded-[16.5px] border border-white/10 bg-transparent px-6 py-12 text-center",
+        className
+      )}
+    >
+      <span
+        className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.04] text-[20px] text-grey-400 ring-1 ring-inset ring-white/10"
+        aria-hidden
+      >
+        {icon ?? glyph}
       </span>
-      <p className="ws-display text-base text-grey-200">{title}</p>
-      {body && <p className="max-w-sm text-sm text-grey-500">{body}</p>}
+      <p className="ws-display text-[15px] text-grey-100">{title}</p>
+      {body && <p className="max-w-sm text-[13px] leading-5 text-grey-500">{body}</p>}
       {action && <div className="mt-3">{action}</div>}
     </div>
   );
@@ -51,7 +70,7 @@ export function ErrorState({
   // signed-out visitor at a dead end.
   if (isAuthError(error)) return <SignInPrompt className={className} />;
   return (
-    <div className={cn("ws-inset flex flex-col items-center gap-3 px-6 py-10 text-center", className)}>
+    <div className={cn("flex flex-col items-center gap-3 rounded-[16.5px] border border-white/10 bg-transparent px-6 py-10 text-center", className)}>
       <p className="text-sm text-down">{errorMessage(error, fallback)}</p>
       {onRetry && <RetryButton onRetry={onRetry} />}
     </div>
@@ -134,9 +153,11 @@ export function SignInInline({ className }: { className?: string }) {
  * an invitation to sign in, not a failure, and it has to leave them exactly
  * where they were.
  *
- * `login()` opens Privy in place, so the reader keeps their scroll position
- * and the page they were on; the `/auth` link is the fallback for when the
- * modal cannot open, and carries returnTo so that path lands back here too.
+ * `login()` opens the app's OWN sign-in card in place (see
+ * `lib/signin-store.ts`), so the reader keeps their scroll position and the
+ * page they were on, and never sees the auth vendor named. The `/auth` link
+ * beside it is the full-page route to the same card, carrying returnTo so that
+ * path lands back here too.
  */
 export function SignInPrompt({
   title = "Sign in to continue",
@@ -154,7 +175,9 @@ export function SignInPrompt({
   return (
     <div
       className={cn(
-        "ws-inset flex flex-col items-center gap-3 px-6 py-8 text-center",
+        // An outline like the empty state and the post card — a black/35
+        // slab read as a hole in the column.
+        "flex flex-col items-center gap-3 rounded-[16.5px] border border-white/10 bg-transparent px-6 py-8 text-center",
         className
       )}
     >

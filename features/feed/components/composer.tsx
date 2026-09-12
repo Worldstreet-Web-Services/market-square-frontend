@@ -13,7 +13,6 @@ import { SymbolPicker } from "@/components/ui/symbol-picker";
 import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { cn } from "@/lib/cn";
 import {
-  ACCEPT_MEDIA,
   ensureUploadLimits,
   formatBytes,
   getUploadLimits,
@@ -21,11 +20,23 @@ import {
   uploadKind,
   validateUpload,
   validateVideoDuration,
+  type UploadResult,
 } from "@/lib/api/upload";
-import { useCreatePost, useMentionSearch, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
-import type { Mention, Post } from "@/features/feed/lib/types";
+import { acceptFor } from "@/lib/upload-rules";
+import { useMultiMediaSupported } from "@/lib/media-contract";
+import { MAX_POST_MEDIA, attachmentKind, checkMediaSelection, mediaFields } from "@/lib/post-media";
+import { probeMediaContract } from "@/features/feed/lib/api";
+import { useCreatePost, useUploadPostMedia } from "@/features/feed/hooks/use-feed";
+import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
+import { MentionPicker } from "@/features/feed/components/mention-picker";
+import type { Post } from "@/features/feed/lib/types";
 
 const MAX = 2000;
+
+/** A chosen file and the local object URL that previews it. */
+type Attachment = { file: File; url: string };
+
+const attach = (file: File): Attachment => ({ file, url: URL.createObjectURL(file) });
 
 /** Circular ring that fills as the post approaches the limit (X's counter). */
 function CountRing({ used }: { used: number }) {
@@ -62,6 +73,7 @@ export function Composer({
   asStory = false,
   quoted = null,
   prefill,
+  initialMedia = null,
   onDone,
 }: {
   autoFocus?: boolean;
@@ -76,6 +88,11 @@ export function Composer({
    * component must never receive a raw query parameter.
    */
   prefill?: ComposePrefill | null;
+  /**
+   * A picture handed in already attached — the friends card's "Post to
+   * Square". Seeded once like `prefill`, and removable like any chosen file.
+   */
+  initialMedia?: File | null;
   /** The post being quoted, previewed above the field and sent as quotedPostId. */
   quoted?: Post | null;
   /**
@@ -93,15 +110,31 @@ export function Composer({
   const fileInput = useRef<HTMLInputElement>(null);
   // Seeded once. Later renders must not clobber what the person has typed, so
   // this is an initial value rather than an effect that syncs on every change.
-  const [text, setText] = useState(prefill?.text ?? "");
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  // The text and the @-mention machinery live in one shared hook — the
+  // comment boxes use the same one, so "@" behaves identically everywhere.
+  const typing = useMentionTyping({ max: MAX, field, initial: prefill?.text ?? "" });
+  const { text } = typing;
+  const [media, setMedia] = useState<Attachment[]>(() => (initialMedia ? [attach(initialMedia)] : []));
+  const [uploading, setUploading] = useState(false);
   // Attaching a link is a picker, not an id box — see LinkTargetPicker.
   const [linkOpen, setLinkOpen] = useState(false);
   const [link, setLink] = useState<DeepLink | null>(prefill?.link ?? null);
   const [linkLabel, setLinkLabel] = useState<string | null>(prefill?.label ?? null);
   const [kind, setKind] = useState<"update" | "story">(asStory && !quoted ? "story" : "update");
-  const [mentionQuery, setMentionQuery] = useState("");
+  /*
+    SEVERAL PHOTOS, only where the server takes them — node 1029:22591.
+
+    `media` on create is new, and a server without it would publish the post
+    with none of the chosen photos. So the multi-pick switches on only once a
+    post from this server has come back carrying the `media` list
+    (`lib/media-contract.ts`); the composer asks for one post to find out if
+    nothing on the page has said yet. A story is always one item.
+  */
+  const multiSupported = useMultiMediaSupported();
+  const multi = multiSupported && kind === "update";
+  useEffect(() => {
+    if (!multiSupported) void probeMediaContract();
+  }, [multiSupported]);
   // Height follows the CONTENT, measured from the element rather than counted
   // from newlines: a long unbroken line wraps into several visual rows that no
   // character count can predict. Reset to auto first, or scrollHeight only
@@ -113,38 +146,55 @@ export function Composer({
     node.style.height = `${node.scrollHeight}px`;
   }, [text]);
 
-  const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null);
-  // The picker used to insert "@handle" text and throw the Mention away, so
-  // nobody was ever actually mentioned. POST /posts takes `mentions`, so the
-  // chosen objects are kept and sent — filtered on submit to whoever is still
-  // written in the body, since a handle can be edited or deleted afterwards.
-  const [picked, setPicked] = useState<Mention[]>([]);
-  const mentionResults = useMentionSearch(mentionQuery, mentionRange !== null);
 
   useEffect(() => {
     if (autoFocus) field.current?.focus();
   }, [autoFocus]);
 
-  useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
-
   const deepLink: DeepLink | undefined =
     link ?? undefined;
 
+  const clearMedia = () => {
+    media.forEach((item) => URL.revokeObjectURL(item.url));
+    setMedia([]);
+    if (fileInput.current) fileInput.current.value = "";
+  };
+
+  const removeMedia = (index: number) => {
+    const item = media[index];
+    if (item) URL.revokeObjectURL(item.url);
+    setMedia(media.filter((_, at) => at !== index));
+  };
+
   const submit = () => {
     const body = text.trim();
-    if (!body && !mediaFile) return;
-    const mentions = picked.filter((mention) =>
-      new RegExp(`(^|\\s)@${mention.handle}\\b`).test(body)
+    if (!body && media.length === 0) return;
+    const refused = checkMediaSelection(
+      media.map((item) => uploadKind(item.file)),
+      { story: kind === "story", max: MAX_POST_MEDIA }
     );
+    if (refused) {
+      toast.error(refused);
+      return;
+    }
+    // Kept objects, filtered to whoever is still written in the body.
+    const mentions = typing.mentionsFor(body);
     gate(() => void (async () => {
-      let mediaUrl: string | undefined;
+      let uploaded: UploadResult[];
+      setUploading(true);
       try {
-        mediaUrl = mediaFile ? (await upload.mutateAsync(mediaFile)).url : undefined;
+        // Every url sent is the one `/uploads/complete` returned for this
+        // writer's own upload — the only address the service accepts.
+        uploaded = await Promise.all(media.map((item) => upload.mutateAsync(item.file)));
       } catch {
         return;
+      } finally {
+        setUploading(false);
       }
+      const attached = uploaded.map((result, index) => ({
+        url: result.url,
+        kind: attachmentKind(result.kind, uploadKind(media[index].file)),
+      }));
       create.mutate(
         // The current post contract requires a non-empty text field. An
         // invisible separator preserves media-only posts without displaying
@@ -152,7 +202,7 @@ export function Composer({
         {
           kind,
           text: body || "\u2063",
-          mediaUrl,
+          ...mediaFields(attached),
           deepLink,
           ...(quoted ? { quotedPostId: quoted.id } : {}),
           ...(mentions.length > 0 ? { mentions } : {}),
@@ -164,59 +214,27 @@ export function Composer({
           if (quoted && !created.quotedPost) {
             toast.error("Posted, but quoting isn't available yet — it went out as a plain post.");
           }
+          // The same honesty for the photos: fewer back than were sent means
+          // the server kept only some of them.
+          if (attached.length > 1 && (created.media?.length ?? 0) < attached.length) {
+            toast.error("Posted, but not every photo went out with it.");
+          }
           onDone?.(created);
-          setText("");
-          setMediaFile(null);
-          setPreviewUrl("");
+          typing.reset();
+          clearMedia();
           setLink(null);
           setLinkLabel(null);
           setLinkOpen(false);
-          setMentionQuery("");
-          setMentionRange(null);
-          setPicked([]);
-          if (fileInput.current) fileInput.current.value = "";
         } }
       );
     })());
   };
 
-  const updateText = (value: string, caret: number) => {
-    const next = value.slice(0, MAX);
-    setText(next);
-    const beforeCaret = next.slice(0, Math.min(caret, next.length));
-    const match = beforeCaret.match(/(?:^|\s)@([a-zA-Z0-9_-]*)$/);
-    if (!match) {
-      setMentionRange(null);
-      setMentionQuery("");
-      return;
-    }
-    const start = beforeCaret.length - match[1].length - 1;
-    setMentionRange({ start, end: beforeCaret.length });
-    setMentionQuery(match[1]);
-  };
-
-  const insertMention = (mention: Mention) => {
-    if (!mentionRange) return;
-    const handle = mention.handle;
-    setPicked((current) =>
-      current.some((entry) => entry.type === mention.type && entry.id === mention.id)
-        ? current
-        : [...current, mention]
-    );
-    const inserted = `@${handle} `;
-    const next = `${text.slice(0, mentionRange.start)}${inserted}${text.slice(mentionRange.end)}`.slice(0, MAX);
-    const caret = Math.min(mentionRange.start + inserted.length, next.length);
-    setText(next);
-    setMentionRange(null);
-    setMentionQuery("");
-    requestAnimationFrame(() => {
-      field.current?.focus();
-      field.current?.setSelectionRange(caret, caret);
-    });
-  };
-
-  const chooseMedia = async (file: File | undefined) => {
-    if (!file) return;
+  const chooseMedia = async (list: FileList | null) => {
+    const picked = Array.from(list ?? []);
+    // Cleared so picking the same file again, or adding more, fires again.
+    if (fileInput.current) fileInput.current.value = "";
+    if (picked.length === 0) return;
     // One validator for the whole app, against limits the BACKEND publishes.
     // This used to carry its own rules — a "50 MB" cap matching neither the
     // image nor the video limit — so the composer rejected files the service
@@ -228,30 +246,46 @@ export function Composer({
     // The call is memoised, so only the first pick of a session pays for it,
     // and it falls back rather than failing.
     await ensureUploadLimits();
-    const invalid = validateUpload(file, "media");
-    if (invalid) {
-      toast.error(invalid);
-      return;
-    }
-    // Clip length, checked here and nowhere else: the backend publishes
-    // `maxVideoSeconds` but does not enforce it, because reading a duration
-    // means demuxing the file and the presign path never sees the bytes. So
-    // this is a courtesy — it stops the user spending a phone upload on a clip
-    // the feed should not autoplay — not a control. An unreadable duration
-    // lets the file through; the byte cap is the limit that actually bites.
-    if (uploadKind(file) === "video") {
-      const tooLong = validateVideoDuration(await readVideoDuration(file));
-      if (tooLong) {
-        toast.error(tooLong);
+    for (const file of picked) {
+      const invalid = validateUpload(file, "media");
+      if (invalid) {
+        toast.error(invalid);
         return;
       }
+      // Clip length, checked here and nowhere else: the backend publishes
+      // `maxVideoSeconds` but does not enforce it, because reading a duration
+      // means demuxing the file and the presign path never sees the bytes. So
+      // this is a courtesy — it stops the user spending a phone upload on a
+      // clip the feed should not autoplay — not a control. An unreadable
+      // duration lets the file through; the byte cap is the limit that bites.
+      if (uploadKind(file) === "video") {
+        const tooLong = validateVideoDuration(await readVideoDuration(file));
+        if (tooLong) {
+          toast.error(tooLong);
+          return;
+        }
+      }
     }
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setMediaFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    // Several photos ADD to what is attached; one file REPLACES it, as before.
+    const next = multi ? [...media.map((item) => item.file), ...picked] : picked.slice(0, 1);
+    const refused = checkMediaSelection(next.map((file) => uploadKind(file)), {
+      story: kind === "story",
+      max: MAX_POST_MEDIA,
+    });
+    if (refused) {
+      toast.error(refused);
+      return;
+    }
+    if (multi) {
+      setMedia([...media, ...picked.map(attach)]);
+    } else {
+      media.forEach((item) => URL.revokeObjectURL(item.url));
+      setMedia(next.map(attach));
+    }
   };
 
-  const active = text.trim().length > 0 || mediaFile !== null;
+  const single = media.length === 1 ? media[0] : null;
+  const active = text.trim().length > 0 || media.length > 0;
 
   /**
    * The caps, shown BEFORE a file is chosen.
@@ -321,9 +355,9 @@ export function Composer({
         <textarea
           ref={field}
           value={text}
-          onChange={(event) => updateText(event.target.value, event.target.selectionStart)}
+          onChange={(event) => typing.update(event.target.value, event.target.selectionStart)}
           onKeyDown={(event) => {
-            if (event.key === "Escape") setMentionRange(null);
+            if (event.key === "Escape") typing.dismiss();
           }}
           placeholder="What's happening on the square?"
           rows={1}
@@ -331,27 +365,7 @@ export function Composer({
           style={{ maxHeight: "38dvh" }}
         />
 
-        {mentionRange && (
-          <div className="ws-popover relative z-30 mb-2 max-h-64 overflow-y-auto rounded-2xl p-1.5">
-            <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-meta">People and groups</p>
-            {mentionResults.isPending && <p className="px-3 py-3 text-xs text-meta">Searching…</p>}
-            {mentionResults.data?.items.map((mention) => (
-              <button
-                key={`${mention.type}:${mention.id}`}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => insertMention(mention)}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/8"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/8 text-xs font-bold text-accent">{mention.type === "group" ? "GR" : mention.label.slice(0, 2).toUpperCase()}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-heading">{mention.label}</span>
-                  <span className="block truncate text-xs text-meta">@{mention.handle} · {mention.type === "group" ? "Group" : "Person"}</span>
-                </span>
-              </button>
-            ))}
-            {mentionResults.isSuccess && mentionResults.data.items.length === 0 && <p className="px-3 py-3 text-xs text-meta">No matching people or groups.</p>}
-          </div>
-        )}
+        {typing.token && <MentionPicker typing={typing} />}
 
         <input
           ref={fileInput}
@@ -359,37 +373,62 @@ export function Composer({
           // Derived from the allowlist so the picker can never offer a type
           // we reject — it used to include video/quicktime, which guaranteed
           // a failure after the user had already chosen a file.
-          accept={ACCEPT_MEDIA}
+          // From the LIVE limits: a type appears here the moment the service
+          // publishes it (`.mov` included), and never before.
+          accept={acceptFor("media", limits)}
+          multiple={multi}
           className="sr-only"
-          onChange={(event) => void chooseMedia(event.target.files?.[0])}
+          onChange={(event) => void chooseMedia(event.target.files)}
         />
 
-        {mediaFile && previewUrl && (
+        {single && (
           <div className="mb-2">
             <div className="ws-hair relative mt-2 overflow-hidden rounded-2xl border">
-                {mediaFile.type.startsWith("video/") ? (
-                  <video src={previewUrl} controls className="max-h-80 w-full bg-black object-contain" />
+                {single.file.type.startsWith("video/") ? (
+                  <video src={single.url} controls className="max-h-80 w-full bg-black object-contain" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
-                  <img src={previewUrl} alt="Selected upload preview" className="max-h-80 w-full object-cover" />
+                  <img src={single.url} alt="Selected upload preview" className="max-h-80 w-full object-cover" />
                 )}
                 <button
-                  onClick={() => {
-                    URL.revokeObjectURL(previewUrl);
-                    setMediaFile(null);
-                    setPreviewUrl("");
-                    if (fileInput.current) fileInput.current.value = "";
-                  }}
+                  onClick={clearMedia}
                   aria-label="Remove attached media"
                   className="ws-press absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition-colors hover:bg-black/85"
                 >
                   <IconX className="h-4 w-4" />
                 </button>
                 <div className="absolute bottom-2 left-2 rounded-full bg-black/75 px-2.5 py-1 text-[11px] text-grey-200 backdrop-blur-sm">
-                  {mediaFile.name} · {(mediaFile.size / 1024 / 1024).toFixed(1)} MB
+                  {single.file.name} · {(single.file.size / 1024 / 1024).toFixed(1)} MB
                 </div>
               </div>
           </div>
+        )}
+
+        {/* Several photos preview as the row they will post as, each one
+            removable on its own. */}
+        {media.length > 1 && (
+          <ul aria-label="Attached photos" className="mb-2 mt-2 flex gap-2 overflow-x-auto pb-1">
+            {media.map((item, index) => (
+              <li
+                key={item.url}
+                className="ws-hair relative h-[168px] w-[120px] shrink-0 overflow-hidden rounded-2xl border"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
+                <img
+                  src={item.url}
+                  alt={`Photo ${index + 1} of ${media.length}`}
+                  className="h-full w-full object-cover"
+                />
+                <button
+                  onClick={() => removeMedia(index)}
+                  aria-label={`Remove photo ${index + 1}`}
+                  className="ws-press absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur-sm transition-colors hover:bg-black/85"
+                >
+                  <IconX className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
 
         {(linkOpen || link) && (
@@ -415,11 +454,12 @@ export function Composer({
         <div className="ws-hair flex min-w-0 flex-nowrap items-center gap-0.5 border-t pt-2.5 sm:gap-1">
           <button
             onClick={() => fileInput.current?.click()}
-            aria-label="Upload a picture or video from your device"
-            title="Upload picture or video"
+            disabled={multi && media.length >= MAX_POST_MEDIA}
+            aria-label={multi ? "Upload pictures or a video from your device" : "Upload a picture or video from your device"}
+            title={multi ? `Upload up to ${MAX_POST_MEDIA} pictures or one video` : "Upload picture or video"}
             className={cn(
-              "shrink-0 rounded-full p-1.5 transition-colors hover:bg-white/10 sm:p-2",
-              mediaFile ? "text-heading" : "text-accent"
+              "shrink-0 rounded-full p-1.5 transition-colors hover:bg-white/10 disabled:opacity-40 sm:p-2",
+              media.length > 0 ? "text-heading" : "text-accent"
             )}
           >
             <IconImage className="h-[18px] w-[18px]" />
@@ -460,7 +500,7 @@ export function Composer({
               const node = field.current;
               const at = node?.selectionStart ?? text.length;
               const next = `${text.slice(0, at)}${fragment}${text.slice(at)}`;
-              updateText(next, at + fragment.length);
+              typing.update(next, at + fragment.length);
               // Typing continues where the insert ended, not at the end.
               const caret = at + fragment.length;
               window.requestAnimationFrame(() => {
@@ -475,7 +515,7 @@ export function Composer({
               const node = field.current;
               const at = node?.selectionStart ?? text.length;
               const next = `${text.slice(0, at)}${emoji}${text.slice(at)}`;
-              updateText(next, at + emoji.length);
+              typing.update(next, at + emoji.length);
               const caret = at + emoji.length;
               window.requestAnimationFrame(() => {
                 node?.focus();
@@ -506,10 +546,10 @@ export function Composer({
             {active && <CountRing used={text.length} />}
             <button
               onClick={submit}
-              disabled={!active || create.isPending || upload.isPending}
+              disabled={!active || create.isPending || uploading}
               className="ws-press h-9 rounded-full bg-accent px-4 text-[15px] font-bold text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:px-5"
             >
-              {upload.isPending ? "Uploading…" : create.isPending ? "Posting…" : "Post"}
+              {uploading ? "Uploading…" : create.isPending ? "Posting…" : "Post"}
             </button>
           </div>
         </div>
@@ -519,6 +559,7 @@ export function Composer({
             does not need it yet. */}
         {active && (
           <p className="mt-2 text-[11px] leading-4 text-meta">
+            {multi && `Up to ${MAX_POST_MEDIA} photos or one video · `}
             Photos up to {formatBytes(limits.maxImageBytes)} · video up to{" "}
             {formatBytes(limits.maxVideoBytes)}, {limits.maxVideoSeconds}s
           </p>

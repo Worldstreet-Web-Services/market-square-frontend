@@ -35,7 +35,6 @@ const SOURCES = [
   "features/feed/components/feed-page.tsx",
   // snap-feed.tsx drew the third copy. It is gone: home is the timeline now
   // and the reels feed lives in Explore, which never had its own button.
-  "features/feed/components/reels-feed.tsx",
 ];
 
 describe("the create button is rendered once, fixed, in the shell", () => {
@@ -43,6 +42,35 @@ describe("the create button is rendered once, fixed, in the shell", () => {
   // and the phone's, which rides in the tab bar's row so it cannot land on top
   // of the bar. They are mutually exclusive by breakpoint — see the test below
   // — so a reader still only ever sees one.
+  it("ONE compose control, and it is the dock", () => {
+    /*
+      This used to assert two — the desktop floating circle and the phone's tab
+      bar — and to count `aria-label="Create post"` inside `app-shell.tsx`. Both
+      premises are gone: `BottomDock` (748:15721) replaced the sidebar, then the
+      tab bar, so it is the app's only bottom navigation at every width and its
+      circle is the only compose entry the shell offers.
+
+      The count in the shell is now ZERO and that matters, because `MobileBar`
+      is still DEFINED in that file — exported, unmounted, kept for
+      reversibility. A test that counted literals there would have gone on
+      passing off dead code, which is worse than failing.
+    */
+    const shellCode = stripComments(shell);
+    assert.equal(
+      (shellCode.match(/<MobileBar\b/g) ?? []).length,
+      0,
+      "the phone's tab bar is mounted again — there would be two bottom bars"
+    );
+    assert.match(shellCode, /<BottomDock\b/, "the shell must mount the dock");
+
+    const dock = stripComments(read("components/layout/bottom-dock.tsx"));
+    assert.equal(
+      (dock.match(/aria-label="Create post"/g) ?? []).length,
+      1,
+      "the dock carries exactly one compose control"
+    );
+  });
+
   it("is drawn only by the shell, never by a route", () => {
     for (const path of SOURCES.filter((source) => !source.startsWith("components/layout/"))) {
       assert.equal(
@@ -51,29 +79,116 @@ describe("the create button is rendered once, fixed, in the shell", () => {
         `${path} drew its own compose control — that is how the button drifted between pages`
       );
     }
-    const inShell =
-      (stripComments(shell).match(/aria-label="Create post"/g) ?? []).length +
-      (fabCode.match(/aria-label="Create post"/g) ?? []).length;
-    assert.equal(inShell, 2, "one for the desktop corner, one for the phone's tab row");
   });
 
-  it("shows exactly one of the two at any width", () => {
-    // Both are unconditional within their breakpoint, so overlap would be
-    // permanent rather than intermittent: the desktop circle is hidden below
-    // md, and the phone's bar is hidden from md up.
-    assert.match(fabCode, /\bhidden\b[^"]*\bmd:flex\b/, "the corner button is desktop-only");
-    const mobileBar = stripComments(shell).slice(stripComments(shell).indexOf("function MobileBar"));
-    assert.match(mobileBar.slice(0, 2000), /md:hidden/, "the phone's bar is mobile-only");
+  it("draws no circle at all on the gist rooms page, and the shell draws none there either", () => {
+    /*
+      The rooms page used to mount `CreateFab` itself (407:17286 drew the same
+      circle in the same corner, opening a room). The 2026-09-12 page,
+      1317:158073, draws NO circle: starting a room is the sidebar's "Start
+      Gistroom" and Home's banner, both of which land here with `?open=1`. So
+      the page mounts none, and it stays excluded from `allowsCompose` — a post
+      circle on the rooms page would be the wrong act in that corner.
+    */
+    const surfaces = read("lib/compose-surfaces.ts");
+    const screen = read("components/layout/gist-rooms-screen.tsx");
+    assert.doesNotMatch(screen, /<CreateFab\b/, "the rooms page draws a circle 1317:158073 does not");
+    assert.match(
+      surfaces,
+      /NO_COMPOSE_EXACT[^\]]*"\/gist-rooms"/,
+      "the shell draws a post circle on the rooms page"
+    );
+  });
+
+  it("the dock is shown at EVERY width, not swapped at a breakpoint", () => {
+    /*
+      There used to be two bottom controls that had to be mutually exclusive by
+      breakpoint, and this test existed to prove they never overlapped. There is
+      one now, so the invariant inverts: the dock must NOT be hidden at any
+      width, or a phone or a laptop ends up with no navigation at all.
+    */
+    /*
+      Read from the cn() BASE string, not a literal `className="…"` attribute.
+      The wrapper takes an optional class from the call site now, so the
+      attribute is an expression; matching the attribute form silently stopped
+      finding anything the moment that changed.
+    */
+    const dock = stripComments(read("components/layout/bottom-dock.tsx"));
+    const base = dock.match(/"pointer-events-none fixed[^"]*"/)?.[0] ?? "";
+    assert.notEqual(base, "", "the dock's fixed wrapper must be findable");
+    assert.doesNotMatch(base, /\bhidden\b/, "the dock must not be hidden at any width");
+    assert.doesNotMatch(base, /\bmd:/, "the dock must not swap in at a breakpoint");
+
+    /*
+      The ONE thing allowed to hide it is the sidebar switch, and only on
+      desktop, because the rail takes navigation back there. Asserted at the
+      call site so the exception cannot quietly grow into the component.
+    */
+    /*
+      Three conditions now, not two: the flag, a signed-in reader, and the
+      reader NOT having tucked the rail away (lib/sidebar-pref-store). The
+      third is the one that lets a desktop reader choose the dock; the first
+      two are still what stop a guest or a flag-off build from losing every
+      door. Read through `railOn` so the rail's mount and the dock's step-aside
+      can never disagree about whether the rail is on screen.
+    */
+    const shellDock = stripComments(shell);
+    assert.match(
+      shellDock,
+      /const railOn = MARKET_FLAGS\.sidebar && !guest && !sidebarHidden;/,
+      "railOn must be exactly flag AND signed in AND not tucked away"
+    );
+    assert.match(
+      shellDock,
+      /className=\{railOn \? "md:hidden" : undefined\}/,
+      "the dock may only step aside when the rail is ACTUALLY shown — railOn"
+    );
+    assert.match(shellDock, /\{railOn && \(\s*<Sidebar/, "the rail mounts on the same railOn");
   });
 
   it("is position:fixed, never sticky or absolute", () => {
-    assert.match(fabCode, /className="fixed /, "fixed is what pins it to the viewport corner");
+    // Matched as a WORD, not as the literal start of the attribute. It used to
+    // assert `className="fixed `, which broke the day another utility was
+    // added ahead of it — the position is the invariant, not its place in the
+    // class string.
+    assert.match(fabCode, /className="[^"]*\bfixed\b/, "fixed is what pins it while scrolling");
     assert.doesNotMatch(
       fabCode,
       /\bsticky\b/,
       "sticky only pins while the containing block is in view — that was the bug"
     );
-    assert.doesNotMatch(fabCode, /className="absolute /);
+    assert.doesNotMatch(fabCode, /className="[^"]*\babsolute\b/);
+  });
+
+  it("tracks the SHELL's right edge, not the window's", () => {
+    /*
+      The shell is capped at `--ws-shell-max` and centred, so on a monitor
+      wider than the cap the window's right edge and the frame's are different
+      places — and a button measured from the window sits out in the gutter,
+      orphaned from the column it composes into.
+
+      It stays `fixed` (above), so the fix is the same cap plus the same
+      `mx-auto` on the fixed strip: `inset-x-0` gives `mx-auto` something to
+      centre within. All three have to agree, which is why all three are
+      asserted together here rather than trusted to stay in step.
+    */
+    assert.match(fabCode, /max-w-\[var\(--ws-shell-max\)\]/, "the button lost the shell's cap");
+    assert.match(fabCode, /\bmx-auto\b/, "a capped fixed strip must be centred to sit on the frame");
+    assert.match(fabCode, /\binset-x-0\b/, "mx-auto centres nothing without a left/right basis");
+    assert.match(
+      stripComments(shell),
+      /mx-auto flex w-full max-w-\[var\(--ws-shell-max\)\]/,
+      "the shell frame itself must be the capped, centred one"
+    );
+    assert.match(read("app/globals.css"), /--ws-shell-max:\s*\d+px;/, "the cap must be published");
+  });
+
+  it("does not swallow clicks across the width it now spans", () => {
+    // The strip is as wide as the frame, so it lies over the foot of every
+    // page. Without this it would be an invisible bar eating every click in
+    // its band — the cost of widening the element to position it.
+    assert.match(fabCode, /pointer-events-none/, "the full-width strip must be click-through");
+    assert.match(fabCode, /pointer-events-auto/, "…and the button must take them back");
   });
 
   it("no compose control anywhere is sticky-positioned", () => {
@@ -84,11 +199,22 @@ describe("the create button is rendered once, fixed, in the shell", () => {
     }
   });
 
-  it("is mounted OUTSIDE <main>, so no route's content can move it", () => {
+  it("the shell's desktop compose is mounted OUTSIDE <main>", () => {
+    /*
+      This asserted `<CreateFab` specifically. The desktop compose control is
+      the DOCK's circle now — `BottomDock` (748:15721) replaced both the
+      sidebar and the floating button, because two plus buttons a few pixels
+      apart is what mounting both would be.
+
+      The invariant is unchanged and is the one that mattered: whatever carries
+      compose must sit outside `<main>`, or it inherits that element's
+      containing block and a route's content can move it. That was the original
+      bug — a `sticky` copy inside `<main>` that stranded on short routes.
+    */
     const code = stripComments(shell);
-    const mount = code.indexOf("<CreateFab");
+    const mount = code.indexOf("<BottomDock");
     const mainClose = code.indexOf("</main>");
-    assert.ok(mount > -1, "the shell must mount it");
+    assert.ok(mount > -1, "the shell must mount the dock");
     assert.ok(
       mount > mainClose,
       "mounted inside <main> it inherits that element's containing block again"
@@ -98,7 +224,8 @@ describe("the create button is rendered once, fixed, in the shell", () => {
   it("carries no route-conditional styling", () => {
     // Its class list must be a constant. A pathname-dependent class is exactly
     // how "identical on every route" would rot.
-    const classAttr = fabCode.match(/className="fixed [^"]*"/)?.[0] ?? "";
+    const classAttr = fabCode.match(/className="[^"]*\bfixed\b[^"]*"/)?.[0] ?? "";
+    assert.notEqual(classAttr, "", "the position class list must be findable for this to mean anything");
     assert.doesNotMatch(classAttr, /\$\{/, "the position classes must not interpolate");
     assert.doesNotMatch(fabCode, /pathname/, "the button must not know which route it is on");
   });

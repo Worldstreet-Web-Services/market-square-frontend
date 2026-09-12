@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { msApi } from "@/lib/api/service";
-import { TipCapabilitySchema } from "@/lib/api/schemas";
+import { ProfileSchema, TipCapabilitySchema } from "@/lib/api/schemas";
 import { TipSchema, type Tip, type TipTarget } from "@/features/tips/lib/types";
 
 /**
@@ -13,6 +13,84 @@ import { TipSchema, type Tip, type TipTarget } from "@/features/tips/lib/types";
  */
 export async function fetchTipCapability() {
   return TipCapabilitySchema.parse(await msApi.get("/tips/capability"));
+}
+
+/**
+ * THE TIPS THIS PERSON HAS BEEN PAID — `GET /me/tips/received`.
+ *
+ * The service's own summary for it is "the caller's confirmed tips received
+ * (earnings)", and `/me` is the whole scope: there is no route that answers
+ * what SOMEBODY ELSE has been paid, and there should not be — another
+ * person's income is not a fact their profile publishes.
+ *
+ * Parsed as the service's row (`Tip` in the served spec), not the receipt
+ * shape the rest of this slice renders: this is a list of ledger entries, and
+ * nothing here is hydrated with a profile. `amountKash` stays a string.
+ *
+ * `limit` is the only parameter the route takes — no cursor, so this is a
+ * recent-window read rather than a pageable history. 200 is what the gift
+ * gallery needs to count honestly; it is not a claim to have every tip ever.
+ */
+/**
+ * WHERE A TIP CAME FROM — `source` on `TipWithContext`.
+ *
+ * `kind` separates a gist ROOM from a broadcast STREAM, and the service draws
+ * that distinction deliberately so the client does not have to infer it: a
+ * gist room is a stream with category 'house', and "during a gist room" and
+ * "on a broadcast" are different sentences about somebody's money.
+ *
+ * `title` is nullable in three real ways, none of them a gap: a post has no
+ * title field so its title is its own opening TEXT (a picture-only post has
+ * none), a room with no topic set has none, and `source` itself is null when
+ * the tip was aimed at a PERSON rather than at a thing. Absent means the row
+ * shows no source line — never an invented one.
+ *
+ * Titles arrive truncated to 140 characters server-side with an ellipsis
+ * already applied, so nothing here clamps them again expecting full text.
+ */
+const TipSourceSchema = z.object({
+  kind: z.enum(["post", "stream", "room"]).catch("post"),
+  id: z.string().nullable().optional().default(null),
+  title: z.string().nullable().optional().default(null),
+});
+
+const ReceivedTipSchema = z.object({
+  id: z.string(),
+  /**
+   * The sender, hydrated by the service — `ProfileSummary`, which carries the
+   * three fields `ProfileSchema` actually requires, so this is the app's one
+   * profile shape rather than a second one.
+   *
+   * NULLABLE ON PURPOSE: a tip outlives the account that sent it, because the
+   * money moved. A null sender keeps the amount and the gift and names nobody.
+   *
+   * Optional as well as nullable because the field is NOT on the running
+   * service yet — it is committed on the backend and not deployed to :8094 —
+   * so today every tip parses without it and the row renders exactly as it
+   * did before.
+   */
+  fromUser: ProfileSchema.nullable().optional().default(null),
+  source: TipSourceSchema.nullable().optional().default(null),
+  amountKash: z.string(),
+  // Same `catch` reasoning as `TipResponseSchema`: an unknown status must not
+  // fail a list, and it degrades to the one that asserts nothing.
+  status: z.enum(["pending", "confirmed", "failed"]).catch("pending"),
+  giftId: z.string().nullable().optional().default(null),
+  fromUserId: z.string().nullable().optional().default(null),
+  createdAt: z.string().nullable().optional().default(null),
+});
+
+const ReceivedTipsSchema = z.object({
+  items: z.array(ReceivedTipSchema).optional().default([]),
+});
+
+export type ReceivedTip = z.infer<typeof ReceivedTipSchema>;
+
+export async function fetchReceivedTips(): Promise<ReceivedTip[]> {
+  const page = ReceivedTipsSchema.parse(
+    await msApi.authedGet("/me/tips/received", { limit: 200 })
+  );
+  return page.items;
 }
 
 /**

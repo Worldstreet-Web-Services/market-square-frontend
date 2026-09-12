@@ -1,5 +1,6 @@
 export { DiscoveryPage } from "@/features/discovery/components/discovery-page";
 export { ExploreCategoriesRail } from "@/features/discovery/components/explore-categories-rail";
+export { PeopleFilters } from "@/features/discovery/components/people-filters";
 export { videoMorphName } from "@/features/discovery/components/explore-grid";
 export type { ExploreItem } from "@/features/discovery/components/explore-grid";
 export {

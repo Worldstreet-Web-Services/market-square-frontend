@@ -37,7 +37,47 @@ export const ProfileStreamSchema = z.object({
   category: z.string().optional().default(""),
   scheduledAt: z.string().nullable().optional().default(null),
   ticketPriceKash: z.string().nullable().optional().default(null),
+  // What the Replays rail (545:47746) draws on an ended gist room: its topics,
+  // when it ended, the host's face, and whether a recording exists. All
+  // optional with defaults — the payload has always carried them, the compact
+  // schema simply never read them.
+  topics: z.array(z.string()).optional().default([]),
+  endedAt: z.string().nullable().optional().default(null),
+  replayUrl: z.string().nullable().optional().default(null),
+  owner: ProfileSchema.nullable().optional().default(null),
 });
+
+/**
+ * `GET /profiles/:username/streams` filters — LIVE on :8080 (measured on
+ * prince: unfiltered 7, `kind=room` 4, `status=ended&kind=room` 3). `kind` is
+ * `broadcast | room`, NOT `house`: the route names the gist room by what it
+ * is, not by the category value that stores it.
+ */
+export interface ProfileStreamFilters {
+  status?: "live" | "scheduled" | "ended";
+  kind?: "broadcast" | "room";
+}
+
+/**
+ * A BADGE — `GET /profiles/:username/badges` (asked; not on the contract yet).
+ *
+ * `earnedAt` null is LOCKED: the panel on your own profile (543:40148) draws
+ * the whole catalogue with the locked ones dimmed behind a lock, a stranger's
+ * section (545:47637) draws only what they have earned. `key` selects the
+ * artwork; `name` and `description` are the service's words, never ours.
+ */
+export const BadgeSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  description: z.string().nullable().optional().default(null),
+  earnedAt: z.string().nullable().optional().default(null),
+});
+export type Badge = z.infer<typeof BadgeSchema>;
+
+export const ProfileBadgesSchema = z.object({
+  items: z.array(BadgeSchema),
+});
+
 
 export const ProfileStreamsSchema = z.object({
   items: z.array(ProfileStreamSchema),
@@ -144,3 +184,41 @@ export type ProfileActivity = z.infer<typeof ProfileActivitySchema>;
 export type VerificationRule = z.infer<typeof VerificationRuleSchema>;
 export type MyVerification = z.infer<typeof MyVerificationSchema>;
 export type SpotlightBoard = z.infer<typeof SpotlightSchema>;
+
+/**
+ * One photo in a person's profile gallery — `GET /profiles/:username/photos`.
+ * `thumbnailUrl` is the 320 square for a 160 tile; `url` is the full picture.
+ * Both are rendered as the service gives them, never rebuilt from a key.
+ */
+export const ProfilePhotoSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  thumbnailUrl: z.string(),
+  position: z.number(),
+  createdAt: z.string(),
+});
+export const ProfilePhotosSchema = z.object({ items: z.array(ProfilePhotoSchema) });
+export type ProfilePhoto = z.infer<typeof ProfilePhotoSchema>;
+
+/** `GET /profiles/:id/following` — a page of people, each with the reader's follow and wink state. */
+export const FollowingPageSchema = z.object({
+  items: z.array(ProfileSchema),
+  nextCursor: z.string().nullable().optional().default(null),
+});
+
+/**
+ * `GET /me/winks` — who winked at the reader: one row per person (their latest
+ * wink), newest first. `active` is true while the wink still stands (the same
+ * window that sets `profile.winkedMe`); answered and lapsed winks stay listed.
+ */
+export const WinksPageSchema = z.object({
+  items: z.array(
+    z.object({
+      profile: ProfileSchema,
+      winkedAt: z.string(),
+      active: z.boolean().optional().default(false),
+    })
+  ),
+  nextCursor: z.string().nullable().optional().default(null),
+});
+
