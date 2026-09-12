@@ -40,6 +40,7 @@ import {
   fetchMySpeakerRequest,
   fetchSpeakerRequests,
   resolveSpeakerRequest,
+  fetchStreamByCode,
   remindStream,
 } from "@/features/streams/lib/api";
 import type { Stream, StreamCategory, StreamKind, TicketTier } from "@/features/streams/lib/types";
@@ -380,6 +381,23 @@ export function useCreateStream() {
  * server that has not shipped it. A 409 means the room is already over, which
  * is worth saying out loud.
  */
+/**
+ * Look up a room by the code somebody typed.
+ *
+ * Not retried: a 404 is a settled answer about a code, and retrying spends the
+ * caller's throttle budget (a miss is charged, deliberately, because a free
+ * miss is an unlimited number of guesses).
+ */
+export function useStreamByCode(code: string) {
+  return useQuery({
+    queryKey: ["ms", "stream-by-code", code],
+    queryFn: () => fetchStreamByCode(code),
+    enabled: code.length > 0,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
 export function useRemindMe(streamId: string) {
   const queryClient = useQueryClient();
   const [unavailable, setUnavailable] = useState(false);

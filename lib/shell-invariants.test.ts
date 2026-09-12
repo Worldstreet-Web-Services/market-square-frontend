@@ -777,10 +777,20 @@ describe("the group picker leaves the size rule to the service", () => {
  * THE TOP BAR IS NODE 647:17439 — the live file, updated 2026-09-10 21:10.
  *
  * It replaced the "Ark Ecosystem / <page>" breadcrumb with the lockup and the
- * account cluster. An earlier build added a search field from a cached copy
- * of this node dated 2026-09-08; the live node has NO search, which matches
- * ogazboiz's two earlier requests to keep search out of the chrome, so its
- * absence is pinned. So are the parts the file adds: the purple count badge on
+ * account cluster.
+ *
+ * ─── THE SEARCH FIELD, AND WHY IT IS HERE NOW ────────────────────────────────
+ * This bar deliberately had none. An early build added one from a CACHED copy
+ * of the node dated 2026-09-08, the live node had no search, and ogazboiz had
+ * twice asked to keep search out of the chrome — so its absence was pinned.
+ *
+ * On 2026-09-12 he reversed that himself, against a live node that draws the
+ * field (1295:142737), for a reason the old rule never considered: gist rooms
+ * now carry a spoken code, and this is where somebody types the code a friend
+ * read out. So a field IS pinned here now — and the guard against the stale
+ * cached shape stays, because that mistake is still a mistake.
+ *
+ * Also pinned are the parts the file adds: the purple count badge on
  * the bell, the avatar and caret inside one 7%-white pill, and a bottom
  * hairline that runs the whole window while the bar itself stays capped
  * ("the border line should full the screen for point A to point B").
@@ -795,8 +805,12 @@ describe("the top bar is node 647:17439", () => {
     assert.doesNotMatch(shell, /function Breadcrumb\b/);
   });
 
-  it("carries no search field, as the live node has none", () => {
-    assert.doesNotMatch(bar, /role="search"|placeholder=/, "a search field is back in the top bar");
+  it("carries the live node's search field, and not the stale cached one", () => {
+    // 1295:142737, and ogazboiz's own reversal on 2026-09-12: a room code is
+    // typed here. See the note above for why this flipped.
+    assert.match(bar, /<RoomSearchField \/>/);
+    assert.match(shell, /placeholder="Search Gistrooms, houses, friends\.\.\."/);
+    // The 2026-09-08 cached shape must not come back.
     assert.doesNotMatch(shell, /function TopBarSearch\b/);
   });
 
@@ -1819,6 +1833,26 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // A grid cell stretches to its column: without a square ratio the selected
     // day renders as an oval rather than a disc.
     assert.match(field, /aspect-square/);
+  });
+
+  it("puts one search field in the bar, for a code or a name", () => {
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    // It lives in the BAR: TopBarActions returns null for a signed-out reader,
+    // and search is for everybody.
+    assert.match(shell, /<RoomSearchField \/>\n\s*<TopBarActions \/>/);
+    assert.match(shell, /placeholder="Search Gistrooms, houses, friends\.\.\."/);
+    // The destination is chosen; the input is passed on untouched.
+    assert.match(shell, /looksLikeRoomCode\(entry\)\n?\s*\? `\/code\/\$\{encodeURIComponent\(entry\)\}`/);
+    assert.match(shell, /`\/discover\?q=\$\{encodeURIComponent\(entry\)\}`/);
+    const screen = stripComments(read("components/layout/room-code-screen.tsx"));
+    // A private room shows the doorplate and never a join that would refuse.
+    assert.match(screen, /This room is private/);
+    const privateBranch = screen.slice(screen.indexOf("{shut && ("), screen.indexOf("{!over && !shut && ("));
+    assert.doesNotMatch(privateBranch, /housePath/, "a refused join is offered on a private room");
+    // An ended room resolves and says so, rather than reading as a typo.
+    assert.match(screen, /That room has ended/);
+    // One message for unknown AND malformed, so it cannot be used as an oracle.
+    assert.match(screen, /That code doesn&apos;t match a room/);
   });
 
   it("shows a host their room code, grouped for the eye but never re-sent", () => {

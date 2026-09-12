@@ -17,6 +17,7 @@ import {
   StreamEventsSchema,
   SpeakerRequestListSchema,
   SpeakerRequestSchema,
+  StreamByCodeSchema,
   StreamListSchema,
   StreamSchema,
   StreamReactionSchema,
@@ -138,6 +139,23 @@ export async function reportTicketTransfer(streamId: string, ticketId: string, t
 export async function remindStream(streamId: string, remind: boolean) {
   const path = `/streams/${streamId}/remind`;
   return RemindSchema.parse(remind ? await msApi.post(path) : await msApi.del(path));
+}
+
+/**
+ * Resolve a spoken room code.
+ *
+ * The input is sent AS TYPED — any case, spacing or dashes — because the
+ * service matches leniently and normalising here would give the client and the
+ * service two different opinions about what a code is. Encoded, not rewritten.
+ *
+ * A 404 is the same answer for an unknown code and a malformed one, by design:
+ * a refusal that tells them apart tells somebody probing which guesses are
+ * worth repeating.
+ */
+export async function fetchStreamByCode(code: string) {
+  return StreamByCodeSchema.parse(
+    await msApi.authedGet(`/streams/by-code/${encodeURIComponent(code)}`)
+  );
 }
 
 export async function fetchPlaybackToken(streamId: string) {
