@@ -1015,12 +1015,13 @@ describe("Home's Top GistRooms section is 647:16288's first block", () => {
     assert.match(stripComments(read("app/layout.tsx")), /variable: "--font-heading"/);
   });
 
-  it("spaces it by the file: 85 under the banner, 19 to the dots, 8.67 to cards 17 apart, 78 to what follows", () => {
-    assert.match(rail, /mb-\[78px\] mt-\[85px\]/);
-    assert.match(rail, /mb-\[19px\]/);
-    assert.match(rail, /gap-\[8\.67px\]/);
+  it("spaces it by 1305:149177: 16 to the rail, cards 17 apart, 63 to what follows", () => {
+    assert.match(rail, /mb-\[63px\]/);
+    assert.match(rail, /className="mb-4"/);
     assert.match(rail, /gap-\[17px\] overflow-x-auto/);
-    assert.match(rail, /justify-start pl-\[5px\]/);
+    // The pager dots belong to the BANNER in this design, not here.
+    assert.doesNotMatch(rail, /DeckDots/, "the old section's pager dots are back");
+    assert.doesNotMatch(rail, /mt-\[85px\]|mb-\[78px\]|gap-\[8\.67px\]/, "647:16288's spacing is back");
     assert.doesNotMatch(feed, /\{roomsSlot && <div className="mb-6">/, "an empty rooms slot takes space again");
   });
 
