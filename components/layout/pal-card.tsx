@@ -9,7 +9,9 @@ import {
   IconPalAdd,
   IconPalPass,
   IconPalWink,
+  IconPalWinkOpen,
 } from "@/components/ui/home-icons";
+import { IconPalCrown } from "@/components/ui/pal-crown";
 import { useFollow, useIsFollowing, useWink } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
@@ -70,8 +72,18 @@ export interface PalCardGeometry extends PalCardBase {
 
 export interface PalCardNodeGeometry extends PalCardBase {
   kind: "node-844";
-  /** An OUTSIDE stroke in the page's own `#0F0F0F` (strokeAlign OUTSIDE) — invisible against the page, it shows only where it cuts the card out of the ones behind. */
+  /** An OUTSIDE stroke in the page's own colour (strokeAlign OUTSIDE) — invisible against the page, it shows only where it cuts the card out of the ones behind. */
   rim: number;
+  /** The rim's colour — the page's. `#0F0F0F` when absent (Home's reading); `/pals`' node strokes `#121214`, the chrome the shell now paints. */
+  rimColor?: string;
+  /**
+   * The crown beside the name (1331:21359 on `/pals`), in file units: its box,
+   * the gap after the name's ink, and how far below the name's cap centre it
+   * sits. Drawn only when the card is handed `premium` — see the prop.
+   */
+  crown?: { width: number; height: number; gap: number; dy: number };
+  /** True where the wink face is the file's two-variant component and BLINKS (see `IconPalWinkOpen`). */
+  blink?: boolean;
   /** The two lines, left-aligned and placed from the photo's bottom edge. */
   lines: { nameLeft: number; nameBottom: number; handleLeft: number; handleBottom: number };
   /** A solid `--color-spotlight` disc with an INSIDE ring, the glyph centred. */
@@ -103,6 +115,7 @@ export function PalCard({
   onPass,
   onWinked,
   onFollowed,
+  premium = false,
 }: {
   profile: Profile;
   geometry: PalCardGeometry | PalCardNodeGeometry;
@@ -121,6 +134,18 @@ export function PalCard({
    * a card that stayed put after Follow read as the action not landing.
    */
   onFollowed?: () => void;
+  /**
+   * The crown beside the name — node 1331:21359 on `/pals`' front card.
+   *
+   * NOTHING PASSES THIS YET, ON PURPOSE. `Profile` carries no premium,
+   * subscriber or tier field the crown could truthfully stand for, and the
+   * only honest reading of a badge with no data behind it is "not drawn". It
+   * is a prop rather than a deletion so that the day the field lands the
+   * crown is one line at the call site, with its geometry already the file's.
+   * Do not derive it from `verification`, `role` or `orgBadge` — none of those
+   * is what a crown means.
+   */
+  premium?: boolean;
 }) {
   /*
     Both hooks are per-PERSON, so they live on the card and not on whatever is
@@ -153,7 +178,7 @@ export function PalCard({
           borderRadius: base.radius,
           // The rim is the file's OUTSIDE stroke, so it is drawn outside the
           // box rather than eating into it: a spread shadow, no blur.
-          boxShadow: node ? `0 0 0 ${node.rim}px #0F0F0F` : undefined,
+          boxShadow: node ? `0 0 0 ${node.rim}px ${node.rimColor ?? "#0F0F0F"}` : undefined,
         }}
       />
 
@@ -261,21 +286,48 @@ export function PalCard({
           )}
           style={{ height: base.scrim.height }}
         >
-          <span
-            className={cn(
-              "truncate font-semibold text-white",
-              node ? "absolute block" : "w-full text-center"
-            )}
-            style={{
-              fontSize: base.scrim.name,
-              lineHeight: `${base.scrim.nameLeading}px`,
-              ...(node
-                ? { left: node.lines.nameLeft, right: node.lines.nameLeft, bottom: node.lines.nameBottom }
-                : {}),
-            }}
-          >
-            {name}
-          </span>
+          {node ? (
+            /*
+              The name and, when the card is `premium`, the crown after it —
+              1331:21359 sits 4 past the name's ink on the node's render (6.4
+              file units), its 16.57 box 2 below the cap's centre (3.17 units).
+              A flex row rather than an inline glyph so the crown never wraps
+              or truncates with the name: the text gives way, the crown stays.
+            */
+            <span
+              className="absolute flex items-center"
+              style={{
+                left: node.lines.nameLeft,
+                right: node.lines.nameLeft,
+                bottom: node.lines.nameBottom,
+                gap: node.crown?.gap,
+              }}
+            >
+              <span
+                className="min-w-0 truncate font-semibold text-white"
+                style={{ fontSize: base.scrim.name, lineHeight: `${base.scrim.nameLeading}px` }}
+              >
+                {name}
+              </span>
+              {premium && node.crown && (
+                <IconPalCrown
+                  className="shrink-0"
+                  style={{
+                    width: node.crown.width,
+                    height: node.crown.height,
+                    translate: `0 ${node.crown.dy}px`,
+                  }}
+                />
+              )}
+            </span>
+          ) : (
+            <span
+              className="w-full truncate text-center font-semibold text-white"
+              style={{ fontSize: base.scrim.name, lineHeight: `${base.scrim.nameLeading}px` }}
+            >
+              {name}
+            </span>
+          )}
           <span
             className={cn("truncate text-white/50", node ? "absolute block" : "w-full text-center")}
             style={{
@@ -366,10 +418,20 @@ export function PalCard({
                 aria-hidden
                 className="absolute inset-0 rotate-[17.773deg] rounded-full bg-[linear-gradient(180deg,var(--color-create)_0%,var(--color-spotlight)_100%)]"
               />
-              <IconPalWink
-                className={cn("relative shrink-0", wink.winked && "opacity-60")}
+              {/*
+                The face: the winking frame (206:6943) and, where the file's
+                component blinks, the open-eyed frame (206:6942) over it on the
+                file's own 0.8s / 0.3s clock — `ws-wink-blink` in globals.css.
+                The dim for "already winked" is on the WRAPPER, because the
+                animation owns the open layer's opacity.
+              */}
+              <span
+                className={cn("relative block shrink-0", wink.winked && "opacity-60")}
                 style={{ width: node.controls.winkGlyph, height: node.controls.winkGlyph }}
-              />
+              >
+                <IconPalWink className="absolute inset-0 h-full w-full" />
+                {node.blink && <IconPalWinkOpen className="ws-wink-blink absolute inset-0 h-full w-full" />}
+              </span>
             </>
           ) : (
             <IconDeckWink className={cn("h-full w-full", wink.winked && "opacity-60")} />
@@ -382,10 +444,22 @@ export function PalCard({
 
 /**
  * "Make some friends" — node 844:23435, the FRONT card of 844:18440, in the
- * file's own units. Home and `/pals` both draw it. The deck scales the whole fan by one factor, so
- * these are never rounded to a pixel here.
+ * file's own units. `/pals` draws it (Home has its own, below). The deck
+ * scales the whole fan by one factor, so these are never rounded to a pixel
+ * here.
  *
- *   card    543.42 × 718, radius 89.53, outside stroke 4.54 #0F0F0F
+ * `/pals`' CURRENT node, 1328:1885 (2026-09-12), draws this same card at
+ * exactly 0.6248 — its front card 1331:21353 is 339.53 × 448.60 = 543.42 ×
+ * 0.6248 by 718 × 0.6248, and every part below scales with it: radius 55.94,
+ * photo 309.98 × 325.61 at (15.10, 12.87) radius 51.56, name 22.66 / 38.85,
+ * handle 15.96 / 23.94, badge 67.12 with a 5.79 ring and a 44.05 glyph,
+ * discs 68.34 turned 17.773° (their boxes 85.94) with a 26.56 cross and a
+ * 45.51 face. Read from `size`, never the rotated boxes, and pinned in
+ * `lib/deck-layout.test.ts`. Three things are that node's own and not a
+ * scale: the rim is `#121214` (the chrome the page is painted), the name
+ * carries a crown (1331:21359, behind `premium`), and the face blinks.
+ *
+ *   card    543.42 × 718, radius 89.53, outside stroke 4.54 (#121214 on /pals)
  *   photo   844:23436  496.13 × 521.15 at 24.18, 20.59, radius 82.52
  *   scrim   844:23437  229.19 tall, black 0 → 100%
  *   name    844:23438  Roboto 600 36.27 / 62.17 — render bounds x 75.02, baseline ~473.5
@@ -405,11 +479,16 @@ export const DECK_CARD: PalCardNodeGeometry = {
   height: 718,
   radius: 89.53,
   rim: 4.54,
+  /** 1331:21353 strokes `#121214` — `--color-chrome`, which is what the shell paints the page. */
+  rimColor: "var(--color-chrome)",
   photo: { width: 496.13, height: 521.15, left: 24.18, top: 20.59, radius: 82.52 },
   scrim: { height: 229.19, name: 36.27, nameLeading: 62.17, handle: 25.55, handleLeading: 38.32 },
   lines: { nameLeft: 50.84, nameBottom: 49.57, handleLeft: 58.55, handleBottom: 20.32 },
   badge: { size: 107.43, right: 23.27, top: 20.59, ring: 9.27, glyph: 70.5 },
   controls: { size: 109.38, gap: 28.17, bottom: 34.11, passGlyph: 64.75, winkGlyph: 72.84 },
+  /** 1331:21359: 16.27 × 16.57 at the node's 0.6248, 4 past the name's ink and 2 below the cap's centre on its render. */
+  crown: { width: 26.04, height: 26.53, gap: 6.4, dy: 3.17 },
+  blink: true,
 };
 
 /**

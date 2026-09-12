@@ -1545,6 +1545,121 @@ body {
   }
 }
 
+/* The friends deck's step discs on `/pals` — node 1328:1885's `icobtn`s
+   (1331:21381 left, 1331:21336 right), Figma GLASS over the fan. The API
+   publishes no GLASS parameters, so the rim is SAMPLED from the node's 2x
+   render at 24 angles on the ring (r = 19.4 of a 20 radius) against the
+   disc's interior: on the RIGHT disc it rises to ~+0.50 white at the upper
+   left (315deg), ~+0.35 at the lower right (135deg), and is absent from 45 to
+   75 and from 195 to 255 — a lit lens, not a ring. The LEFT disc is the
+   file's x-mirror of it (its `relativeTransform` is [-1, 0 / 0, 1]), and its
+   page-side samples agree: bright at 225-255deg, dark at the upper left. So
+   there are two rims, one the other's reflection. One pixel wide: r = 18.6
+   already reads as interior. Masked rings, as `ws-glass-rim` draws. */
+@utility ws-deck-lens-right {
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.15) 0deg,
+      rgba(255, 255, 255, 0.05) 30deg,
+      rgba(255, 255, 255, 0) 45deg,
+      rgba(255, 255, 255, 0) 75deg,
+      rgba(255, 255, 255, 0.05) 90deg,
+      rgba(255, 255, 255, 0.35) 120deg,
+      rgba(255, 255, 255, 0.35) 135deg,
+      rgba(255, 255, 255, 0.25) 150deg,
+      rgba(255, 255, 255, 0.08) 180deg,
+      rgba(255, 255, 255, 0) 210deg,
+      rgba(255, 255, 255, 0) 255deg,
+      rgba(255, 255, 255, 0.15) 270deg,
+      rgba(255, 255, 255, 0.32) 285deg,
+      rgba(255, 255, 255, 0.4) 300deg,
+      rgba(255, 255, 255, 0.5) 315deg,
+      rgba(255, 255, 255, 0.41) 330deg,
+      rgba(255, 255, 255, 0.33) 345deg,
+      rgba(255, 255, 255, 0.15) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+}
+
+@utility ws-deck-lens-left {
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.15) 0deg,
+      rgba(255, 255, 255, 0.33) 15deg,
+      rgba(255, 255, 255, 0.41) 30deg,
+      rgba(255, 255, 255, 0.5) 45deg,
+      rgba(255, 255, 255, 0.4) 60deg,
+      rgba(255, 255, 255, 0.32) 75deg,
+      rgba(255, 255, 255, 0.15) 90deg,
+      rgba(255, 255, 255, 0) 105deg,
+      rgba(255, 255, 255, 0) 150deg,
+      rgba(255, 255, 255, 0.08) 180deg,
+      rgba(255, 255, 255, 0.25) 210deg,
+      rgba(255, 255, 255, 0.35) 225deg,
+      rgba(255, 255, 255, 0.35) 240deg,
+      rgba(255, 255, 255, 0.05) 270deg,
+      rgba(255, 255, 255, 0) 285deg,
+      rgba(255, 255, 255, 0) 315deg,
+      rgba(255, 255, 255, 0.05) 330deg,
+      rgba(255, 255, 255, 0.15) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+}
+
+/* THE WINK BLINKS — `Component 14`'s two variants (206:6943 winking, 206:6942
+   both eyes open) carry `AFTER_TIMEOUT` at each other: 0.8s on a frame, then
+   a 0.3s LINEAR smart-animate to the other. So one cycle is 0.8 + 0.3 + 0.8 +
+   0.3 = 2.2s, and the open-eyed layer, stacked over the winking one, is held
+   at 0 for the first 0.8 (36.36%), fades in over the next 0.3 (to 50%), is
+   held at 1 for 0.8 (to 86.36%) and fades out over the last 0.3. Linear,
+   because the file's easing is. Under reduced motion the face rests on the
+   winking frame, which is the state every card instance is placed in. */
+@keyframes ws-wink-blink {
+  0%,
+  36.36% {
+    opacity: 0;
+  }
+  50%,
+  86.36% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@utility ws-wink-blink {
+  animation: ws-wink-blink 2.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-wink-blink {
+    animation: none;
+  }
+}
+
 @utility ws-btn-welcome {
   background: linear-gradient(90deg, var(--color-create) 0%, var(--color-create-deep) 100%);
   color: #ffffff;

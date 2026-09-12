@@ -319,6 +319,9 @@ const FULL_PATTERNS = [
   // The houses directory, node 1368:2270 — the same 951-wide artboard as the
   // rooms page, three house cards across.
   /^\/houses$/,
+  // Pals, node 1328:1885 — again the 951-wide artboard on `#121214` with the
+  // file's 1px white/10 right edge, the deck and its heading in its left 607.
+  /^\/pals$/,
   // Chat's two panes: the fixed 464 list beside the thread, inside Home's
   // frame. Only the exact path — on a phone the panes swap.
   /^\/messages$/,

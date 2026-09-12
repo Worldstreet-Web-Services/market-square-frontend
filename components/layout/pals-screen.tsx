@@ -1,43 +1,38 @@
 "use client";
 
 import { FriendsDeck } from "@/components/layout/friends-deck";
-import { StoriesRow } from "@/features/feed";
-import { useAuth } from "@/hooks/use-auth";
 
 /**
- * THE PALS SURFACE — node 844:18511, the deck on a page of its own.
+ * THE PALS SURFACE — node 1328:1885, the deck on a page of its own.
  *
  * The dock's second destination points here rather than at Explore, because
  * the act its glyph promises is deciding about ONE PERSON AT A TIME — the fan,
  * its pass and its wink — and Explore is a directory you scan.
  *
- * The node opens on the STORIES strip (844:18441, the same 100 × 96 cards
- * Home leads with), then the heading row 47 below it — back disc, the 41.3
- * title, the Location pill — and the deck 89 under that, at the column's full
- * width with the two step discs on its edges. So the page is `StoriesRow`
- * from the feed slice over `FriendsDeck` with its `/pals` heading, stacked
- * from the top. The heading is drawn at 0.68 of the node to fit this column
- * (its own note says why), and the 47 above it is scaled the same — 32.
+ * The node is a 951-wide artboard on the chrome's own `#121214` (the shell's
+ * FULL frame, as the gist rooms and houses pages are), and it draws THREE
+ * things, all in its left 607: the Location pill at y=313, flush with the
+ * right edge of a 579-wide group that starts 26 in; the deck group
+ * (1331:21321) at y=390, 596 wide from 11 in; and "Make some friends"
+ * (1344:21868) at y=1016, 26 in. Nothing else — no stories strip, no back
+ * disc, no title row over the deck, no subtitle, no search row. The strip and
+ * the title row were 844:18511's and left with it.
+ *
+ * All three are drawn by `FriendsDeck` in its `/pals` form: the pill, the deck
+ * and the heading share one scale (`deckLayout`'s `k`) and one measured width,
+ * so their offsets stay the file's at every column. Only the 313 above the
+ * pill is this wrapper's — it is the node's from `md`, and the column's
+ * ordinary 24 below it, where 313 of nothing above a phone's first control
+ * would be most of the screen (no phone frame was given).
  *
  * It is the SAME `FriendsDeck` the home timeline renders, not a second copy
  * and not a second card: one component means the wink cooldown, the
- * already-following guard and the swipe-to-browse cannot be fixed on one
- * surface and left broken on the other; `deckLayout` scales the node's 917
- * span to whatever this column is.
- *
- * It is handed the same three controls Home gives its cards. Without them the
- * posts here would quietly lose follow, wink and tip — the slices cannot be
- * imported by the feed, so every surface that renders a post card composes
- * them in.
+ * already-following guard and the swipe cannot be fixed on one surface and
+ * left broken on the other.
  */
-
 export function PalsScreen() {
-  // The strip is who you follow, so it exists only for someone signed in —
-  // the same gate Home puts on it.
-  const { authenticated } = useAuth();
   return (
-    <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col gap-6 px-4 py-6 md:gap-8 lg:px-6">
-      {authenticated && <StoriesRow />}
+    <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col px-4 pb-6 pt-6 md:px-[11px] md:pt-[313px]">
       <FriendsDeck heading="pals" />
     </div>
   );

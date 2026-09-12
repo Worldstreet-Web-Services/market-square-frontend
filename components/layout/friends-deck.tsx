@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { DeckDots } from "@/components/ui/deck-dots";
-import { canGoBack } from "@/lib/nav-history";
 import { PalCard, DECK_CARD, HOME_DECK_CARD, type PalCardNodeGeometry } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
 import { SectionHeading } from "@/components/layout/section-heading";
@@ -21,7 +19,7 @@ import { SwipeVerdict } from "@/components/layout/swipe-verdict";
 import { useFollow, useIsFollowing } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
-import { DECK_NODE, HOME_DECK_NODE, deckLayout, type DeckLayout, type DeckNode } from "@/lib/deck-layout";
+import { DECK_NODE, HOME_DECK_NODE, PALS_PAGE, deckLayout, type DeckLayout, type DeckNode } from "@/lib/deck-layout";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -43,7 +41,9 @@ import type { Profile } from "@/lib/api/schemas";
  *
  * One component for both surfaces, so the wink cooldown, the already-following
  * guard and the swipe cannot be fixed on one and left broken on the other.
- * `/pals` (node 844:18511) is this deck given a page of its own.
+ * `/pals` (node 1328:1885, which replaced 844:18511) is this deck given a page
+ * of its own: the filter pill above it, the heading BELOW it, and nothing
+ * else — `PALS_PAGE` in lib/deck-layout.ts holds that node's offsets.
  *
  * ─── NOTHING IS CUT ─────────────────────────────────────────────────────────
  * `deckLayout` picks the one scale at which the WHOLE fan — both back cards
@@ -73,7 +73,6 @@ import type { Profile } from "@/lib/api/schemas";
  */
 export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" }) {
   const me = useMe();
-  const router = useRouter();
   /*
     THE FILTER IS THE SERVICE'S, and changing it starts a NEW deck: the facets
     are in `usePeople`'s query key, so a new city or gender is a new list from
@@ -110,12 +109,18 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     ro.observe(el);
     observer.current = ro;
   }, []);
-  // Node 844:18440 puts the deck 89 under the heading block on `/pals`; the
-  // heading is drawn at 0.68 of the node here (see its note), and so is the
-  // gap — 60. HOME (647:16300) spaces its own parts explicitly — 90 to the
-  // deck, 9.38 to the pills, 67 to the rule, 60 to the timeline — so its
-  // section carries no gap of its own, only the 60 under it.
-  const sectionClass = cn("flex flex-col", heading === "pals" ? "gap-6 md:gap-[60px]" : "mb-[64px]");
+  /*
+    `/pals` (1328:1885) SPACES ITS PARTS IN THE DECK'S OWN UNITS — the pill
+    row, the 45 to the deck, the 177 to the heading — and everything is
+    multiplied by the same `k` as the fan, so the page keeps the node's
+    proportions at any width (`PALS_PAGE`). Its section is capped at the
+    node's 596 from `md`, which is what makes `k` the node's own 0.6248 on a
+    desktop column and every number below land on the file's pixel. HOME
+    (647:16300) spaces its own parts explicitly — 90 to the deck, 9.38 to the
+    pills, 67 to the rule, 60 to the timeline — so its section carries no gap
+    of its own, only the 60 under it.
+  */
+  const sectionClass = cn("flex flex-col", heading === "pals" ? "w-full md:max-w-[596px]" : "mb-[64px]");
   /* HOME DRAWS ITS OWN DECK (647:16300), not `/pals`' at another scale. */
   const node: DeckNode = heading === "home" ? HOME_DECK_NODE : DECK_NODE;
   const card: PalCardNodeGeometry = heading === "home" ? HOME_DECK_CARD : DECK_CARD;
@@ -129,7 +134,8 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
 
   const filterPill = (
     <FriendsFilter
-      className={heading === "pals" ? "ml-auto md:absolute md:right-0 md:top-[3px] md:ml-0" : "-mt-[3px]"}
+      variant={heading === "pals" ? "pals" : "home"}
+      className={heading === "home" ? "-mt-[3px]" : undefined}
       value={filter}
       onChange={changeFilter}
       viewerCity={me.data?.city?.trim() || null}
@@ -138,44 +144,22 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
   const header =
     heading === "pals" ? (
       /*
-        `/pals`'S HEADING ROW — node 844:18440's own: a 64 glass back disc
-        (844:23465: white at 16%, the `arrow-left-01-round` chevron upright,
-        its 32 inner ring at zero stroke weight and not drawn), 16 to the
-        title block (844:23461: Roboto 400 over Roboto 700 12 / 16 at 40%, 1
-        apart), the filter pill (844:22603, 136 × 38) flush right. The disc's
-        top is 9 above the block's and the pill's 10 below it — each centred on
-        the title line rather than on the two-line block.
-
-        THE ROW IS THE NODE'S AT 0.68, NOT AT 1. The node's column is 915
-        wide; ours is 550. At the node's own 64 disc and 41.3 title the row's
-        fixed parts left 334 for a 350 title: it truncated, and even at 36 the
-        title ran to within a few pixels of the pill where the file leaves 349
-        of air. So the heading block is scaled the way the deck under it is —
-        the disc 44, the title 28 / 32, the subtitle 11 / 16 (the node's 12 is
-        kept where the phone has the full width), the block padded clear of
-        the pill — which puts the same proportion of space between the title
-        and the pill that the file has. The disc and the pill are centred on
-        the title line, as in the file.
-
-        No phone frame was given: below `md` the disc and the pill share the
-        first row and the title block takes the full width beneath them.
+        `/pals`' ROW ABOVE THE DECK is the filter pill and nothing else —
+        node 1344:21864 is a 579-wide group starting 26 in (15 past the deck
+        group's own 11) with the pill (1344:21865, 86 × 32) flush with its
+        right edge, 2 inside the deck's, and 45 above the deck. No back disc,
+        no title, no subtitle: 844:18511's title row is gone with that node.
+        The insets are the node's in the deck's units, scaled by `k`.
       */
-      <div className="relative flex flex-wrap items-start gap-x-4 gap-y-3 md:flex-nowrap">
-        <button
-          type="button"
-          onClick={() => (canGoBack() ? router.back() : router.push("/"))}
-          aria-label="Back"
-          className="ws-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/16 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md transition-colors hover:bg-white/25"
-        >
-          <IconDeckArrow className="h-[18px] w-[18px]" />
-        </button>
+      <div
+        className="flex justify-end"
+        style={{
+          paddingLeft: PALS_PAGE.groupLeft * layout.k,
+          paddingRight: PALS_PAGE.groupRight * layout.k,
+          marginBottom: PALS_PAGE.pillToDeck * layout.k,
+        }}
+      >
         {filterPill}
-        <div className="flex min-w-0 basis-full flex-col gap-px font-[family-name:var(--font-roboto)] md:basis-auto md:flex-1 md:pr-[152px] md:pt-[6px]">
-          <h1 className="truncate text-[28px] font-normal leading-8 text-white">Make some friends</h1>
-          <p className="text-[12px] font-bold leading-4 text-white/40 md:text-[11px]">
-            Follow cool people and watch your feed go from boring to elite ✨
-          </p>
-        </div>
       </div>
     ) : (
       /*
@@ -355,6 +339,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           disabled={!canStep(-1)}
           onClick={() => step(-1)}
           size={arrowSize}
+          lens={node.arrow.lens}
           left={layout.frontX + (node.arrow.leftDx - node.arrow.size / 2) * layout.k}
           top={layout.frontY + (node.arrow.dy - node.arrow.size / 2) * layout.k}
         />
@@ -363,6 +348,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           disabled={!canStep(1)}
           onClick={() => step(1)}
           size={arrowSize}
+          lens={node.arrow.lens}
           left={layout.frontX + (node.arrow.rightDx - node.arrow.size / 2) * layout.k}
           top={layout.frontY + (node.arrow.dy - node.arrow.size / 2) * layout.k}
         />
@@ -383,8 +369,8 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         page through and the row is absent rather than showing a lit pill and
         two dead ones.
       */}
-      {items.length > 1 &&
-        (heading === "home" ? (
+      {heading === "home" ? (
+        items.length > 1 && (
           /* 647:16296 — FIVE pills, 9.38 under the deck, centred 5.61 right of
              the front card's centre, as the file draws them. */
           <div
@@ -393,9 +379,32 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
           >
             <DeckDots variant="home" count={5} active={Math.round((index / (items.length - 1)) * 4)} className="justify-start" />
           </div>
-        ) : (
-          <DeckDots count={3} active={Math.round((index / (items.length - 1)) * 2)} />
-        ))}
+        )
+      ) : (
+        /*
+          `/pals`' pills sit INSIDE the node's 177 between the deck and the
+          heading (1328:1885 draws no pills; the three are the reader's, kept
+          on every size — see the note above), 24 under the deck. The block is
+          the node's own height so the heading lands where the file puts it
+          whether or not the row is drawn.
+        */
+        <div className="flex flex-col items-center pt-6" style={{ height: PALS_PAGE.deckToHeading * layout.k }}>
+          {items.length > 1 && <DeckDots count={3} active={Math.round((index / (items.length - 1)) * 2)} />}
+        </div>
+      )}
+
+      {/*
+        `/pals`' HEADING IS UNDER THE DECK — node 1344:21868, "Make some
+        friends" at y=1016, 26 in (15 past the deck group's 11): Manrope Bold
+        24 / 28.61, "friends" on the 90deg #C196FD -> #7E3BEB character fill
+        (`styleOverrideTable[2]`), no subtitle. It is the same object Home
+        heads its sections with, so it is `SectionHeading`.
+      */}
+      {heading === "pals" && (
+        <div style={{ paddingLeft: PALS_PAGE.groupLeft * layout.k }}>
+          <SectionHeading id="make-some-friends" lead="Make some" accent="friends" />
+        </div>
+      )}
 
       {/* No rule under the section any more: 647:17210 drew one, but the
           2026-09-12 column (1305:149185) runs straight on to the next section
@@ -415,6 +424,7 @@ function DeckArrow({
   disabled,
   onClick,
   size,
+  lens,
   left,
   top,
 }: {
@@ -422,6 +432,13 @@ function DeckArrow({
   disabled: boolean;
   onClick: () => void;
   size: number;
+  /**
+   * How the GLASS is drawn. `sampled` is 1328:1885's render, measured (see
+   * `ws-deck-lens-left` / `-right` in globals.css): a lit rim on two opposite
+   * diagonals and no ring, the left disc the right's reflection. Absent, the
+   * sheen Home's deck has always had.
+   */
+  lens?: "sampled";
   left: number;
   top: number;
 }) {
@@ -432,7 +449,12 @@ function DeckArrow({
       onClick={onClick}
       aria-label={direction === "prev" ? "Previous person" : "Next person"}
       className={cn(
-        "ws-press absolute z-30 flex items-center justify-center rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md transition-opacity disabled:cursor-default disabled:opacity-70",
+        "ws-press absolute z-30 flex items-center justify-center rounded-full backdrop-blur-md transition-opacity disabled:cursor-default disabled:opacity-70",
+        lens === "sampled"
+          ? direction === "prev"
+            ? "ws-deck-lens-left"
+            : "ws-deck-lens-right"
+          : "shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_0_0_1px_rgba(255,255,255,0.08)]",
         direction === "prev" ? "bg-black/20 text-[#979797]" : "bg-white/16 text-white"
       )}
       style={{ width: size, height: size, left, top }}
