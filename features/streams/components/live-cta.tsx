@@ -16,9 +16,10 @@ import { useGate } from "@/hooks/use-gate";
  *   · TWO arcs (1295:147719 under, 1295:147727 over), each exported with its
  *     own `opacity 0.25` and `mix-blend-mode: soft-light` already in the file —
  *     so they are dropped in as images rather than re-drawn as paths;
- *   · the mascot 98.96 x 96.29 at (5, -12) — it OVERHANGS the banner's top, and
- *     the banner does not clip it — over a 42.39 x 6.06 black/25 ellipse at
- *     (28.74, 100.63) under a 6.056 layer blur (CSS takes half);
+ *   · the mascot 98.96 x 96.29 at (5, -12), whose top 12 the banner CLIPS
+ *     (`clipsContent: true` on 1295:147718 — the arcs run far outside it too),
+ *     over a 42.39 x 6.06 black/25 ellipse at (28.74, 100.63) under a 6.056
+ *     layer blur (CSS takes half);
  *   · the copy at (103.55, 27.76): ONE text node in two runs, per its
  *     `characterStyleOverrides` — "Create your Gistroom now" in Manrope Bold
  *     24/32.784 white, then the rest in Geist Medium 10 at #E9CEFF;
@@ -83,9 +84,11 @@ export function LiveCta() {
 
       <div className="hidden md:block">
         <div className="@container mx-auto w-full max-w-[573px]">
-          {/* NOT clipped: the mascot is meant to break the top edge. */}
+          {/* CLIPPED, as the frame is (`clipsContent: true`): both arcs run
+              well outside the box and the mascot's top 12 is cut. Without this
+              the arcs paint onto the page around the banner. */}
           <div
-            className="relative bg-[linear-gradient(126deg,#AD46FF_0%,#682A99_82%)]"
+            className="relative overflow-hidden bg-[linear-gradient(126deg,#AD46FF_0%,#682A99_82%)]"
             style={{ height: u(102), borderRadius: u(10) }}
           >
             {/* 1295:147719 — the arc under everything. Its opacity and
@@ -105,15 +108,24 @@ export function LiveCta() {
               className="pointer-events-none absolute rounded-[50%] bg-black/25"
               style={{ left: u(33.74), top: u(88.63), width: u(42.39), height: u(6.06), filter: `blur(${u(3.03)})` }}
             />
-            {/* eslint-disable-next-line @next/next/no-img-element -- the file's own art */}
-            <img
-              src="/home/banner-mascot.png"
-              alt=""
+            {/* 1295:147726 — the fill is STRETCH under imageTransform
+                [[1,0,0],[0,0.6486,0]], i.e. the source's TOP 64.86% stretched
+                into the box. So the image is drawn at its full height
+                (96.29 / 0.6486 = 148.46) and the box clips the rest. */}
+            <span
               aria-hidden
-              draggable={false}
-              className="pointer-events-none absolute max-w-none select-none"
+              className="pointer-events-none absolute overflow-hidden"
               style={{ left: u(5), top: u(-12), width: u(98.96), height: u(96.29) }}
-            />
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- the file's own art */}
+              <img
+                src="/home/banner-mascot.png"
+                alt=""
+                draggable={false}
+                className="max-w-none select-none"
+                style={{ width: u(98.96), height: u(148.46) }}
+              />
+            </span>
 
             {/* 1295:147720 — one text node, two runs. */}
             <p

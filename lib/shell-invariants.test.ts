@@ -1852,9 +1852,11 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // BOTH arcs, as exported: each carries its own 25% and soft-light blend.
     assert.match(cta, /banner-arc-left\.svg/);
     assert.match(cta, /banner-arc-right\.svg/);
-    // The mascot overhangs the top edge, so the banner must not clip.
+    // The frame clips (`clipsContent: true`): the mascot sits at -12 and its
+    // top is cut, and both arcs run outside the box. Without the clip they
+    // paint onto the page.
     assert.match(cta, /top: u\(-12\)/);
-    assert.doesNotMatch(cta, /relative overflow-hidden bg-\[linear-gradient\(126deg/, "the banner clips its own mascot");
+    assert.match(cta, /relative overflow-hidden bg-\[linear-gradient\(126deg/, "the arcs escape the banner again");
     // The headline is Manrope; the sub-line is the file's #E9CEFF.
     assert.match(cta, /font-\[family-name:var\(--font-heading\)\] font-bold text-white/);
     assert.match(cta, /text-\[#E9CEFF\]/);
