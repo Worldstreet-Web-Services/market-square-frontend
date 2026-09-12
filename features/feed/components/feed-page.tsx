@@ -419,6 +419,15 @@ export function FeedPage({
             /feed, which is this same component in `feed` mode. */}
         {mode === "home" && postsSlot}
 
+        {/* NODE 647:16515 and 540:19351 — "Join a community" and the pals rail.
+            In `feed` mode they are interleaved INTO the timeline, after the
+            second and fourth posts, where the file puts them. Home has no list
+            to sit inside, so they close its column instead — without this they
+            are passed in and then never drawn, which is how both silently
+            disappeared from Home the first time. */}
+        {mode === "home" && communitySlot}
+        {mode === "home" && palsSlot}
+
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
             than as separate objects — and these are objects, not rows. */}

@@ -1973,6 +1973,12 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(screen, /<FeedPage\n\s*mode="feed"/);
     assert.match(feed, /<Composer/);
     assert.match(feed, /<VideoViewer/);
+    // Home has no list for these to sit inside, so they close its column —
+    // passed in and never drawn is how both vanished from Home once already.
+    assert.match(feed, /\{mode === "home" && communitySlot\}/);
+    assert.match(feed, /\{mode === "home" && palsSlot\}/);
+    // In feed mode they stay interleaved where the file puts them.
+    assert.match(feed, /index === Math\.min\(BEFORE_COMMUNITY - 1/);
     // Pals is back to the deck and the stories strip alone.
     const pals = stripComments(read("components/layout/pals-screen.tsx"));
     assert.doesNotMatch(pals, /PostForYou/, "the rail is still on Pals");
