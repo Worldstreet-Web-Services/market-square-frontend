@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
+import { HomeSearch } from "@/components/layout/home-search";
 import { POST_SLOTS } from "@/components/layout/home-screen";
 import { FeedPage, StoriesRow, TopicTabs, type TopicTab } from "@/features/feed";
 import { useTopics } from "@/features/discovery";
@@ -73,6 +74,17 @@ export function PalsScreen() {
     [vocabulary.data]
   );
   const topics = useMemo(() => (topic ? [topic] : NO_TOPICS), [topic]);
+  /*
+    THE FIELD ANSWERS HERE TOO.
+
+    It used to be a link into Explore on every page but Home, which meant
+    searching from /pals threw you off /pals (ogazboiz: "why is the pal search
+    taking me to /discovery"). Each column owns its OWN query — they are
+    separate pages and never on screen together, so there is no shared string
+    for two inputs to fight over.
+  */
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
 
   return (
     <div className="relative">
@@ -80,16 +92,17 @@ export function PalsScreen() {
         mode="pals"
         topics={topics}
         {...POST_SLOTS}
+        searchSlot={searching ? <HomeSearch query={query} /> : undefined}
         headSlot={
           <>
             {/* 1331:21793 — 574 wide at the node's 13. */}
             <div className="md:ml-[13px] md:w-[574px]">
-              <HomeTopRow />
+              <HomeTopRow value={query} onChange={setQuery} />
             </div>
             {/* 1331:21802 — from the same 13, 51 under the row (60 -> 111).
                 The node's strip is 596 wide and its overlay clips it at 618;
                 the 600 column clips it at its own edge and the strip scrolls. */}
-            {authenticated && (
+            {!searching && authenticated && (
               <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
                 <StoriesRow />
               </div>
@@ -97,9 +110,11 @@ export function PalsScreen() {
             {/* 647:16266 — the topic row, on the column's own 51 under the
                 strip (or under the search row, signed out), as wide as the
                 stories so its rule ends where they do. */}
-            <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
-              <TopicTabs tabs={tabs} active={topic} onSelect={setTopic} />
-            </div>
+            {!searching && (
+              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
+                <TopicTabs tabs={tabs} active={topic} onSelect={setTopic} />
+              </div>
+            )}
           </>
         }
       />

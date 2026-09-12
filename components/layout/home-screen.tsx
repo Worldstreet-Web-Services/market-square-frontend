@@ -110,7 +110,7 @@ export function HomeScreen() {
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
       comingSoonSlot={<ComingSoonRooms />}
-      partnersSlot={<EcosystemPartnersRail />}
+      partnersSlot={<EcosystemPartnersRail heading={false} />}
       housesSlot={<PopularHouses />}
       postsSlot={<PostForYou followSlot={followSlot} winkSlot={winkSlot} tipSlot={tipSlot} />}
       palsSlot={<SuggestedPals />}

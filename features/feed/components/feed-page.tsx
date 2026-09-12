@@ -549,7 +549,7 @@ export function FeedPage({
                 }
               />
             )}
-            {ready && !gated && listBody}
+            {searchSlot ?? (ready && !gated && listBody)}
           </div>
           {!gated && listTail}
         </div>

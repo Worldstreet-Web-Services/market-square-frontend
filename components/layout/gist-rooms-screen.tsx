@@ -3,7 +3,9 @@
 import { HousesStreet } from "@/features/houses";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
 import { UpcomingRoomCard } from "@/components/layout/upcoming-room-card";
+import { useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
+import { HomeSearch } from "@/components/layout/home-search";
 import { SectionHeading } from "@/components/layout/section-heading";
 
 /**
@@ -28,9 +30,27 @@ import { SectionHeading } from "@/components/layout/section-heading";
 const ROOM_CARD_SCALE = 290.47 / 338;
 
 export function GistRoomsScreen() {
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
+  const row = <HomeTopRow value={query} onChange={setQuery} />;
+
+  // The column answers its own query — see the note in pals-screen. Returned
+  // before HousesStreet rather than threaded through it: the street draws
+  // rooms, and a search is not a shorter list of rooms.
+  if (searching) {
+    return (
+      <div className="w-full pl-[22px] pr-[21px] pt-[22px]">
+        {row}
+        <div className="mt-6">
+          <HomeSearch query={query} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <HousesStreet
-      headSlot={<HomeTopRow />}
+      headSlot={row}
       headingSlot={(section) =>
         section === "live" ? (
           <SectionHeading id="live-gistrooms" lead="Live" accent="GistRooms" />
