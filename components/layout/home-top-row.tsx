@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { RailMenu } from "@/components/layout/app-shell";
@@ -80,16 +79,19 @@ export function HomeTopRow({
 }: {
   trailing?: "account" | "filter";
   /**
-   * Present on a page that ANSWERS the query itself — Home. The field becomes
-   * a real input there, and the page below it becomes the results.
+   * THE FIELD IS A REAL INPUT ON EVERY PAGE THAT DRAWS IT.
    *
-   * Absent everywhere else, where the field stays what the file draws: a link
-   * into Explore's search. Two live inputs owning one string is the trap the
-   * top bar fell into before the chrome lost its search, so exactly one
-   * surface at a time owns it.
+   * It used to be a link into Explore on every surface but Home, so searching
+   * from /pals threw you off /pals (ogazboiz: "why is the pal search taking
+   * me to /discovery"). The page that owns the row owns the query and answers
+   * it in place.
+   *
+   * The old worry — two live inputs fighting over one string — does not apply
+   * across PAGES: Home, /pals, /houses and /gist-rooms are never on screen
+   * together, and each keeps its own query, which is cleared by leaving.
    */
-  value?: string;
-  onChange?: (value: string) => void;
+  value: string;
+  onChange: (value: string) => void;
 }) {
   const gate = useGate();
   const [locationOpen, setLocationOpen] = useState(false);
@@ -112,8 +114,7 @@ export function HomeTopRow({
 
   return (
     <div className="flex h-12 items-center gap-3">
-      {onChange ? (
-        <div className="ws-press flex h-12 min-w-0 flex-1 items-center gap-[3.78px] rounded-full border-[0.68px] border-white/40 px-2 shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors focus-within:border-white/55">
+      <div className="ws-press flex h-12 min-w-0 flex-1 items-center gap-[3.78px] rounded-full border-[0.68px] border-white/40 px-2 shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors focus-within:border-white/55">
           <IconTopSearch className="h-4 w-4 shrink-0 text-[#6D6D6D]" />
           <input
             type="search"
@@ -134,18 +135,6 @@ export function HomeTopRow({
             </button>
           )}
         </div>
-      ) : (
-      <Link
-        href="/discover"
-        aria-label="Search Gistrooms, houses, friends"
-        className="ws-press flex h-12 min-w-0 flex-1 items-center gap-[3.78px] rounded-full border-[0.68px] border-white/40 px-2 shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors hover:border-white/55"
-      >
-        <IconTopSearch className="h-4 w-4 shrink-0 text-[#6D6D6D]" />
-        <span className="min-w-0 truncate text-[16px] font-medium leading-[22px] tracking-[-0.112px] text-[#7A7A7A]">
-          Search Gistrooms, houses, friends...
-        </span>
-      </Link>
-      )}
 
       {trailing === "filter" ? (
         <button

@@ -1791,7 +1791,8 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(street, /pl-\[22px\] pr-\[21px\] pt-\[22px\]/);
     assert.match(stripComments(read("components/layout/app-shell.tsx")), /\/\^\\\/gist-rooms\$\/,/, "/gist-rooms is not a FULL-frame route");
     // Home's search row heads it; no page heading, no topic row, no circle.
-    assert.match(screen, /headSlot=\{<HomeTopRow \/>\}/);
+    assert.match(screen, /headSlot=\{row\}/);
+    assert.match(screen, /const row = <HomeTopRow value=\{query\} onChange=\{setQuery\} \/>;/);
     assert.doesNotMatch(street, /Happening|TopicTabs|tabsSlot|createSlot/);
     assert.doesNotMatch(screen, /TopicTabs|CreateFab/);
     // "Live GistRooms" and "Coming Soon" in the shared heading, WITHOUT View more.
@@ -1821,7 +1822,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // The artboard's insets; the row ends in the FILTER pill (1368:2275), a
     // real disabled control — the route takes cursor and limit only.
     assert.match(screen, /pl-\[22px\] pr-\[21px\] pt-\[22px\]/);
-    assert.match(screen, /<HomeTopRow trailing="filter" \/>/);
+    assert.match(screen, /<HomeTopRow trailing="filter" value=\{query\} onChange=\{setQuery\} \/>/);
     assert.match(row, /disabled\n\s*aria-label="Filter houses"\n\s*title="Filtering houses needs a filter the directory doesn't offer yet"/);
     assert.match(row, /h-12 w-16 shrink-0 items-center justify-center gap-3 rounded-\[36px\] bg-\[rgba\(159,90,255,0\.09\)\] px-2 py-1/);
     // "Explore communities" (ogazboiz, 2026-09-12) over the file's pasted "Live GistRooms".
@@ -2178,28 +2179,41 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(pals, /PostForYou/, "the rail is still on Pals");
   });
 
-  it("heads Home's column with the search row — typed on Home, a link elsewhere — and the settings pill", () => {
+  it("heads every column with a search row that answers in place, and the settings pill", () => {
     const row = stripComments(read("components/layout/home-top-row.tsx"));
     /*
-      ONE SURFACE OWNS THE STRING AT A TIME, and `onChange` is what selects it.
+      EVERY PAGE THAT DRAWS THE ROW ANSWERS ITS OWN QUERY.
 
-      The row is a real INPUT on the page that answers the query itself —
-      Home — and stays a link into Explore everywhere else (ogazboiz: "that
-      search is not suppose to take me to discover ... in that home that
-      search there"). Two live inputs owning one query is the trap the top bar
-      fell into before the chrome lost its search, so the branch is on whether
-      the page passed a handler, never on the route.
+      It was a link into Explore everywhere but Home, so searching from /pals
+      threw the reader off /pals (ogazboiz: "why is the pal search taking me
+      to /discovery"). The link branch is gone rather than left unused — dead
+      code that sends a reader somewhere else is exactly what caused that.
+
+      The old worry, two live inputs over one string, does not apply across
+      PAGES: these surfaces are never on screen together and each keeps its
+      own query.
     */
-    assert.match(row, /href="\/discover"/, "the link branch is gone for pages that do not search");
-    assert.match(row, /onChange \? \(/, "the row lost its typed branch");
+    assert.doesNotMatch(row, /href="\/discover"/, "the row can still throw a reader into Explore");
     assert.match(row, /<input/);
     assert.doesNotMatch(row, /<form/, "a form submits and navigates; this field answers in place");
+    for (const screen of [
+      "components/layout/pals-screen.tsx",
+      "components/layout/houses-screen.tsx",
+      "components/layout/gist-rooms-screen.tsx",
+    ]) {
+      const src = stripComments(read(screen));
+      assert.match(src, /<HomeSearch query=\{query\} \/>/, screen + " does not answer its own search");
+      assert.match(src, /onChange=\{setQuery\}/, screen + " does not own a query");
+    }
     assert.match(row, /Search Gistrooms, houses, friends\.\.\./);
     // The node's leading space is a gap the width of a Geist space, not a
     // character in the copy.
     assert.doesNotMatch(row, /" Search Gistrooms/);
     assert.match(row, /flex h-12 min-w-0 flex-1 items-center gap-\[3\.78px\] rounded-full border-\[0\.68px\] border-white\/40 px-2/);
-    assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\] text-\[#7A7A7A\]/);
+    // The file's type scale is unchanged. What the reader TYPES is white;
+    // #7A7A7A is the placeholder, which is what the node actually draws.
+    assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\]/);
+    assert.match(row, /placeholder:text-\[#7A7A7A\]/);
     assert.match(row, /<IconTopSearch className="h-4 w-4 shrink-0 text-\[#6D6D6D\]" \/>/);
     // 1295:142740: 67 wide at radius 36, padding 3/4/3/8, gear and caret 23
     // apart, the file's GLASS matched to its render rather than a border.
@@ -2376,7 +2390,13 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
   it("puts the partners card under Coming Soon, on phones only", () => {
     const feed = stripComments(read("features/feed/components/feed-page.tsx"));
     const home = stripComments(read("components/layout/home-screen.tsx"));
-    assert.match(home, /partnersSlot=\{<EcosystemPartnersRail \/>\}/);
+    assert.match(home, /partnersSlot=\{<EcosystemPartnersRail heading=\{false\} \/>\}/);
+    // No title on the phone: in the column the card speaks for itself, and a
+    // second heading there reads as another section of ours. The rail keeps
+    // its title, where it names one module among several.
+    const partnersCard = stripComments(read("components/layout/ecosystem-partners-rail.tsx"));
+    assert.match(partnersCard, /\{heading && \(/);
+    assert.match(partnersCard, /aria-label="Ecosystem Partners"/, "the label must survive for screen readers");
     // Under Coming Soon, above Popular Houses.
     const soon = feed.indexOf("{comingSoonSlot}");
     const partners = feed.indexOf("{mode === \"home\" && partnersSlot");

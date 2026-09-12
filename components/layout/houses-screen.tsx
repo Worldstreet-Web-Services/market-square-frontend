@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
@@ -8,6 +10,7 @@ import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useDiscoverHousesPages } from "@/features/messages/lib/discover-houses";
 import { useJoinGroup } from "@/features/messages";
 import { HomeTopRow } from "@/components/layout/home-top-row";
+import { HomeSearch } from "@/components/layout/home-search";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { cn } from "@/lib/cn";
 
@@ -79,14 +82,28 @@ export function HousesScreen() {
   const houses = useDiscoverHousesPages();
   const join = useJoinGroup();
   const items = houses.data?.pages.flatMap((page) => page.items) ?? [];
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
   const sentinel = useInfiniteScroll(
     () => void houses.fetchNextPage(),
     Boolean(houses.hasNextPage) && !houses.isFetchingNextPage
   );
 
+  // The column answers its own query — see the note in pals-screen.
+  if (searching) {
+    return (
+      <div className="w-full pl-[22px] pr-[21px] pt-[22px] max-lg:px-4">
+        <HomeTopRow trailing="filter" value={query} onChange={setQuery} />
+        <div className="mt-6">
+          <HomeSearch query={query} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full pl-[22px] pr-[21px] pt-[22px] max-lg:px-4">
-      <HomeTopRow trailing="filter" />
+      <HomeTopRow trailing="filter" value={query} onChange={setQuery} />
 
       <section aria-labelledby="explore-communities" className="mt-9">
         <SectionHeading id="explore-communities" lead="Explore" accent="communities" />
