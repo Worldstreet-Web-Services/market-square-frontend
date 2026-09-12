@@ -1839,6 +1839,15 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(screen, /max-lg:text-\[14px\] max-lg:leading-\[18\.2px\]/, "the phone's 14/18.2 name is gone");
     assert.match(screen, /max-lg:text-\[12px\] max-lg:font-medium max-lg:leading-\[15\.6px\]/, "the phone's 12/15.6 description is gone");
     assert.match(screen, /max-lg:top-\[40px\]/, "the phone's pill offset is gone");
+    // The picture is the node's 48.05 square inset on the white plate; with
+    // no picture the plate is 1373:3990's — `#D8D8D8` with the gist glyph
+    // centred — never a seeded person, never the node's sample photo
+    // (ogazboiz, 2026-09-12).
+    assert.match(screen, /left-\[1\.23px\] top-\[3\.08px\] h-\[48\.05px\] w-\[48\.05px\] object-cover/, "the picture no longer sits square on its plate");
+    assert.match(screen, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
+    assert.match(screen, /src="\/gist-rooms\/card-default-cover\.svg"[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
+    assert.doesNotMatch(screen, /default-picture|<Avatar[\s\S]{0,120}src=\{house\.imageUrl\}/, "a house picture is being invented again");
+    assert.ok(!existsSync(resolve("public/houses")), "the node's sample photo is back as a default");
     // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
     assert.match(screen, /useDiscoverHousesPages\(\)/);
     assert.match(screen, /useInfiniteScroll\(/);

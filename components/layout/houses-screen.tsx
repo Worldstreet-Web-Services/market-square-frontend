@@ -9,6 +9,7 @@ import { useDiscoverHousesPages } from "@/features/messages/lib/discover-houses"
 import { useJoinGroup } from "@/features/messages";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { SectionHeading } from "@/components/layout/section-heading";
+import { cn } from "@/lib/cn";
 
 /**
  * THE HOUSES DIRECTORY — node 1368:2270 (SQUARE 2.0, file 4tFF5q0CzOSrADkpCOAE03),
@@ -129,16 +130,43 @@ export function HousesScreen() {
                   role="listitem"
                   className="relative h-[86px] w-[290px] overflow-hidden rounded-[16.86px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.77px_rgba(255,255,255,0.18)] backdrop-blur-[5.37px] max-lg:h-[106px] max-lg:w-full"
                 >
-                  {/* 1373:3368 — the picture on its white plate. */}
-                  <span className="absolute left-4 top-4 h-[54.21px] w-[49.89px] overflow-hidden rounded-[12.32px] bg-white">
-                    <Avatar
-                      name={house.title ?? "House"}
-                      seed={house.id}
-                      src={house.imageUrl}
-                      size={54}
-                      sizeClassName="h-full w-full"
-                      className="rounded-none border-0"
-                    />
+                  {/* 1373:3368 / 1381:37629 — the picture on its white plate:
+                      a 48.05 SQUARE (image 66, sharp-cornered) inset 1.23 at
+                      the sides and 3.08 top and bottom, so the plate shows
+                      as a white frame round it. It used to be `Avatar`
+                      filling the plate edge to edge, which drew a stranger's
+                      seeded illustration for a house with no picture
+                      ("it suppose to be that normal square and show the
+                      image or the default image", ogazboiz 2026-09-12).
+
+                      NO PICTURE → node 1373:3990, the file's default: the
+                      SAME 49.89 x 54.21 plate at 12.32 filled `#D8D8D8` with
+                      the gist glyph 32.78 x 24 centred in it, no white
+                      frame — the export the room card already uses. Not the
+                      node's sample photo: that is one designer's house, and
+                      every house without a picture would wear it. */}
+                  <span
+                    className={cn(
+                      "absolute left-4 top-4 h-[54.21px] w-[49.89px] overflow-hidden rounded-[12.32px] bg-white",
+                      !house.imageUrl && "flex items-center justify-center bg-[#D8D8D8]"
+                    )}
+                  >
+                    {house.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- the house's own host is unknown
+                      <img
+                        src={house.imageUrl}
+                        alt=""
+                        className="absolute left-[1.23px] top-[3.08px] h-[48.05px] w-[48.05px] object-cover"
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element -- the node's own export
+                      <img
+                        src="/gist-rooms/card-default-cover.svg"
+                        alt=""
+                        aria-hidden
+                        className="h-6 w-[32.78px]"
+                      />
+                    )}
                   </span>
 
                   {/* 1373:3370 — the text column. */}
@@ -153,7 +181,7 @@ export function HousesScreen() {
                             {house.members.slice(0, 3).map((member, index) => (
                               <span
                                 key={member.id}
-                                className="flex h-[12.32px] w-[12.32px] items-center justify-center overflow-hidden rounded-full bg-[#DCDAD5] shadow-[inset_0_0_0_0.62px_#FFFFFF,0_2.46px_9.24px_rgba(147,147,147,0.25)]"
+                                className="flex h-[12.32px] w-[12.32px] items-center justify-center overflow-hidden rounded-[25%] bg-[#DCDAD5] shadow-[inset_0_0_0_0.62px_#FFFFFF,0_2.46px_9.24px_rgba(147,147,147,0.25)]"
                                 style={{ marginLeft: index === 0 ? 0 : -4.93 }}
                               >
                                 <Avatar
