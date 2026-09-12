@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Roboto } from "next/font/google";
+import { Geist, Manrope, Roboto } from "next/font/google";
 import Providers from "./providers";
 import { AppShell } from "@/components/layout/app-shell";
 import { SplashScreen } from "@/components/layout/splash-screen";
@@ -33,6 +33,24 @@ const roboto = Roboto({
   subsets: ["latin"],
 });
 
+/**
+ * Manrope, for Home's section headings.
+ *
+ * The 2026-09-12 Home design sets every section heading in it — "Top
+ * GistRooms", "Make some friends", "Coming Soon", "Popular Houses" — all at
+ * Bold 24/28.61. It is a display face used consistently rather than a
+ * one-string stand-in, and ogazboiz's instruction was to follow the file, so it
+ * is loaded rather than substituted with Geist.
+ *
+ * Two weights, latin only, and it belongs to those headings alone: body copy is
+ * still Geist.
+ */
+const manrope = Manrope({
+  variable: "--font-heading",
+  weight: ["600", "700"],
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: { default: "Square", template: "%s · Square" },
   description:
@@ -57,7 +75,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geist.variable} ${roboto.variable}`}>
+    <html lang="en" className={`${geist.variable} ${roboto.variable} ${manrope.variable}`}>
       <body className="ws-wash min-h-dvh">
         <Providers>
           {/* Above everything, including the bare routes the shell steps out of

@@ -981,13 +981,23 @@ describe("Home's Top GistRooms section is 647:16288's first block", () => {
 
   it("heads the carousel with the file's title and View more", () => {
     // "Top", not the file's "Suggested": these are the rooms actually live (ogazboiz, 2026-09-12).
-    assert.match(rail, /<span className="text-white">Top <\/span>GistRooms/);
+    assert.match(rail, /lead="Top"/);
+    assert.match(rail, /accent="GistRooms"/);
     assert.match(rail, /useStreamList\("live", \[\], "house", undefined, "listeners"\)/, "the carousel no longer asks for live rooms, busiest first");
     const api = stripComments(read("features/streams/lib/api.ts"));
     // A deployment without the busiest-first order must fall back, not empty the shelf.
     assert.match(api, /if \(!refusedListenerSort\(error\)\) throw error;/);
-    assert.match(rail, /bg-\[linear-gradient\(90deg,#C196FD_0%,#7E3BEB_100%\)\] bg-clip-text/);
-    assert.match(rail, /href="\/gist-rooms"/);
+    assert.match(rail, /action=\{\{ label: "View more", href: "\/gist-rooms" \}\}/);
+    // The gradient half, the pill and the file's own arrow live in the one
+    // heading component now — four copies of this markup is how one section
+    // ends up a different size from its neighbours.
+    const heading = stripComments(read("components/layout/section-heading.tsx"));
+    assert.match(heading, /bg-\[linear-gradient\(90deg,#C196FD_0%,#7E3BEB_100%\)\] bg-clip-text/);
+    assert.match(heading, /font-\[family-name:var\(--font-heading\)\] text-\[24px\] font-bold leading-\[28\.61px\]/);
+    assert.match(heading, /\/home\/view-more-arrow\.svg/);
+    // Manrope has to be LOADED or the heading silently falls back to Geist.
+    assert.match(stripComments(read("app/layout.tsx")), /Manrope\(\{/);
+    assert.match(stripComments(read("app/layout.tsx")), /variable: "--font-heading"/);
   });
 
   it("spaces it by the file: 85 under the banner, 19 to the dots, 8.67 to cards 17 apart, 78 to what follows", () => {

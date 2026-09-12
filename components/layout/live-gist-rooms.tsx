@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
 import { useStreamList } from "@/features/streams";
 import { DeckDots } from "@/components/ui/deck-dots";
+import { SectionHeading } from "@/components/layout/section-heading";
 
 /**
  * THE ROOMS OPEN RIGHT NOW — the first block of Home's content column, node
@@ -89,20 +89,13 @@ export function LiveGistRooms() {
 
   return (
     <section aria-labelledby="top-gist-rooms" className="mb-[78px] mt-[85px]">
-      <div className="mb-[19px] flex items-start justify-between gap-4 pl-[5px]">
-        <h2
+      <div className="mb-[19px] pl-[5px]">
+        <SectionHeading
           id="top-gist-rooms"
-          className="inline-block bg-[linear-gradient(90deg,#C196FD_0%,#7E3BEB_100%)] bg-clip-text text-[32px] font-medium leading-[28.615px] text-transparent"
-        >
-          <span className="text-white">Top </span>GistRooms
-        </h2>
-        <Link
-          href="/gist-rooms"
-          className="ws-press mt-[5px] flex h-8 shrink-0 items-center gap-2.5 rounded-full bg-white/[0.04] px-2.5 text-[16px] font-semibold leading-6 tracking-[0.15px] text-white transition-colors hover:bg-white/[0.08]"
-        >
-          View more
-          <IconViewMoreArrow className="h-4 w-4 text-[#9F5AFF]" />
-        </Link>
+          lead="Top"
+          accent="GistRooms"
+          action={{ label: "View more", href: "/gist-rooms" }}
+        />
       </div>
 
       <div className="flex flex-col gap-[8.67px]">
@@ -126,14 +119,5 @@ export function LiveGistRooms() {
         </div>
       </div>
     </section>
-  );
-}
-
-/** The "View more" arrow — `arrow-left-01-round` turned 180deg, node 1069:11820, exported from the file. */
-function IconViewMoreArrow({ className }: { className?: string }) {
-  return (
-    <svg aria-hidden viewBox="0 0 16 16" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M6.00003 12C6.00003 12 9.99999 9.05404 10 7.99997C10 6.94589 6 4 6 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
   );
 }
