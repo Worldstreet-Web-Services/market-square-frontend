@@ -55,7 +55,7 @@ export function PostForYou({
 
   return (
     <section aria-labelledby="post-for-you" className="mb-[63px]">
-      <div className="mb-4 pl-[5px]">
+      <div className="mb-4">
         <SectionHeading
           id="post-for-you"
           lead="Post For You"

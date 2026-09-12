@@ -1840,6 +1840,38 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
+  it("spaces every Home section by the column's own 63, headings flush at x=0", () => {
+    // 1305:149185 is a 63-gap column whose heading rows start at x=0. The 5px
+    // inset and the 78px margin were 647:16288's and misaligned the sections.
+    for (const file of [
+      "components/layout/live-gist-rooms.tsx",
+      "components/layout/coming-soon-rooms.tsx",
+      "components/layout/popular-houses.tsx",
+      "components/layout/post-for-you.tsx",
+    ]) {
+      const section = stripComments(read(file));
+      assert.match(section, /mb-\[63px\]/, `${file} is not on the column's rhythm`);
+      assert.match(section, /className="mb-4"/, `${file} lost the 16 under its heading`);
+      assert.doesNotMatch(section, /pl-\[5px\]/, `${file} still carries the old 5px inset`);
+    }
+  });
+
+  it("heads Make some friends with 1305:149175's own type, deck untouched", () => {
+    const deck = stripComments(read("components/layout/friends-deck.tsx"));
+    // The one heading object, not a fourth copy of the markup.
+    assert.match(deck, /<SectionHeading\n\s*id="make-some-friends"/);
+    assert.match(deck, /lead="Make some"/);
+    assert.match(deck, /accent="friends"/);
+    assert.doesNotMatch(deck, /text-\[22px\] font-medium leading-7 text-white/, "the old hand-built heading is back");
+    // The filter goes in as the live control it is, keeping ogazboiz's name.
+    assert.match(deck, /actionSlot=\{filterPill\}/);
+    assert.match(stripComments(read("components/layout/section-heading.tsx")), /actionSlot \?\? \(action && <SectionAction/);
+    // The DECK stays 647:16288's: its pills and the left-edge rule were asked
+    // for and the new node has nothing to replace them with.
+    assert.match(deck, /<DeckDots variant="home" count=\{5\}/);
+    assert.match(deck, /ws-rule-to-left-edge -mx-4 mt-\[67px\]/);
+  });
+
   it("draws Home's banner on 1305:149178's own numbers, for everybody", () => {
     const cta = stripComments(read("features/streams/components/live-cta.tsx"));
     // 573 x 102 at radius 10 on the file's 126deg ramp — the 938x168 banner
