@@ -10,6 +10,7 @@ import { JoinACommunity } from "@/components/layout/join-a-community";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
 import { ComingSoonRooms } from "@/components/layout/coming-soon-rooms";
+import { PopularHouses } from "@/components/layout/popular-houses";
 import { SuggestedPals } from "@/components/layout/suggested-pals";
 
 // Slices never import each other, so the follow control — which belongs to the
@@ -74,6 +75,7 @@ export function HomeScreen() {
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
       comingSoonSlot={<ComingSoonRooms />}
+      housesSlot={<PopularHouses />}
       communitySlot={<JoinACommunity />}
       palsSlot={<SuggestedPals />}
     />

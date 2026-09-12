@@ -150,6 +150,7 @@ export function FeedPage({
   liveCtaSlot,
   friendsSlot,
   comingSoonSlot,
+  housesSlot,
   communitySlot,
   palsSlot,
 }: {
@@ -176,6 +177,11 @@ export function FeedPage({
    * while nothing is scheduled, so it costs no space on a quiet square.
    */
   comingSoonSlot?: React.ReactNode;
+  /**
+   * "Popular Houses" (1305:149179), the last section of the new Home. Renders
+   * nothing when no public house exists.
+   */
+  housesSlot?: React.ReactNode;
   communitySlot?: React.ReactNode;
   /** The pals rail (540:19351), dropped a few posts into the timeline. */
   palsSlot?: React.ReactNode;
@@ -384,6 +390,10 @@ export function FeedPage({
             margins, like the two sections above it: nothing scheduled renders
             nothing at all rather than an empty shelf. */}
         {comingSoonSlot}
+
+        {/* 1305:149179 — the houses anybody can join, closing the column's
+            sections before the timeline. */}
+        {housesSlot}
 
         {/* 38 between cards, measured between the two slabs' outer edges in
             the Home frame (496:13048). It was 16, which read as a stack rather
