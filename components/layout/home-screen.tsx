@@ -4,8 +4,9 @@ import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/fe
 import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
-import { LiveCta } from "@/features/streams";
 import { JoinACommunity } from "@/components/layout/join-a-community";
+import { HomeTopRow } from "@/components/layout/home-top-row";
+import { HOME_BANNER_SLIDES, HomeBanner } from "@/components/layout/home-banner";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
 import { ComingSoonRooms } from "@/components/layout/coming-soon-rooms";
@@ -54,9 +55,9 @@ const tipSlot = (post: Post) => (
  * the feed may not import, so they are assembled here and handed down as slots
  * — the same route-slot pattern the follow pill and the tip button above use.
  *
- * The Go Live banner (647:17219) belongs to the streams slice and sits under
- * the topic row. Signed-out readers do not get it, for the Live page's reason:
- * a "Go Live" that opens a login wall is bait.
+ * The column opens on the search row and the gistroom banner (1295:142736,
+ * 1305:149178), for everybody: the banner is the strongest invitation on the
+ * page, and the tap gates a signed-out reader into sign-in.
  *
  * The topic vocabulary is DATA rather than a node, because the row's selection
  * drives the feed's own query: `GET /topics` belongs to the discovery slice and
@@ -71,7 +72,12 @@ export function HomeScreen() {
       followSlot={followSlot}
       winkSlot={winkSlot}
       tipSlot={tipSlot}
-      liveCtaSlot={<LiveCta />}
+      headSlot={
+        <>
+          <HomeTopRow />
+          <HomeBanner slides={HOME_BANNER_SLIDES} />
+        </>
+      }
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}
       comingSoonSlot={<ComingSoonRooms />}

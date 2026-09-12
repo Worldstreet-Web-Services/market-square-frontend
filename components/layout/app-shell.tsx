@@ -32,7 +32,6 @@ import { useLogout } from "@/hooks/use-logout";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { InterestGate } from "@/features/discovery";
 import { useUnread } from "@/hooks/use-unread";
-import { looksLikeRoomCode } from "@/lib/room-code";
 import { SessionGuard } from "@/components/layout/session-guard";
 import { Avatar } from "@/components/ui/avatar";
 import { LogoMark, Wordmark } from "@/components/ui/wordmark";
@@ -485,7 +484,7 @@ const BADGE_FOR: Record<
  * re-measured on open, scroll and resize, and clamped into the viewport so a
  * short window cannot push it off the top.
  */
-function RailMenu({
+export function RailMenu({
   label,
   trigger,
   children,
@@ -705,7 +704,7 @@ function AccountChip() {
  * The account menu's entries. The rail's account chip and the top bar's
  * avatar open the same menu, so it is written once.
  */
-function AccountMenuItems({ close }: { close: () => void }) {
+export function AccountMenuItems({ close }: { close: () => void }) {
   const logout = useLogout();
   const me = useMe();
   const router = useRouter();
@@ -1157,8 +1156,12 @@ export function Sidebar({
  * the column's edge and the cluster ends on the rail cards' edge. A WIDE route
  * has no column cap and no rail, so there the bar just keeps 24 either side.
  *
- * NO SEARCH. A build from a cached copy of this node (2026-09-08) put a field
- * here; the live node has none, which is also what ogazboiz asked for twice.
+ * NO SEARCH, ON ANY ROUTE. A build from a cached copy of this node
+ * (2026-09-08) put a field here, and a later one put the 2026-09-12 field in
+ * for room codes; the live node has none, which is also what ogazboiz asked
+ * for twice. That field is the HEAD OF HOME'S COLUMN now (1295:142736,
+ * `HomeTopRow`), a link into Explore's search — beside a settings pill that
+ * opens the same `AccountMenuItems` the avatar below does.
  *
  * THE HAIRLINE RUNS THE WHOLE WINDOW — "the border line should full the
  * screen for point A to point B". It is the file's 10% bottom stroke drawn as
@@ -1192,11 +1195,10 @@ function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
           </Link>
         )}
 
-        {/* The field belongs to the BAR, not to TopBarActions: that returns a
-            Sign in button or null for a signed-out reader, and search is for
-            everybody. */}
+        {/* NO SEARCH FIELD. The 2026-09-12 Home puts it at the head of the
+            column (`HomeTopRow`, node 1295:142736), not in the chrome, and it
+            is a link into Explore's search there. See `HomeTopRow`. */}
         <div className="ml-auto flex min-w-0 shrink items-start gap-3 pl-6 pt-[19px]">
-          <RoomSearchField />
           <TopBarActions />
         </div>
       </div>
@@ -1230,71 +1232,6 @@ function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
  * That precision is one migration away if product asks for it, WITH a rule
  * about who may read it; it is not something to acquire by accident.
  */
-
-/**
- * SEARCH — node 1295:142737, the field the 2026-09-12 Home puts in the bar.
- *
- * The file's own numbers: 495 x 38 at a full radius, a transparent fill under a
- * 0.68 `rgba(255,255,255,0.4)` hairline, 8 of side padding, the exported 16px
- * glyph, and the placeholder in Geist Medium 16/22 at -0.007em. It shrinks
- * rather than holding 495 on a narrow column, because the bar also carries the
- * bell and the account pill.
- *
- * ─── WHY THERE IS A SEARCH BOX IN THE CHROME AT ALL ──────────────────────────
- * This app deliberately had none: ogazboiz asked twice to keep search out of
- * the top bar, and that is written into CLAUDE.md. The 2026-09-12 design puts
- * one here and he confirmed the reason — gist rooms now have a spoken code, and
- * this is where somebody types the code a friend read out. So the rule is
- * superseded BY ITS OWN AUTHOR, for a reason the old rule never considered.
- *
- * ─── ONE FIELD, TWO DESTINATIONS ─────────────────────────────────────────────
- * A code goes to the room it names; anything else goes to search. The test is
- * `looksLikeRoomCode`, and it decides the DESTINATION only — what the person
- * typed is passed on untouched, because the service matches codes leniently and
- * a client that tidied input first would eventually disagree with it about what
- * a code is.
- *
- * The file also draws a settings pill beside the field. It is not built: this
- * bar already carries the bell and the account pill in that spot, and a second
- * settings control next to them would be a duplicate of chrome that exists.
- */
-function RoomSearchField() {
-  const router = useRouter();
-  const [typed, setTyped] = useState("");
-
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault();
-    const entry = typed.trim();
-    if (!entry) return;
-    router.push(
-      looksLikeRoomCode(entry)
-        ? `/code/${encodeURIComponent(entry)}`
-        : `/discover?q=${encodeURIComponent(entry)}`
-    );
-  };
-
-  return (
-    <form
-      role="search"
-      onSubmit={submit}
-      className="hidden h-[38px] min-w-0 max-w-[495px] flex-1 items-center gap-2 rounded-full border-[0.68px] border-white/40 px-2 shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] lg:flex"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-      <img src="/home/search-glyph.svg" alt="" aria-hidden className="h-4 w-4 shrink-0" />
-      <label className="sr-only" htmlFor="room-search">
-        Search Square
-      </label>
-      <input
-        id="room-search"
-        value={typed}
-        onChange={(event) => setTyped(event.target.value)}
-        placeholder="Search Gistrooms, houses, friends..."
-        autoComplete="off"
-        className="min-w-0 flex-1 bg-transparent text-[16px] font-medium leading-[22px] tracking-[-0.007em] text-white outline-none placeholder:text-[#7A7A7A]"
-      />
-    </form>
-  );
-}
 
 function TopBarActions() {
   const { ready, authenticated, login } = useAuth();

@@ -779,16 +779,13 @@ describe("the group picker leaves the size rule to the service", () => {
  * It replaced the "Ark Ecosystem / <page>" breadcrumb with the lockup and the
  * account cluster.
  *
- * ─── THE SEARCH FIELD, AND WHY IT IS HERE NOW ────────────────────────────────
- * This bar deliberately had none. An early build added one from a CACHED copy
- * of the node dated 2026-09-08, the live node had no search, and ogazboiz had
- * twice asked to keep search out of the chrome — so its absence was pinned.
- *
- * On 2026-09-12 he reversed that himself, against a live node that draws the
- * field (1295:142737), for a reason the old rule never considered: gist rooms
- * now carry a spoken code, and this is where somebody types the code a friend
- * read out. So a field IS pinned here now — and the guard against the stale
- * cached shape stays, because that mistake is still a mistake.
+ * ─── NO SEARCH IN THE CHROME ─────────────────────────────────────────────────
+ * This bar has none, on every route. An early build added one from a CACHED
+ * copy of the node dated 2026-09-08; a later one put the 2026-09-12 field
+ * (1295:142737) here for room codes. The 2026-09-12 Home draws that field at
+ * the HEAD OF THE COLUMN (1295:142736, `HomeTopRow`), as a link into Explore's
+ * search, so the bar keeps the breadcrumb-less lockup, the bell and the
+ * avatar and nothing else — and both stale shapes stay pinned out.
  *
  * Also pinned are the parts the file adds: the purple count badge on
  * the bell, the avatar and caret inside one 7%-white pill, and a bottom
@@ -805,13 +802,13 @@ describe("the top bar is node 647:17439", () => {
     assert.doesNotMatch(shell, /function Breadcrumb\b/);
   });
 
-  it("carries the live node's search field, and not the stale cached one", () => {
-    // 1295:142737, and ogazboiz's own reversal on 2026-09-12: a room code is
-    // typed here. See the note above for why this flipped.
-    assert.match(bar, /<RoomSearchField \/>/);
-    assert.match(shell, /placeholder="Search Gistrooms, houses, friends\.\.\."/);
-    // The 2026-09-08 cached shape must not come back.
-    assert.doesNotMatch(shell, /function TopBarSearch\b/);
+  it("carries no search field, on any route", () => {
+    // Neither the 2026-09-08 cached shape nor the room-code field that stood
+    // in the bar for a morning: the field is the column's (1295:142736).
+    assert.doesNotMatch(bar, /RoomSearchField|TopBarSearch|role="search"/);
+    assert.doesNotMatch(shell, /function TopBarSearch\b|function RoomSearchField\b/);
+    assert.doesNotMatch(shell, /looksLikeRoomCode/, "the bar is routing room codes again");
+    assert.match(bar, /<TopBarActions \/>/);
   });
 
   it("draws the bottom hairline across the whole window, not just the capped frame", () => {
@@ -954,29 +951,32 @@ describe("The topic row is node 647:16266", () => {
  * Phones keep the compact strip: no mobile frame was given.
  */
 describe("Home's banner is node 1305:149178", () => {
-  const cta = stripComments(read("features/streams/components/live-cta.tsx"));
+  const banner = stripComments(read("components/layout/home-banner.tsx"));
   const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+  const home = stripComments(read("components/layout/home-screen.tsx"));
 
-  it("scales against its own width, and keeps a phone strip the artboard cannot become", () => {
-    assert.match(cta, /@container/, "the banner no longer scales against its own width");
-    assert.match(cta, /hidden md:block/);
-    assert.match(cta, /md:hidden/, "the phone strip is gone");
+  it("draws the card at the file's pixels from md, and keeps a phone strip the artboard cannot become", () => {
+    assert.match(banner, /hidden h-\[102px\] overflow-hidden rounded-\[10px\] md:block/);
+    assert.match(banner, /md:hidden/, "the phone strip is gone");
+    assert.doesNotMatch(banner, /@container|cqw/, "the composition is being scaled instead of drawn");
   });
 
   it("no longer carries 647:17219's artboard", () => {
-    // Replaced, not restyled — see the 1305:149178 test for what it draws now.
-    assert.doesNotMatch(cta, /DESIGN_W = 938/);
-    assert.doesNotMatch(cta, /92deg,#AD46FF_-16\.3%/);
+    assert.doesNotMatch(banner, /DESIGN_W = 938/);
+    assert.doesNotMatch(banner, /92deg,#AD46FF_-16\.3%/);
+    assert.doesNotMatch(home, /LiveCta/, "the streams slice's banner is back on Home");
   });
 
-  it("opens Home above the rooms, for EVERYBODY", () => {
-    // It was signed-in only; ogazboiz opened it to visitors on 2026-09-12, so
-    // the strongest invitation on the page is seen by people who have not yet
-    // accepted it. The tap gates instead.
-    assert.match(stripComments(read("components/layout/home-screen.tsx")), /liveCtaSlot=\{<LiveCta \/>\}/);
-    const banner = feed.indexOf("{liveCtaSlot && ");
+  it("opens the column with the search row and the banner, above everything, for EVERYBODY", () => {
+    // The head slot: the row (1295:142736), then the banner 11 under it, then
+    // the column's 64 to the first section — drawn before anything else.
+    assert.match(home, /headSlot=\{\n\s*<>\n\s*<HomeTopRow \/>\n\s*<HomeBanner slides=\{HOME_BANNER_SLIDES\} \/>/);
+    assert.match(feed, /\{headSlot && <div className="mb-\[64px\] flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
+    const head = feed.indexOf("{headSlot && ");
+    const trending = feed.indexOf("<TrendingDiscussions");
     const rooms = feed.indexOf("{roomsSlot}");
-    assert.ok(banner > 0 && rooms > banner, "the banner is not above the rooms");
+    assert.ok(head > 0 && trending > head && rooms > trending, "the head is not above everything else");
+    assert.doesNotMatch(feed, /liveCtaSlot/, "the old under-the-tabs mount is back");
     // The topic row is gone from Home (ogazboiz, 2026-09-12).
     assert.doesNotMatch(feed, /TopicTabs/);
   });
@@ -1416,14 +1416,16 @@ describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () =>
 
 describe("The Home banner speaks gist room for now", () => {
   it("opens the gist room sheet, not the studio, and never says Go Live", () => {
-    const cta = stripComments(read("features/streams/components/live-cta.tsx"));
-    assert.match(cta, /\/gist-rooms\?open=1/, "the banner stopped opening the gist room sheet");
-    assert.doesNotMatch(cta, />\s*Go Live\s*</, "the banner says Go Live again");
-    assert.doesNotMatch(cta, /href="\/studio"/);
+    const banner = stripComments(read("components/layout/home-banner.tsx"));
+    // The same thing the sidebar's "Start Gistroom" does.
+    assert.match(banner, /href: "\/gist-rooms\?open=1"/, "the banner stopped opening the gist room sheet");
+    assert.match(stripComments(read("components/layout/app-shell.tsx")), /href="\/gist-rooms\?open=1"/);
+    assert.doesNotMatch(banner, />\s*Go Live\s*</, "the banner says Go Live again");
+    assert.doesNotMatch(banner, /\/studio/);
     // Both breakpoints go through ONE gated handler, so a signed-out reader is
     // asked to sign in rather than meeting a dead control.
-    assert.equal((cta.match(/onClick=\{open\}/g) ?? []).length, 2, "a breakpoint lost its handler");
-    assert.match(cta, /const open = \(\) => gate\(/);
+    assert.equal((banner.match(/onClick=\{open\}/g) ?? []).length, 2, "a breakpoint lost its handler");
+    assert.match(banner, /const open = \(\) => gate\(\(\) => router\.push\(slide\.action\.href\)\);/);
   });
 });
 
@@ -1874,33 +1876,44 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
   });
 
   it("draws Home's banner on 1305:149178's own numbers, for everybody", () => {
-    const cta = stripComments(read("features/streams/components/live-cta.tsx"));
-    // 573 x 102 at radius 10 on the file's 126deg ramp — the 938x168 banner
-    // from 647:17219 is replaced, not restyled.
-    assert.match(cta, /const W = 573;/);
-    assert.match(cta, /height: u\(102\), borderRadius: u\(10\)/);
-    assert.match(cta, /linear-gradient\(126deg,#AD46FF_0%,#682A99_82%\)/);
-    // The file's own word on the button.
-    assert.match(cta, /Host Room/);
-    assert.doesNotMatch(cta, /Gist Room/, "the old button label is back");
-    // BOTH arcs, as exported: each carries its own 25% and soft-light blend.
-    assert.match(cta, /banner-arc-left\.svg/);
-    assert.match(cta, /banner-arc-right\.svg/);
+    const banner = stripComments(read("components/layout/home-banner.tsx"));
+    // 102 tall at radius 10 on the file's ramp. The gradient's width handle
+    // sits straight below its start, so on a 573 x 102 box the bands are
+    // vertical and the ramp runs LEFT TO RIGHT: 90deg, -16.5% to 82%. The
+    // 126deg an earlier build used is the square-space reading of the same
+    // handles, which the render does not show.
+    assert.match(banner, /linear-gradient\(90deg,#AD46FF_-16\.5%,#682A99_82%\)/);
+    assert.doesNotMatch(banner, /126deg/);
+    // The file's own word on the button, at its own box and 25 from the edge.
+    assert.match(banner, /label: "Host Room"/);
+    assert.doesNotMatch(banner, /Gist Room/, "the old button label is back");
+    assert.match(banner, /right-\[25px\] top-\[32px\] flex h-\[38px\] w-\[90px\]/);
+    assert.match(banner, /inset_0_0_0_2px_rgba\(194,160,250,0\.55\),0_6px_6\.2px_rgba\(0,0,0,0\.25\)/);
+    // BOTH arcs, the file's exports, each at its STROKE's bounds (the export is
+    // trimmed to the stroke, not to the node's box), blended by the element —
+    // a blend inside an <img> blends against nothing.
+    assert.match(banner, /banner-arc-left\.svg/);
+    assert.match(banner, /left-\[-4\.12px\] top-\[-57\.22px\] h-\[106px\] w-\[256px\] max-w-none select-none mix-blend-soft-light/);
+    assert.match(banner, /banner-arc-right\.svg/);
+    assert.match(banner, /left-\[204\.87px\] top-\[16\.41px\] h-\[153px\] w-\[369px\] max-w-none select-none mix-blend-soft-light/);
     // The frame clips (`clipsContent: true`): the mascot sits at -12 and its
-    // top is cut, and both arcs run outside the box. Without the clip they
-    // paint onto the page.
-    assert.match(cta, /top: u\(-12\)/);
-    assert.match(cta, /relative overflow-hidden bg-\[linear-gradient\(126deg/, "the arcs escape the banner again");
-    // The headline is Manrope; the sub-line is the file's #E9CEFF.
-    assert.match(cta, /font-\[family-name:var\(--font-heading\)\] font-bold text-white/);
-    assert.match(cta, /text-\[#E9CEFF\]/);
-    // The four pager dots.
-    assert.match(cta, /const DOTS = \[27\.08, 10\.29, 9\.21, 9\.21\];/);
-    // Shown to EVERYONE, with sign-in on the tap (ogazboiz, 2026-09-12) — it
-    // was the strongest invitation on the page and showed to nobody who had
-    // not already joined.
-    assert.match(stripComments(read("components/layout/home-screen.tsx")), /liveCtaSlot=\{<LiveCta \/>\}/);
-    assert.match(cta, /const gate = useGate\(\);/);
+    // top is cut, and both arcs run outside the box.
+    assert.match(banner, /left-\[5px\] top-\[-12px\] h-\[96\.29px\] w-\[98\.96px\] overflow-hidden/);
+    assert.match(banner, /h-\[148\.46px\] w-\[98\.96px\]/, "the STRETCH fill's top 64.86% is not what is shown");
+    assert.match(banner, /hidden h-\[102px\] overflow-hidden rounded-\[10px\] md:block/, "the arcs escape the banner again");
+    // One text node, two runs: Manrope Bold 24/32.784, then Geist Medium 10 in
+    // the file's #E9CEFF, centred in the 44 box at (103.55, 27.76).
+    assert.match(banner, /left-\[103\.55px\] top-\[27\.76px\] flex h-\[44px\] w-\[329px\] flex-col justify-center/);
+    assert.match(banner, /font-\[family-name:var\(--font-heading\)\] text-\[24px\] font-bold leading-\[32\.784px\] text-white/);
+    assert.match(banner, /text-\[10px\] font-medium leading-\[14\.51px\] text-\[#E9CEFF\]/);
+    // The pager is DeckDots' geometry and renders ONLY with something to page
+    // through: the file draws one slide, and a row of dots over one slide
+    // claims pages that do not exist.
+    assert.match(banner, /\{paged && <DeckDots count=\{slides\.length\} active=\{index\} onSelect=\{setIndex\}/);
+    assert.match(banner, /const paged = slides\.length > 1;/);
+    assert.equal((banner.match(/^\s*id: "/gm) ?? []).length, 1, "the seed is no longer the file's one slide");
+    // Shown to EVERYONE, with sign-in on the tap (ogazboiz, 2026-09-12).
+    assert.match(banner, /const gate = useGate\(\);/);
   });
 
   it("puts an announcement in its own band, never in the feed", () => {
@@ -2013,15 +2026,26 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(pals, /PostForYou/, "the rail is still on Pals");
   });
 
-  it("puts one search field in the bar, for a code or a name", () => {
-    const shell = stripComments(read("components/layout/app-shell.tsx"));
-    // It lives in the BAR: TopBarActions returns null for a signed-out reader,
-    // and search is for everybody.
-    assert.match(shell, /<RoomSearchField \/>\n\s*<TopBarActions \/>/);
-    assert.match(shell, /placeholder="Search Gistrooms, houses, friends\.\.\."/);
-    // The destination is chosen; the input is passed on untouched.
-    assert.match(shell, /looksLikeRoomCode\(entry\)\n?\s*\? `\/code\/\$\{encodeURIComponent\(entry\)\}`/);
-    assert.match(shell, /`\/discover\?q=\$\{encodeURIComponent\(entry\)\}`/);
+  it("heads Home's column with the search row — a link into Explore — and the settings pill", () => {
+    const row = stripComments(read("components/layout/home-top-row.tsx"));
+    // 1295:142737 is a LINK: Explore owns the query, so nothing here types.
+    assert.match(row, /href="\/discover"/);
+    assert.doesNotMatch(row, /<input|<form/, "the row grew a live input");
+    assert.match(row, /Search Gistrooms, houses, friends\.\.\./);
+    // The node's leading space is a gap the width of a Geist space, not a
+    // character in the copy.
+    assert.doesNotMatch(row, /" Search Gistrooms/);
+    assert.match(row, /flex h-12 min-w-0 flex-1 items-center gap-\[3\.78px\] rounded-full border-\[0\.68px\] border-white\/40 px-2/);
+    assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\] text-\[#7A7A7A\]/);
+    assert.match(row, /<IconTopSearch className="h-4 w-4 shrink-0 text-\[#6D6D6D\]" \/>/);
+    // 1295:142740: 67 wide at radius 36, padding 3/4/3/8, gear and caret 23
+    // apart, the file's GLASS matched to its render rather than a border.
+    assert.match(row, /ws-glass-pill ws-glass-rim relative flex h-12 w-\[67px\] shrink-0 items-center gap-\[23px\] rounded-\[36px\] py-\[3px\] pl-1 pr-2/);
+    assert.match(row, /<IconHomeSettings className="h-6 w-6 shrink-0 text-\[#D9D9D9\]" \/>/);
+    assert.doesNotMatch(row, /border-white\/\d+[^"]*w-\[67px\]|w-\[67px\][^"]*border/, "the pill drew a border the file does not");
+    // It opens the ONE account menu the top bar's avatar and the rail's chip open.
+    assert.match(row, /import \{ AccountMenuItems, RailMenu \} from "@\/components\/layout\/app-shell";/);
+    assert.match(row, /\{\(close\) => <AccountMenuItems close=\{close\} \/>\}/);
     const screen = stripComments(read("components/layout/room-code-screen.tsx"));
     // A private room shows the doorplate and never a join that would refuse.
     assert.match(screen, /This room is private/);

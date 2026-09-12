@@ -148,8 +148,8 @@ export function FeedPage({
   followSlot,
   winkSlot,
   tipSlot,
+  headSlot,
   roomsSlot,
-  liveCtaSlot,
   friendsSlot,
   comingSoonSlot,
   housesSlot,
@@ -187,10 +187,10 @@ export function FeedPage({
    */
   roomsSlot?: React.ReactNode;
   /**
-   * The Go Live banner (647:17219), from the streams slice, directly under the
-   * topic row. Absent for signed-out readers; see HomeScreen.
+   * What opens the column — the search row and the banner (1295:142736 and
+   * 1305:149178), composed in `home-screen` and drawn ABOVE everything else.
    */
-  liveCtaSlot?: React.ReactNode;
+  headSlot?: React.ReactNode;
   friendsSlot?: React.ReactNode;
   /**
    * Gist rooms with a time on them, under the people deck. Renders nothing
@@ -318,6 +318,11 @@ export function FeedPage({
       {/* `ws-align-logo`: under the dock, from md up, the left gutter goes so
           the stories start on the top bar lockup's line — see globals.css. */}
       <div className="ws-align-logo relative px-4 py-4 lg:px-6">
+        {/* THE HEAD OF THE COLUMN — the search row (1295:142736), the banner
+            11 under it (1305:149178 starts at 36487 against the row's 36476),
+            then the column's own 64 to the first section. */}
+        {headSlot && <div className="mb-[64px] flex flex-col gap-[11px]">{headSlot}</div>}
+
         {/*
           HOME STARTS AT THE STORIES — node 225:3315.
 
@@ -388,11 +393,6 @@ export function FeedPage({
             />
           </div>
         )}
-
-        {/* NODE 647:17219 — the Go Live banner: 34 below the topic row's block
-            (its 16px margin collapses into this) and 60 above what follows,
-            the file's own gaps. */}
-        {liveCtaSlot && <div className="mb-[60px] mt-[34px]">{liveCtaSlot}</div>}
 
         {/* NODE 225:3822 — the rooms open right now, directly under the tabs.
             A room happening now beats a subject being discussed, and both beat
