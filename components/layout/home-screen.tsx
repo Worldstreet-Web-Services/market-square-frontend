@@ -4,7 +4,6 @@ import { FeedPage, ArkmarksPage, PostDetailPage, type Post } from "@/features/fe
 import { FollowPill, WinkButton } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
-import { useTopics } from "@/features/discovery";
 import { LiveCta } from "@/features/streams";
 import { useAuth } from "@/hooks/use-auth";
 import { JoinACommunity } from "@/components/layout/join-a-community";
@@ -64,14 +63,12 @@ const tipSlot = (post: Post) => (
  */
 export function HomeScreen() {
   // Home's own eight, in the design's order (`?surface=home`).
-  const topics = useTopics("home");
   const { authenticated } = useAuth();
   return (
     <FeedPage
       followSlot={followSlot}
       winkSlot={winkSlot}
       tipSlot={tipSlot}
-      topicTabs={(topics.data ?? []).map((topic) => ({ key: topic.key, label: topic.label }))}
       liveCtaSlot={authenticated ? <LiveCta /> : null}
       roomsSlot={<LiveGistRooms />}
       friendsSlot={<FriendsDeck />}

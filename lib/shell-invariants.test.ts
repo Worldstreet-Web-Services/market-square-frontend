@@ -895,14 +895,18 @@ describe("the body under the dock", () => {
 });
 
 /**
- * HOME'S TOPIC ROW IS NODE 647:16266 — the live file, updated 2026-09-10.
+ * THE TOPIC ROW IS NODE 647:16266 — the live file, updated 2026-09-10.
  *
  * The row was first built from 225:3352. The live node keeps its pill (101 x
  * 38, full round, the 201deg #7E3BEB -> #472185 gradient while selected) and
  * adds one thing: the "For you" pill carries the file's wink glyph (677:18745,
  * exported), 3px before the label, tinted #D8BCFF while selected.
+ *
+ * It no longer heads HOME (ogazboiz, 2026-09-12) — the gist rooms screen and
+ * the houses street carry it now, which is why the component and this test
+ * stay.
  */
-describe("Home's topic row is node 647:16266", () => {
+describe("The topic row is node 647:16266", () => {
   const tabs = stripComments(read("features/feed/components/topic-tabs.tsx"));
 
   it("gives For you the file's wink, tinted #D8BCFF while selected", () => {
@@ -916,14 +920,6 @@ describe("Home's topic row is node 647:16266", () => {
   });
 
   it("keeps the file's pill: 101 x 38, round, and its gradient in PIXEL space", () => {
-    /*
-      The MCP summary converts the file's gradient handles to "201deg 13% ->
-      100%", which is the angle in the UNIT square. On a 101 x 38 pill that is
-      wrong: projected onto the real box the handles give 226deg with the
-      stops at 22.4% and 84.9%, which reproduces the file's render at both ends
-      (sampled: left 73,33,137 against 74,34,139; right 125,58,234 against
-      126,59,235). 201deg rendered the left end visibly lighter (88,41,166).
-    */
     assert.match(tabs, /h-\[38px\] min-w-\[101px\]/);
     assert.match(tabs, /bg-\[linear-gradient\(226deg,#7E3BEB_22\.4%,#472185_84\.9%\)\]/);
     assert.doesNotMatch(tabs, /201deg/, "the unit-square angle is back");
@@ -961,12 +957,13 @@ describe("Home's Go Live banner is node 647:17219", () => {
     assert.match(cta, /transform="matrix\(-1 0 0 -1 992 275\.203125\)"/);
   });
 
-  it("sits on Home right under the topic row, for signed-in readers only", () => {
+  it("opens Home above the rooms, for signed-in readers only", () => {
     assert.match(home, /liveCtaSlot=\{authenticated \? <LiveCta \/> : null\}/);
-    const tabs = feed.indexOf("<TopicTabs");
     const banner = feed.indexOf("{liveCtaSlot && ");
     const rooms = feed.indexOf("{roomsSlot}");
-    assert.ok(tabs > 0 && banner > tabs && rooms > banner, "the banner is not between the topic row and the rooms");
+    assert.ok(banner > 0 && rooms > banner, "the banner is not above the rooms");
+    // The topic row is gone from Home (ogazboiz, 2026-09-12).
+    assert.doesNotMatch(feed, /TopicTabs/);
   });
 });
 
@@ -1275,12 +1272,14 @@ describe("Gender is one choice everywhere: Male or Female", () => {
 });
 
 describe("Each surface asks for its own topics", () => {
-  it("Home asks for home, the house tag field for composer, and the key carries the surface", () => {
+  it("asks per surface, the house tag field for composer, and the key carries the surface", () => {
     const api = stripComments(read("features/discovery/lib/api.ts"));
     const hook = stripComments(read("features/discovery/hooks/use-discovery.ts"));
     assert.match(api, /msApi\.get\("\/topics", surface \? \{ surface \} : undefined\)/);
     assert.match(hook, /queryKey: \["ms", "topics", surface \?\? "all"\]/, "one surface's list could be served to another");
-    assert.match(stripComments(read("components/layout/home-screen.tsx")), /useTopics\("home"\)/);
+    // Home lost its topic row (ogazboiz, 2026-09-12), so it asks for no
+    // vocabulary at all; the composer field is the surface-specific caller left.
+    assert.doesNotMatch(stripComments(read("components/layout/home-screen.tsx")), /useTopics/);
     assert.match(stripComments(read("components/ui/topic-tags-field.tsx")), /useTopics\("composer"\)/);
   });
 });

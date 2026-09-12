@@ -19,7 +19,6 @@ import type { Lane, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
-import { TopicTabs, type TopicTab } from "@/features/feed/components/topic-tabs";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useMe } from "@/hooks/use-me";
 import { useNewPosts } from "@/features/feed/hooks/use-new-posts";
@@ -141,11 +140,12 @@ function PostSkeleton() {
 }
 
 // Mobile Home stays the vertical snap feed; desktop is the card timeline.
+const NO_TOPICS: string[] = [];
+
 export function FeedPage({
   followSlot,
   winkSlot,
   tipSlot,
-  topicTabs = [],
   roomsSlot,
   liveCtaSlot,
   friendsSlot,
@@ -157,13 +157,6 @@ export function FeedPage({
   /** Composed from outside the slice — the tip control lives in the tips
    *  slice and takes the POST, since a tip goes to `/posts/:id/tips`. */
   tipSlot?: (post: Post) => React.ReactNode;
-  /**
-   * The shared topic vocabulary for the tab row (node 225:3352), supplied by
-   * the layout. `GET /topics` lives in the DISCOVERY slice and slices never
-   * import each other — and this is the data rather than a node, because the
-   * row's selection drives this component's own query.
-   */
-  topicTabs?: readonly TopicTab[];
   /**
    * The three sections the file puts around the timeline, each composed in
    * `components/layout` because each reads a slice this one may not import:
@@ -184,19 +177,6 @@ export function FeedPage({
   const compose = useQueryParam("compose");
   const prefill = useComposePrefill();
   /*
-    THE TAB ROW SELECTS A TOPIC, NOT A LANE — node 225:3352.
-
-    Home used to head the timeline with `For You · Following · Trending`, which
-    are three ways of RANKING the same posts. The file heads it with the
-    subjects the square is talking about, which is the proposition of the
-    product. `null` is "For you" — the unfiltered lane.
-
-    The lane stays `for-you` throughout: a topic narrows what is in the lane, it
-    does not change how the lane is ranked. `GET /feed?topics=` does the
-    narrowing server-side.
-  */
-  const [topic, setTopic] = useState<string | null>(null);
-  /*
     THE TIMELINE RUNS ON, AND "JOIN A COMMUNITY" SITS INSIDE IT.
 
     It used to show three posts and stop at a "Load more" row (242:4890), for
@@ -211,20 +191,14 @@ export function FeedPage({
     asked.
   */
   const lane: Lane = "for-you";
+  // Home has no topic row any more (ogazboiz, 2026-09-12), so the lane is never
+  // narrowed. Module-level, so the query keys are stable between renders.
+  const topics = NO_TOPICS;
   const [composerOpen, setComposerOpen] = useState(false);
   // The post being quoted, if the composer was opened from a repost menu.
   const [quoting, setQuoting] = useState<Post | null>(null);
   const { authenticated } = useAuth();
-  const topics = useMemo(() => (topic ? [topic] : []), [topic]);
   const feed = useFeed(lane, topics);
-
-  /* `For you` plus whatever vocabulary the layout supplied, in the backend's
-     own order — nothing hard-coded, so a topic added upstream appears with no
-     client change. */
-  const tabs: TopicTab[] = useMemo(
-    () => [{ key: null, label: "For you" }, ...topicTabs],
-    [topicTabs]
-  );
 
   /*
     THE HEAD CHECK (`useFeedHead`) runs every 30 seconds while the tab is
@@ -297,7 +271,7 @@ export function FeedPage({
     document.startViewTransition(apply);
   };
   const showComposer = composerOpen || compose === "1" || compose === "story";
-  useMarketView("feed_viewed", { surface: "market_square_home", source: topic ?? lane });
+  useMarketView("feed_viewed", { surface: "market_square_home", source: lane });
 
   return (
     <>
@@ -383,15 +357,6 @@ export function FeedPage({
           </div>
         )}
 
-        {/* NODE 225:3352 — the topic row, over its own 2px rule. */}
-        <div className="mb-4">
-          <TopicTabs
-            tabs={tabs}
-            active={topic}
-            onSelect={(key) => setTopic(key)}
-          />
-        </div>
-
         {/* NODE 647:17219 — the Go Live banner: 34 below the topic row's block
             (its 16px margin collapses into this) and 60 above what follows,
             the file's own gaps. */}
@@ -428,15 +393,9 @@ export function FeedPage({
           {feed.isSuccess && items.length === 0 && (
             <EmptyState
               glyph="◇"
-              title={topic ? "Nothing here yet" : EMPTY_COPY[lane].title}
-              body={
-                topic
-                  ? "Nobody has posted under this topic yet. Try another, or start the conversation."
-                  : EMPTY_COPY[lane].body
-              }
-              action={
-                topic ? null : <LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />
-              }
+              title={EMPTY_COPY[lane].title}
+              body={EMPTY_COPY[lane].body}
+              action={<LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />}
             />
           )}
           {items.map((item, index) => (
