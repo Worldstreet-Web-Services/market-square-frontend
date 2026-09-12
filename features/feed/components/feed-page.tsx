@@ -11,7 +11,6 @@ import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed, useFeedHead } from "@/features/feed/hooks/use-feed";
 import { useLaneSignal } from "@/features/feed/hooks/use-lane-signal";
 import { Composer } from "@/features/feed/components/composer";
-import { TrendingDiscussions } from "@/features/discovery";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import type { VideoItem } from "@/lib/video-context";
 import { FeedItemCard } from "@/features/feed/components/feed-cards";
@@ -154,6 +153,7 @@ export function FeedPage({
   roomsSlot,
   friendsSlot,
   comingSoonSlot,
+  partnersSlot,
   housesSlot,
   communitySlot,
   palsSlot,
@@ -221,6 +221,15 @@ export function FeedPage({
    * while nothing is scheduled, so it costs no space on a quiet square.
    */
   comingSoonSlot?: React.ReactNode;
+  /**
+   * The partners card, on a PHONE only.
+   *
+   * It already sits in the right rail, which is hidden below lg — so without
+   * this it is a desktop-only object, and the design puts it on the phone
+   * directly under Coming Soon. Mounted here rather than in the rail's own
+   * list so it cannot render twice on one screen.
+   */
+  partnersSlot?: React.ReactNode;
   /**
    * "Popular Houses" (1305:149179), the last section of the new Home. Renders
    * nothing when no public house exists.
@@ -593,18 +602,20 @@ export function FeedPage({
             2026-09-11). Home opens on what the square is talking about. */}
 
         {/*
-          What the square is talking about, on the overview where it belongs.
-          It lives in the right rail, which is `hidden lg:block`, so without
-          this the one thing the brief names as the point of the place was
-          invisible to every reader on a phone.
+          TRENDING IS NOT IN THIS COLUMN ANY MORE.
 
-          BELOW the stories now, not above: the file opens Home on the stories
-          strip, and a section that is not in the design must not be the first
-          thing anybody sees.
+          It was mounted here because the right rail is `hidden lg:block`, so
+          a phone never saw it. That reason has gone: Home's field now answers
+          a search in place, and typing a topic beats scanning four hashtags
+          somebody else ranked (ogazboiz: "if they want to search ... remove it
+          there because it doesnt make sense").
+
+          It also cost the worst space on the smallest screen — between the
+          banner and the first section the design actually draws — to show a
+          block the design does not. It still lives in the RAIL and on
+          Explore, which is where ambient discovery belongs: neither pushes
+          the column down.
         */}
-        <div className="mb-4 lg:hidden">
-          <TrendingDiscussions limit={4} />
-        </div>
 
         {/*
           The arena banner is gone from Home.
@@ -639,6 +650,12 @@ export function FeedPage({
             margins, like the two sections above it: nothing scheduled renders
             nothing at all rather than an empty shelf. */}
         {comingSoonSlot}
+
+        {/* node 1391:38132 — under Coming Soon, phones only: the rail carries
+            it from lg up and two copies on one screen is not a placement. */}
+        {mode === "home" && partnersSlot && (
+          <div className="mb-[64px] lg:hidden">{partnersSlot}</div>
+        )}
 
         {/* 1305:149179 — the houses anybody can join, closing the column's
             sections before the timeline. */}
