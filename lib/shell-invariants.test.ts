@@ -1770,6 +1770,41 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(soon, /w-\[479px\] shrink-0/);
   });
 
+  it("does not drop a host into the soundcheck for a room scheduled for later", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    // Backstage is the moment of OPENING. Scheduling for Saturday must not land
+    // the host on a screen whose only action is "open the gist room" (ogazboiz:
+    // "when i schedule a gistroom why is it telling me to open gist room").
+    assert.match(room, /if \(!opened && !openNow && startsLater\(stream\)\) \{/);
+    assert.match(room, /<HostWaiting stream=\{stream\} onOpenNow=/);
+    // A room with no time on it was opened with "Now" and still goes straight
+    // to the soundcheck.
+    assert.match(room, /if \(!stream\.scheduledAt\) return false;/);
+    // Opening early stays available, but it is not the default.
+    assert.match(room, /Open it now instead/);
+  });
+
+  it("closes Home with Popular Houses, on the directory that is already ranked", () => {
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    assert.ok(
+      feed.indexOf("{comingSoonSlot}") < feed.indexOf("{housesSlot}"),
+      "Popular Houses moved above Coming Soon"
+    );
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /housesSlot=\{<PopularHouses \/>\}/);
+    const houses = stripComments(read("components/layout/popular-houses.tsx"));
+    // The endpoint is ALREADY ordered by member count and excludes houses the
+    // reader is in, so nothing is re-sorted and no second endpoint was added.
+    assert.match(houses, /useDiscoverHouses\(/);
+    assert.doesNotMatch(houses, /\.sort\(/, "one loaded page is being re-sorted");
+    // 1305:149179's own scale: 356x120 at radius 22.
+    assert.match(houses, /w-\[356px\] shrink-0/);
+    assert.match(houses, /"--u": "calc\(100cqw \/ 356\)"/);
+    assert.match(houses, /height: u\(120\)/);
+    assert.match(houses, /borderRadius: u\(22\)/);
+    // Empty or undeployed is ABSENT, never an empty shelf.
+    assert.match(houses, /if \(houses\.unavailable \|\| items\.length === 0\) return null;/);
+  });
+
   it("schedules a room with the app's own picker, never the browser's", () => {
     const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));
     // The native control paints its own dd/mm/yyyy chrome in the platform's
