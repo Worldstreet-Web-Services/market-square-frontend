@@ -493,9 +493,18 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
     assert.match(deck, /const card: PalCardNodeGeometry = /, "the deck's card is no longer a node-844 geometry");
   });
 
-  it("is the ONE deck: /pals renders it rather than a second fan", () => {
+  it("is the ONE deck, on Home only: /pals draws the topic row over the following lane instead", () => {
+    // The deck is already on Home, so ogazboiz took it off /pals
+    // (2026-09-12: "the second section is already on home so no need for
+    // that again") and asked for the topic row over the feed there. The
+    // selection is the layout's — `/topics` is discovery's, `/feed` the
+    // feed's — and goes down as `topics`.
     const pals = stripComments(read("components/layout/pals-screen.tsx"));
-    assert.match(pals, /<FriendsDeck heading="pals" \/>/, "/pals grew its own deck again");
+    assert.doesNotMatch(pals, /FriendsDeck/, "the wink deck is back on /pals");
+    assert.match(pals, /<TopicTabs tabs=\{tabs\} active=\{topic\} onSelect=\{setTopic\} \/>/, "/pals lost its topic row");
+    assert.match(pals, /useTopics\("home"\)/, "the row is not the shared vocabulary");
+    assert.match(pals, /mode="pals"\n\s*topics=\{topics\}/, "the selection does not narrow the lane");
+    assert.match(stripComments(read("components/layout/home-screen.tsx")), /friendsSlot=\{<FriendsDeck \/>\}/, "Home lost the deck");
     assert.ok(!existsSync(resolve("components/layout/make-some-friends.tsx")), "the older deck is back");
   });
 });

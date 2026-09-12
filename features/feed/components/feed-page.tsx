@@ -144,6 +144,7 @@ const NO_TOPICS: string[] = [];
 
 export function FeedPage({
   mode = "feed",
+  topics = NO_TOPICS,
   postsSlot,
   followSlot,
   winkSlot,
@@ -179,6 +180,13 @@ export function FeedPage({
    * on one surface and broken on the other.
    */
   mode?: "home" | "feed" | "pals";
+  /**
+   * Topic keys narrowing the lane — `GET /feed?topics=`. `/pals` heads its
+   * list with the topic row (647:16266), whose selection is owned by the
+   * layout: `GET /topics` is the discovery slice's and this one may not
+   * import it. Empty is "no filter". Pass a stable reference.
+   */
+  topics?: readonly string[];
   /** The rail Home shows instead of a timeline (1314:153017). */
   postsSlot?: React.ReactNode;
   followSlot?: (author: Profile) => React.ReactNode;
@@ -233,9 +241,11 @@ export function FeedPage({
   // the deck above it are who the list is for. Home and /feed stay on
   // for-you.
   const lane: Lane = mode === "pals" ? "following" : "for-you";
-  // Home has no topic row any more (ogazboiz, 2026-09-12), so the lane is never
-  // narrowed. Module-level, so the query keys are stable between renders.
-  const topics = NO_TOPICS;
+  // Home has no topic row any more (ogazboiz, 2026-09-12), so its lane is
+  // never narrowed and `topics` stays the module-level empty list; `/pals`'
+  // row narrows the following lane through the prop. A topic narrows what is
+  // in the lane, it does not change how the lane is ranked.
+  const narrowed = topics.length > 0;
   const [composerOpen, setComposerOpen] = useState(false);
   // The post being quoted, if the composer was opened from a repost menu.
   const [quoting, setQuoting] = useState<Post | null>(null);
@@ -318,7 +328,7 @@ export function FeedPage({
   const showComposer = composerOpen || compose === "1" || compose === "story";
   useMarketView("feed_viewed", {
     surface: mode === "pals" ? "market_square_pals" : "market_square_home",
-    source: lane,
+    source: narrowed ? topics.join(",") : lane,
   });
 
   /*
@@ -334,12 +344,19 @@ export function FeedPage({
       {feed.isError && (
         <ErrorState error={feed.error} fallback="Couldn't load the feed." onRetry={() => feed.refetch()} />
       )}
+      {/* A narrowed lane that is empty is empty BECAUSE of the topic, so the
+          copy says so and offers another pill rather than the lane's own
+          "follow somebody" answer, which would be the wrong diagnosis. */}
       {feed.isSuccess && items.length === 0 && (
         <EmptyState
           glyph="◇"
-          title={EMPTY_COPY[lane].title}
-          body={EMPTY_COPY[lane].body}
-          action={<LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />}
+          title={narrowed ? "Nothing here yet" : EMPTY_COPY[lane].title}
+          body={
+            narrowed
+              ? "Nobody has posted under this topic yet. Try another, or start the conversation."
+              : EMPTY_COPY[lane].body
+          }
+          action={narrowed ? null : <LaneCta empty={EMPTY_COPY[lane]} authenticated={authenticated} />}
         />
       )}
       {items.map((item, index) => (
@@ -450,31 +467,33 @@ export function FeedPage({
         {/*
           `/pals` — node 1328:1885, a 951 artboard on the chrome's `#121214`
           with everything in its left 618 (1331:21792). Column-relative: the
-          search row at (13, 12), the stories at (13, 111), the filter pill at
-          y=313, the deck at 390, "Make some friends" at 1016 and the list at
-          (25, 1058). The wrapper's 11 is the deck group's own inset (`FriendsDeck`
-          caps itself at the node's 596 from md), and every other x is
-          measured from it: the head's 2, the list's 14. The vertical rhythm is
-          the node's too — 12 above the head, 106 from the stories' foot (207)
-          to the pill (313), 13.39 from the heading's 28.61 line box (ends
-          1044.61) to the first card. The pill-to-deck 45 and the deck-to-
-          heading 177 are the deck's own (`PALS_PAGE`) and are not repeated
-          here.
+          search row at (13, 12), the stories at (13, 111), and the list at
+          (25, y) — 573.14 wide on a 47.89 gap. The wrapper's 11 is the node's
+          own inset (its deck group and its list clip both start there), and
+          every other x is measured from it: the head's 2, the list's 14. The
+          vertical rhythm is the node's: 12 above the head, 51 between the
+          head's rows (the search row's foot at 60 to the stories at 111).
+
+          THE NODE'S DECK IS NOT DRAWN. 1328:1885 puts the wink deck and "Make
+          some friends" between the stories and the list; ogazboiz took it
+          off this page on 2026-09-12 — the deck is already on Home, and
+          `/pals` is "just about friends and the rest that they are
+          interested in" — and asked for the TOPIC ROW (647:16266) over the
+          list instead, since the feed is here now. The row is the head's last
+          child (composed in `pals-screen`, which owns the selection) and the
+          list follows its rule on 24 — a judgement, since no frame draws this
+          row on this page.
 
           Signed out there is no strip (its gate is `pals-screen`'s), so the
-          deck follows the search row on the same 106 rather than leaving a
+          row follows the search row on the same 51 rather than leaving a
           96-tall hole where a stranger's stories would be.
         */}
         <div className="flex min-h-[calc(100dvh-var(--ws-crumb-h)-var(--ws-topbar-h)-var(--ws-nav-h))] flex-col px-4 pb-6 pt-3 md:px-[11px]">
           {headSlot}
 
-          {/* `FriendsDeck` renders nothing while the directory is empty; the
-              slot keeps its offset so the pill lands on 313 whenever it does. */}
-          {friendsSlot && <div className="mt-[106px]">{friendsSlot}</div>}
-
           {/* Quoting a post from this list opens the composer where the
               reader is, directly over the list. */}
-          {composer && <div className="mt-[13.39px] md:ml-[14px] md:w-[573.14px] md:max-w-[calc(100%-14px)]">{composer}</div>}
+          {composer && <div className="mt-6 md:ml-[14px] md:w-[573.14px] md:max-w-[calc(100%-14px)]">{composer}</div>}
 
           {fresh.pinned && (
             <NewPostsPill count={fresh.count} authors={fresh.authors} onTap={fresh.merge} column={listRef} />
@@ -493,7 +512,7 @@ export function FeedPage({
           */}
           <div
             ref={listRef}
-            className="mt-[13.39px] space-y-4 md:ml-[14px] md:w-[573.14px] md:max-w-[calc(100%-14px)] md:space-y-[47.89px]"
+            className="mt-6 space-y-4 md:ml-[14px] md:w-[573.14px] md:max-w-[calc(100%-14px)] md:space-y-[47.89px]"
           >
             {!ready && <PostSkeleton />}
             {ready && gated && (
