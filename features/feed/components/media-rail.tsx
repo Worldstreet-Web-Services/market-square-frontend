@@ -32,7 +32,7 @@ export function MediaRail({ items, size = "post" }: { items: PostMediaLike[]; si
   };
 
   return (
-    <div className={cn(size === "compact" && "shrink-0")}>
+    <div className={cn(size === "compact" && "flex min-h-0 flex-1 flex-col")}>
       <div className="flex items-center" style={{ gap: g.dotGap }} aria-hidden>
         {items.map((item, index) => (
           <span
@@ -52,6 +52,7 @@ export function MediaRail({ items, size = "post" }: { items: PostMediaLike[]; si
         style={{ gap: g.gap, marginTop: size === "compact" ? 10.7 : 20 }}
         className={cn(
           "flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          size === "compact" && "min-h-0 flex-1",
           // The column's rail bleeds to the card's edge so the next photo peeks
           // in; the compact one sits inside its own card and does not.
           size === "post" && "-mr-4 pr-4 md:-mr-[39px] md:pr-[39px]"
@@ -63,8 +64,17 @@ export function MediaRail({ items, size = "post" }: { items: PostMediaLike[]; si
             type="button"
             onClick={() => setOpen(index)}
             aria-label={`View photo ${index + 1} of ${items.length}`}
-            style={{ width: g.tile, height: g.tileHeight, borderRadius: g.radius }}
-            className="ws-press shrink-0 snap-start overflow-hidden bg-white/[0.04]"
+            style={{
+              width: g.tile,
+              // Fixed in the column; in the rail the tile fills the height the
+              // card has left, so the caption is never squeezed out.
+              ...(size === "compact" ? {} : { height: g.tileHeight }),
+              borderRadius: g.radius,
+            }}
+            className={cn(
+              "ws-press shrink-0 snap-start overflow-hidden bg-white/[0.04]",
+              size === "compact" && "h-full"
+            )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */}
             <img

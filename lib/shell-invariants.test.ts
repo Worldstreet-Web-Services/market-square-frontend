@@ -1971,6 +1971,15 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     const media = stripComments(read("lib/post-media.ts"));
     assert.match(media, /compact: \{\n\s*tile: 134\.3,\n\s*tileHeight: 188\.52,/);
     assert.match(media, /post: \{\n\s*tile: 250\.93,\n\s*tileHeight: 352\.22,/);
+    // In a fixed box the PICTURES give, never the words: the strip flexes and
+    // the caption keeps its two lines.
+    assert.match(card, /compact && "shrink-0 overflow-hidden"/, "the caption gives way instead of the pictures");
+    assert.match(card, /compact && "line-clamp-2"/);
+    // No "Show more" in the rail — it expands in place and the card cannot grow.
+    assert.match(card, /clampLines=\{full \|\| compact \? undefined : 6\}/);
+    const strip = stripComments(read("features/feed/components/media-rail.tsx"));
+    assert.match(strip, /size === "compact" && "min-h-0 flex-1"/);
+    assert.match(strip, /size === "compact" && "h-full"/);
     // The column's card must NOT be dragged to a fixed height by any of this.
     assert.match(card, /"p-4 md:px-\[39px\] md:pb-4 md:pt-6"/);
   });

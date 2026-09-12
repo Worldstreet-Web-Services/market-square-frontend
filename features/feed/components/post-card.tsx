@@ -962,7 +962,7 @@ export function PostCard({
       <div
         data-post-body
         onClick={full ? undefined : openPost}
-        className={cn(!full && "cursor-pointer", compact && "min-h-0 shrink overflow-hidden")}
+        className={cn(!full && "cursor-pointer", compact && "shrink-0 overflow-hidden")}
       >
         <PostText
           text={post.text}
@@ -970,9 +970,13 @@ export function PostCard({
           className={cn(
             "text-[13.8px] leading-[23px] text-white/90",
             // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
-            rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
+            rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3",
+            // Two lines in the rail, clamped by the class rather than by
+            // `clampLines`: that one brings a "Show more" which expands in
+            // place, and this card cannot grow.
+            compact && "line-clamp-2"
           )}
-          clampLines={full ? undefined : compact ? 2 : 6}
+          clampLines={full || compact ? undefined : 6}
         />
       </div>
       {/* The coins the post names, with today's move — the row Ark draws. */}
