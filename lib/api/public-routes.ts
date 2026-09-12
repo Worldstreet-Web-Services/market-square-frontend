@@ -131,6 +131,26 @@ export function isPublicGet(path: string[]): boolean {
   // carries no message, unread count or last activity.
   if (head === "conversations" && second === "discover" && path.length === 2) return true;
 
+  // ONE CONVERSATION'S DOORPLATE, and only that exact shape. Somebody opening a
+  // shared group link is BY DEFINITION not in the group yet, so a membership
+  // gate makes the link useless to the only person who needs it (backend
+  // 6422adf, confirmed 2026-09-12 with the observed response rather than the
+  // spec). What an anonymous caller gets is the plate and nothing else: title,
+  // description, picture, a member COUNT, visibility, and two false flags.
+  // Never messages, never the members themselves, never unread or last
+  // activity.
+  //
+  // The service decides the rest, and its rules are worth knowing here: a
+  // DIRECT conversation 404s for a non-participant (a preview would answer
+  // "are these two talking" to anybody holding an id), a PRIVATE group still
+  // previews with `canJoin: false` because existence is not the secret —
+  // ENTRY is — and a block collapses only `canJoin`, so the response can never
+  // be used as a block detector.
+  //
+  // Every other /conversations route stays gated: messages, join, invites,
+  // members, delete.
+  if (head === "conversations" && second && path.length === 2) return true;
+
   // What a house INVITE LINK opens onto — `GET /invites/:token`, optional auth.
   // The link is sent to people who are not members and often not signed in,
   // and the landing page has to show them the house before asking either. Only

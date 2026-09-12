@@ -67,6 +67,7 @@ const PUBLIC: string[][] = [
   // reads has to answer signed out. This exact shape only.
   ["announcements"],
   ["conversations", "discover"],
+  ["conversations", "cv_1"],
   // A house invite's landing page, read by strangers and signed-out visitors.
   ["invites", "tok_1"],
   // Public upstream and public here: the trending rail is a discovery surface
@@ -225,6 +226,17 @@ describe("isPublicGet", () => {
       assert.equal(isPublicGet(["announcements", "a_1"]), false);
     });
 
+    it("opens one conversation's DOORPLATE, because a shared link must name what it invites you to", () => {
+      // The response is title, description, picture, a member COUNT, visibility
+      // and two flags — never messages, members, unread or last activity. The
+      // service 404s a direct conversation for a non-participant.
+      assert.equal(isPublicGet(["conversations", "cv_1"]), true);
+      // Everything UNDER it still needs a session.
+      assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
+      assert.equal(isPublicGet(["conversations", "cv_1", "members"]), false);
+      assert.equal(isPublicGet(["conversations", "cv_1", "invites"]), false);
+    });
+
     it("opens the house directory and NOTHING else under /conversations", () => {
       // The directory answers for people who are not members and carries no
       // message, unread or last activity. Every other conversation route is a
@@ -232,7 +244,6 @@ describe("isPublicGet", () => {
       // head through would expose whole threads.
       assert.equal(isPublicGet(["conversations", "discover"]), true);
       assert.equal(isPublicGet(["conversations"]), false);
-      assert.equal(isPublicGet(["conversations", "cv_1"]), false);
       assert.equal(isPublicGet(["conversations", "cv_1", "messages"]), false);
       assert.equal(isPublicGet(["conversations", "discover", "anything"]), false);
     });
