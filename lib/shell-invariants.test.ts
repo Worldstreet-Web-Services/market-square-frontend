@@ -1851,6 +1851,11 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(rail, /ws-post\b/, "the rail is drawing its own post slab");
     assert.match(rail, /const SHOWN = 10;/);
     assert.match(rail, /gap-\[17\.37px\]/);
+    // The inline reply field is dropped in a rail: capped at 220 with no floor,
+    // it collapses to an untypable sliver beside the icons.
+    assert.match(rail, /compact\n/);
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /\{!compact && \(\n\s*<InlineComment/);
     // Nothing to show is no section.
     assert.match(rail, /if \(!feed\.isPending && items\.length === 0\) return null;/);
   });

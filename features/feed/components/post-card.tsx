@@ -581,6 +581,7 @@ export function PostCard({
   onOpenMedia,
   onQuote,
   full = false,
+  compact = false,
 }: {
   post: Post;
   /**
@@ -591,6 +592,17 @@ export function PostCard({
    * place that owes you the whole thing, so it sets this.
    */
   full?: boolean;
+  /**
+   * Drop the inline reply field.
+   *
+   * For a card in a RAIL rather than the column. The field is `flex-1` capped
+   * at the file's 220 and has no floor, so once the tallies pill and the four
+   * controls have taken their width it collapses to a sliver — a stray shape
+   * beside the icons that cannot be typed into. It is also the wrong control
+   * there: replying in place needs room to write and to read the thread, and a
+   * rail has neither. Tapping the card opens the post, where the real field is.
+   */
+  compact?: boolean;
   /** Opens the composer with this post quoted. Omitted where there is no composer. */
   onQuote?: (post: Post) => void;
   /** Set when this post reached the timeline through someone's repost. */
@@ -1111,14 +1123,16 @@ export function PostCard({
           any card width, which is what the file's fixed 113px gap expresses at
           its one width.
         */}
-        <InlineComment
-          postId={post.id}
-          onOpenThread={() => setCommentsOpen(true)}
-          revealed={replyOpen}
-          rootRef={inlineRef}
-          // Hidden on a phone until the tally reveals it; the file's row from md.
-          className={cn("md:order-2", !replyOpen && "hidden md:flex")}
-        />
+        {!compact && (
+          <InlineComment
+            postId={post.id}
+            onOpenThread={() => setCommentsOpen(true)}
+            revealed={replyOpen}
+            rootRef={inlineRef}
+            // Hidden on a phone until the tally reveals it; the file's row from md.
+            className={cn("md:order-2", !replyOpen && "hidden md:flex")}
+          />
+        )}
       </div>
 
       <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />

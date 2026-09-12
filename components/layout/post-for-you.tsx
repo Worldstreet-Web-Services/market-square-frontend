@@ -29,7 +29,11 @@ const SHOWN = 10;
  * quietly drift apart — and it would have to reimplement the media viewer, the
  * quote flow, the tallies and the three identity chips to do it.
  *
- * The card is fluid, so it takes the rail's width rather than the column's.
+ * The card is fluid, so it takes the rail's width rather than the column's —
+ * with `compact`, which drops the inline reply field. Capped at the file's 220
+ * and with no floor, that field collapses to an untypable sliver once the
+ * tallies and the four controls have taken their width; and a rail is the wrong
+ * place to reply anyway. Tapping the card opens the post, where the field is.
  */
 export function PostForYou({
   followSlot,
@@ -73,6 +77,7 @@ export function PostForYou({
                   followSlot={followSlot}
                   winkSlot={winkSlot}
                   tipSlot={tipSlot}
+                  compact
                 />
               </div>
             ))}
