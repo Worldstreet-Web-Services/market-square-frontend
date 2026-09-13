@@ -23,6 +23,8 @@ import {
   openConversation,
   removeGroupMember,
   renameGroup,
+  updateGroup,
+  type GroupEdit,
   setMemberRole,
   transferOwnership,
   sendMessage,
@@ -227,6 +229,18 @@ export function useAddGroupMembers(conversationId: string) {
 }
 
 /** "Edit group title" — owner only, enforced by the service. */
+/**
+ * Save a group edit. See `updateGroup` for why an absent field is untouched
+ * rather than cleared, and why visibility is owner-only.
+ */
+export function useUpdateGroup(conversationId: string) {
+  return useConversationAction<GroupEdit>(
+    conversationId,
+    (edit) => updateGroup(conversationId, edit),
+    "Group updated"
+  );
+}
+
 export function useRenameGroup(conversationId: string) {
   return useConversationAction<string>(
     conversationId,

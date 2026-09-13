@@ -2387,6 +2387,42 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
   });
 
+  it("never lets iOS zoom the page when somebody taps a field", () => {
+    const css = read("app/globals.css");
+    // Safari zooms any field whose computed size is under 16px and leaves the
+    // reader zoomed in and scrolled sideways. The trigger is the COMPUTED
+    // size, so fixing it field by field misses every one that inherits.
+    assert.match(css, /@media \(pointer: coarse\)/);
+    assert.match(css, /font-size: 16px;/);
+    // Not by forbidding pinch-zoom, which takes an accessibility affordance
+    // from everybody to spare us a layout problem.
+    assert.doesNotMatch(read("app/layout.tsx"), /maximum-scale|user-scalable/);
+  });
+
+  it("lets a group be edited after it is created, visibility included", () => {
+    const sheet = stripComments(read("features/messages/components/group-settings-sheet.tsx"));
+    const menu = stripComments(read("features/messages/components/thread-menu.tsx"));
+    // Creating a group asks for a name, description, picture and visibility.
+    // All four are editable afterwards, in one place, or the create form is
+    // asking questions the product can never revisit.
+    assert.match(menu, /label="Group settings"/);
+    assert.match(sheet, /useUpdateGroup\(conversation\.id\)/);
+    // VISIBILITY IS OWNER-ONLY — an admin may edit the rest and gets a 403
+    // here, so the control is gated on the ROLE, never on "can edit".
+    assert.match(sheet, /conversation\.viewerRole === "owner"/);
+    assert.match(sheet, /disabled=\{!isOwner\}/);
+    // Public carries BOTH promises: listed where people browse, and joinable.
+    // The older, weaker wording understated what actually happens.
+    assert.match(sheet, /Anyone can find this group and join it/);
+    assert.doesNotMatch(sheet, /Anyone with the link can join/);
+    // Private is not "nobody gets in" — an invite link never consulted
+    // visibility, and going private does not revoke the ones already sent.
+    assert.match(sheet, /already have an invite link/);
+    // Only what changed is sent: an absent field is left alone, so saving a
+    // name must not carry a description nobody touched.
+    assert.match(sheet, /const changed = Object\.keys\(edit\)\.length > 0;/);
+  });
+
   it("defines a pal as a mutual follow, and lists them as rows", () => {
     const pals = stripComments(read("components/layout/your-pals.tsx"));
     const screen = stripComments(read("components/layout/pals-screen.tsx"));

@@ -18,6 +18,7 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
+import { GroupSettingsSheet } from "@/features/messages/components/group-settings-sheet";
 import { ShareSheet } from "@/components/ui/share-sheet";
 import { canMakeInvite, inviteUrl } from "@/features/messages/lib/invites";
 import { memberActions, viewerRole, type GroupRole } from "@/features/messages/lib/roles";
@@ -1835,6 +1836,7 @@ export function Thread({
   const [deleting, setDeleting] = useState(false);
   const removeChat = useDeleteConversation();
   const rename = useRenameGroup(conversation.id);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const leave = useLeaveGroup(conversation.id);
 
   /*
@@ -1976,7 +1978,7 @@ export function Thread({
               onAddMembers,
               onViewMembers: () => setMembersOpen(true),
               onShareInvite: canShareInvite ? shareInvite : undefined,
-              onRenameGroup: () => setRenaming(true),
+              onRenameGroup: () => setSettingsOpen(true),
               onLeaveGroup: me.data ? () => setLeaving(true) : undefined,
               onDeleteChat: () => setDeleting(true),
             }}
@@ -2075,6 +2077,17 @@ export function Thread({
           myRole={myRole}
         />
       )}
+
+      {/* EVERY FIELD CREATING A GROUP ASKS FOR, editable afterwards — name,
+          description, picture and visibility. It used to be the title alone,
+          so a group could be created public and never changed, or described
+          once and never again (ogazboiz: "inside a group there is suppose to
+          be a place where we can edit this settings"). */}
+      <GroupSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        conversation={conversation}
+      />
 
       {/* "Edit group title" — `PATCH /conversations/:id { title }`, owner only,
           which the service enforces. 80 characters is the contract's cap, so
