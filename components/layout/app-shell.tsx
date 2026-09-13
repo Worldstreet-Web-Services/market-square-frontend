@@ -1958,12 +1958,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <IconTopBell className="h-5 w-5" />
               {(unread.data?.notifications ?? 0) > 0 && (
+                /*
+                  A DOT, NOT A NUMBER, at this size.
+
+                  The node draws 7.58px carrying a "6", which works in Figma
+                  and not on a screen: the digit lands at about 5px, under any
+                  legibility floor, so what actually rendered was a purple
+                  blob that read as slightly too large rather than as a count
+                  (ogazboiz asked for it smaller). A dot is smaller AND says
+                  the one thing this badge can honestly say at 6px — that
+                  there is something unread.
+
+                  The COUNT is not lost: the link's own aria-label still
+                  announces "Notifications, N unread", and the number is on
+                  the page the badge leads to. The desktop bar keeps its digit
+                  at 9px, where it is marginally legible and the file draws it.
+                */
                 <span
                   aria-hidden
-                  className="absolute left-[17.05px] top-[7.58px] flex h-[7.58px] min-w-[7.58px] items-center justify-center rounded-full bg-[#9F5AFF] px-[1.5px] text-[5px] font-semibold leading-none text-white ring-[0.84px] ring-inset ring-[#0D0D0F]"
-                >
-                  {(unread.data?.notifications ?? 0) > 9 ? "9+" : unread.data?.notifications}
-                </span>
+                  className="absolute left-[18px] top-[7px] h-[6px] w-[6px] rounded-full bg-[#9F5AFF] ring-[0.84px] ring-inset ring-[#0D0D0F]"
+                />
               )}
             </Link>
 
