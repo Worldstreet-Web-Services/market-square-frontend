@@ -2387,6 +2387,22 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
   });
 
+  it("lets a phone reply by swiping, not only by knowing a trick", () => {
+    const thread = stripComments(read("features/messages/components/thread.tsx"));
+    // The reply disc is hidden on touch, so before this the only way to reply
+    // from a phone was a 450ms hold on a control you could not see.
+    assert.match(thread, /swipeCommits\(dx, dy\)/);
+    assert.match(thread, /onReply\(message\)/);
+    // Committed on RELEASE. A reply firing under a moving finger is one
+    // nobody chose to send.
+    assert.match(thread, /const endDrag = /);
+    assert.doesNotMatch(thread, /moveDrag[\s\S]{0,200}onReply\(/, "a reply fires mid-drag");
+    // The thread's main gesture is scrolling: vertical stays the browser's.
+    assert.match(thread, /touch-pan-y/);
+    // The long-press path is not replaced — both reach the same action.
+    assert.match(thread, /startPress\(event\);/);
+  });
+
   it("never lets iOS zoom the page when somebody taps a field", () => {
     const css = read("app/globals.css");
     // Safari zooms any field whose computed size is under 16px and leaves the

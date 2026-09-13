@@ -36,6 +36,7 @@ import { canSendMessage, type OutgoingMessage } from "@/features/messages/lib/ou
 import { useVoiceRecorder } from "@/features/messages/hooks/use-voice-recorder";
 import { formatElapsed } from "@/features/messages/lib/voice-recorder";
 import { dotScale } from "@/lib/voice-levels";
+import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
 import { uploadFile } from "@/lib/api/upload";
 import { IconArrowLeft, IconHouses, IconMic, IconPlay, IconPause, IconQuote, IconX } from "@/components/ui/icons";
 import {
@@ -1233,6 +1234,54 @@ function MessageRow({
     if (!from) return;
     if (Math.hypot(event.clientX - from.x, event.clientY - from.y) > 10) cancelPress();
   };
+  /*
+    SWIPE RIGHT TO REPLY — the gesture people already have in their hands.
+
+    Replying on a phone was otherwise a two-step move nobody would guess:
+    hold for 450ms, wait for a 28px disc, hit it. That disc is hidden on touch
+    the rest of the time, so there was effectively no reply from a phone
+    unless you already knew the trick. The long-press still works; this is the
+    one-motion version beside it.
+
+    A drag is only claimed once it is CLEARLY horizontal (see lib/swipe-reply),
+    because the thread's main gesture is scrolling and a finger travelling up
+    always drifts sideways. Claiming that drift would make the thread feel
+    stuck — much worse than a reply that needs a second try. `touch-pan-y` on
+    the row leaves vertical scrolling to the browser and takes only the
+    horizontal axis.
+  */
+  const [dragX, setDragX] = useState(0);
+  const dragFrom = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+
+  const startDrag = (event: React.PointerEvent) => {
+    if (event.pointerType === "mouse" || removed) return;
+    dragFrom.current = { x: event.clientX, y: event.clientY };
+    dragging.current = false;
+  };
+  const moveDrag = (event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (!from) return;
+    const dx = event.clientX - from.x;
+    const dy = event.clientY - from.y;
+    if (!isReplySwipe(dx, dy)) return;
+    dragging.current = true;
+    setDragX(swipeOffset(dx));
+  };
+  const endDrag = (event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (from && dragging.current) {
+      const dx = event.clientX - from.x;
+      const dy = event.clientY - from.y;
+      // Committed on RELEASE, never mid-drag: a reply that fired under a
+      // moving finger would be one nobody chose to send.
+      if (swipeCommits(dx, dy)) onReply(message);
+    }
+    dragFrom.current = null;
+    dragging.current = false;
+    setDragX(0);
+  };
+
   const startPress = (event: React.PointerEvent) => {
     if (event.pointerType === "mouse" || removed) return;
     cancelPress();
@@ -1288,22 +1337,53 @@ function MessageRow({
   return (
     <div
       data-message-id={message.id}
-      onPointerDown={startPress}
-      onPointerUp={cancelPress}
-      onPointerCancel={cancelPress}
-      onPointerMove={movePress}
+      onPointerDown={(event) => {
+        startPress(event);
+        startDrag(event);
+      }}
+      onPointerUp={(event) => {
+        cancelPress();
+        endDrag(event);
+      }}
+      onPointerCancel={(event) => {
+        cancelPress();
+        endDrag(event);
+      }}
+      onPointerMove={(event) => {
+        movePress(event);
+        moveDrag(event);
+      }}
+      style={{ transform: dragX ? `translateX(${dragX}px)` : undefined }}
       onContextMenu={(event) => {
         // A long-press that reached the OS menu is the one gesture we mean.
         if (revealed) event.preventDefault();
       }}
       className={cn(
-        "group flex items-end gap-2 rounded-2xl transition-colors duration-700",
+        "group relative flex touch-pan-y items-end gap-2 rounded-2xl transition-colors duration-700",
+        // No transition WHILE dragging or the row lags the finger; springing
+        // back afterwards is the part that should be animated.
+        !dragX && "transition-transform",
         mine ? "justify-end" : "justify-start",
         // The flash after a quote tap: a wash on the whole row, which is the
         // one thing that reads the same behind a white and a purple bubble.
         flash && "-mx-2 bg-white/[0.08] px-2 duration-150"
       )}
     >
+      {/* The glyph WhatsApp shows while you pull: it sits just off the row's
+          left edge and rides in as the row travels, so it is revealed by the
+          drag rather than drawn on top of it. It fades in across the trigger
+          distance, which makes the fade itself the signal that letting go now
+          will reply. `aria-hidden` — the reply is announced by the control it
+          leads to, and a screen-reader user is not dragging anything. */}
+      {dragX > 0 && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -left-9 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white"
+          style={{ opacity: Math.min(1, dragX / SWIPE_TRIGGER) }}
+        >
+          <IconQuote className="h-3.5 w-3.5" />
+        </span>
+      )}
       {group && !mine && (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10">
           <Avatar
