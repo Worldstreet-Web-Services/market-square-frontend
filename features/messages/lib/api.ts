@@ -203,6 +203,35 @@ export async function updateHouseNotificationSettings(
  * group named after the edit and described before it. Only the title is sent
  * here, so an absent description is left alone rather than cleared.
  */
+export interface GroupEdit {
+  title?: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  visibility?: "public" | "private";
+}
+
+/**
+ * Edit a group — PATCH /conversations/:id, one call for every field.
+ *
+ * Only what the caller passes is sent. An absent key is LEFT ALONE, which is
+ * why description and imageUrl are `string | null` rather than optional
+ * strings: null is "clear this", undefined is "do not touch it", and
+ * collapsing the two would make saving a title quietly erase a description.
+ *
+ * VISIBILITY IS OWNER-ONLY, stricter than the rest of this endpoint. An admin
+ * may edit title, description and picture and gets a 403 on visibility, so a
+ * caller must gate the control on role === "owner" rather than on "may edit
+ * this form" — otherwise an admin is shown a switch that always fails.
+ */
+export async function updateGroup(conversationId: string, edit: GroupEdit) {
+  return msApi.patch<unknown>(`/conversations/${conversationId}`, {
+    ...(edit.title !== undefined ? { title: edit.title.trim() } : {}),
+    ...(edit.description !== undefined ? { description: edit.description } : {}),
+    ...(edit.imageUrl !== undefined ? { imageUrl: edit.imageUrl } : {}),
+    ...(edit.visibility !== undefined ? { visibility: edit.visibility } : {}),
+  });
+}
+
 export async function renameGroup(conversationId: string, title: string) {
   return msApi.patch<unknown>(`/conversations/${conversationId}`, { title: title.trim() });
 }

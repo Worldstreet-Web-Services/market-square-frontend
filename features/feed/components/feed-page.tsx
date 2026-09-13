@@ -82,6 +82,21 @@ const EMPTY_COPY: Record<Lane, LaneEmpty> = {
     body: "This lane shows posts from people you follow. Follow a few and it fills up.",
     cta: { label: "Find people to follow", href: "/spotlight" },
   },
+  /*
+    A PAL IS A MUTUAL FOLLOW, so this lane is empty until somebody follows
+    back — which on a young graph is most people, most of the time. The copy
+    therefore has to explain the RULE rather than blame the reader: "nobody
+    here yet" reads as a dead product, while naming the condition tells them
+    exactly what would change it.
+
+    It sends them to the deck rather than to a directory. Following someone is
+    only half a pal; the deck is where the other half gets asked for.
+  */
+  pals: {
+    title: "No pals yet",
+    body: "A pal is someone you follow who follows you back. Their posts land here once they do.",
+    cta: { label: "Meet people", href: "/" },
+  },
   live: {
     title: "Nobody's live right now",
     body: "Live streams and scheduled sessions appear here the moment they start.",
@@ -258,7 +273,21 @@ export function FeedPage({
   // `/pals` reads the FOLLOWING lane — the people the reader decided about in
   // the deck above it are who the list is for. Home and /feed stay on
   // for-you.
-  const lane: Lane = mode === "pals" ? "following" : "for-you";
+  /*
+    /pals READS THE PALS LANE NOW, NOT THE FOLLOWING ONE.
+
+    A follow is one-directional, so following a single loud stranger put them
+    all over the surface that is meant to be your people — which is why /pals
+    read as Home with different SQL. The pals lane is the MUTUAL follows:
+    somebody had to choose you back.
+
+    Empty is a legitimate answer and is deliberately NOT widened back to the
+    following lane here, for the same reason the service refuses to widen it:
+    a surface that quietly returns something other than what its name says is
+    worse than one that returns nothing. The people sections above it — who is
+    in a room, and your pals — carry the page while the graph is thin.
+  */
+  const lane: Lane = mode === "pals" ? "pals" : "for-you";
   // Home has no topic row any more (ogazboiz, 2026-09-12), so its lane is
   // never narrowed and `topics` stays the module-level empty list; `/pals`'
   // row narrows the following lane through the prop. A topic narrows what is

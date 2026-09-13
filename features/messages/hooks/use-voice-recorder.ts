@@ -6,6 +6,7 @@ import {
   pickRecordingType,
   recordingFileName,
 } from "@/features/messages/lib/voice-recorder";
+import { pushLevel, rmsLevel } from "@/lib/voice-levels";
 
 /**
  * Recording a voice note.
@@ -39,11 +40,24 @@ export function useVoiceRecorder() {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  /*
+    WHAT THE MICROPHONE IS ACTUALLY HEARING.
+
+    A pulsing dot and a clock both animate happily while the microphone is
+    muted, covered, or pointed at nothing — so the one question a person has
+    while recording ("is this getting me?") had no answer until playback. These
+    are measured levels, newest last. See lib/voice-levels.ts.
+  */
+  const [levels, setLevels] = useState<number[]>([]);
 
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const stream = useRef<MediaStream | null>(null);
   const ticker = useRef<ReturnType<typeof setInterval> | null>(null);
+  // The metering half, torn down by `release` with everything else.
+  const audioCtx = useRef<AudioContext | null>(null);
+  const analyser = useRef<AnalyserNode | null>(null);
+  const meter = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAt = useRef(0);
   // Set when the user cancels, so `onstop` knows to discard rather than
   // resolve — the recorder fires `stop` identically either way.
@@ -52,6 +66,15 @@ export function useVoiceRecorder() {
   const release = useCallback(() => {
     if (ticker.current) clearInterval(ticker.current);
     ticker.current = null;
+    // The meter goes first: it reads the analyser, and the analyser is about
+    // to be torn down with the context.
+    if (meter.current) clearInterval(meter.current);
+    meter.current = null;
+    analyser.current = null;
+    // An AudioContext left open holds the audio hardware awake, which is the
+    // same class of bug as a live track — see the note on tracks above.
+    void audioCtx.current?.close().catch(() => {});
+    audioCtx.current = null;
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
     recorder.current = null;
@@ -95,11 +118,49 @@ export function useVoiceRecorder() {
     startedAt.current = Date.now();
     media.start();
     setElapsed(0);
+    // Empty, not a row of silent bars: the waveform starts when the recording
+    // does, so the first bar arriving IS the confirmation that the microphone
+    // opened. A pre-filled row looks identical before and after that moment.
+    setLevels([]);
     setRecording(true);
     ticker.current = setInterval(
       () => setElapsed((Date.now() - startedAt.current) / 1000),
       250
     );
+
+    /*
+      THE METER. Best-effort, and deliberately so: if the Web Audio API is
+      missing or the context refuses to open, the note still records and sends
+      — the waveform is feedback, not the feature. A recorder that refused to
+      record because it could not draw would be the wrong trade.
+
+      80ms is ~12 frames a second. Fast enough that a syllable moves the row,
+      slow enough that it is not re-rendering a component on every frame.
+    */
+    try {
+      const Ctor = window.AudioContext ?? (window as unknown as {
+        webkitAudioContext?: typeof AudioContext;
+      }).webkitAudioContext;
+      if (Ctor && stream.current) {
+        const ctx = new Ctor();
+        audioCtx.current = ctx;
+        const node = ctx.createAnalyser();
+        // Small window: this is a loudness meter, not a spectrogram.
+        node.fftSize = 256;
+        ctx.createMediaStreamSource(stream.current).connect(node);
+        analyser.current = node;
+        const samples = new Uint8Array(node.fftSize);
+        meter.current = setInterval(() => {
+          const live = analyser.current;
+          if (!live) return;
+          live.getByteTimeDomainData(samples);
+          const level = rmsLevel(samples);
+          setLevels((previous) => pushLevel(previous, level));
+        }, 80);
+      }
+    } catch {
+      // No meter, still a recorder. See above.
+    }
     return true;
   }, []);
 
@@ -138,5 +199,14 @@ export function useVoiceRecorder() {
     setElapsed(0);
   }, [release]);
 
-  return { recording, elapsed, error, start, stop, cancel, clearError: () => setError(null) };
+  return {
+    recording,
+    elapsed,
+    levels,
+    error,
+    start,
+    stop,
+    cancel,
+    clearError: () => setError(null),
+  };
 }

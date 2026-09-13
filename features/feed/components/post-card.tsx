@@ -669,6 +669,20 @@ export function PostCard({
   const [replyOpen, setReplyOpen] = useState(false);
   const inlineRef = useRef<HTMLDivElement>(null);
   const onCommentTally = () => {
+    /*
+      A COMPACT CARD HAS NO INLINE FIELD TO REVEAL.
+
+      `InlineComment` is rendered only on the full card, so on a compact one
+      `inlineRef` is null, the height test fails, and the old fallback set
+      `replyOpen` — revealing a field that does not exist. Tapping the reply
+      count on Home's Post For You row therefore did nothing at all
+      (ogazboiz: "i cant be able to coment from here"). The sheet is not
+      compact-gated, so the compact card opens it directly.
+    */
+    if (compact) {
+      setCommentsOpen(true);
+      return;
+    }
     const box = inlineRef.current?.getBoundingClientRect();
     if (box && box.height > 0) setCommentsOpen(true);
     else setReplyOpen(true);

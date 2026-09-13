@@ -2215,13 +2215,22 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\]/);
     assert.match(row, /placeholder:text-\[#7A7A7A\]/);
     assert.match(row, /<IconTopSearch className="h-4 w-4 shrink-0 text-\[#6D6D6D\]" \/>/);
-    // 1295:142740: 67 wide at radius 36, padding 3/4/3/8, gear and caret 23
-    // apart, the file's GLASS matched to its render rather than a border.
-    assert.match(row, /"ws-glass-rim relative flex h-12 w-\[67px\] shrink-0 items-center gap-\[23px\] rounded-\[36px\] py-\[3px\] pl-1 pr-2",\n\s*open \? "bg-\[rgba\(159,90,255,0\.09\)\]" : "ws-glass-pill"/);
-    // Open, it is 1317:158078: the purple tint, purple gear and caret, caret up.
-    assert.match(row, /open \? "-scale-y-100 text-\[#9F65FD\]" : "text-white"/);
-    assert.match(row, /<IconHomeSettings className=\{cn\("h-6 w-6 shrink-0", open \? "text-\[#9F65FD\]" : "text-\[#D9D9D9\]"\)\} \/>/);
-    assert.doesNotMatch(row, /border-white\/\d+[^"]*w-\[67px\]|w-\[67px\][^"]*border/, "the pill drew a border the file does not");
+    /*
+      A 48 CIRCLE ON THE FIELD'S OWN EDGE, not the file's 67-wide pill.
+
+      Built literally it read badly and the reasons are measurable: a 23 gap
+      against a 24 gear (two things separated by the width of one of them), a
+      24 gear against a 4px hairline caret, and a glass rim disagreeing with
+      the field's crisp hairline 12px away. The caret carried nothing a gear
+      does not — the menu appearing is the open state, and aria-expanded says
+      so to anybody who cannot see it.
+    */
+    assert.match(row, /relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-\[0\.68px\]/);
+    // The same 0.68 hairline the field uses, so the pair reads as one.
+    assert.match(row, /border-white\/40/);
+    assert.match(row, /<IconHomeSettings className=\{cn\("h-5 w-5 shrink-0", open \? "text-\[#9F65FD\]" : "text-\[#D9D9D9\]"\)\} \/>/);
+    // The settings control draws no caret of its own any more.
+    assert.doesNotMatch(row, /-scale-y-100/, "the settings caret is back");
     // It opens EXPLORE SETTINGS (1317:158022) in RailMenu's own panel — not the
     // account menu any more (ogazboiz, 2026-09-12) — for everyone.
     assert.match(row, /import \{ RailMenu \} from "@\/components\/layout\/app-shell";/);
@@ -2387,22 +2396,92 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
   });
 
-  it("defines a pal as a mutual follow, and lists them as rows", () => {
-    const pals = stripComments(read("components/layout/your-pals.tsx"));
+  it("builds the phone top bar as node 1285:94852, with no search in it", () => {
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    // 72 = 16 + the node's 40 row + 16. It was 48 with the account on the
+    // LEFT and the mark floated to the middle; the node puts the lockup left
+    // and the account right, so the phone finally agrees with the desktop bar.
+    assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[72px\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
+    assert.match(read("app/globals.css"), /--ws-topbar-h: 72px;/);
+    // The node's own 100 x 40 lockup box and its 0.53 hairline.
+    // The box HUGS. The node fixes it at 100, but that is 100 at the FILE's
+    // type; ours renders wider, and a fixed width narrower than its content is
+    // exactly what wrapped the word under the mark. The lockup carries the
+    // `flex` too, because BrandLockup renders bare inline content by design
+    // and inline content wraps.
+    assert.match(shell, /flex h-10 shrink-0 items-center border-b-\[0\.53px\] border-white\/10/);
+    assert.match(shell, /<BrandLockup markHeight=\{24\} label="Square" className="flex" \/>/);
+    // THE SEARCH GLYPH THE NODE DRAWS IS DELIBERATELY ABSENT (ogazboiz: "use
+    // the header that they gave us but hide the search bar"), which also
+    // keeps search out of the chrome. Every column already has its own row.
+    assert.doesNotMatch(shell, /IconTopSearch/, "search came back into the chrome");
+    // The avatar MOVED SIDES but is still the door: the dock's sidebar
+    // control is md:grid, so on a phone this is the only way into the drawer.
+    assert.match(shell, /aria-label="Open menu"/);
+  });
+
+  it("lets a phone reply by swiping, not only by knowing a trick", () => {
+    const thread = stripComments(read("features/messages/components/thread.tsx"));
+    // The reply disc is hidden on touch, so before this the only way to reply
+    // from a phone was a 450ms hold on a control you could not see.
+    assert.match(thread, /swipeCommits\(dx, dy\)/);
+    assert.match(thread, /onReply\(message\)/);
+    // Committed on RELEASE. A reply firing under a moving finger is one
+    // nobody chose to send.
+    assert.match(thread, /const endDrag = /);
+    assert.doesNotMatch(thread, /moveDrag[\s\S]{0,200}onReply\(/, "a reply fires mid-drag");
+    // The thread's main gesture is scrolling: vertical stays the browser's.
+    assert.match(thread, /touch-pan-y/);
+    // The long-press path is not replaced — both reach the same action.
+    assert.match(thread, /startPress\(event\);/);
+  });
+
+  it("never lets iOS zoom the page when somebody taps a field", () => {
+    const css = read("app/globals.css");
+    // Safari zooms any field whose computed size is under 16px and leaves the
+    // reader zoomed in and scrolled sideways. The trigger is the COMPUTED
+    // size, so fixing it field by field misses every one that inherits.
+    assert.match(css, /@media \(pointer: coarse\)/);
+    assert.match(css, /font-size: 16px;/);
+    // Not by forbidding pinch-zoom, which takes an accessibility affordance
+    // from everybody to spare us a layout problem.
+    assert.doesNotMatch(read("app/layout.tsx"), /maximum-scale|user-scalable/);
+  });
+
+  it("lets a group be edited after it is created, visibility included", () => {
+    const sheet = stripComments(read("features/messages/components/group-settings-sheet.tsx"));
+    const menu = stripComments(read("features/messages/components/thread-menu.tsx"));
+    // Creating a group asks for a name, description, picture and visibility.
+    // All four are editable afterwards, in one place, or the create form is
+    // asking questions the product can never revisit.
+    assert.match(menu, /label="Group settings"/);
+    assert.match(sheet, /useUpdateGroup\(conversation\.id\)/);
+    // VISIBILITY IS OWNER-ONLY — an admin may edit the rest and gets a 403
+    // here, so the control is gated on the ROLE, never on "can edit".
+    assert.match(sheet, /conversation\.viewerRole === "owner"/);
+    assert.match(sheet, /disabled=\{!isOwner\}/);
+    // Public carries BOTH promises: listed where people browse, and joinable.
+    // The older, weaker wording understated what actually happens.
+    assert.match(sheet, /Anyone can find this group and join it/);
+    assert.doesNotMatch(sheet, /Anyone with the link can join/);
+    // Private is not "nobody gets in" — an invite link never consulted
+    // visibility, and going private does not revoke the ones already sent.
+    assert.match(sheet, /already have an invite link/);
+    // Only what changed is sent: an absent field is left alone, so saving a
+    // name must not carry a description nobody touched.
+    assert.match(sheet, /const changed = Object\.keys\(edit\)\.length > 0;/);
+  });
+
+  it("does not answer the same question twice on /pals", () => {
     const screen = stripComments(read("components/layout/pals-screen.tsx"));
-    // A follow is about content; a pal is about a person. One-way does not count.
-    assert.match(pals, /mutualPals\(followingItems, followerItems\)/);
-    assert.match(screen, /<YourPals \/>/);
-    // ROWS, not cards: a stack of profile cards is the swipe grammar and reads
-    // as dating on a people page. The deck keeps the cards, and it is on Home.
-    assert.match(pals, /<PersonRow key=\{profile\.id\} profile=\{profile\} \/>/);
-    assert.doesNotMatch(pals, /<PalCard/, "the pals list grew swipe cards");
-    // An incomplete intersection silently drops real pals, which reads to the
-    // user as "they unfollowed me" — so no count is shown while it is partial.
-    assert.match(pals, /palsArePartial\(/);
-    assert.match(pals, /\{!partial && <span/);
-    // No pals yet renders nothing at all, never an empty accusing heading.
-    assert.match(pals, /if \(pals\.length === 0\) return null;/);
+    const feed = stripComments(read("features/feed/components/feed-page.tsx"));
+    // The FEED is scoped to mutual follows server-side, so a client-side
+    // "Your pals" list above it was answering a question the page already
+    // answered one section further down.
+    assert.match(feed, /mode === "pals" \? "pals" : "for-you"/);
+    assert.doesNotMatch(screen, /<YourPals/, "the duplicate pals list is back");
+    // What stays is the part a timeline structurally cannot say.
+    assert.match(screen, /<PalsInRooms \/>/);
   });
 
   it("leads Pals with who is in a room, and renders nothing when nobody is", () => {

@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
 import { PalsInRooms } from "@/components/layout/pals-in-rooms";
-import { YourPals } from "@/components/layout/your-pals";
 import { POST_SLOTS } from "@/components/layout/home-screen";
 import { FeedPage, StoriesRow, TopicTabs, type TopicTab } from "@/features/feed";
 import { useTopics } from "@/features/discovery";
@@ -101,7 +100,13 @@ export function PalsScreen() {
             <div className="md:ml-[13px] md:w-[574px]">
               <HomeTopRow value={query} onChange={setQuery} />
             </div>
-            {/* 1331:21802 — from the same 13, 51 under the row (60 -> 111).
+            {/* 1331:21802 — from the same 13. The node steps 51 under the row
+                (60 -> 111), and this page walks 28 instead: the node draws the
+                stories DIRECTLY under the search row, and the head now carries
+                a rooms rail between them, so three 51s stacked read as a hole
+                rather than as rhythm (ogazboiz: "too many space below the
+                search bar and status"). The whitespace around a frame is ours
+                — see CLAUDE.md; the CONTENT box is the file's.
                 The node's strip is 596 wide and its overlay clips it at 618;
                 the 600 column clips it at its own edge and the strip scrolls. */}
             {/* YOUR PEOPLE, RIGHT NOW — above everything they have posted.
@@ -109,21 +114,28 @@ export function PalsScreen() {
                 wrote earlier. It renders NOTHING when nobody is in a room,
                 which on a young graph is most of the time, so the rows below
                 must read as complete without it. */}
+            {/* No margin on the wrapper: the rail is empty most of the time,
+                and a wrapper that keeps its gap when its child renders nothing
+                leaves a hole under the search row. The section carries its
+                own 51 — see pals-in-rooms.tsx. */}
             {!searching && authenticated && (
-              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
+              <div className="md:ml-[13px] md:w-[calc(100%-13px)]">
                 <PalsInRooms />
               </div>
             )}
-            {/* Then the people themselves — mutual follows only. This is what
-                makes /pals different from Home: there, following one loud
-                account puts them everywhere; here somebody chose you back. */}
+            {/* NO "YOUR PALS" LIST HERE ANY MORE.
+
+                It was a client-side intersection of following and followers,
+                built before the service had a pals lane. It does now, and the
+                FEED below is already scoped to mutual follows server-side — so
+                the list was answering a question the page had already answered,
+                one section further down (ogazboiz: "your pals section ...
+                should not be able to show").
+
+                What is left is the part a timeline cannot say: who is in a room
+                right now, above. */}
             {!searching && authenticated && (
-              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
-                <YourPals />
-              </div>
-            )}
-            {!searching && authenticated && (
-              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
+              <div className="mt-[28px] md:ml-[13px] md:w-[calc(100%-13px)]">
                 <StoriesRow />
               </div>
             )}
@@ -131,7 +143,7 @@ export function PalsScreen() {
                 strip (or under the search row, signed out), as wide as the
                 stories so its rule ends where they do. */}
             {!searching && (
-              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
+              <div className="mt-[28px] md:ml-[13px] md:w-[calc(100%-13px)]">
                 <TopicTabs tabs={tabs} active={topic} onSelect={setTopic} />
               </div>
             )}

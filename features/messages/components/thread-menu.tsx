@@ -27,7 +27,9 @@ import {
  *
  * Live, each on a real route:
  *   Add / Invite gist partners  POST   /conversations/:id/members
- *   Edit group title            PATCH  /conversations/:id
+ *   Group settings              PATCH  /conversations/:id (name, description,
+ *                               picture, visibility — the same fields creating
+ *                               a group asks for)
  *   View members                GET    /conversations/:id/members
  *   Leave group                 DELETE /conversations/:id/members/:me
  *   Share invite link           POST   /conversations/:id/invites, then the
@@ -130,7 +132,7 @@ export function ThreadMenu({
       {(canEdit ?? isOwner) && (
         <MenuRow
           icon={<IconProfileAdd className="h-4 w-4" />}
-          label="Edit group title"
+          label="Group settings"
           onClick={actions.onRenameGroup}
         />
       )}
