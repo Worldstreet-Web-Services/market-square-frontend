@@ -112,6 +112,17 @@ export async function setProfileOrgBadge(profileId: string, badge: OrgBadge) {
   return ProfileSchema.parse(await msApi.post(`/admin/profiles/${profileId}/org-badge`, { badge }));
 }
 
+/**
+ * Seat a profile at the head of the people directory, or clear its seat
+ * (`rank: null`). The service refuses a rank somebody else holds with a 409
+ * naming them — surfaced as-is, because "clear theirs first" is the answer.
+ */
+export async function setProfileFeaturedRank(profileId: string, rank: number | null) {
+  return ProfileSchema.parse(
+    await msApi.post(`/admin/profiles/${encodeURIComponent(profileId)}/featured-rank`, { rank })
+  );
+}
+
 export async function resolveReport(id: string, action: "remove" | "dismiss") {
   return msApi.post<unknown>(`/admin/reports/${id}/resolve`, { action });
 }
