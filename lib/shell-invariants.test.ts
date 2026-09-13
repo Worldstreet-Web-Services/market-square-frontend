@@ -2215,13 +2215,22 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\]/);
     assert.match(row, /placeholder:text-\[#7A7A7A\]/);
     assert.match(row, /<IconTopSearch className="h-4 w-4 shrink-0 text-\[#6D6D6D\]" \/>/);
-    // 1295:142740: 67 wide at radius 36, padding 3/4/3/8, gear and caret 23
-    // apart, the file's GLASS matched to its render rather than a border.
-    assert.match(row, /"ws-glass-rim relative flex h-12 w-\[67px\] shrink-0 items-center gap-\[23px\] rounded-\[36px\] py-\[3px\] pl-1 pr-2",\n\s*open \? "bg-\[rgba\(159,90,255,0\.09\)\]" : "ws-glass-pill"/);
-    // Open, it is 1317:158078: the purple tint, purple gear and caret, caret up.
-    assert.match(row, /open \? "-scale-y-100 text-\[#9F65FD\]" : "text-white"/);
-    assert.match(row, /<IconHomeSettings className=\{cn\("h-6 w-6 shrink-0", open \? "text-\[#9F65FD\]" : "text-\[#D9D9D9\]"\)\} \/>/);
-    assert.doesNotMatch(row, /border-white\/\d+[^"]*w-\[67px\]|w-\[67px\][^"]*border/, "the pill drew a border the file does not");
+    /*
+      A 48 CIRCLE ON THE FIELD'S OWN EDGE, not the file's 67-wide pill.
+
+      Built literally it read badly and the reasons are measurable: a 23 gap
+      against a 24 gear (two things separated by the width of one of them), a
+      24 gear against a 4px hairline caret, and a glass rim disagreeing with
+      the field's crisp hairline 12px away. The caret carried nothing a gear
+      does not — the menu appearing is the open state, and aria-expanded says
+      so to anybody who cannot see it.
+    */
+    assert.match(row, /relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-\[0\.68px\]/);
+    // The same 0.68 hairline the field uses, so the pair reads as one.
+    assert.match(row, /border-white\/40/);
+    assert.match(row, /<IconHomeSettings className=\{cn\("h-5 w-5 shrink-0", open \? "text-\[#9F65FD\]" : "text-\[#D9D9D9\]"\)\} \/>/);
+    // The settings control draws no caret of its own any more.
+    assert.doesNotMatch(row, /-scale-y-100/, "the settings caret is back");
     // It opens EXPLORE SETTINGS (1317:158022) in RailMenu's own panel — not the
     // account menu any more (ogazboiz, 2026-09-12) — for everyone.
     assert.match(row, /import \{ RailMenu \} from "@\/components\/layout\/app-shell";/);

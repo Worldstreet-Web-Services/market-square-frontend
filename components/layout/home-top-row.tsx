@@ -7,7 +7,7 @@ import { RailMenu } from "@/components/layout/app-shell";
 import { ExploreSettingsMenu } from "@/components/layout/explore-settings-menu";
 import { LocationSheet } from "@/components/layout/location-sheet";
 import { IconHomeFilter, IconHomeFilterCaret, IconHomeSettings } from "@/components/ui/home-icons";
-import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
+import { IconTopSearch } from "@/components/ui/topbar-icons";
 
 /**
  * THE HEAD OF HOME'S COLUMN — node 1295:142736, the 2026-09-12 Home.
@@ -37,7 +37,25 @@ import { IconTopCaret, IconTopSearch } from "@/components/ui/topbar-icons";
  * 16px space at the node's tracking, measured in Chrome — rather than as a
  * character, so the copy is the words and nothing else.
  *
- * ─── THE PILL'S GLASS ────────────────────────────────────────────────────────
+ * ─── WHY IT IS A CIRCLE, AND NOT THE FILE'S 67-WIDE PILL WITH A CARET ───────
+ * The file draws a 67 x 48 pill holding a 24px gear and an 8 x 4 caret 23
+ * apart. Built literally it reads badly, and the reasons are measurable:
+ *
+ *   · the GAP is 23 against a gear of 24 — two elements separated by the
+ *     width of one of them read as two unrelated things sharing a box;
+ *   · a 24px gear against a 4px hairline caret is about three times the
+ *     visual weight on one side, with a hole between;
+ *   · its glass rim disagreed with the search field's crisp 0.68 hairline
+ *     12px away.
+ *
+ * So it is a 48 circle carrying the gear alone, on the field's own edge.
+ * The caret carried no information a gear does not already carry — the menu
+ * appearing IS the open state, and `aria-expanded` still says so to anybody
+ * who cannot see it. ogazboiz asked for this directly ("that dropdown icon it
+ * doesnt look good at all"); the sizes are a judgement, and CLAUDE.md is
+ * explicit that the frame gives the content box while the whitespace is ours.
+ *
+ * ─── THE FILTER PILL'S GLASS ─────────────────────────────────────────────────
  * The node says `#7A7A7A` at 5% with Figma's GLASS effect, whose parameters the
  * API does not publish. The RENDER is the truth: an opaque near-black lens
  * (17 at the top edge to 30 at the bottom, on a 0–255 scale) with a rim that is
@@ -99,16 +117,18 @@ export function HomeTopRow({
   const pill = (open: boolean) => (
     <span
       className={cn(
-        "ws-glass-rim relative flex h-12 w-[67px] shrink-0 items-center gap-[23px] rounded-[36px] py-[3px] pl-1 pr-2",
-        open ? "bg-[rgba(159,90,255,0.09)]" : "ws-glass-pill"
+        "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-[0.68px] transition-colors",
+        // The FIELD's edge, not a second one. The two controls sit 12px apart
+        // and used to carry different treatments — the field a crisp 0.68
+        // hairline, this a glass rim matched to a Figma render, which on a
+        // flat dark ground reads soft and muddy beside it. Two edges that
+        // disagree at that distance is what the eye catches first.
+        open
+          ? "border-white/40 bg-[rgba(159,90,255,0.09)]"
+          : "border-white/40 hover:border-white/55"
       )}
     >
-      <IconHomeSettings className={cn("h-6 w-6 shrink-0", open ? "text-[#9F65FD]" : "text-[#D9D9D9]")} />
-      {/* 8 x 4 in the file; the export is 11 x 7 because the 2.29 stroke is
-          centred on the path, so it overflows the box it is laid out at. */}
-      <span className={cn("relative h-[4px] w-[8px] shrink-0", open ? "-scale-y-100 text-[#9F65FD]" : "text-white")}>
-        <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
-      </span>
+      <IconHomeSettings className={cn("h-5 w-5 shrink-0", open ? "text-[#9F65FD]" : "text-[#D9D9D9]")} />
     </span>
   );
 
