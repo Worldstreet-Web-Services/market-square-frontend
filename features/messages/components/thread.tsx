@@ -34,6 +34,7 @@ import { formatBytes, type UploadResult } from "@/lib/api/upload";
 import { canSendMessage, type OutgoingMessage } from "@/features/messages/lib/outgoing";
 import { useVoiceRecorder } from "@/features/messages/hooks/use-voice-recorder";
 import { formatElapsed } from "@/features/messages/lib/voice-recorder";
+import { dotScale } from "@/lib/voice-levels";
 import { uploadFile } from "@/lib/api/upload";
 import { IconArrowLeft, IconHouses, IconMic, IconPlay, IconPause, IconQuote, IconX } from "@/components/ui/icons";
 import {
@@ -1558,26 +1559,71 @@ function Composer({
       )}
 
       {voice.recording && (
-        // Replaces nothing — it sits above the row, so the draft and the
-        // attachment chip stay visible while you talk.
-        <div className="mb-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
-          <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#e84a4a]" />
-          <p className="flex-1 text-[12px] text-white/80" role="status">
-            Recording <span className="tnum text-white/50">{formatElapsed(voice.elapsed)}</span>
-          </p>
+        /*
+          WHAT THE MICROPHONE IS HEARING, WHILE YOU TALK.
+
+          This was a pulsing dot, a clock and two text buttons. All of it
+          animated exactly the same whether the microphone was picking you up
+          or muted, so the only question a person has while recording — "is
+          this getting me?" — went unanswered until playback (ogazboiz: "the ux
+          experince is bad").
+
+          The bars are MEASURED, not decorative. They share the geometry of the
+          playback bars (34, floor 0.25) so a note being recorded and the same
+          note played back read as one object — but the playback bars are
+          hashed from the message id and say so in capitals, while these come
+          from the analyser. Drawing a hashed waveform here would dance
+          identically over a muted microphone, which is worse than the dot it
+          replaces: it looks like feedback and is not.
+
+          It sits ABOVE the composer row, so the draft and any attachment stay
+          visible while you talk.
+        */
+        <div className="mb-2 flex items-center gap-3 rounded-[18px] border border-white/10 bg-white/[0.04] px-3 py-2.5">
+          <span aria-hidden className="flex h-8 min-w-0 flex-1 items-center gap-[2px]">
+            {voice.levels.map((level, index) => (
+              <span
+                key={index}
+                className="flex-1 rounded-full bg-[linear-gradient(180deg,#9F65FD_0%,#5B05E6_100%)] transition-[height] duration-75"
+                style={{ height: `${Math.round(dotScale(level) * 100)}%` }}
+              />
+            ))}
+          </span>
+
+          {/* The clock is the accessible statement; the bars are decoration to
+              a screen reader, which cannot see them move. */}
+          <span className="tnum shrink-0 text-[12px] text-white/60" role="status">
+            {formatElapsed(voice.elapsed)}
+          </span>
+
+          {/* Stop and discard. A square, because that is what a stop control
+              is everywhere else, and NOT styled as the primary action — the
+              destructive one should never be the easiest to hit. */}
           <button
             type="button"
             onClick={voice.cancel}
-            className="ws-press rounded-full px-2 py-1 text-[12px] font-semibold text-white/60 transition-colors hover:text-white"
+            aria-label="Stop and discard recording"
+            className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/15"
           >
-            Cancel
+            <span aria-hidden className="h-3 w-3 rounded-[2px] bg-current" />
           </button>
+
+          {/* Send. The violet ramp, as every other primary action on Square. */}
           <button
             type="button"
             onClick={() => void finishVoice()}
-            className="ws-press rounded-full bg-white px-3 py-1 text-[12px] font-semibold text-black"
+            aria-label="Send voice note"
+            className="ws-btn-create ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
           >
-            Done
+            <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none">
+              <path
+                d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </div>
       )}
