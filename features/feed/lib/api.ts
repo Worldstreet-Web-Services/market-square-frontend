@@ -1,6 +1,5 @@
 "use client";
 
-import { z } from "zod";
 import { msApi } from "@/lib/api/service";
 import { uploadFile } from "@/lib/api/upload";
 import { noteMediaContract } from "@/lib/media-contract";
@@ -13,7 +12,6 @@ import {
   CommentsPageSchema,
   FeedPageSchema,
   LikeResultSchema,
-  MentionSchema,
   RepostResultSchema,
   PostSchema,
   type Lane,
@@ -117,11 +115,9 @@ export async function uploadPostMedia(file: File) {
   return uploadFile(file);
 }
 
-const MentionSearchSchema = z.object({ items: z.array(MentionSchema) });
-
-export async function searchMentions(query: string) {
-  return MentionSearchSchema.parse(await msApi.get("/mentions/search", { q: query.trim(), limit: 8 }));
-}
+// The mention search is shared with the chat composer and lives in
+// `lib/api/mentions.ts`; re-exported so this slice's imports are unchanged.
+export { searchMentions } from "@/lib/api/mentions";
 
 // Arkmarks. POST saves, DELETE unsaves; GET /me/bookmarks pages the saved
 // posts back as feed items, so the Arkmarks tab reuses the timeline shape.

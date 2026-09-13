@@ -22,7 +22,6 @@ import {
   likePost,
   repostPost,
   uploadPostMedia,
-  searchMentions,
   reportTarget,
   deletePost,
   editPost,
@@ -316,14 +315,8 @@ export function useUploadPostMedia() {
   });
 }
 
-export function useMentionSearch(query: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ["ms", "mentions", query.trim()],
-    queryFn: () => searchMentions(query),
-    enabled,
-    staleTime: 30_000,
-  });
-}
+// Shared with the chat composer; lives in `hooks/use-mention-search.ts`.
+export { useMentionSearch } from "@/hooks/use-mention-search";
 
 /**
  * Optimistic like.

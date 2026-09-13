@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ProfileSchema } from "@/lib/api/schemas";
+import { MentionSchema, ProfileSchema } from "@/lib/api/schemas";
 import { flattenMessageMedia } from "@/features/messages/lib/message-media";
 
 /** `ConversationMessage` in the served spec. Note it carries NO `sender` — a
@@ -74,6 +74,37 @@ export const MessageSchema = z.object({
   // The spec's enum. `catch` keeps an unknown future state from blanking the
   // thread; a removed message keeps its row but not its body.
   status: z.enum(["active", "removed"]).optional().default("active").catch("active"),
+  /**
+   * The message this one answers — ONE level, no threading: a reply to a
+   * reply points at that message. The service embeds the original's
+   * 140-character excerpt and its media kind so the quote draws without a
+   * second lookup; `deleted` is always false today (conversation messages
+   * cannot be deleted yet) but the shape is the contract's, and a true value
+   * renders "Message deleted".
+   *
+   * Optional with a null default AND `catch(null)`: a service without the
+   * field, or a malformed one, draws no quote rather than blanking the thread.
+   */
+  replyTo: z
+    .object({
+      id: z.string(),
+      senderId: z.string().optional().default(""),
+      text: z.string().nullable().optional().default(null),
+      media: z
+        .object({ kind: z.string().nullable().optional().default(null) })
+        .nullable()
+        .optional()
+        .default(null),
+      deleted: z.boolean().optional().default(false),
+    })
+    .nullable()
+    .optional()
+    .default(null)
+    .catch(null),
+  /** Who the sender @-mentioned — the same `Mention` rows a post carries, and
+      the same renderer (`PostText`) turns them into links. Empty on a service
+      that has not shipped them. */
+  mentions: z.array(MentionSchema).optional().default([]).catch([]),
   createdAt: z.string(),
 }).transform((message) => ({
   ...message,
@@ -274,6 +305,8 @@ export type { OutgoingMessage } from "@/features/messages/lib/outgoing";
 
 export type Conversation = z.infer<typeof ConversationSchema>;
 export type Message = z.infer<typeof MessageSchema>;
+/** The quoted original on a reply, as the service embeds it. */
+export type MessageReplyTo = NonNullable<Message["replyTo"]>;
 export type ConversationMember = z.infer<typeof ConversationMemberSchema>;
 
 /** The service caps a message body at 2000 characters. */

@@ -24,6 +24,7 @@ import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { toast } from "sonner";
 import { useChatOpen } from "@/lib/chat-open-store";
+import { useRoomBar } from "@/lib/room-bar-store";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { setSidebarHidden, useSidebarHidden } from "@/lib/sidebar-pref-store";
 import { useAuth } from "@/hooks/use-auth";
@@ -1736,6 +1737,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const guest = ready && !authenticated;
   // The desktop rail is drawn: flagged on, signed in, and not tucked away.
   const railOn = MARKET_FLAGS.sidebar && !guest && !sidebarHidden;
+  // A live gist room's OWN bottom bar is up, standing where the phone's dock
+  // would (1285:93076). Phones only; see lib/room-bar-store.ts.
+  const roomBar = useRoomBar();
 
   /*
     ONE SOURCE OF VIEWPORT TRUTH, published for the whole shell.
@@ -1843,7 +1847,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     /* `data-rail` tells the STYLESHEET whether a dock is on screen, so
        `--ws-nav-h` can be 0 where there is none — see globals.css. Every
        consumer of that variable then agrees without knowing about the rail. */
-    <div className="min-h-dvh w-full overflow-x-clip bg-chrome" data-rail={railOn ? "on" : "off"}>
+    <div
+      className="min-h-dvh w-full overflow-x-clip bg-chrome"
+      data-rail={railOn ? "on" : "off"}
+      /* `data-dock` is the same idea for the PHONE: the stylesheet zeroes
+         `--ws-nav-h` under md while a room's own bar has taken the dock's
+         place, so nothing pads its foot for a dock that is not drawn. */
+      data-dock={roomBar ? "room-bar" : "on"}
+    >
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*
         GUESTS GET NO SIDEBAR.
@@ -2064,7 +2075,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             rail's benefit, leaving no navigation at all. Found by turning the
             switch on and looking, which is the only way that shows up.
           */
-          className={railOn ? "md:hidden" : undefined}
+          /*
+            And NOT on a phone while a live gist room's own bar is up: the room
+            pins an 80px bar to the bottom edge (1285:93076) and two bars
+            stacked at the foot of a 390px window is what mounting both would
+            be. Rung by the bar itself (lib/room-bar-store.ts), not by the
+            route — a room that has not opened draws no bar and keeps its dock.
+            Desktop keeps whatever standing the rail gives it — `railOn` alone
+            decides that.
+          */
+          className={cn(railOn && "md:hidden", roomBar && "max-md:hidden")}
           onCompose={canCompose && !guest ? () => setComposeOpen(true) : undefined}
           // The way back, on desktop only: the dock is standing in for a rail
           // the reader tucked away, so it carries the switch that restores it.
