@@ -8,6 +8,7 @@ import { IconSearch } from "@/components/ui/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import type { OrgBadge, Profile } from "@/lib/api/schemas";
+import { FEATURED_RANK_MAX, FEATURED_RANK_MIN, featuredLabel, parseFeaturedRank } from "@/lib/featured-rank";
 import { DateTimeField } from "@/components/ui/date-time-field";
 import {
   notDeployed,
@@ -22,6 +23,7 @@ import {
   useResolveVerificationRequest,
   useRoleApplications,
   useSetProfileOrgBadge,
+  useSetProfileFeaturedRank,
   useSetProfileVerification,
   useVerificationRequests,
 } from "@/features/admin/hooks/use-admin";
@@ -369,7 +371,22 @@ export function ReportsSection() {
 function PersonRow({ profile }: { profile: Profile }) {
   const setBadge = useSetProfileOrgBadge();
   const setVerified = useSetProfileVerification();
+  const setFeatured = useSetProfileFeaturedRank();
   const verified = profile.verification === "verified";
+  /*
+    FEATURED — the seat at the head of every "Make some friends" deck
+    (lib/featured-rank.ts). Typed as a number and set on Enter or the button;
+    the service refuses a seat somebody else holds with a sentence naming
+    them, which the hook shows verbatim. "Clear" empties the seat. Nothing
+    here draws differently for a featured person elsewhere in the product:
+    the order IS the feature.
+  */
+  const [rankDraft, setRankDraft] = useState("");
+  const rankValue = parseFeaturedRank(rankDraft);
+  const submitRank = () => {
+    if (rankValue === null || setFeatured.isPending) return;
+    setFeatured.mutate({ profileId: profile.id, rank: rankValue }, { onSuccess: () => setRankDraft("") });
+  };
 
   return (
     <Row>
@@ -404,6 +421,43 @@ function PersonRow({ profile }: { profile: Profile }) {
               pending={setBadge.isPending}
               onPick={(badge: OrgBadge) => setBadge.mutate({ profileId: profile.id, badge })}
             />
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className={cn("text-[11px]", profile.featuredRank === null ? "text-meta" : "font-semibold text-accent")}>
+            {featuredLabel(profile.featuredRank)}
+          </span>
+          <span className="ml-auto flex items-center gap-1.5" role="group" aria-label="Featured rank">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={FEATURED_RANK_MIN}
+              max={FEATURED_RANK_MAX}
+              value={rankDraft}
+              onChange={(event) => setRankDraft(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && submitRank()}
+              placeholder="#"
+              aria-label={`Featured rank for ${profile.displayName || profile.username}`}
+              className="h-7 w-14 rounded-full border border-white/[0.12] bg-white/[0.04] px-2.5 text-center text-[12px] text-body outline-none placeholder:text-meta focus:border-accent/60"
+            />
+            <button
+              type="button"
+              disabled={rankValue === null || setFeatured.isPending}
+              onClick={submitRank}
+              className="ws-press rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20 disabled:cursor-default disabled:opacity-40"
+            >
+              {profile.featuredRank === null ? "Feature" : "Move"}
+            </button>
+            {profile.featuredRank !== null && (
+              <button
+                type="button"
+                disabled={setFeatured.isPending}
+                onClick={() => setFeatured.mutate({ profileId: profile.id, rank: null })}
+                className="rounded-full px-2 py-1 text-[11px] text-meta transition-colors hover:text-body disabled:opacity-40"
+              >
+                Clear
+              </button>
+            )}
           </span>
         </div>
       </div>
