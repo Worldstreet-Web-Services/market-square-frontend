@@ -1959,25 +1959,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <IconTopBell className="h-5 w-5" />
               {(unread.data?.notifications ?? 0) > 0 && (
                 /*
-                  A DOT, NOT A NUMBER, at this size.
+                  THE COUNT, AT A SIZE THAT CAN ACTUALLY CARRY ONE.
 
-                  The node draws 7.58px carrying a "6", which works in Figma
-                  and not on a screen: the digit lands at about 5px, under any
-                  legibility floor, so what actually rendered was a purple
-                  blob that read as slightly too large rather than as a count
-                  (ogazboiz asked for it smaller). A dot is smaller AND says
-                  the one thing this badge can honestly say at 6px — that
-                  there is something unread.
+                  The node draws this badge at 7.58px with a "6" inside it,
+                  which works on a Figma canvas and not on a screen: the digit
+                  lands near 5px, under any legibility floor. It rendered as a
+                  purple blob rather than a number.
 
-                  The COUNT is not lost: the link's own aria-label still
-                  announces "Notifications, N unread", and the number is on
-                  the page the badge leads to. The desktop bar keeps its digit
-                  at 9px, where it is marginally legible and the file draws it.
+                  Shrinking it (what was asked first) made that worse, and
+                  dropping the digit for a dot lost the count — which was not
+                  mine to decide. So the badge grew instead: 14px with 9px
+                  semibold type is the smallest that stays readable on a phone,
+                  and it is what every mobile badge of this kind actually
+                  measures. It is a deliberate deviation from the node, and the
+                  reason is that the node's own value cannot render its own
+                  content.
+
+                  Past nine it reads "9+" and grows sideways, rather than
+                  shrinking the type back below legibility to fit.
                 */
                 <span
                   aria-hidden
-                  className="absolute left-[18px] top-[7px] h-[6px] w-[6px] rounded-full bg-[#9F5AFF] ring-[0.84px] ring-inset ring-[#0D0D0F]"
-                />
+                  className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-[#9F5AFF] px-[3px] text-[9px] font-semibold leading-none text-white ring-2 ring-[#121214]"
+                >
+                  {(unread.data?.notifications ?? 0) > 9 ? "9+" : unread.data?.notifications}
+                </span>
               )}
             </Link>
 
