@@ -948,7 +948,8 @@ body {
      Published as a variable because the fixed create button tracks the same
      edge — measured from the viewport it would sit out in the gutter. */
   --ws-shell-max: 1265px;
-  --ws-topbar-h: 48px;
+  /* The phone bar is node 1285:94852: 16 + a 40 row + 16. It was 48. */
+  --ws-topbar-h: 72px;
   /* The desktop breadcrumb bar's height — 76px in node 15:1302, and 0 on a
      phone where the bar is `hidden md:flex`.
      Published because one surface has to subtract it: Messages is the only

@@ -1899,56 +1899,85 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           />
         )}
 
-        {/* Mobile top strip: the account on the left, the mark in the MIDDLE,
-          and the two things worth reaching from anywhere on the right.
-          The avatar is the door to everything the sidebar holds on desktop —
-          it opens the same drawer the "More" tab does, so the account you are
-          posting as is both visible and the way in, which is the arrangement
-          every phone app in this category uses. */}
-        <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-12 items-center px-4 md:hidden">
-          <button
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-            aria-expanded={menuOpen}
-            className="ws-press -ml-1 shrink-0 rounded-full p-1"
-          >
-            {authenticated ? (
-              <Avatar
-                name={me.data?.displayName ?? "Me"}
-                seed={me.data?.id}
-                src={me.data?.avatarUrl}
-                size={28}
-              />
-            ) : (
-              <IconUser className="h-6 w-6 text-meta" />
-            )}
-          </button>
+        {/*
+          THE PHONE'S TOP BAR — node 1285:94852, built to the node.
 
-          {/* THE RAIL'S LOCKUP, NOT `/logo.svg`. The strip used to wear the
-            baked wordmark — the mark with "Market Square" stacked beside it —
-            while the rail wore the assembled one, so the app had two logos.
-            `BrandLockup` is the rail's, and this is the same call it makes.
+          It used to be 48 tall with the ACCOUNT on the left and the mark
+          floated to the middle. The node is 72 (16 + a 40 row + 16), puts the
+          lockup on the left and the account on the right, and so finally
+          agrees with the desktop bar instead of mirroring it.
 
-            THE MARK IS 28, which is the size the rail itself falls back to when
-            it has no room (the icon state above): the strip is 48 tall, so the
-            file's 44.6 would sit hairline-to-hairline, and 28 leaves the same
-            10px of air top and bottom that the 28px avatar beside it does.
+          The avatar still opens the DRAWER, which is the one thing that could
+          not change: the dock's sidebar control is `md:grid`, so on a phone
+          this is the only door to everything the sidebar holds. It moved
+          sides; it did not stop being the door.
 
-            Absolutely centred, so the mark sits on the middle of the SCREEN
-            rather than the middle of whatever space the two sides leave —
-            those change with the live pill and the signed-in state. Centred on
-            BOTH axes rather than leaning on an abspos child's static position,
-            which is the flex container's alignment and not a promise. */}
-          <BrandLockup
-            markHeight={28}
-            label="Square"
-            className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2"
-          />
+          THE SEARCH GLYPH THE NODE DRAWS IS DELIBERATELY NOT HERE. ogazboiz:
+          "use the header that they gave us but hide the search bar" — which
+          also keeps the rule that search stays out of the chrome. Every
+          column surface already carries its own search row, and Home answers
+          the query itself, so a second entry point in the bar would be a
+          third place to type one string.
 
-          <div className="ml-auto flex items-center gap-3">
-            {broadcast.live && (
-              <OnAirPill streamId={broadcast.streamId} compact />
-            )}
+          The lockup sits in the node's own 100 x 40 box, which carries a
+          0.53 hairline under it at 10% white — a detail that is easy to read
+          as a rendering fault rather than a border, so: it is in the file.
+        */}
+        <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-[72px] items-center justify-between border-b border-white/10 px-6 md:hidden">
+          <span className="flex h-10 w-[100px] shrink-0 items-center border-b-[0.53px] border-white/10">
+            <BrandLockup markHeight={24} label="Square" />
+          </span>
+
+          <div className="flex shrink-0 items-center gap-4">
+            {broadcast.live && <OnAirPill streamId={broadcast.streamId} compact />}
+
+            {/* 32 disc, the bell at 20.21, and the count at (17.05, 7.58) in
+                the file's #9F5AFF inside a #0D0D0F ring. Past nine it reads
+                "9+" and grows sideways rather than shrinking the type. */}
+            <Link
+              href="/notifications"
+              aria-label={
+                (unread.data?.notifications ?? 0) > 0
+                  ? `Notifications, ${unread.data?.notifications} unread`
+                  : "Notifications"
+              }
+              className="ws-press ws-glass-rim relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#0A0A0C_0%,#121214_50%,#1A1A1C_100%)] text-[#DCDCDC] transition-colors hover:text-white"
+            >
+              <IconTopBell className="h-5 w-5" />
+              {(unread.data?.notifications ?? 0) > 0 && (
+                <span
+                  aria-hidden
+                  className="absolute left-[17.05px] top-[7.58px] flex h-[7.58px] min-w-[7.58px] items-center justify-center rounded-full bg-[#9F5AFF] px-[1.5px] text-[5px] font-semibold leading-none text-white ring-[0.84px] ring-inset ring-[#0D0D0F]"
+                >
+                  {(unread.data?.notifications ?? 0) > 9 ? "9+" : unread.data?.notifications}
+                </span>
+              )}
+            </Link>
+
+            {/* "PF" — the avatar and the caret 8 apart. The caret is laid out
+                at the file's 8 x 4 and its 11 x 7 export overflows that box by
+                the stroke, so it is pulled back a pixel, exactly as the
+                desktop bar does it. */}
+            <button
+              onClick={() => setMenuOpen(true)}
+              aria-label="Open menu"
+              aria-expanded={menuOpen}
+              className="ws-press flex shrink-0 items-center gap-2"
+            >
+              {authenticated ? (
+                <Avatar
+                  name={me.data?.displayName ?? "Me"}
+                  seed={me.data?.id}
+                  src={me.data?.avatarUrl}
+                  size={32}
+                />
+              ) : (
+                <IconUser className="h-8 w-8 text-meta" />
+              )}
+              <span className="relative h-[4px] w-[8px] shrink-0 text-white">
+                <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
+              </span>
+            </button>
           </div>
         </div>
 

@@ -2396,6 +2396,24 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
   });
 
+  it("builds the phone top bar as node 1285:94852, with no search in it", () => {
+    const shell = stripComments(read("components/layout/app-shell.tsx"));
+    // 72 = 16 + the node's 40 row + 16. It was 48 with the account on the
+    // LEFT and the mark floated to the middle; the node puts the lockup left
+    // and the account right, so the phone finally agrees with the desktop bar.
+    assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[72px\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
+    assert.match(read("app/globals.css"), /--ws-topbar-h: 72px;/);
+    // The node's own 100 x 40 lockup box and its 0.53 hairline.
+    assert.match(shell, /flex h-10 w-\[100px\] shrink-0 items-center border-b-\[0\.53px\] border-white\/10/);
+    // THE SEARCH GLYPH THE NODE DRAWS IS DELIBERATELY ABSENT (ogazboiz: "use
+    // the header that they gave us but hide the search bar"), which also
+    // keeps search out of the chrome. Every column already has its own row.
+    assert.doesNotMatch(shell, /IconTopSearch/, "search came back into the chrome");
+    // The avatar MOVED SIDES but is still the door: the dock's sidebar
+    // control is md:grid, so on a phone this is the only way into the drawer.
+    assert.match(shell, /aria-label="Open menu"/);
+  });
+
   it("lets a phone reply by swiping, not only by knowing a trick", () => {
     const thread = stripComments(read("features/messages/components/thread.tsx"));
     // The reply disc is hidden on touch, so before this the only way to reply
