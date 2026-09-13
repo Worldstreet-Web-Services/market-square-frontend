@@ -2404,7 +2404,13 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[72px\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
     assert.match(read("app/globals.css"), /--ws-topbar-h: 72px;/);
     // The node's own 100 x 40 lockup box and its 0.53 hairline.
-    assert.match(shell, /flex h-10 w-\[100px\] shrink-0 items-center border-b-\[0\.53px\] border-white\/10/);
+    // The box HUGS. The node fixes it at 100, but that is 100 at the FILE's
+    // type; ours renders wider, and a fixed width narrower than its content is
+    // exactly what wrapped the word under the mark. The lockup carries the
+    // `flex` too, because BrandLockup renders bare inline content by design
+    // and inline content wraps.
+    assert.match(shell, /flex h-10 shrink-0 items-center border-b-\[0\.53px\] border-white\/10/);
+    assert.match(shell, /<BrandLockup markHeight=\{24\} label="Square" className="flex" \/>/);
     // THE SEARCH GLYPH THE NODE DRAWS IS DELIBERATELY ABSENT (ogazboiz: "use
     // the header that they gave us but hide the search bar"), which also
     // keeps search out of the chrome. Every column already has its own row.

@@ -1924,8 +1924,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           as a rendering fault rather than a border, so: it is in the file.
         */}
         <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-[72px] items-center justify-between border-b border-white/10 px-6 md:hidden">
-          <span className="flex h-10 w-[100px] shrink-0 items-center border-b-[0.53px] border-white/10">
-            <BrandLockup markHeight={24} label="Square" />
+          {/*
+            `flex` belongs on the LOCKUP, not on this box. BrandLockup renders
+            a bare span carrying `items-center` and nothing else — the caller
+            supplies the display — so without it the mark and the word are
+            inline content, and inline content WRAPS. Pinned to the node's 100
+            they did exactly that, and the word dropped under the mark.
+
+            The width hugs for the same reason. The node fixes the box at 100,
+            but that is 100 at the FILE's type; ours renders wider, and a fixed
+            width narrower than its own content is what forced the break. When
+            the box and the render disagree the PNG wins, and the PNG is one
+            line. The 0.53 hairline then follows the lockup's real width.
+          */}
+          <span className="flex h-10 shrink-0 items-center border-b-[0.53px] border-white/10">
+            <BrandLockup markHeight={24} label="Square" className="flex" />
           </span>
 
           <div className="flex shrink-0 items-center gap-4">
