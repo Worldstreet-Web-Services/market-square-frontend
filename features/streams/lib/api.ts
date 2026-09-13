@@ -186,8 +186,15 @@ export async function sendHeartbeat(streamId: string, sessionId: string | null, 
   );
 }
 
-export async function fetchChat(streamId: string) {
-  return ChatSchema.parse(await msApi.get(`/streams/${streamId}/chat`));
+/**
+ * One page of chat, NEWEST FIRST with a cursor that walks further back —
+ * the service's history shape. Callers draw it through `oldestFirst`
+ * (lib/chat-order.ts); nothing renders a page in the order it arrives.
+ */
+export async function fetchChat(streamId: string, cursor?: string | null) {
+  return ChatSchema.parse(
+    await msApi.get(`/streams/${streamId}/chat`, cursor ? { cursor } : undefined)
+  );
 }
 
 export async function sendChat(streamId: string, text: string) {

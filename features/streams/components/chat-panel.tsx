@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { errorCode } from "@/lib/api/envelope";
@@ -16,7 +16,8 @@ import {
   IconRoomSend,
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
-import { useChat, useSendChat } from "@/features/streams/hooks/use-chat";
+import { useChat, useChatHistory, useSendChat } from "@/features/streams/hooks/use-chat";
+import { OLDER_THRESHOLD_PX, oldestFirst, preservedScrollTop } from "@/lib/chat-order";
 import type { ChatMessage, Stream } from "@/features/streams/lib/types";
 
 export interface ChatModeration {
@@ -122,6 +123,21 @@ export function ChatPanel({
 }) {
   const chat = useChat(stream.id, stream.status === "live");
   const send = useSendChat(stream.id);
+  /*
+    THE LIST IS READ OLDEST → NEWEST, and the page arrives the other way round.
+    The polled head is one page, newest first; the history behind it is
+    fetched only when the reader scrolls up for it (`useChatHistory`). Both go
+    through `oldestFirst`, which merges, de-duplicates and orders them, so the
+    newest message is always the LAST item and the pin-to-bottom logic below
+    tracks the right end. Drawn in page order, the newest sat at the top and
+    the list could not scroll (ogazboiz, 2026-09-13).
+  */
+  const history = useChatHistory(stream.id, chat.data?.nextCursor ?? null, stream.status === "live");
+  const ordered = useMemo(
+    () => oldestFirst(...(history.data?.pages.map((page) => page.items) ?? []), chat.data?.items ?? []),
+    [history.data, chat.data]
+  );
+  const hasOlder = history.data ? history.hasNextPage : (chat.data?.nextCursor ?? null) !== null;
   const gate = useGate();
   const [draft, setDraft] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -144,8 +160,7 @@ export function ChatPanel({
    * and offered on a pill instead — the reader decides when to rejoin the live
    * edge, which is exactly the affordance TikTok and YouTube put there.
    */
-  const items = chat.data?.items;
-  const lastId = items && items.length > 0 ? items[items.length - 1].id : null;
+  const lastId = ordered.length > 0 ? ordered[ordered.length - 1].id : null;
   // Pinning is a REF, not state: nothing renders from it, and the arrival
   // effect must not re-run when it flips — scrolling up would otherwise be the
   // thing that triggers a scroll. `behind` is the only part that renders.
@@ -179,13 +194,30 @@ export function ChatPanel({
   // 48px of slack, not equality: a smooth scroll lands a fraction short, and
   // sub-pixel heights mean `scrollTop + clientHeight === scrollHeight` is a
   // condition that is briefly false while sitting still at the bottom.
+  // OLDER MESSAGES LOAD FROM THE TOP. Nearing the top edge asks for the next
+  // page back; the list's height before the page lands is remembered so the
+  // reader stays on the line they were reading once it is inserted above.
+  const heightBeforeOlder = useRef<{ top: number; height: number } | null>(null);
+  const { fetchNextPage, isFetchingNextPage } = history;
   const handleScroll = () => {
     const node = listRef.current;
     if (!node) return;
     const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
     pinnedRef.current = atBottom;
     if (atBottom) setBehind(0);
+    if (node.scrollTop < OLDER_THRESHOLD_PX && hasOlder && !isFetchingNextPage && !heightBeforeOlder.current) {
+      heightBeforeOlder.current = { top: node.scrollTop, height: node.scrollHeight };
+      void fetchNextPage();
+    }
   };
+  const firstId = ordered.length > 0 ? ordered[0].id : null;
+  useLayoutEffect(() => {
+    const node = listRef.current;
+    const before = heightBeforeOlder.current;
+    if (!node || !before) return;
+    node.scrollTop = preservedScrollTop(before.top, before.height, node.scrollHeight);
+    heightBeforeOlder.current = null;
+  }, [firstId]);
 
   const gatedByTicket =
     stream.visibility === "ticketed" && !stream.myTicket && errorCode(send.error) === "FORBIDDEN";
@@ -235,7 +267,11 @@ export function ChatPanel({
                 // the empty space ABOVE them. A top-aligned list left a short
                 // conversation stranded at the top of a 900px panel with a
                 // field far below it, which is not how any chat reads.
-                "flex flex-col justify-end gap-4 px-4 py-4"
+                // The anchoring is an AUTO MARGIN on a spacer (below), not
+                // `justify-end`: a flex column justified to its end pushes its
+                // overflow above the scroll origin where no scrollbar reaches
+                // it, which is why a full chat could not scroll at all.
+                "flex flex-col gap-4 px-4 py-4"
               : "px-3 py-3"
         )}
       >
@@ -289,15 +325,19 @@ export function ChatPanel({
             </li>
           ))}
 
+        {room && <li aria-hidden className="mt-auto shrink-0" />}
+        {room && isFetchingNextPage && (
+          <li className="flex justify-center py-1 text-xs text-body/60">Loading earlier messages…</li>
+        )}
         {room
-          ? chat.data?.items.map((message) => (
+          ? ordered.map((message) => (
               <RoomBubble
                 key={message.id}
                 message={message}
                 isHost={message.authorId === stream.ownerId}
               />
             ))
-          : chat.data?.items.map((message) => (
+          : ordered.map((message) => (
             <li
               key={message.id}
               className={cn(
