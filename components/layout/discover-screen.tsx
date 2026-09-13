@@ -73,10 +73,16 @@ export function DiscoverScreen() {
     re-sort of one loaded page would make page 1 look ordered while page 2
     contradicted it.
 
-    `filter` is matched over the pages already loaded, because `GET /profiles`
-    accepts no facet parameters at all. That is a stopgap and it is labelled as
-    one on the surface itself; `lib/people-filters.ts` carries the contract
-    check and the exact list of what the backend still owes.
+    `filter` is split, and the split is NOT "everything is client-side". Place
+    and gender are real query parameters the route answers (`city`, `region`,
+    `country`, `gender`), so those narrow the whole directory. Only `role` and
+    `verification` are matched over the pages already loaded — legitimately,
+    since every row carries both, so a filtered page is short but never wrong
+    and paging tops it up. `lib/people-filters.ts` carries the contract and
+    marks which clauses are which.
+
+    This used to claim the route "accepts no facet parameters at all", which
+    was false while the call below already sent three of them.
 
     Both seed from the URL so a filtered directory is a link somebody can send.
   */

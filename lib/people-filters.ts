@@ -3,13 +3,20 @@
  *
  * ─── THE CONTRACT, CHECKED FIRST ─────────────────────────────────────────────
  * `GET /profiles` (api.tsionark.com and localhost:8080, identical documents)
- * accepts exactly four parameters: `q`, `sort` (`followers` | `recent`),
- * `cursor`, `limit`. `PublicProfile` carries: id, username, displayName, bio,
- * avatarUrl, role, verification, orgBadge, followerCount, followingCount,
- * isFollowing.
+ * accepts TEN parameters, verified against the served spec on 2026-09-13:
+ * `q`, `sort`, `city`, `region`, `country`, `gender`, `excludeFollowing`,
+ * `withMutualFollowers`, `cursor`, `limit`.
  *
- * There is NO location field, NO gender field, and no query parameter for
- * either. So the honest split is:
+ * THIS BLOCK USED TO SAY THE OPPOSITE — "there is NO location field, NO gender
+ * field, and no query parameter for either" — while contradicting itself ten
+ * lines later, where it correctly described `city`, `region` and `gender` as
+ * server-side. Both halves could not be true, and the false half was read as
+ * the truth: it is why somebody reported to ogazboiz that the gender filter
+ * only narrowed a loaded page. It does not. The route has always answered it.
+ * A stale comment that is wrong about a CONTRACT is worse than no comment,
+ * because the next reader trusts it instead of the spec.
+ *
+ * So the honest split is:
  *
  *   SERVER-SIDE, real   `q` (free text) and `sort` — the directory route owns
  *                       both, and a paged list is never re-sorted here.
