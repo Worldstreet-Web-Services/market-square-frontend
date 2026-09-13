@@ -2387,6 +2387,24 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
   });
 
+  it("defines a pal as a mutual follow, and lists them as rows", () => {
+    const pals = stripComments(read("components/layout/your-pals.tsx"));
+    const screen = stripComments(read("components/layout/pals-screen.tsx"));
+    // A follow is about content; a pal is about a person. One-way does not count.
+    assert.match(pals, /mutualPals\(followingItems, followerItems\)/);
+    assert.match(screen, /<YourPals \/>/);
+    // ROWS, not cards: a stack of profile cards is the swipe grammar and reads
+    // as dating on a people page. The deck keeps the cards, and it is on Home.
+    assert.match(pals, /<PersonRow key=\{profile\.id\} profile=\{profile\} \/>/);
+    assert.doesNotMatch(pals, /<PalCard/, "the pals list grew swipe cards");
+    // An incomplete intersection silently drops real pals, which reads to the
+    // user as "they unfollowed me" — so no count is shown while it is partial.
+    assert.match(pals, /palsArePartial\(/);
+    assert.match(pals, /\{!partial && <span/);
+    // No pals yet renders nothing at all, never an empty accusing heading.
+    assert.match(pals, /if \(pals\.length === 0\) return null;/);
+  });
+
   it("leads Pals with who is in a room, and renders nothing when nobody is", () => {
     const rail = stripComments(read("components/layout/pals-in-rooms.tsx"));
     const pals = stripComments(read("components/layout/pals-screen.tsx"));

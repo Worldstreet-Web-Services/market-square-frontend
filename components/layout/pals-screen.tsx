@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
 import { PalsInRooms } from "@/components/layout/pals-in-rooms";
+import { YourPals } from "@/components/layout/your-pals";
 import { POST_SLOTS } from "@/components/layout/home-screen";
 import { FeedPage, StoriesRow, TopicTabs, type TopicTab } from "@/features/feed";
 import { useTopics } from "@/features/discovery";
@@ -111,6 +112,14 @@ export function PalsScreen() {
             {!searching && authenticated && (
               <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
                 <PalsInRooms />
+              </div>
+            )}
+            {/* Then the people themselves — mutual follows only. This is what
+                makes /pals different from Home: there, following one loud
+                account puts them everywhere; here somebody chose you back. */}
+            {!searching && authenticated && (
+              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
+                <YourPals />
               </div>
             )}
             {!searching && authenticated && (
