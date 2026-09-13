@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
 import { PalsInRooms } from "@/components/layout/pals-in-rooms";
-import { YourPals } from "@/components/layout/your-pals";
 import { POST_SLOTS } from "@/components/layout/home-screen";
 import { FeedPage, StoriesRow, TopicTabs, type TopicTab } from "@/features/feed";
 import { useTopics } from "@/features/discovery";
@@ -114,14 +113,17 @@ export function PalsScreen() {
                 <PalsInRooms />
               </div>
             )}
-            {/* Then the people themselves — mutual follows only. This is what
-                makes /pals different from Home: there, following one loud
-                account puts them everywhere; here somebody chose you back. */}
-            {!searching && authenticated && (
-              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
-                <YourPals />
-              </div>
-            )}
+            {/* NO "YOUR PALS" LIST HERE ANY MORE.
+
+                It was a client-side intersection of following and followers,
+                built before the service had a pals lane. It does now, and the
+                FEED below is already scoped to mutual follows server-side — so
+                the list was answering a question the page had already answered,
+                one section further down (ogazboiz: "your pals section ...
+                should not be able to show").
+
+                What is left is the part a timeline cannot say: who is in a room
+                right now, above. */}
             {!searching && authenticated && (
               <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
                 <StoriesRow />
