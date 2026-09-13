@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
+import { PalsInRooms } from "@/components/layout/pals-in-rooms";
 import { POST_SLOTS } from "@/components/layout/home-screen";
 import { FeedPage, StoriesRow, TopicTabs, type TopicTab } from "@/features/feed";
 import { useTopics } from "@/features/discovery";
@@ -102,6 +103,16 @@ export function PalsScreen() {
             {/* 1331:21802 — from the same 13, 51 under the row (60 -> 111).
                 The node's strip is 596 wide and its overlay clips it at 618;
                 the 600 column clips it at its own edge and the strip scrolls. */}
+            {/* YOUR PEOPLE, RIGHT NOW — above everything they have posted.
+                A people page leads with who is around, not with what they
+                wrote earlier. It renders NOTHING when nobody is in a room,
+                which on a young graph is most of the time, so the rows below
+                must read as complete without it. */}
+            {!searching && authenticated && (
+              <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
+                <PalsInRooms />
+              </div>
+            )}
             {!searching && authenticated && (
               <div className="mt-[51px] md:ml-[13px] md:w-[calc(100%-13px)]">
                 <StoriesRow />

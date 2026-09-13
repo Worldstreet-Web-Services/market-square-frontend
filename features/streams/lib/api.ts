@@ -18,6 +18,7 @@ import {
   SpeakerRequestListSchema,
   SpeakerRequestSchema,
   StreamByCodeSchema,
+  FollowingRoomsSchema,
   StreamListSchema,
   StreamSchema,
   StreamReactionSchema,
@@ -238,6 +239,17 @@ export async function goLive(streamId: string) {
 
 export async function endStream(streamId: string) {
   return StreamSchema.parse(await msApi.post(`/streams/${streamId}/end`));
+}
+
+/**
+ * The people you follow who are in a room RIGHT NOW.
+ *
+ * Authed: it is a statement about the caller's own graph. A 404 means the
+ * route is not deployed, which the hook turns into silence rather than an
+ * error — an absent rail is the correct rendering of "nobody is around".
+ */
+export async function fetchFollowingRooms() {
+  return FollowingRoomsSchema.parse(await msApi.authedGet("/me/following/rooms"));
 }
 
 export async function fetchMyTickets() {

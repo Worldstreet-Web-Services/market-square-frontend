@@ -2387,6 +2387,23 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
   });
 
+  it("leads Pals with who is in a room, and renders nothing when nobody is", () => {
+    const rail = stripComments(read("components/layout/pals-in-rooms.tsx"));
+    const pals = stripComments(read("components/layout/pals-screen.tsx"));
+    // The one thing a people page can say that a timeline cannot.
+    assert.match(rail, /useFollowingRooms\(\)/);
+    assert.match(pals, /<PalsInRooms \/>/);
+    // THE EMPTY STATE IS NO RAIL. A card announcing that nobody is around
+    // advertises a dead product, and on a young graph this is the common case.
+    // Not-deployed, signed-out, loading and genuinely-empty all render alike.
+    assert.match(rail, /if \(rooms\.unavailable \|\| rooms\.isPending \|\| rooms\.isError\) return null;/);
+    assert.match(rail, /if \(items\.length === 0\) return null;/);
+    assert.doesNotMatch(rail, /EmptyState|nobody|No one|Nothing here/i, "the rail grew an empty state");
+    // An absent viewer count is never drawn as a fabricated zero.
+    assert.match(rail, /room\.viewerCount !== null/);
+    assert.doesNotMatch(rail, /peakViewers/, "a peak is not a live audience");
+  });
+
   it("puts the partners card under Coming Soon, on phones only", () => {
     const feed = stripComments(read("features/feed/components/feed-page.tsx"));
     const home = stripComments(read("components/layout/home-screen.tsx"));
