@@ -26,6 +26,7 @@ import {
   resolveRoleApplication,
   resolveVerificationRequest,
   setProfileOrgBadge,
+  setProfileFeaturedRank,
   setProfileVerification,
 } from "@/features/admin/lib/api";
 import type {
@@ -258,6 +259,25 @@ export function useSetProfileOrgBadge() {
     onError: (error) => toast.error(errorMessage(error, "Couldn't update the badge.")),
     onSettled: () => {
       client.invalidateQueries({ queryKey: ["ms", "admin"] });
+      invalidateIdentitySurfaces(client);
+    },
+  });
+}
+
+export function useSetProfileFeaturedRank() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ profileId, rank }: { profileId: string; rank: number | null }) =>
+      setProfileFeaturedRank(profileId, rank),
+    onSuccess: (_profile, { rank }) =>
+      toast.success(rank === null ? "No longer featured" : `Featured at #${rank}`),
+    // The 409 carries the holder's name ("Rank 1 is held by … — clear it
+    // first"); that sentence is the instruction, so it is shown verbatim.
+    onError: (error) => toast.error(errorMessage(error, "Couldn't update the featured rank.")),
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "admin"] });
+      // The directory's order is what changed: every deck reads it.
+      client.invalidateQueries({ queryKey: ["ms", "people"] });
       invalidateIdentitySurfaces(client);
     },
   });

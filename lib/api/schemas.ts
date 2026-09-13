@@ -62,6 +62,14 @@ const RawProfileSchema = z.object({
   role: RoleSchema,
   verification: VerificationSchema,
   orgBadge: OrgBadgeSchema.optional().default(null),
+  /**
+   * The operator-set seat at the head of the people directory (rank 1 leads;
+   * null = not featured) — see lib/featured-rank.ts. Optional with a null
+   * default, the forward-compatible shape `orgBadge` uses. Presentation reads
+   * nothing from it: a featured card is an ordinary card, the ORDER is the
+   * feature, and the admin panel is the one place it is shown and set.
+   */
+  featuredRank: z.number().int().nullable().optional().default(null),
   // Set by the service on GET /me for operator accounts. Presentation only —
   // every /admin route is enforced server-side, so hiding the UI is a courtesy
   // to non-admins, never the access control.
