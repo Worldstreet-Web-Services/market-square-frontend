@@ -690,6 +690,36 @@ function LiveHouse({
   const rosterRef = useRef<HTMLDivElement | null>(null);
 
   /*
+    THE ROOM FITS THE SCREEN FROM `xl` — measured, not assumed.
+
+    Its height used to be `100dvh - header`, and the page scrolled by exactly
+    one dock: the shell reserves the dock's row under every route, and it
+    also draws an announcement band above the route when there is one. Any
+    fixed subtraction is wrong the moment the chrome above changes, so the
+    room measures where its own top edge lands and takes the rest of the
+    viewport less the dock's row (`--ws-nav-h`). Re-measured on resize and
+    whenever the document reflows (a band appearing, the header changing).
+    The value is a CSS variable on the element so the sum stays in CSS.
+  */
+  const roomRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = roomRef.current;
+    if (!el) return;
+    const measure = () => {
+      const top = Math.max(0, Math.round(el.getBoundingClientRect().top + window.scrollY));
+      el.style.setProperty("--ws-room-top", `${top}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.documentElement);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  /*
     BRING IT INTO VIEW WHERE THE THIRD COLUMN IS NOT A COLUMN.
 
     From `xl` the roster takes the chat's column and is already on screen, so
@@ -1201,6 +1231,7 @@ function LiveHouse({
       own rail, and cramming it makes both unusable.
     */
     <main
+      ref={roomRef}
       aria-label={houseTopic(stream)}
       /* `bg-chrome` (#0f0f0f) is the file's own frame fill, not `ws-wash`.
          The wash paints pure #000 with a radial highlight, which made the
@@ -1211,8 +1242,14 @@ function LiveHouse({
       /* The phone reserves its OWN bar's 80 (1285:93076) plus the home
          indicator — the shell's dock is gone on this route below `md` and
          `--ws-nav-h` is 0 there (lib/dock-surfaces.ts). From `md` the
-         floating pill's clearance, as before. */
-      className="flex w-full flex-col bg-chrome pb-[calc(80px+env(safe-area-inset-bottom,0px))] md:pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
+         floating pill's clearance, as before.
+         FROM `xl` THE ROOM FITS THE SCREEN: the viewport less its own
+         measured top edge (`--ws-room-top`, see the effect above — the
+         header plus whatever band the shell draws) and less the dock's row
+         (`--ws-nav-h`), which the shell reserves under every route. Before,
+         only the header was subtracted and the page scrolled by exactly one
+         dock (ogazboiz, 2026-09-13). The chat column is `h-full` inside. */
+      className="flex w-full flex-col bg-chrome pb-[calc(80px+env(safe-area-inset-bottom,0px))] md:pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-room-top,var(--ws-crumb-h))-var(--ws-nav-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
     >
       {/* The audio itself. Mounted from its OWN map so it can never become
           conditional on anything visual — the reason RemoteAudio is its own
@@ -1476,7 +1513,7 @@ function LiveHouse({
           sheet off "View all" (both below). `max-md:hidden` keeps the chat
           MOUNTED — its poll and scroll survive — the same reason the roster
           `hidden`s it rather than unmounting it. */}
-      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome max-md:hidden xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
+      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome max-md:hidden xl:h-full xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
         {/*
           THE ROSTER TAKES THIS COLUMN WHILE IT IS OPEN — 369:8740.
 
