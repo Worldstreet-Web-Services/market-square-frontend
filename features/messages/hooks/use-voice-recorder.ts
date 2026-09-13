@@ -6,7 +6,7 @@ import {
   pickRecordingType,
   recordingFileName,
 } from "@/features/messages/lib/voice-recorder";
-import { emptyLevels, pushLevel, rmsLevel } from "@/lib/voice-levels";
+import { pushLevel, rmsLevel } from "@/lib/voice-levels";
 
 /**
  * Recording a voice note.
@@ -48,7 +48,7 @@ export function useVoiceRecorder() {
     while recording ("is this getting me?") had no answer until playback. These
     are measured levels, newest last. See lib/voice-levels.ts.
   */
-  const [levels, setLevels] = useState<number[]>(() => emptyLevels());
+  const [levels, setLevels] = useState<number[]>([]);
 
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -118,7 +118,10 @@ export function useVoiceRecorder() {
     startedAt.current = Date.now();
     media.start();
     setElapsed(0);
-    setLevels(emptyLevels());
+    // Empty, not a row of silent bars: the waveform starts when the recording
+    // does, so the first bar arriving IS the confirmation that the microphone
+    // opened. A pre-filled row looks identical before and after that moment.
+    setLevels([]);
     setRecording(true);
     ticker.current = setInterval(
       () => setElapsed((Date.now() - startedAt.current) / 1000),

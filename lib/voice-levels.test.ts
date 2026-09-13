@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dotScale, emptyLevels, pushLevel, rmsLevel, WAVEFORM_DOTS } from "./voice-levels.ts";
+import { dotScale, pushLevel, rmsLevel, WAVEFORM_DOTS } from "./voice-levels.ts";
 
 const frame = (value: number, n = 64) => Array.from({ length: n }, () => value);
 
@@ -39,9 +39,12 @@ describe("the voice waveform's maths", () => {
     assert.notEqual(pushLevel(buf, 0.2, 4), buf);
   });
 
-  it("starts at full width so the row does not grow into place", () => {
-    assert.equal(emptyLevels().length, WAVEFORM_DOTS);
-    assert.ok(emptyLevels().every((v) => v === 0));
+  it("grows from empty and stops at the window width", () => {
+    // The row starts empty and fills as you speak — the first bar appearing
+    // is the confirmation that the microphone opened.
+    let buf: number[] = [];
+    for (let i = 0; i < WAVEFORM_DOTS + 10; i += 1) buf = pushLevel(buf, 0.5);
+    assert.equal(buf.length, WAVEFORM_DOTS, "the window must not grow forever");
   });
 
   it("never draws a dot at zero height — silence is a small dot, not a gap", () => {

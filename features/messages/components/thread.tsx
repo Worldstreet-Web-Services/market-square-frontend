@@ -1580,11 +1580,17 @@ function Composer({
           visible while you talk.
         */
         <div className="mb-2 flex items-center gap-3 rounded-[18px] border border-white/10 bg-white/[0.04] px-3 py-2.5">
-          <span aria-hidden className="flex h-8 min-w-0 flex-1 items-center gap-[2px]">
+          {/* The playback bubble's own bars, to the pixel: h-8, 3px apart,
+              2px wide, rounded. A note being recorded and the same note played
+              back are then visibly one object. The row GROWS from the left as
+              you speak rather than sitting pre-filled — it starts when you
+              start, so the first bar appearing is itself the confirmation
+              that the microphone opened. */}
+          <span aria-hidden className="flex h-8 min-w-0 flex-1 items-center gap-[3px] overflow-hidden">
             {voice.levels.map((level, index) => (
               <span
                 key={index}
-                className="flex-1 rounded-full bg-[linear-gradient(180deg,#9F65FD_0%,#5B05E6_100%)] transition-[height] duration-75"
+                className="w-[2px] shrink-0 rounded-full bg-white/60"
                 style={{ height: `${Math.round(dotScale(level) * 100)}%` }}
               />
             ))}

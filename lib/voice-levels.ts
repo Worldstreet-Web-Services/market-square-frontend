@@ -71,11 +71,6 @@ export function pushLevel(
   return next.length > size ? next.slice(next.length - size) : next;
 }
 
-/** A silent row to start from, so the waveform has its full width immediately. */
-export function emptyLevels(size: number = WAVEFORM_DOTS): number[] {
-  return Array.from({ length: size }, () => 0);
-}
-
 /**
  * The drawn height of one dot, as a fraction of the row.
  *
