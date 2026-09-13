@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  MENTIONS_MAX,
   buildMessagePayload,
   canSendMessage,
 } from "../features/messages/lib/outgoing.ts";
@@ -68,5 +69,34 @@ describe("canSendMessage", () => {
     assert.equal(canSendMessage({ text: "" }), false);
     assert.equal(canSendMessage({ text: "   " }), false);
     assert.equal(canSendMessage({ text: "  ", media: { url: "" } }), false);
+  });
+});
+
+describe("replies and mentions", () => {
+  const ada = { type: "profile" as const, id: "p1", label: "Ada", handle: "ada" };
+
+  it("sends replyToId beside the text and omits it when absent or blank", () => {
+    assert.deepEqual(buildMessagePayload({ text: "yes", replyToId: "mg_1" }), { text: "yes", replyToId: "mg_1" });
+    assert.equal("replyToId" in buildMessagePayload({ text: "yes" }), false);
+    assert.equal("replyToId" in buildMessagePayload({ text: "yes", replyToId: null }), false);
+    assert.equal("replyToId" in buildMessagePayload({ text: "yes", replyToId: "  " }), false);
+  });
+
+  it("sends mentions as picked and omits an empty list", () => {
+    assert.deepEqual(buildMessagePayload({ text: "@ada hi", mentions: [ada] }), {
+      text: "@ada hi",
+      mentions: [ada],
+    });
+    assert.equal("mentions" in buildMessagePayload({ text: "hi", mentions: [] }), false);
+  });
+
+  it("caps mentions at the service's 25", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ ...ada, id: `p${i}`, handle: `h${i}` }));
+    assert.equal(buildMessagePayload({ text: "x", mentions: many }).mentions?.length, MENTIONS_MAX);
+  });
+
+  it("a reply with nothing to say is still nothing to send", () => {
+    assert.equal(canSendMessage({ replyToId: "mg_1" }), false);
+    assert.equal(canSendMessage({ text: "ok", replyToId: "mg_1" }), true);
   });
 });

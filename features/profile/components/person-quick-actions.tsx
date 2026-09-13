@@ -6,6 +6,8 @@ import { useMe } from "@/hooks/use-me";
 import { useFollow, useProfile, useWink } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
 import { IconMsWinkFace } from "@/components/ui/design-icons";
+import { IconPalWinkOpen } from "@/components/ui/home-icons";
+import { IconRoomProfileAdd, IconRoomWink } from "@/components/ui/room-icons";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -22,6 +24,13 @@ import type { Profile } from "@/lib/api/schemas";
  * SLOT and this fills it — the same seam `PersonFollow` already uses for the
  * person sheet. The card owns the geometry (56×24 at y=101); this owns the
  * identity and the two actions.
+ *
+ * ─── THE PHONE (1285:92952 in frame 1285:92794) ──────────────────────────────
+ * The same 24px pair, 5 apart, straddling the tile's foot — but the wink disc
+ * is `white/20` carrying `Component 14` at 16, the file's white line-art face
+ * that BLINKS (its two variants carry `AFTER_TIMEOUT` at each other; see
+ * `ws-wink-blink`), and the follow disc carries the exported `profile-add` at
+ * 14. Below `md` it is that; from `md` the desktop file's 😉 on `white/10`.
  *
  * ─── WHAT IT REFUSES TO DRAW ─────────────────────────────────────────────────
  * Nothing at all on YOURSELF: you cannot wink at or follow yourself, and two
@@ -153,11 +162,18 @@ function Actions({
             event.stopPropagation();
             gate(() => wink.send());
           }}
-          className="ws-press flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[14px] leading-none transition-colors hover:bg-white/20 disabled:opacity-40"
+          className="ws-press flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[14px] leading-none transition-colors hover:bg-white/30 disabled:opacity-40 md:bg-white/10 md:hover:bg-white/20"
         >
+          {/* The phone's face: the winking frame (1285:92954) with the
+              open-eyed frame (206:6942) over it on the file's 0.8s/0.3s
+              clock — exactly as the pal card draws the same component. */}
+          <span aria-hidden className="relative block h-4 w-4 text-white md:hidden">
+            <IconRoomWink className="absolute inset-0 h-full w-full" />
+            <IconPalWinkOpen className="ws-wink-blink absolute inset-0 h-full w-full" />
+          </span>
           {/* 14px, at the file's 50% — an emoji is artwork, so it is rendered
               rather than redrawn as a glyph. */}
-          <span aria-hidden className="opacity-50">
+          <span aria-hidden className="hidden opacity-50 md:inline">
             😉
           </span>
         </button>
@@ -185,9 +201,12 @@ function Actions({
   );
 }
 
-/** The file's `profile-add` at 14, on the house 24-grid. Following swaps the
-    plus for a tick — same body, so the button does not change shape. */
+/** The file's `profile-add` at 14, on the house 24-grid — the exported node
+    (1285:92956) at rest. Following swaps the plus for a tick: the file draws
+    no such state, so that one frame is drawn by hand on the same body, and
+    the button does not change shape. */
 function ProfileAddGlyph({ following }: { following: boolean }) {
+  if (!following) return <IconRoomProfileAdd className="h-3.5 w-3.5" />;
   return (
     <svg
       aria-hidden
@@ -201,7 +220,7 @@ function ProfileAddGlyph({ following }: { following: boolean }) {
     >
       <circle cx="10" cy="7.5" r="3.75" />
       <path d="M3.5 20.2c0-3.2 2.9-5.8 6.5-5.8 1.3 0 2.5.3 3.5.9" />
-      {following ? <path d="M15.5 17.2l1.9 1.9 3.1-3.6" /> : <path d="M18 14.5v5M20.5 17h-5" />}
+      <path d="M15.5 17.2l1.9 1.9 3.1-3.6" />
     </svg>
   );
 }

@@ -26,14 +26,35 @@ export interface OutgoingMedia {
   durationSeconds?: number | null;
 }
 
+/**
+ * The `Mention` a picker records — structurally the shape in
+ * `lib/api/schemas.ts` (`MentionSchema`), spelled here so this file stays
+ * alias-free for `node --test`.
+ */
+export interface OutgoingMention {
+  type: "profile" | "group";
+  id: string;
+  label: string;
+  handle: string;
+}
+
+/** The service caps `mentions` at 25 per message. */
+export const MENTIONS_MAX = 25;
+
 export interface OutgoingMessage {
   text?: string;
   media?: OutgoingMedia;
+  /** The message being answered — an id in the SAME conversation, one level. */
+  replyToId?: string | null;
+  /** Who the picker meant; handles typed in `text` are resolved server-side too. */
+  mentions?: OutgoingMention[];
 }
 
 export interface MessagePayload {
   text?: string;
   media?: { url: string; width?: number; height?: number; durationSeconds?: number };
+  replyToId?: string;
+  mentions?: OutgoingMention[];
 }
 
 /** A positive, finite integer, or undefined — the shape the service accepts. */
@@ -63,6 +84,13 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
       ...(duration ? { durationSeconds: duration } : {}),
     };
   }
+
+  // Both are OMITTED rather than sent empty: `replyToId: null` and
+  // `mentions: []` say nothing the absent field does not, and an id that is
+  // only whitespace is not a reply.
+  const replyToId = body.replyToId?.trim();
+  if (replyToId) payload.replyToId = replyToId;
+  if (body.mentions && body.mentions.length > 0) payload.mentions = body.mentions.slice(0, MENTIONS_MAX);
   return payload;
 }
 

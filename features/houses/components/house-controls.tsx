@@ -203,8 +203,10 @@ interface Heart {
 
 let heartSeq = 0;
 
-/** Local drawing only. Broadcast and tally are the caller's job. */
-function useReactionGutter() {
+/** Local drawing only. Broadcast and tally are the caller's job. Shared with
+    the phone's bottom bar (room-phone-bar.tsx), which draws the same gutter
+    above its reaction disc — one animation, not two that drift. */
+export function useReactionGutter() {
   const [hearts, setHearts] = useState<Heart[]>([]);
   const timers = useRef<number[]>([]);
 

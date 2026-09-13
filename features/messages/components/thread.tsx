@@ -5,6 +5,12 @@ import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/use-me";
 import { useGate } from "@/hooks/use-gate";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useMentionTyping } from "@/hooks/use-mention-typing";
+import { MentionPicker } from "@/components/ui/mention-picker";
+import { PostText } from "@/components/ui/post-text";
+import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
+import { replyExcerpt } from "@/lib/message-reply";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
@@ -29,7 +35,7 @@ import { canSendMessage, type OutgoingMessage } from "@/features/messages/lib/ou
 import { useVoiceRecorder } from "@/features/messages/hooks/use-voice-recorder";
 import { formatElapsed } from "@/features/messages/lib/voice-recorder";
 import { uploadFile } from "@/lib/api/upload";
-import { IconArrowLeft, IconHouses, IconMic, IconPlay, IconPause } from "@/components/ui/icons";
+import { IconArrowLeft, IconHouses, IconMic, IconPlay, IconPause, IconQuote, IconX } from "@/components/ui/icons";
 import {
   useConversationMembers,
   useLeaveGroup,
@@ -61,7 +67,12 @@ import {
 } from "@/features/messages/lib/message-media";
 import { playProgress, playedBars, waveformBars } from "@/features/messages/lib/waveform";
 import { isAtBottom } from "@/features/messages/lib/thread-scroll";
-import { MESSAGE_MAX, type Conversation, type Message } from "@/features/messages/lib/types";
+import {
+  MESSAGE_MAX,
+  type Conversation,
+  type Message,
+  type MessageReplyTo,
+} from "@/features/messages/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 
 /**
@@ -90,6 +101,16 @@ import type { Profile } from "@/lib/api/schemas";
  * WHAT IS INERT AND WHY is stated at each control. The rule this pane follows
  * is the house one: a capability with no route behind it is DRAWN and
  * disabled, never wired to a plausible-looking request.
+ *
+ * ─── REPLY-TO AND @MENTIONS HAVE NO FIGMA NODE ──────────────────────────────
+ * Neither 21:5519 nor 21:6024 draws a quoted reply, a reply affordance, a
+ * "Replying to" strip or a mention. They are built in the bubbles' own
+ * language — the same 16px radius, the same white / #7E3BEB fills, the 14/20
+ * body and 12/16 meta — and kept minimal: a quote block inside the bubble, a
+ * strip above the composer in the attachment chip's recipe, and the shared
+ * mention picker the post composer already opens. Until the service ships
+ * the fields, a message without `replyTo` draws no quote and the composer
+ * still sends; nothing here fakes either.
  */
 
 /**
@@ -669,16 +690,153 @@ function bubbleShell(mine: boolean, tail: boolean) {
   );
 }
 
+/**
+ * The ink for a tappable part of a message body — an @handle, a #tag, a link.
+ *
+ * `PostText` is the ONE renderer for post-shaped text, so a handle in a chat
+ * bubble is the same link to `/u/{handle}` a post draws. Its default ink is
+ * the post purple (`--color-spotlight-chip-ink`), which is 2.7:1 on the white
+ * bubble and 2.1:1 on the #7E3BEB one — both fail. So each bubble passes the
+ * ink that clears AA on its own fill: the ramp's dark stop on white (5.66:1),
+ * white on purple (5.66:1), the same two pairings the bubbles already use.
+ */
+function bubbleLinkClass(mine: boolean): string {
+  return mine
+    ? "font-semibold text-spotlight hover:underline"
+    : "font-semibold text-white underline decoration-white/50 underline-offset-2 hover:decoration-white";
+}
+
+/** The body of a text bubble, or its caption: mentions as links, on-brand ink. */
+function BubbleText({
+  message,
+  mine,
+  className,
+}: {
+  message: Message;
+  mine: boolean;
+  className?: string;
+}) {
+  if (!message.text) return null;
+  return (
+    <PostText
+      text={message.text}
+      mentions={message.mentions}
+      linkClassName={bubbleLinkClass(mine)}
+      className={cn(
+        "min-w-0 text-[14px] font-normal leading-5 tracking-[-0.006em]",
+        mine ? "text-[#5A5A5A]" : "text-white",
+        className
+      )}
+    />
+  );
+}
+
+/**
+ * The quoted original INSIDE a reply's bubble: who said it and one line of
+ * what, on a 2px rule in the bubble's own contrasting ink. Tapping it scrolls
+ * to the original when that message is loaded — and does nothing visible
+ * when it is not, which is honest: there is nowhere to go.
+ *
+ * "Message deleted" comes from the service's `deleted`, which is always false
+ * today (conversation messages cannot be deleted yet); the wording is kept so
+ * the shape is future-proof, not because anything flips it.
+ */
+function ReplyQuote({
+  replyTo,
+  mine,
+  name,
+  onJump,
+}: {
+  replyTo: MessageReplyTo;
+  mine: boolean;
+  /** The original's sender, resolved by the pane — "You" for the reader. */
+  name: string;
+  onJump: (messageId: string) => void;
+}) {
+  const line = replyExcerpt({ text: replyTo.text, media: replyTo.media, deleted: replyTo.deleted });
+  return (
+    <button
+      type="button"
+      onClick={() => onJump(replyTo.id)}
+      aria-label={`Go to the message from ${name} this replies to`}
+      className={cn(
+        "ws-press flex w-full min-w-0 flex-col items-start rounded-lg border-l-2 px-2.5 py-1.5 text-left transition-colors",
+        mine
+          ? "border-spotlight bg-black/[0.05] hover:bg-black/[0.08]"
+          : "border-white bg-white/10 hover:bg-white/15"
+      )}
+    >
+      <span className={cn("truncate text-[12px] font-semibold leading-4", mine ? "text-spotlight" : "text-white")}>
+        {name}
+      </span>
+      {line && (
+        <span
+          className={cn(
+            "line-clamp-1 text-[12px] leading-4",
+            mine ? "text-[#5A5A5A]" : "text-white/85",
+            replyTo.deleted && "italic"
+          )}
+        >
+          {line}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * The per-bubble "Reply" — a 28px glass disc beside the bubble, on the side
+ * away from the pane's edge so it never overlaps the tail or the avatar.
+ *
+ * On a pointer device it is invisible until the row is hovered (or the
+ * control is tabbed to); on a touch device there is no hover, so it is not
+ * drawn at all until a long-press on the row reveals it — `revealed` — and a
+ * slot is only reserved then. A tap on it sets the composer's reply target.
+ */
+function ReplyButton({
+  onClick,
+  revealed,
+  mine,
+}: {
+  onClick: () => void;
+  revealed: boolean;
+  mine: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Reply to this message"
+      title="Reply"
+      className={cn(
+        "ws-glass-pill ws-press flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-full text-white/80 transition-opacity hover:bg-white/10 hover:text-white",
+        // The row's hover shows it; keyboard focus shows it; a long-press on a
+        // phone shows it. Otherwise it is transparent on pointer devices and
+        // absent on touch ones.
+        revealed
+          ? "opacity-100"
+          : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden",
+        mine ? "order-first" : "order-last"
+      )}
+    >
+      <IconQuote className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 function TextBubble({
   message,
   mine,
   group,
   tail,
+  quote,
 }: {
   message: Message;
   mine: boolean;
   group: boolean;
   tail: boolean;
+  /** The quoted original, when this message is a reply. */
+  quote?: React.ReactNode;
 }) {
   const removed = message.status === "removed";
 
@@ -691,21 +849,27 @@ function TextBubble({
         //
         // The body and the meta are SIBLINGS in one bottom-aligned row 10px
         // apart, so the stamp hangs off the last line rather than sitting under
-        // the message.
-        "flex max-w-[min(85%,480px)] items-end gap-2.5 p-3",
+        // the message. A quote, when there is one, sits above that row.
+        "flex max-w-[min(85%,480px)] flex-col gap-1.5 p-3",
         bubbleShell(mine, tail)
       )}
     >
-      <p
-        className={cn(
-          "min-w-0 whitespace-pre-wrap break-words text-[14px] font-normal leading-5 tracking-[-0.006em]",
-          mine ? "text-[#5A5A5A]" : "text-white",
-          removed && "italic opacity-60"
+      {quote}
+      <div className="flex items-end gap-2.5">
+        {removed ? (
+          <p
+            className={cn(
+              "min-w-0 whitespace-pre-wrap break-words text-[14px] font-normal italic leading-5 tracking-[-0.006em] opacity-60",
+              mine ? "text-[#5A5A5A]" : "text-white"
+            )}
+          >
+            Message removed
+          </p>
+        ) : (
+          <BubbleText message={message} mine={mine} />
         )}
-      >
-        {removed ? "Message removed" : message.text}
-      </p>
-      <BubbleMeta message={message} mine={mine} group={group} />
+        <BubbleMeta message={message} mine={mine} group={group} />
+      </div>
     </div>
   );
 }
@@ -816,12 +980,14 @@ function MediaBubble({
   group,
   tail,
   kind,
+  quote,
 }: {
   message: Message;
   mine: boolean;
   group: boolean;
   tail: boolean;
   kind: "image" | "video";
+  quote?: React.ReactNode;
 }) {
   const url = message.mediaUrl as string;
   const ratio = mediaRatio(message.mediaWidth, message.mediaHeight);
@@ -829,6 +995,7 @@ function MediaBubble({
 
   return (
     <div className={cn("w-[262px] max-w-[85%] p-1", bubbleShell(mine, tail))}>
+      {quote && <div className="px-1 pb-1.5 pt-1">{quote}</div>}
       {/* The ratio lives on the wrapper so the box is reserved BEFORE the
           media loads — a bubble that resizes on decode shoves the whole river
           under the reader's eye. 4:3 is the fallback shape for an unmeasured
@@ -856,16 +1023,7 @@ function MediaBubble({
         )}
       </div>
 
-      {caption && (
-        <p
-          className={cn(
-            "whitespace-pre-wrap break-words px-2 pt-2 text-[14px] font-normal leading-5 tracking-[-0.006em]",
-            mine ? "text-[#5A5A5A]" : "text-white"
-          )}
-        >
-          {caption}
-        </p>
-      )}
+      {caption && <BubbleText message={message} mine={mine} className="px-2 pt-2" />}
 
       {/* The design's footer strip: 8px of padding, pushed right. */}
       <div className="flex items-center justify-end p-2">
@@ -895,11 +1053,13 @@ function VoiceBubble({
   mine,
   group,
   tail,
+  quote,
 }: {
   message: Message;
   mine: boolean;
   group: boolean;
   tail: boolean;
+  quote?: React.ReactNode;
 }) {
   const url = message.mediaUrl as string;
   const audio = useRef<HTMLAudioElement>(null);
@@ -930,6 +1090,7 @@ function VoiceBubble({
 
   return (
     <div className={cn("flex w-[262px] max-w-[85%] flex-col gap-2 p-3", bubbleShell(mine, tail))}>
+      {quote}
       <audio
         ref={audio}
         src={url}
@@ -1025,16 +1186,78 @@ function MessageRow({
   group,
   sender,
   roomCardSlot,
+  onReply,
+  onJump,
+  nameOf,
+  flash,
 }: {
   message: Message;
   mine: boolean;
   group: boolean;
   sender: Profile | null;
   roomCardSlot?: (streamId: string) => React.ReactNode;
+  /** Make this message the composer's reply target. */
+  onReply: (message: Message) => void;
+  /** Scroll to a loaded message and flash it. */
+  onJump: (messageId: string) => void;
+  /** A sender id as a name — "You" for the reader. */
+  nameOf: (senderId: string) => string;
+  /** Briefly true after a quote tap landed here. */
+  flash: boolean;
 }) {
   const kind = messageMediaKind(message);
   const removed = message.status === "removed";
   const tail = group && !mine;
+
+  /*
+    LONG-PRESS reveals the reply control on a touch screen, where there is no
+    hover. 450ms is between a tap and the OS's own context menu; a finger that
+    moves is scrolling, not pressing, and cancels it. The control stays out
+    for a few seconds, long enough to tap, then goes back — it is the same
+    control hover shows on a desktop, not a second affordance.
+  */
+  const [revealed, setRevealed] = useState(false);
+  const press = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hide = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressAt = useRef<{ x: number; y: number } | null>(null);
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current);
+    press.current = null;
+    pressAt.current = null;
+  };
+  // A held finger drifts a few pixels; only real movement (a scroll) cancels.
+  const movePress = (event: React.PointerEvent) => {
+    const from = pressAt.current;
+    if (!from) return;
+    if (Math.hypot(event.clientX - from.x, event.clientY - from.y) > 10) cancelPress();
+  };
+  const startPress = (event: React.PointerEvent) => {
+    if (event.pointerType === "mouse" || removed) return;
+    cancelPress();
+    pressAt.current = { x: event.clientX, y: event.clientY };
+    press.current = setTimeout(() => {
+      press.current = null;
+      setRevealed(true);
+      if (hide.current) clearTimeout(hide.current);
+      hide.current = setTimeout(() => setRevealed(false), 4_000);
+    }, 450);
+  };
+  useEffect(
+    () => () => {
+      if (press.current) clearTimeout(press.current);
+      if (hide.current) clearTimeout(hide.current);
+    },
+    []
+  );
+
+  const quote = message.replyTo ? (
+    <ReplyQuote
+      replyTo={message.replyTo}
+      mine={mine}
+      name={nameOf(message.replyTo.senderId)}
+      onJump={onJump}
+    />
+  ) : undefined;
 
   // A removed message keeps its row but loses its attachment along with its
   // body — the whole point of the state is that the content is gone.
@@ -1053,15 +1276,32 @@ function MessageRow({
         card={roomCardSlot?.(message.deepLink!.ref)}
       />
     ) : removed || !kind ? (
-      <TextBubble message={message} mine={mine} group={group} tail={tail} />
+      <TextBubble message={message} mine={mine} group={group} tail={tail} quote={quote} />
     ) : kind === "audio" ? (
-      <VoiceBubble message={message} mine={mine} group={group} tail={tail} />
+      <VoiceBubble message={message} mine={mine} group={group} tail={tail} quote={quote} />
     ) : (
-      <MediaBubble message={message} mine={mine} group={group} tail={tail} kind={kind} />
+      <MediaBubble message={message} mine={mine} group={group} tail={tail} kind={kind} quote={quote} />
     );
 
   return (
-    <div className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
+    <div
+      data-message-id={message.id}
+      onPointerDown={startPress}
+      onPointerUp={cancelPress}
+      onPointerCancel={cancelPress}
+      onPointerMove={movePress}
+      onContextMenu={(event) => {
+        // A long-press that reached the OS menu is the one gesture we mean.
+        if (revealed) event.preventDefault();
+      }}
+      className={cn(
+        "group flex items-end gap-2 rounded-2xl transition-colors duration-700",
+        mine ? "justify-end" : "justify-start",
+        // The flash after a quote tap: a wash on the whole row, which is the
+        // one thing that reads the same behind a white and a purple bubble.
+        flash && "-mx-2 bg-white/[0.08] px-2 duration-150"
+      )}
+    >
       {group && !mine && (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10">
           <Avatar
@@ -1073,6 +1313,11 @@ function MessageRow({
         </span>
       )}
       {content}
+      {/* A removed message has nothing to answer. The announcement bubble is
+          the service's, and answering it is answering nobody. */}
+      {!removed && !invite && (
+        <ReplyButton mine={mine} revealed={revealed} onClick={() => onReply(message)} />
+      )}
     </div>
   );
 }
@@ -1081,9 +1326,41 @@ function MessageRow({
    COMPOSER
    ──────────────────────────────────────────────────────────────────────────── */
 
-function Composer({ conversationId }: { conversationId: string }) {
+function Composer({
+  conversationId,
+  replyTo,
+  onCancelReply,
+  replyName,
+  members,
+  meId,
+}: {
+  conversationId: string;
+  /** The message being answered, chosen from a bubble; null for a plain send. */
+  replyTo: Message | null;
+  onCancelReply: () => void;
+  /** Who wrote `replyTo` — "You" for the reader's own. */
+  replyName: string;
+  /** Everyone in this conversation — the only people the picker may offer. */
+  members: MentionableMember[];
+  meId: string | undefined;
+}) {
   const send = useSendMessage(conversationId);
-  const [text, setText] = useState("");
+  const field = useRef<HTMLTextAreaElement>(null);
+  /*
+    THE TEXT AND THE @-MENTION MACHINERY live in the shared hook the post
+    composer and the comment boxes use: "@" opens the list at the caret, a
+    pick writes "@handle " and keeps the Mention object to send. The list is
+    narrowed to MEMBERS of this conversation — the server's rows that are in
+    the roster, plus roster matches the server's top-8 missed — so on a 1:1
+    the only person offered is the other party. `mentionCandidates` is pure
+    and pinned in `lib/mentionable-members.test.ts`.
+  */
+  const typing = useMentionTyping({
+    max: MESSAGE_MAX,
+    field,
+    candidates: (found, query) => mentionCandidates({ found, members, query, exclude: meId }),
+  });
+  const { text } = typing;
   const [picking, setPicking] = useState(false);
   // The uploaded-but-not-yet-sent attachment. It is already IN storage by the
   // time it lands here — the panel finishes the upload before it closes — so
@@ -1094,12 +1371,20 @@ function Composer({ conversationId }: { conversationId: string }) {
   const voice = useVoiceRecorder();
   const [voiceBusy, setVoiceBusy] = useState(false);
   const body = text.trim();
+  // A tap on Reply is a tap that wants to type.
+  useEffect(() => {
+    if (replyTo) field.current?.focus();
+  }, [replyTo]);
   // Either half is enough. A photo with no caption is a message; so is a
   // caption with no photo. Only neither is nothing to send — and that rule is
   // the payload builder's, so the button and the request cannot disagree about
-  // what counts as empty.
+  // what counts as empty. The reply target and the mentions ride along: the
+  // target as its id, the mentions filtered to whoever is still WRITTEN in the
+  // body (`mentionsPresentIn`), since a handle can be deleted after a pick.
   const outgoing: OutgoingMessage = {
     ...(body ? { text: body } : {}),
+    ...(replyTo ? { replyToId: replyTo.id } : {}),
+    ...(body ? { mentions: typing.mentionsFor(body) } : {}),
     ...(attachment
       ? {
           media: {
@@ -1143,11 +1428,20 @@ function Composer({ conversationId }: { conversationId: string }) {
     if (!canSend) return;
     send.mutate(outgoing, {
       onSuccess: () => {
-        setText("");
+        typing.reset();
         setAttachment(null);
+        onCancelReply();
       },
     });
   };
+
+  const replyLine = replyTo
+    ? replyExcerpt({
+        text: replyTo.text,
+        media: replyTo.media ? { kind: replyTo.media.kind } : null,
+        deleted: replyTo.status === "removed",
+      })
+    : "";
 
   return (
     // Pinned, not sticky, for the same reason as the header: it is the last
@@ -1159,6 +1453,46 @@ function Composer({ conversationId }: { conversationId: string }) {
        its own put a third black in the pane; a 3% wash lifts the bar off the
        ground it shares with everything else. */
     <div className="flex min-h-20 shrink-0 flex-col justify-center gap-1 border-t border-white/10 bg-white/[0.03] px-6 py-4">
+      {/*
+        "Replying to …", above the field, in the attachment chip's recipe so
+        the two stack as one family when both are up. The name, one line of
+        the original (or "Photo" / "Voice note"), and an × — Escape in the
+        field clears it too. The text is NOT prefilled with "@handle": the
+        service records who was answered from `replyToId`, and the bubble
+        draws the quote from `replyTo`, so a typed handle would print twice.
+      */}
+      {replyTo && (
+        <div
+          role="status"
+          className="mb-2 flex items-center gap-3 rounded-xl border border-white/10 border-l-2 border-l-spotlight-chip-ink bg-white/[0.04] py-2 pl-3 pr-2"
+        >
+          <IconQuote className="h-3.5 w-3.5 shrink-0 text-spotlight-chip-ink" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12px] font-semibold leading-4 text-white">
+              Replying to {replyName}
+            </p>
+            {replyLine && (
+              <p
+                className={cn(
+                  "truncate text-[12px] leading-4 text-white/60",
+                  replyTo.status === "removed" && "italic"
+                )}
+              >
+                {replyLine}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+            className="ws-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <IconX className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/*
         The staged attachment, above the field.
 
@@ -1310,17 +1644,34 @@ function Composer({ conversationId }: { conversationId: string }) {
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[30px] border border-[#26262B] bg-[#18181C] px-4 py-2">
           <textarea
             id="message-composer"
+            ref={field}
             value={text}
             rows={1}
-            // The service rejects anything longer, so the field stops there too.
-            onChange={(event) => setText(event.target.value.slice(0, MESSAGE_MAX))}
+            // The hook caps at MESSAGE_MAX — the service rejects anything
+            // longer, so the field stops there too — and reads the caret for
+            // an @-token.
+            onChange={(event) => typing.update(event.target.value, event.target.selectionStart)}
             onKeyDown={(event) => {
+              // With the list open, Enter is not a send (the same rule the
+              // comment box follows); Escape closes the list first, and a
+              // second Escape clears the reply target.
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                submit();
+                if (!typing.token) submit();
+              }
+              if (event.key === "Escape") {
+                if (typing.token) {
+                  event.preventDefault();
+                  typing.dismiss();
+                } else if (replyTo) {
+                  event.preventDefault();
+                  onCancelReply();
+                }
               }
             }}
-            placeholder={attachment ? "Add a caption…" : "Write a message…"}
+            placeholder={
+              attachment ? "Add a caption…" : replyTo ? "Write a reply…" : "Write a message…"
+            }
             // The design's caret is #008CFF — the one place in this pane a
             // colour is specified for something the house has no token for.
             className="max-h-32 min-w-0 flex-1 resize-none bg-transparent text-base leading-5 text-white caret-[#008CFF] outline-none placeholder:text-meta"
@@ -1352,6 +1703,12 @@ function Composer({ conversationId }: { conversationId: string }) {
 
       {text.length > MESSAGE_MAX - 200 && (
         <p className="tnum text-right text-[11px] text-meta">{MESSAGE_MAX - text.length} left</p>
+      )}
+
+      {/* The shared list, portalled above the field, only while an @-token is
+          open under the caret. Its rows are this conversation's members. */}
+      {typing.token && (
+        <MentionPicker typing={typing} heading="Members" emptyLabel="Nobody in this chat matches." />
       )}
 
       {/* Mounted only while open, so each opening starts from clean state —
@@ -1401,7 +1758,26 @@ export function Thread({
   const group = isGroupThread(conversation);
   const messages = useMessages(conversation.id, true);
   const markRead = useMarkConversationRead();
+  const reducedMotion = useReducedMotion();
   const [membersOpen, setMembersOpen] = useState(false);
+  /*
+    THE REPLY TARGET, keyed by conversation rather than reset in an effect:
+    a target chosen in one thread must not survive into the next, and
+    deriving it from the id does that without a `setState` inside an effect.
+  */
+  const [replyState, setReplyState] = useState<{ conversationId: string; message: Message } | null>(null);
+  const replyTo = replyState?.conversationId === conversation.id ? replyState.message : null;
+  const setReplyTo = (message: Message | null) =>
+    setReplyState(message ? { conversationId: conversation.id, message } : null);
+  /* The row a quote tap just landed on, washed for a moment. */
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    []
+  );
   const [renaming, setRenaming] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1442,6 +1818,20 @@ export function Thread({
   for (const row of members.data?.items ?? []) {
     if (row.profile) senders.set(row.profile.id, row.profile);
   }
+  // A 1:1 has no roster request; its two people are the reader and the peer.
+  if (!group && conversation.peer) senders.set(conversation.peer.id, conversation.peer);
+
+  /** A sender id as the name a quote or the reply strip prints. */
+  const nameOf = (senderId: string): string => {
+    if (me.data && senderId === me.data.id) return "You";
+    return senders.get(senderId)?.displayName ?? "Member";
+  };
+  /** Who the composer may @-mention: everyone here but the reader. */
+  const mentionable: MentionableMember[] = [...senders.values()].map((profile) => ({
+    id: profile.id,
+    displayName: profile.displayName,
+    username: profile.username,
+  }));
 
   // Opening the thread is the acknowledgement — once per thread, not on every
   // poll tick.
@@ -1477,6 +1867,24 @@ export function Thread({
     following.current = true;
     toBottom();
   }, [conversation.id]);
+
+  /**
+   * A tap on a quote: scroll the original into the middle of the river and
+   * wash its row for a moment. Only when it is LOADED — the thread pages 50 at
+   * a time and an original past that has no row to land on, so the tap does
+   * nothing rather than jumping somewhere wrong.
+   */
+  const jumpTo = (messageId: string) => {
+    const node = river.current?.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(messageId)}"]`
+    );
+    if (!node) return;
+    following.current = false;
+    node.scrollIntoView({ block: "center", behavior: reducedMotion ? "auto" : "smooth" });
+    setFlashId(messageId);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashId(null), 1_400);
+  };
 
   // Follow arriving messages, but only from the live edge — someone scrolled
   // up reading yesterday must not be yanked down because a message landed.
@@ -1585,6 +1993,10 @@ export function Thread({
                     group={group}
                     sender={senders.get(message.senderId) ?? null}
                     roomCardSlot={roomCardSlot}
+                    onReply={setReplyTo}
+                    onJump={jumpTo}
+                    nameOf={nameOf}
+                    flash={flashId === message.id}
                   />
                 ))}
               </div>
@@ -1593,7 +2005,14 @@ export function Thread({
         ))}
       </div>
 
-      <Composer conversationId={conversation.id} />
+      <Composer
+        conversationId={conversation.id}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        replyName={replyTo ? nameOf(replyTo.senderId) : ""}
+        members={mentionable}
+        meId={me.data?.id}
+      />
 
       {group && (
         <MembersSheet

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { IconArrowLeft } from "@/components/ui/icons";
 // The file's own glyphs, exported from it. See components/ui/room-icons.tsx.
-import { IconHouseGroup, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
+import { IconHouseGroup, IconRoomBack, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
 import { canGoBack } from "@/lib/nav-history";
 
 /**
@@ -31,6 +31,7 @@ export function HouseHeader({
   house,
   join,
   confirmBeforeLeave = true,
+  leaveLabel = "Leave Room",
 }: {
   topic: string;
   meta: React.ReactNode;
@@ -88,6 +89,13 @@ export function HouseHeader({
    * is not live, or a seat already taken), rather than rendered dead.
    */
   join?: { onJoin: () => void; state: "idle" | "pending" | "seated"; reason: string | null };
+  /**
+   * What the red pill says ON A PHONE — node 1285:92938 draws the host's as
+   * "Close Room", which is the truth for the one person whose leaving ends
+   * the room. From `md` the pill keeps the desktop file's "Leave Room" as it
+   * always has; only the phone frame names the host's act.
+   */
+  leaveLabel?: string;
 }) {
   const router = useRouter();
   const ref = useRef<HTMLElement>(null);
@@ -147,13 +155,20 @@ export function HouseHeader({
     <>
     <header
       ref={ref}
-      className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-4 pb-4 pt-3 md:pb-6 md:pt-4 xl:px-8 xl:pt-6"
+      /*
+        THE PHONE IS ITS OWN FRAME — 1285:92919 in 1285:92794, a 342 column at
+        x=24 (px-6), 24 under the top bar and 24 above Speakers, its rows 16
+        apart. Every phone value below is that node's; every `md:` value is the
+        desktop file's, unchanged.
+      */
+      className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-6 pb-6 pt-6 md:px-4 md:pb-6 md:pt-4 xl:px-8 xl:pt-6"
     >
       {/* The file's 24px rhythm is a DESKTOP rhythm. Three rows 24 apart, on
           top of a 24px title that wrapped to three lines, was a phone whose
           first screenful was entirely header — the room it is a header for
-          started below the fold. Every value from `md` up is the file's. */}
-      <div className="flex flex-col gap-3 md:gap-6">
+          started below the fold. The phone frame spaces its rows 16 apart
+          (1285:92919 `itemSpacing`); every value from `md` up is the file's. */}
+      <div className="flex flex-col gap-4 md:gap-6">
         {/*
           ── row 0: BACK, LABELLED, ON ITS OWN LINE ──
 
@@ -165,16 +180,19 @@ export function HouseHeader({
         */}
         <button
           onClick={() => (canGoBack() ? router.back() : router.push("/gist-rooms"))}
-          className="ws-press flex w-fit items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
+          /* 1285:92920 on a phone: the 16px `arrow-left` chevron, 8, then
+             "Back" at 14/24. The desktop's 20px arrow and 16/24 from `md`. */
+          className="ws-press flex w-fit items-center gap-2 text-[14px] leading-6 text-white transition-opacity hover:opacity-80 md:text-[16px]"
         >
-          <IconArrowLeft className="h-5 w-5 shrink-0" />
+          <IconRoomBack className="h-4 w-4 shrink-0 md:hidden" />
+          <IconArrowLeft className="hidden h-5 w-5 shrink-0 md:block" />
           Back
         </button>
 
         {/* ── row 1 ── */}
         <div className="flex items-center gap-4">
           {house && (
-            <p className="flex min-w-0 items-center gap-2 text-[16px] leading-6 text-white/50">
+            <p className="flex min-w-0 items-center gap-2 text-[14px] leading-6 text-white/50 md:text-[16px]">
               {/* Node 129:11891, the file's own 16px `profile-2user`, in `--color-spotlight` — which is the `#7E3BEB` it is painted with. */}
               <IconHouseGroup className="h-4 w-4 shrink-0 text-spotlight" />
               <span className="truncate">{house}</span>
@@ -206,16 +224,23 @@ export function HouseHeader({
                  `ws-btn-welcome`'s 90deg ramp and needs no new colour. 85x24 on
                  4/12 of padding, the label at 600 12/16. The older node painted
                  it flat, which is what shipped. */
-              className="ws-press ws-btn-welcome shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold leading-4 text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              /* 1285:92927 on a phone is 77x24 on 4/8 — the same label on
+                 8 of side padding rather than the desktop's 12. */
+              className="ws-press ws-btn-welcome shrink-0 rounded-full px-2 py-1 text-[12px] font-semibold leading-4 text-white transition-opacity hover:opacity-90 disabled:opacity-40 md:px-3"
             >
               {join.state === "pending" ? "Asked to join" : "Join House"}
             </button>
           )}
         </div>
 
-        {/* ── row 2 ── */}
-        <div className="flex items-center gap-3 md:gap-6">
-          <div className="flex min-w-0 flex-1 flex-col gap-1 md:gap-2">
+        {/* ── row 2 ──
+            On a phone it is TWO rows (1285:92930): the title over its count,
+            then the share disc and the red pill on a row of their own, 16
+            below — the file gives the title the whole 342 rather than
+            squeezing it beside two controls. From `md` the desktop's one
+            row: title and count on the left, the discs at the right edge. */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             {/*
               20/28 on a phone, the file's 24/32 from `md` up.
 
@@ -226,7 +251,8 @@ export function HouseHeader({
               roughly 150px of column to wrap inside. Nothing above `md`
               changes; the desktop header is still the file's.
             */}
-            <h1 className="ws-display text-[20px] leading-7 md:text-[24px] md:leading-8">{topic}</h1>
+            {/* 1285:92932 — Bold 16/24 on a phone; the desktop's 24/32 from `md`. */}
+            <h1 className="ws-display text-[16px] leading-6 md:text-[24px] md:leading-8">{topic}</h1>
             {/* 129:11900 — 16/24 at `white/50`, stepped down with the title so
                 the pair keeps its proportion instead of the subtitle crowding
                 a smaller heading. */}
@@ -235,7 +261,8 @@ export function HouseHeader({
 
           {/* 38px circles, gap 16. `ws-glass-pill` is the file's own material —
               see globals.css for why it is a recessed lens and not a ring. */}
-          <div className="flex shrink-0 items-center gap-2 md:gap-4">
+          {/* 1285:92934 — a HUG row on a 16 gap at both widths. */}
+          <div className="flex shrink-0 items-center gap-4">
             {onShare && (
               <button
                 type="button"
@@ -281,20 +308,28 @@ export function HouseHeader({
                 "this destroys something" — a wash, a glyph and a label at the
                 same hue rather than three reds a pixel apart.
               */
+              /*
+                NOW LABELLED AT BOTH WIDTHS. The phone frame (1285:92938) draws
+                the pill at 115x38 with its glyph and label — "Close Room" for
+                the host — on 8 of padding, the label at 12/20; the title moved
+                onto its own row, so the pill no longer costs it anything. The
+                solid red disc that stood in for it below `md` is gone with the
+                reason for it. The wash, glyph and label all render from the
+                one `--color-danger` token (see above), so the phone's `#FF0B0B`
+                wash, `#FF383C` glyph and `#FF5454` label are one red here too.
+
+                The visible label IS the accessible name now — the hidden span
+                is `display: none`, so only the width's own label is read.
+              */
               <button
                 ref={leaveRef}
                 type="button"
                 onClick={() => (confirmBeforeLeave ? setConfirming(true) : onLeave())}
-                /* The visible label disappears under `md`, so the accessible
-                   name has to come from somewhere else. It is spelled exactly
-                   as the label it replaces, so the two never disagree and a
-                   voice user asking for "Leave Room" hits the same control at
-                   both widths. */
-                aria-label="Leave Room"
                 aria-haspopup={confirmBeforeLeave ? "dialog" : undefined}
-                className="ws-press flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-danger text-white transition-colors hover:bg-danger/90 md:w-auto md:gap-2 md:bg-danger/[0.13] md:px-4 md:text-[15px] md:leading-6 md:text-danger md:hover:bg-danger/20"
+                className="ws-press flex h-[38px] w-[115px] shrink-0 items-center justify-center gap-2 rounded-full bg-danger/[0.13] px-2 text-[12px] leading-5 text-danger transition-colors hover:bg-danger/20 md:w-auto md:px-4 md:text-[15px] md:leading-6"
               >
                 <IconRoomLeave className="h-4 w-4 shrink-0" />
+                <span className="md:hidden">{leaveLabel}</span>
                 <span className="hidden md:inline">Leave Room</span>
               </button>
             )}
