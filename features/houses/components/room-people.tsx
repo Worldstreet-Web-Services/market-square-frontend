@@ -1,7 +1,13 @@
 "use client";
 
 import { Avatar } from "@/components/ui/avatar";
-import { IconPlateMic, IconRoomMicOff, IconViewAll } from "@/components/ui/room-icons";
+import {
+  IconPlateMic,
+  IconPlateMicOffSm,
+  IconPlateMicSm,
+  IconRoomMicOff,
+  IconViewAll,
+} from "@/components/ui/room-icons";
 import { cn } from "@/lib/cn";
 
 /**
@@ -22,6 +28,14 @@ import { cn } from "@/lib/cn";
  *
  * Rows are 6 across with a 24px gutter, which is what makes 104 the card width:
  * 6 × 104 + 5 × 24 = 744, the content width of the left column.
+ *
+ * ─── THE PHONE (1285:92941 / 1285:92987 in frame 1285:92794) ─────────────────
+ * Three across on a 16 gutter in a 342 column: 3 × 103 + 2 × 16 = 341. The
+ * tile is 103×144 — a 103 plate at radius 24.92 (`#EDEDED` placeholder, same
+ * rule), the 31.15 microphone disc centred on it, the 24px pair straddling its
+ * foot at y=91 (12 of overhang, so the group is 115), then 15, then the name at
+ * 12/14.06. Section headings are 14/20. Every `md:` value below is the desktop
+ * file's, unchanged.
  */
 
 export interface RoomPerson {
@@ -91,16 +105,17 @@ function PersonCard({ person }: { person: RoomPerson }) {
     <Root
       {...(person.onOpen ? { type: "button" as const, onClick: person.onOpen } : {})}
       className={cn(
-        "flex w-[104px] shrink-0 flex-col gap-2",
+        "flex w-[103px] shrink-0 flex-col gap-[15px] md:w-[104px] md:gap-2",
         person.onOpen && "ws-press text-left"
       )}
     >
       {/* 125 tall: the 113 plate plus the badge's 12px of overhang, so the
-          badge does not push the name down the way a flow child would. */}
-      <div className="relative h-[125px] w-[104px]">
+          badge does not push the name down the way a flow child would. On a
+          phone the same shape at 103 + 12 = 115. */}
+      <div className="relative h-[115px] w-[103px] md:h-[125px] md:w-[104px]">
         <div
           className={cn(
-            "relative flex h-[113px] w-[104px] items-center justify-center overflow-hidden rounded-[32px] bg-white/10 transition-shadow",
+            "relative flex h-[103px] w-[103px] items-center justify-center overflow-hidden rounded-[24.92px] bg-white/10 transition-shadow md:h-[113px] md:w-[104px] md:rounded-[32px]",
             person.speaking && "ring-2 ring-create"
           )}
         >
@@ -138,16 +153,25 @@ function PersonCard({ person }: { person: RoomPerson }) {
             <span
               className={cn(
                 "absolute inset-0 flex items-center justify-center",
-                person.mic === "muted" && "bg-black/45"
+                // The wash is the DESKTOP's reading of muted; the phone frame
+                // draws the file's own slashed disc (1285:92964) with no wash.
+                person.mic === "muted" && "md:bg-black/45"
               )}
             >
               {person.mic === "muted" ? (
-                <IconRoomMicOff className="h-6 w-6 text-white/80 drop-shadow" />
+                <>
+                  <IconPlateMicOffSm className="h-[71px] w-[71px] md:hidden" />
+                  <IconRoomMicOff className="hidden h-6 w-6 text-white/80 drop-shadow md:block" />
+                </>
               ) : (
                 /* The disc, its `white/10` fill and its glow are all INSIDE the
                    exported node, which is why it is 90 wide for a 40px disc —
-                   the glow pads the art. Drawn at 90 so nothing is clipped. */
-                <IconPlateMic className="h-[90px] w-[90px]" />
+                   the glow pads the art. Drawn at 90 so nothing is clipped.
+                   The phone's is the 31.15 disc (1285:92949), padded to 71. */
+                <>
+                  <IconPlateMicSm className="h-[71px] w-[71px] md:hidden" />
+                  <IconPlateMic className="hidden h-[90px] w-[90px] md:block" />
+                </>
               )}
             </span>
           )}
@@ -160,12 +184,15 @@ function PersonCard({ person }: { person: RoomPerson }) {
           position them without knowing what a Profile is.
         */}
         {person.actions && (
-          <span className="absolute left-1/2 top-[101px] -translate-x-1/2">{person.actions}</span>
+          <span className="absolute left-1/2 top-[91px] -translate-x-1/2 md:top-[101px]">
+            {person.actions}
+          </span>
         )}
       </div>
 
-      {/* 169:13373 — `#FFFFFF` at 14/24, not the column's body grey. */}
-      <span className="w-full truncate text-center text-[14px] leading-6 text-white">
+      {/* 169:13373 — `#FFFFFF` at 14/24, not the column's body grey. The
+          phone's name (1285:92958) is 12/14.06. */}
+      <span className="w-full truncate text-center text-[12px] leading-[14px] text-white md:text-[14px] md:leading-6">
         {person.name}
       </span>
     </Root>
@@ -229,7 +256,7 @@ export function RoomPeopleSection({
         {/* 169:13359 — 16/24 at `white/50`. `text-body` is #d4d4d8, which is
             half again as bright and made every section heading compete with the
             names under it. */}
-        <h2 className="shrink-0 text-[16px] leading-6 text-white/50">{title}</h2>
+        <h2 className="shrink-0 text-[14px] leading-5 text-white/50 md:text-[16px] md:leading-6">{title}</h2>
         {rule && <span aria-hidden className="h-px flex-1 bg-white/25" />}
         {action}
       </div>
@@ -239,8 +266,12 @@ export function RoomPeopleSection({
       ) : (
         /* Wraps rather than scrolls: the file draws two full rows of six and a
            room can hold more, and a horizontal scroller hides people behind a
-           gesture nobody is told about. */
-        <div className="flex flex-wrap gap-x-6 gap-y-4">
+           gesture nobody is told about.
+
+           Rows are `items-center` because the file's are (1285:93038): the
+           View all cell is shorter than a tile and sits on the row's middle.
+           Nothing moves on desktop, where every cell is the same 157. */
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-4 md:gap-x-6">
           {shown.map((person) => (
             <PersonCard key={person.id} person={person} />
           ))}
@@ -259,18 +290,23 @@ export function RoomPeopleSection({
  */
 function ViewAllTile({ onClick }: { onClick: () => void }) {
   return (
+    /*
+      ON A PHONE (1285:93069) the group is 104×113: the 48 disc, 8, then
+      "View all" at 14/16.5, the pair centred in the 113. The desktop's disc
+      sits in the tile's own 125 box with the label at 14/24 beneath.
+    */
     <button
       type="button"
       onClick={onClick}
-      className="ws-press flex w-[104px] shrink-0 flex-col items-center gap-2"
+      className="ws-press flex h-[113px] w-[104px] shrink-0 flex-col items-center justify-center gap-2 md:h-auto md:justify-start"
     >
-      <span className="flex h-[125px] w-[104px] items-center justify-center">
+      <span className="flex h-12 w-12 items-center justify-center md:h-[125px] md:w-[104px]">
         {/* Node 169:13519, exported whole: the 48px disc, its `white/10` fill,
             its glow and the people glyph are one asset. Exported at 98 because
-            the glow pads it. */}
-        <IconViewAll className="h-[98px] w-[98px]" />
+            the glow pads it — the phone's 1285:93072 is the same node. */}
+        <IconViewAll className="h-[98px] w-[98px] max-w-none shrink-0" />
       </span>
-      <span className="w-full truncate text-center text-[14px] leading-6 text-white/50">
+      <span className="w-full truncate text-center text-[14px] leading-[16.5px] text-white/50 md:leading-6">
         View all
       </span>
     </button>

@@ -992,6 +992,20 @@ body {
   }
 }
 
+/* ─── AND ON A PHONE, WHILE A ROOM'S OWN BAR HAS TAKEN THE DOCK'S PLACE ─────
+   A live gist room pins its own 80px control bar to the bottom edge of a
+   phone (node 1285:93076) and the shell hides the dock while it is up
+   (`lib/room-bar-store.ts`, stamped as `data-dock` by app-shell.tsx). The
+   same lesson as the rail above: the VARIABLE has to tell the truth, or
+   `main` and every other reader go on padding 112px for a dock that is not
+   drawn — a band of dead space under the room's own bar. The room reserves
+   its bar's height itself. */
+@media (width < 48rem) {
+  [data-dock="room-bar"] {
+    --ws-nav-h: 0px;
+  }
+}
+
 /*
   HOME STARTS ON THE LOGO'S LINE WHILE THE DOCK IS ON.
 

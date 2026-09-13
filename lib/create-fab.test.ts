@@ -138,10 +138,23 @@ describe("the create button is rendered once, fixed, in the shell", () => {
       /const railOn = MARKET_FLAGS\.sidebar && !guest && !sidebarHidden;/,
       "railOn must be exactly flag AND signed in AND not tucked away"
     );
+    /*
+      And ONE more, on phones only: while a live gist room's own bottom bar is
+      up (1285:93076) it stands exactly where the dock would, and the dock
+      steps aside below `md` — rung by the bar through `lib/room-bar-store.ts`,
+      never by the route. It is a separate condition and must stay separate:
+      `railOn` still alone decides `md:hidden`, so desktop never loses the
+      dock for a reason that belongs to a phone bar.
+    */
     assert.match(
       shellDock,
-      /className=\{railOn \? "md:hidden" : undefined\}/,
-      "the dock may only step aside when the rail is ACTUALLY shown — railOn"
+      /className=\{cn\(railOn && "md:hidden", roomBar && "max-md:hidden"\)\}/,
+      "the dock may only step aside when the rail is ACTUALLY shown — railOn — or, on a phone, while a room's own bar stands in its place"
+    );
+    assert.match(
+      shellDock,
+      /const roomBar = useRoomBar\(\);/,
+      "the phone exception must come from lib/room-bar-store.ts, not an inline path check"
     );
     assert.match(shellDock, /\{railOn && \(\s*<Sidebar/, "the rail mounts on the same railOn");
   });

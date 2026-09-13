@@ -8,10 +8,11 @@ import type { Room } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
 import { Sheet } from "@/components/ui/sheet";
-import { IconLink } from "@/components/ui/icons";
+import { IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
 import { RemoteAudio } from "@/features/streams/components/remote-audio";
 import { baseIdentity, participantLabel, remoteAudioSlots, type StageSlot } from "@/features/streams/lib/stage";
@@ -46,6 +47,7 @@ import { HandTray } from "@/features/houses/components/hand-tray";
 import { HouseControls } from "@/features/houses/components/house-controls";
 import { HouseHeader } from "@/features/houses/components/house-header";
 import { RecordGistButton, RoomDock } from "@/features/houses/components/room-dock";
+import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PersonSheet, type PersonTarget } from "@/features/houses/components/person-sheet";
@@ -550,6 +552,17 @@ function LiveHouse({
   const gate = useGate();
   const me = useMe();
   const { message, announce } = useHouseAnnouncer();
+  /*
+    THE PHONE IS A DIFFERENT FRAME, not a narrower desktop — 1285:92794.
+
+    Below `md` the file draws one column with the room's chat and roster
+    reached from a bottom bar rather than stacked under the grid, so two
+    surfaces here are SHEETS on a phone and columns from `md`. The `md:`
+    classes carry most of that; this is for the two places a class cannot
+    decide — which container the one roster panel mounts into, and whether
+    the chat opens as a dialog. The same query the stylesheet is on.
+  */
+  const phone = useMediaQuery("(max-width: 767px)");
 
   /* ---- the one connection ------------------------------------------- */
 
@@ -986,6 +999,8 @@ function LiveHouse({
   /* ---- sheets ---------------------------------------------------------- */
 
   const [tray, setTray] = useState(false);
+  // The phone's chat sheet — 1285:93095 in the bottom bar opens it.
+  const [chatSheet, setChatSheet] = useState(false);
   const [overflowSheet, setOverflowSheet] = useState(false);
   const [person, setPerson] = useState<PersonTarget | null>(null);
 
@@ -1193,7 +1208,11 @@ function LiveHouse({
          to the chat column's #121214 — the two read as one surface. Flat
          ground on the left, `--color-chrome` on the right, exactly as
          129:11887 and 129:12852 are painted. */
-      className="flex w-full flex-col bg-chrome pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
+      /* The phone reserves its OWN bar's 80 (1285:93076) plus the home
+         indicator — the shell's dock is gone on this route below `md` and
+         `--ws-nav-h` is 0 there (lib/dock-surfaces.ts). From `md` the
+         floating pill's clearance, as before. */
+      className="flex w-full flex-col bg-chrome pb-[calc(80px+env(safe-area-inset-bottom,0px))] md:pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
     >
       {/* The audio itself. Mounted from its OWN map so it can never become
           conditional on anything visual — the reason RemoteAudio is its own
@@ -1228,10 +1247,20 @@ function LiveHouse({
             fact about the house, and this line describes the room.
           */
           <>
-            <span className="tnum">{listening}</span> listening ·{" "}
-            <span className="tnum">{speaking}</span> speaking
+            {/* The phone frame's one line (1285:92933) — "306 gist partners".
+                Still the ROOM's count, never the house's: everybody here,
+                listening and speaking, in the file's own words. */}
+            <span className="md:hidden">
+              <span className="tnum">{listening + speaking}</span> gist partners
+            </span>
+            <span className="hidden md:inline">
+              <span className="tnum">{listening}</span> listening ·{" "}
+              <span className="tnum">{speaking}</span> speaking
+            </span>
           </>
         }
+        // 1285:92940 — the host's phone pill says what leaving means for them.
+        leaveLabel={isHost ? "Close Room" : "Leave Room"}
         /*
           THIS file confirms, not the header. Both paths open the sheet below,
           whose copy knows whether the reader is the HOST — closing the room
@@ -1310,7 +1339,10 @@ function LiveHouse({
         section read as a ragged two-and-a-bit rows instead of the two full ones
         the design draws.
       */}
-      <div className={cn("flex flex-col gap-6 px-4 pb-6 pt-10 xl:px-[30px]", state === "failed" && "opacity-40")}>
+      {/* The phone's 342 column at x=24 (px-6), Speakers 24 under the header
+          (1285:92941 at y=307.37 against the head ending at 283.37) — the
+          header's own bottom padding is that 24, so no top padding here. */}
+      <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-10 xl:px-[30px]", state === "failed" && "opacity-40")}>
         <RoomPeopleSection
           title="Speakers"
           rule={false}
@@ -1344,7 +1376,7 @@ function LiveHouse({
         </div>
       )}
 
-      <div className="flex flex-col gap-6 px-4 pb-6 xl:px-[30px]">
+      <div className="flex flex-col gap-6 px-6 pb-6 md:px-4 xl:px-[30px]">
         {/*
           HOUSE MEMBERS is the roster of the group this room belongs to, and it
           is genuinely a different list from the AUDIENCE: a member may not be
@@ -1425,7 +1457,9 @@ function LiveHouse({
             : null
         }
         onReact={() => live.react(1)}
-        className="xl:sticky xl:bottom-0"
+        /* Absent on a phone: the frame's bottom bar (RoomPhoneBar, below) is
+           pinned to the viewport there and carries the same controls. */
+        className="hidden md:flex xl:sticky xl:bottom-0"
       />
 
       </div>
@@ -1437,7 +1471,12 @@ function LiveHouse({
         screen and a stacked block below `xl`; it is never hidden, because the
         chat is the only way somebody without a seat can say anything.
       */}
-      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
+      {/* NOT A COLUMN ON A PHONE. 1285:92794 draws no chat under the grid;
+          the chat is a sheet off the bottom bar's chat disc and the roster a
+          sheet off "View all" (both below). `max-md:hidden` keeps the chat
+          MOUNTED — its poll and scroll survive — the same reason the roster
+          `hidden`s it rather than unmounting it. */}
+      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome max-md:hidden xl:h-[calc(100dvh-var(--ws-crumb-h))] xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
         {/*
           THE ROSTER TAKES THIS COLUMN WHILE IT IS OPEN — 369:8740.
 
@@ -1448,14 +1487,18 @@ function LiveHouse({
           position and its poll survive being covered.
         */}
         {roster && (
-          <div ref={rosterRef} className="min-h-0 flex-1 p-6 xl:scroll-mt-0">
+          /* ONE panel, two homes: the column from `md`, a sheet on the phone
+             (the column is hidden there, and a panel inside a hidden column
+             is a "View all" that does nothing). The Sheet portals to the
+             body, so it renders from inside this aside regardless. */
+          <RosterSurface phone={phone} onClose={closeRoster} scrollRef={rosterRef}>
             <RoomRosterPanel
               title={roster.title}
               people={roster.people}
               onClose={closeRoster}
               actionsSlot={(username) => personActionsSlot?.(username, "labelled")}
             />
-          </div>
+          </RosterSurface>
         )}
         <div className={cn("flex min-h-0 flex-1 flex-col", roster && "hidden")}>
         {/* SPEAKER REQUEST — node 129:12809, host only, above the chat. It used
@@ -1499,7 +1542,10 @@ function LiveHouse({
         reach — so it stays exactly as it was.
       */}
       <HouseControls
-        className="xl:hidden"
+        /* And not on a PHONE either, where the frame's own bar (below) holds
+           every one of these: the mic, the heart, the hand and the queue in
+           the bar, leaving in the header's red pill. */
+        className="max-md:hidden xl:hidden"
         mic={
           onStage
             ? {
@@ -1533,6 +1579,69 @@ function LiveHouse({
               { label: "Leave quietly", onLeave: leave }
         }
       />
+
+      {/*
+        THE PHONE'S BOTTOM BAR — node 1285:93076, pinned to the viewport below
+        `md` where the shell's dock is absent for this route. Everything it
+        fires is the state above: the same mic toggle, the same request
+        mutations, the same reaction channel, the same tray.
+      */}
+      <RoomPhoneBar
+        mic={
+          onStage
+            ? {
+                on: micOn,
+                toggle: () => void micToggle(),
+                disabled: state === "reconnecting" || state === "failed",
+              }
+            : null
+        }
+        ask={
+          canAsk
+            ? {
+                label: pendingMine ? handLabel(mine.data?.createdAt) : "Ask to speak",
+                reason: pendingMine ? null : askReason,
+                pending: pendingMine,
+                busy: request.isPending || resolve.isPending || state !== "live",
+                onAsk: ask,
+                onLower: () =>
+                  mine.data?.id && resolve.mutate({ requestId: mine.data.id, action: "leave" }),
+              }
+            : null
+        }
+        tray={isHost ? { count: handsUp.length, onOpen: () => setTray(true) } : null}
+        onReact={() => live.react(1)}
+        incoming={incoming}
+        onChat={() => setChatSheet(true)}
+      />
+
+      {/* The chat, as a sheet, on a phone — the file's "Gistroom Chat" row
+          over a hairline, then the same panel the column holds. Only ever
+          opened from the phone bar, and dropped if the viewport grows past
+          `md`, where the column is back on screen. */}
+      <Sheet
+        open={chatSheet && phone}
+        onClose={() => setChatSheet(false)}
+        bare
+        panelClassName="h-[85dvh]"
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="ws-hair flex shrink-0 items-center justify-between border-b px-6 py-6">
+            <h2 className="text-[14px] font-bold leading-5 text-white">Gistroom Chat</h2>
+            <button
+              type="button"
+              onClick={() => setChatSheet(false)}
+              aria-label="Close the chat"
+              className="ws-press flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.04] text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <IconX className="h-2.5 w-2.5" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            <ChatPanel stream={stream} variant="room" />
+          </div>
+        </div>
+      </Sheet>
 
       {isHost && (
         <HandTray
@@ -1655,6 +1764,36 @@ function LiveHouse({
         </div>
       </Sheet>
     </main>
+  );
+}
+
+/**
+ * Where the roster panel lives: the chat's column from `md`, a sheet on a
+ * phone. One component so the ONE `RoomRosterPanel` mount above needs no
+ * second copy — a second would be a panel under the grid as well.
+ */
+function RosterSurface({
+  phone,
+  onClose,
+  scrollRef,
+  children,
+}: {
+  phone: boolean;
+  onClose: () => void;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+}) {
+  if (phone) {
+    return (
+      <Sheet open onClose={onClose} bare panelClassName="h-[85dvh]">
+        <div className="h-full p-4">{children}</div>
+      </Sheet>
+    );
+  }
+  return (
+    <div ref={scrollRef} className="min-h-0 flex-1 p-6 xl:scroll-mt-0">
+      {children}
+    </div>
   );
 }
 
