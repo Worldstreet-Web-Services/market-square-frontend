@@ -1,0 +1,211 @@
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import { Sheet } from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/button";
+import { ensureUploadLimits, uploadFile, validateUpload } from "@/lib/api/upload";
+import { useUpdateGroup } from "@/features/messages/hooks/use-messages";
+import type { Conversation } from "@/features/messages/lib/types";
+
+/**
+ * EDITING A GROUP AFTER IT EXISTS.
+ *
+ * Creating a group asks for a title, a description, a picture and a
+ * visibility — and then there was nowhere to change any of them
+ * (ogazboiz: "inside a group there is suppose to be a place where we can edit
+ * this settings"). Every one of those was already a real column and a real
+ * PATCH; the form was the missing half.
+ *
+ * It deliberately mirrors step 2 of the create flow, field for field and in
+ * the same order. A settings screen that asks different questions from the
+ * one that created the thing teaches people that the two are different
+ * objects.
+ *
+ * ─── WHAT IT DOES NOT DO ─────────────────────────────────────────────────────
+ * Members, roles, ownership and invite links are NOT here. They already have
+ * their own sheet reached from the thread, they are about PEOPLE rather than
+ * about the group's profile, and duplicating them would put two ways to remove
+ * somebody in one product.
+ *
+ * ─── ONLY WHAT CHANGED IS SENT ───────────────────────────────────────────────
+ * An absent field on the PATCH is left alone; a null clears it. So saving a
+ * title must not carry a description the person never touched — that is how a
+ * form quietly erases a field somebody else wrote.
+ */
+export function GroupSettingsSheet({
+  open,
+  onClose,
+  conversation,
+}: {
+  open: boolean;
+  onClose: () => void;
+  conversation: Conversation;
+}) {
+  const save = useUpdateGroup(conversation.id);
+
+  const [title, setTitle] = useState(conversation.title ?? "");
+  const [description, setDescription] = useState(conversation.description ?? "");
+  const [imageUrl, setImageUrl] = useState<string | null>(conversation.imageUrl ?? null);
+  const [visibility, setVisibility] = useState<"public" | "private">(
+    conversation.visibility === "public" ? "public" : "private"
+  );
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  /*
+    VISIBILITY IS OWNER-ONLY, and that is stricter than the rest of this form.
+    An admin may edit the title, description and picture, and gets a 403 on
+    visibility. So the control is gated on the role rather than on "can edit
+    this form" — otherwise an admin sees a switch that always fails, which is
+    worse than not offering it.
+  */
+  const isOwner = conversation.viewerRole === "owner";
+
+  // The picture goes through the same verification a message attachment does,
+  // so a group image can only ever be a file this service stored.
+  const takeImage = async (file: File | undefined) => {
+    if (!file || imageBusy) return;
+    setImageError(null);
+    await ensureUploadLimits();
+    const problem = validateUpload(file, "image");
+    if (problem) {
+      setImageError(problem);
+      return;
+    }
+    setImageBusy(true);
+    try {
+      const result = await uploadFile(file, undefined, "image");
+      setImageUrl(result.url);
+    } catch (cause) {
+      setImageError(cause instanceof Error ? cause.message : "That upload didn't finish.");
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  const named = title.trim();
+  // Only the fields that actually moved. See the header.
+  const edit = {
+    ...(named && named !== (conversation.title ?? "") ? { title: named } : {}),
+    ...(description.trim() !== (conversation.description ?? "")
+      ? { description: description.trim() || null }
+      : {}),
+    ...(imageUrl !== (conversation.imageUrl ?? null) ? { imageUrl } : {}),
+    ...(isOwner && visibility !== (conversation.visibility ?? "private") ? { visibility } : {}),
+  };
+  const changed = Object.keys(edit).length > 0;
+
+  const field =
+    "w-full rounded-2xl border border-white/12 bg-black/35 px-3 py-2 text-[14px] text-white outline-none placeholder:text-meta focus:border-white/25";
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Group settings">
+      <div className="space-y-4 p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/12 bg-white/5">
+            {imageUrl ? (
+              <Image src={imageUrl} alt="" width={64} height={64} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-[20px] text-meta">{(named || "G").slice(0, 1).toUpperCase()}</span>
+            )}
+          </span>
+          <label className="ws-press cursor-pointer rounded-full border border-white/15 px-4 py-2 text-[12px] font-semibold text-white/80">
+            {imageBusy ? "Uploading…" : imageUrl ? "Change picture" : "Upload picture"}
+            <input
+              type="file"
+              /* The service stores png, jpeg, webp and gif and refuses the
+                 rest, so the picker offers exactly those — image/* would let
+                 somebody choose a HEIC straight off an iPhone and only find
+                 out it was refused after the upload finished. */
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="sr-only"
+              disabled={imageBusy}
+              onChange={(event) => void takeImage(event.target.files?.[0])}
+            />
+          </label>
+        </div>
+        {imageError && (
+          <p role="alert" className="text-[12px] text-down">
+            {imageError}
+          </p>
+        )}
+
+        <label className="block">
+          <span className="mb-1 block text-[12px] font-semibold text-meta">Name</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className={field} />
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-[12px] font-semibold text-meta">Description</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="What is this group for?"
+            className={field}
+          />
+        </label>
+
+        <div>
+          <span className="mb-2 block text-[12px] font-semibold text-meta">Who can get in</span>
+          <div className="flex flex-col gap-2">
+            {(["private", "public"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                disabled={!isOwner}
+                aria-pressed={visibility === option}
+                onClick={() => setVisibility(option)}
+                className={`ws-press flex items-center gap-2 rounded-full border bg-white/5 px-3 py-2.5 text-left text-[13px] text-white/90 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  visibility === option ? "border-white/40" : "border-white/20"
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                    visibility === option ? "border-white" : "border-white/40"
+                  }`}
+                >
+                  {visibility === option && <span className="h-2 w-2 rounded-full bg-white" />}
+                </span>
+                {option === "private" ? "Private" : "Public"}
+              </button>
+            ))}
+          </div>
+          {/*
+            PUBLIC CARRIES BOTH PROMISES AT ONCE — the group is LISTED where
+            people browse houses, AND anybody who has it can walk in. The
+            weaker wording ("anyone with the link can join") was what this
+            product used to say, and it understates what actually happens.
+
+            Private is not "nobody gets in": an invite link is a separate door
+            that never consulted visibility, and going private does not revoke
+            the links already handed out. Saying so here is the difference
+            between a promise and a surprise.
+          */}
+          <p className="mt-2 text-[12px] leading-4 text-meta">
+            {visibility === "private"
+              ? "Only people who are added, or who already have an invite link, can get in."
+              : "Anyone can find this group and join it."}
+          </p>
+          {!isOwner && (
+            <p className="mt-1 text-[12px] leading-4 text-meta">
+              Only the group&apos;s owner can change this.
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          disabled={!changed || !named || save.isPending || imageBusy}
+          onClick={() => save.mutate(edit, { onSuccess: onClose })}
+          className="ws-btn-create ws-press flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {save.isPending && <Spinner className="h-4 w-4" />}
+          {!named ? "A group needs a name" : changed ? "Save changes" : "Nothing to save"}
+        </button>
+      </div>
+    </Sheet>
+  );
+}

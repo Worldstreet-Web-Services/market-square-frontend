@@ -134,4 +134,11 @@ export type FeedStream = z.infer<typeof FeedStreamSchema>;
 export type FeedPage = z.infer<typeof FeedPageSchema>;
 export type ReportReason = z.infer<typeof ReportReasonSchema>;
 export type Mention = z.infer<typeof MentionSchema>;
-export type Lane = "for-you" | "following" | "live" | "platform" | "reels" | "trending";
+export type Lane =
+  | "for-you"
+  | "following"
+  | "pals"
+  | "live"
+  | "platform"
+  | "reels"
+  | "trending";

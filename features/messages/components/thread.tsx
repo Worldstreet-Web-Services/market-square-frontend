@@ -18,6 +18,7 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
+import { GroupSettingsSheet } from "@/features/messages/components/group-settings-sheet";
 import { ShareSheet } from "@/components/ui/share-sheet";
 import { canMakeInvite, inviteUrl } from "@/features/messages/lib/invites";
 import { memberActions, viewerRole, type GroupRole } from "@/features/messages/lib/roles";
@@ -34,6 +35,8 @@ import { formatBytes, type UploadResult } from "@/lib/api/upload";
 import { canSendMessage, type OutgoingMessage } from "@/features/messages/lib/outgoing";
 import { useVoiceRecorder } from "@/features/messages/hooks/use-voice-recorder";
 import { formatElapsed } from "@/features/messages/lib/voice-recorder";
+import { dotScale } from "@/lib/voice-levels";
+import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
 import { uploadFile } from "@/lib/api/upload";
 import { IconArrowLeft, IconHouses, IconMic, IconPlay, IconPause, IconQuote, IconX } from "@/components/ui/icons";
 import {
@@ -1231,6 +1234,54 @@ function MessageRow({
     if (!from) return;
     if (Math.hypot(event.clientX - from.x, event.clientY - from.y) > 10) cancelPress();
   };
+  /*
+    SWIPE RIGHT TO REPLY — the gesture people already have in their hands.
+
+    Replying on a phone was otherwise a two-step move nobody would guess:
+    hold for 450ms, wait for a 28px disc, hit it. That disc is hidden on touch
+    the rest of the time, so there was effectively no reply from a phone
+    unless you already knew the trick. The long-press still works; this is the
+    one-motion version beside it.
+
+    A drag is only claimed once it is CLEARLY horizontal (see lib/swipe-reply),
+    because the thread's main gesture is scrolling and a finger travelling up
+    always drifts sideways. Claiming that drift would make the thread feel
+    stuck — much worse than a reply that needs a second try. `touch-pan-y` on
+    the row leaves vertical scrolling to the browser and takes only the
+    horizontal axis.
+  */
+  const [dragX, setDragX] = useState(0);
+  const dragFrom = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+
+  const startDrag = (event: React.PointerEvent) => {
+    if (event.pointerType === "mouse" || removed) return;
+    dragFrom.current = { x: event.clientX, y: event.clientY };
+    dragging.current = false;
+  };
+  const moveDrag = (event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (!from) return;
+    const dx = event.clientX - from.x;
+    const dy = event.clientY - from.y;
+    if (!isReplySwipe(dx, dy)) return;
+    dragging.current = true;
+    setDragX(swipeOffset(dx));
+  };
+  const endDrag = (event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (from && dragging.current) {
+      const dx = event.clientX - from.x;
+      const dy = event.clientY - from.y;
+      // Committed on RELEASE, never mid-drag: a reply that fired under a
+      // moving finger would be one nobody chose to send.
+      if (swipeCommits(dx, dy)) onReply(message);
+    }
+    dragFrom.current = null;
+    dragging.current = false;
+    setDragX(0);
+  };
+
   const startPress = (event: React.PointerEvent) => {
     if (event.pointerType === "mouse" || removed) return;
     cancelPress();
@@ -1286,22 +1337,53 @@ function MessageRow({
   return (
     <div
       data-message-id={message.id}
-      onPointerDown={startPress}
-      onPointerUp={cancelPress}
-      onPointerCancel={cancelPress}
-      onPointerMove={movePress}
+      onPointerDown={(event) => {
+        startPress(event);
+        startDrag(event);
+      }}
+      onPointerUp={(event) => {
+        cancelPress();
+        endDrag(event);
+      }}
+      onPointerCancel={(event) => {
+        cancelPress();
+        endDrag(event);
+      }}
+      onPointerMove={(event) => {
+        movePress(event);
+        moveDrag(event);
+      }}
+      style={{ transform: dragX ? `translateX(${dragX}px)` : undefined }}
       onContextMenu={(event) => {
         // A long-press that reached the OS menu is the one gesture we mean.
         if (revealed) event.preventDefault();
       }}
       className={cn(
-        "group flex items-end gap-2 rounded-2xl transition-colors duration-700",
+        "group relative flex touch-pan-y items-end gap-2 rounded-2xl transition-colors duration-700",
+        // No transition WHILE dragging or the row lags the finger; springing
+        // back afterwards is the part that should be animated.
+        !dragX && "transition-transform",
         mine ? "justify-end" : "justify-start",
         // The flash after a quote tap: a wash on the whole row, which is the
         // one thing that reads the same behind a white and a purple bubble.
         flash && "-mx-2 bg-white/[0.08] px-2 duration-150"
       )}
     >
+      {/* The glyph WhatsApp shows while you pull: it sits just off the row's
+          left edge and rides in as the row travels, so it is revealed by the
+          drag rather than drawn on top of it. It fades in across the trigger
+          distance, which makes the fade itself the signal that letting go now
+          will reply. `aria-hidden` — the reply is announced by the control it
+          leads to, and a screen-reader user is not dragging anything. */}
+      {dragX > 0 && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -left-9 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white"
+          style={{ opacity: Math.min(1, dragX / SWIPE_TRIGGER) }}
+        >
+          <IconQuote className="h-3.5 w-3.5" />
+        </span>
+      )}
       {group && !mine && (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10">
           <Avatar
@@ -1558,26 +1640,77 @@ function Composer({
       )}
 
       {voice.recording && (
-        // Replaces nothing — it sits above the row, so the draft and the
-        // attachment chip stay visible while you talk.
-        <div className="mb-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
-          <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#e84a4a]" />
-          <p className="flex-1 text-[12px] text-white/80" role="status">
-            Recording <span className="tnum text-white/50">{formatElapsed(voice.elapsed)}</span>
-          </p>
+        /*
+          WHAT THE MICROPHONE IS HEARING, WHILE YOU TALK.
+
+          This was a pulsing dot, a clock and two text buttons. All of it
+          animated exactly the same whether the microphone was picking you up
+          or muted, so the only question a person has while recording — "is
+          this getting me?" — went unanswered until playback (ogazboiz: "the ux
+          experince is bad").
+
+          The bars are MEASURED, not decorative. They share the geometry of the
+          playback bars (34, floor 0.25) so a note being recorded and the same
+          note played back read as one object — but the playback bars are
+          hashed from the message id and say so in capitals, while these come
+          from the analyser. Drawing a hashed waveform here would dance
+          identically over a muted microphone, which is worse than the dot it
+          replaces: it looks like feedback and is not.
+
+          It sits ABOVE the composer row, so the draft and any attachment stay
+          visible while you talk.
+        */
+        <div className="mb-2 flex items-center gap-3 rounded-[18px] border border-white/10 bg-white/[0.04] px-3 py-2.5">
+          {/* The playback bubble's own bars, to the pixel: h-8, 3px apart,
+              2px wide, rounded. A note being recorded and the same note played
+              back are then visibly one object. The row GROWS from the left as
+              you speak rather than sitting pre-filled — it starts when you
+              start, so the first bar appearing is itself the confirmation
+              that the microphone opened. */}
+          <span aria-hidden className="flex h-8 min-w-0 flex-1 items-center gap-[3px] overflow-hidden">
+            {voice.levels.map((level, index) => (
+              <span
+                key={index}
+                className="w-[2px] shrink-0 rounded-full bg-white/60"
+                style={{ height: `${Math.round(dotScale(level) * 100)}%` }}
+              />
+            ))}
+          </span>
+
+          {/* The clock is the accessible statement; the bars are decoration to
+              a screen reader, which cannot see them move. */}
+          <span className="tnum shrink-0 text-[12px] text-white/60" role="status">
+            {formatElapsed(voice.elapsed)}
+          </span>
+
+          {/* Stop and discard. A square, because that is what a stop control
+              is everywhere else, and NOT styled as the primary action — the
+              destructive one should never be the easiest to hit. */}
           <button
             type="button"
             onClick={voice.cancel}
-            className="ws-press rounded-full px-2 py-1 text-[12px] font-semibold text-white/60 transition-colors hover:text-white"
+            aria-label="Stop and discard recording"
+            className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/15"
           >
-            Cancel
+            <span aria-hidden className="h-3 w-3 rounded-[2px] bg-current" />
           </button>
+
+          {/* Send. The violet ramp, as every other primary action on Square. */}
           <button
             type="button"
             onClick={() => void finishVoice()}
-            className="ws-press rounded-full bg-white px-3 py-1 text-[12px] font-semibold text-black"
+            aria-label="Send voice note"
+            className="ws-btn-create ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
           >
-            Done
+            <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none">
+              <path
+                d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </div>
       )}
@@ -1783,6 +1916,7 @@ export function Thread({
   const [deleting, setDeleting] = useState(false);
   const removeChat = useDeleteConversation();
   const rename = useRenameGroup(conversation.id);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const leave = useLeaveGroup(conversation.id);
 
   /*
@@ -1924,7 +2058,7 @@ export function Thread({
               onAddMembers,
               onViewMembers: () => setMembersOpen(true),
               onShareInvite: canShareInvite ? shareInvite : undefined,
-              onRenameGroup: () => setRenaming(true),
+              onRenameGroup: () => setSettingsOpen(true),
               onLeaveGroup: me.data ? () => setLeaving(true) : undefined,
               onDeleteChat: () => setDeleting(true),
             }}
@@ -2023,6 +2157,17 @@ export function Thread({
           myRole={myRole}
         />
       )}
+
+      {/* EVERY FIELD CREATING A GROUP ASKS FOR, editable afterwards — name,
+          description, picture and visibility. It used to be the title alone,
+          so a group could be created public and never changed, or described
+          once and never again (ogazboiz: "inside a group there is suppose to
+          be a place where we can edit this settings"). */}
+      <GroupSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        conversation={conversation}
+      />
 
       {/* "Edit group title" — `PATCH /conversations/:id { title }`, owner only,
           which the service enforces. 80 characters is the contract's cap, so

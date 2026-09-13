@@ -43,7 +43,19 @@ export function PalsInRooms() {
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby="pals-in-rooms" className="mb-[64px]">
+    /*
+      THE SECTION OWNS ITS OWN SPACING, and that is the whole point on a rail
+      that renders nothing most of the time. It used to sit inside a wrapper
+      carrying `mt-[51px]`, so an EMPTY rail still cost 51px — a gap under the
+      search row with nothing in it, which is exactly what a reader reads as
+      the page being broken. The margin lives here, so it disappears with the
+      section.
+
+      28 is the head's rhythm on this page — the same step the stories row and
+      the topic row use. It carries no bottom margin: whatever follows brings
+      its own.
+    */
+    <section aria-labelledby="pals-in-rooms" className="mt-[28px]">
       <h2 id="pals-in-rooms" className="mb-3 text-[15px] font-bold text-white">
         In a room now
       </h2>

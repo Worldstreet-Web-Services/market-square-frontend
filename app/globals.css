@@ -649,6 +649,35 @@ body {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
+/*
+  iOS ZOOMS INTO ANY FIELD IT CONSIDERS SMALL, and the threshold is exactly
+  16px. Safari on iPhone scales the whole page up on focus so the text is
+  legible, then leaves the reader zoomed in and scrolled sideways — the
+  composer ends up half off-screen, and it happens every single time somebody
+  taps to type. ogazboiz hit it in the message composer.
+
+  It is fixed HERE rather than field by field because the trigger is the
+  computed size, so every field that inherits the body size is affected too,
+  not just the ones that set a small size on purpose. There were nine such
+  fields across messages alone; the next one somebody adds would have the bug
+  again on the day it shipped.
+
+  `pointer: coarse` so the DESIGN survives where it is not a problem: on a
+  mouse the drawn sizes stand, and only touch devices are lifted to 16.
+
+  Deliberately NOT `maximum-scale=1` on the viewport, which is the other way
+  people fix this: it stops the zoom by forbidding pinch-zoom entirely, which
+  takes a real accessibility affordance away from everybody to spare us a
+  layout problem.
+*/
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Pill input: rail search and any single-line filter field. */
 @utility ws-field {
   border-radius: 9999px;
@@ -919,7 +948,8 @@ body {
      Published as a variable because the fixed create button tracks the same
      edge — measured from the viewport it would sit out in the gutter. */
   --ws-shell-max: 1265px;
-  --ws-topbar-h: 48px;
+  /* The phone bar is node 1285:94852: 16 + a 40 row + 16. It was 48. */
+  --ws-topbar-h: 72px;
   /* The desktop breadcrumb bar's height — 76px in node 15:1302, and 0 on a
      phone where the bar is `hidden md:flex`.
      Published because one surface has to subtract it: Messages is the only

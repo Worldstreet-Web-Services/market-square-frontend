@@ -51,16 +51,26 @@ import type { Profile } from "@/lib/api/schemas";
  * goes through the same upload verification a message attachment does, so a
  * group image can only ever be a file this service stored.
  *
- * VISIBILITY IS DRAWN AND INERT, and this is the one place in the flow where
- * the design promises something the product cannot do. There is no way to find
- * a group you are not in: no directory, no join route, and `GET
- * /me/conversations` is membership-scoped. So every group is private in the
- * only sense anybody can observe, and a Public option that merely stored a
- * flag would be a statement about who can see the conversation that nothing
- * enforces. A control that makes a promise about privacy has to be true on the
- * day it ships, so Public is disabled and says why, and the line beneath
- * states what is actually the case rather than the file's placeholder
- * "Visible to ...".
+ * VISIBILITY IS REAL AND ENFORCED. This block used to say the opposite —
+ * "drawn and inert", "no directory, no join route", "Public is disabled" —
+ * and every clause of that has since become false: `GET
+ * /conversations/discover` lists public houses, `POST /conversations/:id/join`
+ * lets somebody walk into one, and both create and PATCH accept `visibility`.
+ * The control below has been live for some time; only this comment lagged.
+ *
+ * PUBLIC CARRIES BOTH PROMISES AT ONCE: the group is LISTED where people
+ * browse houses, AND anybody holding it may join. It is the stronger of the
+ * two, so the copy is worded for the stronger one — "anyone with the link can
+ * join" understated what actually happens.
+ *
+ * PRIVATE IS NOT "nobody gets in". An invite link is a separate door that
+ * never consulted visibility, so a private group is still enterable by anyone
+ * holding a link somebody made. Saying so is the difference between a promise
+ * and a surprise.
+ *
+ * It can be changed afterwards, in Group settings — owner only, stricter than
+ * the rest of that endpoint. See features/messages/components/
+ * group-settings-sheet.tsx.
  */
 
 const TITLE_MAX = 80;
@@ -496,8 +506,8 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
                 <path d="M2.4 9h13.2M9 2a13 13 0 0 1 0 14M9 2a13 13 0 0 0 0 14" />
               </svg>
               {visibility === "private"
-                ? "Only the people you add can see this group."
-                : "Anyone with the link can join this group."}
+                ? "Only people who are added, or who already have an invite link, can get in."
+                : "Anyone can find this group and join it."}
             </p>
           </div>
 
