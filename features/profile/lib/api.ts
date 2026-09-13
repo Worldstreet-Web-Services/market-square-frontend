@@ -33,6 +33,17 @@ export async function fetchFollowing(profileId: string, cursor?: string) {
   );
 }
 
+/**
+ * `GET /profiles/:id/followers` — public and paged, the reverse edge of the
+ * one above. Needed because a PAL is a mutual follow, and "following" alone
+ * cannot tell you who chose you back.
+ */
+export async function fetchFollowers(profileId: string, cursor?: string) {
+  return FollowingPageSchema.parse(
+    await msApi.get(`/profiles/${encodeURIComponent(profileId)}/followers`, { cursor, limit: 30 })
+  );
+}
+
 /** `GET /me/winks` — who winked at the reader, newest first. A 404 before it deploys is "not deployed". */
 export async function fetchMyWinks(cursor?: string) {
   return WinksPageSchema.parse(await msApi.authedGet("/me/winks", { cursor, limit: 25 }));

@@ -36,6 +36,7 @@ import {
   setBlocked,
   setFollow,
   updateMe,
+  fetchFollowers,
   fetchFollowing,
   fetchMyWinks,
 } from "@/features/profile/lib/api";
@@ -56,6 +57,17 @@ export function useFollowingList(profileId: string | undefined) {
   return useInfiniteQuery({
     queryKey: ["ms", "following", profileId],
     queryFn: ({ pageParam }) => fetchFollowing(profileId ?? "", pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: Boolean(profileId),
+  });
+}
+
+/** The reverse edge — who follows this person. Paged like the list above. */
+export function useFollowersList(profileId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["ms", "followers", profileId],
+    queryFn: ({ pageParam }) => fetchFollowers(profileId ?? "", pageParam ?? undefined),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: Boolean(profileId),
