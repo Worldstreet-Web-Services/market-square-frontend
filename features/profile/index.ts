@@ -28,6 +28,7 @@ export {
   // topic vocabulary from discovery; this is the read it needs from here.
   useProfileStreams,
   // Pals' Winks and Following tabs.
+  useFollowersList,
   useFollowingList,
   useMyWinks,
 } from "./hooks/use-profile";

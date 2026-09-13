@@ -48,6 +48,24 @@ export { StreamSchema, TicketSchema };
 export type { Stream, Ticket } from "@/lib/api/schemas";
 
 
+/**
+ * `GET /me/following/rooms` — "Rooms your people are in".
+ *
+ * A live room PLUS the people the caller follows who are listening in it right
+ * now. The service does the hard part: it counts only people whose "Visibility
+ * on Space" is on, never the host, and only rooms this caller could see anyway
+ * (a private room only to its members). So a name here is one the reader was
+ * already allowed to see, in a room they can already enter.
+ *
+ * The row is the stream shape with `participants` added, so the room renders
+ * with the same component as any other room rather than a second card.
+ */
+export const FollowingRoomSchema = StreamSchema.extend({
+  participants: z.array(ProfileSchema).optional().default([]),
+});
+export const FollowingRoomsSchema = z.array(FollowingRoomSchema);
+export type FollowingRoom = z.infer<typeof FollowingRoomSchema>;
+
 export const StreamListSchema = z.object({
   items: z.array(StreamSchema),
   nextCursor: z.string().nullable().optional().default(null),

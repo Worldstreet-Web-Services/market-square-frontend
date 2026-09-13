@@ -42,6 +42,7 @@ import {
   resolveSpeakerRequest,
   fetchStreamByCode,
   remindStream,
+  fetchFollowingRooms,
 } from "@/features/streams/lib/api";
 import type { Stream, StreamCategory, StreamKind, TicketTier } from "@/features/streams/lib/types";
 import {
@@ -129,6 +130,32 @@ export function useStreamList(
  * ever, and the only transition it cares about is live -> ended, after which
  * polling a finished room for the rest of the session is pure waste.
  */
+/**
+ * WHO OF YOURS IS IN A ROOM RIGHT NOW.
+ *
+ * Signed-in only, because it is a statement about the caller's own graph —
+ * a signed-out reader has no "your people" and the hook never asks.
+ *
+ * A 404 is "not deployed", not an error: `unavailable` goes true and the
+ * surface renders NOTHING. That is also the right rendering when nobody is
+ * around, so the rail has exactly one empty state and it is zero-height.
+ *
+ * Polled at 30s. Presence is the whole point and a stale rail invites
+ * somebody into a room that emptied ten minutes ago.
+ */
+export function useFollowingRooms() {
+  const { authenticated } = useAuth();
+  const query = useQuery({
+    queryKey: ["ms", "following-rooms"],
+    queryFn: fetchFollowingRooms,
+    enabled: authenticated,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 2,
+  });
+  return { ...query, unavailable: errorCode(query.error) === "NOT_FOUND" };
+}
+
 export function useStream(
   id: string,
   poll: boolean | number | readonly ["while-live", number] = false
