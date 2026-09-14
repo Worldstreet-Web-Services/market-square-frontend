@@ -157,3 +157,48 @@ describe("notification kinds cover the served contract", () => {
     assert.match(source, /\.catch\("follow"\)/);
   });
 });
+
+describe("ProfileSchema.username picks the handle to route and print by", () => {
+  // "user_" + eight of the room-code alphabet, which excludes 0/O/1/l/I.
+  const minted = "user_kmvvbmrf";
+
+  it("prefers the handle the person chose", () => {
+    const p = ProfileSchema.parse({ ...base, username: "amara", generatedUsername: minted });
+    assert.equal(p.username, "amara");
+  });
+
+  it("uses the minted handle when nothing was chosen", () => {
+    const p = ProfileSchema.parse({ ...base, username: null, generatedUsername: minted });
+    assert.equal(p.username, minted);
+  });
+
+  it("STILL falls back to the id when the mint is not deployed", () => {
+    // The key is absent, not null, on a service running the older build. This
+    // line is the only reason unclaimed profiles route at all until it ships.
+    const p = ProfileSchema.parse({ ...base, username: null });
+    assert.equal(p.username, base.id);
+  });
+
+  it("does not let a minted handle pass for a chosen one", () => {
+    // The claim screen keys off this. A handle the service handed out is not
+    // an answer to "what do you want to be called".
+    const p = ProfileSchema.parse({ ...base, username: null, generatedUsername: minted });
+    assert.equal(p.usernameUnclaimed, true);
+    const chosen = ProfileSchema.parse({ ...base, username: "amara" });
+    assert.equal(chosen.usernameUnclaimed, false);
+  });
+
+  it("does not read a minted handle as somebody's name", () => {
+    // "user_kmvvbmrf" is an address; naming a person that says the machine
+    // named them. A chosen handle DOES stand in for a missing name.
+    const given = ProfileSchema.parse({
+      ...base,
+      username: null,
+      displayName: null,
+      generatedUsername: minted,
+    });
+    assert.equal(given.displayName, "Member ·C123");
+    const chose = ProfileSchema.parse({ ...base, username: "amara", displayName: null });
+    assert.equal(chose.displayName, "amara");
+  });
+});

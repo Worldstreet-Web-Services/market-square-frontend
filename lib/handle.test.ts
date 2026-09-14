@@ -28,3 +28,11 @@ describe("the @handle shown beside a name", () => {
     assert.equal(made, null);
   });
 });
+
+describe("the minted handle the service hands out", () => {
+  it("prints like any other handle", () => {
+    // `user_` + eight of the room-code alphabet. It is a real address —
+    // /profiles/user_kmvvbmrf resolves — so there is nothing to special-case.
+    assert.equal(atHandle("user_kmvvbmrf"), "@user_kmvvbmrf");
+  });
+});

@@ -14,15 +14,20 @@
  * is").
  *
  * So: an id is not a handle, and nothing is printed for one. The display NAME
- * already identifies the person — `memberName` in lib/api/schemas.ts derives
+ * already identifies the person — `placeholderName` in lib/api/schemas.ts derives
  * "Member ·GT4T" from the same id — and a name without a handle reads as
  * somebody who has not chosen one yet, which is exactly what is true.
  *
  * A short handle is NOT invented here. Anything this function made up would
  * be untypeable and unroutable: `/u/user_7fk2p9` would 404, because only the
- * service can mint a handle it will answer to. That request is with the
- * backend; when real usernames are assigned at signup this returns them and
- * nothing else changes.
+ * service can mint a handle it will answer to.
+ *
+ * THE SERVICE NOW MINTS ONE — `user_` + eight characters, a real address —
+ * and it arrives as `generatedUsername`. So nothing changed here: the schema
+ * prefers the chosen handle, then the minted one, then the id, and this still
+ * prints whatever it is given unless that is an id. The guard below is what
+ * covers the gap until the mint is deployed everywhere, and the case the
+ * backend calls impossible (both columns null) if it ever stops being.
  */
 export function atHandle(username: string | null | undefined): string | null {
   if (!username) return null;
