@@ -1292,10 +1292,27 @@ describe("The account dropdown follows 747:14001", () => {
     assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
   });
 
-  it("hangs in the file's 172 panel on both account menus", () => {
+  it("hangs in the full-size 231 panel on both account menus", () => {
+    // The file's 172 is its 74.46% scale; ogazboiz asked for both menus bigger
+    // (2026-09-14). 231 is the same panel unscaled, and `MenuPanel` exactly.
     assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 2);
-    assert.match(shell, /const width = panel === "gist" \? 172 : panel === "explore" \? 347 : 224;/);
-    assert.match(shell, /border-\[0\.745px\] border-white\/\[0\.18\] bg-grey-800 p-\[11\.913px\]/);
+    assert.match(shell, /const width = panel === "gist" \? 231 : panel === "explore" \? 347 : 224;/);
+    // The clamp and the style must agree, or the clamp keeps a menu on screen
+    // that is wider than the one it measured.
+    assert.match(shell, /width: panel === "gist" \? 231 : panel === "explore" \? 347 : 224,/);
+    assert.match(shell, /gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
+  });
+
+  it("draws both dropdowns in the design system's one row size", () => {
+    // The shrunken `compact` row put an 8.935px label on a 23.83px row. It is
+    // gone, so a menu cannot drift back to it without re-adding the variant.
+    const filter = stripComments(read("components/layout/friends-filter.tsx"));
+    const row = stripComments(read("components/ui/menu-row.tsx"));
+    assert.doesNotMatch(row, /compact/);
+    assert.doesNotMatch(shell, /size="compact"/);
+    assert.doesNotMatch(filter, /size="compact"/);
+    assert.match(row, /"h-8 gap-2 rounded-xl px-2 text-\[12px\] leading-4"/);
+    assert.match(filter, /w-\[231px\] flex-col gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
   });
 });
 

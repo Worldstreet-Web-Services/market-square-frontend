@@ -21,18 +21,20 @@ import { cn } from "@/lib/cn";
  * roadmap) or live (which lies). It renders as the button's `title`, so it
  * costs no height and never changes the row's geometry.
  *
- * `size="compact"` is THIS ROW AT 74.46% — the "Make some friends" filter menu
- * (node 651:18441) is the DM menu's rows resized as a group: 23.83 tall, an
- * 8.935 radius, 5.957 of padding and gap, the label at 8.935/11.913, with a
- * 14px glyph box. Every number is that scale of the row above, so it is one
- * row with two sizes rather than a second row. `trailing` is the chevron the
- * file puts on its right edge; the default row has none.
+ * THERE IS ONE SIZE. The friends filter (651:18441) and the account menu
+ * (747:14001) draw this row at 74.46% — 23.83 tall with an 8.935px label — and
+ * both used to, through a `compact` size. At that scale the label is below any
+ * platform's legibility floor, and ogazboiz asked for both menus to be bigger
+ * (2026-09-14). Undoing the scale lands exactly on the numbers above, and the
+ * filter's panel on `MenuPanel`'s 231 / 16 / 8, so the menus now use the
+ * design system's own row rather than a shrunken copy of it.
+ *
+ * `trailing` is the chevron the file puts on a row's right edge.
  */
 export function MenuRow({
   icon,
   label,
   tone = "default",
-  size = "default",
   trailing,
   disabled,
   hint,
@@ -42,8 +44,6 @@ export function MenuRow({
   icon?: React.ReactNode;
   label: string;
   tone?: "default" | "danger";
-  /** `compact` is the row at the friends filter's 74.46% — see above. */
-  size?: "default" | "compact";
   /** Drawn against the row's right edge, after the label. */
   trailing?: React.ReactNode;
   disabled?: boolean;
@@ -51,7 +51,6 @@ export function MenuRow({
   hint?: string;
   onClick?: () => void;
 }) {
-  const compact = size === "compact";
   const off = disabled || Boolean(hint) || !onClick;
   return (
     <button
@@ -62,9 +61,7 @@ export function MenuRow({
       onClick={onClick}
       className={cn(
         "ws-press flex w-full items-center bg-white/[0.03] text-left font-medium transition-colors",
-        compact
-          ? "h-[23.83px] gap-[5.957px] rounded-[8.935px] px-[5.957px] text-[8.935px] leading-[11.913px]"
-          : "h-8 gap-2 rounded-xl px-2 text-[12px] leading-4",
+        "h-8 gap-2 rounded-xl px-2 text-[12px] leading-4",
         // The file gives a destructive row `#FF3B30`; `--color-danger` is
         // `#ff383c`, which is the same red to within two values per channel and
         // is already what every other destructive control in the app uses.
@@ -72,12 +69,7 @@ export function MenuRow({
         off ? "cursor-not-allowed opacity-40" : "hover:bg-white/[0.08]"
       )}
     >
-      <span
-        className={cn(
-          "flex shrink-0 items-center justify-center",
-          compact ? "h-3.5 w-3.5" : "h-4 w-4"
-        )}
-      >
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>

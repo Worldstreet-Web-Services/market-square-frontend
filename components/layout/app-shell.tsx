@@ -515,9 +515,13 @@ export function RailMenu({
    */
   align?: "right" | "above" | "below";
   /**
-   * `gist` is node 747:14001 ("gist dm"), the account dropdown: 172 wide,
-   * `#1C1C1C`, a 0.745 inside ring at 18% white, radius 8, 11.913 of padding
-   * and rows 5.957 apart — the same menu the friends filter draws (651:18441).
+   * `gist` is node 747:14001 ("gist dm"), the account dropdown — the same menu
+   * the friends filter draws (651:18441). The file has it at 74.46% scale
+   * (172 wide, 11.913 of padding, an 8.935px label); ogazboiz asked for it
+   * bigger (2026-09-14), so it is full scale: 231 wide, 16 of padding, rows 8
+   * apart, a 1px ring at 18% white. The width is written TWICE — the clamp
+   * below and the style — and the two must agree or the clamp keeps a menu on
+   * screen that is wider than the one it measured.
    * `explore` is node 1317:158022 ("Explore Settings"), the panel Home's
    * settings pill opens: 347 wide, `#201F1F` behind a 14 blur, a 1px inside
    * ring at 18% white, radius 22, 16 of padding and rows 12 apart.
@@ -534,7 +538,7 @@ export function RailMenu({
       const node = anchor.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
-      const width = panel === "gist" ? 172 : panel === "explore" ? 347 : 224;
+      const width = panel === "gist" ? 231 : panel === "explore" ? 347 : 224;
       const left =
         align === "right"
           ? Math.min(rect.right + 8, window.innerWidth - width - 8)
@@ -581,11 +585,11 @@ export function RailMenu({
                 ...(align === "below"
                   ? { top: at.top }
                   : { bottom: Math.max(8, window.innerHeight - at.top) }),
-                width: panel === "gist" ? 172 : panel === "explore" ? 347 : 224,
+                width: panel === "gist" ? 231 : panel === "explore" ? 347 : 224,
               }}
               className={
                 panel === "gist"
-                  ? "ws-popover-enter fixed z-[61] flex flex-col gap-[5.957px] rounded-lg border-[0.745px] border-white/[0.18] bg-grey-800 p-[11.913px]"
+                  ? "ws-popover-enter fixed z-[61] flex flex-col gap-2 rounded-[11px] border border-white/[0.18] bg-grey-800 p-4"
                   : panel === "explore"
                     ? "ws-popover-enter fixed z-[61] flex flex-col gap-3 overflow-hidden rounded-[22px] bg-[#201F1F] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[7px]"
                     : "ws-popover fixed z-[61] rounded-2xl p-1.5"
@@ -731,11 +735,11 @@ export function AccountMenuItems({ close }: { close: () => void }) {
   const update = useUpdateMe();
   const [step, setStep] = useState<"root" | "gender">("root");
   /* The file's own chevron (747:14009), and turned round for a step's Back. */
-  const chevron = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] text-white" />;
-  const back = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] -scale-x-100 text-white" />;
+  const chevron = <IconFilterChevronRight className="h-2 w-1 text-white" />;
+  const back = <IconFilterChevronRight className="h-2 w-1 -scale-x-100 text-white" />;
   /* The option that is on carries the filter menu's own dot in `--color-create`. */
   const dot = (on: boolean) =>
-    on ? <span aria-hidden className="block h-1.5 w-1.5 rounded-full bg-create" /> : undefined;
+    on ? <span aria-hidden className="block h-[7px] w-[7px] rounded-full bg-create" /> : undefined;
   const go = (href: string) => {
     close();
     router.push(href);
@@ -749,11 +753,10 @@ export function AccountMenuItems({ close }: { close: () => void }) {
   if (step === "gender") {
     return (
       <>
-        <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
+        <MenuRow icon={back} label="Back" onClick={() => setStep("root")} />
         {GENDER_OPTIONS.map((option) => (
           <MenuRow
             key={option.value}
-            size="compact"
             icon={dot(normalizeGender(me.data?.gender) === option.value)}
             label={option.label}
             onClick={() => update.mutate({ gender: option.value }, { onSuccess: () => setStep("root") })}
@@ -773,29 +776,25 @@ export function AccountMenuItems({ close }: { close: () => void }) {
   return (
     <>
       <MenuRow
-        size="compact"
-        icon={<IconFilterLocation className="h-[11.81px] w-[12.25px] text-grey-400" />}
+        icon={<IconFilterLocation className="h-[13.5px] w-[14px] text-grey-400" />}
         label="Profile"
         trailing={chevron}
         onClick={() => go(me.data ? `/u/${me.data.username}` : "/auth")}
       />
       <MenuRow
-        size="compact"
-        icon={<IconFilterFriends className="h-[9.64px] w-[13.13px] text-grey-400" />}
+        icon={<IconFilterFriends className="h-[11px] w-[15px] text-grey-400" />}
         label="Settings"
         // Each person's own settings live under their profile.
         onClick={() => go(me.data ? `/u/${me.data.username}/settings` : "/auth")}
       />
       <MenuRow
-        size="compact"
-        icon={<IconFilterGender className="h-3.5 w-3.5 text-grey-400" />}
+        icon={<IconFilterGender className="h-4 w-4 text-grey-400" />}
         label={genderLabel(me.data?.gender) ? `Gender · ${genderLabel(me.data?.gender)}` : "Gender"}
         trailing={chevron}
         onClick={me.data ? () => setStep("gender") : undefined}
       />
       <MenuRow
-        size="compact"
-        icon={<IconLogout className="h-3.5 w-3.5 text-grey-400" />}
+        icon={<IconLogout className="h-4 w-4 text-grey-400" />}
         label={`Log out @${me.data?.username ?? ""}`}
         onClick={() => {
           close();
