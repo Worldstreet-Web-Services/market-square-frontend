@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -2396,6 +2397,33 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
   });
 
+  it("never prints a profile id where a handle goes", () => {
+    // `username` is a ROUTING key — it is in /u/{username} and in the
+    // service's own paths — so the schema falls back to the profile id when
+    // nobody has claimed one, and LINKS keep resolving. That fallback is
+    // right for links and wrong for text: it printed forty characters of
+    // Privy DID as if somebody could type it.
+    const roots = ["features", "components"];
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = dir + "/" + entry.name;
+        if (entry.isDirectory()) walk(p);
+        else if (p.endsWith(".tsx")) {
+          const src = fs.readFileSync(p, "utf8");
+          // `@{x.username}` printed straight into JSX.
+          if (/@\{[A-Za-z.?]*username\}/.test(src)) offenders.push(p);
+        }
+      }
+    };
+    for (const r of roots) walk(r);
+    // The ONE legitimate case: the edit sheet's "you are currently @x" line,
+    // which renders inside the CLAIMED branch and so always has a real name.
+    const allowed = ["features/profile/components/edit-profile-sheet.tsx"];
+    const unexpected = offenders.filter((p) => !allowed.includes(p));
+    assert.deepEqual(unexpected, [], "a raw username is printed without atHandle: " + unexpected.join(", "));
+  });
+
   it("builds the phone top bar as node 1285:94852, with no search in it", () => {
     const shell = stripComments(read("components/layout/app-shell.tsx"));
     // 72 = 16 + the node's 40 row + 16. It was 48 with the account on the
@@ -2557,3 +2585,36 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
   });
 });
 
+
+describe("the spoken room code is copyable and reaches the host while live", () => {
+  const copyRow = stripComments(read("features/houses/components/copy-row.tsx"));
+  const houseRoom = stripComments(read("features/houses/components/house-room.tsx"));
+
+  it("copies the BARE code, never the grouped one", () => {
+    // `lib/room-code.ts` is explicit that grouping is "display only; never
+    // sent back" — the service matches unseparated. Copying `bcd-fghj-km`
+    // would put a string in the clipboard that fails in the join field, which
+    // is worse than showing no code at all because it looks like it worked.
+    assert.match(copyRow, /writeText\(code\)/);
+    assert.doesNotMatch(copyRow, /writeText\(groupRoomCode/);
+    // And it still DISPLAYS the grouped form, which is the whole point of
+    // having two strings.
+    assert.match(copyRow, /\{groupRoomCode\(code\)\}/);
+  });
+
+  it("reaches the live room, not only the screen before it opens", () => {
+    // The defect: the code rendered on exactly one screen, the host's waiting
+    // screen, so it disappeared at the moment a host reads it down a phone.
+    // The share sheet lives in the live room, so a reference there is the
+    // proof that a live host can still find it.
+    assert.match(houseRoom, /<CopyCodeRow/);
+    assert.match(houseRoom, /isHost && stream\.roomCode/);
+  });
+
+  it("says nothing at all when a room has no code", () => {
+    // A broadcast is never given one, and neither is a room made before codes
+    // shipped. Null is ordinary, so it must be guarded rather than rendered as
+    // an empty or placeholder code.
+    assert.match(houseRoom, /stream\.roomCode && \(/);
+  });
+});

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { atHandle } from "@/lib/handle";
 import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/use-me";
@@ -582,8 +583,8 @@ function MembersSheet({
                     <span className="truncate text-[14px] font-semibold text-white">
                       {profile?.displayName ?? "Former member"}
                     </span>
-                    {profile?.username && (
-                      <span className="truncate text-[12px] text-meta">@{profile.username}</span>
+                    {atHandle(profile?.username) && (
+                      <span className="truncate text-[12px] text-meta">{atHandle(profile?.username)}</span>
                     )}
                     {profile && actions && (actions.makeAdmin || actions.removeAdmin || actions.makeOwner || actions.remove) && (
                       <div className="mt-1.5 flex flex-wrap gap-1.5">

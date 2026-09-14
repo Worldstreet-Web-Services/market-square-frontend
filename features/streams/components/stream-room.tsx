@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { atHandle } from "@/lib/handle";
 
 import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
 import {
@@ -877,7 +878,9 @@ export function StreamRoom({
                   >
                     <span className="truncate text-[17px] font-bold text-heading">{owner.displayName}</span>
                     <VerifiedBadge verification={owner.verification} />
-                    <span className="hidden truncate text-sm text-meta lg:inline">@{owner.username}</span>
+                    {atHandle(owner.username) && (
+                      <span className="hidden truncate text-sm text-meta lg:inline">{atHandle(owner.username)}</span>
+                    )}
                   </Link>
                 </>
               ) : (

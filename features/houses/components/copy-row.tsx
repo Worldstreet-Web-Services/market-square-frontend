@@ -2,6 +2,7 @@
 
 import { toast } from "sonner";
 import { IconCopy, IconLink } from "@/components/ui/icons";
+import { groupRoomCode } from "@/lib/room-code";
 
 /**
  * A labelled link somebody can copy.
@@ -25,6 +26,42 @@ export function CopyRow({ label, hint, url }: { label: string; hint?: string; ur
       >
         <IconLink className="h-4 w-4 shrink-0 text-grey-500" />
         <span className="min-w-0 flex-1 truncate text-xs text-grey-300">{url}</span>
+        <IconCopy className="h-4 w-4 shrink-0 text-grey-500" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * THE SPOKEN CODE, in the same row idiom as the links beside it.
+ *
+ * A separate component rather than a flag on `CopyRow`, because almost nothing
+ * about the row survives the change: a code is READ ALOUD, so it is set large
+ * and grouped and must never truncate, where a link is set small and always
+ * truncates. Sharing one signature between those would be a `url` that is not
+ * a url and a branch in every line of the body.
+ *
+ * WHAT IS SHOWN AND WHAT IS COPIED ARE DIFFERENT STRINGS, deliberately. The
+ * service stores and matches the code unseparated; `bcd-fghj-km` is grouping
+ * for the eye, which `lib/room-code.ts` is explicit is "display only; never
+ * sent back". So the dashes go on screen and the bare code goes to the
+ * clipboard — paste it into the join field and it resolves, which it would not
+ * if we copied what was drawn.
+ */
+export function CopyCodeRow({ label, hint, code }: { label: string; hint?: string; code: string }) {
+  return (
+    <div className="py-2">
+      <p className="text-[13px] font-semibold text-heading">{label}</p>
+      {hint && <p className="mb-1.5 mt-0.5 text-[11px] leading-4 text-meta">{hint}</p>}
+      <button
+        onClick={() =>
+          void navigator.clipboard.writeText(code).then(() => toast.success("Code copied"))
+        }
+        className="ws-inset flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+      >
+        <span className="tnum min-w-0 flex-1 text-[15px] font-semibold tracking-[0.08em] text-white">
+          {groupRoomCode(code)}
+        </span>
         <IconCopy className="h-4 w-4 shrink-0 text-grey-500" />
       </button>
     </div>
