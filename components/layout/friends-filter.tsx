@@ -47,13 +47,16 @@ import { friendsFilterLabel, type FriendsFilter } from "@/lib/friends-filter";
  * menu under it is the same one on both drawings.
  *
  * ─── THE MENU ────────────────────────────────────────────────────────────────
- * 172 wide, `#1C1C1C` (which is `--color-grey-800`), an 8px radius and a
- * 0.745px `white/18` inside ring, 11.913 of padding, rows 5.957 apart. It hangs
+ * `#1C1C1C` (which is `--color-grey-800`) with a `white/18` inside ring. The
+ * file draws it 172 wide at 74.46% scale — 11.913 of padding, rows 5.957 apart,
+ * an 8.935px label — and ogazboiz asked for it bigger (2026-09-14), so it is
+ * drawn at full scale: 231 wide, 16 of padding, rows 8 apart, which is
+ * `MenuPanel` exactly, with the file's 8 radius scaled to 11. It hangs
  * 3px under the pill with its right edge 2px inside the pill's — the file's
  * own offsets (menu right -1018 against pill right -1016; menu top 49858
  * against pill bottom 49855).
  *
- * The rows are the DM menu's `MenuRow` at 74.46% — `size="compact"` — with the
+ * The rows are the DM menu's own `MenuRow`, unscaled, with the
  * file's three glyphs in `--color-grey-400` and its own trailing chevron. Each
  * row also carries a `13` count in the file that is `visible: false`, and so
  * is not drawn.
@@ -108,14 +111,14 @@ export function FriendsFilter({
     close();
   };
 
-  const chevron = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] text-white" />;
+  const chevron = <IconFilterChevronRight className="h-2 w-1 text-white" />;
   /* The file's own chevron, turned round: a step's Back row points the way it goes. */
-  const back = <IconFilterChevronRight className="h-[3.57px] w-[1.79px] -scale-x-100 text-white" />;
+  const back = <IconFilterChevronRight className="h-2 w-1 -scale-x-100 text-white" />;
   /* The file draws no selected state; a row that is on is simply named in the pill.
      Inside a step, the row that is on carries a filled dot in `--color-create`
      so the reader can see which line they are on without leaving the menu. */
   const dot = (on: boolean) =>
-    on ? <span aria-hidden className="block h-1.5 w-1.5 rounded-full bg-create" /> : undefined;
+    on ? <span aria-hidden className="block h-[7px] w-[7px] rounded-full bg-create" /> : undefined;
 
   return (
     /*
@@ -176,27 +179,24 @@ export function FriendsFilter({
           <div
             role="menu"
             aria-label="Filter people by"
-            className="ws-popover-enter absolute right-[2px] top-[calc(100%+3px)] z-20 flex w-[172px] flex-col gap-[5.957px] rounded-lg border-[0.745px] border-white/[0.18] bg-grey-800 p-[11.913px]"
+            className="ws-popover-enter absolute right-[2px] top-[calc(100%+3px)] z-20 flex w-[231px] flex-col gap-2 rounded-[11px] border border-white/[0.18] bg-grey-800 p-4"
           >
             {step === "root" && (
               <>
                 <MenuRow
-                  size="compact"
-                  icon={<IconFilterLocation className="h-[11.81px] w-[12.25px] text-grey-400" />}
+                  icon={<IconFilterLocation className="h-[13.5px] w-[14px] text-grey-400" />}
                   label={value.city.trim() ? `Location · ${value.city.trim()}` : "Location"}
                   trailing={chevron}
                   onClick={() => setStep("location")}
                 />
                 <MenuRow
-                  size="compact"
-                  icon={<IconFilterFriends className="h-[9.64px] w-[13.13px] text-grey-400" />}
+                  icon={<IconFilterFriends className="h-[11px] w-[15px] text-grey-400" />}
                   label={value.newOnly ? "Friends · New people" : "Friends"}
                   trailing={chevron}
                   onClick={() => setStep("friends")}
                 />
                 <MenuRow
-                  size="compact"
-                  icon={<IconFilterGender className="h-3.5 w-3.5 text-grey-400" />}
+                  icon={<IconFilterGender className="h-4 w-4 text-grey-400" />}
                   label={genderLabel(value.gender) ? `Gender · ${genderLabel(value.gender)}` : "Gender"}
                   trailing={chevron}
                   onClick={() => setStep("gender")}
@@ -206,15 +206,13 @@ export function FriendsFilter({
 
             {step === "location" && (
               <>
-                <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
+                <MenuRow icon={back} label="Back" onClick={() => setStep("root")} />
                 <MenuRow
-                  size="compact"
                   icon={dot(value.city === "")}
                   label="Anywhere"
                   onClick={() => set({ city: "" })}
                 />
                 <MenuRow
-                  size="compact"
                   icon={dot(Boolean(viewerCity) && value.city === viewerCity)}
                   label={viewerCity ? `Near me · ${viewerCity}` : "Near me"}
                   hint={viewerCity ? undefined : "Add your city to your profile first"}
@@ -238,7 +236,7 @@ export function FriendsFilter({
                     placeholder="Type a city, then Enter"
                     aria-label="City"
                     autoFocus
-                    className="h-[23.83px] w-full rounded-[8.935px] bg-white/[0.03] px-[5.957px] text-[8.935px] font-medium leading-[11.913px] text-white/80 outline-none placeholder:text-white/40 focus:bg-white/[0.08]"
+                    className="h-8 w-full rounded-xl bg-white/[0.03] px-2 text-[12px] font-medium leading-4 text-white/80 outline-none placeholder:text-white/40 focus:bg-white/[0.08]"
                   />
                 </form>
               </>
@@ -246,15 +244,13 @@ export function FriendsFilter({
 
             {step === "friends" && (
               <>
-                <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
+                <MenuRow icon={back} label="Back" onClick={() => setStep("root")} />
                 <MenuRow
-                  size="compact"
                   icon={dot(!value.newOnly)}
                   label="Everyone"
                   onClick={() => set({ newOnly: false })}
                 />
                 <MenuRow
-                  size="compact"
                   icon={dot(value.newOnly)}
                   label="People I don't follow yet"
                   onClick={() => set({ newOnly: true })}
@@ -264,9 +260,8 @@ export function FriendsFilter({
 
             {step === "gender" && (
               <>
-                <MenuRow size="compact" icon={back} label="Back" onClick={() => setStep("root")} />
+                <MenuRow icon={back} label="Back" onClick={() => setStep("root")} />
                 <MenuRow
-                  size="compact"
                   icon={dot(normalizeGender(value.gender) === null)}
                   label="Anyone"
                   onClick={() => set({ gender: "" })}
@@ -274,7 +269,6 @@ export function FriendsFilter({
                 {GENDER_OPTIONS.map((option) => (
                   <MenuRow
                     key={option.value}
-                    size="compact"
                     icon={dot(normalizeGender(value.gender) === option.value)}
                     label={option.label}
                     onClick={() => set({ gender: option.value })}
