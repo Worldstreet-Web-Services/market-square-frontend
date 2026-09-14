@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -2394,6 +2395,33 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     );
     // The clock is ticked state, never read during render.
     assert.doesNotMatch(section, /endsAtMs <= Date\.now\(\)\n\s*\? "The end/);
+  });
+
+  it("never prints a profile id where a handle goes", () => {
+    // `username` is a ROUTING key — it is in /u/{username} and in the
+    // service's own paths — so the schema falls back to the profile id when
+    // nobody has claimed one, and LINKS keep resolving. That fallback is
+    // right for links and wrong for text: it printed forty characters of
+    // Privy DID as if somebody could type it.
+    const roots = ["features", "components"];
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = dir + "/" + entry.name;
+        if (entry.isDirectory()) walk(p);
+        else if (p.endsWith(".tsx")) {
+          const src = fs.readFileSync(p, "utf8");
+          // `@{x.username}` printed straight into JSX.
+          if (/@\{[A-Za-z.?]*username\}/.test(src)) offenders.push(p);
+        }
+      }
+    };
+    for (const r of roots) walk(r);
+    // The ONE legitimate case: the edit sheet's "you are currently @x" line,
+    // which renders inside the CLAIMED branch and so always has a real name.
+    const allowed = ["features/profile/components/edit-profile-sheet.tsx"];
+    const unexpected = offenders.filter((p) => !allowed.includes(p));
+    assert.deepEqual(unexpected, [], "a raw username is printed without atHandle: " + unexpected.join(", "));
   });
 
   it("builds the phone top bar as node 1285:94852, with no search in it", () => {

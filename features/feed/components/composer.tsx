@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { atHandle } from "@/lib/handle";
 import { toast } from "sonner";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
@@ -335,8 +336,8 @@ export function Composer({
               <span className="truncate text-[13px] font-bold text-heading">
                 {quoted.author?.displayName ?? "Unknown"}
               </span>
-              {quoted.author && (
-                <span className="truncate text-[12px] text-meta">@{quoted.author.username}</span>
+              {atHandle(quoted.author?.username) && (
+                <span className="truncate text-[12px] text-meta">{atHandle(quoted.author?.username)}</span>
               )}
             </div>
             <p className="mt-1.5 line-clamp-3 text-[13px] leading-normal text-body">

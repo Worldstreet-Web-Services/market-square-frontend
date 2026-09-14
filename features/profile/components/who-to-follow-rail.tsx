@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { atHandle } from "@/lib/handle";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { Profile } from "@/lib/api/schemas";
@@ -89,7 +90,9 @@ export function WhoToFollowRail() {
                   <span className="truncate">{row.profile.displayName}</span>
                   <VerifiedBadge verification={row.profile.verification} className="h-3.5 w-3.5" />
                 </span>
-                <span className="block truncate text-sm text-meta">@{row.profile.username}</span>
+                {atHandle(row.profile.username) && (
+                  <span className="block truncate text-sm text-meta">{atHandle(row.profile.username)}</span>
+                )}
               </span>
               <RailFollow profile={row.profile} />
             </Link>

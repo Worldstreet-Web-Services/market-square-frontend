@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { atHandle } from "@/lib/handle";
 import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { errorCode } from "@/lib/api/envelope";
@@ -561,7 +562,7 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
             </span>
             {message.author && (
               <span className="shrink-0 text-[12px] leading-5 tracking-[-0.006em] text-white/60">
-                @{message.author.username}
+                {atHandle(message.author.username)}
               </span>
             )}
             {isHost && (

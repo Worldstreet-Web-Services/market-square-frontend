@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { atHandle } from "@/lib/handle";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
@@ -154,7 +155,9 @@ export function PersonCell({
           <OrgBadgeChip orgBadge={profile.orgBadge} />
           <RoleChip role={profile.role} />
         </span>
-        <span className="block truncate text-[11px] text-meta">@{profile.username}</span>
+        {atHandle(profile.username) && (
+          <span className="block truncate text-[11px] text-meta">{atHandle(profile.username)}</span>
+        )}
       </span>
     </Link>
   );
