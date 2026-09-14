@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { atHandle } from "@/lib/handle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TransitionLink } from "@/components/ui/transition-link";
@@ -320,7 +321,9 @@ function QuotedPost({ quoted }: { quoted: NonNullable<Post["quotedPost"]> }) {
         {author && (
           <>
             <VerifiedBadge verification={author.verification} className="h-3 w-3" />
-            <span className="truncate text-[12px] text-meta">@{author.username}</span>
+            {atHandle(author.username) && (
+              <span className="truncate text-[12px] text-meta">{atHandle(author.username)}</span>
+            )}
           </>
         )}
       </span>
@@ -805,7 +808,7 @@ export function PostCard({
             )}
           </div>
           <p className="mt-[2.8px] truncate text-[12.1px] leading-[16.2px] text-white/50">
-            {author ? `@${author.username}  •  ` : ""}
+            {atHandle(author?.username) ? `${atHandle(author?.username)}  •  ` : ""}
             {/* The time is the post's own link, the keyboard's way in. */}
             {full ? (
               relativeTime(post.createdAt)

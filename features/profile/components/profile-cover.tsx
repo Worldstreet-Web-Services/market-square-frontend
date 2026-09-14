@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
+import { atHandle } from "@/lib/handle";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { ImageViewer } from "@/components/ui/image-viewer";
@@ -265,12 +266,16 @@ export function ProfileCover({
                   profile", ogazboiz). `role` still decides who can go live. */}
             </h1>
             <div className="flex min-w-0 flex-wrap items-center gap-3">
-              {/* An unclaimed member's username is their Privy DID — forty-odd
-                  unbroken characters — and `break-all` is the only break it
-                  offers. */}
-              <span className="break-all text-[14px] leading-5 text-white/50 md:text-[16px] md:leading-6">
-                @{profile.username}
-              </span>
+              {/* An unclaimed member has no handle to show — their `username`
+                  is the Privy DID the schema falls back to so LINKS resolve,
+                  and printing it gave this line forty-odd unbroken characters
+                  that only `break-all` could cope with. Nothing is drawn now;
+                  the display name above already names them. */}
+              {atHandle(profile.username) && (
+                <span className="text-[14px] leading-5 text-white/50 md:text-[16px] md:leading-6">
+                  {atHandle(profile.username)}
+                </span>
+              )}
               {meta}
             </div>
           </div>

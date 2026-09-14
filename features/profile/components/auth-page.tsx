@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { atHandle } from "@/lib/handle";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
@@ -52,7 +53,10 @@ export function AuthPage() {
             <p className="text-sm text-grey-300">
               {profile ? (
                 <>
-                  Signed in as <span className="font-semibold text-white">@{profile.username}</span>
+                  Signed in as{" "}
+                  <span className="font-semibold text-white">
+                    {atHandle(profile.username) ?? profile.displayName}
+                  </span>
                 </>
               ) : (
                 "Setting up your profile…"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { atHandle } from "@/lib/handle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -515,7 +516,7 @@ function ClosedHouse({ stream }: { stream: Stream }) {
           href={`/u/${stream.owner.username}`}
           className="ws-row flex items-center gap-3 px-4 py-3.5 text-[13px] font-semibold text-body"
         >
-          Visit @{stream.owner.username}
+          Visit {atHandle(stream.owner.username) ?? stream.owner.displayName}
         </Link>
       )}
       <OpenHouseSheet

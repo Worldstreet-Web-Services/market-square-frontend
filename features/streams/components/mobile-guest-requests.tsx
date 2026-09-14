@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { atHandle } from "@/lib/handle";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -67,8 +68,8 @@ function RequestRow({
             </>
           )}
         </div>
-        {profile && (
-          <span className="block truncate text-[11px] text-meta">@{profile.username}</span>
+        {profile && atHandle(profile.username) && (
+          <span className="block truncate text-[11px] text-meta">{atHandle(profile.username)}</span>
         )}
       </div>
       {/* Decline first would put the destructive action under the thumb. */}

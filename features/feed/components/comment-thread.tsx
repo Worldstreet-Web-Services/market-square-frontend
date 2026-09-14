@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { atHandle } from "@/lib/handle";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { errorCode } from "@/lib/api/envelope";
@@ -140,7 +141,7 @@ export function CommentBox({
           <span className="min-w-0 truncate">
             Replying to{" "}
             <span className="font-semibold text-body">
-              {replyTo.username ? `@${replyTo.username}` : replyTo.displayName}
+              {atHandle(replyTo.username) ?? replyTo.displayName}
             </span>
           </span>
           <button
@@ -282,7 +283,9 @@ function CommentRow({
               <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5 shrink-0" />
               <OrgBadgeChip orgBadge={author.orgBadge} />
               <RoleChip role={author.role} className="shrink-0" />
-              <span className="text-[13px] text-meta">@{author.username}</span>
+              {atHandle(author.username) && (
+                <span className="text-[13px] text-meta">{atHandle(author.username)}</span>
+              )}
             </>
           ) : (
             <span className="font-bold text-heading">Member</span>
@@ -298,7 +301,7 @@ function CommentRow({
               href={`/u/${answering.username}`}
               className="mr-1 font-semibold text-create hover:underline"
             >
-              @{answering.username}
+              {atHandle(answering.username) ?? answering.displayName}
             </Link>
           )}
           {/* The one renderer for post-shaped text: mentions become links

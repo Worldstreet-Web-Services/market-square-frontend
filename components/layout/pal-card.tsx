@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { atHandle } from "@/lib/handle";
 import { Avatar } from "@/components/ui/avatar";
 import {
   IconDeckAdd,
@@ -335,7 +336,7 @@ export function PalCard({
                 : {}),
             }}
           >
-            @{profile.username}
+            {atHandle(profile.username)}
           </span>
         </span>
       </Link>

@@ -36,6 +36,25 @@ const OrgBadgeSchema = z.enum(["market", "ark"]).nullable().catch(null);
 const RawProfileSchema = z.object({
   id: z.string(),
   username: z.string().nullable().optional().default(null),
+  /**
+   * THE HANDLE THE SERVICE MINTED, for somebody who never chose one.
+   *
+   * `user_` + eight characters of the room-code alphabet (no vowels, none of
+   * 0/O/1/l/I), e.g. `user_kmvvbmrf`, and it is a REAL ADDRESS:
+   * `/profiles/user_kmvvbmrf` resolves, and so does everything under it.
+   *
+   * IT IS A SECOND COLUMN, NOT A FILLED-IN `username`, and that is what keeps
+   * `usernameUnclaimed` honest below — a minted handle is something the person
+   * was given, not something they chose, so the claim screen must still ask.
+   *
+   * NULL ON A CLAIMED PROFILE. The backfill was scoped to `username IS NULL`
+   * exactly (ogazboiz: "excluding those that have claim username"), so anyone
+   * who had already chosen a handle has this null and keeps theirs.
+   *
+   * Optional as well as nullable because the mint is not deployed everywhere
+   * yet: an older service omits the key entirely and must still parse.
+   */
+  generatedUsername: z.string().nullable().optional().default(null),
   displayName: z.string().nullable().optional().default(null),
   bio: z.string().nullable().optional().default(null),
   avatarUrl: z.string().nullable().optional().default(null),
@@ -194,10 +213,39 @@ function placeholderName(id: string): string {
 
 export const ProfileSchema = RawProfileSchema.transform((p) => ({
   ...p,
-  // True when the backend has no chosen username yet; the claim sheet keys
-  // off this rather than string-sniffing the fallback.
+  // True when the backend has no CHOSEN username yet. A minted
+  // `generatedUsername` deliberately does not clear this: it is an address the
+  // service handed out, not a name this person picked, so the claim screen
+  // still asks. That is why the mint landed as a second column.
   usernameUnclaimed: p.username === null,
-  username: p.username ?? p.id,
+  /*
+    WHAT EVERY LINK AND EVERY @HANDLE IS BUILT FROM, in order of how much the
+    person had to do with it: the one they chose, then the one they were given,
+    and only then the id.
+
+    THE ID STAYS AS A LAST RESORT, against the backend's advice to drop it now
+    that the mint exists. Their argument is that a profile has one or the other
+    by construction, so the third branch is dead — and they are right about the
+    invariant. But the branch is not free to remove: `username` is a ROUTING
+    key, so if the pair were ever both null the links would become `/u/null`
+    and that person's entire profile would be unreachable, while the id keeps
+    resolving because the service accepts one wherever it accepts a username.
+    A dead branch that costs nothing beats a dead profile.
+
+    It is also NOT deployed-everywhere yet: until the mint ships to production
+    `generatedUsername` is absent, and this line is the only reason unclaimed
+    profiles still route at all. Nothing here paper over a bug — `atHandle`
+    refuses to PRINT an id, so the id-shaped case shows a name and no handle
+    rather than quietly passing a DID off as somebody's @.
+  */
+  username: p.username ?? p.generatedUsername ?? p.id,
+  /*
+    A CHOSEN username stands in for a missing name; a MINTED one does not.
+    "user_kmvvbmrf" is an address, and reading it as somebody's name would say
+    the machine named them. `placeholderName` gives "Member ·GT4T", and with
+    the minted handle showing underneath as `@user_kmvvbmrf` that reads the way
+    every social app reads: a person who has a handle and no display name yet.
+  */
   displayName: p.displayName ?? p.username ?? placeholderName(p.id),
   bio: p.bio ?? "",
 }));

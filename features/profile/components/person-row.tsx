@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { atHandle } from "@/lib/handle";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
@@ -102,7 +103,7 @@ export function PersonRow({ profile }: { profile: Profile }) {
           */}
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-[11px] font-normal leading-4 text-white/50">
-              @{profile.username}
+              {atHandle(profile.username)}
             </span>
             <span className="flex shrink-0 items-center gap-1 sm:hidden">{badges}</span>
           </span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/ui/avatar";
+import { atHandle } from "@/lib/handle";
 import { ChipShell, OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconLink, IconX } from "@/components/ui/icons";
@@ -84,7 +85,9 @@ export function PorchSheet({
               <OrgBadgeChip orgBadge={host.orgBadge} />
               <RoleChip role={host.role} />
             </div>
-            <span className="block truncate text-[11px] text-meta">@{host.username}</span>
+            {atHandle(host.username) && (
+              <span className="block truncate text-[11px] text-meta">{atHandle(host.username)}</span>
+            )}
           </div>
           <ChipShell>Host</ChipShell>
         </div>

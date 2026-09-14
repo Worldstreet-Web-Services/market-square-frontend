@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { atHandle } from "@/lib/handle";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -240,7 +241,7 @@ export function TipSheet({
               {recipient.displayName}
             </p>
             <p className="truncate text-[13px] text-white/50">
-              @{recipient.username}
+              {atHandle(recipient.username) ?? recipient.displayName}
             </p>
           </div>
         </div>
@@ -449,7 +450,7 @@ export function TipSheet({
           <p className="text-[14px] text-body">
             {receipt.status === "settled" ? "Sent to " : "On its way to "}
             <span className="font-bold text-white">
-              @{receipt.recipient.username}
+              {atHandle(receipt.recipient.username) ?? receipt.recipient.displayName}
             </span>
           </p>
           {receipt.status === "pending" && (

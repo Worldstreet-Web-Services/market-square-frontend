@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { atHandle } from "@/lib/handle";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconChevronRight } from "@/components/ui/icons";
@@ -82,7 +83,7 @@ export function PersonSheet({
               </>
             )}
           </div>
-          {username && <p className="truncate text-[12px] text-meta">@{username}</p>}
+          {atHandle(username) && <p className="truncate text-[12px] text-meta">{atHandle(username)}</p>}
           {person.meta?.bio && (
             <p className="mt-1 text-[13px] leading-5 text-body">{person.meta.bio}</p>
           )}
