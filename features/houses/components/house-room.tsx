@@ -43,7 +43,7 @@ import { opensAtLabel } from "@/lib/format";
 import { groupRoomCode } from "@/lib/room-code";
 import { Backstage } from "@/features/houses/components/backstage";
 import { CaptionRail } from "@/features/houses/components/caption-rail";
-import { CopyRow } from "@/features/houses/components/copy-row";
+import { CopyRow, CopyCodeRow } from "@/features/houses/components/copy-row";
 import { HandTray } from "@/features/houses/components/hand-tray";
 import { HouseControls } from "@/features/houses/components/house-controls";
 import { HouseHeader } from "@/features/houses/components/house-header";
@@ -1733,6 +1733,29 @@ function LiveHouse({
       />
 
       <Sheet open={overflowSheet} onClose={() => setOverflowSheet(false)} title="This house">
+        {/* THE CODE GOES FIRST, AND ONLY THE HOST SEES IT.
+            It used to appear on exactly one screen — the host's own waiting
+            screen, before the room opened — so it vanished at the moment a
+            host actually needs it, which is once they are live and reading it
+            down a phone (ogazboiz: "why cant they see the room code").
+
+            Host-only is the conservative reading and matches what was asked.
+            The listener link below carries the same power and is shown to
+            everyone, so a code in every listener's sheet would probably leak
+            nothing new — but "probably" is not a case for widening who can
+            hand out entry to somebody else's room, so that stays a question
+            for the product rather than a guess made here.
+
+            A room without a code says nothing: a broadcast is never given one
+            and neither is a room made before codes shipped, so null is
+            ordinary and never an error. */}
+        {isHost && stream.roomCode && (
+          <CopyCodeRow
+            label="Room code"
+            hint="For reading down a phone. Anyone can type it in to walk in and listen."
+            code={stream.roomCode}
+          />
+        )}
         <CopyRow
           label="Listener link"
           hint="Anyone with this can walk in and listen."
