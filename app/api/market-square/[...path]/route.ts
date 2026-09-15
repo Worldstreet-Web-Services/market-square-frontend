@@ -3,6 +3,7 @@ import { verifyRequest, verifyRequestDetailed } from "@/lib/server/auth";
 import { handleFixture, FIXTURE_ME_ID } from "@/lib/fixtures/handler";
 import { isPublicGet, isSafePath, isPublicPost } from "@/lib/api/public-routes";
 import { forwardToUpstream } from "@/lib/server/proxy";
+import { marketSquareBase } from "@/lib/server/upstream-base";
 import { cacheControlFor } from "@/lib/server/cache-policy";
 import { FALLBACK_LIMITS } from "@/lib/upload-rules";
 
@@ -26,7 +27,9 @@ import { FALLBACK_LIMITS } from "@/lib/upload-rules";
  */
 export const maxDuration = 30;
 
-const BASE = process.env.WSAPI_BASE_URL ? `${process.env.WSAPI_BASE_URL}/v1/market-square` : null;
+// Shared with the share-preview reads, so the two can never disagree about
+// where the service is.
+const BASE = marketSquareBase();
 const PRIVY_CONFIGURED = Boolean(
   process.env.NEXT_PUBLIC_PRIVY_APP_ID && process.env.PRIVY_APP_SECRET
 );

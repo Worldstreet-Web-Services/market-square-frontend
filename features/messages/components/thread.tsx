@@ -2073,7 +2073,6 @@ export function Thread({
           onClose={() => setInviteLink(null)}
           title="Share invite link"
           payload={{ text: `Join ${conversation.title ?? "my house"} on Square`, url: inviteLink }}
-          campaign="house_invite"
         />
       )}
 

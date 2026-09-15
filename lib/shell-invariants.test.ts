@@ -1720,24 +1720,39 @@ describe("Square has a favicon and tagged share links", () => {
     assert.ok(read("app/apple-icon.png").length > 0);
   });
 
-  it("tags every link the share sheet hands out, with what was shared", () => {
+  it("tags every link the share sheet hands out with one short channel code", () => {
+    // Three UTM tags were 62 of a shared post link's 128 characters. The
+    // campaign is rebuilt from the landing path, so it no longer travels.
     const sheet = stripComments(read("components/ui/share-sheet.tsx"));
-    assert.match(sheet, /shareTags\("native_share", campaign\)/);
-    assert.match(sheet, /shareTags\("copy_link", campaign\)/);
-    assert.match(sheet, /shareTags\(target, campaign\)/);
-    for (const [file, campaign] of [
-      ["features/feed/components/post-card.tsx", "post_share"],
-      ["features/profile/components/profile-page.tsx", "profile_share"],
-      ["features/profile/components/person-more-menu.tsx", "profile_share"],
-      ["features/messages/components/thread.tsx", "house_invite"],
-    ] as const) {
-      assert.match(read(file), new RegExp(`campaign="${campaign}"`), file);
+    assert.match(sheet, /withShareChannel\(payload\.url, "native_share"\)/);
+    assert.match(sheet, /withShareChannel\(payload\.url, "copy_link"\)/);
+    assert.match(sheet, /withShareChannel\(payload\.url, target\)/);
+    assert.doesNotMatch(sheet, /withUtm|shareTags|campaign/);
+    for (const file of [
+      "features/feed/components/post-card.tsx",
+      "features/profile/components/profile-page.tsx",
+      "features/profile/components/person-more-menu.tsx",
+      "features/messages/components/thread.tsx",
+      "components/layout/upcoming-room-card.tsx",
+    ]) {
+      assert.doesNotMatch(read(file), /campaign="/, file);
     }
   });
 
-  it("keeps the UTM tags a visit arrived with and sends them with analytics", () => {
+  it("shares a post by its short id", () => {
+    assert.match(
+      stripComments(read("features/feed/components/post-card.tsx")),
+      /url: `\$\{window\.location\.origin\}\/p\/\$\{sharePostId\(post\.id\)\}`/
+    );
+  });
+
+  it("keeps where a visit came from, then takes the code off the address bar", () => {
     const analytics = stripComments(read("lib/analytics.ts"));
     assert.match(analytics, /const utm = captureVisitUtm\(\);/);
+    assert.match(analytics, /readUtm\(window\.location\.search, window\.location\.pathname\)/);
+    // `null`: passing history.state (which carries Next's marker) skips the router sync.
+    assert.match(analytics, /window\.history\.replaceState\(null, "", clean\)/);
+    assert.doesNotMatch(analytics, /replaceState\(window\.history\.state/);
     assert.match(stripComments(read("components/layout/app-shell.tsx")), /captureVisitUtm\(\);/);
   });
 });
@@ -2633,5 +2648,95 @@ describe("the spoken room code is copyable and reaches the host while live", () 
     // shipped. Null is ordinary, so it must be guarded rather than rendered as
     // an empty or placeholder code.
     assert.match(houseRoom, /stream\.roomCode && \(/);
+  });
+});
+
+describe("a profile's counts open X-style follow lists", () => {
+  const page = stripComments(read("features/profile/components/profile-page.tsx"));
+  const list = stripComments(read("features/profile/components/follow-list-page.tsx"));
+
+  it("links each count to its own list", () => {
+    // Plain text before: two numbers with no way to see the people behind them.
+    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/following`\}/);
+    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/followers`\}/);
+  });
+
+  it("has a route for each list", () => {
+    for (const tab of ["followers", "following"]) {
+      const route = read(`app/u/[username]/${tab}/page.tsx`);
+      assert.match(route, new RegExp(`<FollowListPage username=\\{username\\} tab="${tab}" />`));
+    }
+  });
+
+  it("lists people with the one PersonRow, paged by BrowseList", () => {
+    // A second row for people is how two follow controls with two behaviours ship.
+    assert.match(list, /<PersonRow key=\{person\.id\} profile=\{person\} \/>/);
+    assert.match(list, /<BrowseList/);
+  });
+
+  it("switches tabs in place, so Back leaves the page in one step", () => {
+    assert.match(list, /router\.replace\(`\/u\/\$\{handle\}\/\$\{next\}`/);
+    assert.doesNotMatch(list, /router\.push\(/);
+  });
+
+  it("never re-sorts a page client-side", () => {
+    // Re-sorting reorders rows already on screen as later pages arrive. The
+    // order is the service's to fix.
+    assert.doesNotMatch(list, /\.sort\(/);
+  });
+});
+
+
+describe("link previews publish only what they should, where they should", () => {
+  it("fetches post and profile data only on the two routes built for it", () => {
+    for (const file of ["app/p/[id]/page.tsx", "app/u/[username]/page.tsx"]) {
+      const route = stripComments(read(file));
+      assert.match(route, /export async function generateMetadata/, file);
+      // Bots and browsers render differently, so one cached response is wrong.
+      assert.match(route, /export const dynamic = "force-dynamic";/, file);
+      // Next already decoded the param; a second decode reopens traversal.
+      assert.doesNotMatch(route, /decodeURIComponent/, file);
+    }
+    const post = stripComments(read("app/p/[id]/page.tsx"));
+    assert.match(post, /const post = resolvePostParam\(id, \{ fixtureIds: FIXTURE_MODE \}\);\n\s*if \(!post\) notFound\(\);/);
+    // Fixture ids only when there is no upstream at all.
+    assert.match(post, /const FIXTURE_MODE = marketSquareBase\(\) === null;/);
+    assert.match(post, /<PostScreen postId=\{post\.uuid\} \/>/);
+  });
+
+  it("gives rooms, houses, invites and room codes the generic card only", () => {
+    // A private group's title or picture in a chat app's preview cache would
+    // outlive a rename and a revoked invite.
+    for (const file of [
+      "app/gist-rooms/page.tsx",
+      "app/gist-rooms/[id]/page.tsx",
+      "app/live/page.tsx",
+      "app/live/[id]/page.tsx",
+      "app/houses/page.tsx",
+      "app/join/[token]/page.tsx",
+      "app/code/[code]/page.tsx",
+    ]) {
+      assert.doesNotMatch(stripComments(read(file)), /generateMetadata|openGraph/, file);
+    }
+  });
+
+  it("never uses the opengraph-image file convention, which overrides generateMetadata", () => {
+    for (const file of ["app/opengraph-image.tsx", "app/opengraph-image.png", "app/twitter-image.tsx"]) {
+      assert.equal(existsSync(new URL(`../${file}`, import.meta.url)), false, file);
+    }
+    assert.match(stripComments(read("app/share-card/route.tsx")), /export const dynamic = "force-static";/);
+    assert.match(stripComments(read("lib/og-metadata.ts")), /url: "\/share-card",/);
+  });
+
+  it("keeps Next's own preview-bot list and adds to it, rather than replacing it", () => {
+    const config = stripComments(read("next.config.ts"));
+    assert.match(config, /import \{ HTML_LIMITED_BOT_UA_RE \} from "next\/dist\/shared\/lib\/router\/utils\/html-bots";/);
+    assert.match(config, /htmlLimitedBots: new RegExp\(`\$\{HTML_LIMITED_BOT_UA_RE\.source\}\|/);
+  });
+
+  it("sets metadataBase and the generic card in the root layout", () => {
+    const layout = stripComments(read("app/layout.tsx"));
+    assert.match(layout, /metadataBase: new URL\(siteOrigin\(process\.env\)\)/);
+    assert.match(layout, /images: \[FALLBACK_OG_IMAGE\]/);
   });
 });

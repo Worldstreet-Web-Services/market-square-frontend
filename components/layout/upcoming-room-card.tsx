@@ -340,7 +340,6 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
             onClose={() => setSharing(false)}
             title="Share gist room"
             payload={{ text: `${stream.title} on Square`, url: `${window.location.origin}${href}` }}
-            campaign="room_share"
           />
         )}
       </div>
