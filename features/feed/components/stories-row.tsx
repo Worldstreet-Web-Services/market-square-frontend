@@ -34,6 +34,9 @@ import { useMe } from "@/hooks/use-me";
 import { isHouse } from "@/features/houses/lib/house";
 import { useFeed, useStories } from "@/features/feed/hooks/use-feed";
 import { reportView } from "@/features/feed/hooks/use-record-view";
+import { useStoryViewers } from "@/features/feed/hooks/use-story-viewers";
+import { StoryViewersPanel } from "@/features/feed/components/story-viewers";
+import { seenByLabel } from "@/lib/story-viewers";
 import type { FeedItem, Post } from "@/features/feed/lib/types";
 
 /**
@@ -443,7 +446,15 @@ function StoryViewer({
   const [pressing, setPressing] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [hidden, setHidden] = useState(false);
-  const paused = isHeld({ pressing, hovering, hidden });
+  /*
+    WHICH STORY'S VIEWER LIST IS OPEN, by id rather than a boolean — so moving
+    to the next story closes it without an effect: the open id simply stops
+    matching the story on screen.
+  */
+  const [viewersFor, setViewersFor] = useState<string | null>(null);
+  const me = useMe();
+  // The list being open holds the story, the same way a backgrounded tab does.
+  const paused = isHeld({ pressing, hovering, hidden: hidden || viewersFor !== null });
   // Progress is driven from the SAME clock that advances the story, so a hold
   // freezes the bar with the story instead of racing on to 100% underneath a
   // paused card.
@@ -454,6 +465,17 @@ function StoryViewer({
   const story = group?.stories[at.story];
   const storyKey = `${at.group}:${at.story}`;
   const isVideo = story ? Boolean(story.mediaUrl) && isStoryVideoMedia(story) : false;
+  /*
+    "SEEN BY" IS THE AUTHOR'S ALONE. The route answers only the story's author,
+    so it is asked only on the reader's own story — asking on everyone else's
+    would be a guaranteed 404 on every story opened. Nothing is drawn until it
+    answers: a service without the route (404), a removed story, anything that
+    is not a clean success leaves no entry rather than a broken one.
+  */
+  const mine = Boolean(group && me.data && group.id === me.data.id);
+  const viewers = useStoryViewers(story?.id, mine);
+  const viewerTotal = viewers.data?.pages[0]?.total ?? null;
+  const viewersOpen = Boolean(story && viewersFor === story.id);
 
   /** Elapsed wall time on this story, in MILLISECONDS — see `advanceRatio`. */
   const elapsedRef = useRef(0);
@@ -967,6 +989,24 @@ function StoryViewer({
           <p className="ws-display ws-text-shadow text-2xl leading-snug text-white">{story.text}</p>
         </div>
 
+        {mine && viewerTotal !== null && (
+          <div className="relative z-20 px-6 pb-4">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setViewersFor(story.id);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              aria-haspopup="dialog"
+              aria-expanded={viewersOpen}
+              className="ws-press flex items-center gap-2 rounded-full bg-black/45 px-3.5 py-1.5 text-[13px] font-semibold text-white backdrop-blur-sm"
+            >
+              {seenByLabel(viewerTotal)}
+            </button>
+          </div>
+        )}
+
         {cta && (
           <div className="relative z-20 px-6 pb-8">
             <Link
@@ -977,6 +1017,10 @@ function StoryViewer({
               {cta.label}
             </Link>
           </div>
+        )}
+
+        {mine && viewersOpen && viewerTotal !== null && (
+          <StoryViewersPanel query={viewers} total={viewerTotal} onClose={() => setViewersFor(null)} />
         )}
       </div>
 

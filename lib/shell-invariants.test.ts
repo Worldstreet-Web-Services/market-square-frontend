@@ -2882,3 +2882,36 @@ describe("QA round, 2026-09-15", () => {
     assert.match(shell, /label="All pages"/);
   });
 });
+
+describe("Seen by: the author sees who viewed their story", () => {
+  const stories = stripComments(read("features/feed/components/stories-row.tsx"));
+  const panel = stripComments(read("features/feed/components/story-viewers.tsx"));
+  const hook = stripComments(read("features/feed/hooks/use-story-viewers.ts"));
+
+  it("asks only on the reader's own story", () => {
+    // The route is author-only; asking on anyone else's is a 404 on every story opened.
+    assert.match(stories, /const mine = Boolean\(group && me\.data && group\.id === me\.data\.id\);/);
+    assert.match(stories, /useStoryViewers\(story\?\.id, mine\)/);
+    assert.match(hook, /enabled: enabled && Boolean\(storyId\),/);
+  });
+
+  it("draws nothing until the service answers, so a missing route leaves no broken entry", () => {
+    assert.match(stories, /\{mine && viewerTotal !== null && \(/);
+    assert.match(hook, /retry: shouldRetryViewers,/);
+  });
+
+  it("counts from total, never from the rows the list happens to hold", () => {
+    assert.match(stories, /const viewerTotal = viewers\.data\?\.pages\[0\]\?\.total \?\? null;/);
+    assert.match(stories, /\{seenByLabel\(viewerTotal\)\}/);
+    assert.doesNotMatch(panel, /seenByLabel\(rows\.length\)/);
+  });
+
+  it("holds the story while the list is open, and closes it when the story changes", () => {
+    assert.match(stories, /isHeld\(\{ pressing, hovering, hidden: hidden \|\| viewersFor !== null \}\)/);
+    assert.match(stories, /const viewersOpen = Boolean\(story && viewersFor === story\.id\);/);
+  });
+
+  it("opens each viewer's profile", () => {
+    assert.match(panel, /href=\{`\/u\/\$\{profile\.username\}`\}/);
+  });
+});
