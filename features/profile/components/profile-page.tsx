@@ -614,18 +614,31 @@ export function ProfilePage({
           23px void is a 55px gap.
         */}
         <p className="tnum flex flex-wrap items-baseline gap-x-[55px] gap-y-1 text-[15px] leading-5">
-          <span className="flex items-baseline gap-1">
+          {/*
+            THE COUNTS OPEN THE LISTS, the way X's do: tapping "Following"
+            shows who this person follows, "Followers" who follows them. They
+            were plain text before, so both numbers were claims with no way to
+            see the people behind them. Same type, same spacing — only now a
+            link, underlined on hover like every other text link on the page.
+          */}
+          <Link
+            href={`/u/${data.username}/following`}
+            className="flex items-baseline gap-1 rounded-sm decoration-white/50 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
             <span className="font-semibold text-[#F7F9F9]">
               {formatCount(data.followingCount)}
             </span>
             <span className="font-normal text-white/50">Following</span>
-          </span>
-          <span className="flex items-baseline gap-1">
+          </Link>
+          <Link
+            href={`/u/${data.username}/followers`}
+            className="flex items-baseline gap-1 rounded-sm decoration-white/50 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
             <span className="font-semibold text-[#F7F9F9]">
               {formatCount(data.followerCount)}
             </span>
             <span className="font-normal text-white/50">Followers</span>
-          </span>
+          </Link>
         </p>
 
         {/*

@@ -2635,3 +2635,38 @@ describe("the spoken room code is copyable and reaches the host while live", () 
     assert.match(houseRoom, /stream\.roomCode && \(/);
   });
 });
+
+describe("a profile's counts open X-style follow lists", () => {
+  const page = stripComments(read("features/profile/components/profile-page.tsx"));
+  const list = stripComments(read("features/profile/components/follow-list-page.tsx"));
+
+  it("links each count to its own list", () => {
+    // Plain text before: two numbers with no way to see the people behind them.
+    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/following`\}/);
+    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/followers`\}/);
+  });
+
+  it("has a route for each list", () => {
+    for (const tab of ["followers", "following"]) {
+      const route = read(`app/u/[username]/${tab}/page.tsx`);
+      assert.match(route, new RegExp(`<FollowListPage username=\\{username\\} tab="${tab}" />`));
+    }
+  });
+
+  it("lists people with the one PersonRow, paged by BrowseList", () => {
+    // A second row for people is how two follow controls with two behaviours ship.
+    assert.match(list, /<PersonRow key=\{person\.id\} profile=\{person\} \/>/);
+    assert.match(list, /<BrowseList/);
+  });
+
+  it("switches tabs in place, so Back leaves the page in one step", () => {
+    assert.match(list, /router\.replace\(`\/u\/\$\{handle\}\/\$\{next\}`/);
+    assert.doesNotMatch(list, /router\.push\(/);
+  });
+
+  it("never re-sorts a page client-side", () => {
+    // Re-sorting reorders rows already on screen as later pages arrive. The
+    // order is the service's to fix.
+    assert.doesNotMatch(list, /\.sort\(/);
+  });
+});
