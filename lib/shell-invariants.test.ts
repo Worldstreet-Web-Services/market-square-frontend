@@ -2862,6 +2862,14 @@ describe("QA round, 2026-09-15", () => {
     assert.match(spotlight, /hint=\{window\.live \? undefined : /);
   });
 
+  it("9b · spotlight asks for no window, so the board survives the backend's real weekly window", () => {
+    // Pinning "weekly" would blank the board once the service makes weekly a
+    // real rolling 7 days; sending "all" is refused by today's service.
+    const api = stripComments(read("features/profile/lib/api.ts"));
+    assert.match(api, /msApi\.get\("\/spotlight"\)\);/);
+    assert.doesNotMatch(api, /window: "weekly"/);
+  });
+
   it("8 · the story viewer reports a view, so an author's viewer list can have anyone in it", () => {
     const stories = stripComments(read("features/feed/components/stories-row.tsx"));
     assert.match(stories, /import \{ reportView \} from "@\/features\/feed\/hooks\/use-record-view";/);
