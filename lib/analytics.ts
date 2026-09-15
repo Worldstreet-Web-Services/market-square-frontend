@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { apiFetch } from "@/lib/api/client";
-import { readUtm, type UtmParams } from "@/lib/utm";
+import { readUtm, withoutShareChannel, type UtmParams } from "@/lib/utm";
 
 export type MarketEventName =
   | "feed_viewed"
@@ -46,10 +46,21 @@ export function captureVisitUtm(): UtmParams | null {
   if (typeof window === "undefined") return null;
   try {
     const stored = sessionStorage.getItem(UTM_KEY);
-    if (stored) return JSON.parse(stored) as UtmParams;
-    const found = readUtm(window.location.search);
+    const found = stored ? null : readUtm(window.location.search, window.location.pathname);
     if (found) sessionStorage.setItem(UTM_KEY, JSON.stringify(found));
-    return found;
+    // The channel code is read ONCE and then taken off the address bar — even
+    // when this visit already had tags stored — so a link copied from the bar
+    // never re-shares a channel that did not send it.
+    //
+    // `null`, NOT `history.state`. Next patches replaceState and, when the
+    // state passed in already carries its internal marker (`__NA`), hands it
+    // straight to the browser WITHOUT updating the router — so the router kept
+    // `?s=wa` in `useSearchParams` and wrote it back into the bar on its next
+    // commit. With `null`, Next copies its own state across and syncs the URL,
+    // which is exactly what its docs show.
+    const clean = withoutShareChannel(window.location.href);
+    if (clean) window.history.replaceState(null, "", clean);
+    return stored ? (JSON.parse(stored) as UtmParams) : found;
   } catch {
     return null;
   }

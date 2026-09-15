@@ -6,7 +6,7 @@ import { IconShareFacebook, IconShareTelegram, IconShareWhatsApp, IconShareX } f
 import { IconMsShare } from "@/components/ui/design-icons";
 import { IconLink } from "@/components/ui/icons";
 import { SHARE_TARGETS, shareUrl, type SharePayload, type ShareTarget } from "@/lib/share-targets";
-import { shareTags, withUtm, type ShareCampaign } from "@/lib/utm";
+import { withShareChannel } from "@/lib/utm";
 
 /**
  * SHARE — a post, a profile — to WhatsApp, X, Facebook, Telegram, the
@@ -35,14 +35,11 @@ export function ShareSheet({
   open,
   onClose,
   payload,
-  campaign,
   title = "Share post",
 }: {
   open: boolean;
   onClose: () => void;
   payload: SharePayload;
-  /** What is being shared — the link's `utm_campaign`. Every link leaves tagged. */
-  campaign: ShareCampaign;
   /** The sheet's heading: "Share post", "Share profile". */
   title?: string;
 }) {
@@ -51,7 +48,7 @@ export function ShareSheet({
   const native = async () => {
     onClose();
     try {
-      await navigator.share({ text: payload.text, url: withUtm(payload.url, shareTags("native_share", campaign)) });
+      await navigator.share({ text: payload.text, url: withShareChannel(payload.url, "native_share") });
     } catch {
       /* dismissed share sheets are not errors */
     }
@@ -60,7 +57,7 @@ export function ShareSheet({
   const copy = async () => {
     onClose();
     try {
-      await navigator.clipboard.writeText(withUtm(payload.url, shareTags("copy_link", campaign)));
+      await navigator.clipboard.writeText(withShareChannel(payload.url, "copy_link"));
       toast.success("Link copied");
     } catch {
       toast.error("Couldn't copy the link.");
@@ -86,7 +83,7 @@ export function ShareSheet({
           return (
             <a
               key={target}
-              href={shareUrl(target, { ...payload, url: withUtm(payload.url, shareTags(target, campaign)) })}
+              href={shareUrl(target, { ...payload, url: withShareChannel(payload.url, target) })}
               target="_blank"
               rel="noopener noreferrer"
               onClick={onClose}

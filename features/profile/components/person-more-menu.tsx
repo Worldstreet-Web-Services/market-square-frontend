@@ -260,7 +260,6 @@ export function PersonMoreMenu({
             text: `${profile.displayName || profile.username} on Square`,
             url: `${window.location.origin}/u/${profile.username}`,
           }}
-          campaign="profile_share"
         />
       )}
 

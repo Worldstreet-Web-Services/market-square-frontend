@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Manrope, Roboto } from "next/font/google";
 import Providers from "./providers";
 import { AppShell } from "@/components/layout/app-shell";
+import { FALLBACK_OG_IMAGE, SITE_DESCRIPTION, SITE_NAME, siteOrigin } from "@/lib/og-metadata";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import { SignInOverlay } from "@/components/layout/sign-in-overlay";
 import { WelcomeGate } from "@/components/layout/welcome/welcome-gate";
@@ -51,10 +52,33 @@ const manrope = Manrope({
   subsets: ["latin"],
 });
 
+/*
+  THE CARD EVERY ROUTE UNFURLS INTO UNLESS IT SAYS OTHERWISE.
+
+  Only `/p/[id]` and `/u/[username]` publish data-driven previews. Rooms,
+  houses, invites and room codes inherit this generic branded card on purpose:
+  a private group's title or picture, copied into a chat app's preview cache,
+  would outlive a renamed group and a revoked invite. A child segment that sets
+  `openGraph` REPLACES this object rather than merging into it (metadata merges
+  shallowly), so a post never inherits this image by accident.
+*/
 export const metadata: Metadata = {
-  title: { default: "Square", template: "%s · Square" },
-  description:
-    "The social square of the Ark platform: live streams, the ARK Store, creators and community.",
+  metadataBase: new URL(siteOrigin(process.env)),
+  title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: [FALLBACK_OG_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    images: [FALLBACK_OG_IMAGE],
+  },
 };
 
 /**

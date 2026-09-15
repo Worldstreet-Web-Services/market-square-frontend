@@ -878,7 +878,6 @@ export function ProfilePage({
             text: `${data.displayName || data.username} on Square`,
             url: `${window.location.origin}/u/${data.username}`,
           }}
-          campaign="profile_share"
         />
       )}
 
