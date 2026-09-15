@@ -1,6 +1,7 @@
 "use client";
 
 import { placeLine } from "@/lib/countries";
+import { profileHref } from "@/lib/profile-href";
 import { useState } from "react";
 import Link from "next/link";
 import { IconProfileGlobePin, IconProfileLink } from "@/components/ui/profile-icons";
@@ -30,6 +31,7 @@ import { isHttpUrl } from "@/lib/http-url";
 import { EditProfileSheet } from "@/features/profile/components/edit-profile-sheet";
 import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
 import { WinkButton } from "@/features/profile/components/wink-button";
+import { useCanonicalProfileAddress } from "@/features/profile/hooks/use-canonical-profile-address";
 import { VerificationCard } from "@/features/profile/components/verification-card";
 import {
   AccountTabs,
@@ -421,6 +423,9 @@ export function ProfilePage({
   ) => React.ReactNode;
 }) {
   const profile = useProfile(username);
+  // Opened by id, or by a name they have since changed: once loaded, the
+  // address bar shows who they are now. See useCanonicalProfileAddress.
+  useCanonicalProfileAddress(username, profile.data);
   const me = useMe();
   const [tab, setTab] = useState<Tab>("posts");
   /**
@@ -622,7 +627,7 @@ export function ProfilePage({
             link, underlined on hover like every other text link on the page.
           */}
           <Link
-            href={`/u/${data.username}/following`}
+            href={profileHref(data, "following")}
             className="flex items-baseline gap-1 rounded-sm decoration-white/50 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <span className="font-semibold text-[#F7F9F9]">
@@ -631,7 +636,7 @@ export function ProfilePage({
             <span className="font-normal text-white/50">Following</span>
           </Link>
           <Link
-            href={`/u/${data.username}/followers`}
+            href={profileHref(data, "followers")}
             className="flex items-baseline gap-1 rounded-sm decoration-white/50 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <span className="font-semibold text-[#F7F9F9]">

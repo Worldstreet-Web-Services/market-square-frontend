@@ -1,6 +1,7 @@
 "use client";
 
 import { friendsMomentFor } from "@/lib/friends-popup";
+import { profileHref } from "@/lib/profile-href";
 import { openFriendsCard } from "@/lib/friends-card-store";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -234,7 +235,7 @@ function hrefFor(item: MarketNotification): string | null {
       ? `/p/${item.postId}?comment=${encodeURIComponent(item.commentId)}`
       : `/p/${item.postId}`;
   }
-  if (item.actor) return `/u/${item.actor.username}`;
+  if (item.actor) return profileHref(item.actor);
   return null;
 }
 

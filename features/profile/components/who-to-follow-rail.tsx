@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
@@ -77,7 +78,7 @@ export function WhoToFollowRail() {
         {suggestions.map((row) => (
           <li key={row.profile.id}>
             <Link
-              href={`/u/${row.profile.username}`}
+              href={profileHref(row.profile)}
               className="ws-rail-row flex items-center gap-3 px-4 py-3"
             >
               <Avatar

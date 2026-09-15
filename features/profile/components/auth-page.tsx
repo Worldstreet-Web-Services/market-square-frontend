@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { useAuth } from "@/hooks/use-auth";
@@ -67,7 +68,7 @@ export function AuthPage() {
                 {returnTo ? "Continue where you left off" : "Go to the square"}
               </Button>
               {profile && (
-                <Button variant="secondary" className="w-full" onClick={() => router.push(`/u/${profile.username}`)}>
+                <Button variant="secondary" className="w-full" onClick={() => router.push(profileHref(profile))}>
                   My profile
                 </Button>
               )}

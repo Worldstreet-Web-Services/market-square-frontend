@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -521,7 +522,7 @@ function ClosedHouse({ stream }: { stream: Stream }) {
       </div>
       {stream.owner && (
         <Link
-          href={`/u/${stream.owner.username}`}
+          href={profileHref(stream.owner)}
           className="ws-row flex items-center gap-3 px-4 py-3.5 text-[13px] font-semibold text-body"
         >
           Visit {atHandle(stream.owner.username) ?? stream.owner.displayName}

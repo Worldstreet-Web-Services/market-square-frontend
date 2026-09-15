@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { profileHref } from "@/lib/profile-href";
 import { isStoryVideoMedia, storyCover } from "@/lib/story-cover";
 import {
   advanceRatio,
@@ -816,12 +817,12 @@ function StoryViewer({
         </div>
 
         <div className="relative z-20 flex items-center gap-3 px-3 py-3">
-          <Link href={`/u/${group.username}`} onClick={close}>
+          <Link href={profileHref(group)} onClick={close}>
             <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={32} />
           </Link>
           <div className="min-w-0 flex-1">
             <Link
-              href={`/u/${group.username}`}
+              href={profileHref(group)}
               onClick={close}
               className="ws-text-shadow block truncate text-sm font-bold text-white"
             >

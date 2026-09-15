@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { profileHref } from "@/lib/profile-href";
 import Link from "next/link";
 import { useMe } from "@/hooks/use-me";
 import { formatDateTime } from "@/lib/format";
@@ -59,7 +60,7 @@ export function StudioHome() {
           body="Apply for a creator role from your profile to schedule and host streams."
           action={
             <Link
-              href={`/u/${me.data.username}#creator`}
+              href={`${profileHref(me.data)}#creator`}
               className="ws-press rounded-full bg-accent px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-white"
             >
               Become a creator

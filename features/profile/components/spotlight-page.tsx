@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { profileHref } from "@/lib/profile-href";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatKashScore } from "@/features/profile/lib/score";
@@ -164,7 +165,7 @@ export function SpotlightPage() {
               if (!row) return <div key={position} />;
               const size = PODIUM_SIZE_BY_RANK[position] ?? 64;
               return (
-                <Link key={row.profile.id} href={`/u/${row.profile.username}`} className="flex flex-col items-center gap-2">
+                <Link key={row.profile.id} href={profileHref(row.profile)} className="flex flex-col items-center gap-2">
                   <div className="relative">
                     <Avatar name={row.profile.displayName} seed={row.profile.id} src={row.profile.avatarUrl} size={size} ring={position === 0} />
                     <span
@@ -198,7 +199,7 @@ export function SpotlightPage() {
                 >
                   {row.rank}
                 </span>
-                <Link href={`/u/${row.profile.username}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <Link href={profileHref(row.profile)} className="flex min-w-0 flex-1 items-center gap-3">
                   <Avatar name={row.profile.displayName} seed={row.profile.id} src={row.profile.avatarUrl} size={40} />
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 truncate text-[15px] font-bold text-heading">

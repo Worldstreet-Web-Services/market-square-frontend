@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { profileHref } from "@/lib/profile-href";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
 import { IconX } from "@/components/ui/icons";
@@ -66,7 +67,7 @@ export function StoryViewersPanel({
         {rows.map(({ profile, viewedAt }) => (
           <li key={profile.id}>
             <Link
-              href={`/u/${profile.username}`}
+              href={profileHref(profile)}
               className="ws-press flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-white/[0.06]"
             >
               <Avatar name={profile.displayName} seed={profile.id} src={profile.avatarUrl} size={40} />

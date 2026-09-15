@@ -1284,7 +1284,8 @@ describe("The account dropdown follows 747:14001", () => {
 
   it("offers Profile, Settings, Gender and Log out", () => {
     assert.match(items, /label="Profile"/);
-    assert.match(items, /go\(me\.data \? `\/u\/\$\{me\.data\.username\}\/settings` : "\/auth"\)/, "Settings no longer opens the person's own /u/<username>/settings");
+    // By id since QA ("users can change their username"); the settings page redirects to the current username.
+    assert.match(items, /go\(me\.data \? profileHref\(me\.data, "settings"\) : "\/auth"\)/, "Settings no longer opens the person's own settings");
     assert.match(items, /setStep\("gender"\)/);
     assert.match(items, /GENDER_OPTIONS\.map\(\(option\) =>/);
     assert.match(items, /update\.mutate\(\{ gender: option\.value \}/);
@@ -2664,8 +2665,8 @@ describe("a profile's counts open X-style follow lists", () => {
 
   it("links each count to its own list", () => {
     // Plain text before: two numbers with no way to see the people behind them.
-    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/following`\}/);
-    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/followers`\}/);
+    assert.match(page, /href=\{profileHref\(data, "following"\)\}/);
+    assert.match(page, /href=\{profileHref\(data, "followers"\)\}/);
   });
 
   it("has a route for each list", () => {
@@ -2833,9 +2834,9 @@ describe("QA round, 2026-09-15", () => {
   });
 
   it("4 · a member's face, and a one-to-one chat's header, open that person's profile", () => {
-    assert.match(thread, /sender\?\.username \? \(\n\s*<Link\n\s*href=\{`\/u\/\$\{sender\.username\}`\}/);
-    assert.match(thread, /peer\?\.username \? \(\n\s*<Link\n\s*href=\{`\/u\/\$\{peer\.username\}`\}/);
-    assert.match(thread, /\{!group && peer\?\.username \? \(\n\s*<Link href=\{`\/u\/\$\{peer\.username\}`\}/);
+    assert.match(thread, /sender\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(sender\)\}/);
+    assert.match(thread, /peer\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(peer\)\}/);
+    assert.match(thread, /\{!group && peer\?\.username \? \(\n\s*<Link href=\{profileHref\(peer\)\}/);
   });
 
   it("5 · the thread column and the room's chat column end with a divider, like X", () => {
@@ -2912,6 +2913,53 @@ describe("Seen by: the author sees who viewed their story", () => {
   });
 
   it("opens each viewer's profile", () => {
-    assert.match(panel, /href=\{`\/u\/\$\{profile\.username\}`\}/);
+    assert.match(panel, /href=\{profileHref\(profile\)\}/);
+  });
+});
+
+describe("links to a person go by id, not by a username they can change (QA)", () => {
+  // Every in-app profile link is profileHref(profile). The files below are the
+  // deliberate exceptions, each for a reason stated in lib/profile-href.ts or
+  // at the call site: the canonical-address redirects themselves, callers that
+  // only ever hold a username, and the SEO canonical.
+  const ALLOWED = new Set([
+    "components/layout/settings-screen.tsx",
+    "features/profile/components/follow-list-page.tsx",
+    "features/profile/components/claim-username-gate.tsx",
+    "features/houses/components/room-roster-panel.tsx",
+    "features/houses/components/person-sheet.tsx",
+    "lib/og-metadata.ts",
+  ]);
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true }).flatMap((entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(path);
+      return /\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith(".test.ts") ? [path] : [];
+    });
+
+  it("draws no in-app profile link from a username outside the known exceptions", () => {
+    const offenders: string[] = [];
+    for (const file of [...walk("features"), ...walk("components"), ...walk("lib"), ...walk("app")]) {
+      if (ALLOWED.has(file)) continue;
+      const code = stripComments(read(file));
+      // A link built from a username that is NOT a share link (those keep the
+      // short username on purpose and start with the page origin).
+      for (const match of code.matchAll(/`\/u\/\$\{[^}`]*\.username\}/g)) {
+        const before = code.slice(Math.max(0, (match.index ?? 0) - 40), match.index);
+        if (!/window\.location\.origin\}$/.test(before)) offenders.push(file);
+      }
+    }
+    assert.deepEqual([...new Set(offenders)], []);
+  });
+
+  it("builds the link from the id, and the profile page shows the current username", () => {
+    assert.match(stripComments(read("lib/profile-href.ts")), /const key = SAFE_ID\.test\(profile\.id\)/);
+    assert.match(stripComments(read("features/profile/components/profile-page.tsx")), /useCanonicalProfileAddress\(username, profile\.data\);/);
+    assert.match(stripComments(read("features/profile/components/follow-list-page.tsx")), /useCanonicalProfileAddress\(username, profile\.data, tab\);/);
+    assert.match(stripComments(read("features/profile/hooks/use-canonical-profile-address.ts")), /router\.replace\(/);
+  });
+
+  it("links a mention by the recorded profile id when there is one", () => {
+    assert.match(stripComments(read("components/ui/post-text.tsx")), /segment\.id \? profileHref\(\{ id: segment\.id, username: segment\.handle \}\)/);
   });
 });

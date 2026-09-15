@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import { Avatar } from "@/components/ui/avatar";
 import {
@@ -241,7 +242,7 @@ export function PalCard({
       </button>
 
       <Link
-        href={`/u/${profile.username}`}
+        href={profileHref(profile)}
         tabIndex={interactive ? undefined : -1}
         className="absolute block overflow-hidden"
         style={{

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { profileHref } from "@/lib/profile-href";
 import { toast } from "sonner";
 import { atHandle } from "@/lib/handle";
 import Image from "next/image";
@@ -342,7 +343,7 @@ function ThreadHeader({
           ) : (
             peer?.username ? (
               <Link
-                href={`/u/${peer.username}`}
+                href={profileHref(peer)}
                 aria-label={`View ${peer.displayName}'s profile`}
                 className="block h-full w-full"
               >
@@ -361,7 +362,7 @@ function ThreadHeader({
             <h1 className="truncate text-[16px] font-bold leading-6 text-white">
               {/* A one-to-one chat's name opens that person, like their face. */}
               {!group && peer?.username ? (
-                <Link href={`/u/${peer.username}`} className="hover:underline">
+                <Link href={profileHref(peer)} className="hover:underline">
                   {title}
                 </Link>
               ) : (
@@ -1557,7 +1558,7 @@ function MessageRow({
       {group && !mine && (
         sender?.username ? (
           <Link
-            href={`/u/${sender.username}`}
+            href={profileHref(sender)}
             aria-label={`View ${sender.displayName}'s profile`}
             className="ws-press flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10"
           >
