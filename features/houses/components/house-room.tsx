@@ -1530,7 +1530,7 @@ function LiveHouse({
           sheet off "View all" (both below). `max-md:hidden` keeps the chat
           MOUNTED — its poll and scroll survive — the same reason the roster
           `hidden`s it rather than unmounting it. */}
-      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome max-md:hidden xl:h-full xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
+      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome max-md:hidden xl:h-full xl:w-[411px] xl:border-x xl:border-t-0 xl:overflow-hidden">
         {/*
           THE ROSTER TAKES THIS COLUMN WHILE IT IS OPEN — 369:8740.
 

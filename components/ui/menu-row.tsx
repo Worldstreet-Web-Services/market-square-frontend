@@ -29,6 +29,12 @@ import { cn } from "@/lib/cn";
  * filter's panel on `MenuPanel`'s 231 / 16 / 8, so the menus now use the
  * design system's own row rather than a shrunken copy of it.
  *
+ * AND THEN ONE SIZE UP. QA, on the full-size menus: "There is need to increase
+ * the size of elements on this pop ups (texts, icons, etc)". The DM file's 12px
+ * label on a 32px row is still under what a phone menu carries, so the row is
+ * 40 tall with a 14px label and a 20px glyph box — the size menus are set at on
+ * every platform a reader already uses — and the panel widens to hold it.
+ *
  * `trailing` is the chevron the file puts on a row's right edge.
  */
 export function MenuRow({
@@ -61,7 +67,7 @@ export function MenuRow({
       onClick={onClick}
       className={cn(
         "ws-press flex w-full items-center bg-white/[0.03] text-left font-medium transition-colors",
-        "h-8 gap-2 rounded-xl px-2 text-[12px] leading-4",
+        "h-10 gap-2.5 rounded-xl px-2.5 text-[14px] leading-5",
         // The file gives a destructive row `#FF3B30`; `--color-danger` is
         // `#ff383c`, which is the same red to within two values per channel and
         // is already what every other destructive control in the app uses.
@@ -69,7 +75,7 @@ export function MenuRow({
         off ? "cursor-not-allowed opacity-40" : "hover:bg-white/[0.08]"
       )}
     >
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -79,7 +85,7 @@ export function MenuRow({
 }
 
 /**
- * The panel the rows sit in — 231 wide, `#1C1C1C` (which is `--color-grey-800`
+ * The panel the rows sit in — 264 wide (231 before QA's larger rows), `#1C1C1C` (which is `--color-grey-800`
  * exactly), a 1px `white/18` ring, 22px radius, 16px of padding and an 8px gap
  * down the list.
  */
@@ -87,7 +93,7 @@ export function MenuPanel({ children }: { children: React.ReactNode }) {
   return (
     <div
       role="menu"
-      className="flex w-[231px] flex-col gap-2 rounded-[22px] border border-white/[0.18] bg-grey-800 p-4 shadow-[0_18px_44px_-12px_rgba(0,0,0,0.85)]"
+      className="flex w-[264px] flex-col gap-2 rounded-[22px] border border-white/[0.18] bg-grey-800 p-4 shadow-[0_18px_44px_-12px_rgba(0,0,0,0.85)]"
     >
       {children}
     </div>

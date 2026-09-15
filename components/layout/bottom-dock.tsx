@@ -247,7 +247,8 @@ export function BottomDock({
           <button
             type="button"
             onClick={onCompose}
-            aria-label="Create post"
+            // It asks first — a post or a gist room (QA). See CreateChoiceSheet.
+            aria-label="Create"
             className="ws-press block h-[72px] w-[72px] rounded-full transition-opacity hover:opacity-90"
           >
             <svg viewBox="0 0 113 113" className="block h-full w-full" fill="none" aria-hidden>

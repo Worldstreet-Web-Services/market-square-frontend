@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatKashScore } from "@/features/profile/lib/score";
@@ -9,6 +10,8 @@ import type { Profile } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
 import { OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconChevronDown } from "@/components/ui/icons";
+import { MenuPanel, MenuRow } from "@/components/ui/menu-row";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -42,20 +45,91 @@ const PODIUM_ORDER = [1, 0, 2];
 // ranking has to be read rather than seen.
 const PODIUM_SIZE_BY_RANK = [96, 76, 64];
 
+/**
+ * WHICH STRETCH OF TIME THE RANKING COVERS — a dropdown, not a label.
+ *
+ * QA: "This should be a filter dropdown to view for This month and All time".
+ *
+ * THE BOARD IS ALL TIME, and was labelled "This week". Checked in the service
+ * (2026-09-15): the `spotlight` table holds one row per person, every scoring
+ * event ADDS to it (`score = spotlight.score + EXCLUDED.score`), and nothing
+ * anywhere resets, decays or windows it — the `window` column is pinned to the
+ * single value 'weekly' as a name. So "This week" was a false claim about the
+ * numbers under it, and the one window the data can honestly serve is All time.
+ *
+ * This week and This month are drawn DISABLED with the reason — the house rule
+ * for a control the service cannot back yet. A real week or month needs the
+ * service to keep a scoring history from the day it ships (past totals cannot
+ * be split by date), which is with the backend and with ogazboiz as a product
+ * call. Switching one on is flipping `live` here and passing the window on.
+ */
+type SpotlightWindow = "weekly" | "monthly" | "all";
+
+const WINDOWS: { value: SpotlightWindow; label: string; live: boolean }[] = [
+  { value: "all", label: "All time", live: true },
+  { value: "weekly", label: "This week", live: false },
+  { value: "monthly", label: "This month", live: false },
+];
+
+function SpotlightWindowMenu() {
+  const [open, setOpen] = useState(false);
+  const current = WINDOWS[0]!;
+  return (
+    <div
+      className="relative shrink-0"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Ranking window: ${current.label}`}
+        onClick={() => setOpen((value) => !value)}
+        className="ws-press rounded-full"
+      >
+        <Pill tone="spotlight" className="flex items-center gap-1.5 px-3.5 py-1 text-[13px]">
+          {current.label}
+          <IconChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+        </Pill>
+      </button>
+      {open && (
+        <>
+          {/* A tap anywhere else closes it, rather than deciding about a row. */}
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-[calc(100%+6px)] z-40">
+            <MenuPanel>
+              {WINDOWS.map((window) => (
+                <MenuRow
+                  key={window.value}
+                  label={window.label}
+                  icon={
+                    window.value === current.value ? (
+                      <span aria-hidden className="block h-2 w-2 rounded-full bg-create" />
+                    ) : undefined
+                  }
+                  hint={window.live ? undefined : "Coming soon: weekly and monthly ranking needs a scoring history first"}
+                  onClick={window.live ? () => setOpen(false) : undefined}
+                />
+              ))}
+            </MenuPanel>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function SpotlightPage() {
   const board = useSpotlight();
 
   return (
     <>
-      {/* Backend ranks weekly only; the window is a label, not a toggle. */}
       <ColumnHeader
         title="Spotlight"
         subtitle="The square's most active voices, ranked"
-        action={
-          <Pill tone="spotlight" className="shrink-0 px-3.5 py-1 text-[13px]">
-            This week
-          </Pill>
-        }
+        action={<SpotlightWindowMenu />}
       />
 
       {board.isPending && (

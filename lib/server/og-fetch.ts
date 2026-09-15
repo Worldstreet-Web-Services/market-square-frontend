@@ -17,10 +17,15 @@
  * unknown service, with the same status and the same `NOT_FOUND` code as a
  * missing post (checked against production): only the message differs. A bad
  * `WSAPI_BASE_URL` read as "gone" would 404 every post and profile to every
- * chat app at once, and they cache that. So `not-found` requires the service's
- * own "Post not found" / "Profile not found"; any other 404 is `unavailable`.
- * Matching a sentence is a stopgap — a distinct error code has been asked of
- * the backend, and this should switch to it the day it exists.
+ * chat app at once, and they cache that. So `not-found` requires the service
+ * to say WHAT is missing.
+ *
+ * It now does: `error.details.resource` is "post" or "profile" on those 404s
+ * and ABSENT on a route miss, a malformed id and an unknown gateway service
+ * (backend PR #234; the code is still `NOT_FOUND` everywhere). That is read
+ * first. A service without #234 sends no details, so the exact sentences
+ * "Post not found" / "Profile not found" stay as the fallback — delete that
+ * half once production answers with `details.resource`.
  *
  * NOTHING IS CACHED ACROSS REQUESTS — `cache: "no-store"`, deliberately. This
  * read used to ask for a minute of `next.revalidate`, and an explicit
@@ -83,9 +88,17 @@ export async function fetchOgJson(url: string, options: OgFetchOptions = {}): Pr
 }
 
 /** Did the service itself say this post or profile does not exist? */
+const GONE_RESOURCES = new Set(["post", "profile"]);
+
 async function isGone(res: Response): Promise<boolean> {
   try {
-    const body = JSON.parse(await res.text()) as { error?: { message?: unknown } } | null;
+    const body = JSON.parse(await res.text()) as {
+      error?: { message?: unknown; details?: { resource?: unknown } };
+    } | null;
+    const resource = body?.error?.details?.resource;
+    // The service's own statement of what is missing wins outright.
+    if (typeof resource === "string") return GONE_RESOURCES.has(resource);
+    // Fallback for a service without #234: its exact sentences, nothing looser.
     const message = body?.error?.message;
     return typeof message === "string" && GONE_MESSAGES.has(message);
   } catch {

@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 /**
- * THE PHONE'S DOCK STEPS ASIDE FOR A ROOM'S OWN BAR — AND ONLY THEN.
+ * THE DOCK STEPS ASIDE WHILE A ROOM IS LIVE — AND ONLY THEN.
+ *
+ * Phones first, and since QA (2026-09-15) desktop too: "When a user is in a
+ * gistroom listening or speaking, the menu docker shouldn't be displayed".
  *
  * Node 1285:92794 pins the gist room's control bar (1285:93076) to the bottom
  * edge of a phone, where the shell's dock sits. The rule has to reach three
@@ -13,7 +16,7 @@ import { describe, it } from "node:test";
  * not opened, or has closed, draws no bar and no Back, and a route rule left
  * that phone with no navigation at all.
  */
-describe("the phone dock rule reaches the shell, the stylesheet and the room", () => {
+describe("the live-room dock rule reaches the shell, the stylesheet and the room", () => {
   const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
   const shell = read("components/layout/app-shell.tsx");
   const css = read("app/globals.css");
@@ -25,14 +28,16 @@ describe("the phone dock rule reaches the shell, the stylesheet and the room", (
     assert.doesNotMatch(shell, /hidesPhoneDock|dock-surfaces/, "the shell keys the dock on the route again");
   });
 
-  it("hides the dock below md while a bar is up, and nowhere else", () => {
+  it("hides the dock at every width while a room's bar is up, and nowhere else", () => {
     assert.match(shell, /const roomBar = useRoomBar\(\);/, "the shell no longer listens for a room bar");
     assert.match(
       shell,
-      /roomBar && "max-md:hidden"/,
-      "the dock is not hidden on a phone where a room's bar stands in for it"
+      /roomBar && "hidden"/,
+      "the dock is not hidden while a live room's bar is up"
     );
-    // Desktop is untouched: the rail still decides `md:hidden` on its own.
+    // It no longer waits for a phone breakpoint — that is the QA fix.
+    assert.doesNotMatch(shell, /roomBar && "max-md:hidden"/);
+    // The rail still decides `md:hidden` on its own.
     assert.match(shell, /railOn && "md:hidden"/);
   });
 
@@ -40,9 +45,11 @@ describe("the phone dock rule reaches the shell, the stylesheet and the room", (
     assert.match(shell, /data-dock=\{roomBar \? "room-bar" : "on"\}/);
     assert.match(
       css,
-      /@media \(width < 48rem\) \{\s*\[data-dock="room-bar"\] \{\s*--ws-nav-h: 0px;/,
-      "the phone still pads its foot for a dock that is not drawn"
+      /\n\[data-dock="room-bar"\] \{\s*--ws-nav-h: 0px;/,
+      "the page still pads its foot for a dock that is not drawn"
     );
+    // At every width — a phone-only media query here is the desktop band QA saw.
+    assert.doesNotMatch(css, /@media \(width < 48rem\) \{\s*\[data-dock="room-bar"\]/);
   });
 
   it("mounts the room's own bar on the phone, fixed to the bottom edge", () => {

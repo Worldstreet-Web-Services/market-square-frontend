@@ -340,18 +340,34 @@ function ThreadHeader({
               <IconHouses className="h-5 w-5 text-white/70" />
             )
           ) : (
-            <Avatar
-              name={peer?.displayName ?? "?"}
-              seed={peer?.id}
-              src={peer?.avatarUrl}
-              size={38}
-            />
+            peer?.username ? (
+              <Link
+                href={`/u/${peer.username}`}
+                aria-label={`View ${peer.displayName}'s profile`}
+                className="block h-full w-full"
+              >
+                <Avatar name={peer.displayName} seed={peer.id} src={peer.avatarUrl} size={38} />
+              </Link>
+            ) : (
+              <Avatar name={peer?.displayName ?? "?"} seed={peer?.id} src={peer?.avatarUrl} size={38} />
+            )
           )}
         </span>
 
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-1">
-            <h1 className="truncate text-[12px] font-bold leading-4 text-white">{title}</h1>
+            {/* QA: the person's or group's name is the page's heading, so it is set
+                like one — 16px, up from the file's 12. */}
+            <h1 className="truncate text-[16px] font-bold leading-6 text-white">
+              {/* A one-to-one chat's name opens that person, like their face. */}
+              {!group && peer?.username ? (
+                <Link href={`/u/${peer.username}`} className="hover:underline">
+                  {title}
+                </Link>
+              ) : (
+                title
+              )}
+            </h1>
             {/* The design draws exactly ONE capsule here — the admin-granted
                 badge, which is `OrgBadgeChip`: its recipe exactly, a 4% white
                 pill with a 19% white hairline around the MARKET/ARK wordmark.
@@ -1529,15 +1545,34 @@ function MessageRow({
           <IconQuote className="h-3.5 w-3.5" />
         </span>
       )}
+      {/*
+        A MEMBER'S FACE OPENS THEIR PROFILE (QA: "When a user clicks on another
+        user's pfp in a chat or group conversation, they should be redirected
+        to that user's profile"). Only when the roster has resolved who sent
+        it — a face with nobody behind it stays a plain picture rather than a
+        link to a guessed address. The row's click guard still swallows the
+        click at the end of a reply swipe or a long-press, so neither gesture
+        navigates away.
+      */}
       {group && !mine && (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10">
-          <Avatar
-            name={sender?.displayName ?? "?"}
-            seed={sender?.id ?? message.senderId}
-            src={sender?.avatarUrl}
-            size={24}
-          />
-        </span>
+        sender?.username ? (
+          <Link
+            href={`/u/${sender.username}`}
+            aria-label={`View ${sender.displayName}'s profile`}
+            className="ws-press flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10"
+          >
+            <Avatar name={sender.displayName} seed={sender.id} src={sender.avatarUrl} size={24} />
+          </Link>
+        ) : (
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10">
+            <Avatar
+              name={sender?.displayName ?? "?"}
+              seed={sender?.id ?? message.senderId}
+              src={sender?.avatarUrl}
+              size={24}
+            />
+          </span>
+        )
       )}
       {content}
       {/* A removed message has nothing to answer. The announcement bubble is

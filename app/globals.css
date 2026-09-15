@@ -1029,11 +1029,13 @@ body {
    same lesson as the rail above: the VARIABLE has to tell the truth, or
    `main` and every other reader go on padding 112px for a dock that is not
    drawn — a band of dead space under the room's own bar. The room reserves
-   its bar's height itself. */
-@media (width < 48rem) {
-  [data-dock="room-bar"] {
-    --ws-nav-h: 0px;
-  }
+   its bar's height itself.
+
+   AT EVERY WIDTH, not just phones: the dock now steps aside on desktop too
+   while a room is live (QA), and a 112px foot kept for a dock that is not
+   drawn is exactly the page that "doesn't reach the bottom of the screen". */
+[data-dock="room-bar"] {
+  --ws-nav-h: 0px;
 }
 
 /*

@@ -111,14 +111,14 @@ export function FriendsFilter({
     close();
   };
 
-  const chevron = <IconFilterChevronRight className="h-2 w-1 text-white" />;
+  const chevron = <IconFilterChevronRight className="h-2.5 w-[5px] text-white" />;
   /* The file's own chevron, turned round: a step's Back row points the way it goes. */
-  const back = <IconFilterChevronRight className="h-2 w-1 -scale-x-100 text-white" />;
+  const back = <IconFilterChevronRight className="h-2.5 w-[5px] -scale-x-100 text-white" />;
   /* The file draws no selected state; a row that is on is simply named in the pill.
      Inside a step, the row that is on carries a filled dot in `--color-create`
      so the reader can see which line they are on without leaving the menu. */
   const dot = (on: boolean) =>
-    on ? <span aria-hidden className="block h-[7px] w-[7px] rounded-full bg-create" /> : undefined;
+    on ? <span aria-hidden className="block h-2 w-2 rounded-full bg-create" /> : undefined;
 
   return (
     /*
@@ -145,7 +145,11 @@ export function FriendsFilter({
         className={
           variant === "pals"
             ? "ws-press flex h-8 shrink-0 items-center gap-[14px] rounded-full bg-white/[0.04] py-1 pl-2.5 pr-[3px] font-[family-name:var(--font-heading)] text-[10px] font-semibold leading-6 tracking-[0.015em] text-white transition-colors hover:bg-white/[0.08]"
-            : "ws-press flex h-[38px] w-[136px] items-center justify-between rounded-full bg-[#979797]/5 pl-[25px] pr-[19px] text-[16px] font-semibold leading-[24px] text-white transition-colors hover:bg-[#979797]/10"
+            : // QA: "the space between the text and icon is too much". The file's 136
+            // fixed width with justify-between parked the chevron at the far end
+            // of the pill; the pill now hugs its label with an 8px gap, and caps
+            // its growth so "Location · Lagos" still truncates.
+              "ws-press flex h-[38px] max-w-[240px] items-center gap-2 rounded-full bg-[#979797]/5 pl-4 pr-3 text-[16px] font-semibold leading-[24px] text-white transition-colors hover:bg-[#979797]/10"
         }
       >
         <span className="min-w-0 truncate">{friendsFilterLabel(value)}</span>
@@ -179,24 +183,24 @@ export function FriendsFilter({
           <div
             role="menu"
             aria-label="Filter people by"
-            className="ws-popover-enter absolute right-[2px] top-[calc(100%+3px)] z-20 flex w-[231px] flex-col gap-2 rounded-[11px] border border-white/[0.18] bg-grey-800 p-4"
+            className="ws-popover-enter absolute right-[2px] top-[calc(100%+3px)] z-20 flex w-[264px] flex-col gap-2 rounded-[11px] border border-white/[0.18] bg-grey-800 p-4"
           >
             {step === "root" && (
               <>
                 <MenuRow
-                  icon={<IconFilterLocation className="h-[13.5px] w-[14px] text-grey-400" />}
+                  icon={<IconFilterLocation className="h-[17px] w-[17.5px] text-grey-400" />}
                   label={value.city.trim() ? `Location · ${value.city.trim()}` : "Location"}
                   trailing={chevron}
                   onClick={() => setStep("location")}
                 />
                 <MenuRow
-                  icon={<IconFilterFriends className="h-[11px] w-[15px] text-grey-400" />}
+                  icon={<IconFilterFriends className="h-[14px] w-[19px] text-grey-400" />}
                   label={value.newOnly ? "Friends · New people" : "Friends"}
                   trailing={chevron}
                   onClick={() => setStep("friends")}
                 />
                 <MenuRow
-                  icon={<IconFilterGender className="h-4 w-4 text-grey-400" />}
+                  icon={<IconFilterGender className="h-5 w-5 text-grey-400" />}
                   label={genderLabel(value.gender) ? `Gender · ${genderLabel(value.gender)}` : "Gender"}
                   trailing={chevron}
                   onClick={() => setStep("gender")}
@@ -236,7 +240,7 @@ export function FriendsFilter({
                     placeholder="Type a city, then Enter"
                     aria-label="City"
                     autoFocus
-                    className="h-8 w-full rounded-xl bg-white/[0.03] px-2 text-[12px] font-medium leading-4 text-white/80 outline-none placeholder:text-white/40 focus:bg-white/[0.08]"
+                    className="h-10 w-full rounded-xl bg-white/[0.03] px-2.5 text-[14px] font-medium leading-5 text-white/80 outline-none placeholder:text-white/40 focus:bg-white/[0.08]"
                   />
                 </form>
               </>
