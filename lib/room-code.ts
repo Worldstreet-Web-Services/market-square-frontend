@@ -42,3 +42,26 @@ export function groupRoomCode(code: string): string {
     ? `${code.slice(0, 3)}-${code.slice(3, 7)}-${code.slice(7)}`
     : code;
 }
+
+/**
+ * WHO MAY SEE A ROOM'S CODE.
+ *
+ * The host always: it is theirs to read out. In a PUBLIC room, everyone in it
+ * too — anyone can already walk in, the listener link in the same sheet is
+ * shown to all of them, and a code is just that link in a form a person can
+ * say down a phone ("they cant see it in the gist room if it is public").
+ *
+ * A PRIVATE room keeps it with the host. There the code is how somebody gets
+ * handed a way in, and handing out a way into somebody else's private room is
+ * not a listener's call.
+ *
+ * No code, nothing to show: a broadcast is never given one, and neither is a
+ * room made before codes shipped.
+ */
+export function roomCodeVisible(
+  room: { roomCode: string | null; audience: "public" | "private" },
+  isHost: boolean
+): boolean {
+  if (!room.roomCode) return false;
+  return isHost || room.audience === "public";
+}

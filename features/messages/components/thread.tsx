@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { atHandle } from "@/lib/handle";
 import Image from "next/image";
 import { cn } from "@/lib/cn";
@@ -17,6 +18,8 @@ import { OrgBadgeChip } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
+import { MediaViewer } from "@/components/ui/media-viewer";
+import { mediaDownloadUrl } from "@/lib/media-download";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
 import { GroupSettingsSheet } from "@/features/messages/components/group-settings-sheet";
@@ -39,7 +42,7 @@ import { formatElapsed } from "@/features/messages/lib/voice-recorder";
 import { dotScale } from "@/lib/voice-levels";
 import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
 import { uploadFile } from "@/lib/api/upload";
-import { IconArrowLeft, IconHouses, IconMic, IconPlay, IconPause, IconQuote, IconX } from "@/components/ui/icons";
+import { IconArrowLeft, IconDownload, IconFullscreen, IconHouses, IconMic, IconPlay, IconPause, IconQuote, IconX } from "@/components/ui/icons";
 import {
   useConversationMembers,
   useLeaveGroup,
@@ -996,6 +999,12 @@ function MediaBubble({
   const url = message.mediaUrl as string;
   const ratio = mediaRatio(message.mediaWidth, message.mediaHeight);
   const caption = message.text?.trim();
+  // Open full screen, the way a photo or clip opens in WhatsApp.
+  const [viewing, setViewing] = useState(false);
+  // A real save of the ORIGINAL file, or null when this is not a file the
+  // service issued — see lib/media-download.ts. Null draws no control at all.
+  const downloadUrl = mediaDownloadUrl(url, `square-${kind}-${message.id.slice(0, 8)}`);
+  const noun = kind === "video" ? "video" : "photo";
 
   return (
     <div className={cn("w-[262px] max-w-[85%] p-1", bubbleShell(mine, tail))}>
@@ -1006,8 +1015,37 @@ function MediaBubble({
           attachment, never a crop. */}
       <div className="relative w-full" style={{ aspectRatio: String(ratio ?? 4 / 3) }}>
         {kind === "video" ? (
-          <InlineVideo src={url} className="absolute inset-0 rounded-xl" />
+          /*
+            A DIV, not a button — the post card's recipe. The player owns a
+            real sound control, and a button inside a button is invalid markup
+            that would make "Tap for sound" open the clip instead. The frame
+            opens it, the pill toggles sound, and the keyboard gets the explicit
+            full-screen control.
+          */
+          <div
+            onClick={() => setViewing(true)}
+            className="absolute inset-0 cursor-pointer overflow-hidden rounded-xl"
+          >
+            <InlineVideo src={url} className="absolute inset-0 rounded-xl" />
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setViewing(true);
+              }}
+              aria-label="Play video full screen"
+              className="ws-glass ws-press absolute bottom-3 right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-body transition-colors hover:text-white"
+            >
+              <IconFullscreen className="h-4 w-4" />
+            </button>
+          </div>
         ) : (
+          <button
+            type="button"
+            onClick={() => setViewing(true)}
+            aria-label="View photo full screen"
+            className="absolute inset-0 block cursor-zoom-in overflow-hidden rounded-xl"
+          >
           <MediaFrame backdrop={url} className="absolute inset-0 rounded-xl">
             {/*
               A plain <img>, never `next/image`. The host of an attachment is
@@ -1024,8 +1062,38 @@ function MediaBubble({
               className="absolute inset-0 h-full w-full object-contain"
             />
           </MediaFrame>
+          </button>
+        )}
+
+        {/*
+          SAVE IT, RIGHT ON THE BUBBLE — the way WhatsApp puts the arrow on the
+          media itself (ogazboiz: "just download to see on the chat"), not only
+          behind the full-screen view. Top-right, clear of the clip's sound pill
+          (bottom-left) and its full-screen control (bottom-right).
+        */}
+        {downloadUrl && (
+          <a
+            href={downloadUrl}
+            download
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Download ${noun}`}
+            title={`Download ${noun}`}
+            className="ws-glass ws-press absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full text-body transition-colors hover:text-white"
+          >
+            <IconDownload className="h-4 w-4" />
+          </a>
         )}
       </div>
+
+      {viewing && (
+        <MediaViewer
+          kind={kind}
+          src={url}
+          alt={caption || (kind === "video" ? "Video" : "Photo")}
+          downloadUrl={downloadUrl}
+          onClose={() => setViewing(false)}
+        />
+      )}
 
       {caption && <BubbleText message={message} mine={mine} className="px-2 pt-2" />}
 
@@ -1052,6 +1120,62 @@ function MediaBubble({
  * purple glyph — the design only draws the outgoing case, and a purple disc on
  * a purple bubble is not a disc.
  */
+/**
+ * THE NOTE YOU JUST RECORDED, BEFORE IT GOES.
+ *
+ * Stopping a recording keeps it here in the composer, and this is what makes
+ * keeping it worth anything: a real play control on the uploaded file, so the
+ * person hears exactly what will be sent before they send it or remove it.
+ * Stopped when the chip goes away, so a removed note never talks on over the
+ * thread.
+ */
+function StagedVoicePreview({ url, durationSeconds }: { url: string; durationSeconds: number | null }) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const node = audio.current;
+    return () => node?.pause();
+  }, []);
+
+  const toggle = () => {
+    const node = audio.current;
+    if (!node) return;
+    if (node.paused) void node.play().catch(() => setPlaying(false));
+    else node.pause();
+  };
+
+  return (
+    <>
+      <audio
+        ref={audio}
+        src={url}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          setElapsed(0);
+        }}
+        onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime)}
+      />
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playing ? "Pause voice note" : "Play voice note"}
+        aria-pressed={playing}
+        className="ws-btn-create ws-press flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white"
+      >
+        {playing ? <IconPause className="h-4 w-4" /> : <IconPlay className="h-4 w-4" />}
+      </button>
+      <span className="tnum shrink-0 text-[12px] text-white/60">
+        {formatElapsed(playing || elapsed > 0 ? elapsed : (durationSeconds ?? 0))}
+      </span>
+    </>
+  );
+}
+
 function VoiceBubble({
   message,
   mine,
@@ -1254,6 +1378,17 @@ function MessageRow({
   const [dragX, setDragX] = useState(0);
   const dragFrom = useRef<{ x: number; y: number } | null>(null);
   const dragging = useRef(false);
+  /*
+    THE CLICK AFTER A GESTURE BELONGS TO THE GESTURE.
+
+    A swipe-to-reply and a long-press both end with the finger lifting over a
+    bubble, and the browser follows that with a click on whatever is under it.
+    Once a photo or clip in a bubble opened full screen on a tap, that click
+    opened it at the end of every reply swipe and every long-press. Set when
+    either gesture fires, spent by the row's capture handler, and cleared on
+    the next press so a gesture that produced no click cannot eat a real tap.
+  */
+  const swallowClick = useRef(false);
 
   const startDrag = (event: React.PointerEvent) => {
     if (event.pointerType === "mouse" || removed) return;
@@ -1272,6 +1407,7 @@ function MessageRow({
   const endDrag = (event: React.PointerEvent) => {
     const from = dragFrom.current;
     if (from && dragging.current) {
+      swallowClick.current = true;
       const dx = event.clientX - from.x;
       const dy = event.clientY - from.y;
       // Committed on RELEASE, never mid-drag: a reply that fired under a
@@ -1289,6 +1425,7 @@ function MessageRow({
     pressAt.current = { x: event.clientX, y: event.clientY };
     press.current = setTimeout(() => {
       press.current = null;
+      swallowClick.current = true;
       setRevealed(true);
       if (hide.current) clearTimeout(hide.current);
       hide.current = setTimeout(() => setRevealed(false), 4_000);
@@ -1339,8 +1476,15 @@ function MessageRow({
     <div
       data-message-id={message.id}
       onPointerDown={(event) => {
+        swallowClick.current = false;
         startPress(event);
         startDrag(event);
+      }}
+      onClickCapture={(event) => {
+        if (!swallowClick.current) return;
+        swallowClick.current = false;
+        event.preventDefault();
+        event.stopPropagation();
       }}
       onPointerUp={(event) => {
         cancelPress();
@@ -1502,6 +1646,41 @@ function Composer({
         result: uploaded,
         measured: { durationSeconds: result.durationSeconds },
       });
+    } catch {
+      toast.error("Couldn't attach the voice note.");
+    } finally {
+      setVoiceBusy(false);
+    }
+  };
+
+  /**
+   * Stop, upload and SEND, in one tap — the recording strip's arrow.
+   *
+   * It used to stage the note like `finishVoice` and wait for a second press
+   * of send ("if i click that send it should send once instead"). Staging is
+   * still what STOP does, for the person who wants to hear it back; the arrow
+   * is for the person who already knows.
+   *
+   * The note goes out ON ITS OWN, answering the reply target if there is one,
+   * and anything typed in the field stays there: a voice note is its own
+   * message in WhatsApp, and a half-written line should not ride out under it
+   * as a caption nobody meant to send. The payload is built from the upload
+   * result directly — `attachment` state would not have updated yet inside
+   * this same call.
+   */
+  const sendVoiceNow = async () => {
+    const result = await voice.stop();
+    if (!result) return;
+    setVoiceBusy(true);
+    try {
+      const uploaded = await uploadFile(result.file, undefined, "attachment");
+      const note: OutgoingMessage = {
+        ...(replyTo ? { replyToId: replyTo.id } : {}),
+        media: { url: uploaded.url, durationSeconds: result.durationSeconds },
+      };
+      send.mutate(note, { onSuccess: () => onCancelReply() });
+    } catch {
+      toast.error("Couldn't send the voice note.");
     } finally {
       setVoiceBusy(false);
     }
@@ -1597,6 +1776,11 @@ function Composer({
               alt=""
               className="h-10 w-10 shrink-0 rounded-lg object-cover"
             />
+          ) : attachment.result.kind === "audio" ? (
+            <StagedVoicePreview
+              url={attachment.result.url}
+              durationSeconds={attachment.measured.durationSeconds ?? null}
+            />
           ) : (
             <span
               aria-hidden
@@ -1684,22 +1868,38 @@ function Composer({
             {formatElapsed(voice.elapsed)}
           </span>
 
-          {/* Stop and discard. A square, because that is what a stop control
-              is everywhere else, and NOT styled as the primary action — the
-              destructive one should never be the easiest to hit. */}
+          {/* DISCARD, as its own quiet control. It used to BE the stop square,
+              so stopping to hear the note back threw it away ("if i click that
+              stop i should able to listen to the vn"). Never styled as the
+              primary action: the destructive one is the hardest to hit. */}
           <button
             type="button"
             onClick={voice.cancel}
-            aria-label="Stop and discard recording"
+            aria-label="Discard recording"
+            title="Discard"
+            className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <IconX className="h-4 w-4" />
+          </button>
+
+          {/* STOP, AND KEEP IT. The note lands in the composer with a play
+              button, to hear back and then send or remove. A square, because
+              that is what stop is everywhere else. */}
+          <button
+            type="button"
+            onClick={() => void finishVoice()}
+            aria-label="Stop recording and listen"
+            title="Stop and listen"
             className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/15"
           >
             <span aria-hidden className="h-3 w-3 rounded-[2px] bg-current" />
           </button>
 
-          {/* Send. The violet ramp, as every other primary action on Square. */}
+          {/* SEND, IN ONE TAP — stop, upload and send. The violet ramp, as
+              every other primary action on Square. */}
           <button
             type="button"
-            onClick={() => void finishVoice()}
+            onClick={() => void sendVoiceNow()}
             aria-label="Send voice note"
             className="ws-btn-create ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
           >
@@ -1744,7 +1944,7 @@ function Composer({
           icon={<Image src="/messages/attach.svg" alt="" width={24} height={24} />}
         />
         <CircleButton
-          label={voice.recording ? "Stop recording" : "Record a voice note"}
+          label={voice.recording ? "Stop recording and listen" : "Record a voice note"}
           size={24}
           disabled={voiceBusy}
           onClick={() => {

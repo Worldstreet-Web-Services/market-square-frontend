@@ -40,10 +40,10 @@ import {
 import { RoomRosterPanel } from "@/features/houses/components/room-roster-panel";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { opensAtLabel } from "@/lib/format";
-import { groupRoomCode } from "@/lib/room-code";
+import { groupRoomCode, roomCodeVisible } from "@/lib/room-code";
 import { Backstage } from "@/features/houses/components/backstage";
 import { CaptionRail } from "@/features/houses/components/caption-rail";
-import { CopyRow, CopyCodeRow } from "@/features/houses/components/copy-row";
+import { CopyRow, CopyCodeRow, CopyCodeChip } from "@/features/houses/components/copy-row";
 import { HandTray } from "@/features/houses/components/hand-tray";
 import { HouseControls } from "@/features/houses/components/house-controls";
 import { HouseHeader } from "@/features/houses/components/house-header";
@@ -474,6 +474,14 @@ function NotOpenYet({
         <p className="ws-meta mt-2">
           {stream.owner ? `${stream.owner.displayName} · ` : ""}Not open yet
         </p>
+        {/* A listener waiting on a PUBLIC room can read the code out to a
+            friend before it opens. Never on a private one — see
+            `roomCodeVisible`. */}
+        {roomCodeVisible(stream, false) && stream.roomCode && (
+          <p className="ws-meta mt-1">
+            <CopyCodeChip code={stream.roomCode} />
+          </p>
+        )}
       </div>
       {/* The same card the host waits on, for the same reason. */}
       {upcomingCardSlot && <div className="px-4 pt-2">{upcomingCardSlot(stream)}</div>}
@@ -1295,6 +1303,14 @@ function LiveHouse({
               <span className="tnum">{listening}</span> listening ·{" "}
               <span className="tnum">{speaking}</span> speaking
             </span>
+            {/* THE CODE, ON THE LINE EVERYONE IN THE ROOM ALREADY READS — for
+                everyone in a public room, for the host in a private one. */}
+            {roomCodeVisible(stream, isHost) && stream.roomCode && (
+              <>
+                {" · "}
+                <CopyCodeChip code={stream.roomCode} />
+              </>
+            )}
           </>
         }
         // 1285:92940 — the host's phone pill says what leaving means for them.
@@ -1733,23 +1749,16 @@ function LiveHouse({
       />
 
       <Sheet open={overflowSheet} onClose={() => setOverflowSheet(false)} title="This house">
-        {/* THE CODE GOES FIRST, AND ONLY THE HOST SEES IT.
-            It used to appear on exactly one screen — the host's own waiting
-            screen, before the room opened — so it vanished at the moment a
-            host actually needs it, which is once they are live and reading it
-            down a phone (ogazboiz: "why cant they see the room code").
-
-            Host-only is the conservative reading and matches what was asked.
-            The listener link below carries the same power and is shown to
-            everyone, so a code in every listener's sheet would probably leak
-            nothing new — but "probably" is not a case for widening who can
-            hand out entry to somebody else's room, so that stays a question
-            for the product rather than a guess made here.
+        {/* THE CODE GOES FIRST. It used to be host-only, as the conservative
+            reading of "why cant they see the room code"; ogazboiz then ruled
+            it: in a PUBLIC room everyone should see it ("they cant see it in
+            the gist room if it is public"). A private room keeps it with the
+            host. The rule is `roomCodeVisible`, so this row, the header line
+            and the waiting screen cannot disagree.
 
             A room without a code says nothing: a broadcast is never given one
-            and neither is a room made before codes shipped, so null is
-            ordinary and never an error. */}
-        {isHost && stream.roomCode && (
+            and neither is a room made before codes shipped. */}
+        {roomCodeVisible(stream, isHost) && stream.roomCode && (
           <CopyCodeRow
             label="Room code"
             hint="For reading down a phone. Anyone can type it in to walk in and listen."

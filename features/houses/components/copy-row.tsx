@@ -1,6 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
+import { cn } from "@/lib/cn";
 import { IconCopy, IconLink } from "@/components/ui/icons";
 import { groupRoomCode } from "@/lib/room-code";
 
@@ -65,5 +66,37 @@ export function CopyCodeRow({ label, hint, code }: { label: string; hint?: strin
         <IconCopy className="h-4 w-4 shrink-0 text-grey-500" />
       </button>
     </div>
+  );
+}
+
+/**
+ * THE CODE INLINE, where a room's own header already says who is in it.
+ *
+ * A row in a sheet is one tap too deep for the thing a listener wants while
+ * sitting in a room ("they cant see it in the gist room"), so the code also sits
+ * on the header's line. Tapping it copies — and like `CopyCodeRow` it copies the
+ * BARE code while showing the grouped one, because grouping is display only and
+ * a copied `bcd-fghj-km` would fail in the join field.
+ *
+ * It stops the click from reaching anything around it: this sits inside
+ * surfaces that are themselves tappable.
+ */
+export function CopyCodeChip({ code, className }: { code: string; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        void navigator.clipboard.writeText(code).then(() => toast.success("Code copied"));
+      }}
+      aria-label={`Copy room code ${groupRoomCode(code)}`}
+      className={cn(
+        "ws-press inline-flex items-baseline gap-1 rounded-md transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        className
+      )}
+    >
+      Code
+      <span className="tnum font-semibold tracking-[0.08em] text-white">{groupRoomCode(code)}</span>
+    </button>
   );
 }
