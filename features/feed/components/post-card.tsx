@@ -48,6 +48,7 @@ import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
 import { MentionPicker } from "@/features/feed/components/mention-picker";
 import { ShareSheet } from "@/components/ui/share-sheet";
+import { sharePostId } from "@/lib/short-id";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 
@@ -1170,9 +1171,10 @@ export function PostCard({
           onClose={() => setSharing(false)}
           payload={{
             text: post.text,
-            url: `${window.location.origin}/p/${post.id}`,
+            // Shared as the 22-character short id; `/p/[id]` resolves it back to
+            // the UUID, and a link already shared with the UUID keeps working.
+            url: `${window.location.origin}/p/${sharePostId(post.id)}`,
           }}
-          campaign="post_share"
         />
       )}
 

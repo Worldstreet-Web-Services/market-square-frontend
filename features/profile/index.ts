@@ -12,6 +12,10 @@ export { WinkButton } from "./components/wink-button";
 // The one row for listing people. Composed into Explore's People results
 // through a route slot — slices never import each other.
 export { PersonRow } from "./components/person-row";
+// X's follow lists — /u/{username}/followers and /following, reached from the
+// counts on a profile.
+export { FollowListPage } from "./components/follow-list-page";
+export type { FollowListTab } from "./components/follow-list-page";
 export { WhoToFollowRail } from "./components/who-to-follow-rail";
 export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";
 // Safety rows and a follow control that take a HANDLE rather than a Profile —

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots";
 
 /**
  * SECURITY HEADERS.
@@ -62,10 +63,29 @@ const SECURITY_HEADERS = [
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
 ];
 
+/**
+ * LINK-PREVIEW CRAWLERS THAT MUST GET METADATA IN <head>.
+ *
+ * A page with `generateMetadata` streams its tags into <body> after the first
+ * bytes — fine for a browser, invisible to a crawler that reads <head> and
+ * stops. Next renders them blocking only for user agents matching
+ * `htmlLimitedBots`, and SETTING IT REPLACES Next's own list rather than adding
+ * to it.
+ *
+ * So the default is IMPORTED, not copied: every bot Next adds in an upgrade is
+ * kept automatically, and if Next ever moves the file the build fails loudly
+ * instead of our previews silently losing WhatsApp. Its list already covers
+ * WhatsApp, Facebook, X, Telegram (whose "TelegramBot (like TwitterBot)" the
+ * case-insensitive Twitterbot matches), Slack, Discord, LinkedIn and iMessage.
+ * These are the preview crawlers it misses.
+ */
+const EXTRA_PREVIEW_BOTS = ["Pinterestbot", "Mastodon", "Snap URL Preview", "Viber"];
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  htmlLimitedBots: new RegExp(`${HTML_LIMITED_BOT_UA_RE.source}|${EXTRA_PREVIEW_BOTS.join("|")}`, "i"),
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
