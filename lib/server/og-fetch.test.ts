@@ -40,6 +40,23 @@ describe("the share-preview read", () => {
     assert.deepEqual(await fetchOgJson("u", stub(() => notFound("Profile not found"))), { status: "not-found" });
   });
 
+  it("reads the service's own statement of what is missing (backend #234)", async () => {
+    const detailed = (resource?: string) =>
+      new Response(
+        JSON.stringify({
+          success: false,
+          error: { code: "NOT_FOUND", message: "Not found", ...(resource ? { details: { resource } } : {}) },
+        }),
+        { status: 404 }
+      );
+    assert.deepEqual(await fetchOgJson("u", stub(() => detailed("post"))), { status: "not-found" });
+    assert.deepEqual(await fetchOgJson("u", stub(() => detailed("profile"))), { status: "not-found" });
+    // A missing COMMENT is not "this post is gone".
+    assert.deepEqual(await fetchOgJson("u", stub(() => detailed("comment"))), { status: "unavailable" });
+    // No details and no known sentence: a route miss, not a missing post.
+    assert.deepEqual(await fetchOgJson("u", stub(() => detailed())), { status: "unavailable" });
+  });
+
   it("does not read a misrouted gateway as gone, which would 404 every post at once", async () => {
     // Real production bodies: same status, same code, different cause.
     for (const response of [

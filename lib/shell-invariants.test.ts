@@ -1292,14 +1292,16 @@ describe("The account dropdown follows 747:14001", () => {
     assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
   });
 
-  it("hangs in the full-size 231 panel on both account menus", () => {
+  it("hangs in the 264 panel on every account menu", () => {
     // The file's 172 is its 74.46% scale; ogazboiz asked for both menus bigger
-    // (2026-09-14). 231 is the same panel unscaled, and `MenuPanel` exactly.
-    assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 2);
-    assert.match(shell, /const width = panel === "gist" \? 231 : panel === "explore" \? 347 : 224;/);
+    // (2026-09-14) to 231, and QA asked for bigger again (2026-09-15): 264,
+    // which is `MenuPanel` exactly. Three menus: the rail, the desktop top
+    // bar and — since QA — the phone top bar.
+    assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 3);
+    assert.match(shell, /const width = panel === "gist" \? 264 : panel === "explore" \? 347 : 224;/);
     // The clamp and the style must agree, or the clamp keeps a menu on screen
     // that is wider than the one it measured.
-    assert.match(shell, /width: panel === "gist" \? 231 : panel === "explore" \? 347 : 224,/);
+    assert.match(shell, /width: panel === "gist" \? 264 : panel === "explore" \? 347 : 224,/);
     assert.match(shell, /gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
   });
 
@@ -1311,8 +1313,8 @@ describe("The account dropdown follows 747:14001", () => {
     assert.doesNotMatch(row, /compact/);
     assert.doesNotMatch(shell, /size="compact"/);
     assert.doesNotMatch(filter, /size="compact"/);
-    assert.match(row, /"h-8 gap-2 rounded-xl px-2 text-\[12px\] leading-4"/);
-    assert.match(filter, /w-\[231px\] flex-col gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
+    assert.match(row, /"h-10 gap-2\.5 rounded-xl px-2\.5 text-\[14px\] leading-5"/);
+    assert.match(filter, /w-\[264px\] flex-col gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
   });
 });
 
@@ -2808,5 +2810,67 @@ describe("recording a voice note: stop to listen, send in one tap", () => {
   it("says so when the upload fails, instead of failing silently", () => {
     assert.match(thread, /toast\.error\("Couldn't send the voice note\."\)/);
     assert.match(thread, /toast\.error\("Couldn't attach the voice note\."\)/);
+  });
+});
+
+describe("QA round, 2026-09-15", () => {
+  const filter = stripComments(read("components/layout/friends-filter.tsx"));
+  const row = stripComments(read("features/messages/components/conversation-row.tsx"));
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+  const page = stripComments(read("features/messages/components/messages-page.tsx"));
+  const room = stripComments(read("features/houses/components/house-room.tsx"));
+  const choice = stripComments(read("components/layout/create-choice-sheet.tsx"));
+  const spotlight = stripComments(read("features/profile/components/spotlight-page.tsx"));
+
+  it("1 · the filter pill hugs its label instead of parking the chevron at the far end", () => {
+    assert.doesNotMatch(filter, /w-\[136px\] items-center justify-between/);
+    assert.match(filter, /h-\[38px\] max-w-\[240px\] items-center gap-2 rounded-full/);
+  });
+
+  it("2 · the name of the person or gist room reads as a heading", () => {
+    assert.match(row, /truncate text-\[15px\] font-bold leading-5 text-white">\{name\}/);
+    assert.match(thread, /<h1 className="truncate text-\[16px\] font-bold leading-6 text-white">/);
+  });
+
+  it("4 · a member's face, and a one-to-one chat's header, open that person's profile", () => {
+    assert.match(thread, /sender\?\.username \? \(\n\s*<Link\n\s*href=\{`\/u\/\$\{sender\.username\}`\}/);
+    assert.match(thread, /peer\?\.username \? \(\n\s*<Link\n\s*href=\{`\/u\/\$\{peer\.username\}`\}/);
+    assert.match(thread, /\{!group && peer\?\.username \? \(\n\s*<Link href=\{`\/u\/\$\{peer\.username\}`\}/);
+  });
+
+  it("5 · the thread column and the room's chat column end with a divider, like X", () => {
+    assert.match(page, /flex min-h-0 min-w-0 flex-1 flex-col lg:border-r lg:border-white\/10/);
+    assert.match(room, /xl:w-\[411px\] xl:border-x xl:border-t-0/);
+  });
+
+  it("7 · the dock's plus asks: a post, or a gist room", () => {
+    assert.match(shell, /onCompose=\{canCompose && !guest \? \(\) => setChoosingCreate\(true\) : undefined\}/);
+    assert.match(shell, /<CreateChoiceSheet\n\s*open=\{choosingCreate\}/);
+    assert.match(choice, /onPost\(\);/);
+    // The same address the sidebar's Start Gistroom and Home's Host Room use.
+    assert.match(choice, /router\.push\("\/gist-rooms\?open=1"\)/);
+  });
+
+  it("9 · spotlight is a window dropdown that names the window the data actually is", () => {
+    assert.match(spotlight, /action=\{<SpotlightWindowMenu \/>\}/);
+    // The board accumulates forever (no reset, decay or window in the service),
+    // so the live window is All time, and "This week" is never claimed.
+    assert.match(spotlight, /\{ value: "all", label: "All time", live: true \}/);
+    assert.match(spotlight, /\{ value: "weekly", label: "This week", live: false \}/);
+    assert.match(spotlight, /\{ value: "monthly", label: "This month", live: false \}/);
+    assert.doesNotMatch(spotlight, /label: "This week", live: true/);
+    assert.match(spotlight, /hint=\{window\.live \? undefined : /);
+  });
+
+  it("8 · the story viewer reports a view, so an author's viewer list can have anyone in it", () => {
+    const stories = stripComments(read("features/feed/components/stories-row.tsx"));
+    assert.match(stories, /import \{ reportView \} from "@\/features\/feed\/hooks\/use-record-view";/);
+    assert.match(stories, /onSeen\(story\.id\);\n\s*reportView\(story\.id\);/);
+  });
+
+  it("10 · the phone avatar opens the desktop's account menu, and keeps a way to every page", () => {
+    assert.match(shell, /\{\(close\) => <AccountMenuItems close=\{close\} onOpenNav=\{\(\) => setMenuOpen\(true\)\} \/>\}/);
+    assert.match(shell, /\{onOpenNav && \(\n\s*<MenuRow\n\s*icon=\{<IconMore/);
+    assert.match(shell, /label="All pages"/);
   });
 });

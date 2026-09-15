@@ -65,16 +65,19 @@ describe("the create button is rendered once, fixed, in the shell", () => {
 
     const dock = stripComments(read("components/layout/bottom-dock.tsx"));
     assert.equal(
-      (dock.match(/aria-label="Create post"/g) ?? []).length,
+      // Labelled "Create" since QA: it asks whether to make a post or a gist
+      // room (components/layout/create-choice-sheet.tsx) rather than opening
+      // the post composer outright.
+      (dock.match(/aria-label="Create"/g) ?? []).length,
       1,
-      "the dock carries exactly one compose control"
+      "the dock carries exactly one create control"
     );
   });
 
   it("is drawn only by the shell, never by a route", () => {
     for (const path of SOURCES.filter((source) => !source.startsWith("components/layout/"))) {
       assert.equal(
-        (read(path).match(/aria-label="Create post"/g) ?? []).length,
+        (read(path).match(/aria-label="Create(?: post)?"/g) ?? []).length,
         0,
         `${path} drew its own compose control — that is how the button drifted between pages`
       );
@@ -139,17 +142,18 @@ describe("the create button is rendered once, fixed, in the shell", () => {
       "railOn must be exactly flag AND signed in AND not tucked away"
     );
     /*
-      And ONE more, on phones only: while a live gist room's own bottom bar is
-      up (1285:93076) it stands exactly where the dock would, and the dock
-      steps aside below `md` — rung by the bar through `lib/room-bar-store.ts`,
-      never by the route. It is a separate condition and must stay separate:
-      `railOn` still alone decides `md:hidden`, so desktop never loses the
-      dock for a reason that belongs to a phone bar.
+      And ONE more: while a live gist room is up, the dock steps aside — rung
+      by the room's bar through `lib/room-bar-store.ts`, never by the route.
+      It used to be phones only; QA asked for the dock to be gone on desktop
+      too while listening or speaking, so the page reaches the bottom of the
+      screen (2026-09-15). It is still a separate condition from `railOn`, and
+      it is still keyed on the room being LIVE: a room that has not opened, or
+      has closed, draws no bar and keeps its dock.
     */
     assert.match(
       shellDock,
-      /className=\{cn\(railOn && "md:hidden", roomBar && "max-md:hidden"\)\}/,
-      "the dock may only step aside when the rail is ACTUALLY shown — railOn — or, on a phone, while a room's own bar stands in its place"
+      /className=\{cn\(railOn && "md:hidden", roomBar && "hidden"\)\}/,
+      "the dock may only step aside when the rail is ACTUALLY shown — railOn — or while a live room's own bar is up"
     );
     assert.match(
       shellDock,

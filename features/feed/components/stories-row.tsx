@@ -33,6 +33,7 @@ import {
 import { useMe } from "@/hooks/use-me";
 import { isHouse } from "@/features/houses/lib/house";
 import { useFeed, useStories } from "@/features/feed/hooks/use-feed";
+import { reportView } from "@/features/feed/hooks/use-record-view";
 import type { FeedItem, Post } from "@/features/feed/lib/types";
 
 /**
@@ -611,8 +612,20 @@ function StoryViewer({
     };
   }, []);
 
+  /*
+    A STORY ON SCREEN IS A STORY VIEWED — and now the service is told.
+
+    It marked the story seen for THIS browser (the ring greys out) and never
+    reported the view, so the author's "who viewed my story" could only ever
+    have come back empty (QA asked for that list; the backend confirmed the
+    gap by reading, and so did this file). `reportView` is the feed's own
+    reporter: once per story per tab, and the service deduplicates per viewer
+    and does not count the author's own view.
+  */
   useEffect(() => {
-    if (story) onSeen(story.id);
+    if (!story) return;
+    onSeen(story.id);
+    reportView(story.id);
   }, [story, onSeen]);
 
   useEffect(() => {

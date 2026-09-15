@@ -72,7 +72,9 @@ export function ConversationRow({
 
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-[12px] font-bold leading-4 text-white">{name}</span>
+          {/* QA: the name should be bigger. 12px was the file's, and read as body
+              text beside a 38px picture; 15px makes it the row's heading. */}
+          <span className="truncate text-[15px] font-bold leading-5 text-white">{name}</span>
           {/*
             THE PEOPLE GLYPH, in `--color-spotlight`, 12px — node 31:6589.
             It is what tells a group apart from a person at a glance, and it is
