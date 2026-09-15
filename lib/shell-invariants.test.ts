@@ -2312,7 +2312,8 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // Null is ordinary — a broadcast, or a room older than codes.
     assert.match(schemas, /roomCode: z\.string\(\)\.nullable\(\)\.optional\(\)\.default\(null\)/);
     const room = stripComments(read("features/houses/components/house-room.tsx"));
-    assert.match(room, /import \{ groupRoomCode \} from "@\/lib\/room-code";/);
+    // The visibility rule rides in on the same import (roomCodeVisible).
+    assert.match(room, /import \{ groupRoomCode, roomCodeVisible \} from "@\/lib\/room-code";/);
     assert.match(room, /groupRoomCode\(stream\.roomCode\)/);
     // Rendered only when there is one; a room without a code is shared by link.
     assert.match(room, /\{stream\.roomCode && \(/);
@@ -2640,7 +2641,11 @@ describe("the spoken room code is copyable and reaches the host while live", () 
     // The share sheet lives in the live room, so a reference there is the
     // proof that a live host can still find it.
     assert.match(houseRoom, /<CopyCodeRow/);
-    assert.match(houseRoom, /isHost && stream\.roomCode/);
+    // One rule for the sheet, the header line and the waiting screen: the host
+    // always, everyone in a public room (ogazboiz, 2026-09-15).
+    assert.equal((houseRoom.match(/roomCodeVisible\(stream, isHost\) && stream\.roomCode && \(/g) ?? []).length, 2);
+    assert.match(houseRoom, /roomCodeVisible\(stream, false\) && stream\.roomCode && \(/);
+    assert.doesNotMatch(houseRoom, /isHost && stream\.roomCode/);
   });
 
   it("says nothing at all when a room has no code", () => {
@@ -2738,5 +2743,70 @@ describe("link previews publish only what they should, where they should", () =>
     const layout = stripComments(read("app/layout.tsx"));
     assert.match(layout, /metadataBase: new URL\(siteOrigin\(process\.env\)\)/);
     assert.match(layout, /images: \[FALLBACK_OG_IMAGE\]/);
+  });
+});
+
+describe("chat photos and clips open full screen and can be saved, like WhatsApp", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+  const viewer = stripComments(read("components/ui/media-viewer.tsx"));
+
+  it("opens a photo or a clip in the one full-screen viewer", () => {
+    assert.match(thread, /aria-label="View photo full screen"/);
+    assert.match(thread, /aria-label="Play video full screen"/);
+    assert.match(thread, /\{viewing && \(\n\s*<MediaViewer/);
+    // The clip's frame is a div: a button around the player's own sound
+    // control is invalid markup and made "Tap for sound" open the clip.
+    assert.match(thread, /<div\n\s*onClick=\{\(\) => setViewing\(true\)\}\n\s*className="absolute inset-0 cursor-pointer/);
+  });
+
+  it("offers a real download on the bubble and in the viewer, or none at all", () => {
+    assert.match(thread, /const downloadUrl = mediaDownloadUrl\(url, `square-\$\{kind\}-\$\{message\.id\.slice\(0, 8\)\}`\);/);
+    assert.match(thread, /\{downloadUrl && \(\n\s*<a\n\s*href=\{downloadUrl\}/);
+    assert.match(viewer, /\{downloadUrl && \(\n\s*<a\n\s*href=\{downloadUrl\}/);
+  });
+
+  it("never opens the photo at the end of a reply swipe or a long-press", () => {
+    assert.match(thread, /if \(from && dragging\.current\) \{\n\s*swallowClick\.current = true;/);
+    assert.match(thread, /press\.current = null;\n\s*swallowClick\.current = true;/);
+    assert.match(thread, /onClickCapture=\{\(event\) => \{\n\s*if \(!swallowClick\.current\) return;/);
+    // Cleared on every press, so a gesture that produced no click cannot eat a real tap.
+    assert.match(thread, /onPointerDown=\{\(event\) => \{\n\s*swallowClick\.current = false;/);
+  });
+
+  it("pauses whatever else is playing while a clip is open", () => {
+    assert.match(viewer, /mediaToSilence<HTMLMediaElement>\(/);
+    assert.match(viewer, /stopped\.forEach\(\(media\) => media\.pause\(\)\);/);
+  });
+
+  it("keeps profile pictures on the same viewer", () => {
+    assert.match(stripComments(read("components/ui/image-viewer.tsx")), /<MediaViewer kind="image"/);
+  });
+});
+
+describe("recording a voice note: stop to listen, send in one tap", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+
+  it("stops and KEEPS the note on the square, instead of throwing it away", () => {
+    // The square used to be voice.cancel, so stopping to listen discarded it.
+    assert.match(thread, /onClick=\{\(\) => void finishVoice\(\)\}\n\s*aria-label="Stop recording and listen"/);
+    assert.match(thread, /onClick=\{voice\.cancel\}\n\s*aria-label="Discard recording"/);
+    assert.doesNotMatch(thread, /aria-label="Stop and discard recording"/);
+  });
+
+  it("sends with ONE tap on the arrow", () => {
+    assert.match(thread, /onClick=\{\(\) => void sendVoiceNow\(\)\}\n\s*aria-label="Send voice note"/);
+    // Built from the upload result, not from attachment state that has not updated yet.
+    assert.match(thread, /media: \{ url: uploaded\.url, durationSeconds: result\.durationSeconds \},/);
+    assert.match(thread, /send\.mutate\(note, \{ onSuccess: \(\) => onCancelReply\(\) \}\);/);
+  });
+
+  it("lets a kept note be played back before it is sent", () => {
+    assert.match(thread, /attachment\.result\.kind === "audio" \? \(\n\s*<StagedVoicePreview/);
+    assert.match(thread, /function StagedVoicePreview\(/);
+  });
+
+  it("says so when the upload fails, instead of failing silently", () => {
+    assert.match(thread, /toast\.error\("Couldn't send the voice note\."\)/);
+    assert.match(thread, /toast\.error\("Couldn't attach the voice note\."\)/);
   });
 });
