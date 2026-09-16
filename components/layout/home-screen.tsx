@@ -8,7 +8,7 @@ import { TipButton } from "@/features/tips";
 import { KashBalance } from "@/features/kash";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
-import { HOME_BANNER_SLIDES, HomeBanner } from "@/components/layout/home-banner";
+import { HomeBanner } from "@/components/layout/home-banner";
 import { LiveGistRooms } from "@/components/layout/live-gist-rooms";
 import { FriendsDeck } from "@/components/layout/friends-deck";
 import { ComingSoonRooms } from "@/components/layout/coming-soon-rooms";
@@ -103,7 +103,7 @@ export function HomeScreen() {
       headSlot={
         <>
           <HomeTopRow value={query} onChange={setQuery} />
-          {!searching && <HomeBanner slides={HOME_BANNER_SLIDES} />}
+          {!searching && <HomeBanner />}
         </>
       }
       searchSlot={searching ? <HomeSearch query={query} /> : undefined}

@@ -16,7 +16,7 @@ import { IconMic, IconPlus } from "@/components/ui/icons";
  * Both choices go to what already exists rather than to a second copy of it:
  * a post opens the shell's one composer in place (the page underneath is
  * kept), and a room goes to `/gist-rooms?open=1`, the same address the
- * sidebar's "Start Gistroom" and Home's "Host Room" use, which opens the room
+ * sidebar's "Start Gistroom" uses, which opens the room
  * sheet on arrival. Composed here in `components/layout` because it joins the
  * shell's composer to the rooms route, which no slice may do.
  */

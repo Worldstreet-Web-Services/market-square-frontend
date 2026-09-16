@@ -35,6 +35,8 @@ import { cn } from "@/lib/cn";
 const DOT_VARIANTS = {
   default: { row: "gap-[2.71px]", pill: "h-[4.33px] rounded-[13.54px]", on: "w-[27.08px]", off: "w-[9.21px]" },
   home: { row: "gap-[3.63px]", pill: "h-[5.81px] rounded-[18.14px]", on: "w-[36.29px]", off: "w-[13.79px]" },
+  // Home's banner slides (1676:17267): 4 tall at 13.54, 2.71 apart, 20 lit, 8 off.
+  banner: { row: "gap-[2.71px]", pill: "h-1 rounded-[13.54px]", on: "w-5", off: "w-2" },
 } as const;
 
 export function DeckDots({
