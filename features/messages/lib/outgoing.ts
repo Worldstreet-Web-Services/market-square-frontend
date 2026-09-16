@@ -24,6 +24,17 @@ export interface OutgoingMedia {
   width?: number | null;
   height?: number | null;
   durationSeconds?: number | null;
+  /**
+   * Files only: the name the reader picked, so the bubble can say what it is.
+   *
+   * The service sanitises it and forces the stored object's real extension, so
+   * it is display text that can never become a storage key. Sent only when it
+   * survives trimming — a whitespace name is not a name, and an empty string
+   * would be a caption the user never wrote.
+   */
+  fileName?: string | null;
+  /** Files only: the size, so the bubble can show it without fetching bytes. */
+  sizeBytes?: number | null;
 }
 
 /**
@@ -52,7 +63,14 @@ export interface OutgoingMessage {
 
 export interface MessagePayload {
   text?: string;
-  media?: { url: string; width?: number; height?: number; durationSeconds?: number };
+  media?: {
+    url: string;
+    width?: number;
+    height?: number;
+    durationSeconds?: number;
+    fileName?: string;
+    sizeBytes?: number;
+  };
   replyToId?: string;
   mentions?: OutgoingMention[];
 }
@@ -77,11 +95,15 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
       typeof raw === "number" && Number.isFinite(raw) && raw > 0
         ? Math.max(1, Math.round(raw))
         : undefined;
+    const fileName = body.media.fileName?.trim();
+    const sizeBytes = measurement(body.media.sizeBytes);
     payload.media = {
       url: body.media.url,
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
       ...(duration ? { durationSeconds: duration } : {}),
+      ...(fileName ? { fileName } : {}),
+      ...(sizeBytes ? { sizeBytes } : {}),
     };
   }
 

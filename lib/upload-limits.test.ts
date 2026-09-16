@@ -53,6 +53,18 @@ const SERVER_LIMITS = {
   maxAudioBytes: 10 * MB,
   audioContentTypes: ["audio/mpeg", "audio/mp4", "audio/webm", "audio/ogg", "audio/wav"],
   maxVideoSeconds: 90,
+  // Documents joined the published contract the same way audio did. The
+  // fixture carries every field the service serves, so "adopts what it
+  // returns" keeps meaning exactly that.
+  maxFileBytes: 10 * MB,
+  fileContentTypes: [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+  ],
 };
 
 beforeEach(() => {

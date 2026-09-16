@@ -37,7 +37,12 @@ export const MessageSchema = z.object({
       // `catch` rather than a hard enum: a future fourth kind must degrade to
       // "media we cannot type" (the URL sniff then decides) instead of
       // throwing the message away.
-      kind: z.enum(["image", "video", "audio"]).nullable().optional().default(null).catch(null),
+      kind: z
+        .enum(["image", "video", "audio", "file"])
+        .nullable()
+        .optional()
+        .default(null)
+        .catch(null),
       // Intrinsic pixels, when the service knows them. They set the bubble's
       // aspect ratio so a photo is not letterboxed into a guessed box —
       // absent, the bubble contains rather than crops.
@@ -46,6 +51,13 @@ export const MessageSchema = z.object({
       /** Voice-note length. Null means "unknown", which renders no duration
           at all rather than `00:00`. */
       durationSeconds: z.number().nullable().optional().default(null),
+      /** Files only: the name to show. The service sanitises it and forces the
+          stored object's real extension, so it is display text and never a
+          storage key. Null renders as the generic noun, never as an empty row. */
+      fileName: z.string().nullable().optional().default(null),
+      /** Files only: the size to show beside the name. Null renders no size
+          rather than `0 KB`, which would be a claim about the file. */
+      sizeBytes: z.number().nullable().optional().default(null),
     })
     .nullable()
     .optional()

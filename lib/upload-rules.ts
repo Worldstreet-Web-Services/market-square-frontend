@@ -18,6 +18,24 @@ export const VIDEO_TYPES = ["video/mp4", "video/webm"];
  * cap could be a file nobody can play on mobile data.
  */
 export const AUDIO_TYPES = ["audio/mpeg", "audio/mp4", "audio/webm", "audio/ogg", "audio/wav"];
+/**
+ * Documents. A chat message may carry a FILE, and a file is its own kind — not
+ * an image that failed to decode.
+ *
+ * These are the service's own `FILE_TYPES` map. It derives the kind from the
+ * content type on upload (`{ kind: 'file' }`) and stores the bytes with a
+ * `Content-Disposition`, so a browser downloads them instead of trying to
+ * render them. Files are ATTACHMENTS ONLY: there is no document in a post, an
+ * avatar or a story.
+ */
+export const FILE_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+];
 
 /** The upload contract: what may be sent, and how big. */
 export interface UploadLimits {
@@ -35,6 +53,15 @@ export interface UploadLimits {
   maxVideoSeconds: number;
   maxAudioBytes: number;
   audioContentTypes: string[];
+  /**
+   * Documents. Published by the service and, until now, DROPPED here — which
+   * is the whole reason a PDF could not be sent: the field never reached the
+   * picker's `accept`, so the file dialog would not offer one, and the
+   * attachment panel's caption could not list it. The service has allowed
+   * documents the entire time.
+   */
+  maxFileBytes: number;
+  fileContentTypes: string[];
 }
 
 /**
@@ -60,6 +87,8 @@ export const FALLBACK_LIMITS: UploadLimits = {
   maxVideoSeconds: 90,
   maxAudioBytes: 10 * 1024 * 1024,
   audioContentTypes: AUDIO_TYPES,
+  maxFileBytes: 10 * 1024 * 1024,
+  fileContentTypes: FILE_TYPES,
 };
 
 let current: UploadLimits = FALLBACK_LIMITS;
@@ -100,6 +129,10 @@ export function setUploadLimits(limits: Partial<UploadLimits> | null | undefined
     maxVideoSeconds: positive(limits?.maxVideoSeconds)
       ? limits.maxVideoSeconds
       : current.maxVideoSeconds,
+    maxFileBytes: positive(limits?.maxFileBytes) ? limits.maxFileBytes : current.maxFileBytes,
+    fileContentTypes: types(limits?.fileContentTypes)
+      ? limits.fileContentTypes
+      : current.fileContentTypes,
   };
   return current;
 }
@@ -226,16 +259,23 @@ export function validateUpload(
   // Audio counts only where audio is actually accepted. A voice note in an
   // avatar picker is not "a file we can nearly take" — it is the wrong file.
   const isAudio = accept === "attachment" && limits.audioContentTypes.includes(type);
+  // Documents follow audio's rule: a chat attachment and nothing else. A PDF in
+  // an avatar picker is the wrong file, not a near miss.
+  const isFile = accept === "attachment" && limits.fileContentTypes.includes(type);
 
-  if (!isImage && !isVideo && !isAudio) {
+  if (!isImage && !isVideo && !isAudio && !isFile) {
     const hint = EXTENSION_HINT[type];
     if (hint) return hint;
     if (accept === "image") return "Use a JPEG, PNG, WebP or GIF image.";
     return accept === "attachment"
-      ? "Use an image (JPEG, PNG, WebP, GIF), a video (MP4, WebM) or audio (MP3, M4A, OGG, WAV)."
+      ? "Use an image (JPEG, PNG, WebP, GIF), a video (MP4, WebM), audio (MP3, M4A, OGG, WAV) or a document (PDF, DOCX, XLSX, PPTX, TXT, CSV)."
       : "Use an image (JPEG, PNG, WebP, GIF) or a video (MP4, WebM).";
   }
   if (accept === "image" && isVideo) return "This field takes an image, not a video.";
+
+  if (isFile && file.size > limits.maxFileBytes) {
+    return `Files must be under ${formatBytes(limits.maxFileBytes)} — this one is ${formatBytes(file.size)}.`;
+  }
 
   if (isAudio && file.size > limits.maxAudioBytes) {
     return `Voice notes must be under ${formatBytes(limits.maxAudioBytes)} — this one is ${formatBytes(file.size)}.`;
@@ -256,10 +296,11 @@ export function validateUpload(
 export function uploadKind(
   file: UploadCandidate,
   limits: UploadLimits = getUploadLimits()
-): "image" | "video" | "audio" {
+): "image" | "video" | "audio" | "file" {
   const type = normalizeType(file.type);
   if (limits.videoContentTypes.includes(type)) return "video";
   if (limits.audioContentTypes.includes(type)) return "audio";
+  if (limits.fileContentTypes.includes(type)) return "file";
   return "image";
 }
 
@@ -284,12 +325,14 @@ export function shouldUploadDirect(file: UploadCandidate): boolean {
  */
 export const ACCEPT_IMAGE = IMAGE_TYPES.join(",");
 export const ACCEPT_MEDIA = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
-export const ACCEPT_ATTACHMENT = [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES].join(",");
+export const ACCEPT_ATTACHMENT = [...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES, ...FILE_TYPES].join(
+  ","
+);
 
 export function acceptFor(accept: UploadAccept, limits: UploadLimits = getUploadLimits()): string {
   if (accept === "image") return limits.imageContentTypes.join(",");
   const types = [...limits.imageContentTypes, ...limits.videoContentTypes];
-  if (accept === "attachment") types.push(...limits.audioContentTypes);
+  if (accept === "attachment") types.push(...limits.audioContentTypes, ...limits.fileContentTypes);
   return types.join(",");
 }
 
@@ -312,7 +355,7 @@ export function acceptFor(accept: UploadAccept, limits: UploadLimits = getUpload
  */
 export const UploadResultSchema = z.object({
   url: z.string(),
-  kind: z.enum(["image", "video", "audio"]).nullable().catch(null),
+  kind: z.enum(["image", "video", "audio", "file"]).nullable().catch(null),
   contentType: z.string().optional().default(""),
   bytes: z.number().optional().default(0),
 });
