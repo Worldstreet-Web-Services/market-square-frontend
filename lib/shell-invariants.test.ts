@@ -1405,7 +1405,8 @@ describe("The profile's bio block follows 1021:20271", () => {
   it("sits 40 under the cover, bio and labels at 400, counts in #F7F9F9, place and website 14/20 #A1A1AA", () => {
     assert.match(page, /flex flex-col gap-4 px-4 pt-6 md:px-8 md:pt-10/);
     assert.match(page, /"text-\[15px\] font-normal leading-5 text-white\/50"/);
-    assert.equal((page.match(/font-semibold text-\[#F7F9F9\]/g) ?? []).length, 2);
+    assert.equal((page.match(/font-semibold text-\[#F7F9F9\]/g) ?? []).length, 1);
+    assert.equal((page.match(/<CountLabel count=\{data\.(followingCount|followerCount)\}/g) ?? []).length, 3);
     assert.match(page, /gap-y-2 text-\[14px\] font-normal leading-5 text-\[#A1A1AA\]/);
   });
 });
@@ -2689,6 +2690,15 @@ describe("a profile's counts open X-style follow lists", () => {
     // Plain text before: two numbers with no way to see the people behind them.
     assert.match(page, /href=\{profileHref\(data, "following"\)\}/);
     assert.match(page, /href=\{profileHref\(data, "followers"\)\}/);
+  });
+
+  it("keeps who you follow private: only your own profile links or lists it", () => {
+    // "people should not be able to see the people you are following"
+    assert.match(page, /\{isMe \? \(\s*<Link\s+href=\{profileHref\(data, "following"\)\}/, "another person's Following count links to their list again");
+    assert.match(list, /useFollowingList\(tab === "following" && isMe \? id : undefined\)/, "the list is requested for somebody else's profile");
+    assert.match(list, /\.\.\.\(isMe \? \[\{ value: "following" as FollowListTab, label: "Following" \}\] : \[\]\)/, "the Following tab shows on somebody else's profile");
+    assert.match(list, /tab === "following" && profile\.isSuccess && readerKnown && !isMe/);
+    assert.match(list, /title="Following is private"/);
   });
 
   it("has a route for each list", () => {

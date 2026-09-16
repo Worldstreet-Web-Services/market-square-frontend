@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { atHandle } from "@/lib/handle";
 import { useMe } from "@/hooks/use-me";
+import { useAuth } from "@/hooks/use-auth";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { BrowseList } from "@/components/ui/browse-list";
-import { ErrorState } from "@/components/ui/states";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import {
   useFollowersList,
   useFollowingList,
@@ -44,22 +45,33 @@ export type FollowListTab = "followers" | "following";
  * (follow time, with a cursor that carries it) belongs to the backend and is
  * with it — nothing here re-sorts a page, which would reorder rows as later
  * pages arrived.
+ *
+ * WHO SOMEBODY FOLLOWS IS PRIVATE TO THEM (2026-09-16: "people should not be
+ * able to see the people you are following"). The Following tab and its list
+ * exist only on your own profile; anybody else — signed out included — who
+ * opens `/u/<them>/following` gets a notice and no request is made. The
+ * service must refuse the list to everybody but its owner as well: hiding it
+ * here only stops our own UI from asking.
  */
 export function FollowListPage({ username, tab }: { username: string; tab: FollowListTab }) {
   const router = useRouter();
+  const { ready, authenticated } = useAuth();
   const me = useMe();
   const profile = useProfile(username);
   // The same address rule as the profile itself, keeping the list on screen.
   useCanonicalProfileAddress(username, profile.data, tab);
   const id = profile.data?.id;
+  const isMe = Boolean(id) && me.data?.id === id;
+  // Whether we know who the reader is yet — until then "not you" is a guess,
+  // and guessing wrong would flash the private notice over your own list.
+  const readerKnown = ready && (!authenticated || me.isSuccess || me.isError);
 
   // Both hooks run every render; only the list on screen is enabled. A tab
   // visited once stays cached under its key, so switching back is instant.
+  // Following is only ever requested for your own profile.
   const followers = useFollowersList(tab === "followers" ? id : undefined);
-  const following = useFollowingList(tab === "following" ? id : undefined);
+  const following = useFollowingList(tab === "following" && isMe ? id : undefined);
   const query = tab === "followers" ? followers : following;
-
-  const isMe = Boolean(id) && me.data?.id === id;
   // The canonical handle once the profile has loaded — a link opened by id or
   // by a minted handle still switches tabs under the address people share.
   const handle = profile.data?.username ?? username;
@@ -75,7 +87,7 @@ export function FollowListPage({ username, tab }: { username: string; tab: Follo
       <ColumnTabs
         tabs={[
           { value: "followers" as FollowListTab, label: "Followers" },
-          { value: "following" as FollowListTab, label: "Following" },
+          ...(isMe ? [{ value: "following" as FollowListTab, label: "Following" }] : []),
         ]}
         value={tab}
         onChange={(next) => router.replace(`/u/${handle}/${next}`, { scroll: false })}
@@ -96,6 +108,18 @@ export function FollowListPage({ username, tab }: { username: string; tab: Follo
             onRetry={() => profile.refetch()}
           />
         </div>
+      </>
+    );
+  }
+
+  if (tab === "following" && profile.isSuccess && readerKnown && !isMe) {
+    return (
+      <>
+        {header}
+        <EmptyState
+          title="Following is private"
+          body={`Only ${profile.data.displayName || "they"} can see who they follow.`}
+        />
       </>
     );
   }
