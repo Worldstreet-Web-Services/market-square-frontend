@@ -21,6 +21,7 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaViewer } from "@/components/ui/media-viewer";
 import { mediaDownloadUrl } from "@/lib/media-download";
+import { isHttpUrl } from "@/lib/http-url";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
 import { GroupSettingsSheet } from "@/features/messages/components/group-settings-sheet";
@@ -1000,23 +1001,37 @@ function RoomInviteBubble({
 }
 
 /**
- * A DOCUMENT — a row, not a picture.
+ * A DOCUMENT — a row, not a picture, and the WHOLE row opens it.
  *
  * A PDF has nothing to show until it is opened, so the bubble states what it
- * is and offers the one action that makes sense: save it. Drawing it through
- * `MediaBubble` would put an `<img>` around bytes no browser decodes, which is
- * exactly what `messageMediaKind`'s old `image` fallback did to every file.
+ * is and offers the one action that makes sense: get the file. Drawing it
+ * through `MediaBubble` would put an `<img>` around bytes no browser decodes.
  *
- * NAME AND SIZE COME FROM THE MESSAGE, never from a request. The service sends
- * both on the row, so the bubble is complete on first paint with no HEAD
- * against storage — and a missing size renders nothing rather than `0 KB`,
- * which would be a claim about a file we have not measured.
+ * ─── THE LINK IS THE DOCUMENT'S OWN URL ──────────────────────────────────────
+ * It is NOT run through `mediaDownloadUrl`, and an earlier version was, which
+ * is why documents shipped with no way to open them. That helper exists to make
+ * Cloudinary answer a PICTURE or CLIP with `Content-Disposition: attachment`,
+ * and it only accepts `https://res.cloudinary.com/…/(image|video)/upload/…`.
+ * A document matches neither half of that:
  *
- * The download goes through `mediaDownloadUrl`, the same helper the photo and
- * clip bubbles use: it forces a `Content-Disposition` on the stored object, so
- * the browser saves the ORIGINAL rather than navigating to a PDF viewer and
- * losing the name. Null there means the URL is not one the service issued, and
- * then no control is drawn at all rather than a link that would do nothing.
+ *   - on Cloudinary the service stores it as a `raw` resource, which the
+ *     helper's pattern does not include, so it answered null;
+ *   - locally it lives on MinIO over http, which the helper refuses outright.
+ *
+ * Null drew no control, and the row itself was inert — a file you could see
+ * and not reach. The rewrite was never needed for a document anyway: the SERVICE
+ * already serves it as a download on both storages — `publicUrl` adds
+ * `fl_attachment/` to every `raw` key on Cloudinary, and the S3 store sends
+ * `Content-Disposition: attachment`. So the stored URL is linked as it is.
+ *
+ * `isHttpUrl` guards it, because it becomes an `href`: a URL that is not
+ * http(s) renders the row as plain, never as a link somebody could make run
+ * script. `target="_blank"` keeps the conversation on screen if a browser does
+ * navigate rather than save.
+ *
+ * NAME AND SIZE COME FROM THE MESSAGE, never from a request, so the bubble is
+ * complete on first paint, and a missing size renders nothing rather than
+ * `0 KB`, which would be a claim about a file nobody measured.
  */
 function FileBubble({
   message,
@@ -1034,73 +1049,87 @@ function FileBubble({
   const url = message.mediaUrl as string;
   const name = message.mediaFileName?.trim() || "Attachment";
   const size = message.mediaSizeBytes;
-  const downloadUrl = mediaDownloadUrl(url, name);
+  const href = isHttpUrl(url) ? url : null;
   const caption = message.text?.trim();
+
+  /*
+    EVERY INK HERE IS PAIRED TO THE SHELL IT SITS ON: `bubbleShell` paints MY
+    bubble white and THEIRS `--color-spotlight`, so a hardcoded `text-white`
+    once made a document you sent render as an empty white box. The pairings
+    are `ReplyQuote`'s, the other inner surface that sits inside both shells.
+  */
+  const surface = cn(
+    "flex items-center gap-2.5 rounded-xl p-2.5 transition-colors",
+    mine ? "bg-black/[0.05]" : "bg-white/10"
+  );
+  const row = (
+    <>
+      <span
+        aria-hidden
+        className={cn(
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase tracking-tight",
+          mine ? "bg-black/[0.07] text-[#5A5A5A]" : "bg-white/15 text-white/80"
+        )}
+      >
+        {fileExtensionLabel(message.mediaFileName, url)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span
+          className={cn(
+            "block truncate text-[13px] font-semibold leading-4",
+            mine ? "text-black/85" : "text-white"
+          )}
+        >
+          {name}
+        </span>
+        {typeof size === "number" && size > 0 && (
+          <span
+            className={cn(
+              "mt-0.5 block text-[11px] leading-4",
+              mine ? "text-black/45" : "text-white/55"
+            )}
+          >
+            {formatBytes(size)}
+          </span>
+        )}
+      </span>
+      {href && (
+        // Decorative: the ROW is the link, so the icon only says what tapping
+        // does. A nested <a> here would be invalid markup.
+        <span
+          aria-hidden
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+            mine ? "text-black/55" : "text-white/70"
+          )}
+        >
+          <IconDownload className="h-4 w-4" />
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div className={cn("w-[262px] max-w-[85%] p-1", bubbleShell(mine, tail))}>
       {quote && <div className="px-1 pb-1.5 pt-1">{quote}</div>}
-      {/*
-        EVERY INK HERE IS PAIRED TO THE SHELL IT SITS ON, which is the one thing
-        this bubble got wrong first time: `bubbleShell` paints MY bubble white
-        and THEIRS `--color-spotlight`, so a hardcoded `text-white` made my own
-        documents render as an empty white box — the file was sent and stored
-        correctly and simply could not be seen. The pairings are `ReplyQuote`'s,
-        the other inner surface that sits inside both shells.
-      */}
-      <div
-        className={cn(
-          "flex items-center gap-2.5 rounded-xl p-2.5",
-          mine ? "bg-black/[0.05]" : "bg-white/10"
-        )}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase tracking-tight",
-            mine ? "bg-black/[0.07] text-[#5A5A5A]" : "bg-white/15 text-white/80"
-          )}
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={name}
+          // The row sits inside a message that has its own press handling; a
+          // tap on the file is a tap on the file, not on the message.
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Download ${name}`}
+          title={`Download ${name}`}
+          className={cn(surface, "ws-press", mine ? "hover:bg-black/[0.09]" : "hover:bg-white/15")}
         >
-          {fileExtensionLabel(message.mediaFileName, url)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span
-            className={cn(
-              "block truncate text-[13px] font-semibold leading-4",
-              mine ? "text-black/85" : "text-white"
-            )}
-          >
-            {name}
-          </span>
-          {typeof size === "number" && size > 0 && (
-            <span
-              className={cn(
-                "mt-0.5 block text-[11px] leading-4",
-                mine ? "text-black/45" : "text-white/55"
-              )}
-            >
-              {formatBytes(size)}
-            </span>
-          )}
-        </span>
-        {downloadUrl && (
-          <a
-            href={downloadUrl}
-            download
-            onClick={(event) => event.stopPropagation()}
-            aria-label={`Download ${name}`}
-            title={`Download ${name}`}
-            className={cn(
-              "ws-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
-              mine
-                ? "text-black/55 hover:bg-black/10 hover:text-black"
-                : "text-white/70 hover:bg-white/15 hover:text-white"
-            )}
-          >
-            <IconDownload className="h-4 w-4" />
-          </a>
-        )}
-      </div>
+          {row}
+        </a>
+      ) : (
+        <div className={surface}>{row}</div>
+      )}
 
       {caption && <BubbleText message={message} mine={mine} className="px-2 pt-2" />}
 
