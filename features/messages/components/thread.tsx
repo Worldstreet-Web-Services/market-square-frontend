@@ -69,6 +69,7 @@ import {
 } from "@/features/messages/lib/thread-identity";
 import { receiptLabel, receiptState, type ReceiptState } from "@/features/messages/lib/read-receipt";
 import {
+  fileExtensionLabel,
   formatDuration,
   mediaRatio,
   messageMediaKind,
@@ -998,6 +999,118 @@ function RoomInviteBubble({
   );
 }
 
+/**
+ * A DOCUMENT — a row, not a picture.
+ *
+ * A PDF has nothing to show until it is opened, so the bubble states what it
+ * is and offers the one action that makes sense: save it. Drawing it through
+ * `MediaBubble` would put an `<img>` around bytes no browser decodes, which is
+ * exactly what `messageMediaKind`'s old `image` fallback did to every file.
+ *
+ * NAME AND SIZE COME FROM THE MESSAGE, never from a request. The service sends
+ * both on the row, so the bubble is complete on first paint with no HEAD
+ * against storage — and a missing size renders nothing rather than `0 KB`,
+ * which would be a claim about a file we have not measured.
+ *
+ * The download goes through `mediaDownloadUrl`, the same helper the photo and
+ * clip bubbles use: it forces a `Content-Disposition` on the stored object, so
+ * the browser saves the ORIGINAL rather than navigating to a PDF viewer and
+ * losing the name. Null there means the URL is not one the service issued, and
+ * then no control is drawn at all rather than a link that would do nothing.
+ */
+function FileBubble({
+  message,
+  mine,
+  group,
+  tail,
+  quote,
+}: {
+  message: Message;
+  mine: boolean;
+  group: boolean;
+  tail: boolean;
+  quote?: React.ReactNode;
+}) {
+  const url = message.mediaUrl as string;
+  const name = message.mediaFileName?.trim() || "Attachment";
+  const size = message.mediaSizeBytes;
+  const downloadUrl = mediaDownloadUrl(url, name);
+  const caption = message.text?.trim();
+
+  return (
+    <div className={cn("w-[262px] max-w-[85%] p-1", bubbleShell(mine, tail))}>
+      {quote && <div className="px-1 pb-1.5 pt-1">{quote}</div>}
+      {/*
+        EVERY INK HERE IS PAIRED TO THE SHELL IT SITS ON, which is the one thing
+        this bubble got wrong first time: `bubbleShell` paints MY bubble white
+        and THEIRS `--color-spotlight`, so a hardcoded `text-white` made my own
+        documents render as an empty white box — the file was sent and stored
+        correctly and simply could not be seen. The pairings are `ReplyQuote`'s,
+        the other inner surface that sits inside both shells.
+      */}
+      <div
+        className={cn(
+          "flex items-center gap-2.5 rounded-xl p-2.5",
+          mine ? "bg-black/[0.05]" : "bg-white/10"
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase tracking-tight",
+            mine ? "bg-black/[0.07] text-[#5A5A5A]" : "bg-white/15 text-white/80"
+          )}
+        >
+          {fileExtensionLabel(message.mediaFileName, url)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn(
+              "block truncate text-[13px] font-semibold leading-4",
+              mine ? "text-black/85" : "text-white"
+            )}
+          >
+            {name}
+          </span>
+          {typeof size === "number" && size > 0 && (
+            <span
+              className={cn(
+                "mt-0.5 block text-[11px] leading-4",
+                mine ? "text-black/45" : "text-white/55"
+              )}
+            >
+              {formatBytes(size)}
+            </span>
+          )}
+        </span>
+        {downloadUrl && (
+          <a
+            href={downloadUrl}
+            download
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Download ${name}`}
+            title={`Download ${name}`}
+            className={cn(
+              "ws-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+              mine
+                ? "text-black/55 hover:bg-black/10 hover:text-black"
+                : "text-white/70 hover:bg-white/15 hover:text-white"
+            )}
+          >
+            <IconDownload className="h-4 w-4" />
+          </a>
+        )}
+      </div>
+
+      {caption && <BubbleText message={message} mine={mine} className="px-2 pt-2" />}
+
+      <div className="flex items-center justify-end p-2">
+        <BubbleMeta message={message} mine={mine} group={group} />
+      </div>
+    </div>
+  );
+}
+
 function MediaBubble({
   message,
   mine,
@@ -1485,6 +1598,8 @@ function MessageRow({
       <TextBubble message={message} mine={mine} group={group} tail={tail} quote={quote} />
     ) : kind === "audio" ? (
       <VoiceBubble message={message} mine={mine} group={group} tail={tail} quote={quote} />
+    ) : kind === "file" ? (
+      <FileBubble message={message} mine={mine} group={group} tail={tail} quote={quote} />
     ) : (
       <MediaBubble message={message} mine={mine} group={group} tail={tail} kind={kind} quote={quote} />
     );
@@ -1629,7 +1744,7 @@ function Composer({
   // time it lands here — the panel finishes the upload before it closes — so
   // this holds a URL the service will accept, not a File still to be pushed.
   const [attachment, setAttachment] = useState<
-    { result: UploadResult; measured: Measured } | null
+    { result: UploadResult; measured: Measured; fileName: string } | null
   >(null);
   const voice = useVoiceRecorder();
   const [voiceBusy, setVoiceBusy] = useState(false);
@@ -1655,6 +1770,11 @@ function Composer({
             width: attachment.measured.width ?? null,
             height: attachment.measured.height ?? null,
             durationSeconds: attachment.measured.durationSeconds ?? null,
+            // Files only. Sent for a document and never for a photo: the
+            // service rejects a name on media that is not a file, and
+            // `buildMessagePayload` drops an empty one either way.
+            fileName: attachment.result.kind === "file" ? attachment.fileName : null,
+            sizeBytes: attachment.result.kind === "file" ? attachment.result.bytes : null,
           },
         }
       : {}),
@@ -1681,6 +1801,10 @@ function Composer({
       setAttachment({
         result: uploaded,
         measured: { durationSeconds: result.durationSeconds },
+        // A recording has no name the reader chose. It is carried for the type
+        // only — `fileName` is sent for documents alone, so this never reaches
+        // the service.
+        fileName: result.file.name,
       });
     } catch {
       toast.error("Couldn't attach the voice note.");
@@ -1824,9 +1948,7 @@ function Composer({
             >
               {attachment.result.kind === "video"
                 ? "MP4"
-                : attachment.result.kind === "audio"
-                  ? "VOX"
-                  : "FILE"}
+                : fileExtensionLabel(attachment.fileName, attachment.result.url)}
             </span>
           )}
           <p className="min-w-0 flex-1 truncate text-[12px] text-white/70">
@@ -1836,7 +1958,7 @@ function Composer({
                 ? "Video"
                 : attachment.result.kind === "audio"
                   ? "Voice note"
-                  : "Attachment"}{" "}
+                  : attachment.fileName || "Attachment"}{" "}
             <span className="text-white/40">{formatBytes(attachment.result.bytes)}</span>
           </p>
           <button
@@ -2087,7 +2209,9 @@ function Composer({
         <AttachmentPanel
           open
           onClose={() => setPicking(false)}
-          onAttached={(result, measured) => setAttachment({ result, measured })}
+          onAttached={(result, measured, fileName) =>
+            setAttachment({ result, measured, fileName })
+          }
         />
       )}
     </div>

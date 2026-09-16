@@ -101,17 +101,21 @@ test("a nested attachment flattens onto the message", () => {
       mediaWidth: 1200,
       mediaHeight: 800,
       mediaDurationSeconds: null,
+      mediaFileName: null,
+      mediaSizeBytes: null,
     },
   );
 });
 
-test("no attachment is five nulls, never a partially-filled shape", () => {
+test("no attachment is every field null, never a partially-filled shape", () => {
   const empty = {
     mediaUrl: null,
     mediaKind: null,
     mediaWidth: null,
     mediaHeight: null,
     mediaDurationSeconds: null,
+    mediaFileName: null,
+    mediaSizeBytes: null,
   };
   assert.deepEqual(flattenMessageMedia(null), empty);
   assert.deepEqual(flattenMessageMedia(undefined), empty);
