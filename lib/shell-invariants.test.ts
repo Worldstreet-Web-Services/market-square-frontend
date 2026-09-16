@@ -1155,8 +1155,17 @@ describe("Home's timeline follows 647:16354", () => {
 
   it("draws the post's org badge as its own glyph, not a capsule inside a capsule", () => {
     assert.match(post, /<OrgBadgeChip orgBadge=\{author\.orgBadge\} bare \/>/, "the post header wraps the lockup in a second capsule again");
-    assert.match(badge, /bare\s*\?\s*orgBadge === "market"\s*\?\s*"h-\[14px\] w-\[71px\]"/);
+    assert.match(badge, /<BadgeArkGlyph className=\{bare \? "h-\[9px\] w-\[44px\]" : "h-\[7px\] w-\[34px\]"\} \/>/);
     assert.match(badge, /!bare && "rounded-\[21px\] border/, "the capsule is drawn around the bare lockup");
+  });
+
+  it("draws no MARKET badge anywhere — the design removed it (2026-09-16)", () => {
+    // Gated ONCE, in the component every surface goes through, so no call
+    // site can keep drawing it. The schema still parses "market".
+    assert.match(badge, /if \(orgBadge !== "ark"\) return null;/, "a non-ARK org badge renders again");
+    assert.doesNotMatch(badge, /BadgeMarketGlyph|#008CFF/, "the MARKET lockup or its blue ring is back in the chip");
+    const glyphs = read("components/ui/org-badge-glyphs.tsx");
+    assert.doesNotMatch(glyphs, /export function BadgeMarketGlyph/, "the MARKET lockup artwork is back");
   });
 });
 
@@ -2472,13 +2481,16 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // and the account right, so the phone finally agrees with the desktop bar.
     assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[72px\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
     assert.match(read("app/globals.css"), /--ws-topbar-h: 72px;/);
-    // The node's own 100 x 40 lockup box and its 0.53 hairline.
+    // The node's own 100 x 40 lockup box — WITHOUT the node's 0.53 hairline
+    // under it (ogazboiz, 2026-09-16): on a phone it read as a stray short
+    // line under the logo. The bar's full-width border-b above is the only one.
     // The box HUGS. The node fixes it at 100, but that is 100 at the FILE's
     // type; ours renders wider, and a fixed width narrower than its content is
     // exactly what wrapped the word under the mark. The lockup carries the
     // `flex` too, because BrandLockup renders bare inline content by design
     // and inline content wraps.
-    assert.match(shell, /flex h-10 shrink-0 items-center border-b-\[0\.53px\] border-white\/10/);
+    assert.match(shell, /<span className="flex h-10 shrink-0 items-center">/);
+    assert.doesNotMatch(shell, /border-b-\[0\.53px\]/, "the short hairline under the phone lockup came back");
     assert.match(shell, /<BrandLockup markHeight=\{24\} label="Square" className="flex" \/>/);
     // THE SEARCH GLYPH THE NODE DRAWS IS DELIBERATELY ABSENT (ogazboiz: "use
     // the header that they gave us but hide the search bar"), which also

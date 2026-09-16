@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { cn } from "@/lib/cn";
-import { BadgeArkGlyph, BadgeMarketGlyph } from "@/components/ui/org-badge-glyphs";
+import { BadgeArkGlyph } from "@/components/ui/org-badge-glyphs";
 import type { OrgBadge, VerificationState } from "@/lib/api/schemas";
 
 /**
@@ -48,28 +48,26 @@ export function VerifiedBadge({
 }
 
 /**
- * The organisation badge — the design's MARKET / ARK lockup.
+ * The organisation badge — the design's ARK lockup.
  *
  * Assigned admin-only and deliberately NOT derived from `role`: product
  * decides who carries one, so this and `RoleChip` are independent signals that
  * can sit side by side. When `orgBadge` is null nothing renders — there is no
  * fallback to invent one from role or verification.
  *
- * Chip geometry is the design's: a 21px-radius capsule at 4% white, wrapping
- * the brand glyph at 7px tall.
+ * THERE IS NO MARKET BADGE ANY MORE (2026-09-16, ogazboiz: "there is no market
+ * badge anymore again so we need to remove that"). The blue-ringed MARKET
+ * lockup is gone from the design, so `"market"` renders NOTHING — here, once,
+ * rather than at each of the call sites, so no surface can keep drawing it.
+ * The schema still parses `"market"` (the backend enum and existing profiles
+ * carry it), it simply has no presentation, exactly as `creator` has no
+ * `RoleChip`.
  *
- * The border is where the two badges now part company. The 2026-08-25 design
- * revision gave the MARKET chip a solid #008CFF 1px border; ARK was checked
- * separately against the file and kept its 19% white hairline, so this is a
- * per-badge value and not a shared token. The fill stays 4% white on both —
- * the blue is the ring, not a filled background.
+ * Chip geometry is the design's: a 21px-radius capsule at 4% white with a 19%
+ * white hairline, wrapping the brand glyph at 7px tall.
  *
- * `bare` — THE GLYPH IS THE CHIP. Each exported lockup already carries its own
- * capsule, fill and ring, so on the post card it is drawn alone at its own
- * size: node 647:16370 is one 79.42x14.18 capsule with a 1.15 outside ring,
- * which at the card's 1.151 scale is exactly the MARKET glyph's 71x14. The
- * capsule above stays for the rows and sheets, whose own layouts were measured
- * around a 45-wide chip.
+ * `bare` — the lockup drawn alone at its own size, for the post card's header,
+ * without the capsule the rows and sheets wrap it in.
  */
 export function OrgBadgeChip({
   orgBadge,
@@ -81,31 +79,19 @@ export function OrgBadgeChip({
   /** Draw the exported lockup alone at its native size — see above. */
   bare?: boolean;
 }) {
-  if (!orgBadge) return null;
-  const Glyph = orgBadge === "market" ? BadgeMarketGlyph : BadgeArkGlyph;
+  if (orgBadge !== "ark") return null;
   return (
     <span
-      title={orgBadge === "market" ? "Market" : "Ark"}
+      title="Ark"
       className={cn(
         "inline-flex shrink-0 items-center",
-        !bare && "rounded-[21px] border bg-white/[0.04] px-1 py-[2.5px]",
-        !bare && (orgBadge === "market" ? "border-[#008CFF]" : "border-white/[0.19]"),
+        !bare && "rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-1 py-[2.5px]",
         className
       )}
     >
-      <span className="sr-only">{orgBadge === "market" ? "Market" : "Ark"}</span>
+      <span className="sr-only">Ark</span>
       {/* Width tracks the glyph's own aspect ratio, height is fixed. */}
-      <Glyph
-        className={
-          bare
-            ? orgBadge === "market"
-              ? "h-[14px] w-[71px]"
-              : "h-[9px] w-[44px]"
-            : orgBadge === "market"
-              ? "h-[7px] w-[35px]"
-              : "h-[7px] w-[34px]"
-        }
-      />
+      <BadgeArkGlyph className={bare ? "h-[9px] w-[44px]" : "h-[7px] w-[34px]"} />
     </span>
   );
 }

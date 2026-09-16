@@ -227,7 +227,12 @@ export function ConfirmAction({
 }
 
 /**
- * Badge assignment: MARKET, ARK, or none.
+ * Badge assignment: ARK, or none.
+ *
+ * MARKET is no longer offered — the badge was removed from the design and
+ * `OrgBadgeChip` draws nothing for it. A profile that still carries it shows
+ * a "MARKET (retired)" pill as the current value, so an operator can see it
+ * and clear it rather than be shown no selection at all.
  *
  * Lives wherever a person does — the people table and the approve-a-creator
  * row alike — because "approve them and badge them" is one operator flow.
@@ -242,7 +247,7 @@ export function BadgePicker({
   onPick: (badge: OrgBadge) => void;
 }) {
   const options: Array<{ value: OrgBadge; label: string }> = [
-    { value: "market", label: "MARKET" },
+    ...(current === "market" ? [{ value: "market" as const, label: "MARKET (retired)" }] : []),
     { value: "ark", label: "ARK" },
     { value: null, label: "None" },
   ];
