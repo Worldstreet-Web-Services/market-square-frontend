@@ -354,8 +354,9 @@ export function MessagesPage({
 
     The inbox lookup above cannot be the only source: a thread you start with
     someone who does not follow you is created PENDING with you as the
-    requester, and that is in no list the service returns to you (All is
-    accepted-only; Gist Requests is other people's). See lib/open-conversation.
+    requester, and this lookup searches ALL, which is accepted-only. The thread
+    is in the Gist Requests list — this link just does not search there. See
+    lib/open-conversation.
     The inbox still wins when it has the thread, since its row is the fuller
     one — peer, preview and unread count.
   */

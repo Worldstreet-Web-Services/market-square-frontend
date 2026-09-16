@@ -83,8 +83,9 @@ describe("Start gisting, Message and the support chat reach the person", () => {
   });
 
   it("opens a linked thread from the stored one when the inbox does not carry it", () => {
-    // Without this, an outgoing PENDING request — in no list the service
-    // returns — could never be found, and the page fell back to the inbox.
+    // Without this, a link to an outgoing PENDING request — which is not in
+    // the ALL list this lookup searches — found nothing, and the page fell back
+    // to the inbox. (The request itself is listed under Gist Requests.)
     const page = read("../features/messages/components/messages-page.tsx");
     const linked = page.slice(page.indexOf("const linked ="), page.indexOf("const open = picked"));
     assert.ok(linked.includes("opened.data"), "linked must fall back to the opened thread");

@@ -7,21 +7,24 @@ import type { Conversation, ConversationRef } from "./types.ts";
  * ─── WHY THIS EXISTS ─────────────────────────────────────────────────────────
  * The messages page opens a linked thread (`/messages?c=<id>`) by finding it in
  * the inbox's loaded list, because there is no `GET /conversations/:id`. That
- * works for a thread you already share, and for NOTHING you start with a
- * stranger:
+ * works for a thread you already share, and NOT for one you start with
+ * somebody who does not follow you:
  *
  *   - `POST /conversations` creates the thread `pending`, with you as
  *     `requested_by`, unless the other person already FOLLOWS you
  *     (`invited = isFollowing(peer, you)` in the service).
- *   - `GET /me/conversations` defaults `state` to `accepted`, so it is not in
- *     All.
- *   - Gist Requests lists pending threads `requested_by <> you` — other
- *     people's requests — so it is not there either.
+ *   - The page resolves the link against the ALL list, and
+ *     `GET /me/conversations` defaults `state` to `accepted` — so a pending
+ *     thread is not in it.
  *
- * So an outgoing request is in NO list, the lookup found nothing, and Start
- * gisting, a profile's Message button and the support chat all landed on the
- * inbox instead of the person. Somebody who winked at you usually does not
- * follow you, which is exactly why the wink card hit it first.
+ * The thread is NOT unreachable, and an earlier version of this comment said it
+ * was: the Gist Requests tab asks for `state=pending`, and the service returns
+ * the requester's OWN outgoing request there as a row (only Accept/Decline are
+ * hidden, since you cannot answer your own). What failed was the LINK alone —
+ * `?c=<id>` searched All, found nothing, and Start gisting, a profile's Message
+ * button and the support chat all landed on the inbox instead of the person.
+ * Somebody who winked at you usually does not follow you, which is why the wink
+ * card hit it first.
  *
  * ─── WHERE THE OBJECT COMES FROM ─────────────────────────────────────────────
  * The response is a bare REF — id, participant ids, timestamps; no peer, no
