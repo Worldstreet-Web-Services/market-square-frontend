@@ -33,6 +33,11 @@ import {
 } from "@/features/messages/lib/api";
 import type { HouseNotificationSettings, OutgoingMessage } from "@/features/messages/lib/types";
 import { tabQuery, type InboxTab } from "@/features/messages/lib/filter";
+import {
+  conversationFromRef,
+  openedConversationKey,
+} from "@/features/messages/lib/open-conversation";
+import type { Profile } from "@/lib/api/schemas";
 
 // The service publishes `market-square.message.sent` for the ws-gateway
 // without the body, so realtime is only ever a "refetch" signal. Until that
@@ -187,8 +192,16 @@ export function useAnswerRequest() {
 export function useOpenConversation() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: openConversation,
-    onSuccess: () => client.invalidateQueries({ queryKey: ["ms", "conversations"] }),
+    // The PROFILE, not its id: the response is a bare ref with no peer, and the
+    // thread needs one. See lib/open-conversation.
+    mutationFn: (peer: Profile) => openConversation(peer.id),
+    // Seeded HERE, in the hook's own callback, not in each caller's: a hook
+    // option runs even when the calling component has unmounted, which is
+    // exactly what happens when a popup closes itself on success.
+    onSuccess: (ref, peer) => {
+      client.setQueryData(openedConversationKey(ref.id), conversationFromRef(ref, peer));
+      return client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+    },
     onError: (error) => toast.error(errorMessage(error, "Couldn't open that conversation.")),
   });
 }

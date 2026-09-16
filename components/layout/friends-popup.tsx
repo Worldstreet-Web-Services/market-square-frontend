@@ -306,7 +306,7 @@ function FriendsDialog({
     // The popup now stays open for the one request, the button says so, and a
     // failure leaves the reader where they were with the hook's own toast
     // rather than on a page that never changes.
-    chat.mutate(other.id, {
+    chat.mutate(other, {
       onSuccess: (conversation) => {
         onClose();
         router.push(`/messages?c=${conversation.id}`);
