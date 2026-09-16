@@ -22,6 +22,8 @@
  * Pure, so `node --test` pins it.
  */
 
+import { sq } from "./square-path.ts";
+
 /** The ids the service mints are safe path segments; this refuses anything that is not. */
 const SAFE_ID = /^[A-Za-z0-9:_-]{1,128}$/;
 
@@ -32,5 +34,6 @@ export function profileHref(
   // An id that could not be a path segment falls back to the handle rather
   // than producing a link that breaks, or one that escapes /u/.
   const key = SAFE_ID.test(profile.id) ? profile.id : (profile.username ?? profile.id);
-  return `/u/${key}${subpage ? `/${subpage}` : ""}`;
+  // Under /square: the Square is served at www.tsionark.com/square (lib/square-path).
+  return sq(`/u/${key}${subpage ? `/${subpage}` : ""}`);
 }

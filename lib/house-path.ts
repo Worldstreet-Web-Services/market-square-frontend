@@ -12,6 +12,9 @@
  * room; the link alone cannot say which, because a house IS a stream with
  * `category: "house"`. The caller knows, so the caller chooses.
  */
+import { sq } from "./square-path.ts";
+
 export function housePath(houseId: string): string {
-  return `/gist-rooms/${houseId}`;
+  // Under /square (lib/square-path). Callers render this as an href directly.
+  return sq(`/gist-rooms/${houseId}`);
 }

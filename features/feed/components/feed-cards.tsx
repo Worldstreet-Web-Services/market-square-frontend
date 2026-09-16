@@ -27,7 +27,7 @@ export function pricePillLabel(stream: FeedStream): string {
 function StreamFeedCard({ stream }: { stream: FeedStream }) {
   const owner = stream.owner;
   const reshare = async () => {
-    const url = `${window.location.origin}/live/${stream.id}`;
+    const url = `${window.location.origin}${sq(`/live/${stream.id}`)}`;
     try {
       if (navigator.share) await navigator.share({ title: stream.title, text: `Watch ${stream.title} live on Square`, url });
       else {

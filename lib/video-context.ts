@@ -16,6 +16,7 @@
  */
 
 import type { DeepLink, Profile } from "@/lib/api/schemas";
+import { sq } from "./square-path.ts";
 
 /** The minimum a slide needs. Counts are OPTIONAL — see below. */
 export interface VideoItem {
@@ -90,5 +91,6 @@ export function videoHref(
   // "for-you" is the default the page falls back to, so it stays out of the URL.
   if (selection.tab && selection.tab !== "for-you") params.set("tab", selection.tab);
   params.set("v", videoId);
-  return `${pathname}?${params.toString()}`;
+  // `pathname` may be the live /square/discover or the logical default; sq is idempotent.
+  return sq(`${pathname}?${params.toString()}`);
 }

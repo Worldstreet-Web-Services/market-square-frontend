@@ -4,7 +4,7 @@ import { canMakeInvite, inviteErrorCopy, inviteState, inviteUrl } from "../featu
 
 describe("house invite links", () => {
   it("builds the link from the token, since the service returns none", () => {
-    assert.equal(inviteUrl("https://square.example", "abc_DEF-123"), "https://square.example/join/abc_DEF-123");
+    assert.equal(inviteUrl("https://square.example", "abc_DEF-123"), "https://square.example/square/join/abc_DEF-123");
   });
 
   it("offers the link to any member of a public house and only the owner or an admin of a private one", () => {

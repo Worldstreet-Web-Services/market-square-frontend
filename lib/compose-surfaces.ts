@@ -35,12 +35,18 @@
  * prefix rules with a trailing slash rather than plain `startsWith` on the
  * section name.
  */
+import { stripSquare } from "./square-path.ts";
+
 const NO_COMPOSE_EXACT = ["/auth", "/operations", "/messages", "/gist-rooms"];
 const NO_COMPOSE_PREFIX = ["/live/", "/studio/", "/admin", "/operations/", "/gist-rooms/"];
 
 export function allowsCompose(pathname: string): boolean {
-  if (NO_COMPOSE_EXACT.includes(pathname)) return false;
-  return !NO_COMPOSE_PREFIX.some((prefix) => pathname.startsWith(prefix));
+  // The rules name LOGICAL routes. `usePathname()` answers /square/… since the
+  // move, so it is normalised here, once, rather than at every caller — a caller
+  // that forgot would silently put a compose button on the wrong screen.
+  const path = stripSquare(pathname);
+  if (NO_COMPOSE_EXACT.includes(path)) return false;
+  return !NO_COMPOSE_PREFIX.some((prefix) => path.startsWith(prefix));
 }
 
 /**
@@ -64,5 +70,5 @@ export function allowsCompose(pathname: string): boolean {
  * no entry here.
  */
 export function allowsRailCompose(pathname: string): boolean {
-  return pathname !== "/auth";
+  return stripSquare(pathname) !== "/auth";
 }

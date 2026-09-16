@@ -42,6 +42,7 @@
 
 import { housePath } from "./house-path.ts";
 import { profileHref } from "./profile-href.ts";
+import { sq } from "./square-path.ts";
 
 export type NotificationDestination = {
   kind: string;
@@ -71,19 +72,20 @@ export function isGistRoomNotification(item: NotificationDestination): boolean {
 export function notificationHref(item: NotificationDestination): string | null {
   // A chat event has no post and no stream, so without this it fell through to
   // the sender's PROFILE — which is not where the message is.
-  if (item.kind === "message" || item.kind === "chat_request") return "/messages";
+  if (item.kind === "message" || item.kind === "chat_request") return sq("/messages");
 
   // A gist room and a broadcast are both streams. See the header.
   if (item.streamId) {
-    return isGistRoomNotification(item) ? housePath(item.streamId) : `/live/${item.streamId}`;
+    // `housePath` and `profileHref` already return /square paths; `sq` is idempotent.
+    return isGistRoomNotification(item) ? housePath(item.streamId) : sq(`/live/${item.streamId}`);
   }
 
   // ON the comment when the payload names one: the permalink reads `?comment=`
   // and scrolls to it. Without an id it opens the post, as it always did.
   if (item.postId) {
     return item.commentId
-      ? `/p/${item.postId}?comment=${encodeURIComponent(item.commentId)}`
-      : `/p/${item.postId}`;
+      ? sq(`/p/${item.postId}?comment=${encodeURIComponent(item.commentId)}`)
+      : sq(`/p/${item.postId}`);
   }
 
   if (item.actor) return profileHref(item.actor);

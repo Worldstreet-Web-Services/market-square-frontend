@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots";
+import { withMicrofrontends } from "@vercel/microfrontends/next/config";
 import { legacyRedirects } from "./lib/legacy-routes";
 
 /**
@@ -100,4 +101,15 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/*
+  SERVED AS A VERCEL MICROFRONTEND at www.tsionark.com/square, beside WSWS
+  (microfrontends.json lives in wsws-frontend; this app is
+  `market-square-frontend`). `withMicrofrontends` adds the asset prefix and
+  reads the group's routing config, and it THROWS when that config is absent
+  ("Missing MFE_CONFIG") — which it is until the microfrontends group is created
+  on the Vercel team. So it is switched on by configuration, not by shipping:
+  set SQUARE_MICROFRONTENDS=1 on the Vercel project once the group exists.
+  Until then the app runs exactly as before under /square, on
+  square.tsionark.com.
+*/
+export default process.env.SQUARE_MICROFRONTENDS === "1" ? withMicrofrontends(nextConfig) : nextConfig;

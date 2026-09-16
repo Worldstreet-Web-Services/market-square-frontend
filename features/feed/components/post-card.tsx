@@ -1175,7 +1175,7 @@ export function PostCard({
             text: post.text,
             // Shared as the 22-character short id; `/p/[id]` resolves it back to
             // the UUID, and a link already shared with the UUID keeps working.
-            url: `${window.location.origin}/p/${sharePostId(post.id)}`,
+            url: `${window.location.origin}${sq(`/p/${sharePostId(post.id)}`)}`,
           }}
         />
       )}

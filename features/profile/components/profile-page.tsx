@@ -882,7 +882,7 @@ export function ProfilePage({
           title="Share profile"
           payload={{
             text: `${data.displayName || data.username} on Square`,
-            url: `${window.location.origin}/u/${data.username}`,
+            url: `${window.location.origin}${sq(`/u/${data.username}`)}`,
           }}
         />
       )}

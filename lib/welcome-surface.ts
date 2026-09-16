@@ -1,3 +1,4 @@
+import { stripSquare } from "./square-path.ts";
 /**
  * WHERE THE WELCOME SEQUENCE IS ALLOWED TO APPEAR.
  *
@@ -25,7 +26,11 @@
  * Signed-out browsing is a real, supported thing in this app, and gating every
  * route behind an intro would break every link anybody has ever sent.
  */
-export function isWelcomeSurface(pathname: string, returnTo: string | null): boolean {
+export function isWelcomeSurface(rawPathname: string, rawReturnTo: string | null): boolean {
+  // Both are LOGICAL here. usePathname() answers /square/… since the move, and
+  // returnTo is a URL built from that same pathname, so both carry the prefix.
+  const pathname = stripSquare(rawPathname);
+  const returnTo = rawReturnTo === null ? null : stripSquare(rawReturnTo);
   if (pathname === "/") return true;
   if (pathname !== "/auth") return false;
   // Nothing to go back to, or the front door — either way, a newcomer.

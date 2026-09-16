@@ -8,7 +8,7 @@ import { FALLBACK_OG_IMAGE } from "@/lib/og-metadata";
  * its own: a text-only post, a profile without an avatar, a story, and every
  * route that must not publish data-driven previews (rooms, houses, invites).
  *
- * It is the real lockup (`public/logo.svg`, the same file `Wordmark` renders)
+ * It is the real lockup (`public/square/logo.svg`, the same file `Wordmark` renders)
  * centred on the page ground, and nothing else — no redrawn mark and no copy
  * set in a stand-in typeface.
  *
@@ -29,7 +29,7 @@ export const dynamic = "force-static";
 const LOCKUP_SCALE = 4;
 
 export async function GET() {
-  const svg = await readFile(join(process.cwd(), "public/logo.svg"));
+  const svg = await readFile(join(process.cwd(), "public/square/logo.svg"));
   const src = `data:image/svg+xml;base64,${svg.toString("base64")}`;
   return new ImageResponse(
     (

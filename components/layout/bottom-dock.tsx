@@ -6,6 +6,7 @@ import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { IconCollapseRight } from "@/components/ui/icons";
 import { useUnread } from "@/hooks/use-unread";
+import { asset, sq, stripSquare } from "@/lib/square-path";
 
 /**
  * THE DESKTOP DOCK — node 748:15721, and there is no sidebar beside it.
@@ -89,14 +90,16 @@ export function BottomDock({
    */
   guest?: boolean;
 }) {
-  const pathname = usePathname();
+  // Logical route: nav `href`s are keys (see the matching below), so the
+  // pathname is compared WITHOUT the /square prefix and prefixed only where rendered.
+  const pathname = stripSquare(usePathname());
   const unread = useUnread();
 
   const gradient = `dock-create-${useId().replace(/:/g, "")}`;
 
   const all: DockItem[] = [
     /* 964:24181 — the home mark, 31.57 x 23.5, exported with its own ramp. */
-    { href: "/", label: "Home", glyph: "/notifications/dock-home.svg", size: { width: 31.57, height: 23.5 } },
+    { href: "/", label: "Home", glyph: asset("/notifications/dock-home.svg"), size: { width: 31.57, height: 23.5 } },
     /* Discover left the dock (ogazboiz, 2026-09-11): people are met on Pals,
        whose first tab is Discover, and Explore is no longer a destination in
        the navigation. The bar keeps the file's 286 and centres what is left. */
@@ -113,11 +116,11 @@ export function BottomDock({
       one person at a time; Explore is a directory you scan. `/pals` is the
       same `FriendsDeck` the timeline carries, given a page of its own.
     */
-    { href: "/pals", label: "Pals", glyph: "/notifications/dock-pals.svg", size: { width: 37.39, height: 27.46 }, badge: null },
+    { href: "/pals", label: "Pals", glyph: asset("/notifications/dock-pals.svg"), size: { width: 37.39, height: 27.46 }, badge: null },
     {
       href: "/messages",
       label: "Chat",
-      glyph: "/notifications/dock-chat.svg",
+      glyph: asset("/notifications/dock-chat.svg"),
       size: { width: 32.4, height: 29.91 },
       // The real global unread, the same number the bell reads.
       badge: unread.data?.messages ?? null,
@@ -161,7 +164,7 @@ export function BottomDock({
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={sq(item.href)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "ws-press relative flex flex-col items-center justify-center rounded-full transition-colors",

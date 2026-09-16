@@ -1,3 +1,4 @@
+import { sq } from "../../../lib/square-path.ts";
 /**
  * A HOUSE'S INVITE LINK — "i cant share link to someone to join my group".
  *
@@ -15,7 +16,7 @@
  */
 
 export function inviteUrl(origin: string, token: string): string {
-  return `${origin}/join/${encodeURIComponent(token)}`;
+  return `${origin}${sq(`/join/${encodeURIComponent(token)}`)}`;
 }
 
 /** May this reader make an invite link for this house? */

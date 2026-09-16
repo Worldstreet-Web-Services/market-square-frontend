@@ -16,14 +16,14 @@ describe("a gist room notification never opens the broadcast player", () => {
         subject: { kind: "room" },
         house: { conversationId: "cv_square_talk" },
       }),
-      `/gist-rooms/${ROOM_ID}`
+      `/square/gist-rooms/${ROOM_ID}`
     );
   });
 
   it("trusts the service's own subject.kind", () => {
     assert.equal(
       notificationHref({ kind: "speaker_request", streamId: ROOM_ID, subject: { kind: "room" } }),
-      `/gist-rooms/${ROOM_ID}`
+      `/square/gist-rooms/${ROOM_ID}`
     );
   });
 
@@ -32,7 +32,7 @@ describe("a gist room notification never opens the broadcast player", () => {
     // row without it must not fall back to the wrong surface.
     assert.equal(
       notificationHref({ kind: "house_room", streamId: ROOM_ID }),
-      `/gist-rooms/${ROOM_ID}`
+      `/square/gist-rooms/${ROOM_ID}`
     );
   });
 
@@ -43,7 +43,7 @@ describe("a gist room notification never opens the broadcast player", () => {
         streamId: ROOM_ID,
         house: { conversationId: "cv_square_talk" },
       }),
-      `/gist-rooms/${ROOM_ID}`
+      `/square/gist-rooms/${ROOM_ID}`
     );
   });
 });
@@ -52,7 +52,7 @@ describe("a broadcast still opens the player", () => {
   it("sends a live stream to /live/", () => {
     assert.equal(
       notificationHref({ kind: "stream_live", streamId: "st_1", subject: { kind: "stream" } }),
-      "/live/st_1"
+      "/square/live/st_1"
     );
   });
 
@@ -60,12 +60,12 @@ describe("a broadcast still opens the player", () => {
     // Naming `speaker_request` as a room kind would break exactly this row.
     assert.equal(
       notificationHref({ kind: "speaker_request", streamId: "st_1", subject: { kind: "stream" } }),
-      "/live/st_1"
+      "/square/live/st_1"
     );
   });
 
   it("defaults an unclassified stream row to the player", () => {
-    assert.equal(notificationHref({ kind: "stream_live", streamId: "st_1" }), "/live/st_1");
+    assert.equal(notificationHref({ kind: "stream_live", streamId: "st_1" }), "/square/live/st_1");
   });
 });
 
@@ -85,20 +85,20 @@ describe("isGistRoomNotification", () => {
 
 describe("every other destination is unchanged", () => {
   it("sends chat events to the inbox, not to the sender's profile", () => {
-    assert.equal(notificationHref({ kind: "message", actor: { id: "u1" } }), "/messages");
-    assert.equal(notificationHref({ kind: "chat_request", actor: { id: "u1" } }), "/messages");
+    assert.equal(notificationHref({ kind: "message", actor: { id: "u1" } }), "/square/messages");
+    assert.equal(notificationHref({ kind: "chat_request", actor: { id: "u1" } }), "/square/messages");
   });
 
   it("opens a post, and opens ON a comment when one is named", () => {
-    assert.equal(notificationHref({ kind: "like", postId: "p1" }), "/p/p1");
+    assert.equal(notificationHref({ kind: "like", postId: "p1" }), "/square/p/p1");
     assert.equal(
       notificationHref({ kind: "comment", postId: "p1", commentId: "c 1/2" }),
-      "/p/p1?comment=c%201%2F2"
+      "/square/p/p1?comment=c%201%2F2"
     );
   });
 
   it("falls back to the actor by id, then to nothing", () => {
-    assert.equal(notificationHref({ kind: "follow", actor: { id: "u1", username: "ada" } }), "/u/u1");
+    assert.equal(notificationHref({ kind: "follow", actor: { id: "u1", username: "ada" } }), "/square/u/u1");
     assert.equal(notificationHref({ kind: "follow" }), null);
   });
 
@@ -107,7 +107,7 @@ describe("every other destination is unchanged", () => {
     // still about the room.
     assert.equal(
       notificationHref({ kind: "house_room", streamId: ROOM_ID, postId: "p1" }),
-      `/gist-rooms/${ROOM_ID}`
+      `/square/gist-rooms/${ROOM_ID}`
     );
   });
 });
