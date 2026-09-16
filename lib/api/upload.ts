@@ -1,7 +1,7 @@
 "use client";
 
 import { z } from "zod";
-import { getAccessToken } from "@privy-io/react-auth";
+import { getAuthToken } from "@/lib/auth-token";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { apiError, errorCode } from "@/lib/api/envelope";
 import {
@@ -75,7 +75,7 @@ type Presign = z.infer<typeof PresignSchema>;
 
 async function authHeader(): Promise<Record<string, string>> {
   if (DEMO_AUTH) return {};
-  const token = await getAccessToken().catch(() => null);
+  const token = await getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

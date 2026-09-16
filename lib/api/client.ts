@@ -1,6 +1,6 @@
 "use client";
 
-import { getAccessToken } from "@privy-io/react-auth";
+import { getAuthToken } from "@/lib/auth-token";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { apiError } from "@/lib/api/envelope";
 import {
@@ -51,11 +51,11 @@ export async function apiFetch(
 ): Promise<Response> {
   if (DEMO_AUTH) return fetch(path, init);
 
-  let accessToken = await getAccessToken().catch(() => null);
+  let accessToken = await getAuthToken();
   if (opts.requireAuth && !accessToken) {
     // Give Privy a chance to finish warming up before judging the session.
     await waitForAuthReady();
-    accessToken = await getAccessToken().catch(() => null);
+    accessToken = await getAuthToken();
     if (!accessToken) {
       const { ready, authenticated } = getAuthSnapshot();
       if (ready && !authenticated) {
