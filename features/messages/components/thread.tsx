@@ -373,7 +373,8 @@ function ThreadHeader({
             </h1>
             {/* The design draws exactly ONE capsule here — the admin-granted
                 badge, which is `OrgBadgeChip`: its recipe exactly, a 4% white
-                pill with a 19% white hairline around the MARKET/ARK wordmark.
+                pill with a 19% white hairline around the ARK wordmark (MARKET
+                was removed from the design and renders nothing).
                 Drawn at the house size, since a 4.55px wordmark is unreadable
                 and this chip is 7px tall on every other surface in the app.
 

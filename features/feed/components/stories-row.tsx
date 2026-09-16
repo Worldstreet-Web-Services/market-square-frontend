@@ -304,19 +304,19 @@ function TileMedia({ url, video }: { url: string; video: boolean }) {
 /**
  * Portrait live tile — the desktop strip's broadcast entry.
  *
- * Same 100×96 footprint as a story card so the row stays on one rhythm, but the
+ * Same 72×96 footprint as a story card so the row stays on one rhythm, but the
  * silver ring/black-gap sandwich is replaced by the design's red ring drawn
  * straight on the tile edge, and it renders as a link into the room.
  */
 function LiveCard({ entry }: { entry: LiveEntry }) {
   return (
     <span className="relative block">
-      {/* 1331:21817 — the same 100.09 x 96 tile with the red drawn INSIDE its
+      {/* 1331:21817 — the same 72 x 96 tile with the red drawn INSIDE its
           edge (`ws-story-tile-live`), so the tile is the node's size ring
           included. The node draws no pill; it stays because a 40% red edge
           on its own says nothing a reader can name, and the pill is the
           strip's documented live marker. */}
-      <span className="ws-story-card ws-story-tile-live relative block h-24 w-[100.09px] overflow-hidden rounded-[16.34px]">
+      <span className="ws-story-card ws-story-tile-live relative block h-24 w-[72px] overflow-hidden rounded-[16.34px]">
         <GradientThumb seed={entry.id} className="absolute inset-0 h-full w-full" />
         {entry.thumbnailUrl && <TileMedia url={entry.thumbnailUrl} video={false} />}
         <span className="absolute inset-0 bg-black/[0.27]" />
@@ -332,14 +332,20 @@ function LiveCard({ entry }: { entry: LiveEntry }) {
 /**
  * Portrait story card — 1331:21812's tiles on /pals (1328:1885).
  *
- * 100.09 x 96 at 16.34 radius, the node's two black/10 shadows
+ * 72 x 96 at 16.34 radius, the node's two black/10 shadows
  * (`ws-story-card`), the cover under a flat 27% black scrim (1331:21814) with
  * the author's 24 avatar at (7.47, 9). The ring is an INSIDE stroke on the
  * tile's own edge — unseen is 2px of the file's #C27AFF -> #7E3BEB, seen the
  * 0.68 hairline at 40% white — drawn over the media by the tile utilities,
- * with no black gap and no padding: the tile is 100.09 x 96 ring included.
+ * with no black gap and no padding: the tile is 72 x 96 ring included.
  * It was a silver conic ring around a black gap around a 100 x 96 tile, a
  * 109 x 105 object the node does not draw.
+ *
+ * WIDTH IS 72, NOT THE FILE'S 100.09 (designer's call, 2026-09-16: "reduce the
+ * width"). At 100.09 x 96 the tile was near-square and read as a thumbnail
+ * grid rather than a story strip; 72 x 96 is a 3:4 portrait that still holds
+ * the "Your Story" tile's 55.15 disc with ~8px either side. Height, radius,
+ * rings and the 24 avatar at (7.47, 9) are unchanged.
  */
 function StoryCard({
   group,
@@ -356,7 +362,7 @@ function StoryCard({
   return (
     <span
       className={cn(
-        "ws-story-card relative block h-24 w-[100.09px] overflow-hidden rounded-[16.34px]",
+        "ws-story-card relative block h-24 w-[72px] overflow-hidden rounded-[16.34px]",
         seen ? "ws-story-tile-seen" : "ws-story-tile-unseen"
       )}
     >
@@ -1218,7 +1224,7 @@ export function StoriesRow() {
     return (
       <div className="flex gap-[5.45px]">
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-24 w-[100.09px] shrink-0 rounded-[16.34px]" />
+          <Skeleton key={i} className="h-24 w-[72px] shrink-0 rounded-[16.34px]" />
         ))}
       </div>
     );
@@ -1249,14 +1255,16 @@ export function StoriesRow() {
                ring, the + still on it to add another, as WhatsApp's My status. */
             <span className="relative block">
               <StoryCard group={groups[mine]!} seen={groups[mine]!.stories.every((story) => seen.has(story.id))} />
-              <span className="ws-text-shadow pointer-events-none absolute bottom-3 left-3.5 font-[family-name:var(--font-roboto)] text-[9px] font-bold text-white">
+              <span className="ws-text-shadow pointer-events-none absolute bottom-3 left-2 font-[family-name:var(--font-roboto)] text-[9px] font-bold text-white">
                 Your Story
               </span>
-              <AddStoryBadge className="absolute bottom-2.5 right-2.5" />
+              {/* Top-right, not bottom-right: on the 72-wide tile a foot
+                  badge would sit on top of the "Your Story" label. */}
+              <AddStoryBadge className="absolute right-2 top-2" />
             </span>
           ) : (
           /*
-            1331:21803 — 100.09 x 96, the file's dashed ring; a 55.15 white
+            1331:21803 — 72 x 96 (width narrowed from the file's 100.09), the file's dashed ring; a 55.15 white
             disc holding the viewer's avatar at y=12.26, centred; the + badge
             at y=59.23, centred, straddling the disc's foot (67.41); "Your
             Story" in Roboto Bold 8.17/10.89 at 40% white at y=77.56, centred.
@@ -1267,21 +1275,21 @@ export function StoriesRow() {
             that is the file's own crop of its mascot, not a rule, so the
             reader's avatar simply fills the disc.
           */
-          <span className="ws-story-card relative block h-24 w-[100.09px]">
+          <span className="ws-story-card relative block h-24 w-[72px]">
             {/* The file's dashed ring, drawn rather than bordered so the dash
                 length (6.13 on, 6.13 off), the 0.68px weight and the 16.34
                 radius are all the file's exactly. Inset by half the stroke so
                 it sits inside the tile instead of straddling its edge. */}
             <svg
               aria-hidden
-              viewBox="0 0 100.09 96"
+              viewBox="0 0 72 96"
               fill="none"
               className="pointer-events-none absolute inset-0 h-full w-full"
             >
               <rect
                 x="0.34"
                 y="0.34"
-                width="99.41"
+                width="71.32"
                 height="95.32"
                 rx="16.34"
                 stroke="rgba(255,255,255,0.4)"

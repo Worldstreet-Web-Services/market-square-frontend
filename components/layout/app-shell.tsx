@@ -1947,9 +1947,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           the query itself, so a second entry point in the bar would be a
           third place to type one string.
 
-          The lockup sits in the node's own 100 x 40 box, which carries a
-          0.53 hairline under it at 10% white — a detail that is easy to read
-          as a rendering fault rather than a border, so: it is in the file.
+          The lockup sits in the node's own 100 x 40 box. The node also draws
+          a 0.53 hairline under that box at 10% white; it is NOT drawn
+          (ogazboiz, 2026-09-16): on a phone it read as a stray short line
+          under the logo, directly above the bar's own full-width bottom
+          border. Only that full-width border stays.
         */}
         <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-[72px] items-center justify-between border-b border-white/10 px-6 md:hidden">
           {/*
@@ -1963,9 +1965,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             but that is 100 at the FILE's type; ours renders wider, and a fixed
             width narrower than its own content is what forced the break. When
             the box and the render disagree the PNG wins, and the PNG is one
-            line. The 0.53 hairline then follows the lockup's real width.
+            line.
           */}
-          <span className="flex h-10 shrink-0 items-center border-b-[0.53px] border-white/10">
+          <span className="flex h-10 shrink-0 items-center">
             <BrandLockup markHeight={24} label="Square" className="flex" />
           </span>
 

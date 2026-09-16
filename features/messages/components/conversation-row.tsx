@@ -84,10 +84,10 @@ export function ConversationRow({
           {/*
             The capsule the file draws beside four names of five is the ORG
             badge, not a verified check: it is OrgBadgeChip's own recipe — 4%
-            fill, hairline border, ~13.29px radius — and the exported glyph
-            carries only white marks, which `org-badge-glyphs.tsx` records as
-            MARKET's signature (ARK dims its flanking marks to #979797 at 18%).
-            The one row drawn without it is a peer with NO org badge, not an
+            fill, hairline border, ~13.29px radius. The file drew MARKET there;
+            MARKET was removed from the design (2026-09-16) and OrgBadgeChip
+            renders nothing for it, so only an ARK peer carries a capsule now.
+            A row drawn without it is a peer with no (drawn) org badge, not an
             unverified peer.
           */}
           {!group && peer?.orgBadge && <OrgBadgeChip orgBadge={peer.orgBadge} className="scale-[0.65]" />}
