@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mediaDownloadUrl } from "./media-download.ts";
 import {
   fileExtensionLabel,
   flattenMessageMedia,
@@ -150,5 +151,46 @@ describe("the file bubble is readable on BOTH bubble shells", () => {
     // what rendered the reader's own document as an empty white box.
     assert.ok(body.includes("bg-black/"), "no dark surface for the white bubble");
     assert.ok(body.includes("text-black/"), "no dark ink for the white bubble");
+  });
+});
+
+/**
+ * A DOCUMENT MUST BE REACHABLE, not merely visible.
+ *
+ * `FileBubble` once ran the document's URL through `mediaDownloadUrl`, the
+ * helper that makes Cloudinary serve a PICTURE or CLIP as an attachment. It
+ * only accepts `https://res.cloudinary.com/…/(image|video)/upload/…`, so for a
+ * document it answered null — and null drew no control while the row itself
+ * was inert. The file was stored, sent and rendered, and could not be opened.
+ */
+describe("a document can be opened", () => {
+  it("the picture/clip helper genuinely cannot serve a document on either store", () => {
+    // Pinning the PREMISE, so this is not rediscovered by breaking it again.
+    // Cloudinary stores a document as `raw`, outside the helper's pattern...
+    assert.equal(
+      mediaDownloadUrl(
+        "https://res.cloudinary.com/demo/raw/upload/fl_attachment/uploads/did:privy:me/file/a.docx",
+        "a"
+      ),
+      null
+    );
+    // ...and locally it lives on MinIO over http, which the helper refuses.
+    assert.equal(
+      mediaDownloadUrl("http://localhost:9004/market-square-media/uploads/did:privy:me/file/a.docx", "a"),
+      null
+    );
+  });
+
+  it("links the document's own url, guarded, with the whole row as the target", () => {
+    const source = readFileSync(
+      new URL("../features/messages/components/thread.tsx", import.meta.url),
+      "utf8"
+    );
+    const body = source
+      .slice(source.indexOf("function FileBubble("), source.indexOf("function MediaBubble("))
+      .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
+    assert.ok(!body.includes("mediaDownloadUrl("), "a document must not go through the picture/clip helper");
+    assert.ok(/isHttpUrl\(url\)/.test(body), "the href must be guarded to http(s)");
+    assert.ok(body.includes("href={href}"), "the row must link the document");
   });
 });
