@@ -7,11 +7,11 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { relativeTime } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import type { OrgBadge, Profile } from "@/lib/api/schemas";
+import type { Profile } from "@/lib/api/schemas";
 
 /** An operator panel: dense, bordered, its own heading and count. */
 export function Panel({
@@ -153,7 +153,6 @@ export function PersonCell({
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[13px] font-bold text-heading">{profile.displayName}</span>
           <VerifiedBadge verification={profile.verification} className="h-3 w-3" />
-          <OrgBadgeChip orgBadge={profile.orgBadge} />
           <RoleChip role={profile.role} />
         </span>
         {atHandle(profile.username) && (
@@ -222,56 +221,6 @@ export function ConfirmAction({
       >
         Cancel
       </button>
-    </span>
-  );
-}
-
-/**
- * Badge assignment: ARK, or none.
- *
- * MARKET is no longer offered — the badge was removed from the design and
- * `OrgBadgeChip` draws nothing for it. A profile that still carries it shows
- * a "MARKET (retired)" pill as the current value, so an operator can see it
- * and clear it rather than be shown no selection at all.
- *
- * Lives wherever a person does — the people table and the approve-a-creator
- * row alike — because "approve them and badge them" is one operator flow.
- */
-export function BadgePicker({
-  current,
-  pending,
-  onPick,
-}: {
-  current: OrgBadge;
-  pending?: boolean;
-  onPick: (badge: OrgBadge) => void;
-}) {
-  const options: Array<{ value: OrgBadge; label: string }> = [
-    ...(current === "market" ? [{ value: "market" as const, label: "MARKET (retired)" }] : []),
-    { value: "ark", label: "ARK" },
-    { value: null, label: "None" },
-  ];
-  return (
-    <span className="flex shrink-0 items-center gap-1" role="group" aria-label="Organisation badge">
-      {options.map((option) => {
-        const active = current === option.value;
-        return (
-          <button
-            key={option.label}
-            disabled={pending || active}
-            onClick={() => onPick(option.value)}
-            aria-pressed={active}
-            className={cn(
-              "ws-press rounded-full border px-2 py-0.5 text-[10px] font-bold transition-colors disabled:cursor-default",
-              active
-                ? "border-create/50 bg-create/15 text-create"
-                : "border-white/15 text-meta hover:bg-white/10 hover:text-body"
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
     </span>
   );
 }

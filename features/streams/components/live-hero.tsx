@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
-import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
+import { VerifiedBadge } from "@/components/ui/badge";
 import { formatCount } from "@/lib/format";
 import {
   IconBroadcastFilled,
@@ -104,7 +104,6 @@ export function LiveHero({ streams }: { streams: Stream[] }) {
                     {owner && (
                       <>
                         <VerifiedBadge verification={owner.verification} className="h-3 w-3" />
-                        <OrgBadgeChip orgBadge={owner.orgBadge} />
                       </>
                     )}
                   </span>

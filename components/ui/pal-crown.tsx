@@ -7,7 +7,7 @@
  * `#D9D9D9` sparks. 16.27 x 16.57 in the file, drawn here in a 17 box at the
  * export's own coordinates and scaled by the card.
  *
- * Like the org lockups (`org-badge-glyphs.tsx`) this is artwork with its own
+ * Like any brand lockup, this is artwork with its own
  * fills, not a line icon, so nothing is recoloured to `currentColor`.
  *
  * NOTHING SETS IT YET. The profile carries no premium / verified-tier field

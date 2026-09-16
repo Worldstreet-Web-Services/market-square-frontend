@@ -63,7 +63,7 @@ import { cn } from "@/lib/cn";
  * your ARK account" without printing the name twice.
  *
  * The vectors are `ark-logo.svg`'s own paths, inlined rather than fetched —
- * the same treatment `org-badge-glyphs.tsx` gives the ARK badge lockup, and
+ * the same treatment any brand lockup gets, and
  * for the same reason: brand artwork keeps its own fills instead
  * of being recoloured to `currentColor`. That is also why it reads brighter
  * than the #8E8E93 label, exactly as the full-colour Google mark did.
