@@ -14,7 +14,7 @@ import { isVideoUrl } from "../../../lib/media.ts";
  * media, and extension sniffing only exists for rows written before it did.
  */
 
-export type MessageMediaKind = "image" | "video" | "audio";
+export type MessageMediaKind = "image" | "video" | "audio" | "file";
 
 export interface MessageMedia {
   mediaUrl?: string | null;
@@ -25,6 +25,14 @@ export interface MessageMedia {
 // container that is far more often video here (the upload endpoint issues it
 // for clips), so it belongs to `isVideoUrl` and is tested there first.
 const AUDIO_EXTENSIONS = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)(\?|#|$)/i;
+
+/**
+ * Documents. Last in the sniff order and narrow on purpose: these extensions
+ * belong to nothing else we render, so a match is unambiguous. Without this a
+ * PDF fell through to the `image` fallback below and drew a photo bubble
+ * around bytes no browser will decode.
+ */
+const FILE_EXTENSIONS = /\.(pdf|docx?|xlsx?|pptx?|txt|csv)(\?|#|$)/i;
 
 /**
  * The media on a message, or null when there is none.
@@ -42,6 +50,8 @@ export function messageMediaKind(message: MessageMedia): MessageMediaKind | null
     if (typed.startsWith("image")) return "image";
     if (typed.startsWith("video")) return "video";
     if (typed.startsWith("audio")) return "audio";
+    // The service types a document as `file` — see its FILE_TYPES map.
+    if (typed.startsWith("file")) return "file";
     // An unrecognised kind falls through to the sniff rather than being
     // dropped — the schema already `catch`es it to null, so this is the case
     // where a future backend sends something we have not enumerated yet.
@@ -49,7 +59,28 @@ export function messageMediaKind(message: MessageMedia): MessageMediaKind | null
 
   if (AUDIO_EXTENSIONS.test(url) || url.startsWith("data:audio/")) return "audio";
   if (isVideoUrl(url)) return "video";
+  if (FILE_EXTENSIONS.test(url)) return "file";
   return "image";
+}
+
+/**
+ * "PDF", "DOCX" — the chip on a file row.
+ *
+ * Read from the NAME first and the URL only as a fallback: the service stores
+ * an object under a key of its own minting, so the URL's extension is the
+ * stored type while the name is what the sender actually attached. They agree
+ * today (the service forces the real extension onto the name), and when they
+ * ever disagree the sender's name is the one the reader recognises.
+ *
+ * "FILE" when neither says anything — a chip reading the truth beats a chip
+ * reading an empty box.
+ */
+export function fileExtensionLabel(
+  name: string | null | undefined,
+  url?: string | null
+): string {
+  const from = (value: string) => /\.([A-Za-z0-9]{1,8})(?:\?|#|$)/.exec(value)?.[1]?.toUpperCase() ?? "";
+  return from(name?.trim() ?? "") || from(url?.trim() ?? "") || "FILE";
 }
 
 /**
@@ -114,18 +145,24 @@ export function mediaRatio(
  */
 export interface WireMessageMedia {
   url: string;
-  kind?: "image" | "video" | "audio" | null;
+  kind?: "image" | "video" | "audio" | "file" | null;
   width?: number | null;
   height?: number | null;
   durationSeconds?: number | null;
+  /** Files only — the name to show, already sanitised by the service. */
+  fileName?: string | null;
+  /** Files only — the size to show, so the row needs no HEAD request. */
+  sizeBytes?: number | null;
 }
 
 export interface FlatMessageMedia {
   mediaUrl: string | null;
-  mediaKind: "image" | "video" | "audio" | null;
+  mediaKind: "image" | "video" | "audio" | "file" | null;
   mediaWidth: number | null;
   mediaHeight: number | null;
   mediaDurationSeconds: number | null;
+  mediaFileName: string | null;
+  mediaSizeBytes: number | null;
 }
 
 export function flattenMessageMedia(
@@ -137,5 +174,7 @@ export function flattenMessageMedia(
     mediaWidth: media?.width ?? null,
     mediaHeight: media?.height ?? null,
     mediaDurationSeconds: media?.durationSeconds ?? null,
+    mediaFileName: media?.fileName ?? null,
+    mediaSizeBytes: media?.sizeBytes ?? null,
   };
 }

@@ -44,10 +44,28 @@ import {
  * The body copy loses "document" for the same reason.
  */
 
-/** "JPEG, PNG, WebP, GIF, MP4, WebM • up to 200 MB" — from the live contract. */
+/**
+ * The short name for a document type.
+ *
+ * Only the types whose MIME subtype is not itself a readable word: `text/plain`
+ * becomes PLAIN without help, and `application/pdf` is already PDF.
+ */
+const DOCUMENT_LABELS: Record<string, string> = {
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+  "text/plain": "TXT",
+};
+
+/** "JPEG, PNG, WebP, GIF, MP4, WebM, PDF • up to 200 MB" — from the live contract. */
 function describeLimits(): string {
   const limits = getUploadLimits();
   const label = (type: string) => {
+    // Office types are long MIME names whose subtype is unreadable —
+    // `vnd.openxmlformats-officedocument.wordprocessingml.document` would land
+    // in the caption verbatim. They get the extension people actually say.
+    const named = DOCUMENT_LABELS[type];
+    if (named) return named;
     const subtype = type.split("/")[1] ?? type;
     return subtype === "jpeg" ? "JPEG" : subtype.toUpperCase();
   };
@@ -55,11 +73,17 @@ function describeLimits(): string {
     ...limits.imageContentTypes,
     ...limits.videoContentTypes,
     ...limits.audioContentTypes,
+    ...limits.fileContentTypes,
   ]
     .map(label)
     // MP4 is both a video and an audio container, so the two lists overlap.
     .filter((name, index, all) => all.indexOf(name) === index);
-  const largest = Math.max(limits.maxImageBytes, limits.maxVideoBytes, limits.maxAudioBytes);
+  const largest = Math.max(
+    limits.maxImageBytes,
+    limits.maxVideoBytes,
+    limits.maxAudioBytes,
+    limits.maxFileBytes
+  );
   return `${formats.join(", ")} • up to ${formatBytes(largest)}`;
 }
 
@@ -67,7 +91,12 @@ export interface AttachmentPanelProps {
   open: boolean;
   onClose: () => void;
   /** Handed the stored URL and whatever the client could measure about it. */
-  onAttached: (result: UploadResult, measured: Measured) => void;
+  /**
+   * `fileName` is the name the reader picked. It matters only for a document —
+   * the bubble shows it and the service stores it — but it is handed back for
+   * every kind so the caller is never guessing which callback shape it got.
+   */
+  onAttached: (result: UploadResult, measured: Measured, fileName: string) => void;
 }
 
 export interface Measured {
@@ -156,7 +185,7 @@ export function AttachmentPanel({ open, onClose, onAttached }: AttachmentPanelPr
       // takes AUDIO, and the default would refuse a voice note at the last
       // gate — after the panel had already accepted it.
       const result = await uploadFile(file, setProgress, "attachment");
-      onAttached(result, measured);
+      onAttached(result, measured, file.name);
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That upload didn't finish.");
@@ -236,7 +265,8 @@ export function AttachmentPanel({ open, onClose, onAttached }: AttachmentPanelPr
                       not in any allowlist, so naming them here would promise
                       an upload we refuse. */}
                   <p className="text-[13px] leading-snug text-white/60">
-                    Drag and drop your files (image, video, voice note) here, or
+                    Drag and drop your files (image, video, voice note, document)
+                    here, or
                     <br />
                     click to browse.
                   </p>
