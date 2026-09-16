@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { profileHref } from "@/lib/profile-href";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatCount, relativeTime } from "@/lib/format";
@@ -244,7 +245,7 @@ export function PostSlide({
         <div className="min-w-0 flex-1 pr-20">
           {author && (
             <Link
-              href={`/u/${author.username}`}
+              href={profileHref(author)}
               className="pointer-events-auto flex items-center gap-2"
             >
               <Avatar

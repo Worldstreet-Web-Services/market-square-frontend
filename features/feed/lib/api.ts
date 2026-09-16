@@ -4,6 +4,7 @@ import { msApi } from "@/lib/api/service";
 import { uploadFile } from "@/lib/api/upload";
 import { noteMediaContract } from "@/lib/media-contract";
 import type { DeepLink } from "@/lib/api/schemas";
+import { StoryViewersPageSchema } from "@/features/feed/lib/types";
 import {
   BookmarkResultSchema,
   PinResultSchema,
@@ -242,4 +243,15 @@ export async function pinPost(postId: string, pin: boolean) {
 
 export async function deletePost(postId: string) {
   return msApi.del<unknown>(`/posts/${postId}`);
+}
+
+/**
+ * `GET /posts/{id}/viewers` — the author's own story's viewers. Author only:
+ * anybody else, a removed story or a service without the route answers 4xx,
+ * and the caller draws nothing (see lib/story-viewers.ts).
+ */
+export async function fetchStoryViewers(storyId: string, cursor?: string) {
+  return StoryViewersPageSchema.parse(
+    await msApi.authedGet(`/posts/${encodeURIComponent(storyId)}/viewers`, { limit: 50, cursor })
+  );
 }

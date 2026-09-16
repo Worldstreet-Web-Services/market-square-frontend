@@ -205,10 +205,19 @@ export async function renewVerification() {
   return RenewVerificationSchema.parse(await msApi.post("/me/verification/renew"));
 }
 
-// Backend supports window=weekly only; the param is fixed here so the UI can
-// never emit an invalid value.
+/*
+  NO WINDOW IS SENT, deliberately. The board has always been an ALL-TIME tally
+  (the service's score only ever accumulates), and the two services on either
+  side of the next backend deploy agree on exactly one request that returns it:
+  none. Today's service knows only `weekly` and treats it as its default — the
+  same all-time numbers. The next one defaults to `all`, and turns `weekly`
+  into a REAL rolling 7 days that starts empty on deploy. Pinning `weekly` would
+  blank the board the day that ships; sending `all` would be refused by today's
+  service. When the window dropdown switches on This week and This month, the
+  chosen window is passed here, and only then.
+*/
 export async function fetchSpotlight() {
-  return SpotlightSchema.parse(await msApi.get("/spotlight", { window: "weekly" }));
+  return SpotlightSchema.parse(await msApi.get("/spotlight"));
 }
 
 export async function fetchCreatorApplication() {

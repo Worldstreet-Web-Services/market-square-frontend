@@ -1,6 +1,7 @@
 "use client";
 
 import { GENDER_OPTIONS, genderLabel, normalizeGender } from "@/lib/gender";
+import { profileHref } from "@/lib/profile-href";
 import { createPortal } from "react-dom";
 
 import { useEffect, useRef, useState } from "react";
@@ -805,13 +806,13 @@ export function AccountMenuItems({
         icon={<IconFilterLocation className="h-[17px] w-[17.5px] text-grey-400" />}
         label="Profile"
         trailing={chevron}
-        onClick={() => go(me.data ? `/u/${me.data.username}` : "/auth")}
+        onClick={() => go(me.data ? profileHref(me.data) : "/auth")}
       />
       <MenuRow
         icon={<IconFilterFriends className="h-[14px] w-[19px] text-grey-400" />}
         label="Settings"
         // Each person's own settings live under their profile.
-        onClick={() => go(me.data ? `/u/${me.data.username}/settings` : "/auth")}
+        onClick={() => go(me.data ? profileHref(me.data, "settings") : "/auth")}
       />
       <MenuRow
         icon={<IconFilterGender className="h-5 w-5 text-grey-400" />}
@@ -1542,7 +1543,7 @@ function MobileMenu({
           ) : (
             <div className="ws-hair flex items-center gap-2 border-t pt-3">
               <Link
-                href={me.data ? `/u/${me.data.username}` : "/auth"}
+                href={me.data ? profileHref(me.data) : "/auth"}
                 onClick={onClose}
                 className="ws-press flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-white/[0.06]"
               >

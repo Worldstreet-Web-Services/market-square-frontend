@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { profileHref } from "@/lib/profile-href";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { arkAppConfigured } from "@/lib/deeplink";
@@ -200,7 +201,10 @@ function SegmentView({ segment, link }: { segment: Segment; link: string }) {
       // nobody; refusing to link is the worse failure, because the feature
       // then just looks broken.
       return (
-        <Link href={`/u/${segment.handle}`} className={link}>
+        <Link
+          href={segment.id ? profileHref({ id: segment.id, username: segment.handle }) : `/u/${segment.handle}`}
+          className={link}
+        >
           {segment.value}
         </Link>
       );
