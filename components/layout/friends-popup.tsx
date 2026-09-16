@@ -291,11 +291,26 @@ function FriendsDialog({
   const swipe = useSwipeCard({ width: 139.9, onDecide: () => onNext() });
 
   const startGisting = () => {
-    onClose();
     // To the THREAD, not the inbox — same reason as the profile's Message
     // button. "Start gisting" that lands on a list has not started anything.
+    //
+    // CLOSE ONLY ONCE THE THREAD EXISTS. `onClose` empties the fan, and an
+    // empty fan makes `FriendsPopup` return early — which UNMOUNTS this dialog,
+    // and the `useOpenConversation` observer with it. TanStack Query drops
+    // callbacks passed to `mutate()` once their component is gone. So closing
+    // first created the conversation on the server and silently lost the
+    // navigation to it: the popup vanished, nothing opened, and the button
+    // looked dead. Wink back and Follow back never hit this because they need
+    // no callback afterwards; Post to Square already awaits before it closes.
+    //
+    // The popup now stays open for the one request, the button says so, and a
+    // failure leaves the reader where they were with the hook's own toast
+    // rather than on a page that never changes.
     chat.mutate(other.id, {
-      onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
+      onSuccess: (conversation) => {
+        onClose();
+        router.push(`/messages?c=${conversation.id}`);
+      },
     });
   };
   const winkBack = () => {
@@ -309,10 +324,17 @@ function FriendsDialog({
 
   const primaryAct =
     copy.primary === "start-gisting" ? startGisting : copy.primary === "wink-back" ? winkBack : followBack;
-  const primaryOff = copy.primary === "wink-back" && (wink.unavailable || wink.refusal !== null);
+  // While the thread is being opened, both entry points to it are held: a
+  // second tap would be a second request racing the first to the same place.
+  const gisting = chat.isPending;
+  const primaryOff =
+    (copy.primary === "wink-back" && (wink.unavailable || wink.refusal !== null)) ||
+    (copy.primary === "start-gisting" && gisting);
 
   const secondaryAct = copy.secondary === "wink" ? winkBack : startGisting;
-  const secondaryOff = copy.secondary === "wink" && (wink.unavailable || wink.refusal !== null);
+  const secondaryOff =
+    (copy.secondary === "wink" && (wink.unavailable || wink.refusal !== null)) ||
+    (copy.secondary !== "wink" && gisting);
 
   const card =
     "absolute overflow-hidden rounded-[37.16px] border-[4.645px] border-white bg-[#EDEDED] shadow-[0_6.6px_6.5px_rgba(0,0,0,0.25)]";
@@ -549,7 +571,7 @@ function FriendsDialog({
             title={copy.primary === "wink-back" ? (wink.refusal ?? undefined) : undefined}
             className="ws-btn-welcome ws-press flex h-9 w-[214px] items-center justify-center rounded-full text-[11.77px] font-medium leading-[20.45px] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {labels.primary}
+            {copy.primary === "start-gisting" && gisting ? "Opening…" : labels.primary}
           </button>
           {copy.secondary && (
             <button
@@ -560,7 +582,7 @@ function FriendsDialog({
               className="ws-press flex h-9 w-[219px] items-center justify-center gap-[9.4px] rounded-full bg-[#323232] text-[11.77px] font-medium leading-[20.45px] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {copy.secondary === "wink" && <IconProfileWink className="h-[16.3px] w-[16.3px]" />}
-              {labels.secondary}
+              {copy.secondary !== "wink" && gisting ? "Opening…" : labels.secondary}
             </button>
           )}
         </div>
