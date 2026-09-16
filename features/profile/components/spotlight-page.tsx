@@ -9,7 +9,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { Profile } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { Pill, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconChevronDown } from "@/components/ui/icons";
 import { MenuPanel, MenuRow } from "@/components/ui/menu-row";
@@ -205,7 +205,6 @@ export function SpotlightPage() {
                     <p className="flex items-center gap-1.5 truncate text-[15px] font-bold text-heading">
                       {row.profile.displayName}
                       <VerifiedBadge verification={row.profile.verification} className="h-3.5 w-3.5" />
-                      <OrgBadgeChip orgBadge={row.profile.orgBadge} />
                       <RoleChip role={row.profile.role} />
                     </p>
                     <p className="tnum text-[13px] text-meta">{formatKashScore(row.score)} pts</p>

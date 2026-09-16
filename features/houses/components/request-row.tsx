@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import type { SpeakerRequest } from "@/features/streams/lib/types";
 
 /**
@@ -62,7 +62,6 @@ export function RequestRow({
           {profile && (
             <>
               <VerifiedBadge verification={profile.verification} className="h-3 w-3 shrink-0" />
-              <OrgBadgeChip orgBadge={profile.orgBadge} />
               <RoleChip role={profile.role} />
             </>
           )}

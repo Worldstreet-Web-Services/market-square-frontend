@@ -2,7 +2,7 @@
 
 import { Avatar } from "@/components/ui/avatar";
 import { atHandle } from "@/lib/handle";
-import { ChipShell, OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { ChipShell, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconLink, IconX } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/sheet";
@@ -82,7 +82,6 @@ export function PorchSheet({
                 {host.displayName}
               </span>
               <VerifiedBadge verification={host.verification} className="h-3.5 w-3.5 shrink-0" />
-              <OrgBadgeChip orgBadge={host.orgBadge} />
               <RoleChip role={host.role} />
             </div>
             {atHandle(host.username) && (

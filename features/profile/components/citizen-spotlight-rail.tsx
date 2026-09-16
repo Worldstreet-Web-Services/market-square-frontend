@@ -8,7 +8,7 @@ import { useMe } from "@/hooks/use-me";
 import type { Profile } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
 import { ModuleUnavailable } from "@/components/ui/states";
-import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
+import { VerifiedBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronRight, IconSpark } from "@/components/ui/icons";
 import { useFollow, useSpotlight } from "@/features/profile/hooks/use-profile";
@@ -98,7 +98,6 @@ export function CitizenSpotlightRail() {
                 <span className="flex items-center gap-1 truncate text-[12px] font-bold leading-4 text-white">
                   <span className="truncate">{row.profile.displayName}</span>
                   <VerifiedBadge verification={row.profile.verification} className="h-3 w-3" />
-                  <OrgBadgeChip orgBadge={row.profile.orgBadge} />
                 </span>
                 <span className="block truncate text-[11px] font-normal leading-4 text-white/50">
                   {formatCount(row.profile.followerCount)} followers

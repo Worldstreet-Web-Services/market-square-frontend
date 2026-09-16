@@ -768,9 +768,9 @@ body {
 }
 
 /* THE CARD STRIP'S RINGS — node 1331:21812 on /pals (1328:1885), the three
-   states of a 100.09 x 96 tile at 16.34 radius. Every ring is an INSIDE
+   states of a 72 x 96 tile (narrowed from the file's 100.09) at 16.34 radius. Every ring is an INSIDE
    stroke on the tile's own edge, over the artwork, with no black gap and no
-   padding — the tile is 100.09 x 96 ring included — so each is drawn as an
+   padding — the tile is 72 x 96 ring included — so each is drawn as an
    overlay ABOVE the media (`::after`), never as a wrapper that grows the tile.
    Seen / plain (1331:21813): a 0.68 hairline at 40% white. Live (1331:21817):
    2px of `--color-live` at 40%. Unseen (1331:21823): 2px of the file's

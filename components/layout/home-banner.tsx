@@ -1,192 +1,253 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useGate } from "@/hooks/use-gate";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DeckDots } from "@/components/ui/deck-dots";
-import { asset, sq } from "@/lib/square-path";
+import { asset } from "@/lib/square-path";
 
 /**
- * "CREATE YOUR GISTROOM NOW" — node 1305:149178, the first section of the
- * 2026-09-12 Home, directly under the search row.
+ * HOME'S BANNER — three slides, nodes 1676:17254, 1682:17344 and 1683:17370
+ * (2026-09-16). They replace the single "Create your Gistroom now" card.
  *
- * ─── THE FILE'S NUMBERS, READ FROM THE RAW NODE ──────────────────────────────
- *   · the card (1295:147718): 573 x 102, radius 10, `clipsContent`, and a
- *     linear gradient `#AD46FF` → `#682A99` whose handles run (-0.165, 0.144) →
- *     (0.820, 0.856) with the width handle straight BELOW the start. On a
- *     573 x 102 box that third handle makes the colour bands vertical, so the
- *     ramp runs left to right: `90deg`, `#AD46FF` at -16.5% and `#682A99` at
- *     82%. (The render agrees: the left column is one colour top to bottom.)
- *     Read as a square-space angle it comes out as 126deg, which is not what
- *     the file draws;
- *   · two soft-light arcs at 25% (1295:147719 under everything, 1295:147727
- *     over): the exported SVGs are trimmed to the stroke, so each sits at its
- *     stroke's own bounds — worked from `strokeGeometry` and checked against
- *     `absoluteRenderBounds` to the hundredth. 147727 is the same vector turned
- *     180°; its export already carries the turn. The file bakes `opacity 0.25`
- *     into both, so only the blend is applied here: `mix-blend-mode` inside an
- *     `<img>` blends against nothing, it has to be on the element;
- *   · the mascot (1295:147726) 98.96 x 96.29 at (5, -12), its top 12 clipped by
- *     the card. Its fill is STRETCH under `imageTransform [[1,0,0],[0,0.6486,0]]`
- *     — the source's top 64.86% filling the box — so the image is drawn at its
- *     full height (96.29 / 0.6486 = 148.46) and the box clips the rest. The
- *     2x node export was diffed against this and is the same picture;
- *   · the shadow it stands on (1295:147725): a 42.39 x 6.06 black/25 ellipse
- *     at (33.74, 88.63) under a 6.056 layer blur (CSS takes half);
- *   · the copy (1295:147720) at (103.55, 27.76), a 329 x 44 box, vertically
- *     centred: ONE text node in two runs per `styleOverrideTable` — override 29
- *     is Manrope Bold 24/32.784 in white, override 53 Geist Medium 10 in
- *     `#E9CEFF` (line-height inherited, 14.51). The runs sum to 47.3 in a 44
- *     box, which is the file's own clipping; the PNG wins and the box is 44;
- *   · the button (1295:147721) 90 x 38 at (458, 32) — 25 from the right edge,
- *     which is what it is anchored to here, since the card is the column's
- *     width: white, full radius, a 2px INSIDE stroke `#C2A0FA` at 55%,
- *     `0 6 6.2 rgba(0,0,0,.25)`, the label at 12.44/16.59 bold in `#682A98`.
- *     The file sets it in Roboto; it is Geist here, the repo's standing rule.
- *     The transparent `Button:shadow` rectangle inside it carries two more
- *     shadows, but a shadow is cast from the layer's alpha and the layer has
- *     none — nothing is drawn from it;
- *   · the dots (1295:147729) 9 under the card, `DeckDots`' own geometry (the
- *     4.33 pills at radius 13.54, 2.71 apart, the active one 27.08).
+ * ─── THE FILE'S NUMBERS, READ FROM THE RAW NODES ────────────────────────────
+ * Each slide is a 342 x 98 column: the card (342 x 86, radius 15, clipped),
+ * then 8, then the pager row (4 tall). Every position below is the child's
+ * `absoluteBoundingBox` minus the card's origin.
  *
- * ─── IT IS A CAROUSEL, AND THE DOTS ARE HONEST ───────────────────────────────
- * The file draws four dots with the first lit, and ONE slide. A row of dots
- * over a single slide promises pages that do not exist, so the dots render
- * only when there is more than one slide — today there is one, so there are
- * none. `slides` is the seam: a second slide is a second entry in
- * `HOME_BANNER_SLIDES`, and the dots appear with it, as buttons.
+ *   · house (1676:17255): the ramp `#AD46FF` → `#682A99` with the same handles
+ *     as the old banner — the width handle sits straight below the start, so
+ *     the bands are vertical and it runs 90deg, -16.5% to 82%. Two soft-light
+ *     arcs (Vector 449 at (-47, -65), Vector 448 at (11, 12), RIGHT-anchored),
+ *     a 83 x 4 black/25 shadow at (241, 82) under a 4 layer blur (CSS takes
+ *     half), the copy at (16, 16) in a 194 x 54 box, and the chat cube
+ *     (Group 48098403) at (238, 2), 110.79 x 81.57, CENTER-anchored and cut by
+ *     the card's right edge exactly as the frame clips it.
+ *   · gistrooms (1683:17477): two fills — the same ramp UNDER a solid
+ *     `#F84538`. The last visible fill paints on top, so the card is solid red.
+ *     Arcs at (-25, -29) and (59, 0) at 65%, the copy at (16, 21) in 204 x 44,
+ *     the faces (Group 1000002879) RIGHT-anchored at (217, 10), 114.58 x 68.96.
+ *   · explore (1683:17468, the complete version from file VRZ9LeofsP5lmWPT7kMV4b):
+ *     the ramp under a solid `#0DCF51`, so green. One arc at (107, -56), the
+ *     copy at (16, 28) in 210 x 40 at Geist 700 14/20, the clouds (Group
+ *     1000002912, three white ellipses at 25% soft-light) at (12, 62), the
+ *     torn paper (Layer 2) at (-43, -78), and the people with the mic
+ *     (Frame 1000002913, 108 x 86, clipped) against the right edge. The file's
+ *     two hidden layers (image 94 and its vectorised copy, Asset 40) are not
+ *     drawn.
  *
- * Every slide is the file's one composition — the ramp, the arcs, the mascot,
- * the white pill — with its own words and destination; the file gives no
- * second artwork to make anything else of.
+ * The arcs and clouds are the file's SVG exports, which carry their own
+ * `opacity` and `mix-blend-mode`. A blend inside an `<img>` blends against
+ * nothing, so the element carries `mix-blend-soft-light` too. The cube is an
+ * SVG export; the faces are a 4x PNG export, since they are photographs.
  *
- * ─── WHERE HOST ROOM GOES ────────────────────────────────────────────────────
- * The sidebar's "Start Gistroom" is `/gist-rooms?open=1`, which opens the room
- * composer on the rooms page. This calls the same thing, through `useGate`, so
- * a signed-out reader is asked to sign in rather than meeting a dead control
- * (the banner shows to everyone; the tap is the gate).
+ * ─── TYPE ────────────────────────────────────────────────────────────────────
+ * The house copy is ONE text node, Geist 500 14/18.2, with overrides: "house"
+ * is Inter ExtraBold Italic 800 and "people" / "community" Inter Bold Italic
+ * 700 (`styleOverrideTable` 1488 / 1487). Inter is loaded for exactly those
+ * runs rather than faking an italic out of Geist. The other two are Geist 700
+ * 14/22 (explore 14/20). Every line break is the render's own: the gistroom copy carries a
+ * `\n`, and the other two wrap in their fixed boxes — pinned with `<br />`
+ * so a font-metric difference cannot rewrap them.
  *
- * ─── PHONES ──────────────────────────────────────────────────────────────────
- * The file gives no phone frame. Below `md` the composition cannot hold —
- * 329 of copy beside a 99 mascot and a 90 button do not fit in 358 — and
- * scaling the artboard to that width puts the sub-line at 6px. So the phone
- * keeps a compact strip on the same ramp, with the file's own words, mascot
- * and button; it is not a measured node and is marked as such.
+ * ─── WIDER THAN 342 ──────────────────────────────────────────────────────────
+ * The file draws only the 342 artboard. Wider columns follow each layer's own
+ * `constraints`, never a scale: the card stretches, height stays 86, LEFT
+ * layers keep their left offset, RIGHT layers their right offset and the
+ * CENTER-anchored cube its offset from the middle. That is Figma's own resize
+ * rule for these nodes, so the composition is drawn, not zoomed.
+ *
+ * ─── PAGING ──────────────────────────────────────────────────────────────────
+ * The slides sit in one scroll-snap track: a swipe (or trackpad) moves between
+ * them, and the pager follows the scroll. The pills are the file's (20 x 4
+ * active in `#7E3BEB`, 8 x 4 in `#D9D9D9`, 2.71 apart) and are buttons.
+ *
+ * It also ROTATES on its own every `BANNER_AUTOPLAY_MS`, looping, held while
+ * a pointer rests on it, a finger is on it, focus is inside it or the tab is
+ * hidden, and never under prefers-reduced-motion.
+ *
+ * NO SLIDE LINKS ANYWHERE. None of the three nodes carries an interaction and
+ * none draws a button, so nothing here invents a destination.
  */
-export type HomeBannerSlide = {
-  id: string;
-  title: string;
-  subtitle: string;
-  action: { label: string; href: string };
-};
 
-/** 1305:149178's one slide. */
-export const HOME_BANNER_SLIDES: HomeBannerSlide[] = [
-  {
-    id: "host-gistroom",
-    title: "Create your Gistroom now",
-    subtitle: "Host live GistTalk sessions and watch your community thrive instantly.",
-    action: { label: "Host Room", href: sq("/gist-rooms?open=1") },
-  },
-];
+const SOFT = "pointer-events-none absolute max-w-none select-none mix-blend-soft-light";
+const ART = "pointer-events-none absolute max-w-none select-none";
 
-const GROUND = "bg-[linear-gradient(90deg,#AD46FF_-16.5%,#682A99_82%)]";
+function HouseSlide() {
+  return (
+    <div className="relative h-[86px] overflow-hidden rounded-[15px] bg-[linear-gradient(90deg,#AD46FF_-16.5%,#682A99_82%)]">
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 449) */}
+      <img src={asset("/home/slides/house-arc-top.svg")} alt="" aria-hidden className={`${SOFT} left-[-47px] top-[-65px] h-[115px] w-[272px]`} />
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 448), right-anchored */}
+      <img src={asset("/home/slides/house-arc-bottom.svg")} alt="" aria-hidden className={`${SOFT} right-[-59px] top-[12px] h-[165px] w-[390px]`} />
+      {/* Ellipse 1282 — the shadow the cube stands on. The node is LEFT-anchored
+          while the cube is CENTER-anchored, so on a wider card the file's own
+          constraints would leave the shadow behind; it rides with the cube
+          instead (241 is 70 right of the 342 card's middle). */}
+      <span aria-hidden className="pointer-events-none absolute left-[calc(50%+70px)] top-[82px] h-1 w-[83px] rounded-[50%] bg-black/25 blur-[2px]" />
+      <p className="absolute left-4 top-4 flex h-[54px] w-[194px] items-center text-[14px] font-medium leading-[18.2px] text-white">
+        <span>
+          Build your own{" "}
+          <em className="font-[family-name:var(--font-inter)] font-extrabold italic">house</em>.
+          <br />
+          Gather your <em className="font-[family-name:var(--font-inter)] font-bold italic">people</em>, and keep
+          <br />
+          the <em className="font-[family-name:var(--font-inter)] font-bold italic">community</em> going
+        </span>
+      </p>
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Group 48098403), centre-anchored */}
+      <img src={asset("/home/slides/house-chat-cube.svg")} alt="" aria-hidden className={`${ART} left-[calc(50%+67px)] top-[2px] h-[82px] w-[111px]`} />
+    </div>
+  );
+}
 
-export function HomeBanner({ slides }: { slides: HomeBannerSlide[] }) {
-  const gate = useGate();
-  const router = useRouter();
+function GistSlide() {
+  return (
+    <div className="relative h-[86px] overflow-hidden rounded-[15px] bg-[#F84538]">
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 450) */}
+      <img src={asset("/home/slides/gist-arc-short.svg")} alt="" aria-hidden className={`${SOFT} left-[-25px] top-[-29px] h-[77px] w-[112px]`} />
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 449) */}
+      <img src={asset("/home/slides/gist-arc-loop.svg")} alt="" aria-hidden className={`${SOFT} left-[59px] top-0 h-[148px] w-[284px]`} />
+      <p className="absolute left-4 top-[21px] flex h-[44px] w-[204px] items-center text-[14px] font-bold leading-[22px] text-white">
+        <span>
+          Vibe in gistrooms, and
+          <br />
+          make fresh connections.
+        </span>
+      </p>
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Group 1000002879), right-anchored */}
+      <img src={asset("/home/slides/gist-faces.png")} alt="" aria-hidden draggable={false} className={`${ART} right-[10.42px] top-[10px] h-[68.96px] w-[114.58px]`} />
+    </div>
+  );
+}
+
+function ExploreSlide() {
+  return (
+    <div className="relative h-[86px] overflow-hidden rounded-[15px] bg-[#0DCF51]">
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 449) */}
+      <img src={asset("/home/slides/explore-arc.svg")} alt="" aria-hidden className={`${SOFT} left-[107px] top-[-56px] h-[115px] w-[272px]`} />
+      <p className="absolute left-4 top-[28px] flex h-[40px] w-[210px] items-center text-[14px] font-bold leading-[20px] text-white">
+        <span>
+          Explore what’s trending and
+          <br />
+          join conversations that matter.
+        </span>
+      </p>
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Group 1000002912) */}
+      <img src={asset("/home/slides/explore-clouds.svg")} alt="" aria-hidden className={`${SOFT} left-[12px] top-[62px] h-[48px] w-[94px]`} />
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Layer 2), the torn paper over the corner */}
+      <img src={asset("/home/slides/explore-paper.svg")} alt="" aria-hidden className={`${ART} left-[-43px] top-[-78px] h-[121px] w-[121px]`} />
+      {/* Frame 1000002913 — the people and the mic, flush with the card's right
+          edge (234 + 108 = 342). The node is LEFT-anchored, which on a wider
+          card would strand it mid-banner, so it holds the right edge instead. */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Frame 1000002913) */}
+      <img src={asset("/home/slides/explore-people.png")} alt="" aria-hidden draggable={false} className={`${ART} right-0 top-0 h-[86px] w-[108px]`} />
+    </div>
+  );
+}
+
+const SLIDES = [
+  { id: "house", label: "Build your own house", Slide: HouseSlide },
+  { id: "gistrooms", label: "Vibe in gistrooms", Slide: GistSlide },
+  { id: "explore", label: "Explore what's trending", Slide: ExploreSlide },
+] as const;
+
+/**
+ * How long a slide stays before the banner moves on by itself. Not in the
+ * file (no timer, no prototype reaction on any of the three nodes); asked for
+ * on 2026-09-16 ("is they not animation that it changes on it own too").
+ */
+export const BANNER_AUTOPLAY_MS = 10000;
+
+export function HomeBanner() {
+  const track = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
-  const slide = slides[Math.min(index, slides.length - 1)];
-  if (!slide) return null;
-  const open = () => gate(() => router.push(slide.action.href));
-  const paged = slides.length > 1;
+  // Reasons the rotation is held, never one flag: a pointer resting on the
+  // card, a finger on it, keyboard focus inside it, or the tab being hidden
+  // can overlap, and releasing one must not restart a slide another still holds.
+  const [held, setHeld] = useState<ReadonlySet<string>>(() => new Set());
+  const hold = useCallback((reason: string, on: boolean) => {
+    setHeld((current) => {
+      if (current.has(reason) === on) return current;
+      const next = new Set(current);
+      if (on) next.add(reason);
+      else next.delete(reason);
+      return next;
+    });
+  }, []);
+
+  // The pager follows the track, so a swipe and a tap agree on where we are.
+  useEffect(() => {
+    const node = track.current;
+    if (!node) return;
+    const onScroll = () => {
+      const width = node.clientWidth;
+      if (width > 0) setIndex(Math.round(node.scrollLeft / width));
+    };
+    node.addEventListener("scroll", onScroll, { passive: true });
+    return () => node.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const go = useCallback((next: number) => {
+    const node = track.current;
+    if (!node) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollTo({ left: next * node.clientWidth, behavior: reduce ? "auto" : "smooth" });
+    setIndex(next);
+  }, []);
+
+  useEffect(() => {
+    const onVisibility = () => hold("hidden", document.hidden);
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [hold]);
+
+  // Moves on by itself, looping from the last slide back to the first. The
+  // timer restarts whenever the slide changes — by the timer, a swipe or a
+  // pill — so every slide gets its full time. Under prefers-reduced-motion it
+  // never rotates on its own: moving content the reader did not ask for is
+  // exactly what that setting turns off.
+  useEffect(() => {
+    if (held.size > 0) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setTimeout(() => go((index + 1) % SLIDES.length), BANNER_AUTOPLAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [index, held, go]);
 
   return (
-    <section aria-label={slide.title}>
-      {/* The phone strip — not a node; see the note above. */}
-      <div className={`relative flex h-[66px] items-center rounded-[10px] pl-[72px] pr-4 md:hidden ${GROUND}`}>
-        <span className="pointer-events-none absolute bottom-[9px] left-[30px] h-1 w-7 rounded-[50%] bg-black/25 blur-[1px]" />
-        {/* eslint-disable-next-line @next/next/no-img-element -- the file's own art */}
-        <img
-          src={asset("/home/banner-mascot.png")}
-          alt=""
-          aria-hidden
-          draggable={false}
-          className="pointer-events-none absolute bottom-0 left-4 h-[62px] w-[58px] select-none object-contain object-top"
-        />
-        <p className="min-w-0 flex-1 font-[family-name:var(--font-heading)] text-[13px] font-bold leading-[16px] text-white">
-          {slide.title}
-        </p>
-        <button
-          type="button"
-          onClick={open}
-          className="ws-press ml-3 flex h-7 shrink-0 items-center rounded-full bg-white px-3 text-[12px] font-bold leading-none text-[#682A98] transition-opacity hover:opacity-90"
-        >
-          {slide.action.label}
-        </button>
+    <section
+      aria-roledescription="carousel"
+      aria-label="Square"
+      // pointermove, not pointerenter: enter also fires when the card scrolls
+      // or renders under a cursor that never moved, and nothing would release it.
+      onPointerMove={(event) => event.pointerType === "mouse" && hold("hover", true)}
+      onPointerLeave={(event) => event.pointerType === "mouse" && hold("hover", false)}
+      onTouchStart={() => hold("touch", true)}
+      onTouchEnd={() => hold("touch", false)}
+      onTouchCancel={() => hold("touch", false)}
+      onFocus={() => hold("focus", true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) hold("focus", false);
+      }}
+    >
+      <div
+        ref={track}
+        className="flex snap-x snap-mandatory overflow-x-auto rounded-[15px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {SLIDES.map(({ id, label, Slide }, i) => (
+          <div
+            key={id}
+            role="group"
+            aria-roledescription="slide"
+            aria-label={`${i + 1} of ${SLIDES.length}: ${label}`}
+            className="w-full shrink-0 snap-start"
+          >
+            <Slide />
+          </div>
+        ))}
       </div>
-
-      {/* 1295:147718 — the card, clipped as the frame is. */}
-      <div className={`relative hidden h-[102px] overflow-hidden rounded-[10px] md:block ${GROUND}`}>
-        {/* 1295:147719 — the arc under everything, at its stroke's bounds. */}
-        {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-        <img
-          src={asset("/home/banner-arc-left.svg")}
-          alt=""
-          aria-hidden
-          className="pointer-events-none absolute left-[-4.12px] top-[-57.22px] h-[106px] w-[256px] max-w-none select-none mix-blend-soft-light"
-        />
-
-        {/* 1295:147725 — the shadow the mascot stands on. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute left-[33.74px] top-[88.63px] h-[6.06px] w-[42.39px] rounded-[50%] bg-black/25 blur-[3.03px]"
-        />
-        {/* 1295:147726 — the mascot: the source's top 64.86% in a 98.96 x 96.29
-            box at (5, -12). */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute left-[5px] top-[-12px] h-[96.29px] w-[98.96px] overflow-hidden"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- the file's own art */}
-          <img
-            src={asset("/home/banner-mascot.png")}
-            alt=""
-            draggable={false}
-            className="h-[148.46px] w-[98.96px] max-w-none select-none"
-          />
-        </span>
-
-        {/* 1295:147720 — one text node, two runs, centred in its 44. */}
-        <p className="absolute left-[103.55px] top-[27.76px] flex h-[44px] w-[329px] flex-col justify-center">
-          <span className="font-[family-name:var(--font-heading)] text-[24px] font-bold leading-[32.784px] text-white">
-            {slide.title}
-          </span>
-          <span className="text-[10px] font-medium leading-[14.51px] text-[#E9CEFF]">{slide.subtitle}</span>
-        </p>
-
-        {/* 1295:147727 — the arc over everything, at its stroke's bounds. */}
-        {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-        <img
-          src={asset("/home/banner-arc-right.svg")}
-          alt=""
-          aria-hidden
-          className="pointer-events-none absolute left-[204.87px] top-[16.41px] h-[153px] w-[369px] max-w-none select-none mix-blend-soft-light"
-        />
-
-        {/* 1295:147721 — Host Room, 25 from the right edge. */}
-        <button
-          type="button"
-          onClick={open}
-          className="ws-press absolute right-[25px] top-[32px] flex h-[38px] w-[90px] items-center justify-center rounded-full bg-white text-[12.44px] font-bold leading-[16.59px] text-[#682A98] shadow-[inset_0_0_0_2px_rgba(194,160,250,0.55),0_6px_6.2px_rgba(0,0,0,0.25)] transition-opacity hover:opacity-90"
-        >
-          {slide.action.label}
-        </button>
-      </div>
-
-      {/* 1295:147729 — the pager, 9 under the card. Only while there is
-          something to page through. */}
-      {paged && <DeckDots count={slides.length} active={index} onSelect={setIndex} className="pt-[9px]" />}
+      {/* 8 under the card to the pills: the button is 16 tall around a 4 pill,
+          so 6 of the gap is already inside it. */}
+      <DeckDots variant="banner" count={SLIDES.length} active={index} onSelect={go} className="pt-[2px]" />
     </section>
   );
 }

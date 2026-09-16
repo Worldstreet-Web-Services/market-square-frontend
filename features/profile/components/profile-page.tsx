@@ -56,6 +56,16 @@ import { asset, sq } from "@/lib/square-path";
 type Tab = "posts" | "media" | "streams" | "activities";
 
 /** The action under an empty profile tab — own profile only. */
+/** A profile count and its word — Geist 600 #F7F9F9, then 400 at 50% white. */
+function CountLabel({ count, label }: { count: number; label: string }) {
+  return (
+    <>
+      <span className="font-semibold text-[#F7F9F9]">{formatCount(count)}</span>
+      <span className="font-normal text-white/50">{label}</span>
+    </>
+  );
+}
+
 function TabCta({ href, label }: { href: string; label: string }) {
   return (
     <Link
@@ -627,23 +637,30 @@ export function ProfilePage({
             see the people behind them. Same type, same spacing — only now a
             link, underlined on hover like every other text link on the page.
           */}
-          <Link
-            href={profileHref(data, "following")}
-            className="flex items-baseline gap-1 rounded-sm decoration-white/50 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <span className="font-semibold text-[#F7F9F9]">
-              {formatCount(data.followingCount)}
+          {/*
+            WHO YOU FOLLOW IS YOURS (2026-09-16: "people should not be able to
+            see the people you are following"). Only your own profile links the
+            count to the list; on anybody else's it is a plain number. Followers
+            stays public. The route refuses the list too (FollowListPage), so a
+            shared /following link shows nothing either.
+          */}
+          {isMe ? (
+            <Link
+              href={profileHref(data, "following")}
+              className="flex items-baseline gap-1 rounded-sm decoration-white/50 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <CountLabel count={data.followingCount} label="Following" />
+            </Link>
+          ) : (
+            <span className="flex items-baseline gap-1">
+              <CountLabel count={data.followingCount} label="Following" />
             </span>
-            <span className="font-normal text-white/50">Following</span>
-          </Link>
+          )}
           <Link
             href={profileHref(data, "followers")}
             className="flex items-baseline gap-1 rounded-sm decoration-white/50 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <span className="font-semibold text-[#F7F9F9]">
-              {formatCount(data.followerCount)}
-            </span>
-            <span className="font-normal text-white/50">Followers</span>
+            <CountLabel count={data.followerCount} label="Followers" />
           </Link>
         </p>
 

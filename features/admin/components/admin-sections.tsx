@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/button";
 import { IconSearch } from "@/components/ui/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
-import type { OrgBadge, Profile } from "@/lib/api/schemas";
+import type { Profile } from "@/lib/api/schemas";
 import { FEATURED_RANK_MAX, FEATURED_RANK_MIN, featuredLabel, parseFeaturedRank } from "@/lib/featured-rank";
 import { DateTimeField } from "@/components/ui/date-time-field";
 import {
@@ -22,13 +22,11 @@ import {
   useResolveRoleApplication,
   useResolveVerificationRequest,
   useRoleApplications,
-  useSetProfileOrgBadge,
   useSetProfileFeaturedRank,
   useSetProfileVerification,
   useVerificationRequests,
 } from "@/features/admin/hooks/use-admin";
 import {
-  BadgePicker,
   ConfirmAction,
   Panel,
   PanelBody,
@@ -133,7 +131,6 @@ export function OverviewSection({ queues }: { queues: Array<{ label: string; cou
 export function ApplicationsSection() {
   const applications = useRoleApplications();
   const resolve = useResolveRoleApplication();
-  const setBadge = useSetProfileOrgBadge();
   const items = applications.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
@@ -176,20 +173,6 @@ export function ApplicationsSection() {
                   pending={resolve.isPending}
                   onConfirm={() => resolve.mutate({ id: application.id, approve: false })}
                 />
-                {/* Approving and badging is one operator flow, so the badge
-                    control sits on the same row rather than in another tab. */}
-                {application.applicant && (
-                  <span className="ml-auto flex items-center gap-2">
-                    <span className="text-[11px] text-meta">Badge</span>
-                    <BadgePicker
-                      current={application.applicant.orgBadge}
-                      pending={setBadge.isPending}
-                      onPick={(badge: OrgBadge) =>
-                        setBadge.mutate({ profileId: application.applicant!.id, badge })
-                      }
-                    />
-                  </span>
-                )}
               </div>
             </div>
           </Row>
@@ -369,7 +352,6 @@ export function ReportsSection() {
 /* ----------------------------------------------------------------- People */
 
 function PersonRow({ profile }: { profile: Profile }) {
-  const setBadge = useSetProfileOrgBadge();
   const setVerified = useSetProfileVerification();
   const setFeatured = useSetProfileFeaturedRank();
   const verified = profile.verification === "verified";
@@ -414,14 +396,6 @@ function PersonRow({ profile }: { profile: Profile }) {
             pending={setVerified.isPending}
             onConfirm={() => setVerified.mutate({ profileId: profile.id, verified: !verified })}
           />
-          <span className="ml-auto flex items-center gap-2">
-            <span className="text-[11px] text-meta">Badge</span>
-            <BadgePicker
-              current={profile.orgBadge}
-              pending={setBadge.isPending}
-              onPick={(badge: OrgBadge) => setBadge.mutate({ profileId: profile.id, badge })}
-            />
-          </span>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className={cn("text-[11px]", profile.featuredRank === null ? "text-meta" : "font-semibold text-accent")}>

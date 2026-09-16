@@ -1,5 +1,5 @@
 import { msApi } from "@/lib/api/service";
-import { ProfileSchema, type OrgBadge } from "@/lib/api/schemas";
+import { ProfileSchema } from "@/lib/api/schemas";
 import {
   AdminAnnouncementPageSchema,
   AdminProfilePageSchema,
@@ -105,11 +105,6 @@ export async function setProfileVerification(profileId: string, verified: boolea
   return ProfileSchema.parse(
     await msApi.post(`/admin/profiles/${profileId}/verification`, { verified })
   );
-}
-
-/** `null` clears the badge. */
-export async function setProfileOrgBadge(profileId: string, badge: OrgBadge) {
-  return ProfileSchema.parse(await msApi.post(`/admin/profiles/${profileId}/org-badge`, { badge }));
 }
 
 /**

@@ -23,7 +23,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconFlag, IconFullscreen, IconQuote, IconSend } from "@/components/ui/icons";
 import {
   IconMsBookmark,
@@ -805,7 +805,6 @@ export function PostCard({
                   {author.displayName}
                 </Link>
                 <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5" />
-                <OrgBadgeChip orgBadge={author.orgBadge} bare />
                 <RoleChip role={author.role} />
               </>
             )}

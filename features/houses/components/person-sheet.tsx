@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { atHandle } from "@/lib/handle";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconChevronRight } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/sheet";
 import type { ParticipantMeta } from "@/features/houses/lib/participant-meta";
@@ -79,7 +79,6 @@ export function PersonSheet({
                   verification={person.meta.verification}
                   className="h-3.5 w-3.5 shrink-0"
                 />
-                <OrgBadgeChip orgBadge={person.meta.orgBadge} />
                 <RoleChip role={person.meta.role} />
               </>
             )}

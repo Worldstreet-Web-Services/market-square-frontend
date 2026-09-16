@@ -1,7 +1,6 @@
 import { useId } from "react";
 import { cn } from "@/lib/cn";
-import { BadgeArkGlyph, BadgeMarketGlyph } from "@/components/ui/org-badge-glyphs";
-import type { OrgBadge, VerificationState } from "@/lib/api/schemas";
+import type { VerificationState } from "@/lib/api/schemas";
 
 /**
  * The verified seal — ogazboiz's own artwork (a 132x131 scalloped seal on the
@@ -47,69 +46,6 @@ export function VerifiedBadge({
   );
 }
 
-/**
- * The organisation badge — the design's MARKET / ARK lockup.
- *
- * Assigned admin-only and deliberately NOT derived from `role`: product
- * decides who carries one, so this and `RoleChip` are independent signals that
- * can sit side by side. When `orgBadge` is null nothing renders — there is no
- * fallback to invent one from role or verification.
- *
- * Chip geometry is the design's: a 21px-radius capsule at 4% white, wrapping
- * the brand glyph at 7px tall.
- *
- * The border is where the two badges now part company. The 2026-08-25 design
- * revision gave the MARKET chip a solid #008CFF 1px border; ARK was checked
- * separately against the file and kept its 19% white hairline, so this is a
- * per-badge value and not a shared token. The fill stays 4% white on both —
- * the blue is the ring, not a filled background.
- *
- * `bare` — THE GLYPH IS THE CHIP. Each exported lockup already carries its own
- * capsule, fill and ring, so on the post card it is drawn alone at its own
- * size: node 647:16370 is one 79.42x14.18 capsule with a 1.15 outside ring,
- * which at the card's 1.151 scale is exactly the MARKET glyph's 71x14. The
- * capsule above stays for the rows and sheets, whose own layouts were measured
- * around a 45-wide chip.
- */
-export function OrgBadgeChip({
-  orgBadge,
-  className,
-  bare = false,
-}: {
-  orgBadge: OrgBadge;
-  className?: string;
-  /** Draw the exported lockup alone at its native size — see above. */
-  bare?: boolean;
-}) {
-  if (!orgBadge) return null;
-  const Glyph = orgBadge === "market" ? BadgeMarketGlyph : BadgeArkGlyph;
-  return (
-    <span
-      title={orgBadge === "market" ? "Market" : "Ark"}
-      className={cn(
-        "inline-flex shrink-0 items-center",
-        !bare && "rounded-[21px] border bg-white/[0.04] px-1 py-[2.5px]",
-        !bare && (orgBadge === "market" ? "border-[#008CFF]" : "border-white/[0.19]"),
-        className
-      )}
-    >
-      <span className="sr-only">{orgBadge === "market" ? "Market" : "Ark"}</span>
-      {/* Width tracks the glyph's own aspect ratio, height is fixed. */}
-      <Glyph
-        className={
-          bare
-            ? orgBadge === "market"
-              ? "h-[14px] w-[71px]"
-              : "h-[9px] w-[44px]"
-            : orgBadge === "market"
-              ? "h-[7px] w-[35px]"
-              : "h-[7px] w-[34px]"
-        }
-      />
-    </span>
-  );
-}
-
 const ROLE_LABEL: Record<string, string | null> = {
   citizen: null,
   // NOT DRAWN. Nearly everybody who posts is a creator, so the chip sat on
@@ -126,8 +62,8 @@ const ROLE_LABEL: Record<string, string | null> = {
  * The capsule itself, with no opinion about what is in it.
  *
  * Extracted at the THIRD caller, not the second: `RoleChip`, a house's HOST
- * chip and its MUTED FOR YOU chip are the same object — the org badge's
- * geometry with a text label instead of a lockup — and three hand-copied
+ * chip and its MUTED FOR YOU chip are the same object — one capsule with a
+ * text label — and three hand-copied
  * class strings is how one of them quietly stops matching the others.
  *
  * It deliberately does not take a tone. There is one capsule; anything that
@@ -142,8 +78,6 @@ export function ChipShell({
 }) {
   return (
     <span
-      // Shares the org badge's capsule geometry so the two sit together
-      // cleanly. See OrgBadgeChip.
       className={cn(
         "inline-flex shrink-0 items-center rounded-[21px] border border-white/[0.19] bg-white/[0.04] px-2 py-px text-[9px] font-semibold uppercase tracking-wide text-grey-200",
         className
@@ -157,7 +91,6 @@ export function ChipShell({
 export function RoleChip({ role, className }: { role: string; className?: string }) {
   const label = ROLE_LABEL[role] ?? null;
   if (!label) return null;
-  // Role and org badge are independent signals — see OrgBadgeChip.
   return <ChipShell className={className}>{label}</ChipShell>;
 }
 
