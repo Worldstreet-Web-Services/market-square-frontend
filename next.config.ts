@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots";
+import { legacyRedirects } from "./lib/legacy-routes";
 
 /**
  * SECURITY HEADERS.
@@ -88,6 +89,14 @@ const nextConfig: NextConfig = {
   htmlLimitedBots: new RegExp(`${HTML_LIMITED_BOT_UA_RE.source}|${EXTRA_PREVIEW_BOTS.join("|")}`, "i"),
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+  },
+  /*
+    The Square lives under /square (see lib/square-path). Every address it
+    handed out before the move redirects to its new home, so no shared link,
+    bookmark or preview card breaks. See lib/legacy-routes.
+  */
+  async redirects() {
+    return legacyRedirects();
   },
 };
 

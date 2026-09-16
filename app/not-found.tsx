@@ -1,3 +1,4 @@
+import { sq } from "@/lib/square-path";
 import Link from "next/link";
 
 export default function NotFound() {
@@ -10,13 +11,13 @@ export default function NotFound() {
       </p>
       <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
         <Link
-          href="/"
+          href={sq("/")}
           className="ws-press rounded-full bg-accent px-5 py-2 text-[15px] font-bold text-ink transition-colors hover:bg-white"
         >
           Back to the feed
         </Link>
         <Link
-          href="/discover"
+          href={sq("/discover")}
           className="ws-press rounded-full border border-white/20 px-5 py-2 text-[15px] font-bold text-body transition-colors hover:bg-white/10"
         >
           Explore
