@@ -938,7 +938,7 @@ export function SettingsScreen({ username }: { username: string }) {
                 onChat={
                   support.data
                     ? () =>
-                        openChat.mutate(support.data.id, {
+                        openChat.mutate(support.data, {
                           onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
                         })
                     : undefined

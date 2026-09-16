@@ -11,6 +11,7 @@ import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useMe } from "@/hooks/use-me";
 import { usePeople } from "@/features/discovery";
 import { InboxSearch } from "@/features/messages/components/inbox-chrome";
+import { conversationFromRef } from "@/features/messages/lib/open-conversation";
 import { CreateGroupFlow } from "@/components/layout/create-group-flow";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
 import { ThreadSafetyRows } from "@/components/layout/thread-safety-rows";
@@ -118,40 +119,13 @@ function NewChatSheet({ open, onClose, onStarted }: NewChatPickerProps) {
   );
 
   const pick = (profile: Profile) => {
-    start.mutate(profile.id, {
+    start.mutate(profile, {
       onSuccess: (conversation) => {
-        // `POST /conversations` answers a Conversation REF — id and
-        // participant ids, no peer, preview or unread count. The peer is the
-        // person just chosen, so the thread is opened with that rather than
-        // waiting a poll for the inbox to carry them.
-        // The rest is what a brand-new 1:1 IS, stated rather than defaulted:
-        // this picker only ever starts a direct thread, so there is no title,
-        // no roster and no request to accept. `requestState` is left off
-        // entirely — undefined means "this object does not carry one", which
-        // is what the schema's deliberately undefaulted field is for.
-        onStarted({
-          id: conversation.id,
-          kind: "direct",
-          // A 1:1 has no creator and is never joinable by link — the service
-          // says so too, and these are the values it would have returned.
-          createdBy: null,
-          visibility: "private" as const,
-          // Roles and per-house levels belong to groups; a 1:1 has neither.
-          viewerRole: null,
-          notificationSettings: null,
-          imageUrl: null,
-          description: null,
-          title: null,
-          peer: profile,
-          members: [],
-          memberCount: null,
-          lastSender: null,
-          lastMessage: null,
-          lastMessageAt: conversation.lastMessageAt ?? null,
-          lastActiveAt: null,
-          requestedBy: null,
-          unreadCount: 0,
-        });
+        // Built from the ref and the person just chosen. This construction
+        // started here and now lives in lib/open-conversation, so the linked
+        // `?c=` path opens the identical thread rather than a second copy of
+        // the rules for what a brand-new 1:1 is.
+        onStarted(conversationFromRef(conversation, profile));
         setQuery("");
       },
     });
