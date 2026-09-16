@@ -1751,9 +1751,14 @@ describe("Contact us opens a chat with support", () => {
 
 describe("Square has a favicon and tagged share links", () => {
   it("serves the brand mark as the tab icon and a home-screen icon", () => {
-    const icon = read("app/icon.svg");
+    const icon = read("public/icon.svg");
     assert.match(icon, /viewBox="0 0 60 60"/);
-    assert.ok(read("app/apple-icon.png").length > 0);
+    assert.ok(read("public/apple-icon.png").length > 0);
+    // Through asset(), so inside Ark the tab icon is Square's, not WSWS's.
+    const layout = stripComments(read("app/layout.tsx"));
+    assert.match(layout, /icon: \[\{ url: asset\("\/icon\.svg"\), sizes: "any", type: "image\/svg\+xml" \}\]/);
+    assert.match(layout, /apple: \[\{ url: asset\("\/apple-icon\.png"\), sizes: "180x180", type: "image\/png" \}\]/);
+    assert.ok(!existsSync(resolve("app/icon.svg")), "the file convention is back and writes an unprefixed icon link");
   });
 
   it("tags every link the share sheet hands out with one short channel code", () => {
