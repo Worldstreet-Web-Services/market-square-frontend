@@ -216,6 +216,7 @@ export const ConversationRefSchema = z.object({
   lastMessageAt: z.string().nullable().optional().default(null),
   createdAt: z.string().optional().default(""),
 });
+export type ConversationRef = z.infer<typeof ConversationRefSchema>;
 
 /** A row of `GET /conversations/:id/members`. The profile is nullable because
     a member whose account has gone is still a member of the group — dropping

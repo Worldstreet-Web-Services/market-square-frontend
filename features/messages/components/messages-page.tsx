@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { setChatOpen } from "@/lib/chat-open-store";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,6 +15,7 @@ import { ConversationRow } from "@/features/messages/components/conversation-row
 import { Thread } from "@/features/messages/components/thread";
 import { ThreadPlaceholder } from "@/features/messages/components/thread-placeholder";
 import { visibleConversations, type InboxTab } from "@/features/messages/lib/filter";
+import { openedConversationKey } from "@/features/messages/lib/open-conversation";
 import type { Profile } from "@/lib/api/schemas";
 import { Spinner } from "@/components/ui/button";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -345,11 +347,30 @@ export function MessagesPage({
     they have. Closing a linked thread sets `picked` to null and the parameter
     is already gone by then (see below), so it cannot spring back open.
   */
+  /*
+    The thread the reader JUST opened, from where `useOpenConversation` stored
+    it. `skipToken` means this never fetches — there is no endpoint to fetch
+    from — it only subscribes to what the mutation wrote.
+
+    The inbox lookup above cannot be the only source: a thread you start with
+    someone who does not follow you is created PENDING with you as the
+    requester, and this lookup searches ALL, which is accepted-only. The thread
+    is in the Gist Requests list — this link just does not search there. See
+    lib/open-conversation.
+    The inbox still wins when it has the thread, since its row is the fuller
+    one — peer, preview and unread count.
+  */
+  const opened = useQuery<Conversation>({
+    queryKey: openedConversationKey(wanted ?? ""),
+    queryFn: skipToken,
+  });
   const linked =
     wanted && !picked
       ? ((inbox.data?.pages.flatMap((page) => page.items) ?? []).find(
           (conversation) => conversation.id === wanted
-        ) ?? null)
+        ) ??
+        opened.data ??
+        null)
       : null;
   const open = picked ?? linked;
 

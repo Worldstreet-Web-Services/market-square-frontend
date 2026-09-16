@@ -48,7 +48,7 @@ function MessageButton({ profile }: { profile: Profile }) {
         person they had just pressed the button on.
       */
       onClick={() =>
-        open.mutate(profile.id, {
+        open.mutate(profile, {
           onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
         })
       }
