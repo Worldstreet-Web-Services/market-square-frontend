@@ -54,6 +54,10 @@ import { DeckDots } from "@/components/ui/deck-dots";
  * them, and the pager follows the scroll. The pills are the file's (20 x 4
  * active in `#7E3BEB`, 8 x 4 in `#D9D9D9`, 2.71 apart) and are buttons.
  *
+ * It also ROTATES on its own every `BANNER_AUTOPLAY_MS`, looping, held while
+ * a pointer rests on it, a finger is on it, focus is inside it or the tab is
+ * hidden, and never under prefers-reduced-motion.
+ *
  * NO SLIDE LINKS ANYWHERE. None of the three nodes carries an interaction and
  * none draws a button, so nothing here invents a destination.
  */
@@ -133,9 +137,29 @@ const SLIDES = [
   { id: "explore", label: "Explore what's trending", Slide: ExploreSlide },
 ] as const;
 
+/**
+ * How long a slide stays before the banner moves on by itself. Not in the
+ * file (no timer, no prototype reaction on any of the three nodes); asked for
+ * on 2026-09-16 ("is they not animation that it changes on it own too").
+ */
+export const BANNER_AUTOPLAY_MS = 5000;
+
 export function HomeBanner() {
   const track = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
+  // Reasons the rotation is held, never one flag: a pointer resting on the
+  // card, a finger on it, keyboard focus inside it, or the tab being hidden
+  // can overlap, and releasing one must not restart a slide another still holds.
+  const [held, setHeld] = useState<ReadonlySet<string>>(() => new Set());
+  const hold = useCallback((reason: string, on: boolean) => {
+    setHeld((current) => {
+      if (current.has(reason) === on) return current;
+      const next = new Set(current);
+      if (on) next.add(reason);
+      else next.delete(reason);
+      return next;
+    });
+  }, []);
 
   // The pager follows the track, so a swipe and a tap agree on where we are.
   useEffect(() => {
@@ -157,8 +181,41 @@ export function HomeBanner() {
     setIndex(next);
   }, []);
 
+  useEffect(() => {
+    const onVisibility = () => hold("hidden", document.hidden);
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [hold]);
+
+  // Moves on by itself, looping from the last slide back to the first. The
+  // timer restarts whenever the slide changes — by the timer, a swipe or a
+  // pill — so every slide gets its full time. Under prefers-reduced-motion it
+  // never rotates on its own: moving content the reader did not ask for is
+  // exactly what that setting turns off.
+  useEffect(() => {
+    if (held.size > 0) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setTimeout(() => go((index + 1) % SLIDES.length), BANNER_AUTOPLAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [index, held, go]);
+
   return (
-    <section aria-roledescription="carousel" aria-label="Square">
+    <section
+      aria-roledescription="carousel"
+      aria-label="Square"
+      // pointermove, not pointerenter: enter also fires when the card scrolls
+      // or renders under a cursor that never moved, and nothing would release it.
+      onPointerMove={(event) => event.pointerType === "mouse" && hold("hover", true)}
+      onPointerLeave={(event) => event.pointerType === "mouse" && hold("hover", false)}
+      onTouchStart={() => hold("touch", true)}
+      onTouchEnd={() => hold("touch", false)}
+      onTouchCancel={() => hold("touch", false)}
+      onFocus={() => hold("focus", true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) hold("focus", false);
+      }}
+    >
       <div
         ref={track}
         className="flex snap-x snap-mandatory overflow-x-auto rounded-[15px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

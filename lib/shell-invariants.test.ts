@@ -986,6 +986,17 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
     assert.match(banner, /const SOFT = "pointer-events-none absolute max-w-none select-none mix-blend-soft-light";/);
   });
 
+  it("rotates on its own, holds for the reader, and never under reduced motion", () => {
+    assert.match(banner, /export const BANNER_AUTOPLAY_MS = 5000;/);
+    assert.match(banner, /if \(held\.size > 0\) return;/);
+    assert.match(banner, /if \(window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches\) return;/);
+    assert.match(banner, /go\(\(index \+ 1\) % SLIDES\.length\)/, "the rotation no longer loops");
+    assert.match(banner, /onPointerMove=\{\(event\) => event\.pointerType === "mouse" && hold\("hover", true\)\}/);
+    assert.doesNotMatch(banner, /onPointerEnter/, "hover is bound to pointerenter, which fires under a cursor that never moved");
+    assert.match(banner, /hold\("hidden", document\.hidden\)/);
+    assert.match(banner, /onTouchStart=\{\(\) => hold\("touch", true\)\}/);
+  });
+
   it("pages with the file's pills and invents no destination", () => {
     assert.match(banner, /<DeckDots variant="banner" count=\{SLIDES\.length\} active=\{index\} onSelect=\{go\}/);
     assert.match(stripComments(read("components/ui/deck-dots.tsx")), /banner: \{ row: "gap-\[2\.71px\]", pill: "h-1 rounded-\[13\.54px\]", on: "w-5", off: "w-2" \}/);
