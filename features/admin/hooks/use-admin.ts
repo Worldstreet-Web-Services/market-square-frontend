@@ -12,7 +12,6 @@ import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { invalidateContentSurfaces, invalidateIdentitySurfaces } from "@/lib/api/invalidate";
 import { useMe } from "@/hooks/use-me";
 import { ANNOUNCEMENTS_KEY } from "@/hooks/use-announcements";
-import type { OrgBadge } from "@/lib/api/schemas";
 import {
   createAnnouncement,
   endAnnouncement,
@@ -25,7 +24,6 @@ import {
   resolveReport,
   resolveRoleApplication,
   resolveVerificationRequest,
-  setProfileOrgBadge,
   setProfileFeaturedRank,
   setProfileVerification,
 } from "@/features/admin/lib/api";
@@ -242,21 +240,6 @@ export function useSetProfileVerification() {
     onSuccess: (_profile, { verified }) =>
       toast.success(verified ? "Verified" : "Verification removed"),
     onError: (error) => toast.error(errorMessage(error, "Couldn't update verification.")),
-    onSettled: () => {
-      client.invalidateQueries({ queryKey: ["ms", "admin"] });
-      invalidateIdentitySurfaces(client);
-    },
-  });
-}
-
-export function useSetProfileOrgBadge() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ profileId, badge }: { profileId: string; badge: OrgBadge }) =>
-      setProfileOrgBadge(profileId, badge),
-    onSuccess: (_profile, { badge }) =>
-      toast.success(badge ? `${badge === "market" ? "MARKET" : "ARK"} badge assigned` : "Badge cleared"),
-    onError: (error) => toast.error(errorMessage(error, "Couldn't update the badge.")),
     onSettled: () => {
       client.invalidateQueries({ queryKey: ["ms", "admin"] });
       invalidateIdentitySurfaces(client);

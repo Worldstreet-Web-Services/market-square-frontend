@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Manrope, Roboto } from "next/font/google";
+import { Geist, Inter, Manrope, Roboto } from "next/font/google";
 import Providers from "./providers";
 import { AppShell } from "@/components/layout/app-shell";
 import { FALLBACK_OG_IMAGE, SITE_DESCRIPTION, SITE_NAME, siteOrigin } from "@/lib/og-metadata";
@@ -46,6 +46,18 @@ const roboto = Roboto({
  * Two weights, latin only, and it belongs to those headings alone: body copy is
  * still Geist.
  */
+/**
+ * Inter, bold and extra-bold ITALIC only: the emphasised words on Home's first
+ * banner slide (1676:17258, `styleOverrideTable` 1487 / 1488). Geist has no
+ * italic, and a browser-slanted Geist is not the file's letterform.
+ */
+const inter = Inter({
+  variable: "--font-inter",
+  weight: ["700", "800"],
+  style: ["italic"],
+  subsets: ["latin"],
+});
+
 const manrope = Manrope({
   variable: "--font-heading",
   weight: ["600", "700"],
@@ -99,7 +111,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geist.variable} ${roboto.variable} ${manrope.variable}`}>
+    <html lang="en" className={`${geist.variable} ${roboto.variable} ${inter.variable} ${manrope.variable}`}>
       <body className="ws-wash min-h-dvh">
         <Providers>
           {/* Above everything, including the bare routes the shell steps out of

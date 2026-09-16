@@ -15,7 +15,6 @@ import { PostText } from "@/components/ui/post-text";
 import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
 import { replyExcerpt } from "@/lib/message-reply";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
@@ -371,17 +370,6 @@ function ThreadHeader({
                 title
               )}
             </h1>
-            {/* The design draws exactly ONE capsule here — the admin-granted
-                badge, which is `OrgBadgeChip`: its recipe exactly, a 4% white
-                pill with a 19% white hairline around the MARKET/ARK wordmark.
-                Drawn at the house size, since a 4.55px wordmark is unreadable
-                and this chip is 7px tall on every other surface in the app.
-
-                A GROUP CARRIES NONE. `orgBadge` is granted to a person, and
-                the conversation payload has no badge of its own — so the
-                capsule is a 1:1 thing and its absence beside a group name is
-                correct rather than missing. */}
-            {!group && peer && <OrgBadgeChip orgBadge={peer.orgBadge} />}
           </div>
 
           {/* The design puts "Typing…" on this line in the earlier frame. There

@@ -5,7 +5,7 @@ import { atHandle } from "@/lib/handle";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import {
@@ -63,7 +63,6 @@ function RequestRow({
           {profile && (
             <>
               <VerifiedBadge verification={profile.verification} className="h-3 w-3 shrink-0" />
-              <OrgBadgeChip orgBadge={profile.orgBadge} />
               <RoleChip role={profile.role} />
             </>
           )}

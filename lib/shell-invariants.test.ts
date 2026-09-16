@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
@@ -948,33 +948,62 @@ describe("The topic row is node 647:16266", () => {
 });
 
 /**
- * HOME'S BANNER IS NODE 1305:149178 — the 2026-09-12 Home.
- *
- * It REPLACED 647:17219's 938 x 168 artboard, which this block used to pin. The
- * drawing is asserted in "draws Home's banner on 1305:149178's own numbers";
- * what stays here is where it SITS and what it is not.
- *
- * The file draws it 938 x 168 directly under the topic row. The column is 600,
- * so from md up the banner keeps the file's composition and scales as ONE
- * picture to the width it is given (every length a share of 938, via container
- * units), rather than reflowing a two-line headline around a 138px figure.
- * Phones keep the compact strip: no mobile frame was given.
+ * HOME'S BANNER IS THREE SLIDES — 1676:17254, 1682:17344, 1683:17370
+ * (2026-09-16). They replaced 1305:149178's "Create your Gistroom now" card.
  */
-describe("Home's banner is node 1305:149178", () => {
+describe("Home's banner is the three 2026-09-16 slides", () => {
   const banner = stripComments(read("components/layout/home-banner.tsx"));
   const feed = stripComments(read("features/feed/components/feed-page.tsx"));
   const home = stripComments(read("components/layout/home-screen.tsx"));
 
-  it("draws the card at the file's pixels from md, and keeps a phone strip the artboard cannot become", () => {
-    assert.match(banner, /hidden h-\[102px\] overflow-hidden rounded-\[10px\] md:block/);
-    assert.match(banner, /md:hidden/, "the phone strip is gone");
-    assert.doesNotMatch(banner, /@container|cqw/, "the composition is being scaled instead of drawn");
+  it("draws each card at the file's 86, radius 15, on its own ground", () => {
+    assert.equal((banner.match(/relative h-\[86px\] overflow-hidden rounded-\[15px\]/g) ?? []).length, 3);
+    // House keeps the ramp; the other two paint a solid OVER the same ramp, and
+    // the top fill is what shows.
+    assert.match(banner, /bg-\[linear-gradient\(90deg,#AD46FF_-16\.5%,#682A99_82%\)\]/);
+    assert.match(banner, /bg-\[#F84538\]/);
+    assert.match(banner, /bg-\[#0DCF51\]/);
+    assert.doesNotMatch(banner, /@container|cqw|scale\(/, "the composition is being scaled instead of drawn");
   });
 
-  it("no longer carries 647:17219's artboard", () => {
-    assert.doesNotMatch(banner, /DESIGN_W = 938/);
-    assert.doesNotMatch(banner, /92deg,#AD46FF_-16\.3%/);
-    assert.doesNotMatch(home, /LiveCta/, "the streams slice's banner is back on Home");
+  it("uses the file's words, type and line breaks", () => {
+    assert.match(banner, /text-\[14px\] font-medium leading-\[18\.2px\]/);
+    assert.equal((banner.match(/text-\[14px\] font-bold leading-\[22px\]/g) ?? []).length, 1);
+    assert.match(banner, /left-4 top-\[28px\] flex h-\[40px\] w-\[210px\] items-center text-\[14px\] font-bold leading-\[20px\]/);
+    assert.match(banner, /<em className="font-\[family-name:var\(--font-inter\)\] font-extrabold italic">house<\/em>/);
+    assert.match(banner, /font-bold italic">people<\/em>/);
+    assert.match(banner, /font-bold italic">community<\/em>/);
+    assert.match(banner, /Vibe in gistrooms, and\s*<br \/>\s*make fresh connections\./);
+    assert.match(banner, /Explore what’s trending and\s*<br \/>\s*join conversations that matter\./);
+    assert.match(stripComments(read("app/layout.tsx")), /const inter = Inter\(\{\s*variable: "--font-inter",\s*weight: \["700", "800"\],\s*style: \["italic"\]/);
+  });
+
+  it("draws the art from the file's own exports", () => {
+    for (const asset of ["house-arc-top.svg", "house-arc-bottom.svg", "house-chat-cube.svg", "gist-arc-short.svg", "gist-arc-loop.svg", "gist-faces.png", "explore-arc.svg", "explore-clouds.svg", "explore-paper.svg", "explore-people.png"]) {
+      assert.match(banner, new RegExp(`/home/slides/${asset.replace(".", "\\.")}`));
+      assert.ok(existsSync(resolve(`public/home/slides/${asset}`)), `${asset} is missing`);
+    }
+    // A blend inside an <img> blends against nothing: the element carries it.
+    assert.match(banner, /const SOFT = "pointer-events-none absolute max-w-none select-none mix-blend-soft-light";/);
+  });
+
+  it("rotates on its own, holds for the reader, and never under reduced motion", () => {
+    assert.match(banner, /export const BANNER_AUTOPLAY_MS = 10000;/);
+    assert.match(banner, /if \(held\.size > 0\) return;/);
+    assert.match(banner, /if \(window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches\) return;/);
+    assert.match(banner, /go\(\(index \+ 1\) % SLIDES\.length\)/, "the rotation no longer loops");
+    assert.match(banner, /onPointerMove=\{\(event\) => event\.pointerType === "mouse" && hold\("hover", true\)\}/);
+    assert.doesNotMatch(banner, /onPointerEnter/, "hover is bound to pointerenter, which fires under a cursor that never moved");
+    assert.match(banner, /hold\("hidden", document\.hidden\)/);
+    assert.match(banner, /onTouchStart=\{\(\) => hold\("touch", true\)\}/);
+  });
+
+  it("pages with the file's pills and invents no destination", () => {
+    assert.match(banner, /<DeckDots variant="banner" count=\{SLIDES\.length\} active=\{index\} onSelect=\{go\}/);
+    assert.match(stripComments(read("components/ui/deck-dots.tsx")), /banner: \{ row: "gap-\[2\.71px\]", pill: "h-1 rounded-\[13\.54px\]", on: "w-5", off: "w-2" \}/);
+    assert.match(banner, /snap-x snap-mandatory overflow-x-auto/);
+    // None of the three nodes has an interaction or a button.
+    assert.doesNotMatch(banner, /<Link|href=|router\.push|<button/);
   });
 
   it("opens the column with the search row and the banner, above everything, for EVERYBODY", () => {
@@ -986,7 +1015,7 @@ describe("Home's banner is node 1305:149178", () => {
     // open instead of sitting on top of a list of results.
     assert.match(
       home,
-      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && <HomeBanner slides=\{HOME_BANNER_SLIDES\} \/>\}/
+      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && <HomeBanner \/>\}/
     );
     assert.match(feed, /\{headSlot && <div className="mb-\[64px\] flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
     const head = feed.indexOf("{headSlot && ");
@@ -1000,8 +1029,7 @@ describe("Home's banner is node 1305:149178", () => {
     assert.doesNotMatch(feed, /liveCtaSlot/, "the old under-the-tabs mount is back");
     // The topic row is gone from Home (ogazboiz, 2026-09-12).
     assert.doesNotMatch(feed, /TopicTabs/);
-  });
-});
+  });});
 
 /**
  * HOME'S SUGGESTED GISTROOMS SECTION — the first block of the content column,
@@ -1153,10 +1181,24 @@ describe("Home's timeline follows 647:16354", () => {
     assert.match(css, /@utility ws-post \{[^}]*border: 0\.69px solid rgba\(255, 255, 255, 0\.1\);/);
   });
 
-  it("draws the post's org badge as its own glyph, not a capsule inside a capsule", () => {
-    assert.match(post, /<OrgBadgeChip orgBadge=\{author\.orgBadge\} bare \/>/, "the post header wraps the lockup in a second capsule again");
-    assert.match(badge, /bare\s*\?\s*orgBadge === "market"\s*\?\s*"h-\[14px\] w-\[71px\]"/);
-    assert.match(badge, /!bare && "rounded-\[21px\] border/, "the capsule is drawn around the bare lockup");
+  it("draws no org badge anywhere — the verified seal is the only badge (2026-09-16)", () => {
+    // ogazboiz: "only verification badge will have now". MARKET went first,
+    // then ARK and the admin picker that assigned them. The schema still
+    // parses `orgBadge` so existing payloads load; nothing draws it.
+    assert.doesNotMatch(post, /OrgBadgeChip|orgBadge/, "the post header draws an org badge again");
+    assert.doesNotMatch(badge, /export function OrgBadgeChip|BadgeArkGlyph|BadgeMarketGlyph/, "the org badge component is back");
+    assert.ok(!existsSync(resolve("components/ui/org-badge-glyphs.tsx")), "the lockup artwork is back");
+    const offenders: string[] = [];
+    const walk = (dir: string): string[] =>
+      readdirSync(resolve(dir), { withFileTypes: true }).flatMap((entry) => {
+        const path = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(path);
+        return /\.tsx?$/.test(entry.name) && !entry.name.endsWith(".test.ts") ? [path] : [];
+      });
+    for (const file of [...walk("components"), ...walk("features"), ...walk("app")]) {
+      if (/OrgBadgeChip|BadgePicker|setProfileOrgBadge/.test(stripComments(read(file)))) offenders.push(file);
+    }
+    assert.deepEqual(offenders, [], "an org badge or its admin picker is drawn again");
   });
 });
 
@@ -1391,17 +1433,18 @@ describe("The profile's bio block follows 1021:20271", () => {
   it("sits 40 under the cover, bio and labels at 400, counts in #F7F9F9, place and website 14/20 #A1A1AA", () => {
     assert.match(page, /flex flex-col gap-4 px-4 pt-6 md:px-8 md:pt-10/);
     assert.match(page, /"text-\[15px\] font-normal leading-5 text-white\/50"/);
-    assert.equal((page.match(/font-semibold text-\[#F7F9F9\]/g) ?? []).length, 2);
+    assert.equal((page.match(/font-semibold text-\[#F7F9F9\]/g) ?? []).length, 1);
+    assert.equal((page.match(/<CountLabel count=\{data\.(followingCount|followerCount)\}/g) ?? []).length, 3);
     assert.match(page, /gap-y-2 text-\[14px\] font-normal leading-5 text-\[#A1A1AA\]/);
   });
 });
 
 describe("The profile draws no creator badge", () => {
-  it("keeps the verified seal and the org badge on the cover, and no RoleChip", () => {
+  it("keeps the verified seal on the cover, and no RoleChip or org badge", () => {
     const cover = stripComments(read("features/profile/components/profile-cover.tsx"));
     assert.doesNotMatch(cover, /RoleChip/, "the creator badge is back on the profile");
     assert.match(cover, /<VerifiedBadge verification=\{profile\.verification\}/);
-    assert.match(cover, /<OrgBadgeChip orgBadge=\{profile\.orgBadge\} \/>/);
+    assert.doesNotMatch(cover, /OrgBadgeChip/, "the org badge is back on the profile");
   });
 });
 
@@ -1456,21 +1499,6 @@ describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () =>
     assert.match(page, /useState<AccountTab>\("posts"\)/);
     assert.match(page, /accountTab === "posts" && \(\s*<PostsTab/);
     assert.match(tabs, /bg-\[linear-gradient\(226deg,#7E3BEB_22\.4%,#472185_84\.9%\)\] text-grey-100/);
-  });
-});
-
-describe("The Home banner speaks gist room for now", () => {
-  it("opens the gist room sheet, not the studio, and never says Go Live", () => {
-    const banner = stripComments(read("components/layout/home-banner.tsx"));
-    // The same thing the sidebar's "Start Gistroom" does.
-    assert.match(banner, /href: "\/gist-rooms\?open=1"/, "the banner stopped opening the gist room sheet");
-    assert.match(stripComments(read("components/layout/app-shell.tsx")), /href="\/gist-rooms\?open=1"/);
-    assert.doesNotMatch(banner, />\s*Go Live\s*</, "the banner says Go Live again");
-    assert.doesNotMatch(banner, /\/studio/);
-    // Both breakpoints go through ONE gated handler, so a signed-out reader is
-    // asked to sign in rather than meeting a dead control.
-    assert.equal((banner.match(/onClick=\{open\}/g) ?? []).length, 2, "a breakpoint lost its handler");
-    assert.match(banner, /const open = \(\) => gate\(\(\) => router\.push\(slide\.action\.href\)\);/);
   });
 });
 
@@ -2063,47 +2091,6 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(deck, /ws-rule-to-left-edge/);
   });
 
-  it("draws Home's banner on 1305:149178's own numbers, for everybody", () => {
-    const banner = stripComments(read("components/layout/home-banner.tsx"));
-    // 102 tall at radius 10 on the file's ramp. The gradient's width handle
-    // sits straight below its start, so on a 573 x 102 box the bands are
-    // vertical and the ramp runs LEFT TO RIGHT: 90deg, -16.5% to 82%. The
-    // 126deg an earlier build used is the square-space reading of the same
-    // handles, which the render does not show.
-    assert.match(banner, /linear-gradient\(90deg,#AD46FF_-16\.5%,#682A99_82%\)/);
-    assert.doesNotMatch(banner, /126deg/);
-    // The file's own word on the button, at its own box and 25 from the edge.
-    assert.match(banner, /label: "Host Room"/);
-    assert.doesNotMatch(banner, /Gist Room/, "the old button label is back");
-    assert.match(banner, /right-\[25px\] top-\[32px\] flex h-\[38px\] w-\[90px\]/);
-    assert.match(banner, /inset_0_0_0_2px_rgba\(194,160,250,0\.55\),0_6px_6\.2px_rgba\(0,0,0,0\.25\)/);
-    // BOTH arcs, the file's exports, each at its STROKE's bounds (the export is
-    // trimmed to the stroke, not to the node's box), blended by the element —
-    // a blend inside an <img> blends against nothing.
-    assert.match(banner, /banner-arc-left\.svg/);
-    assert.match(banner, /left-\[-4\.12px\] top-\[-57\.22px\] h-\[106px\] w-\[256px\] max-w-none select-none mix-blend-soft-light/);
-    assert.match(banner, /banner-arc-right\.svg/);
-    assert.match(banner, /left-\[204\.87px\] top-\[16\.41px\] h-\[153px\] w-\[369px\] max-w-none select-none mix-blend-soft-light/);
-    // The frame clips (`clipsContent: true`): the mascot sits at -12 and its
-    // top is cut, and both arcs run outside the box.
-    assert.match(banner, /left-\[5px\] top-\[-12px\] h-\[96\.29px\] w-\[98\.96px\] overflow-hidden/);
-    assert.match(banner, /h-\[148\.46px\] w-\[98\.96px\]/, "the STRETCH fill's top 64.86% is not what is shown");
-    assert.match(banner, /hidden h-\[102px\] overflow-hidden rounded-\[10px\] md:block/, "the arcs escape the banner again");
-    // One text node, two runs: Manrope Bold 24/32.784, then Geist Medium 10 in
-    // the file's #E9CEFF, centred in the 44 box at (103.55, 27.76).
-    assert.match(banner, /left-\[103\.55px\] top-\[27\.76px\] flex h-\[44px\] w-\[329px\] flex-col justify-center/);
-    assert.match(banner, /font-\[family-name:var\(--font-heading\)\] text-\[24px\] font-bold leading-\[32\.784px\] text-white/);
-    assert.match(banner, /text-\[10px\] font-medium leading-\[14\.51px\] text-\[#E9CEFF\]/);
-    // The pager is DeckDots' geometry and renders ONLY with something to page
-    // through: the file draws one slide, and a row of dots over one slide
-    // claims pages that do not exist.
-    assert.match(banner, /\{paged && <DeckDots count=\{slides\.length\} active=\{index\} onSelect=\{setIndex\}/);
-    assert.match(banner, /const paged = slides\.length > 1;/);
-    assert.equal((banner.match(/^\s*id: "/gm) ?? []).length, 1, "the seed is no longer the file's one slide");
-    // Shown to EVERYONE, with sign-in on the tap (ogazboiz, 2026-09-12).
-    assert.match(banner, /const gate = useGate\(\);/);
-  });
-
   it("puts an announcement in its own band, never in the feed", () => {
     const shell = stripComments(read("components/layout/app-shell.tsx"));
     // Above what the route draws, inside the column — never inside the feed or
@@ -2472,13 +2459,16 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // and the account right, so the phone finally agrees with the desktop bar.
     assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[72px\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
     assert.match(read("app/globals.css"), /--ws-topbar-h: 72px;/);
-    // The node's own 100 x 40 lockup box and its 0.53 hairline.
+    // The node's own 100 x 40 lockup box — WITHOUT the node's 0.53 hairline
+    // under it (ogazboiz, 2026-09-16): on a phone it read as a stray short
+    // line under the logo. The bar's full-width border-b above is the only one.
     // The box HUGS. The node fixes it at 100, but that is 100 at the FILE's
     // type; ours renders wider, and a fixed width narrower than its content is
     // exactly what wrapped the word under the mark. The lockup carries the
     // `flex` too, because BrandLockup renders bare inline content by design
     // and inline content wraps.
-    assert.match(shell, /flex h-10 shrink-0 items-center border-b-\[0\.53px\] border-white\/10/);
+    assert.match(shell, /<span className="flex h-10 shrink-0 items-center">/);
+    assert.doesNotMatch(shell, /border-b-\[0\.53px\]/, "the short hairline under the phone lockup came back");
     assert.match(shell, /<BrandLockup markHeight=\{24\} label="Square" className="flex" \/>/);
     // THE SEARCH GLYPH THE NODE DRAWS IS DELIBERATELY ABSENT (ogazboiz: "use
     // the header that they gave us but hide the search bar"), which also
@@ -2674,6 +2664,15 @@ describe("a profile's counts open X-style follow lists", () => {
     assert.match(page, /href=\{profileHref\(data, "followers"\)\}/);
   });
 
+  it("keeps who you follow private: only your own profile links or lists it", () => {
+    // "people should not be able to see the people you are following"
+    assert.match(page, /\{isMe \? \(\s*<Link\s+href=\{profileHref\(data, "following"\)\}/, "another person's Following count links to their list again");
+    assert.match(list, /useFollowingList\(tab === "following" && isMe \? id : undefined\)/, "the list is requested for somebody else's profile");
+    assert.match(list, /\.\.\.\(isMe \? \[\{ value: "following" as FollowListTab, label: "Following" \}\] : \[\]\)/, "the Following tab shows on somebody else's profile");
+    assert.match(list, /tab === "following" && profile\.isSuccess && readerKnown && !isMe/);
+    assert.match(list, /title="Following is private"/);
+  });
+
   it("has a route for each list", () => {
     for (const tab of ["followers", "following"]) {
       const route = read(`app/u/[username]/${tab}/page.tsx`);
@@ -2853,7 +2852,7 @@ describe("QA round, 2026-09-15", () => {
     assert.match(shell, /onCompose=\{canCompose && !guest \? \(\) => setChoosingCreate\(true\) : undefined\}/);
     assert.match(shell, /<CreateChoiceSheet\n\s*open=\{choosingCreate\}/);
     assert.match(choice, /onPost\(\);/);
-    // The same address the sidebar's Start Gistroom and Home's Host Room use.
+    // The same address the sidebar's Start Gistroom uses.
     assert.match(choice, /router\.push\("\/gist-rooms\?open=1"\)/);
   });
 

@@ -12,7 +12,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useMe } from "@/hooks/use-me";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconMsComment, IconMsLike } from "@/components/ui/design-icons";
 import { IconSend, IconX } from "@/components/ui/icons";
 import { IconTrash } from "@/components/ui/thread-icons";
@@ -282,7 +282,6 @@ function CommentRow({
                 {author.displayName}
               </Link>
               <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5 shrink-0" />
-              <OrgBadgeChip orgBadge={author.orgBadge} />
               <RoleChip role={author.role} className="shrink-0" />
               {atHandle(author.username) && (
                 <span className="text-[13px] text-meta">{atHandle(author.username)}</span>
