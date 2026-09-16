@@ -1,0 +1,91 @@
+/**
+ * WHERE A NOTIFICATION ROW GOES WHEN YOU TAP IT.
+ *
+ * ─── THE BUG THIS EXISTS TO KILL ─────────────────────────────────────────────
+ * The rule used to be one line: `if (item.streamId) return /live/<id>`. But a
+ * GIST ROOM IS A STREAM — it is a `Stream` carrying `category: "house"` — so
+ * `house_room` rows ("preach opened a gist room in Square Talk") carry a
+ * `streamId` exactly like a broadcast does, and every one of them was sent to
+ * the video player. ogazboiz hit it: a row that says "Gist room opened" landed
+ * on a black "This stream has ended" page whose own header still read HOUSE.
+ *
+ * That was two failures wearing one coat. The surface was wrong — an audio room
+ * rendered by a player with no audio room in it — and because the broadcast's
+ * ended state offers nothing tappable, it was also a dead end. Routing to the
+ * room fixes both at once: `ClosedHouse` keeps the topic as a heading, names
+ * the host, links to their profile and offers "Open a gist room about this".
+ * No new screen was needed; the right one already existed.
+ *
+ * ─── WHY THREE SIGNALS AND NOT ONE ───────────────────────────────────────────
+ * `subject.kind` is the SERVICE's own answer (`category === 'house' ? 'room' :
+ * 'stream'`), so it is the one to trust first — it means the client never
+ * re-derives what a gist room is. But `subject` is served-but-undocumented and
+ * this schema parses it as optional precisely because deployed environments lag,
+ * and a row that arrives without it must not silently fall back to the wrong
+ * surface. So two independent facts back it up: the kind `house_room` can only
+ * ever be a gist room, and a non-null `house` is set by the backend on that kind
+ * alone (`houseOf`, which returns null for every other kind).
+ *
+ * Any one of the three is sufficient; needing all three would reintroduce the
+ * bug the moment one field lagged. They cannot disagree in a way that matters —
+ * each is only ever set for a room.
+ *
+ * `speaker_request` is deliberately NOT in that list. A raised hand happens in
+ * a gist room and in a native broadcast, so it is routed by `subject.kind` like
+ * anything else: naming the kind would send every video stream's speaker
+ * request to a room that does not exist.
+ *
+ * Pure, with no framework imports, so `node --test` pins it. It takes a
+ * structural type rather than importing `MarketNotification`, because `lib/` is
+ * the lowest layer and may never import from `features/`.
+ */
+
+import { housePath } from "./house-path.ts";
+import { profileHref } from "./profile-href.ts";
+
+export type NotificationDestination = {
+  kind: string;
+  streamId?: string | null;
+  postId?: string | null;
+  commentId?: string | null;
+  actor?: { id: string; username?: string | null } | null;
+  subject?: { kind: "post" | "stream" | "room" } | null;
+  house?: { conversationId: string } | null;
+};
+
+/**
+ * Is the stream this row is about a GIST ROOM rather than a broadcast?
+ *
+ * Only asked of rows that carry a `streamId` — on anything else the question
+ * does not arise, and answering it would be inventing a destination.
+ */
+export function isGistRoomNotification(item: NotificationDestination): boolean {
+  // The service's own classification, and the only one that covers every kind.
+  if (item.subject?.kind === "room") return true;
+  // A kind that cannot be anything else, for a payload with no `subject` yet.
+  if (item.kind === "house_room") return true;
+  // Set by the backend on `house_room` rows alone; null everywhere else.
+  return item.house != null;
+}
+
+export function notificationHref(item: NotificationDestination): string | null {
+  // A chat event has no post and no stream, so without this it fell through to
+  // the sender's PROFILE — which is not where the message is.
+  if (item.kind === "message" || item.kind === "chat_request") return "/messages";
+
+  // A gist room and a broadcast are both streams. See the header.
+  if (item.streamId) {
+    return isGistRoomNotification(item) ? housePath(item.streamId) : `/live/${item.streamId}`;
+  }
+
+  // ON the comment when the payload names one: the permalink reads `?comment=`
+  // and scrolls to it. Without an id it opens the post, as it always did.
+  if (item.postId) {
+    return item.commentId
+      ? `/p/${item.postId}?comment=${encodeURIComponent(item.commentId)}`
+      : `/p/${item.postId}`;
+  }
+
+  if (item.actor) return profileHref(item.actor);
+  return null;
+}
