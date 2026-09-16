@@ -142,7 +142,7 @@ const SLIDES = [
  * file (no timer, no prototype reaction on any of the three nodes); asked for
  * on 2026-09-16 ("is they not animation that it changes on it own too").
  */
-export const BANNER_AUTOPLAY_MS = 5000;
+export const BANNER_AUTOPLAY_MS = 10000;
 
 export function HomeBanner() {
   const track = useRef<HTMLDivElement>(null);

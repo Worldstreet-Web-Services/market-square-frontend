@@ -987,7 +987,7 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
   });
 
   it("rotates on its own, holds for the reader, and never under reduced motion", () => {
-    assert.match(banner, /export const BANNER_AUTOPLAY_MS = 5000;/);
+    assert.match(banner, /export const BANNER_AUTOPLAY_MS = 10000;/);
     assert.match(banner, /if \(held\.size > 0\) return;/);
     assert.match(banner, /if \(window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches\) return;/);
     assert.match(banner, /go\(\(index \+ 1\) % SLIDES\.length\)/, "the rotation no longer loops");
