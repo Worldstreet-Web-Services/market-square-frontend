@@ -24,9 +24,14 @@ import { DeckDots } from "@/components/ui/deck-dots";
  *     `#F84538`. The last visible fill paints on top, so the card is solid red.
  *     Arcs at (-25, -29) and (59, 0) at 65%, the copy at (16, 21) in 204 x 44,
  *     the faces (Group 1000002879) RIGHT-anchored at (217, 10), 114.58 x 68.96.
- *   · explore (1683:17468): the ramp under a solid `#0DCF51`, so green. One arc
- *     at (107, -56), the copy at (16, 21) in 210 x 44, and the clouds
- *     (Group 1000002912, three white ellipses at 25% soft-light) at (-10, 57).
+ *   · explore (1683:17468, the complete version from file VRZ9LeofsP5lmWPT7kMV4b):
+ *     the ramp under a solid `#0DCF51`, so green. One arc at (107, -56), the
+ *     copy at (16, 28) in 210 x 40 at Geist 700 14/20, the clouds (Group
+ *     1000002912, three white ellipses at 25% soft-light) at (12, 62), the
+ *     torn paper (Layer 2) at (-43, -78), and the people with the mic
+ *     (Frame 1000002913, 108 x 86, clipped) against the right edge. The file's
+ *     two hidden layers (image 94 and its vectorised copy, Asset 40) are not
+ *     drawn.
  *
  * The arcs and clouds are the file's SVG exports, which carry their own
  * `opacity` and `mix-blend-mode`. A blend inside an `<img>` blends against
@@ -38,7 +43,7 @@ import { DeckDots } from "@/components/ui/deck-dots";
  * is Inter ExtraBold Italic 800 and "people" / "community" Inter Bold Italic
  * 700 (`styleOverrideTable` 1488 / 1487). Inter is loaded for exactly those
  * runs rather than faking an italic out of Geist. The other two are Geist 700
- * 14/22. Every line break is the render's own: the gistroom copy carries a
+ * 14/22 (explore 14/20). Every line break is the render's own: the gistroom copy carries a
  * `\n`, and the other two wrap in their fixed boxes — pinned with `<br />`
  * so a font-metric difference cannot rewrap them.
  *
@@ -118,7 +123,7 @@ function ExploreSlide() {
     <div className="relative h-[86px] overflow-hidden rounded-[15px] bg-[#0DCF51]">
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 449) */}
       <img src="/home/slides/explore-arc.svg" alt="" aria-hidden className={`${SOFT} left-[107px] top-[-56px] h-[115px] w-[272px]`} />
-      <p className="absolute left-4 top-[21px] flex h-[44px] w-[210px] items-center text-[14px] font-bold leading-[22px] text-white">
+      <p className="absolute left-4 top-[28px] flex h-[40px] w-[210px] items-center text-[14px] font-bold leading-[20px] text-white">
         <span>
           Explore what’s trending and
           <br />
@@ -126,7 +131,14 @@ function ExploreSlide() {
         </span>
       </p>
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Group 1000002912) */}
-      <img src="/home/slides/explore-clouds.svg" alt="" aria-hidden className={`${SOFT} left-[-10px] top-[57px] h-[48px] w-[94px]`} />
+      <img src="/home/slides/explore-clouds.svg" alt="" aria-hidden className={`${SOFT} left-[12px] top-[62px] h-[48px] w-[94px]`} />
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Layer 2), the torn paper over the corner */}
+      <img src="/home/slides/explore-paper.svg" alt="" aria-hidden className={`${ART} left-[-43px] top-[-78px] h-[121px] w-[121px]`} />
+      {/* Frame 1000002913 — the people and the mic, flush with the card's right
+          edge (234 + 108 = 342). The node is LEFT-anchored, which on a wider
+          card would strand it mid-banner, so it holds the right edge instead. */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Frame 1000002913) */}
+      <img src="/home/slides/explore-people.png" alt="" aria-hidden draggable={false} className={`${ART} right-0 top-0 h-[86px] w-[108px]`} />
     </div>
   );
 }

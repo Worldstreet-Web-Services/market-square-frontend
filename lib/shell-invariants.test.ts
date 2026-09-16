@@ -968,7 +968,8 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
 
   it("uses the file's words, type and line breaks", () => {
     assert.match(banner, /text-\[14px\] font-medium leading-\[18\.2px\]/);
-    assert.equal((banner.match(/text-\[14px\] font-bold leading-\[22px\]/g) ?? []).length, 2);
+    assert.equal((banner.match(/text-\[14px\] font-bold leading-\[22px\]/g) ?? []).length, 1);
+    assert.match(banner, /left-4 top-\[28px\] flex h-\[40px\] w-\[210px\] items-center text-\[14px\] font-bold leading-\[20px\]/);
     assert.match(banner, /<em className="font-\[family-name:var\(--font-inter\)\] font-extrabold italic">house<\/em>/);
     assert.match(banner, /font-bold italic">people<\/em>/);
     assert.match(banner, /font-bold italic">community<\/em>/);
@@ -978,7 +979,7 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
   });
 
   it("draws the art from the file's own exports", () => {
-    for (const asset of ["house-arc-top.svg", "house-arc-bottom.svg", "house-chat-cube.svg", "gist-arc-short.svg", "gist-arc-loop.svg", "gist-faces.png", "explore-arc.svg", "explore-clouds.svg"]) {
+    for (const asset of ["house-arc-top.svg", "house-arc-bottom.svg", "house-chat-cube.svg", "gist-arc-short.svg", "gist-arc-loop.svg", "gist-faces.png", "explore-arc.svg", "explore-clouds.svg", "explore-paper.svg", "explore-people.png"]) {
       assert.match(banner, new RegExp(`/home/slides/${asset.replace(".", "\\.")}`));
       assert.ok(existsSync(resolve(`public/home/slides/${asset}`)), `${asset} is missing`);
     }
