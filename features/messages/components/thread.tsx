@@ -1040,19 +1040,45 @@ function FileBubble({
   return (
     <div className={cn("w-[262px] max-w-[85%] p-1", bubbleShell(mine, tail))}>
       {quote && <div className="px-1 pb-1.5 pt-1">{quote}</div>}
-      <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.06] p-2.5">
+      {/*
+        EVERY INK HERE IS PAIRED TO THE SHELL IT SITS ON, which is the one thing
+        this bubble got wrong first time: `bubbleShell` paints MY bubble white
+        and THEIRS `--color-spotlight`, so a hardcoded `text-white` made my own
+        documents render as an empty white box — the file was sent and stored
+        correctly and simply could not be seen. The pairings are `ReplyQuote`'s,
+        the other inner surface that sits inside both shells.
+      */}
+      <div
+        className={cn(
+          "flex items-center gap-2.5 rounded-xl p-2.5",
+          mine ? "bg-black/[0.05]" : "bg-white/10"
+        )}
+      >
         <span
           aria-hidden
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[10px] font-bold uppercase tracking-tight text-white/70"
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase tracking-tight",
+            mine ? "bg-black/[0.07] text-[#5A5A5A]" : "bg-white/15 text-white/80"
+          )}
         >
           {fileExtensionLabel(message.mediaFileName, url)}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold leading-4 text-white">
+          <span
+            className={cn(
+              "block truncate text-[13px] font-semibold leading-4",
+              mine ? "text-black/85" : "text-white"
+            )}
+          >
             {name}
           </span>
           {typeof size === "number" && size > 0 && (
-            <span className="mt-0.5 block text-[11px] leading-4 text-white/45">
+            <span
+              className={cn(
+                "mt-0.5 block text-[11px] leading-4",
+                mine ? "text-black/45" : "text-white/55"
+              )}
+            >
               {formatBytes(size)}
             </span>
           )}
@@ -1064,7 +1090,12 @@ function FileBubble({
             onClick={(event) => event.stopPropagation()}
             aria-label={`Download ${name}`}
             title={`Download ${name}`}
-            className="ws-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className={cn(
+              "ws-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+              mine
+                ? "text-black/55 hover:bg-black/10 hover:text-black"
+                : "text-white/70 hover:bg-white/15 hover:text-white"
+            )}
           >
             <IconDownload className="h-4 w-4" />
           </a>

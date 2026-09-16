@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   fileExtensionLabel,
   flattenMessageMedia,
@@ -103,5 +104,51 @@ describe("the outgoing payload carries a document's name and size", () => {
     const negative = buildMessagePayload({ media: { url: PDF_URL, sizeBytes: -5 } });
     assert.equal(zero.media?.sizeBytes, undefined);
     assert.equal(negative.media?.sizeBytes, undefined);
+  });
+});
+
+/**
+ * A SOURCE ASSERTION, for the half that has no pure form.
+ *
+ * `bubbleShell` paints MY bubble white and THEIRS `--color-spotlight`, so any
+ * ink inside a bubble has to be paired to the shell it sits on. `FileBubble`
+ * shipped with a hardcoded `text-white`, which made a document sent by the
+ * reader render as an empty white box — stored correctly, sent correctly, and
+ * invisible. No unit test could catch that because the values are class names
+ * in JSX, so the file itself is what gets checked, exactly as
+ * `shell-invariants` and `story-sound` do for their own wiring.
+ */
+describe("the file bubble is readable on BOTH bubble shells", () => {
+  const source = readFileSync(
+    new URL("../features/messages/components/thread.tsx", import.meta.url),
+    "utf8"
+  );
+  const body = source.slice(
+    source.indexOf("function FileBubble("),
+    source.indexOf("function MediaBubble(")
+  );
+
+  it("was found at all, so this test cannot silently pass on a rename", () => {
+    assert.ok(body.length > 500, "FileBubble's body was not located in thread.tsx");
+  });
+
+  it("pairs its surfaces and ink to `mine`", () => {
+    // The row, the type chip, the name, the size and the download control —
+    // five decisions, none of which may assume one background.
+    const ternaries = body.match(/\bmine\b\s*\?/g) ?? [];
+    assert.ok(
+      ternaries.length >= 4,
+      `expected the ink to branch on \`mine\`, found ${ternaries.length}`
+    );
+  });
+
+  it("carries a LIGHT-shell branch, whose absence was the original bug", () => {
+    // Checking for the branch that must exist beats hunting for white strings:
+    // `text-white` is perfectly correct on the purple shell, and a matcher that
+    // flags it produces a test that fails on working code. What could never be
+    // right is styling this bubble with no dark ink at all — that is precisely
+    // what rendered the reader's own document as an empty white box.
+    assert.ok(body.includes("bg-black/"), "no dark surface for the white bubble");
+    assert.ok(body.includes("text-black/"), "no dark ink for the white bubble");
   });
 });
