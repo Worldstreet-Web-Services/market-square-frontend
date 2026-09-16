@@ -1,13 +1,24 @@
 /**
- * WHERE THE SQUARE LIVES: `www.tsionark.com/square`.
+ * ONE APP, TWO ADDRESSES.
  *
- * The Square is served as a Vercel microfrontend beside WSWS, which owns the
- * rest of the domain. Every route, BFF endpoint and public file therefore sits
- * under one prefix — and because `withMicrofrontends` does NOT support Next's
- * `basePath` (Vercel's quickstart says so outright), the prefix is real: routes
- * live in `app/square/`, files in `public/square/`, and every address the app
- * writes has to carry it. These helpers are the only place that knows the
- * prefix, so it is spelled once.
+ * The Square is its own site at `square.tsionark.com`, and that site does not
+ * change. The same Square is ALSO shown inside Ark at `www.tsionark.com/square`,
+ * as a Vercel microfrontend beside WSWS, which owns the rest of that domain.
+ *
+ * Those are two builds of this one repo, told apart by ONE build-time variable:
+ *
+ *   · `NEXT_PUBLIC_SQUARE_BASE_PATH` unset — the standalone site. No prefix;
+ *     every helper here returns its input unchanged, so the app is exactly
+ *     what it was before any of this existed.
+ *   · `NEXT_PUBLIC_SQUARE_BASE_PATH=/square` — the build Ark mounts. Every
+ *     address the app writes carries `/square`, and `next.config.ts` rewrites
+ *     `/square/…` back onto the real routes, so the routes and files stay where
+ *     they are in `app/` and `public/`.
+ *
+ * Why not Next's `basePath`: Vercel microfrontends do not support it (their
+ * quickstart says so outright). A rewrite plus these helpers is the supported
+ * shape, and keeping the prefix a variable is what leaves the standalone site
+ * untouched.
  *
  * ─── THREE KINDS OF PATH, NEVER CONFUSED ─────────────────────────────────────
  *  · `sq`    — a ROUTE the reader navigates to: `/feed` → `/square/feed`.
@@ -23,73 +34,74 @@
  *
  * ─── EVERY HELPER IS IDEMPOTENT AND LEAVES FOREIGN ADDRESSES ALONE ───────────
  * An absolute URL, a protocol-relative `//host`, a bare `#hash` or `?query`,
- * and a path that already carries the prefix all come back unchanged. So
- * wrapping twice is harmless, and a helper can never turn somebody's external
- * link into a broken local one.
+ * and a path that already carries the prefix all come back unchanged.
  *
- * Pure and alias-free, so `node --test` pins it.
+ * Pure and alias-free, so `node --test` pins it — both builds, through
+ * `squarePaths(base)`.
  */
 
-export const SQUARE_BASE = "/square";
-
-/** Not a root path this app owns: an absolute URL, `//host`, `#hash`, `?query`, or empty. */
-function isForeign(path: string): boolean {
-  return !path.startsWith("/") || path.startsWith("//");
+/** The only prefixes this app may be built with. Anything else is a config mistake. */
+export function parseBase(raw: string | undefined): "" | "/square" {
+  const value = raw?.trim() ?? "";
+  if (value === "" ) return "";
+  if (value === "/square") return "/square";
+  throw new Error(`NEXT_PUBLIC_SQUARE_BASE_PATH must be unset or "/square", got "${value}"`);
 }
 
-/** Already under the prefix: `/square`, `/square/…`, `/square?…`, `/square#…`. */
-function isPrefixed(path: string): boolean {
-  return (
-    path === SQUARE_BASE ||
-    path.startsWith(`${SQUARE_BASE}/`) ||
-    path.startsWith(`${SQUARE_BASE}?`) ||
-    path.startsWith(`${SQUARE_BASE}#`)
-  );
+export function squarePaths(base: "" | "/square") {
+  /** Not a root path this app owns: an absolute URL, `//host`, `#hash`, `?query`, or empty. */
+  const isForeign = (path: string) => !path.startsWith("/") || path.startsWith("//");
+
+  /** Already under the prefix: `/square`, `/square/…`, `/square?…`, `/square#…`. */
+  const isPrefixed = (path: string) =>
+    base !== "" &&
+    (path === base || path.startsWith(`${base}/`) || path.startsWith(`${base}?`) || path.startsWith(`${base}#`));
+
+  const prefix = (path: string) => (base === "" || isForeign(path) || isPrefixed(path) ? path : `${base}${path}`);
+
+  return {
+    base,
+    /**
+     * A route. `/` is the front page, so under the prefix it becomes `/square`
+     * — never `/square/`, a second spelling of the same page. A query or hash
+     * on the root keeps its place: `/?compose=1` → `/square?compose=1`, the
+     * cross-product share contract.
+     */
+    sq(path: string): string {
+      if (base === "" || isForeign(path) || isPrefixed(path)) return path;
+      if (path === "/") return base;
+      if (path.startsWith("/?") || path.startsWith("/#")) return `${base}${path.slice(1)}`;
+      return `${base}${path}`;
+    },
+    /** A file in `public/`. */
+    asset: prefix,
+    /** A BFF endpoint of this app. */
+    api: prefix,
+    /**
+     * The route WITHOUT the prefix — for every comparison the app makes.
+     * Twenty-two places decide what to show from the pathname (`=== "/messages"`,
+     * `startsWith("/live/")`); normalising where the pathname is read keeps all
+     * of them working in both builds. A path outside the prefix comes back
+     * unchanged, so the standalone build is a no-op.
+     */
+    stripSquare(pathname: string): string {
+      if (base === "") return pathname;
+      if (pathname === base) return "/";
+      if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
+      return pathname;
+    },
+  };
 }
 
-/**
- * A route, under the prefix.
- *
- * `/` is the Square's front page, so it becomes `/square` — never `/square/`,
- * which is a second spelling of the same page and a duplicate for search. A
- * query or hash on the root keeps its place: `/?compose=1` → `/square?compose=1`,
- * the cross-product share contract.
- */
-export function sq(path: string): string {
-  if (isForeign(path) || isPrefixed(path)) return path;
-  if (path === "/") return SQUARE_BASE;
-  if (path.startsWith("/?") || path.startsWith("/#")) return `${SQUARE_BASE}${path.slice(1)}`;
-  return `${SQUARE_BASE}${path}`;
-}
+// `process.env.NEXT_PUBLIC_…` is inlined by Next at build time, so the client
+// bundle carries the value it was built with. `process` is guarded for the
+// test runner and any bundler that does not define it.
+const paths = squarePaths(
+  parseBase(typeof process === "undefined" ? undefined : process.env.NEXT_PUBLIC_SQUARE_BASE_PATH)
+);
 
-/** A file in `public/`, served from `public/square/`. */
-export function asset(path: string): string {
-  if (isForeign(path) || isPrefixed(path)) return path;
-  return `${SQUARE_BASE}${path}`;
-}
-
-/** A BFF endpoint of this app. `/api/…` only — anything else is not ours to prefix. */
-export function api(path: string): string {
-  if (isForeign(path) || isPrefixed(path)) return path;
-  return `${SQUARE_BASE}${path}`;
-}
-
-/**
- * The route WITHOUT the prefix — for every comparison the app already makes.
- *
- * Twenty-two places decide what to show from the pathname (`=== "/messages"`,
- * `startsWith("/live/")`): the dock, compose, the welcome gate, back history.
- * After the move `usePathname()` answers `/square/messages`, and every one of
- * those would silently stop matching — no error, just a dock that never hides
- * and a compose button on the wrong screen. Normalising ONCE, where the
- * pathname is read, keeps all of that logic exactly as it was instead of
- * rewriting twenty-two comparisons and hoping none was missed.
- *
- * `/square` → `/`, `/square/feed` → `/feed`. A path outside the Square is
- * returned as it is, so it can never be mistaken for one of ours.
- */
-export function stripSquare(pathname: string): string {
-  if (pathname === SQUARE_BASE) return "/";
-  if (pathname.startsWith(`${SQUARE_BASE}/`)) return pathname.slice(SQUARE_BASE.length);
-  return pathname;
-}
+export const SQUARE_BASE = paths.base;
+export const sq = paths.sq;
+export const asset = paths.asset;
+export const api = paths.api;
+export const stripSquare = paths.stripSquare;

@@ -148,8 +148,8 @@ describe("post previews", () => {
     assert.equal(meta.description, "New here, who’s here?");
     assert.equal(meta.openGraph.type, "article");
     assert.equal(meta.openGraph.siteName, "Square");
-    assert.equal(meta.openGraph.url, `/square/p/${SHORT}`);
-    assert.deepEqual(meta.alternates, { canonical: `/square/p/${SHORT}` });
+    assert.equal(meta.openGraph.url, `/p/${SHORT}`);
+    assert.deepEqual(meta.alternates, { canonical: `/p/${SHORT}` });
     assert.equal(meta.twitter.card, "summary_large_image");
     assert.deepEqual(meta.openGraph.images, [
       { url: `${CLOUD}/image/upload/${POST_T}/${PUBLIC_ID}`, width: 1200, height: 630, type: "image/jpeg", alt: "Photo from Qing's post" },
@@ -214,8 +214,8 @@ describe("profile previews", () => {
     assert.equal(meta.description, "Creative Technologist || Ai engineer");
     assert.equal(meta.openGraph.type, "profile");
     assert.equal(meta.twitter.card, "summary");
-    assert.equal(meta.openGraph.url, "/square/u/qingthecreator_");
-    assert.deepEqual(meta.alternates, { canonical: "/square/u/qingthecreator_" });
+    assert.equal(meta.openGraph.url, "/u/qingthecreator_");
+    assert.deepEqual(meta.alternates, { canonical: "/u/qingthecreator_" });
     assert.deepEqual(meta.openGraph.images, [
       { url: `${CLOUD}/image/upload/${AVATAR_T}/${PUBLIC_ID}`, width: 400, height: 400, type: "image/jpeg", alt: "Qing's profile photo" },
     ]);
@@ -223,10 +223,10 @@ describe("profile previews", () => {
 
   it("canonicalises a minted-handle visit onto the handle the profile answers to", () => {
     const meta = buildProfileMetadata(parseOgProfile(raw)!, "user_69bqxdc8");
-    assert.equal(meta.openGraph.url, "/square/u/qingthecreator_");
+    assert.equal(meta.openGraph.url, "/u/qingthecreator_");
     const minted = buildProfileMetadata(parseOgProfile({ ...raw, username: null, displayName: null })!, "user_69bqxdc8");
     assert.deepEqual(minted.title, { absolute: "Member ·HXNZ (@user_69bqxdc8) on Square" });
-    assert.equal(minted.openGraph.url, "/square/u/user_69bqxdc8");
+    assert.equal(minted.openGraph.url, "/u/user_69bqxdc8");
   });
 
   it("omits the handle rather than print an id, and falls back for a missing bio or avatar", () => {
@@ -242,7 +242,7 @@ describe("profile previews", () => {
   it("is generic without a canonical for a handle the service would never answer to", () => {
     assert.equal(genericProfileMetadata("did:privy:abc").alternates, undefined);
     assert.equal(genericProfileMetadata("did:privy:abc").openGraph.url, undefined);
-    assert.equal(genericProfileMetadata("ada_lovelace").openGraph.url, "/square/u/ada_lovelace");
+    assert.equal(genericProfileMetadata("ada_lovelace").openGraph.url, "/u/ada_lovelace");
     assert.equal(profileMetadataFor({ status: "not-found" }, "ada_lovelace"), "not-found");
     assert.deepEqual(profileMetadataFor({ status: "unavailable" }, "ada_lovelace"), genericProfileMetadata("ada_lovelace"));
     assert.deepEqual(profileMetadataFor(null, "ada_lovelace"), genericProfileMetadata("ada_lovelace"));

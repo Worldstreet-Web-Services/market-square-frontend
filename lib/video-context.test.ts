@@ -20,12 +20,12 @@ test("arrow-key movement clamps and never wraps", () => {
 });
 
 test("a shared link carries the selection, not just the clip", () => {
-  assert.equal(videoHref("p1", { tab: "shows" }), "/square/discover?tab=shows&v=p1");
+  assert.equal(videoHref("p1", { tab: "shows" }), "/discover?tab=shows&v=p1");
   // The default tab stays out of the URL rather than bloating every share.
-  assert.equal(videoHref("p1", { tab: "for-you" }), "/square/discover?v=p1");
-  assert.equal(videoHref("p1", {}), "/square/discover?v=p1");
+  assert.equal(videoHref("p1", { tab: "for-you" }), "/discover?v=p1");
+  assert.equal(videoHref("p1", {}), "/discover?v=p1");
   assert.equal(
     videoHref("p1", { query: " ark ", tab: "posts" }),
-    "/square/discover?q=ark&tab=posts&v=p1"
+    "/discover?q=ark&tab=posts&v=p1"
   );
 });

@@ -981,7 +981,7 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
   it("draws the art from the file's own exports", () => {
     for (const asset of ["house-arc-top.svg", "house-arc-bottom.svg", "house-chat-cube.svg", "gist-arc-short.svg", "gist-arc-loop.svg", "gist-faces.png", "explore-arc.svg", "explore-clouds.svg", "explore-paper.svg", "explore-people.png"]) {
       assert.match(banner, new RegExp(`asset\\("/home/slides/${asset.replace(".", "\\.")}"\\)`));
-      assert.ok(existsSync(resolve(`public/square/home/slides/${asset}`)), `${asset} is missing`);
+      assert.ok(existsSync(resolve(`public/home/slides/${asset}`)), `${asset} is missing`);
     }
     // A blend inside an <img> blends against nothing: the element carries it.
     assert.match(banner, /const SOFT = "pointer-events-none absolute max-w-none select-none mix-blend-soft-light";/);
@@ -1304,7 +1304,7 @@ describe("The dock follows 964:24177", () => {
   it("carries Home, Pals and Chat, with the node's own glyphs", () => {
     for (const glyph of ["dock-home.svg", "dock-pals.svg", "dock-chat.svg"]) {
       assert.ok(dock.includes(`/notifications/${glyph}`), `${glyph} is not the dock's glyph`);
-      assert.ok(existsSync(new URL(`../public/square/notifications/${glyph}`, import.meta.url)), `${glyph} is missing from public`);
+      assert.ok(existsSync(new URL(`../public/notifications/${glyph}`, import.meta.url)), `${glyph} is missing from public`);
     }
     assert.doesNotMatch(dock, /href: "\/discover"/, "Discover is back in the dock; people are met on Pals now");
   });
@@ -1411,7 +1411,7 @@ describe("The profile cover follows 1021:20229", () => {
     assert.match(cover, /aria-label="Change profile photo"[\s\S]{0,80}absolute -bottom-2 -right-3 h-8 w-8/);
     assert.match(page, /onChangePhoto=\{isMe \? \(\) => setEditOpen\(true\) : undefined\}/);
     for (const asset of ["camera-button.svg", "icon-share.svg", "kash-chevron.svg"]) {
-      assert.ok(existsSync(new URL(`../public/square/profile/${asset}`, import.meta.url)), `${asset} is missing`);
+      assert.ok(existsSync(new URL(`../public/profile/${asset}`, import.meta.url)), `${asset} is missing`);
     }
   });
 
@@ -1478,7 +1478,7 @@ describe("The profile's Photos row is 1021:20930", () => {
     assert.match(photos, /h-40 w-40 shrink-0 overflow-hidden rounded-\[20px\]/);
     assert.match(photos, /shadow-\[0_4px_25px_0_rgba\(107,107,107,0\.25\)\]/);
     assert.match(photos, /"Upload more"/);
-    assert.ok(existsSync(new URL("../public/square/profile/gallery-add.svg", import.meta.url)));
+    assert.ok(existsSync(new URL("../public/profile/gallery-add.svg", import.meta.url)));
     assert.match(page, /<ProfilePhotos username=\{data\.username\} isMe=\{isMe\} \/>/);
   });
 });
@@ -1563,7 +1563,7 @@ describe("A house can be shared with an invite link", () => {
   });
 
   it("lands the link on /join/<token>", () => {
-    const route = read("app/square/join/[token]/page.tsx");
+    const route = read("app/join/[token]/page.tsx");
     assert.match(route, /<JoinPage token=\{decodeURIComponent\(token\)\} \/>/);
     const page = stripComments(read("features/messages/components/join-page.tsx"));
     assert.match(page, /const state = inviteState\(house, authenticated\);/);
@@ -1751,9 +1751,9 @@ describe("Contact us opens a chat with support", () => {
 
 describe("Square has a favicon and tagged share links", () => {
   it("serves the brand mark as the tab icon and a home-screen icon", () => {
-    const icon = read("app/square/icon.svg");
+    const icon = read("app/icon.svg");
     assert.match(icon, /viewBox="0 0 60 60"/);
-    assert.ok(read("app/square/apple-icon.png").length > 0);
+    assert.ok(read("app/apple-icon.png").length > 0);
   });
 
   it("tags every link the share sheet hands out with one short channel code", () => {
@@ -1793,11 +1793,31 @@ describe("Square has a favicon and tagged share links", () => {
   });
 });
 
+describe("One app, two addresses: square.tsionark.com untouched, Ark mounts it at /square", () => {
+  const config = stripComments(read("next.config.ts"));
+
+  it("keeps every route and file where the standalone site has them", () => {
+    assert.ok(!existsSync(resolve("app/square")), "routes moved under app/square again, which changes the standalone site");
+    assert.ok(!existsSync(resolve("public/square")), "files moved under public/square again");
+    assert.ok(!existsSync(resolve("lib/legacy-routes.ts")), "redirects are back; the standalone site has nothing to redirect");
+    assert.doesNotMatch(config, /redirects\(\)/);
+  });
+
+  it("rewrites /square onto the real routes only when the base is set", () => {
+    assert.match(config, /const base = parseBase\(process\.env\.NEXT_PUBLIC_SQUARE_BASE_PATH\);\s*if \(base === ""\) return \[\];/);
+    assert.match(config, /beforeFiles: \[\s*\{ source: base, destination: "\/" \},\s*\{ source: `\$\{base\}\/:path\*`, destination: "\/:path\*" \},/);
+    assert.match(config, /process\.env\.SQUARE_MICROFRONTENDS === "1" \? withMicrofrontends\(nextConfig\) : nextConfig/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
-    const sw = read("public/square/sw.js");
+    const sw = read("public/sw.js");
     assert.match(sw, /addEventListener\("push"/);
-    assert.match(sw, /icon: "\/square\/apple-icon\.png"/);
+    assert.match(sw, /icon: SQUARE \+ "\/apple-icon\.png"/);
+    // The prefix is the worker's own scope: "" standalone, "/square" inside Ark.
+    assert.match(sw, /const SQUARE = new URL\(self\.registration\.scope\)\.pathname\.replace\(\/\\\/\$\/, ""\);/);
+    assert.doesNotMatch(stripComments(sw), /"\/square/, "a /square path is hard-coded in the worker again");
     assert.match(sw, /if \(target\.origin !== self\.location\.origin\)/);
   });
 
@@ -1826,11 +1846,11 @@ describe("The daily email summary", () => {
     const page = stripComments(read("features/settings/components/unsubscribe-page.tsx"));
     assert.match(page, /onClick=\{\(\) => unsubscribe\.mutate\(token\)\}/);
     assert.doesNotMatch(page, /useEffect/, "a mail link-scanner opening the page would switch summaries off");
-    assert.match(read("app/square/unsubscribe/page.tsx"), /<UnsubscribePage \/>/);
+    assert.match(read("app/unsubscribe/page.tsx"), /<UnsubscribePage \/>/);
   });
 
   it("lets the BFF pass exactly that one write through signed out", () => {
-    const route = stripComments(read("app/square/api/market-square/[...path]/route.ts"));
+    const route = stripComments(read("app/api/market-square/[...path]/route.ts"));
     assert.match(route, /const needsAuth = method === "GET" \? !isPublicGet\(path\) : !\(method === "POST" && isPublicPost\(path\)\);/);
   });
 });
@@ -1886,7 +1906,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     const row = stripComments(read("components/layout/home-top-row.tsx"));
     // The link, the route, the FULL frame.
     assert.match(stripComments(read("components/layout/popular-houses.tsx")), /action=\{\{ label: "View more", href: sq\("\/houses"\) \}\}/);
-    assert.match(read("app/square/houses/page.tsx"), /<HousesScreen \/>/);
+    assert.match(read("app/houses/page.tsx"), /<HousesScreen \/>/);
     assert.match(stripComments(read("components/layout/app-shell.tsx")), /\/\^\\\/houses\$\/,/, "/houses is not a FULL-frame route");
     // The artboard's insets; the row ends in the FILTER pill (1368:2275), a
     // real disabled control — the route takes cursor and limit only.
@@ -1921,7 +1941,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(screen, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
     assert.match(screen, /src=\{asset\("\/gist-rooms\/card-default-cover\.svg"\)\}[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
     assert.doesNotMatch(screen, /default-picture|<Avatar[\s\S]{0,120}src=\{house\.imageUrl\}/, "a house picture is being invented again");
-    assert.ok(!existsSync(resolve("public/square/houses")), "the node's sample photo is back as a default");
+    assert.ok(!existsSync(resolve("public/houses")), "the node's sample photo is back as a default");
     // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
     assert.match(screen, /useDiscoverHousesPages\(\)/);
     assert.match(screen, /useInfiniteScroll\(/);
@@ -2675,7 +2695,7 @@ describe("a profile's counts open X-style follow lists", () => {
 
   it("has a route for each list", () => {
     for (const tab of ["followers", "following"]) {
-      const route = read(`app/square/u/[username]/${tab}/page.tsx`);
+      const route = read(`app/u/[username]/${tab}/page.tsx`);
       assert.match(route, new RegExp(`<FollowListPage username=\\{username\\} tab="${tab}" />`));
     }
   });
@@ -2701,7 +2721,7 @@ describe("a profile's counts open X-style follow lists", () => {
 
 describe("link previews publish only what they should, where they should", () => {
   it("fetches post and profile data only on the two routes built for it", () => {
-    for (const file of ["app/square/p/[id]/page.tsx", "app/square/u/[username]/page.tsx"]) {
+    for (const file of ["app/p/[id]/page.tsx", "app/u/[username]/page.tsx"]) {
       const route = stripComments(read(file));
       assert.match(route, /export async function generateMetadata/, file);
       // Bots and browsers render differently, so one cached response is wrong.
@@ -2709,7 +2729,7 @@ describe("link previews publish only what they should, where they should", () =>
       // Next already decoded the param; a second decode reopens traversal.
       assert.doesNotMatch(route, /decodeURIComponent/, file);
     }
-    const post = stripComments(read("app/square/p/[id]/page.tsx"));
+    const post = stripComments(read("app/p/[id]/page.tsx"));
     assert.match(post, /const post = resolvePostParam\(id, \{ fixtureIds: FIXTURE_MODE \}\);\n\s*if \(!post\) notFound\(\);/);
     // Fixture ids only when there is no upstream at all.
     assert.match(post, /const FIXTURE_MODE = marketSquareBase\(\) === null;/);
@@ -2720,13 +2740,13 @@ describe("link previews publish only what they should, where they should", () =>
     // A private group's title or picture in a chat app's preview cache would
     // outlive a rename and a revoked invite.
     for (const file of [
-      "app/square/gist-rooms/page.tsx",
-      "app/square/gist-rooms/[id]/page.tsx",
-      "app/square/live/page.tsx",
-      "app/square/live/[id]/page.tsx",
-      "app/square/houses/page.tsx",
-      "app/square/join/[token]/page.tsx",
-      "app/square/code/[code]/page.tsx",
+      "app/gist-rooms/page.tsx",
+      "app/gist-rooms/[id]/page.tsx",
+      "app/live/page.tsx",
+      "app/live/[id]/page.tsx",
+      "app/houses/page.tsx",
+      "app/join/[token]/page.tsx",
+      "app/code/[code]/page.tsx",
     ]) {
       assert.doesNotMatch(stripComments(read(file)), /generateMetadata|openGraph/, file);
     }
@@ -2736,7 +2756,7 @@ describe("link previews publish only what they should, where they should", () =>
     for (const file of ["app/opengraph-image.tsx", "app/opengraph-image.png", "app/twitter-image.tsx"]) {
       assert.equal(existsSync(new URL(`../${file}`, import.meta.url)), false, file);
     }
-    assert.match(stripComments(read("app/square/share-card/route.tsx")), /export const dynamic = "force-static";/);
+    assert.match(stripComments(read("app/share-card/route.tsx")), /export const dynamic = "force-static";/);
     assert.match(stripComments(read("lib/og-metadata.ts")), /url: sq\("\/share-card"\),/);
   });
 

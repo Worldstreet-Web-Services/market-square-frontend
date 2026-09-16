@@ -4,11 +4,11 @@ import { resolveCta, resolveDeepLink } from "./deeplink.ts";
 
 test("internal kinds route inside the app and are always available", () => {
   const link = resolveDeepLink({ kind: "stream", ref: "s1" });
-  assert.deepEqual(link, { href: "/square/live/s1", external: false, label: "Watch", available: true });
+  assert.deepEqual(link, { href: "/live/s1", external: false, label: "Watch", available: true });
 });
 
 test("a source is threaded onto internal destinations", () => {
-  assert.equal(resolveDeepLink({ kind: "store_item", ref: "x" }, "home").href, "/square/store/x?source=home");
+  assert.equal(resolveDeepLink({ kind: "store_item", ref: "x" }, "home").href, "/store/x?source=home");
 });
 
 test("Ark product links resolve against the verified Ark origin", () => {

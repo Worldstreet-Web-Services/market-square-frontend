@@ -11,19 +11,24 @@
   a path; it is resolved against this origin and never allowed to leave it.
   `tag` makes a repeat about the same thing replace the earlier notification.
 
-  THE SQUARE LIVES UNDER /square (www.tsionark.com/square, a Vercel
-  microfrontend beside WSWS). The service does not know that and still sends
-  root paths like `/p/<id>`. On www.tsionark.com that path belongs to WSWS, so a
-  tap would open the wrong app; `underSquare` puts every path the service sends
-  under the prefix. It mirrors `sq` in lib/square-path.ts, which a worker cannot
-  import, and like it is idempotent.
+  TWO BUILDS, ONE WORKER. On square.tsionark.com the Square owns the whole
+  origin; inside Ark it lives under /square (www.tsionark.com/square), beside
+  WSWS. The worker cannot read the build's variable and does not need to: it is
+  registered from `<base>/sw.js` with no explicit scope, so its scope IS the
+  base, `/` standalone and `/square/` inside Ark. `SQUARE` is that scope without
+  its trailing slash: "" or "/square".
+
+  The service sends root paths like `/p/<id>`. Inside Ark that path belongs to
+  WSWS, so `underSquare` puts every path under the prefix. It mirrors `sq` in
+  lib/square-path.ts, which a worker cannot import, is idempotent, and does
+  nothing standalone.
 */
 
-const SQUARE = "/square";
+const SQUARE = new URL(self.registration.scope).pathname.replace(/\/$/, "");
 
-/** A same-origin URL, moved under /square if it is not there already. */
+/** A same-origin URL, moved under the prefix if it is not there already. */
 function underSquare(url) {
-  if (url.pathname !== SQUARE && !url.pathname.startsWith(SQUARE + "/")) {
+  if (SQUARE && url.pathname !== SQUARE && !url.pathname.startsWith(SQUARE + "/")) {
     url.pathname = SQUARE + (url.pathname === "/" ? "" : url.pathname);
   }
   return url;
@@ -31,6 +36,7 @@ function underSquare(url) {
 
 /** Is this window one of the Square's own pages, rather than a WSWS page on the same origin? */
 function isSquarePage(href) {
+  if (!SQUARE) return true;
   const path = new URL(href).pathname;
   return path === SQUARE || path.startsWith(SQUARE + "/");
 }
@@ -55,9 +61,9 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(title, {
       body: typeof data.body === "string" ? data.body : "",
       tag: typeof data.tag === "string" && data.tag ? data.tag : undefined,
-      icon: "/square/apple-icon.png",
-      badge: "/square/apple-icon.png",
-      data: { url: typeof data.url === "string" ? data.url : "/square/notifications" },
+      icon: SQUARE + "/apple-icon.png",
+      badge: SQUARE + "/apple-icon.png",
+      data: { url: typeof data.url === "string" ? data.url : SQUARE + "/notifications" },
     })
   );
 });
@@ -66,12 +72,12 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   let target;
   try {
-    target = new URL((event.notification.data && event.notification.data.url) || "/square/notifications", self.location.origin);
+    target = new URL((event.notification.data && event.notification.data.url) || SQUARE + "/notifications", self.location.origin);
   } catch {
-    target = new URL("/square/notifications", self.location.origin);
+    target = new URL(SQUARE + "/notifications", self.location.origin);
   }
   // A push can only ever open a page on Square itself.
-  if (target.origin !== self.location.origin) target = new URL("/square/notifications", self.location.origin);
+  if (target.origin !== self.location.origin) target = new URL(SQUARE + "/notifications", self.location.origin);
   target = underSquare(target);
 
   event.waitUntil(

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots";
 import { withMicrofrontends } from "@vercel/microfrontends/next/config";
-import { legacyRedirects } from "./lib/legacy-routes";
+import { parseBase } from "./lib/square-path";
 
 /**
  * SECURITY HEADERS.
@@ -92,24 +92,32 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
   /*
-    The Square lives under /square (see lib/square-path). Every address it
-    handed out before the move redirects to its new home, so no shared link,
-    bookmark or preview card breaks. See lib/legacy-routes.
+    THE BUILD ARK MOUNTS answers under /square (see lib/square-path). The routes
+    and public files stay where they are; `/square/…` is rewritten onto them
+    BEFORE the filesystem is checked, so pages, route handlers and public files
+    all resolve. The standalone build (no base) gets no rewrites at all and is
+    exactly what it was.
   */
-  async redirects() {
-    return legacyRedirects();
+  async rewrites() {
+    const base = parseBase(process.env.NEXT_PUBLIC_SQUARE_BASE_PATH);
+    if (base === "") return [];
+    return {
+      beforeFiles: [
+        { source: base, destination: "/" },
+        { source: `${base}/:path*`, destination: "/:path*" },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
   },
 };
 
 /*
-  SERVED AS A VERCEL MICROFRONTEND at www.tsionark.com/square, beside WSWS
-  (microfrontends.json lives in wsws-frontend; this app is
-  `market-square-frontend`). `withMicrofrontends` adds the asset prefix and
-  reads the group's routing config, and it THROWS when that config is absent
-  ("Missing MFE_CONFIG") — which it is until the microfrontends group is created
-  on the Vercel team. So it is switched on by configuration, not by shipping:
-  set SQUARE_MICROFRONTENDS=1 on the Vercel project once the group exists.
-  Until then the app runs exactly as before under /square, on
-  square.tsionark.com.
+  THE BUILD ARK MOUNTS runs as a Vercel microfrontend at www.tsionark.com/square,
+  beside WSWS (microfrontends.json lives in wsws-frontend). `withMicrofrontends`
+  adds the asset prefix and reads the group's routing config, and it THROWS
+  when that config is absent ("Missing MFE_CONFIG"). So it is on only where
+  SQUARE_MICROFRONTENDS=1 — the Vercel project in the group — and never on the
+  standalone square.tsionark.com build.
 */
 export default process.env.SQUARE_MICROFRONTENDS === "1" ? withMicrofrontends(nextConfig) : nextConfig;
