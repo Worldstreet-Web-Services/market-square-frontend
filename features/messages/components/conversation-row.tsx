@@ -3,7 +3,6 @@
 import { cn } from "@/lib/cn";
 import { inboxTime } from "@/lib/inbox-time";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip } from "@/components/ui/badge";
 import { IconPeople } from "@/components/ui/icons";
 import { isGroupThread, threadTitle } from "@/features/messages/lib/thread-identity";
 import Image from "next/image";
@@ -81,16 +80,6 @@ export function ConversationRow({
             the one mark on this row that is purple rather than white.
           */}
           {group && <IconPeople className="h-3 w-3 shrink-0 text-spotlight" />}
-          {/*
-            The capsule the file draws beside four names of five is the ORG
-            badge, not a verified check: it is OrgBadgeChip's own recipe — 4%
-            fill, hairline border, ~13.29px radius. The file drew MARKET there;
-            MARKET was removed from the design (2026-09-16) and OrgBadgeChip
-            renders nothing for it, so only an ARK peer carries a capsule now.
-            A row drawn without it is a peer with no (drawn) org badge, not an
-            unverified peer.
-          */}
-          {!group && peer?.orgBadge && <OrgBadgeChip orgBadge={peer.orgBadge} className="scale-[0.65]" />}
         </span>
 
         <span className="flex items-center gap-2 truncate text-[11px] font-normal leading-[16.5px] text-white/50">

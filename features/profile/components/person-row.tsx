@@ -8,7 +8,7 @@ import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { Profile } from "@/lib/api/schemas";
 import { Avatar } from "@/components/ui/avatar";
-import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
+import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { useFollow } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
 import { PersonMoreMenu } from "@/features/profile/components/person-more-menu";
@@ -57,7 +57,6 @@ export function PersonRow({ profile }: { profile: Profile }) {
   const badges = (
     <>
       <VerifiedBadge verification={profile.verification} className="h-3 w-3 shrink-0" />
-      <OrgBadgeChip orgBadge={profile.orgBadge} />
       <RoleChip role={profile.role} className="shrink-0" />
     </>
   );

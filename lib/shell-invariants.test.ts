@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
@@ -1153,19 +1153,24 @@ describe("Home's timeline follows 647:16354", () => {
     assert.match(css, /@utility ws-post \{[^}]*border: 0\.69px solid rgba\(255, 255, 255, 0\.1\);/);
   });
 
-  it("draws the post's org badge as its own glyph, not a capsule inside a capsule", () => {
-    assert.match(post, /<OrgBadgeChip orgBadge=\{author\.orgBadge\} bare \/>/, "the post header wraps the lockup in a second capsule again");
-    assert.match(badge, /<BadgeArkGlyph className=\{bare \? "h-\[9px\] w-\[44px\]" : "h-\[7px\] w-\[34px\]"\} \/>/);
-    assert.match(badge, /!bare && "rounded-\[21px\] border/, "the capsule is drawn around the bare lockup");
-  });
-
-  it("draws no MARKET badge anywhere — the design removed it (2026-09-16)", () => {
-    // Gated ONCE, in the component every surface goes through, so no call
-    // site can keep drawing it. The schema still parses "market".
-    assert.match(badge, /if \(orgBadge !== "ark"\) return null;/, "a non-ARK org badge renders again");
-    assert.doesNotMatch(badge, /BadgeMarketGlyph|#008CFF/, "the MARKET lockup or its blue ring is back in the chip");
-    const glyphs = read("components/ui/org-badge-glyphs.tsx");
-    assert.doesNotMatch(glyphs, /export function BadgeMarketGlyph/, "the MARKET lockup artwork is back");
+  it("draws no org badge anywhere — the verified seal is the only badge (2026-09-16)", () => {
+    // ogazboiz: "only verification badge will have now". MARKET went first,
+    // then ARK and the admin picker that assigned them. The schema still
+    // parses `orgBadge` so existing payloads load; nothing draws it.
+    assert.doesNotMatch(post, /OrgBadgeChip|orgBadge/, "the post header draws an org badge again");
+    assert.doesNotMatch(badge, /export function OrgBadgeChip|BadgeArkGlyph|BadgeMarketGlyph/, "the org badge component is back");
+    assert.ok(!existsSync(resolve("components/ui/org-badge-glyphs.tsx")), "the lockup artwork is back");
+    const offenders: string[] = [];
+    const walk = (dir: string): string[] =>
+      readdirSync(resolve(dir), { withFileTypes: true }).flatMap((entry) => {
+        const path = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(path);
+        return /\.tsx?$/.test(entry.name) && !entry.name.endsWith(".test.ts") ? [path] : [];
+      });
+    for (const file of [...walk("components"), ...walk("features"), ...walk("app")]) {
+      if (/OrgBadgeChip|BadgePicker|setProfileOrgBadge/.test(stripComments(read(file)))) offenders.push(file);
+    }
+    assert.deepEqual(offenders, [], "an org badge or its admin picker is drawn again");
   });
 });
 
@@ -1406,11 +1411,11 @@ describe("The profile's bio block follows 1021:20271", () => {
 });
 
 describe("The profile draws no creator badge", () => {
-  it("keeps the verified seal and the org badge on the cover, and no RoleChip", () => {
+  it("keeps the verified seal on the cover, and no RoleChip or org badge", () => {
     const cover = stripComments(read("features/profile/components/profile-cover.tsx"));
     assert.doesNotMatch(cover, /RoleChip/, "the creator badge is back on the profile");
     assert.match(cover, /<VerifiedBadge verification=\{profile\.verification\}/);
-    assert.match(cover, /<OrgBadgeChip orgBadge=\{profile\.orgBadge\} \/>/);
+    assert.doesNotMatch(cover, /OrgBadgeChip/, "the org badge is back on the profile");
   });
 });
 

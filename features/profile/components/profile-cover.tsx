@@ -5,7 +5,7 @@ import { atHandle } from "@/lib/handle";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { ImageViewer } from "@/components/ui/image-viewer";
-import { OrgBadgeChip, VerifiedBadge } from "@/components/ui/badge";
+import { VerifiedBadge } from "@/components/ui/badge";
 import { IconProfileBack } from "@/components/ui/profile-icons";
 import { canGoBack } from "@/lib/nav-history";
 import { artworkForSeed, resolveSeed } from "@/lib/avatar-seed";
@@ -261,7 +261,6 @@ export function ProfileCover({
             <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-[20px] font-bold leading-7 text-white md:text-[24px] md:leading-8">
               <span className="min-w-0 break-words">{name}</span>
               <VerifiedBadge verification={profile.verification} className="h-5 w-5" />
-              <OrgBadgeChip orgBadge={profile.orgBadge} />
               {/* No creator badge on the profile ("remove that creator badge in
                   profile", ogazboiz). `role` still decides who can go live. */}
             </h1>
