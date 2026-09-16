@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { IconChevronRight, IconEye, IconPlay, IconVolume } from "@/components/ui/icons";
 import type { Stream } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 /**
  * Explore's card grid.
@@ -73,7 +74,7 @@ function StreamCard({ stream }: { stream: Stream }) {
   const owner = stream.owner;
 
   return (
-    <Link href={`/live/${stream.id}`} className="group flex flex-col gap-[7.36px]">
+    <Link href={sq(`/live/${stream.id}`)} className="group flex flex-col gap-[7.36px]">
       <CardFrame>
         {/* A missing thumbnail gets the seeded gradient, never a blank tile. */}
         <GradientThumb seed={stream.id} className="absolute inset-0 h-full w-full">
@@ -189,7 +190,7 @@ function MediaCard({
   // a player that would have nothing to play.
   if (!isVideo) {
     return (
-      <Link href={`/p/${post.id}`} className="group flex flex-col gap-[7.36px]">
+      <Link href={sq(`/p/${post.id}`)} className="group flex flex-col gap-[7.36px]">
         {art}
       </Link>
     );

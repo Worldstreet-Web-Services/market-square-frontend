@@ -10,6 +10,7 @@ import { GreenRoom } from "@/features/streams/components/green-room";
 import { LiveCockpit } from "@/features/streams/components/live-cockpit";
 import { PostLive } from "@/features/streams/components/post-live";
 import type { Ingest } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 // /studio/[id]: the per-stream state machine — green-room | live-cockpit |
 // post-live by stream status. Deep-linkable: landing on a live stream offers
@@ -48,7 +49,7 @@ export function StudioStreamScreen({ streamId }: { streamId: string }) {
           title="Not your stream"
           body="Only the host can open this studio room."
           action={
-            <Link href={`/live/${data.id}`} className="text-sm font-semibold text-accent hover:underline">
+            <Link href={sq(`/live/${data.id}`)} className="text-sm font-semibold text-accent hover:underline">
               Watch it instead →
             </Link>
           }

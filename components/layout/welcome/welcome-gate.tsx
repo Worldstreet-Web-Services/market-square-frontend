@@ -9,6 +9,7 @@ import {
   WelcomeFlow,
   useShowWelcome,
 } from "@/components/layout/welcome/welcome-flow";
+import { sq } from "@/lib/square-path";
 
 /**
  * WHAT A NEWCOMER SEES AFTER THE SPLASH.
@@ -68,7 +69,7 @@ export function WelcomeGate() {
    */
   const lookAround = () => {
     dismiss();
-    if (pathname === "/auth") router.replace(returnTo ?? "/");
+    if (pathname === "/auth") router.replace(returnTo ?? sq("/"));
   };
 
   if (!show) return null;

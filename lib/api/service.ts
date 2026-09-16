@@ -2,6 +2,7 @@
 
 import { apiFetch } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/envelope";
+import { api } from "../square-path.ts";
 
 export type QueryParams = Record<string, string | number | boolean | undefined>;
 
@@ -97,4 +98,4 @@ export function createServiceClient(
 
 // The one Market Square transport. Every feature api client for the square
 // itself goes through this.
-export const msApi = createServiceClient("/api/market-square");
+export const msApi = createServiceClient(api("/api/market-square"));

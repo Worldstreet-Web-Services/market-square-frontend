@@ -14,6 +14,7 @@ import {
   IconSpeaker,
 } from "@/features/streams/components/live-icons";
 import type { Stream } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 const HERO_LIMIT = 7;
 
@@ -134,7 +135,7 @@ export function LiveHero({ streams }: { streams: Stream[] }) {
               </p>
 
               <Link
-                href={`/live/${stream.id}`}
+                href={sq(`/live/${stream.id}`)}
                 className="ws-press absolute bottom-[19%] left-[18px] flex h-[35px] items-center gap-[5px] rounded-full bg-[#169632] pl-[15px] pr-[15px] text-[10px] font-bold leading-none text-white/[0.78] transition-opacity hover:opacity-90 sm:pr-[59px]"
               >
                 <IconBroadcastFilled className="h-[14px] w-[19px] text-[#0c5d06]" />

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronRight } from "@/components/ui/icons";
 import { useFollow, useSpotlight } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
+import { sq } from "@/lib/square-path";
 
 function RailFollow({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
@@ -101,7 +102,7 @@ export function WhoToFollowRail() {
         ))}
       </ul>
       <Link
-        href="/spotlight"
+        href={sq("/spotlight")}
         className="ws-rail-row flex items-center gap-1 px-4 py-3 text-sm font-semibold text-accent"
       >
         Show more <IconChevronRight className="h-3.5 w-3.5" />

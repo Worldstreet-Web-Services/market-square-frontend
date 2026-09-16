@@ -9,6 +9,7 @@ import { UploadField } from "@/components/ui/upload-field";
 import { useCreateStream } from "@/features/streams/hooks/use-streams";
 import { BROADCAST_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { sq } from "@/lib/square-path";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-grey-600";
@@ -72,7 +73,7 @@ export function CreateStreamSheet({
       {
         onSuccess: (stream: Stream) => {
           onClose();
-          router.push(`/studio/${stream.id}`);
+          router.push(sq(`/studio/${stream.id}`));
         },
       }
     );

@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api/client";
 import { apiError } from "@/lib/api/envelope";
 import { BUY_ORIGIN, parseDestinations, type BuyRoute } from "@/lib/buy-routes";
 import { QuoteError, normaliseQuote, type BuyQuote } from "@/lib/buy-quote";
+import { api } from "../../../lib/square-path.ts";
 
 /**
  * The routing provider, through our own proxy at `/api/dextopus`.
@@ -20,7 +21,7 @@ import { QuoteError, normaliseQuote, type BuyQuote } from "@/lib/buy-quote";
  */
 
 async function providerFetch<T>(path: string, init: RequestInit, fallback: string): Promise<T> {
-  const res = await apiFetch(`/api/dextopus/${path}`, init, { breaker: false });
+  const res = await apiFetch(api(`/api/dextopus/${path}`), init, { breaker: false });
   const body = (await res.json().catch(() => null)) as
     | (Record<string, unknown> & { error?: { code?: string; message?: string }; message?: string })
     | null;

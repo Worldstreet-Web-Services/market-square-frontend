@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { formatKash } from "@/lib/format";
 import { useKashAccount, useKashStatus } from "@/features/kash";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE BALANCE CHIP ON A PROFILE COVER — node 435:27523.
@@ -43,7 +44,7 @@ export function ProfileKashChip() {
       </span>
       {/* 1097:23691 — the node's own chevron, 1.5 stroke at 60% white. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/profile/kash-chevron.svg" alt="" aria-hidden className="h-4 w-4 shrink-0" />
+      <img src={asset("/profile/kash-chevron.svg")} alt="" aria-hidden className="h-4 w-4 shrink-0" />
     </Link>
   );
 }

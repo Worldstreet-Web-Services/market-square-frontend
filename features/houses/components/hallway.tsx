@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { housePath } from "@/features/houses/lib/house";
 import { useStreamList } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 /**
  * The hallway: the rooms open right now, at the top of Home.
@@ -85,7 +86,7 @@ export function Hallway() {
           walk in.
         </p>
         <Link
-          href="/gist-rooms"
+          href={sq("/gist-rooms")}
           className="ws-press mt-3 inline-flex items-center rounded-full border border-white/12 px-4 py-2 text-[13px] font-bold text-body transition-colors hover:bg-white/6"
         >
           Open a gist room
@@ -116,7 +117,7 @@ export function Hallway() {
         </h2>
         {houses.length > SHOWN && (
           <Link
-            href="/gist-rooms"
+            href={sq("/gist-rooms")}
             className="text-[12px] font-bold text-create transition-opacity hover:opacity-80"
           >
             See all {houses.length}

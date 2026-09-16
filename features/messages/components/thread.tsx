@@ -84,6 +84,7 @@ import {
   type MessageReplyTo,
 } from "@/features/messages/lib/types";
 import type { Profile } from "@/lib/api/schemas";
+import { asset } from "@/lib/square-path";
 
 /**
  * The conversation pane — the right-hand 751px column of the Messages screen.
@@ -424,7 +425,7 @@ function ThreadHeader({
             label="Conversation options"
             size={24}
             onClick={() => setMenuOpen((open) => !open)}
-            icon={<Image src="/messages/more.svg" alt="" width={24} height={24} />}
+            icon={<Image src={asset("/messages/more.svg")} alt="" width={24} height={24} />}
           />
           {menuOpen && (
             <>
@@ -2128,7 +2129,7 @@ function Composer({
           label="Attach a file"
           size={24}
           onClick={() => setPicking(true)}
-          icon={<Image src="/messages/attach.svg" alt="" width={24} height={24} />}
+          icon={<Image src={asset("/messages/attach.svg")} alt="" width={24} height={24} />}
         />
         <CircleButton
           label={voice.recording ? "Stop recording and listen" : "Record a voice note"}
@@ -2144,7 +2145,7 @@ function Composer({
               <Spinner className="h-5 w-5 text-white" />
             ) : (
               <Image
-                src="/messages/voice.svg"
+                src={asset("/messages/voice.svg")}
                 alt=""
                 width={24}
                 height={24}
@@ -2202,7 +2203,7 @@ function Composer({
               same way. The design's 20px export, since the house `IconEmoji`
               is a plain smiley and this one carries a plus. */}
           <span aria-hidden className="shrink-0">
-            <Image src="/messages/emoji.svg" alt="" width={20} height={20} />
+            <Image src={asset("/messages/emoji.svg")} alt="" width={20} height={20} />
           </span>
         </div>
 
@@ -2216,7 +2217,7 @@ function Composer({
             send.isPending ? (
               <Spinner className="h-4 w-4 text-white" />
             ) : (
-              <Image src="/messages/send.svg" alt="" width={16} height={16} />
+              <Image src={asset("/messages/send.svg")} alt="" width={16} height={16} />
             )
           }
         />

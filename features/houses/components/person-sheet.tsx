@@ -7,6 +7,7 @@ import { OrgBadgeChip, RoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { IconChevronRight } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/sheet";
 import type { ParticipantMeta } from "@/features/houses/lib/participant-meta";
+import { sq } from "@/lib/square-path";
 
 /**
  * A profile, OVER the room.
@@ -127,7 +128,7 @@ export function PersonSheet({
 
         {username && (
           <Link
-            href={`/u/${username}`}
+            href={sq(`/u/${username}`)}
             className="ws-row flex w-full items-center gap-3 px-1 py-3 text-[13px] font-semibold text-body"
           >
             {/* The ONE thing here that navigates, and the label says so. */}

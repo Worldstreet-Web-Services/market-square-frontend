@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/square-path";
 
 /**
  * Symbols a `$TICKER` may link to.
@@ -36,7 +37,7 @@ function useCatalogue() {
   return useQuery({
     queryKey: ["ms", "tradeable-catalogue"],
     queryFn: async (): Promise<Catalogue> => {
-      const res = await fetch("/api/symbols");
+      const res = await fetch(api("/api/symbols"));
       if (!res.ok) return { symbols: [], markets: [] };
       const body = (await res.json()) as Partial<Catalogue>;
       return { symbols: body.symbols ?? [], markets: body.markets ?? [] };

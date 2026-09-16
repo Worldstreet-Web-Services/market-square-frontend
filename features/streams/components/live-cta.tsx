@@ -1,6 +1,7 @@
 "use client";
 
 import { useGate } from "@/hooks/use-gate";
+import { asset, sq } from "@/lib/square-path";
 
 /**
  * "CREATE YOUR GISTROOM NOW" — node 1305:149178, the first section of the
@@ -54,7 +55,7 @@ const DOTS = [27.08, 10.29, 9.21, 9.21];
 
 export function LiveCta() {
   const gate = useGate();
-  const open = () => gate(() => window.location.assign("/gist-rooms?open=1"));
+  const open = () => gate(() => window.location.assign(sq("/gist-rooms?open=1")));
 
   return (
     <>
@@ -64,7 +65,7 @@ export function LiveCta() {
         <span className="pointer-events-none absolute bottom-[9px] left-[30px] h-1 w-7 rounded-[50%] bg-black/25 blur-[1px]" />
         {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size decorative art */}
         <img
-          src="/home/banner-mascot.png"
+          src={asset("/home/banner-mascot.png")}
           alt=""
           aria-hidden
           draggable={false}
@@ -95,7 +96,7 @@ export function LiveCta() {
                 soft-light blend are baked into the export. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
             <img
-              src="/home/banner-arc-left.svg"
+              src={asset("/home/banner-arc-left.svg")}
               alt=""
               aria-hidden
               className="pointer-events-none absolute max-w-none select-none"
@@ -119,7 +120,7 @@ export function LiveCta() {
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- the file's own art */}
               <img
-                src="/home/banner-mascot.png"
+                src={asset("/home/banner-mascot.png")}
                 alt=""
                 draggable={false}
                 className="max-w-none select-none"
@@ -146,7 +147,7 @@ export function LiveCta() {
             {/* 1295:147727 — the arc over everything. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
             <img
-              src="/home/banner-arc-right.svg"
+              src={asset("/home/banner-arc-right.svg")}
               alt=""
               aria-hidden
               className="pointer-events-none absolute max-w-none select-none"

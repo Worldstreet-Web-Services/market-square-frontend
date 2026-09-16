@@ -3,6 +3,7 @@
 import { UpcomingRoomCard } from "@/components/layout/upcoming-room-card";
 import { useStreamList } from "@/features/streams";
 import { SectionHeading } from "@/components/layout/section-heading";
+import { sq } from "@/lib/square-path";
 
 /**
  * GIST ROOMS THAT HAVE NOT OPENED YET — Home's "Coming soon".
@@ -51,7 +52,7 @@ export function ComingSoonRooms() {
     <section aria-labelledby="coming-soon-rooms" className="mb-[64px]">
       <div className="mb-4">
         {/* 1305:149167 sets this heading ALL WHITE — no gradient half. */}
-        <SectionHeading id="coming-soon-rooms" lead="Coming Soon" action={{ label: "View more", href: "/gist-rooms" }} />
+        <SectionHeading id="coming-soon-rooms" lead="Coming Soon" action={{ label: "View more", href: sq("/gist-rooms") }} />
       </div>
 
       {/* 1305:148882 — the rail, clipped at the column's edge; the cards at

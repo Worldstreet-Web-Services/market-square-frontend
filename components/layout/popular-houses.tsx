@@ -4,6 +4,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { useDiscoverHouses } from "@/features/messages/lib/discover-houses";
 import { useJoinGroup } from "@/features/messages";
+import { sq } from "@/lib/square-path";
 
 /**
  * POPULAR HOUSES — node 1305:149179 in the 2026-09-12 Home.
@@ -61,7 +62,7 @@ export function PopularHouses() {
           id="popular-houses"
           lead="Popular"
           accent="Houses"
-          action={{ label: "View more", href: "/houses" }}
+          action={{ label: "View more", href: sq("/houses") }}
         />
       </div>
 

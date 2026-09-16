@@ -5,6 +5,7 @@ import { formatCount, formatKash } from "@/lib/format";
 import { Pill } from "@/components/ui/badge";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { CATEGORY_GLYPH, type StoreItem } from "@/features/store/lib/types";
+import { sq } from "@/lib/square-path";
 
 export function storePriceLabel(item: Pick<StoreItem, "pricing" | "priceKash">): string {
   return item.pricing === "free" || !item.priceKash ? "Free" : formatKash(item.priceKash);
@@ -24,7 +25,7 @@ export function storePriceLabel(item: Pick<StoreItem, "pricing" | "priceKash">):
 export function StoreItemCard({ item }: { item: StoreItem }) {
   return (
     <Link
-      href={`/store/${item.slug}`}
+      href={sq(`/store/${item.slug}`)}
       className="ws-hair ws-rail-row block overflow-hidden rounded-2xl border"
     >
       <GradientThumb

@@ -69,6 +69,7 @@ import { streamPriceLabel } from "@/features/streams/components/stream-card";
 import { stageFrameAspect } from "@/features/streams/lib/stage";
 import type { Stream } from "@/features/streams/lib/types";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { sq } from "@/lib/square-path";
 
 function Countdown({ target }: { target: string }) {
   const [now, setNow] = useState(() => Date.now());
@@ -337,10 +338,10 @@ let giftSeq = 0;
 // gone. Nothing here is marked current: the current page is /live/:id, which
 // none of these is — this rail is the way *out* of the room.
 const STREAM_NAV = [
-  { href: "/", label: "Home", icon: IconHome },
-  { href: "/live", label: "Discover LIVE", icon: IconLive },
-  { href: "/tickets", label: "My tickets", icon: IconTicket },
-  { href: "/studio", label: "Go LIVE", icon: IconCamera },
+  { href: sq("/"), label: "Home", icon: IconHome },
+  { href: sq("/live"), label: "Discover LIVE", icon: IconLive },
+  { href: sq("/tickets"), label: "My tickets", icon: IconTicket },
+  { href: sq("/studio"), label: "Go LIVE", icon: IconCamera },
 ] as const;
 
 
@@ -388,7 +389,7 @@ function SuggestedCreators({ currentId }: { currentId: string }) {
           return (
             <li key={item.id}>
               <Link
-                href={`/live/${item.id}`}
+                href={sq(`/live/${item.id}`)}
                 // Below xl the row is the avatar alone, so the accessible name
                 // has to come from the link itself — the text is display:none.
                 aria-label={`${name} — live now`}
@@ -420,7 +421,7 @@ function SuggestedCreators({ currentId }: { currentId: string }) {
       </ul>
 
       <Link
-        href="/live"
+        href={sq("/live")}
         className="mt-2 flex items-center justify-center gap-1 px-1 py-1 text-[13px] font-semibold text-accent xl:justify-start"
       >
         <IconChevronDown className="h-3.5 w-3.5 shrink-0" />
@@ -840,7 +841,7 @@ export function StreamRoom({
         {/* ---- Header ------------------------------------------------- */}
         <div className="absolute inset-x-0 top-0 z-20 flex items-start gap-3 px-4 pb-2 pt-3 lg:static lg:z-auto lg:h-[72px] lg:shrink-0 lg:items-center lg:border-b lg:border-white/10 lg:bg-panel lg:px-5 lg:py-0">
           <Link
-            href="/live"
+            href={sq("/live")}
             aria-label="Back to Live"
             /* Below lg this overlaid chevron IS the exit (the rail starts at
                lg). In theater mode the rail is gone, so it comes back on

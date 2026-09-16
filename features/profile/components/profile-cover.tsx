@@ -10,6 +10,7 @@ import { IconProfileBack } from "@/components/ui/profile-icons";
 import { canGoBack } from "@/lib/nav-history";
 import { artworkForSeed, resolveSeed } from "@/lib/avatar-seed";
 import type { Profile } from "@/lib/api/schemas";
+import { asset, sq } from "@/lib/square-path";
 
 /**
  * THE PROFILE COVER — node 435:27500, redrawn as 1021:20229 (live file,
@@ -81,7 +82,7 @@ export function ProfileCover({
   const [scale, setScale] = useState<number | null>(null);
   /* The picture open full screen, if any: the profile picture or the cover. */
   const [viewing, setViewing] = useState<{ src: string; alt: string } | null>(null);
-  const coverSrc = profile.coverUrl ?? "/profile/default-cover.jpg";
+  const coverSrc = profile.coverUrl ?? asset("/profile/default-cover.jpg");
   const avatarSrc = profile.avatarUrl ?? artworkForSeed(resolveSeed({ id: profile.id, name }));
   useLayoutEffect(() => {
     const el = cardRef.current;
@@ -153,7 +154,7 @@ export function ProfileCover({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src="/profile/default-cover.jpg"
+          src={asset("/profile/default-cover.jpg")}
           alt=""
           aria-hidden
           className="absolute inset-0 h-full w-full scale-[1.9] object-cover"
@@ -190,7 +191,7 @@ export function ProfileCover({
           header. */}
       <button
         type="button"
-        onClick={() => (canGoBack() ? router.back() : router.push("/"))}
+        onClick={() => (canGoBack() ? router.back() : router.push(sq("/")))}
         className="ws-press pointer-events-auto absolute left-6 top-6 z-10 flex items-center gap-2 text-[16px] leading-6 text-white transition-opacity hover:opacity-80"
       >
         {/* 545:47613 — the file's own `arrow-left` at 20, not the shared chevron. */}
@@ -244,7 +245,7 @@ export function ProfileCover({
               >
                 {/* The node's own export: the disc, its ramp and the camera. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/profile/camera-button.svg" alt="" aria-hidden className="block h-8 w-8" />
+                <img src={asset("/profile/camera-button.svg")} alt="" aria-hidden className="block h-8 w-8" />
               </button>
             )}
           </span>

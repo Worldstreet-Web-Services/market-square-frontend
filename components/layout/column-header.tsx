@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { IconArrowLeft } from "@/components/ui/icons";
 import { canGoBack } from "@/lib/nav-history";
+import { sq } from "@/lib/square-path";
 
 // Every column surface that is not the timeline gets this header: an optional
 // back arrow, the page title with a quiet subtitle under it, and room on the
@@ -13,7 +14,7 @@ export function ColumnHeader({
   title,
   subtitle,
   back = false,
-  backFallback = "/",
+  backFallback = sq("/"),
   onBack,
   action,
   children,

@@ -74,6 +74,7 @@ import {
   buildSeating,
   seatsFull,
 } from "@/features/houses/lib/seating";
+import { sq } from "@/lib/square-path";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -235,7 +236,7 @@ export function HouseRoom({
       <div className="mx-auto w-full max-w-[520px] px-4 py-10 text-center">
         <p className="text-sm text-body">This is a stream, not a house.</p>
         <Link
-          href={`/live/${data.id}`}
+          href={sq(`/live/${data.id}`)}
           className="ws-press mt-3 inline-flex h-8 items-center rounded-full border border-white/15 bg-white/5 px-3.5 text-xs font-semibold text-white"
         >
           Watch it instead
@@ -854,7 +855,7 @@ function LiveHouse({
     if (seatParamUsed.current || isHost || mine.isPending) return;
     if (new URLSearchParams(window.location.search).get("seat") !== "1") return;
     seatParamUsed.current = true;
-    router.replace(`/gist-rooms/${stream.id}`, { scroll: false });
+    router.replace(sq(`/gist-rooms/${stream.id}`), { scroll: false });
     if (!mine.data || mine.data.status === "denied" || mine.data.status === "withdrawn") {
       request.mutate();
     }
@@ -1014,7 +1015,7 @@ function LiveHouse({
     if (!isHost && myRequestId) {
       resolve.mutate({ requestId: myRequestId, action: "leave" });
     }
-    router.push("/gist-rooms");
+    router.push(sq("/gist-rooms"));
   }, [isHost, myRequestId, resolve, router]);
 
   /*
@@ -1824,7 +1825,7 @@ function LiveHouse({
             loading={endHouse.isPending}
             onClick={() => {
               if (isHost) {
-                endHouse.mutate(stream.id, { onSuccess: () => router.push("/gist-rooms") });
+                endHouse.mutate(stream.id, { onSuccess: () => router.push(sq("/gist-rooms")) });
                 return;
               }
               leaveNow();

@@ -8,6 +8,7 @@ import { IconPeople } from "@/components/ui/icons";
 import { isGroupThread, threadTitle } from "@/features/messages/lib/thread-identity";
 import Image from "next/image";
 import type { Conversation } from "@/features/messages/lib/types";
+import { asset } from "@/lib/square-path";
 
 /**
  * One conversation in the inbox — a 62px card, not a list row.
@@ -141,7 +142,7 @@ function Preview({ conversation, meId }: { conversation: Conversation; meId?: st
       <>
         {/* The file's own 16px document glyph, exported rather than
             approximated — the house set has no attachment icon. */}
-        <Image src="/messages/attachment.svg" alt="" width={16} height={16} className="shrink-0" />
+        <Image src={asset("/messages/attachment.svg")} alt="" width={16} height={16} className="shrink-0" />
         <span className="truncate">
           {mine ? "You: " : ""}
           Shared attachment

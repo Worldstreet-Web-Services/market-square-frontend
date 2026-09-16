@@ -9,6 +9,7 @@ import { IconEye, IconPlay } from "@/components/ui/icons";
 import { gameLabel } from "@/lib/deeplink";
 import type { Stream } from "@/features/streams/lib/types";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { sq } from "@/lib/square-path";
 
 export function streamPriceLabel(stream: Pick<Stream, "ticketPriceKash" | "vipPriceKash">): string {
   if (stream.ticketPriceKash) return formatKash(stream.ticketPriceKash);
@@ -27,7 +28,7 @@ export function StreamCard({ stream }: { stream: Stream }) {
   const game = gameLabel(stream.deepLink);
   return (
     <TransitionLink
-      href={`/live/${stream.id}`}
+      href={sq(`/live/${stream.id}`)}
       className="ws-row flex items-start gap-3 px-4 py-3"
     >
       <GradientThumb

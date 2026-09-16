@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMe } from "@/hooks/use-me";
 import { ClaimUsernameSheet } from "@/features/profile/components/edit-profile-sheet";
+import { sq } from "@/lib/square-path";
 
 // Mounted once in the shell: the moment /me arrives after login with no
 // chosen username, the claim sheet opens prominently — on any page, not
@@ -31,7 +32,7 @@ export function ClaimUsernameGate() {
         setDismissed(true);
         window.sessionStorage.setItem(DISMISS_KEY, "1");
       }}
-      onClaimed={(username) => router.push(`/u/${username}`)}
+      onClaimed={(username) => router.push(sq(`/u/${username}`))}
     />
   );
 }

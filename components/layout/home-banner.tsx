@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGate } from "@/hooks/use-gate";
 import { DeckDots } from "@/components/ui/deck-dots";
+import { asset, sq } from "@/lib/square-path";
 
 /**
  * "CREATE YOUR GISTROOM NOW" — node 1305:149178, the first section of the
@@ -85,7 +86,7 @@ export const HOME_BANNER_SLIDES: HomeBannerSlide[] = [
     id: "host-gistroom",
     title: "Create your Gistroom now",
     subtitle: "Host live GistTalk sessions and watch your community thrive instantly.",
-    action: { label: "Host Room", href: "/gist-rooms?open=1" },
+    action: { label: "Host Room", href: sq("/gist-rooms?open=1") },
   },
 ];
 
@@ -107,7 +108,7 @@ export function HomeBanner({ slides }: { slides: HomeBannerSlide[] }) {
         <span className="pointer-events-none absolute bottom-[9px] left-[30px] h-1 w-7 rounded-[50%] bg-black/25 blur-[1px]" />
         {/* eslint-disable-next-line @next/next/no-img-element -- the file's own art */}
         <img
-          src="/home/banner-mascot.png"
+          src={asset("/home/banner-mascot.png")}
           alt=""
           aria-hidden
           draggable={false}
@@ -130,7 +131,7 @@ export function HomeBanner({ slides }: { slides: HomeBannerSlide[] }) {
         {/* 1295:147719 — the arc under everything, at its stroke's bounds. */}
         {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
         <img
-          src="/home/banner-arc-left.svg"
+          src={asset("/home/banner-arc-left.svg")}
           alt=""
           aria-hidden
           className="pointer-events-none absolute left-[-4.12px] top-[-57.22px] h-[106px] w-[256px] max-w-none select-none mix-blend-soft-light"
@@ -149,7 +150,7 @@ export function HomeBanner({ slides }: { slides: HomeBannerSlide[] }) {
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- the file's own art */}
           <img
-            src="/home/banner-mascot.png"
+            src={asset("/home/banner-mascot.png")}
             alt=""
             draggable={false}
             className="h-[148.46px] w-[98.96px] max-w-none select-none"
@@ -167,7 +168,7 @@ export function HomeBanner({ slides }: { slides: HomeBannerSlide[] }) {
         {/* 1295:147727 — the arc over everything, at its stroke's bounds. */}
         {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
         <img
-          src="/home/banner-arc-right.svg"
+          src={asset("/home/banner-arc-right.svg")}
           alt=""
           aria-hidden
           className="pointer-events-none absolute left-[204.87px] top-[16.41px] h-[153px] w-[369px] max-w-none select-none mix-blend-soft-light"

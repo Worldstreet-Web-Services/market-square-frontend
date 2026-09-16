@@ -15,6 +15,7 @@ import { IconProfileSms } from "@/components/ui/profile-icons";
 import { ProfileHousesOf } from "@/components/layout/profile-houses-of";
 import { ProfileReplays } from "@/components/layout/profile-replays";
 import type { Profile } from "@/lib/api/schemas";
+import { sq } from "@/lib/square-path";
 
 /**
  * Joins the profile and messages slices, which never import each other.
@@ -49,7 +50,7 @@ function MessageButton({ profile }: { profile: Profile }) {
       */
       onClick={() =>
         open.mutate(profile, {
-          onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
+          onSuccess: (conversation) => router.push(sq(`/messages?c=${conversation.id}`)),
         })
       }
       className="ws-glass-clear ws-press flex h-[38.37px] w-[38.37px] shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-50"

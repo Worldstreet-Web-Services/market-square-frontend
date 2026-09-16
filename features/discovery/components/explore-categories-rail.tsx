@@ -16,6 +16,7 @@ import {
   IconStore,
 } from "@/components/ui/icons";
 import { useCategories } from "@/features/discovery/hooks/use-discovery";
+import { sq } from "@/lib/square-path";
 
 /**
  * Explore Categories.
@@ -43,17 +44,17 @@ interface Destination {
 
 const DESTINATIONS: Record<string, Destination> = {
   // The home timeline IS every post — /discover would be a detour.
-  "all-posts": { href: "/", external: false, icon: IconHome },
-  "live-streams": { href: "/live", external: false, icon: IconLive },
+  "all-posts": { href: sq("/"), external: false, icon: IconHome },
+  "live-streams": { href: sq("/live"), external: false, icon: IconLive },
   // Spotlight is the surface that actually ranks and returns creators.
-  "creators-audio": { href: "/spotlight", external: false, icon: IconSpark },
+  "creators-audio": { href: sq("/spotlight"), external: false, icon: IconSpark },
   // Promotion only. With `storeNav` off the category KEEPS its row — the
   // API's label, order and count are authoritative and stay exactly as
   // served — it simply loses its destination and renders inert, the same way
   // the Ark-app categories do when that app is not configured. Hiding the row
   // outright would edit the service's own list; hiding the link does not.
   ...(MARKET_FLAGS.storeNav
-    ? { "ark-store": { href: "/store", external: false, icon: IconStore } }
+    ? { "ark-store": { href: sq("/store"), external: false, icon: IconStore } }
     : {}),
   // Other Ark products: resolved through the same deep-link table the feed
   // uses, so the base URL and the source attribution stay in one place.

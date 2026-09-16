@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { IconX } from "@/components/ui/icons";
 import { formatCount } from "@/lib/format";
 import type { RoomPerson } from "@/features/houses/components/room-people";
+import { sq } from "@/lib/square-path";
 
 /**
  * EVERYONE IN ONE SECTION — node 369:8741, what "View all" opens.
@@ -136,7 +137,7 @@ function RowIdentity({
   const className = "flex min-w-0 flex-1 items-center gap-[9px]";
   if (!username) return <span className={className}>{children}</span>;
   return (
-    <Link href={`/u/${username}`} className={className}>
+    <Link href={sq(`/u/${username}`)} className={className}>
       {children}
     </Link>
   );

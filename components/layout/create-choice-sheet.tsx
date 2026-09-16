@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Sheet } from "@/components/ui/sheet";
 import { IconMic, IconPlus } from "@/components/ui/icons";
+import { sq } from "@/lib/square-path";
 
 /**
  * WHAT ARE YOU MAKING — a post, or a gist room.
@@ -60,7 +61,7 @@ export function CreateChoiceSheet({
           className={row}
           onClick={() => {
             onClose();
-            router.push("/gist-rooms?open=1");
+            router.push(sq("/gist-rooms?open=1"));
           }}
         >
           <span className={disc}>

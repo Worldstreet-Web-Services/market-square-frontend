@@ -1,5 +1,6 @@
 import { createPublicClient, fallback, http, type Chain } from "viem";
 import { SPONSORED_EVM_CHAINS } from "@/lib/trade/sponsored-evm";
+import { api } from "../square-path.ts";
 
 // Read client per chain for confirming transactions. Reads must go through a
 // client pinned to the transaction's chain, never the embedded wallet's ambient
@@ -49,7 +50,7 @@ const FALLBACK_RPCS: Record<number, string> = {
 export function publicClientForChain(chainId: number) {
   const entry = READ_CHAINS[chainId];
   if (!entry) throw new Error(`This chain isn't supported yet (${chainId}).`);
-  const primary = http(`/api/evm-rpc/${entry.network}`);
+  const primary = http(api(`/api/evm-rpc/${entry.network}`));
   const backup = FALLBACK_RPCS[chainId];
   return createPublicClient({
     chain: entry.chain,

@@ -12,6 +12,7 @@ import {
   IconFilterLocation,
 } from "@/components/ui/home-icons";
 import { friendsFilterLabel, type FriendsFilter } from "@/lib/friends-filter";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE FILTER ON "MAKE SOME FRIENDS" — node 647:17482 (the pill) and 651:18441
@@ -156,7 +157,7 @@ export function FriendsFilter({
         {variant === "pals" ? (
           // eslint-disable-next-line @next/next/no-img-element -- the file's own export
           <img
-            src="/home/view-more-arrow.svg"
+            src={asset("/home/view-more-arrow.svg")}
             alt=""
             aria-hidden
             className={cn(

@@ -35,6 +35,7 @@ import {
   IconSettingsChevron,
   IconExternalLink,
 } from "@/components/ui/icons";
+import { sq } from "@/lib/square-path";
 
 /*
   SETTINGS, IN HOME'S FRAME.
@@ -717,7 +718,7 @@ export function SettingsScreen({ username }: { username: string }) {
   */
   useEffect(() => {
     if (me.data && me.data.username.toLowerCase() !== username.toLowerCase()) {
-      router.replace(`/u/${me.data.username}/settings`);
+      router.replace(sq(`/u/${me.data.username}/settings`));
     }
   }, [me.data, username, router]);
 
@@ -939,7 +940,7 @@ export function SettingsScreen({ username }: { username: string }) {
                   support.data
                     ? () =>
                         openChat.mutate(support.data, {
-                          onSuccess: (conversation) => router.push(`/messages?c=${conversation.id}`),
+                          onSuccess: (conversation) => router.push(sq(`/messages?c=${conversation.id}`)),
                         })
                     : undefined
                 }

@@ -40,6 +40,7 @@ import {
 } from "@/features/profile/components/account-tabs";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { useMarketView } from "@/lib/analytics";
+import { asset, sq } from "@/lib/square-path";
 
 /*
   Media is a tab, not a section inside Posts.
@@ -129,7 +130,7 @@ function PostsTab({
           action={
             isMe
               ? (composeSlot ?? (
-                  <TabCta href="/?compose=1" label="Create a post" />
+                  <TabCta href={sq("/?compose=1")} label="Create a post" />
                 ))
               : undefined
           }
@@ -166,7 +167,7 @@ function PinnedPost({ pinned }: { pinned: NonNullable<Profile["pinnedPost"]> }) 
     <div className="px-4 pt-8 md:px-8">
       <p className="pb-2 text-[12px] font-semibold text-white/50">Pinned</p>
       <Link
-        href={`/p/${pinned.id}`}
+        href={sq(`/p/${pinned.id}`)}
         className="ws-press flex items-center gap-3 rounded-[16px] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.07]"
       >
         {pinned.thumbnailUrl && (
@@ -222,7 +223,7 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
               ? "Sessions you host show up here once you've gone live."
               : "Sessions they host will show up here."
           }
-          action={isMe ? <TabCta href="/studio" label="Go live" /> : undefined}
+          action={isMe ? <TabCta href={sq("/studio")} label="Go live" /> : undefined}
         />
       </div>
     );
@@ -231,7 +232,7 @@ function StreamsTab({ username, isMe }: { username: string; isMe: boolean }) {
       {streams.data.items.map((stream) => (
         <li key={stream.id}>
           <Link
-            href={`/live/${stream.id}`}
+            href={sq(`/live/${stream.id}`)}
             className="ws-row flex items-center gap-3 px-4 py-3"
           >
             <div className="min-w-0 flex-1">
@@ -300,7 +301,7 @@ function ActivitiesTab({
               : "Scheduled games, streams and events show here."
           }
           action={
-            isMe ? <TabCta href="/schedule" label="Schedule one" /> : undefined
+            isMe ? <TabCta href={sq("/schedule")} label="Schedule one" /> : undefined
           }
         />
       </div>
@@ -529,7 +530,7 @@ export function ProfilePage({
                 >
                   {/* 1021:20262 — the node's own `basil:share-outline`. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/profile/icon-share.svg" alt="" aria-hidden className="h-4 w-4" />
+                  <img src={asset("/profile/icon-share.svg")} alt="" aria-hidden className="h-4 w-4" />
                 </button>
                 <button
                   type="button"

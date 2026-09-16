@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { IconExportArrow } from "@/components/ui/icons";
+import { asset } from "@/lib/square-path";
 
 /**
  * "Ecosystem Partners" — the rail's card for the products around the square.
@@ -41,7 +42,7 @@ const SLIDES: PartnerSlide[] = [
     body: "Build the life you want with all the tools you could ever need… all from one account.",
     accent: "#FFD230",
     href: WORLDSTREET_URL,
-    art: "/ecosystem/partner-slide-1.svg",
+    art: asset("/ecosystem/partner-slide-1.svg"),
     alt: "WorldStreet",
   },
   {
@@ -53,7 +54,7 @@ const SLIDES: PartnerSlide[] = [
     // whole. A carousel where every card leads to the same place is a banner
     // with extra steps.
     href: "https://linkpay-lemon.vercel.app/en",
-    art: "/ecosystem/partner-slide-2.svg",
+    art: asset("/ecosystem/partner-slide-2.svg"),
     alt: "LinkPay",
   },
 ];

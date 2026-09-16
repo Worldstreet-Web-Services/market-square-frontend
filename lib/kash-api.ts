@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createServiceClient } from "@/lib/api/service";
+import { api } from "./square-path.ts";
 
 /**
  * The KASH transport, and the one read that crosses slice boundaries.
@@ -22,7 +23,7 @@ import { createServiceClient } from "@/lib/api/service";
  * breaker and tell the feed, messages and notifications that the square is
  * down.
  */
-export const kashApi = createServiceClient("/api/kash", {
+export const kashApi = createServiceClient(api("/api/kash"), {
   fallbackMessage: "KASH is unavailable right now.",
   breaker: false,
 });
