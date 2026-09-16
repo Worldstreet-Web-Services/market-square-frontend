@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -146,7 +147,7 @@ export function PersonCell({
     );
   }
   return (
-    <Link href={`/u/${profile.username}`} className="flex min-w-0 items-center gap-2.5">
+    <Link href={profileHref(profile)} className="flex min-w-0 items-center gap-2.5">
       <Avatar name={profile.displayName} src={profile.avatarUrl} size={size} />
       <span className="min-w-0">
         <span className="flex items-center gap-1.5">

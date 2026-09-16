@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { profileHref } from "@/lib/profile-href";
 import { toast } from "sonner";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { formatDateTime, formatKash, formatCount, relativeTime } from "@/lib/format";
@@ -40,7 +41,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
     <article className="ws-post p-3">
       <header className="flex items-center gap-2.5 px-1">
         {owner ? (
-          <TransitionLink href={`/u/${owner.username}`} className="shrink-0">
+          <TransitionLink href={profileHref(owner)} className="shrink-0">
             <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={36} />
           </TransitionLink>
         ) : (
@@ -53,7 +54,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
             {owner ? (
               <>
                 <Link
-                  href={`/u/${owner.username}`}
+                  href={profileHref(owner)}
                   className="truncate text-[14px] font-bold text-heading hover:underline"
                 >
                   {owner.displayName}

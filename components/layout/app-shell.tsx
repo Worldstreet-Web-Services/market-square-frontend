@@ -1,6 +1,7 @@
 "use client";
 
 import { GENDER_OPTIONS, genderLabel, normalizeGender } from "@/lib/gender";
+import { profileHref } from "@/lib/profile-href";
 import { createPortal } from "react-dom";
 
 import { useEffect, useRef, useState } from "react";
@@ -50,6 +51,7 @@ import { OnboardingFlow } from "@/components/layout/onboarding-flow";
 import { FriendsPopup } from "@/components/layout/friends-popup";
 import { RightRail } from "@/components/layout/right-rail";
 import { BottomDock } from "@/components/layout/bottom-dock";
+import { CreateChoiceSheet } from "@/components/layout/create-choice-sheet";
 import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
@@ -538,7 +540,7 @@ export function RailMenu({
       const node = anchor.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
-      const width = panel === "gist" ? 231 : panel === "explore" ? 347 : 224;
+      const width = panel === "gist" ? 264 : panel === "explore" ? 347 : 224;
       const left =
         align === "right"
           ? Math.min(rect.right + 8, window.innerWidth - width - 8)
@@ -585,7 +587,7 @@ export function RailMenu({
                 ...(align === "below"
                   ? { top: at.top }
                   : { bottom: Math.max(8, window.innerHeight - at.top) }),
-                width: panel === "gist" ? 231 : panel === "explore" ? 347 : 224,
+                width: panel === "gist" ? 264 : panel === "explore" ? 347 : 224,
               }}
               className={
                 panel === "gist"
@@ -728,18 +730,32 @@ function AccountChip() {
  * The account menu's entries. The rail's account chip and the top bar's
  * avatar open the same menu, so it is written once.
  */
-export function AccountMenuItems({ close }: { close: () => void }) {
+export function AccountMenuItems({
+  close,
+  onOpenNav,
+}: {
+  close: () => void;
+  /**
+   * PHONES ONLY: a row that opens the full nav drawer. On a phone the avatar
+   * used to open that drawer directly, and it was the drawer's ONLY way in —
+   * so when the avatar became this menu (QA: "it's bringing up an old screen
+   * instead of the new pop up"), Tickets, Store, Studio and Admin would have
+   * had no entry point on a phone at all. Absent on desktop, where the rail or
+   * the dock's sidebar switch already reaches them.
+   */
+  onOpenNav?: () => void;
+}) {
   const logout = useLogout();
   const me = useMe();
   const router = useRouter();
   const update = useUpdateMe();
   const [step, setStep] = useState<"root" | "gender">("root");
   /* The file's own chevron (747:14009), and turned round for a step's Back. */
-  const chevron = <IconFilterChevronRight className="h-2 w-1 text-white" />;
-  const back = <IconFilterChevronRight className="h-2 w-1 -scale-x-100 text-white" />;
+  const chevron = <IconFilterChevronRight className="h-2.5 w-[5px] text-white" />;
+  const back = <IconFilterChevronRight className="h-2.5 w-[5px] -scale-x-100 text-white" />;
   /* The option that is on carries the filter menu's own dot in `--color-create`. */
   const dot = (on: boolean) =>
-    on ? <span aria-hidden className="block h-[7px] w-[7px] rounded-full bg-create" /> : undefined;
+    on ? <span aria-hidden className="block h-2 w-2 rounded-full bg-create" /> : undefined;
   const go = (href: string) => {
     close();
     router.push(href);
@@ -775,26 +791,37 @@ export function AccountMenuItems({ close }: { close: () => void }) {
   */
   return (
     <>
+      {onOpenNav && (
+        <MenuRow
+          icon={<IconMore className="h-5 w-5 text-grey-400" />}
+          label="All pages"
+          trailing={chevron}
+          onClick={() => {
+            close();
+            onOpenNav();
+          }}
+        />
+      )}
       <MenuRow
-        icon={<IconFilterLocation className="h-[13.5px] w-[14px] text-grey-400" />}
+        icon={<IconFilterLocation className="h-[17px] w-[17.5px] text-grey-400" />}
         label="Profile"
         trailing={chevron}
-        onClick={() => go(me.data ? `/u/${me.data.username}` : "/auth")}
+        onClick={() => go(me.data ? profileHref(me.data) : "/auth")}
       />
       <MenuRow
-        icon={<IconFilterFriends className="h-[11px] w-[15px] text-grey-400" />}
+        icon={<IconFilterFriends className="h-[14px] w-[19px] text-grey-400" />}
         label="Settings"
         // Each person's own settings live under their profile.
-        onClick={() => go(me.data ? `/u/${me.data.username}/settings` : "/auth")}
+        onClick={() => go(me.data ? profileHref(me.data, "settings") : "/auth")}
       />
       <MenuRow
-        icon={<IconFilterGender className="h-4 w-4 text-grey-400" />}
+        icon={<IconFilterGender className="h-5 w-5 text-grey-400" />}
         label={genderLabel(me.data?.gender) ? `Gender · ${genderLabel(me.data?.gender)}` : "Gender"}
         trailing={chevron}
         onClick={me.data ? () => setStep("gender") : undefined}
       />
       <MenuRow
-        icon={<IconLogout className="h-4 w-4 text-grey-400" />}
+        icon={<IconLogout className="h-5 w-5 text-grey-400" />}
         label={`Log out @${me.data?.username ?? ""}`}
         onClick={() => {
           close();
@@ -1516,7 +1543,7 @@ function MobileMenu({
           ) : (
             <div className="ws-hair flex items-center gap-2 border-t pt-3">
               <Link
-                href={me.data ? `/u/${me.data.username}` : "/auth"}
+                href={me.data ? profileHref(me.data) : "/auth"}
                 onClick={onClose}
                 className="ws-press flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-white/[0.06]"
               >
@@ -1713,6 +1740,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unread = useUnread();
   const broadcast = useBroadcastStatus();
   const [composeOpen, setComposeOpen] = useState(false);
+  // The dock's plus asks first: a post, or a gist room. See CreateChoiceSheet.
+  const [choosingCreate, setChoosingCreate] = useState(false);
   /**
    * The mobile drawer, owned HERE because two surfaces open it: the account
    * avatar in the top strip and the "More" tab at the bottom. Two copies of
@@ -1990,26 +2019,57 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 at the file's 8 x 4 and its 11 x 7 export overflows that box by
                 the stroke, so it is pulled back a pixel, exactly as the
                 desktop bar does it. */}
-            <button
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open menu"
-              aria-expanded={menuOpen}
-              className="ws-press flex shrink-0 items-center gap-2"
-            >
-              {authenticated ? (
-                <Avatar
-                  name={me.data?.displayName ?? "Me"}
-                  seed={me.data?.id}
-                  src={me.data?.avatarUrl}
-                  size={32}
-                />
-              ) : (
+            {authenticated ? (
+              /*
+                THE SAME ACCOUNT MENU AS DESKTOP. QA: on a phone the avatar
+                "is bringing up an old screen instead of the new pop up that is
+                supposed to show just like the way desktop is" — it opened the
+                nav drawer. It now opens the desktop's menu, hung below the
+                avatar, with one extra first row, "All pages", because this
+                avatar was the drawer's only way in on a phone.
+              */
+              <RailMenu
+                label="Account"
+                align="below"
+                panel="gist"
+                trigger={({ open, toggle }) => (
+                  <button
+                    type="button"
+                    onClick={toggle}
+                    aria-expanded={open}
+                    aria-haspopup="menu"
+                    aria-label={`Account menu for @${me.data?.username ?? "you"}`}
+                    className="ws-press flex shrink-0 items-center gap-2"
+                  >
+                    <Avatar
+                      name={me.data?.displayName ?? "Me"}
+                      seed={me.data?.id}
+                      src={me.data?.avatarUrl}
+                      size={32}
+                    />
+                    <span className="relative h-[4px] w-[8px] shrink-0 text-white">
+                      <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
+                    </span>
+                  </button>
+                )}
+              >
+                {(close) => <AccountMenuItems close={close} onOpenNav={() => setMenuOpen(true)} />}
+              </RailMenu>
+            ) : (
+              // Signed out there is no account to show; the drawer is still
+              // where sign-in and the pages live.
+              <button
+                onClick={() => setMenuOpen(true)}
+                aria-label="Open menu"
+                aria-expanded={menuOpen}
+                className="ws-press flex shrink-0 items-center gap-2"
+              >
                 <IconUser className="h-8 w-8 text-meta" />
-              )}
-              <span className="relative h-[4px] w-[8px] shrink-0 text-white">
-                <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
-              </span>
-            </button>
+                <span className="relative h-[4px] w-[8px] shrink-0 text-white">
+                  <IconTopCaret className="absolute -left-px -top-px h-[7px] w-[11px]" />
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2142,11 +2202,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             stacked at the foot of a 390px window is what mounting both would
             be. Rung by the bar itself (lib/room-bar-store.ts), not by the
             route — a room that has not opened draws no bar and keeps its dock.
-            Desktop keeps whatever standing the rail gives it — `railOn` alone
-            decides that.
+            It used to be phones only, and desktop kept the dock under a live
+            room. QA: "When a user is in a gistroom listening or speaking, the
+            menu docker shouldn't be displayed until they click Back … This will
+            allow the page to display fully and reach the bottom of the screen."
+            So it is gone at EVERY width while the room is live — the same
+            doorbell, which the room rings on mount at every width (its phone
+            bar is always mounted and only CSS-hidden above md), and clears the
+            moment the reader leaves.
           */
-          className={cn(railOn && "md:hidden", roomBar && "max-md:hidden")}
-          onCompose={canCompose && !guest ? () => setComposeOpen(true) : undefined}
+          className={cn(railOn && "md:hidden", roomBar && "hidden")}
+          onCompose={canCompose && !guest ? () => setChoosingCreate(true) : undefined}
           // The way back, on desktop only: the dock is standing in for a rail
           // the reader tucked away, so it carries the switch that restores it.
           onShowSidebar={
@@ -2173,6 +2239,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           — the same arrangement the composer above uses, and for the same
           reason: tapping a coin must never cost the reader their page. */}
         <TickerSheet />
+
+        <CreateChoiceSheet
+          open={choosingCreate}
+          onClose={() => setChoosingCreate(false)}
+          onPost={() => setComposeOpen(true)}
+        />
 
         {/* The phone's tab bar is gone — `BottomDock` above serves every
             width now. See the note on `MobileBar`. */}

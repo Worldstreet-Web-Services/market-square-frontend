@@ -1,6 +1,7 @@
 "use client";
 
 import { friendsMomentFor } from "@/lib/friends-popup";
+import { notificationHref } from "@/lib/notification-href";
 import { openFriendsCard } from "@/lib/friends-card-store";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -222,20 +223,17 @@ const GROUP_LABEL: Record<NotificationGroup, string> = {
   account: "Account",
 };
 
+/**
+ * The destination is decided in `lib/notification-href.ts`, not here.
+ *
+ * It used to be inline, and being inline is why it shipped sending every
+ * `house_room` row to `/live/` — a gist room IS a stream, so the one-line
+ * `if (item.streamId)` swallowed rooms and broadcasts alike. A decision that
+ * cannot be run without a browser is a decision nobody checks; `node --test`
+ * pins this one.
+ */
 function hrefFor(item: MarketNotification): string | null {
-  // A chat event has no post and no stream, so without this it fell through to
-  // the sender's PROFILE — which is not where the message is.
-  if (item.kind === "message" || item.kind === "chat_request") return "/messages";
-  if (item.streamId) return `/live/${item.streamId}`;
-  // ON the comment when the payload names one: the permalink reads `?comment=`
-  // and scrolls to it. Without an id it opens the post, as it always did.
-  if (item.postId) {
-    return item.commentId
-      ? `/p/${item.postId}?comment=${encodeURIComponent(item.commentId)}`
-      : `/p/${item.postId}`;
-  }
-  if (item.actor) return `/u/${item.actor.username}`;
-  return null;
+  return notificationHref(item);
 }
 
 function Row({

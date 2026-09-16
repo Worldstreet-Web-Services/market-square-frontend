@@ -12,6 +12,7 @@ import {
   useProfile,
 } from "@/features/profile/hooks/use-profile";
 import { PersonRow } from "@/features/profile/components/person-row";
+import { useCanonicalProfileAddress } from "@/features/profile/hooks/use-canonical-profile-address";
 import type { Profile } from "@/lib/api/schemas";
 
 export type FollowListTab = "followers" | "following";
@@ -48,6 +49,8 @@ export function FollowListPage({ username, tab }: { username: string; tab: Follo
   const router = useRouter();
   const me = useMe();
   const profile = useProfile(username);
+  // The same address rule as the profile itself, keeping the list on screen.
+  useCanonicalProfileAddress(username, profile.data, tab);
   const id = profile.data?.id;
 
   // Both hooks run every render; only the list on screen is enabled. A tab

@@ -474,7 +474,7 @@ export function useRenewVerification() {
 
 export function useSpotlight() {
   return useQuery({
-    queryKey: ["ms", "spotlight", "weekly"],
+    queryKey: ["ms", "spotlight", "all"],
     queryFn: fetchSpotlight,
   });
 }

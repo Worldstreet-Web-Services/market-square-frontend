@@ -1284,7 +1284,8 @@ describe("The account dropdown follows 747:14001", () => {
 
   it("offers Profile, Settings, Gender and Log out", () => {
     assert.match(items, /label="Profile"/);
-    assert.match(items, /go\(me\.data \? `\/u\/\$\{me\.data\.username\}\/settings` : "\/auth"\)/, "Settings no longer opens the person's own /u/<username>/settings");
+    // By id since QA ("users can change their username"); the settings page redirects to the current username.
+    assert.match(items, /go\(me\.data \? profileHref\(me\.data, "settings"\) : "\/auth"\)/, "Settings no longer opens the person's own settings");
     assert.match(items, /setStep\("gender"\)/);
     assert.match(items, /GENDER_OPTIONS\.map\(\(option\) =>/);
     assert.match(items, /update\.mutate\(\{ gender: option\.value \}/);
@@ -1292,14 +1293,16 @@ describe("The account dropdown follows 747:14001", () => {
     assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
   });
 
-  it("hangs in the full-size 231 panel on both account menus", () => {
+  it("hangs in the 264 panel on every account menu", () => {
     // The file's 172 is its 74.46% scale; ogazboiz asked for both menus bigger
-    // (2026-09-14). 231 is the same panel unscaled, and `MenuPanel` exactly.
-    assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 2);
-    assert.match(shell, /const width = panel === "gist" \? 231 : panel === "explore" \? 347 : 224;/);
+    // (2026-09-14) to 231, and QA asked for bigger again (2026-09-15): 264,
+    // which is `MenuPanel` exactly. Three menus: the rail, the desktop top
+    // bar and — since QA — the phone top bar.
+    assert.equal((shell.match(/label="Account"\s+align="(?:above|below)"\s+panel="gist"/g) ?? []).length, 3);
+    assert.match(shell, /const width = panel === "gist" \? 264 : panel === "explore" \? 347 : 224;/);
     // The clamp and the style must agree, or the clamp keeps a menu on screen
     // that is wider than the one it measured.
-    assert.match(shell, /width: panel === "gist" \? 231 : panel === "explore" \? 347 : 224,/);
+    assert.match(shell, /width: panel === "gist" \? 264 : panel === "explore" \? 347 : 224,/);
     assert.match(shell, /gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
   });
 
@@ -1311,8 +1314,8 @@ describe("The account dropdown follows 747:14001", () => {
     assert.doesNotMatch(row, /compact/);
     assert.doesNotMatch(shell, /size="compact"/);
     assert.doesNotMatch(filter, /size="compact"/);
-    assert.match(row, /"h-8 gap-2 rounded-xl px-2 text-\[12px\] leading-4"/);
-    assert.match(filter, /w-\[231px\] flex-col gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
+    assert.match(row, /"h-10 gap-2\.5 rounded-xl px-2\.5 text-\[14px\] leading-5"/);
+    assert.match(filter, /w-\[264px\] flex-col gap-2 rounded-\[11px\] border border-white\/\[0\.18\] bg-grey-800 p-4/);
   });
 });
 
@@ -2662,8 +2665,8 @@ describe("a profile's counts open X-style follow lists", () => {
 
   it("links each count to its own list", () => {
     // Plain text before: two numbers with no way to see the people behind them.
-    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/following`\}/);
-    assert.match(page, /href=\{`\/u\/\$\{data\.username\}\/followers`\}/);
+    assert.match(page, /href=\{profileHref\(data, "following"\)\}/);
+    assert.match(page, /href=\{profileHref\(data, "followers"\)\}/);
   });
 
   it("has a route for each list", () => {
@@ -2808,5 +2811,155 @@ describe("recording a voice note: stop to listen, send in one tap", () => {
   it("says so when the upload fails, instead of failing silently", () => {
     assert.match(thread, /toast\.error\("Couldn't send the voice note\."\)/);
     assert.match(thread, /toast\.error\("Couldn't attach the voice note\."\)/);
+  });
+});
+
+describe("QA round, 2026-09-15", () => {
+  const filter = stripComments(read("components/layout/friends-filter.tsx"));
+  const row = stripComments(read("features/messages/components/conversation-row.tsx"));
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+  const page = stripComments(read("features/messages/components/messages-page.tsx"));
+  const room = stripComments(read("features/houses/components/house-room.tsx"));
+  const choice = stripComments(read("components/layout/create-choice-sheet.tsx"));
+  const spotlight = stripComments(read("features/profile/components/spotlight-page.tsx"));
+
+  it("1 · the filter pill hugs its label instead of parking the chevron at the far end", () => {
+    assert.doesNotMatch(filter, /w-\[136px\] items-center justify-between/);
+    assert.match(filter, /h-\[38px\] max-w-\[240px\] items-center gap-2 rounded-full/);
+  });
+
+  it("2 · the name of the person or gist room reads as a heading", () => {
+    assert.match(row, /truncate text-\[15px\] font-bold leading-5 text-white">\{name\}/);
+    assert.match(thread, /<h1 className="truncate text-\[16px\] font-bold leading-6 text-white">/);
+  });
+
+  it("4 · a member's face, and a one-to-one chat's header, open that person's profile", () => {
+    assert.match(thread, /sender\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(sender\)\}/);
+    assert.match(thread, /peer\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(peer\)\}/);
+    assert.match(thread, /\{!group && peer\?\.username \? \(\n\s*<Link href=\{profileHref\(peer\)\}/);
+  });
+
+  it("5 · the thread column and the room's chat column end with a divider, like X", () => {
+    assert.match(page, /flex min-h-0 min-w-0 flex-1 flex-col lg:border-r lg:border-white\/10/);
+    assert.match(room, /xl:w-\[411px\] xl:border-x xl:border-t-0/);
+  });
+
+  it("7 · the dock's plus asks: a post, or a gist room", () => {
+    assert.match(shell, /onCompose=\{canCompose && !guest \? \(\) => setChoosingCreate\(true\) : undefined\}/);
+    assert.match(shell, /<CreateChoiceSheet\n\s*open=\{choosingCreate\}/);
+    assert.match(choice, /onPost\(\);/);
+    // The same address the sidebar's Start Gistroom and Home's Host Room use.
+    assert.match(choice, /router\.push\("\/gist-rooms\?open=1"\)/);
+  });
+
+  it("9 · spotlight is a window dropdown that names the window the data actually is", () => {
+    assert.match(spotlight, /action=\{<SpotlightWindowMenu \/>\}/);
+    // The board accumulates forever (no reset, decay or window in the service),
+    // so the live window is All time, and "This week" is never claimed.
+    assert.match(spotlight, /\{ value: "all", label: "All time", live: true \}/);
+    assert.match(spotlight, /\{ value: "weekly", label: "This week", live: false \}/);
+    assert.match(spotlight, /\{ value: "monthly", label: "This month", live: false \}/);
+    assert.doesNotMatch(spotlight, /label: "This week", live: true/);
+    assert.match(spotlight, /hint=\{window\.live \? undefined : /);
+  });
+
+  it("9b · spotlight asks for no window, so the board survives the backend's real weekly window", () => {
+    // Pinning "weekly" would blank the board once the service makes weekly a
+    // real rolling 7 days; sending "all" is refused by today's service.
+    const api = stripComments(read("features/profile/lib/api.ts"));
+    assert.match(api, /msApi\.get\("\/spotlight"\)\);/);
+    assert.doesNotMatch(api, /window: "weekly"/);
+  });
+
+  it("8 · the story viewer reports a view, so an author's viewer list can have anyone in it", () => {
+    const stories = stripComments(read("features/feed/components/stories-row.tsx"));
+    assert.match(stories, /import \{ reportView \} from "@\/features\/feed\/hooks\/use-record-view";/);
+    assert.match(stories, /onSeen\(story\.id\);\n\s*reportView\(story\.id\);/);
+  });
+
+  it("10 · the phone avatar opens the desktop's account menu, and keeps a way to every page", () => {
+    assert.match(shell, /\{\(close\) => <AccountMenuItems close=\{close\} onOpenNav=\{\(\) => setMenuOpen\(true\)\} \/>\}/);
+    assert.match(shell, /\{onOpenNav && \(\n\s*<MenuRow\n\s*icon=\{<IconMore/);
+    assert.match(shell, /label="All pages"/);
+  });
+});
+
+describe("Seen by: the author sees who viewed their story", () => {
+  const stories = stripComments(read("features/feed/components/stories-row.tsx"));
+  const panel = stripComments(read("features/feed/components/story-viewers.tsx"));
+  const hook = stripComments(read("features/feed/hooks/use-story-viewers.ts"));
+
+  it("asks only on the reader's own story", () => {
+    // The route is author-only; asking on anyone else's is a 404 on every story opened.
+    assert.match(stories, /const mine = Boolean\(group && me\.data && group\.id === me\.data\.id\);/);
+    assert.match(stories, /useStoryViewers\(story\?\.id, mine\)/);
+    assert.match(hook, /enabled: enabled && Boolean\(storyId\),/);
+  });
+
+  it("draws nothing until the service answers, so a missing route leaves no broken entry", () => {
+    assert.match(stories, /\{mine && viewerTotal !== null && \(/);
+    assert.match(hook, /retry: shouldRetryViewers,/);
+  });
+
+  it("counts from total, never from the rows the list happens to hold", () => {
+    assert.match(stories, /const viewerTotal = viewers\.data\?\.pages\[0\]\?\.total \?\? null;/);
+    assert.match(stories, /\{seenByLabel\(viewerTotal\)\}/);
+    assert.doesNotMatch(panel, /seenByLabel\(rows\.length\)/);
+  });
+
+  it("holds the story while the list is open, and closes it when the story changes", () => {
+    assert.match(stories, /isHeld\(\{ pressing, hovering, hidden: hidden \|\| viewersFor !== null \}\)/);
+    assert.match(stories, /const viewersOpen = Boolean\(story && viewersFor === story\.id\);/);
+  });
+
+  it("opens each viewer's profile", () => {
+    assert.match(panel, /href=\{profileHref\(profile\)\}/);
+  });
+});
+
+describe("links to a person go by id, not by a username they can change (QA)", () => {
+  // Every in-app profile link is profileHref(profile). The files below are the
+  // deliberate exceptions, each for a reason stated in lib/profile-href.ts or
+  // at the call site: the canonical-address redirects themselves, callers that
+  // only ever hold a username, and the SEO canonical.
+  const ALLOWED = new Set([
+    "components/layout/settings-screen.tsx",
+    "features/profile/components/follow-list-page.tsx",
+    "features/profile/components/claim-username-gate.tsx",
+    "features/houses/components/room-roster-panel.tsx",
+    "features/houses/components/person-sheet.tsx",
+    "lib/og-metadata.ts",
+  ]);
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true }).flatMap((entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(path);
+      return /\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith(".test.ts") ? [path] : [];
+    });
+
+  it("draws no in-app profile link from a username outside the known exceptions", () => {
+    const offenders: string[] = [];
+    for (const file of [...walk("features"), ...walk("components"), ...walk("lib"), ...walk("app")]) {
+      if (ALLOWED.has(file)) continue;
+      const code = stripComments(read(file));
+      // A link built from a username that is NOT a share link (those keep the
+      // short username on purpose and start with the page origin).
+      for (const match of code.matchAll(/`\/u\/\$\{[^}`]*\.username\}/g)) {
+        const before = code.slice(Math.max(0, (match.index ?? 0) - 40), match.index);
+        if (!/window\.location\.origin\}$/.test(before)) offenders.push(file);
+      }
+    }
+    assert.deepEqual([...new Set(offenders)], []);
+  });
+
+  it("builds the link from the id, and the profile page shows the current username", () => {
+    assert.match(stripComments(read("lib/profile-href.ts")), /const key = SAFE_ID\.test\(profile\.id\)/);
+    assert.match(stripComments(read("features/profile/components/profile-page.tsx")), /useCanonicalProfileAddress\(username, profile\.data\);/);
+    assert.match(stripComments(read("features/profile/components/follow-list-page.tsx")), /useCanonicalProfileAddress\(username, profile\.data, tab\);/);
+    assert.match(stripComments(read("features/profile/hooks/use-canonical-profile-address.ts")), /router\.replace\(/);
+  });
+
+  it("links a mention by the recorded profile id when there is one", () => {
+    assert.match(stripComments(read("components/ui/post-text.tsx")), /segment\.id \? profileHref\(\{ id: segment\.id, username: segment\.handle \}\)/);
   });
 });

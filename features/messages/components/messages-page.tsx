@@ -488,7 +488,10 @@ export function MessagesPage({
 
       {/* `min-h-0` so the chat pane can be shorter than its content and scroll
           internally rather than stretching this row. */}
-      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", !open && "hidden lg:flex")}>
+      {/* QA: the composer's band stopped short with nothing marking where the
+          column ends. X closes its conversation column with a hairline, so this
+          one does too — from lg, where the page can be narrower than the screen. */}
+      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col lg:border-r lg:border-white/10", !open && "hidden lg:flex")}>
         {open ? (
           <Thread
             conversation={open}

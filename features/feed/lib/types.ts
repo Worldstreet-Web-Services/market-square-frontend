@@ -142,3 +142,17 @@ export type Lane =
   | "platform"
   | "reels"
   | "trending";
+
+/**
+ * `GET /posts/{id}/viewers` — who viewed the reader's OWN story, newest first.
+ *
+ * `total` is the story's view count and is what "Seen by N" prints; `items`
+ * can be SHORTER, because people blocked in either direction are left out.
+ * `nextCursor` is opaque: passed back untouched, never parsed.
+ */
+export const StoryViewersPageSchema = z.object({
+  items: z.array(z.object({ profile: ProfileSchema, viewedAt: z.string() })),
+  nextCursor: z.string().nullable().optional().default(null),
+  total: z.number().nonnegative(),
+});
+export type StoryViewersPage = z.infer<typeof StoryViewersPageSchema>;

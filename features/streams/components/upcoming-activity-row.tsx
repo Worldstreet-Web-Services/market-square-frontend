@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { profileHref } from "@/lib/profile-href";
 import { formatDateTime } from "@/lib/format";
 import { resolveDeepLink } from "@/lib/deeplink";
 import { Avatar } from "@/components/ui/avatar";
@@ -36,7 +37,7 @@ export function ActivityRow({ activity }: { activity: Activity }) {
         <p className="mt-0.5 text-[13px] text-body">{formatDateTime(activity.startsAt)}</p>
         {host && (
           <Link
-            href={`/u/${host.username}`}
+            href={profileHref(host)}
             className="mt-1.5 flex items-center gap-1.5 text-[12px] text-meta hover:text-body"
           >
             <Avatar name={host.displayName} src={host.avatarUrl} size={18} />

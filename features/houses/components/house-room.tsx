@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -521,7 +522,7 @@ function ClosedHouse({ stream }: { stream: Stream }) {
       </div>
       {stream.owner && (
         <Link
-          href={`/u/${stream.owner.username}`}
+          href={profileHref(stream.owner)}
           className="ws-row flex items-center gap-3 px-4 py-3.5 text-[13px] font-semibold text-body"
         >
           Visit {atHandle(stream.owner.username) ?? stream.owner.displayName}
@@ -1530,7 +1531,7 @@ function LiveHouse({
           sheet off "View all" (both below). `max-md:hidden` keeps the chat
           MOUNTED — its poll and scroll survive — the same reason the roster
           `hidden`s it rather than unmounting it. */}
-      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome max-md:hidden xl:h-full xl:w-[411px] xl:border-l xl:border-t-0 xl:overflow-hidden">
+      <aside className="ws-hair flex w-full shrink-0 flex-col border-t bg-chrome max-md:hidden xl:h-full xl:w-[411px] xl:border-x xl:border-t-0 xl:overflow-hidden">
         {/*
           THE ROSTER TAKES THIS COLUMN WHILE IT IS OPEN — 369:8740.
 

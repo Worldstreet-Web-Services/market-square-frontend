@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 
 import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
@@ -860,7 +861,7 @@ export function StreamRoom({
           </Link>
 
           {owner && (
-            <Link href={`/u/${owner.username}`} className="hidden shrink-0 lg:block">
+            <Link href={profileHref(owner)} className="hidden shrink-0 lg:block">
               <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={44} />
             </Link>
           )}
@@ -869,11 +870,11 @@ export function StreamRoom({
             <div className="flex items-center gap-2">
               {owner ? (
                 <>
-                  <Link href={`/u/${owner.username}`} className="shrink-0 lg:hidden">
+                  <Link href={profileHref(owner)} className="shrink-0 lg:hidden">
                     <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={36} />
                   </Link>
                   <Link
-                    href={`/u/${owner.username}`}
+                    href={profileHref(owner)}
                     className="ws-text-shadow flex min-w-0 items-baseline gap-1.5 lg:[text-shadow:none]"
                   >
                     <span className="truncate text-[17px] font-bold text-heading">{owner.displayName}</span>
@@ -1143,7 +1144,7 @@ export function StreamRoom({
         {/* Host handle under the frame, as in the reference. */}
         {owner && (
           <Link
-            href={`/u/${owner.username}`}
+            href={profileHref(owner)}
             className="hidden shrink-0 px-5 py-2 text-[13px] text-meta transition-colors hover:text-body lg:block"
           >
             {owner.username}

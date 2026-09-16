@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { profileHref } from "@/lib/profile-href";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -116,7 +117,7 @@ export function LiveHero({ streams }: { streams: Stream[] }) {
 
                 {owner && (
                   <Link
-                    href={`/u/${owner.username}`}
+                    href={profileHref(owner)}
                     className="ws-press mt-[5px] flex h-6 shrink-0 items-center rounded-full bg-white px-3 text-[12px] font-bold leading-none text-black transition-opacity hover:opacity-90"
                   >
                     Follow

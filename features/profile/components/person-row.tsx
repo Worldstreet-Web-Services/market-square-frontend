@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
@@ -65,7 +66,7 @@ export function PersonRow({ profile }: { profile: Profile }) {
     <div className="ws-row flex items-center gap-2 px-4 py-3 sm:gap-[9px]">
       {/* The row links to the profile — except the button, which is why the
           link wraps the identity block rather than the whole row. */}
-      <Link href={`/u/${profile.username}`} className="flex min-w-0 flex-1 items-center gap-[9px]">
+      <Link href={profileHref(profile)} className="flex min-w-0 flex-1 items-center gap-[9px]">
         <span className="shrink-0 overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
           <Avatar
             name={profile.displayName}
