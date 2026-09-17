@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { houseTopic } from "@/features/houses";
 import { Button } from "@/components/ui/button";
 import { useRoomSession } from "@/lib/room-session-store";
 import { isHolding } from "@/lib/room-session/reducer";
+import { gistRoomGuard } from "@/lib/room-session/visibility";
 import { sq } from "@/lib/square-path";
 
 /**
@@ -35,10 +36,18 @@ export function GistRoomGuard({
   const session = useRoomSession();
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
-  const inGistRoom =
-    isHolding(session.state.connection) && session.state.target !== null && session.state.target.streamId !== streamId;
+  const door = gistRoomGuard({
+    holding: isHolding(session.state.connection),
+    targetStreamId: session.state.target?.streamId ?? null,
+    streamId,
+  });
 
-  if (!inGistRoom) return <>{children}</>;
+  useEffect(() => {
+    if (door === "return-to-room") router.replace(sq(`/gist-rooms/${streamId}`));
+  }, [door, router, streamId]);
+
+  if (door === "render") return <>{children}</>;
+  if (door === "return-to-room") return null;
 
   const current = session.state.target?.streamId;
   return (

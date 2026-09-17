@@ -61,6 +61,8 @@ import { AnnouncementBand } from "@/components/layout/announcement-band";
 import { RoomSessionProvider } from "@/components/layout/room-session";
 import { RoomMiniPlayer } from "@/components/layout/room-mini-player";
 import { ZoneExitGuard } from "@/components/layout/zone-exit-guard";
+import { PushNavigation } from "@/components/layout/push-navigation";
+import { leaveSquare, requestZoneExit } from "@/lib/zone-exit";
 import {
   IconBell,
   IconDots,
@@ -1278,7 +1280,7 @@ function ArkMenu() {
               label={destination.label}
               onClick={() => {
                 close();
-                window.location.assign(destination.href);
+                requestZoneExit({ href: destination.href, go: () => leaveSquare(destination.href) });
               }}
             />
           ))}
@@ -1818,6 +1820,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ShellFrame>{children}</ShellFrame>
       {/* Speakers and hosts are asked before a link leaves the Square zone. */}
       <ZoneExitGuard />
+      {/* A tapped push navigates this tab in-app rather than reloading it. */}
+      <PushNavigation />
     </RoomSessionProvider>
   );
 }

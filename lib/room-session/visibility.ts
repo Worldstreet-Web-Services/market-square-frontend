@@ -131,6 +131,30 @@ export function miniPlayerChrome({ state, presence, micOn, canPlayAudio }: MiniP
 }
 
 /**
+ * THE DOOR OF A STREAM OR STUDIO PAGE, while the tab holds a gist room.
+ *
+ *  · Another stream: ask (its audio would play over the room, or the Studio
+ *    would broadcast the reader's voice into both).
+ *  · THE ROOM ITSELF, reached as `/live/<id>` or `/studio/<id>` (a profile's
+ *    Streams tab, Explore, the live rail link every stream there): back to
+ *    the room's own page. A gist room is never watched through /live or run
+ *    from the Studio, and those pages hide the mini-player — a host there sat
+ *    with an open mic and no hang-up on screen.
+ */
+export function gistRoomGuard({
+  holding,
+  targetStreamId,
+  streamId,
+}: {
+  holding: boolean;
+  targetStreamId: string | null;
+  streamId: string;
+}): "render" | "ask" | "return-to-room" {
+  if (!holding || targetStreamId === null) return "render";
+  return targetStreamId === streamId ? "return-to-room" : "ask";
+}
+
+/**
  * Does following this link leave the Square zone — a FULL page load that ends
  * the tab's room?
  *

@@ -1837,8 +1837,8 @@ describe("Inside Ark the Square leads back to Ark: a pill on phones, Ark's secti
   });
 
   it("leaves by full page loads: the other zone has those routes, this build does not", () => {
-    assert.match(nav, /else window\.location\.assign\(ARK_BACK_FALLBACK\);/);
-    assert.match(shell, /window\.location\.assign\(destination\.href\);/);
+    assert.match(nav, /else leaveSquare\(ARK_BACK_FALLBACK\);/);
+    assert.match(shell, /leaveSquare\(destination\.href\)/);
     assert.doesNotMatch(nav, /router\.push|<Link/);
   });
 });
@@ -3331,12 +3331,12 @@ describe("one live microphone per tab, and no stale question", () => {
     // The same one guard the stream room uses.
     assert.match(code("components/layout/stream-room-screen.tsx"), /<GistRoomGuard/);
     const guard = code("components/layout/gist-room-guard.tsx");
-    assert.match(guard, /isHolding\(session\.state\.connection\) && session\.state\.target !== null && session\.state\.target\.streamId !== streamId/);
+    assert.match(guard, /holding: isHolding\(session\.state\.connection\),/);
   });
 
   it("the zone-exit sheet forgets its link when the reader stops speaking", () => {
     const guard = code("components/layout/zone-exit-guard.tsx");
-    assert.match(guard, /if \(!speaking && href !== null\) setHref\(null\);/);
+    assert.match(guard, /if \(!speaking && exit !== null\) setExit\(null\);/);
   });
 });
 
@@ -3409,5 +3409,47 @@ describe("a speaker's stage has a way back, and a mic banner that tells the trut
   it("the voice recorder refuses to record while the room mic is still actually open", () => {
     const recorder = code("features/messages/hooks/use-voice-recorder.ts");
     assert.match(recorder, /room\.room\?\.localParticipant\.isMicrophoneEnabled/);
+  });
+});
+
+describe("nothing inside the Square reloads the tab under a gist room", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("a tapped push asks the open Square tab to navigate itself, and reloads only without an answer", () => {
+    const sw = code("public/sw.js");
+    assert.match(sw, /client\.postMessage\(\{ type: "ms:navigate", url: target\.href \}, \[channel\.port2\]\)/);
+    const click = block(sw, 'self.addEventListener("notificationclick"', "\n});");
+    assert.ok(click.indexOf("postMessage") < click.indexOf("client.navigate("), "navigate() is not the fallback");
+    assert.match(click, /if \(!acknowledged && "navigate" in client\) await client\.navigate\(target\.href\);/);
+    const listener = code("components/layout/push-navigation.tsx");
+    assert.match(listener, /navigator\.serviceWorker\.addEventListener\("message", onMessage\);/);
+    assert.match(listener, /router\.push\(path\);/);
+    assert.match(listener, /event\.ports\[0\]\?\.postMessage\("ok"\);/);
+    assert.match(code("components/layout/app-shell.tsx"), /<PushNavigation \/>/);
+  });
+
+  it("no layout component or the Gistroom banner leaves by a bare location.assign", () => {
+    const layout = readdirSync(resolve(import.meta.dirname, "../components/layout")).filter((name) => /\.tsx?$/.test(name));
+    for (const name of layout) {
+      assert.doesNotMatch(code(`components/layout/${name}`), /window\.location\.assign\(/, name);
+    }
+    assert.doesNotMatch(code("features/streams/components/live-cta.tsx"), /location\.assign/);
+    assert.match(code("features/streams/components/live-cta.tsx"), /router\.push\(sq\("\/gist-rooms\?open=1"\)\)/);
+  });
+
+  it("the rail's Ark menu and Back to Ark go through the zone-exit question", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    const menu = block(shell, "function ArkMenu(", "\n}\n");
+    assert.match(menu, /requestZoneExit\(\{ href: destination\.href, go: \(\) => leaveSquare\(destination\.href\) \}\)/);
+    assert.match(menu, /goBackToArk\(\)/);
+    assert.match(code("components/layout/ark-nav.tsx"), /requestZoneExit\(\{/);
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.match(guard, /setZoneExitHandler\(/);
+  });
+
+  it("the guard sends /live/:id and /studio/:id of the room you are in back to that room", () => {
+    const guard = code("components/layout/gist-room-guard.tsx");
+    assert.match(guard, /gistRoomGuard\(\{/);
+    assert.match(guard, /router\.replace\(sq\(`\/gist-rooms\/\$\{streamId\}`\)\)/);
   });
 });

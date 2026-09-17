@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useGate } from "@/hooks/use-gate";
 import { asset, sq } from "@/lib/square-path";
 
@@ -55,7 +56,10 @@ const DOTS = [27.08, 10.29, 9.21, 9.21];
 
 export function LiveCta() {
   const gate = useGate();
-  const open = () => gate(() => window.location.assign(sq("/gist-rooms?open=1")));
+  const router = useRouter();
+  // A client navigation: a full load here tore down the gist room the reader
+  // had minimised on /live. The page opens the sheet off `?open=1` on arrival.
+  const open = () => gate(() => router.push(sq("/gist-rooms?open=1")));
 
   return (
     <>

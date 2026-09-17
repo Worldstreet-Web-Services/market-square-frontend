@@ -41,6 +41,27 @@ function isSquarePage(href) {
   return path === SQUARE || path.startsWith(SQUARE + "/");
 }
 
+/** How long an open tab has to say it followed the push itself. */
+const NAVIGATE_ACK_MS = 1500;
+
+/** Ask a Square tab to navigate in-app. Resolves true once it confirms. */
+function askToNavigate(client, target) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve(false), NAVIGATE_ACK_MS);
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timer);
+      resolve(event.data === "ok");
+    };
+    try {
+      client.postMessage({ type: "ms:navigate", url: target.href }, [channel.port2]);
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
+}
+
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
@@ -89,7 +110,13 @@ self.addEventListener("notificationclick", (event) => {
         // portfolio tab to open a notification.
         if (new URL(client.url).origin === self.location.origin && isSquarePage(client.url) && "focus" in client) {
           await client.focus();
-          if ("navigate" in client) await client.navigate(target.href);
+          // NOT navigate() first: that is a full page load, and a full load
+          // tears down the tab's gist room — a host goes silent because
+          // somebody winked back. The tab navigates itself in-app
+          // (components/layout/push-navigation.tsx) and says so; only a tab
+          // that does not answer is navigated the hard way.
+          const acknowledged = await askToNavigate(client, target);
+          if (!acknowledged && "navigate" in client) await client.navigate(target.href);
           return;
         }
       }

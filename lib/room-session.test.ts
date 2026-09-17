@@ -940,3 +940,54 @@ describe("who is on the stage, and what an approved speaker is offered", async (
     assert.equal(roomStagePanel({ ...failing, connection: "reconnecting" }), null);
   });
 });
+
+describe("ways in and out that used to reload the tab", async () => {
+  const { pushNavigatePath, PUSH_NAVIGATE } = await import("./push-navigate.ts");
+  const { requestZoneExit, setZoneExitHandler } = await import("./zone-exit.ts");
+  const { gistRoomGuard } = await import("./room-session/visibility.ts");
+
+  it("a tapped push is followed as an in-app navigation, only to a Square page on this origin", () => {
+    const origin = "https://www.tsionark.com";
+    const message = (url: unknown) => ({ type: PUSH_NAVIGATE, url });
+    assert.equal(pushNavigatePath(message(`${origin}/square/messages?c=1#m`), { origin, base: "/square" }), "/square/messages?c=1#m");
+    assert.equal(pushNavigatePath(message("https://square.tsionark.com/p/abc"), { origin: "https://square.tsionark.com", base: "" }), "/p/abc");
+    assert.equal(pushNavigatePath(message("https://evil.example/square/p"), { origin, base: "/square" }), null, "another origin");
+    assert.equal(pushNavigatePath(message(`${origin}/portfolio`), { origin, base: "/square" }), null, "an Ark page is a full load");
+    assert.equal(pushNavigatePath(message("javascript:alert(1)"), { origin, base: "/square" }), null);
+    assert.equal(pushNavigatePath(message(42), { origin, base: "/square" }), null);
+    assert.equal(pushNavigatePath({ type: "other", url: `${origin}/square` }, { origin, base: "/square" }), null);
+    assert.equal(pushNavigatePath(null, { origin, base: "/square" }), null);
+  });
+
+  it("a programmatic Ark exit goes straight there with nobody to ask", () => {
+    setZoneExitHandler(null);
+    const went: string[] = [];
+    requestZoneExit({ href: "https://www.tsionark.com/market", go: () => went.push("go") });
+    assert.deepEqual(went, ["go"]);
+  });
+
+  it("…and is held for the guard's question while a host or speaker is on", () => {
+    const asked: string[] = [];
+    const went: string[] = [];
+    setZoneExitHandler((request) => {
+      asked.push(request.href);
+      return true;
+    });
+    requestZoneExit({ href: "https://www.tsionark.com/market", go: () => went.push("go") });
+    assert.deepEqual(asked, ["https://www.tsionark.com/market"]);
+    assert.equal(went.length, 0, "the page left before the host could choose");
+    // A handler that declines (the reader is only listening) lets it through.
+    setZoneExitHandler(() => false);
+    requestZoneExit({ href: "https://www.tsionark.com/market", go: () => went.push("go") });
+    assert.deepEqual(went, ["go"]);
+    setZoneExitHandler(null);
+  });
+
+  it("the stream or Studio page of the gist room you are in sends you back to the room", () => {
+    const held = (streamId: string) => ({ holding: true, targetStreamId: streamId });
+    assert.equal(gistRoomGuard({ ...held("g1"), streamId: "g1" }), "return-to-room", "a hot mic with no hang-up on screen");
+    assert.equal(gistRoomGuard({ ...held("g1"), streamId: "s2" }), "ask");
+    assert.equal(gistRoomGuard({ holding: false, targetStreamId: "g1", streamId: "g1" }), "render");
+    assert.equal(gistRoomGuard({ holding: false, targetStreamId: null, streamId: "s2" }), "render");
+  });
+});

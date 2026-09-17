@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { useRoomSession } from "@/lib/room-session-store";
 import { isZoneExit } from "@/lib/room-session/visibility";
+import { leaveSquare, setZoneExitHandler, type ZoneExitRequest } from "@/lib/zone-exit";
 
 /**
  * LEAVING THE SQUARE ENDS YOUR SPOT IN THE ROOM — so a speaker is asked.
@@ -25,11 +26,21 @@ import { isZoneExit } from "@/lib/room-session/visibility";
  */
 export function ZoneExitGuard() {
   const session = useRoomSession();
-  const [href, setHref] = useState<string | null>(null);
+  const [exit, setExit] = useState<ZoneExitRequest | null>(null);
   const speaking = session.presence === "host" || session.presence === "speaker";
   // Moved back to the audience while the sheet was up: the question is void.
   // Kept, it reappeared with the old link the next time they took the stage.
-  if (!speaking && href !== null) setHref(null);
+  if (!speaking && exit !== null) setExit(null);
+
+  // The programmatic exits — the rail's Ark menu, Back to Ark (lib/zone-exit.ts).
+  useEffect(() => {
+    if (!speaking) return;
+    setZoneExitHandler((request) => {
+      setExit(request);
+      return true;
+    });
+    return () => setZoneExitHandler(null);
+  }, [speaking]);
 
   useEffect(() => {
     if (!speaking) return;
@@ -44,17 +55,18 @@ export function ZoneExitGuard() {
       if (!isZoneExit(raw, { origin: window.location.origin })) return;
       event.preventDefault();
       event.stopPropagation();
-      setHref(anchor.href);
+      const href = anchor.href;
+      setExit({ href, go: () => leaveSquare(href) });
     };
     document.addEventListener("click", onClickCapture, true);
     return () => document.removeEventListener("click", onClickCapture, true);
   }, [speaking]);
 
   const title = session.stream ? houseTopic(session.stream) : "your gist room";
-  const close = () => setHref(null);
+  const close = () => setExit(null);
 
   return (
-    <Sheet open={href !== null && speaking} onClose={close} title={`Opening Ark ends your spot in ${title}`}>
+    <Sheet open={exit !== null && speaking} onClose={close} title={`Opening Ark ends your spot in ${title}`}>
       <p className="text-[13px] leading-5 text-body">
         {session.presence === "host"
           ? "You're hosting. Open it in a new tab to keep the room going here."
@@ -64,7 +76,7 @@ export function ZoneExitGuard() {
         <Button
           className="w-full"
           onClick={() => {
-            if (href) window.open(href, "_blank", "noopener");
+            if (exit) window.open(exit.href, "_blank", "noopener");
             close();
           }}
         >
@@ -74,10 +86,10 @@ export function ZoneExitGuard() {
           variant="ghost"
           className="w-full"
           onClick={() => {
-            const target = href;
+            const target = exit;
             close();
             if (!target) return;
-            void session.leave().finally(() => window.location.assign(target));
+            void session.leave().finally(() => target.go());
           }}
         >
           Leave and go

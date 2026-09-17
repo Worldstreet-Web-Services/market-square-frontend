@@ -3,6 +3,7 @@
 import { cn } from "@/lib/cn";
 import { ARK_BACK_FALLBACK, arkBackAction } from "@/lib/ark-links";
 import { SQUARE_BASE } from "@/lib/square-path";
+import { leaveSquare, requestZoneExit } from "@/lib/zone-exit";
 
 /**
  * Ark's wordmark — the mobile app's home-tab artwork (tsion
@@ -31,15 +32,24 @@ export function ArkChevron({ className }: { className?: string }) {
   );
 }
 
-/** Leave the Square for Ark by the mobile app's rule (`lib/ark-links`): back if Ark is behind us, else Market. */
+/**
+ * Leave the Square for Ark by the mobile app's rule (`lib/ark-links`): back if
+ * Ark is behind us, else Market. Through the zone-exit door, so a host or a
+ * speaker is asked before the room goes quiet (lib/zone-exit.ts).
+ */
 export function goBackToArk(): void {
-  const action = arkBackAction({
-    referrer: document.referrer,
-    origin: window.location.origin,
-    base: SQUARE_BASE,
+  requestZoneExit({
+    href: ARK_BACK_FALLBACK,
+    go: () => {
+      const action = arkBackAction({
+        referrer: document.referrer,
+        origin: window.location.origin,
+        base: SQUARE_BASE,
+      });
+      if (action === "history" && window.history.length > 1) window.history.back();
+      else leaveSquare(ARK_BACK_FALLBACK);
+    },
   });
-  if (action === "history" && window.history.length > 1) window.history.back();
-  else window.location.assign(ARK_BACK_FALLBACK);
 }
 
 /**
