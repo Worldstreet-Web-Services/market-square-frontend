@@ -79,7 +79,6 @@ import { roomFailureCopy } from "@/lib/room-connection-copy";
 import { roomEntryReady } from "@/lib/room-session/entry";
 import { roomStagePanel } from "@/lib/room-session/presence";
 import type { StageAction } from "@/lib/stage-recovery";
-import { inviteAnnouncement } from "@/lib/speaker-invite";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -1015,12 +1014,9 @@ function LiveHouse({
     wasOnStage.current = onStage;
   }, [onStage, announce]);
 
-  // An invitation to speak: said once, when it arrives.
+  // An invitation to speak is announced by the session, once, wherever the
+  // reader is (room-session.tsx InviteAnnouncer) — never again on this page's mount.
   const ownerName = stream.owner?.displayName || stream.owner?.username || null;
-  const myInviteId = here && !isHost ? (session.invite?.requestId ?? null) : null;
-  useEffect(() => {
-    if (myInviteId) announce(inviteAnnouncement(ownerName));
-  }, [myInviteId, ownerName, announce]);
 
   // Your own hand.
   const handWas = useRef<string | null>(null);

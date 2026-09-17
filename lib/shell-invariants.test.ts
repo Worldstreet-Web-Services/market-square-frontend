@@ -3874,6 +3874,16 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(tools, /micMuted: seat \? seat\.isMuted : true,/);
   });
 
+  it("the invitation is announced by the session alone, never by a surface that remounts", () => {
+    const session = code("components/layout/room-session.tsx");
+    assert.match(session, /<InviteAnnouncer\s/);
+    assert.match(session, /const step = stepInviteAnnouncer\(spoken\.state, \{/);
+    for (const surface of [player, room]) {
+      assert.doesNotMatch(surface, /inviteAnnouncement/, "a surface is announcing the invitation again");
+      assert.doesNotMatch(surface, /role="status"[^>]*>\s*\{visible \?/);
+    }
+  });
+
   it("everyone sees who turned a mic off, straight from the seat", () => {
     assert.match(room, /mutedByHost: slot\.mutedByHost,/);
     assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);

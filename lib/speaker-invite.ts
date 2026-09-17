@@ -121,10 +121,68 @@ export function inviteBannerVisible(input: {
 /** Both spellings of a route — standalone `/x` and Ark's `/square/x` — as one. */
 const logicalPath = squarePaths("/square").stripSquare;
 
-/** Said once to a screen reader when the banner appears. It promises nothing about a seat or a mic. */
-export function inviteAnnouncement(hostName: string | null | undefined): string {
-  const who = hostName?.trim();
-  return `${who || "The host"} invited you to speak.`;
+/**
+ * Said once to a screen reader when an invitation arrives. It gives the time
+ * limit sighted readers see ticking (WCAG 2.2.1) and where the two answers
+ * are, and promises nothing about a seat or a mic.
+ */
+export function inviteAnnouncement(hostName: string | null | undefined, secondsLeft: number | null): string {
+  const who = hostName?.trim() || "The host";
+  const where = "Join as speaker, or Not now, at the top of the page.";
+  if (secondsLeft === null) return `${who} invited you to speak. ${where}`;
+  const whole = Math.max(1, Math.ceil(secondsLeft));
+  const within = whole >= 60 && whole % 60 === 0 ? `${whole / 60} minute${whole === 60 ? "" : "s"}` : `${whole} seconds`;
+  return `${who} invited you to speak. Answer within ${within}: ${where}`;
+}
+
+/** When the one warning before an invitation runs out is said. */
+export const INVITE_WARNING_SECONDS = 10;
+
+export interface InviteAnnouncerState {
+  /** The invitation already announced, or null. */
+  requestId: string | null;
+  warned: boolean;
+  answered: boolean;
+}
+
+export const INITIAL_INVITE_ANNOUNCER: InviteAnnouncerState = { requestId: null, warned: false, answered: false };
+
+/**
+ * What the screen reader is told about the reader's invitation, one reading
+ * at a time: the invitation once, one warning near the end, and a closing line
+ * when it ends unanswered. ONE announcer for the whole session — the room page
+ * and the mini-player each announcing on mount repeated it every time the
+ * reader moved between them.
+ */
+export function stepInviteAnnouncer(
+  state: InviteAnnouncerState,
+  input: { requestId: string | null; hostName: string | null | undefined; secondsLeft: number | null; answered: boolean }
+): { state: InviteAnnouncerState; say: string | null } {
+  if (input.requestId && input.requestId !== state.requestId) {
+    return {
+      state: {
+        requestId: input.requestId,
+        warned: input.secondsLeft !== null && input.secondsLeft <= INVITE_WARNING_SECONDS,
+        answered: input.answered,
+      },
+      say: inviteAnnouncement(input.hostName, input.secondsLeft),
+    };
+  }
+  if (input.requestId) {
+    const answered = state.answered || input.answered;
+    if (!answered && !state.warned && input.secondsLeft !== null && input.secondsLeft <= INVITE_WARNING_SECONDS) {
+      return {
+        state: { ...state, warned: true },
+        say: `${INVITE_WARNING_SECONDS} seconds left to answer the invitation to speak.`,
+      };
+    }
+    return { state: { ...state, answered }, say: null };
+  }
+  if (state.requestId) {
+    const answered = state.answered || input.answered;
+    return { state: INITIAL_INVITE_ANNOUNCER, say: answered ? null : "The invitation to speak has ended." };
+  }
+  return { state, say: null };
 }
 
 /** The one-time hint once an accepted invitation has seated them: the mic is theirs to open. */

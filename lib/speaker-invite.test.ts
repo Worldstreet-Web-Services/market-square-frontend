@@ -10,7 +10,10 @@ import {
   inviteErrorOutcome,
   inviteAnnouncement,
   inviteBannerVisible,
+  INITIAL_INVITE_ANNOUNCER,
   INVITE_TTL_MS,
+  INVITE_WARNING_SECONDS,
+  stepInviteAnnouncer,
   inviteDeadline,
   inviteView,
   invitesByUser,
@@ -371,10 +374,58 @@ describe("the host's open invitations, keyed on the person", () => {
   });
 });
 
-describe("the invitee is told once, by name", () => {
-  it("names the host when it can and never promises a seat", () => {
-    assert.equal(inviteAnnouncement("Ada"), "Ada invited you to speak.");
-    assert.equal(inviteAnnouncement("  "), "The host invited you to speak.");
-    assert.doesNotMatch(inviteAnnouncement(null), /seat|mic/i);
+describe("the invitee is told once, by name, with the deadline", () => {
+  it("names the host, says how long and where the answer is, and never promises a seat", () => {
+    assert.equal(
+      inviteAnnouncement("Ada", 60),
+      "Ada invited you to speak. Answer within 1 minute: Join as speaker, or Not now, at the top of the page."
+    );
+    assert.equal(
+      inviteAnnouncement("  ", 42),
+      "The host invited you to speak. Answer within 42 seconds: Join as speaker, or Not now, at the top of the page."
+    );
+    assert.equal(inviteAnnouncement("Ada", null), "Ada invited you to speak. Join as speaker, or Not now, at the top of the page.");
+    assert.doesNotMatch(inviteAnnouncement(null, 60), /seat|mic/i);
+  });
+
+  const run = (readings: { requestId: string | null; secondsLeft: number | null; answered?: boolean }[]) => {
+    let state = INITIAL_INVITE_ANNOUNCER;
+    const said: (string | null)[] = [];
+    for (const reading of readings) {
+      const step = stepInviteAnnouncer(state, { hostName: "Ada", answered: false, ...reading });
+      state = step.state;
+      said.push(step.say);
+    }
+    return said;
+  };
+
+  it("announces an invitation once, however often the surfaces around it change", () => {
+    const said = run([
+      { requestId: "r1", secondsLeft: 60 },
+      { requestId: "r1", secondsLeft: 59 },
+      { requestId: "r1", secondsLeft: 40 },
+    ]);
+    assert.match(said[0] ?? "", /^Ada invited you to speak\./);
+    assert.deepEqual(said.slice(1), [null, null]);
+  });
+
+  it("warns once near the end, and says so when it runs out unanswered", () => {
+    const said = run([
+      { requestId: "r1", secondsLeft: 60 },
+      { requestId: "r1", secondsLeft: INVITE_WARNING_SECONDS },
+      { requestId: "r1", secondsLeft: 9 },
+      { requestId: null, secondsLeft: null },
+    ]);
+    assert.deepEqual(said.slice(1), ["10 seconds left to answer the invitation to speak.", null, "The invitation to speak has ended."]);
+  });
+
+  it("says nothing more once the reader has answered", () => {
+    const said = run([
+      { requestId: "r1", secondsLeft: 60 },
+      { requestId: "r1", secondsLeft: 20, answered: true },
+      { requestId: "r1", secondsLeft: 5, answered: true },
+      { requestId: null, secondsLeft: null, answered: true },
+    ]);
+    assert.deepEqual(said.slice(1), [null, null, null]);
   });
 });

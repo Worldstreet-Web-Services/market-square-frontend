@@ -27,7 +27,7 @@ import {
   type MiniPlayerCardPlacement,
 } from "@/lib/room-session/visibility";
 import { sq, stripSquare } from "@/lib/square-path";
-import { inviteAnnouncement, inviteBannerVisible } from "@/lib/speaker-invite";
+import { inviteBannerVisible } from "@/lib/speaker-invite";
 
 /**
  * THE MINIMISED GIST ROOM.
@@ -116,10 +116,8 @@ function SessionInvite() {
   const hostName = owner?.displayName || owner?.username || "The host";
   return (
     <>
-      {/* Always mounted, so the announcement is read when it appears. */}
-      <p role="status" aria-live="polite" className="sr-only">
-        {visible ? inviteAnnouncement(owner?.displayName || owner?.username) : ""}
-      </p>
+      {/* Announced by the session (room-session.tsx InviteAnnouncer), never
+          here: a region that fills in on every route change repeats it. */}
       {visible && invite && (
         <div
           // A full-width card on a phone; 400 at the top-right from md.

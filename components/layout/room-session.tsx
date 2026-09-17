@@ -36,7 +36,13 @@ import { REJOIN_KEY, parseRejoin, rejoinOfferFor, serializeRejoin, type RejoinRe
 import { useMe } from "@/hooks/use-me";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
 import { MARKET_FLAGS } from "@/lib/market-config";
-import { releaseActionFor } from "@/lib/speaker-invite";
+import {
+  INITIAL_INVITE_ANNOUNCER,
+  inviteView,
+  releaseActionFor,
+  stepInviteAnnouncer,
+  type InviteAnnouncerState,
+} from "@/lib/speaker-invite";
 import { HOST_MUTE_TOAST, INITIAL_HOST_MUTE_TOAST, hostMuteOf, hostMuteToken, stepHostMuteToast } from "@/lib/host-mute";
 import { speakerSignalOf, userTopic } from "@/lib/ws-gateway";
 import { sharedGateway } from "@/lib/ws-gateway-shared";
@@ -310,9 +316,12 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     () => (inviteId ? { requestId: inviteId, inviteExpiresAt, seenAt: inviteSeenAt } : null),
     [inviteId, inviteExpiresAt, inviteSeenAt]
   );
+  // Which invitation the reader answered: its end is then no news to announce.
+  const [answeredInviteId, setAnsweredInviteId] = useState<string | null>(null);
   const answerInvite = useCallback(
     (action: "accept" | "reject") => {
       if (!inviteId) return;
+      setAnsweredInviteId(inviteId);
       answerInviteMutate({ requestId: inviteId, action });
     },
     [answerInviteMutate, inviteId]
@@ -839,11 +848,72 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   return (
     <>
       {children}
+      {/* The ONE place the invitation is announced, whichever surface draws it. */}
+      <InviteAnnouncer
+        invite={invite}
+        hostName={stream.data?.owner?.displayName || stream.data?.owner?.username || null}
+        // Leaving the room ends the invitation too; that is not news either.
+        answered={!holding || (invite !== null && answeredInviteId === invite.requestId)}
+      />
       {/* The audio itself, outside every route. Mounted from its own map so it
           can never become conditional on anything visual. */}
       {room && stream.data && (
         <HouseAudioSinks room={room} streamId={streamId} ownerId={stream.data.ownerId} />
       )}
     </>
+  );
+}
+
+/**
+ * THE INVITATION, SAID ONCE. It used to be announced by the room page (on
+ * mount, and again after a reconnect) and by the mini-player (whenever the
+ * reader left the room's page), so moving around the Square repeated it. The
+ * session is always mounted, so it says it: the invitation with its deadline,
+ * one warning near the end, and a closing line when it ends unanswered
+ * (lib/speaker-invite.ts `stepInviteAnnouncer`).
+ */
+function InviteAnnouncer({
+  invite,
+  hostName,
+  answered,
+}: {
+  invite: RoomSessionView["invite"];
+  hostName: string | null;
+  answered: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const ticking = invite !== null;
+  useEffect(() => {
+    if (!ticking) return;
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [ticking]);
+
+  const view = invite
+    ? inviteView({ id: invite.requestId, status: "invited", inviteExpiresAt: invite.inviteExpiresAt }, now, invite.seenAt)
+    : null;
+  const secondsLeft = view?.state === "open" ? view.secondsLeft : null;
+  const [spoken, setSpoken] = useState<{ state: InviteAnnouncerState; text: string }>({
+    state: INITIAL_INVITE_ANNOUNCER,
+    text: "",
+  });
+  const step = stepInviteAnnouncer(spoken.state, {
+    requestId: invite && view?.state !== "expired" ? invite.requestId : null,
+    hostName,
+    secondsLeft,
+    answered,
+  });
+  const changed =
+    step.say !== null ||
+    step.state.requestId !== spoken.state.requestId ||
+    step.state.warned !== spoken.state.warned ||
+    step.state.answered !== spoken.state.answered;
+  // Adjusted during render, React's pattern for state that follows a value.
+  if (changed) setSpoken({ state: step.state, text: step.say ?? spoken.text });
+
+  return (
+    <p role="status" aria-live="polite" className="sr-only">
+      {spoken.text}
+    </p>
   );
 }
