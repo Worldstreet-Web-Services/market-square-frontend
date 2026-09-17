@@ -38,6 +38,7 @@ import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-sto
 import { MARKET_FLAGS } from "@/lib/market-config";
 import {
   INITIAL_INVITE_ANNOUNCER,
+  createAnswerLatch,
   inviteView,
   releaseActionFor,
   stepInviteAnnouncer,
@@ -318,13 +319,15 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   );
   // Which invitation the reader answered: its end is then no news to announce.
   const [answeredInviteId, setAnsweredInviteId] = useState<string | null>(null);
+  // Same-frame taps: the banner's `busy` arrives a render late (lib/speaker-invite.ts `createAnswerLatch`).
+  const [answerLatch] = useState(createAnswerLatch);
   const answerInvite = useCallback(
     (action: "accept" | "reject") => {
-      if (!inviteId) return;
+      if (!inviteId || !answerLatch.claim(inviteId)) return;
       setAnsweredInviteId(inviteId);
-      answerInviteMutate({ requestId: inviteId, action });
+      answerInviteMutate({ requestId: inviteId, action }, { onError: () => answerLatch.release(inviteId) });
     },
-    [answerInviteMutate, inviteId]
+    [answerInviteMutate, answerLatch, inviteId]
   );
 
   // The room ended while the reader was somewhere else. ROOM_DELETED says the

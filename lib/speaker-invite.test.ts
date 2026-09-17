@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { shouldAutoEnableMic } from "./mic-consent.ts";
 import {
   OUTCOME_GRACE_MS,
+  createAnswerLatch,
   answerErrorMessage,
   formatCountdown,
   hostOutcomeLabel,
@@ -430,5 +431,29 @@ describe("the invitee is told once, by name, with the deadline", () => {
       { requestId: null, secondsLeft: null, answered: true },
     ]);
     assert.deepEqual(said.slice(1), [null, null, null]);
+  });
+});
+
+describe("one answer per invitation", () => {
+  it("a same-frame double tap sends one answer, whichever button it lands on", () => {
+    const latch = createAnswerLatch();
+    const sent: string[] = [];
+    const answer = (id: string, action: string) => {
+      if (latch.claim(id)) sent.push(`${id}:${action}`);
+    };
+    answer("req-1", "accept");
+    answer("req-1", "accept");
+    answer("req-1", "reject");
+    assert.deepEqual(sent, ["req-1:accept"]);
+  });
+
+  it("a failed answer can be retried, and a new invitation claims afresh", () => {
+    const latch = createAnswerLatch();
+    assert.equal(latch.claim("req-1"), true);
+    latch.release("req-2");
+    assert.equal(latch.claim("req-1"), false, "releasing another invitation frees nothing");
+    latch.release("req-1");
+    assert.equal(latch.claim("req-1"), true, "retry after a failure");
+    assert.equal(latch.claim("req-2"), true, "a new invitation");
   });
 });

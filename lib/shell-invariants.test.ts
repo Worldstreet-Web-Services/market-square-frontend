@@ -3854,6 +3854,15 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(resolve, /if \(quietResolveError\(error as ApiErrorLike, action\)\) \{/);
   });
 
+  it("the session latches an answer before sending it, so a double tap sends one", () => {
+    const session = code("components/layout/room-session.tsx");
+    assert.match(session, /const \[answerLatch\] = useState\(createAnswerLatch\);/);
+    assert.match(
+      session,
+      /if \(!inviteId \|\| !answerLatch\.claim\(inviteId\)\) return;\s*setAnsweredInviteId\(inviteId\);\s*answerInviteMutate\(\{ requestId: inviteId, action \}, \{ onError: \(\) => answerLatch\.release\(inviteId\) \}\);/
+    );
+  });
+
   it("a host's tap on an undeployed mute or invite is answered, not swallowed", () => {
     const hooks = code("features/streams/hooks/use-streams.ts");
     const mute = hooks.slice(hooks.indexOf("export function useMuteSpeaker"));

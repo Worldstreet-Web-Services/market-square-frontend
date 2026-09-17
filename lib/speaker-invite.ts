@@ -522,3 +522,35 @@ export function quietResolveError(error: ApiErrorLike | null | undefined, action
   if (action === "leave") return code === "AWAITING_INVITEE";
   return false;
 }
+
+/**
+ * ONE ANSWER PER INVITATION, however fast the taps.
+ *
+ * The banner's `busy` is the mutation's pending flag, which only reaches the
+ * buttons on the next render — so two taps in one frame (a double tap, a
+ * bouncing switch, Enter held down) both got through, sending the answer and
+ * the "Tap the mic when you're ready" hint twice. The latch is synchronous:
+ * the first claim on an invitation wins and every later one is refused until
+ * the answer FAILS and is released, so a network error can still be retried.
+ * A new invitation is a new id and claims afresh.
+ */
+export interface AnswerLatch {
+  /** True for the first claim on this invitation; false while one is held. */
+  claim(requestId: string): boolean;
+  /** The answer failed: the reader may answer again. */
+  release(requestId: string): void;
+}
+
+export function createAnswerLatch(): AnswerLatch {
+  let held: string | null = null;
+  return {
+    claim(requestId) {
+      if (held === requestId) return false;
+      held = requestId;
+      return true;
+    },
+    release(requestId) {
+      if (held === requestId) held = null;
+    },
+  };
+}
