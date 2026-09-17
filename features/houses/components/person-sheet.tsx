@@ -102,9 +102,8 @@ export function PersonSheet({
               ? hostActions.invite.reason
               : "They'll be asked first. Their mic stays off until they tap it."
         }
-        // Live only for the change it was added for (Invited. Waiting…): a
-        // cooldown's reason ticks every second and was read out every second.
-        live={hostActions.invite.kind === "invited"}
+        // Not a live region: the invite's own toast ("Invited Ada to speak.")
+        // already says it, and a live hint made one tap three announcements.
         disabled={(hostActions.invite.kind === "invite" && hostActions.invite.disabled) || hostActions.busy}
         onClick={() => {
           if (hostActions.invite.kind === "invited") hostActions.onCancelInvite(hostActions.invite.requestId);
@@ -222,14 +221,11 @@ function HostRow({
   hint,
   disabled,
   onClick,
-  live = false,
 }: {
   label: string;
   hint?: string;
   disabled: boolean;
   onClick: () => void;
-  /** The hint changes in place (Invited. Waiting…) and is read when it does. */
-  live?: boolean;
 }) {
   const button = useRef<HTMLButtonElement>(null);
   const focused = useRef(false);
@@ -269,7 +265,7 @@ function HostRow({
     >
       <span className={cn("text-[13px] font-semibold text-body", disabled && "opacity-50")}>{label}</span>
       {hint && (
-        <span className="mt-0.5 text-[11px] leading-4 text-grey-300" aria-live={live ? "polite" : undefined}>
+        <span className="mt-0.5 text-[11px] leading-4 text-grey-300">
           {hint}
         </span>
       )}

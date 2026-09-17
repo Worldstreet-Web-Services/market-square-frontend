@@ -5,6 +5,9 @@ import {
   OUTCOME_GRACE_MS,
   createAnswerLatch,
   answerLanding,
+  answerBusyCopy,
+  inviteCountdownLabel,
+  invitedCountdownLabel,
   answerErrorMessage,
   formatCountdown,
   hostOutcomeLabel,
@@ -557,13 +560,13 @@ describe("the invitee is told once, by name, with the deadline", () => {
   it("names the host, says how long and where the answer is, and never promises a seat", () => {
     assert.equal(
       inviteAnnouncement("Ada", 60),
-      "Ada invited you to speak. Answer within 1 minute: Join as speaker, or Not now, at the top of the page."
+      "Ada invited you to speak. Answer within 1 minute: Join as speaker, or Not now, in the Invitation to speak region."
     );
     assert.equal(
       inviteAnnouncement("  ", 42),
-      "The host invited you to speak. Answer within 42 seconds: Join as speaker, or Not now, at the top of the page."
+      "The host invited you to speak. Answer within 42 seconds: Join as speaker, or Not now, in the Invitation to speak region."
     );
-    assert.equal(inviteAnnouncement("Ada", null), "Ada invited you to speak. Join as speaker, or Not now, at the top of the page.");
+    assert.equal(inviteAnnouncement("Ada", null), "Ada invited you to speak. Join as speaker, or Not now, in the Invitation to speak region.");
     assert.doesNotMatch(inviteAnnouncement(null, 60), /seat|mic/i);
   });
 
@@ -595,7 +598,21 @@ describe("the invitee is told once, by name, with the deadline", () => {
       { requestId: "r1", secondsLeft: 9 },
       { requestId: null, secondsLeft: null },
     ]);
-    assert.deepEqual(said.slice(1), ["10 seconds left to answer the invitation to speak.", null, "The invitation to speak has ended."]);
+    assert.deepEqual(said.slice(1), ["20 seconds left to answer the invitation to speak.", null, "The invitation to speak has ended."]);
+  });
+
+  it("warns at least 20 seconds ahead (WCAG 2.2.1), never with 10 left", () => {
+    assert.ok(INVITE_WARNING_SECONDS >= 20);
+    const said = run([
+      { requestId: "r1", secondsLeft: 60 },
+      { requestId: "r1", secondsLeft: 21 },
+      { requestId: "r1", secondsLeft: 20 },
+    ]);
+    assert.deepEqual(said.slice(1), [null, "20 seconds left to answer the invitation to speak."]);
+  });
+
+  it("never says the answers are at the top of the page: with a sheet open they are not", () => {
+    for (const left of [60, 42, null]) assert.doesNotMatch(inviteAnnouncement("Ada", left), /top of the page/);
   });
 
   it("says nothing more once the reader has answered", () => {
@@ -642,6 +659,18 @@ describe("one answer per invitation", () => {
     // The host invites again and the service reuses the row id.
     latch.follow("req-1");
     assert.equal(latch.claim("req-1"), true, "the new invitation can be answered");
+  });
+});
+
+describe("the countdowns say what they count, and an answer on the wire says so", () => {
+  it("the invitee's banner and the host's row name the time as time left", () => {
+    assert.equal(inviteCountdownLabel(42), "Answer in 0:42");
+    assert.equal(invitedCountdownLabel(65), "ends in 1:05");
+  });
+
+  it("names the answer being sent, on the tapped button and for a screen reader", () => {
+    assert.deepEqual(answerBusyCopy("accept"), { label: "Joining…", status: "Joining the stage…" });
+    assert.deepEqual(answerBusyCopy("reject"), { label: "Declining…", status: "Sending your answer…" });
   });
 });
 

@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button, Spinner } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { focusLost, handFocusOn } from "@/lib/focus-handoff";
-import { formatCountdown, inviteView } from "@/lib/speaker-invite";
+import { answerBusyCopy, inviteCountdownLabel, inviteView } from "@/lib/speaker-invite";
 
 /**
  * THE HOST'S INVITATION, ASKED — never a seat taken on the reader's behalf.
@@ -55,6 +55,10 @@ export function InviteBanner({
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Which answer was tapped, so the one on the wire can say so (`answerBusyCopy`).
+  const [tapped, setTapped] = useState<"accept" | "reject" | null>(null);
+  const sending = busy && tapped !== null ? answerBusyCopy(tapped) : null;
 
   const view = inviteView({ id: requestId, status: "invited", inviteExpiresAt, createdAt }, now, seenAt, clockOffsetMs);
   const open = view.state === "open";
@@ -119,11 +123,15 @@ export function InviteBanner({
           {view.secondsLeft !== null && (
             <>
               {" · "}
-              <span className="tnum">{formatCountdown(view.secondsLeft)}</span>
+              <span className="tnum">{inviteCountdownLabel(view.secondsLeft)}</span>
             </>
           )}
         </p>
       </div>
+      {/* One line while the answer is on the wire; empty otherwise. */}
+      <p role="status" className="sr-only">
+        {sending?.status ?? ""}
+      </p>
       {/* The answers on their own row at every width: even the 400px desktop
           banner leaves the question ~120px beside them. */}
       <div className="flex w-full items-center justify-end gap-2">
@@ -133,11 +141,12 @@ export function InviteBanner({
           aria-disabled={busy}
           onClick={() => {
             if (busy) return;
+            setTapped("reject");
             onReject();
           }}
-          className={cn("pointer-coarse:h-11 max-md:flex-1", busy && "cursor-not-allowed opacity-50")}
+          className={cn("pointer-coarse:h-11 max-md:flex-1", busy && "cursor-not-allowed", busy && tapped !== "reject" && "opacity-50")}
         >
-          Not now
+          {busy && tapped === "reject" ? <BusyLabel label={answerBusyCopy("reject").label} /> : "Not now"}
         </Button>
         <Button
           size="sm"
@@ -145,14 +154,31 @@ export function InviteBanner({
           aria-disabled={busy}
           onClick={() => {
             if (busy) return;
+            setTapped("accept");
             onAccept();
           }}
-          className={cn("pointer-coarse:h-11 max-md:flex-1", busy && "cursor-not-allowed opacity-50")}
+          className={cn("pointer-coarse:h-11 max-md:flex-1", busy && "cursor-not-allowed", busy && tapped !== "accept" && "opacity-50")}
         >
-          Join as speaker
+          {busy && tapped === "accept" ? <BusyLabel label={answerBusyCopy("accept").label} /> : "Join as speaker"}
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The tapped answer while it is on the wire. The spinner is decoration (the
+ * status line says it for a screen reader), and the button is never
+ * `disabled`, so focus stays where it was.
+ */
+function BusyLabel({ label }: { label: string }) {
+  return (
+    <>
+      <span aria-hidden className="inline-flex">
+        <Spinner className="h-3.5 w-3.5" />
+      </span>
+      {label}
+    </>
   );
 }
 

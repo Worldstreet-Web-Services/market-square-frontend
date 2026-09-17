@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { SpeakerRequest } from "@/features/streams/lib/types";
 import { cn } from "@/lib/cn";
 import { handFocusOn, nextFocusIndex } from "@/lib/focus-handoff";
-import { formatCountdown } from "@/lib/speaker-invite";
+import { invitedCountdownLabel } from "@/lib/speaker-invite";
 
 /**
  * The host's "Invited" group — people asked up who have not answered yet.
@@ -92,7 +92,7 @@ export function InvitedGroup({ invited, heading = true }: { invited: InvitedList
                 {entry.timed && (
                   <>
                     {" · "}
-                    <span className="tnum">{formatCountdown((entry.deadline - now) / 1000)}</span>
+                    <span className="tnum">{invitedCountdownLabel((entry.deadline - now) / 1000)}</span>
                   </>
                 )}
               </span>

@@ -162,22 +162,52 @@ export function inviteBannerVisible(input: {
 /** Both spellings of a route — standalone `/x` and Ark's `/square/x` — as one. */
 const logicalPath = squarePaths("/square").stripSquare;
 
+/** The invitee's countdown, saying what it counts: a bare `0:42` could be a slot's length. */
+export function inviteCountdownLabel(seconds: number): string {
+  return `Answer in ${formatCountdown(seconds)}`;
+}
+
+/** The host's Invited row: the time before the invitation ends. */
+export function invitedCountdownLabel(seconds: number): string {
+  return `ends in ${formatCountdown(seconds)}`;
+}
+
+/**
+ * While an answer is on the wire: the tapped button's label, and one status
+ * line for a screen reader. Without them a slow connection only dimmed both
+ * buttons, and the answer looked broken.
+ */
+export function answerBusyCopy(action: "accept" | "reject"): { label: string; status: string } {
+  return action === "accept"
+    ? { label: "Joining…", status: "Joining the stage…" }
+    : { label: "Declining…", status: "Sending your answer…" };
+}
+
 /**
  * Said once to a screen reader when an invitation arrives. It gives the time
- * limit sighted readers see ticking (WCAG 2.2.1) and where the two answers
- * are, and promises nothing about a seat or a mic.
+ * limit sighted readers see ticking (WCAG 2.2.1) and names the region the two
+ * answers are in, and promises nothing about a seat or a mic.
+ *
+ * It names the REGION, not a place: with a sheet open the banner is drawn
+ * inside that sheet's dialog (components/ui/modal-layer.tsx), and "at the top
+ * of the page" sent a reader to the sheet's Close button.
  */
 export function inviteAnnouncement(hostName: string | null | undefined, secondsLeft: number | null): string {
   const who = hostName?.trim() || "The host";
-  const where = "Join as speaker, or Not now, at the top of the page.";
+  const where = "Join as speaker, or Not now, in the Invitation to speak region.";
   if (secondsLeft === null) return `${who} invited you to speak. ${where}`;
   const whole = Math.max(1, Math.ceil(secondsLeft));
   const within = whole >= 60 && whole % 60 === 0 ? `${whole / 60} minute${whole === 60 ? "" : "s"}` : `${whole} seconds`;
   return `${who} invited you to speak. Answer within ${within}: ${where}`;
 }
 
-/** When the one warning before an invitation runs out is said. */
-export const INVITE_WARNING_SECONDS = 10;
+/**
+ * When the one warning before an invitation runs out is said: 20 seconds
+ * ahead, the least WCAG 2.2.1 asks, so a reader who has to find the banner
+ * past an open sheet still has time to answer. The 60 seconds cannot be
+ * extended yet: that needs a longer TTL or an extend route from the service.
+ */
+export const INVITE_WARNING_SECONDS = 20;
 
 export interface InviteAnnouncerState {
   /** The invitation already announced, or null. */

@@ -4089,9 +4089,18 @@ describe("invite to speak and the soft mute, after review", () => {
     assert.match(banner, /const landing = dialog\?\.isConnected \? dialog : main;/);
   });
 
-  it("the invite hint is live only for the change it announces, never a ticking countdown", () => {
-    assert.match(sheet, /live=\{hostActions\.invite\.kind === "invited"\}/);
-    assert.doesNotMatch(sheet, /^\s*live\s*$/m);
+  it("one tap on Invite to speak is announced once, by its toast: the sheet's hint is not a live region", () => {
+    assert.doesNotMatch(sheet, /aria-live/);
+    assert.match(code("features/streams/hooks/use-streams.ts"), /toast\(inviteSentMessage\(row\.status, name\)\);/);
+  });
+
+  it("the countdowns say what they count, and the answer on the wire shows and says so without disabling", () => {
+    assert.match(banner, /<span className="tnum">\{inviteCountdownLabel\(view\.secondsLeft\)\}<\/span>/);
+    assert.match(code("features/houses/components/invited-group.tsx"), /<span className="tnum">\{invitedCountdownLabel\(\(entry\.deadline - now\) \/ 1000\)\}<\/span>/);
+    assert.match(banner, /<p role="status" className="sr-only">\s*\{sending\?\.status \?\? ""\}\s*<\/p>/);
+    assert.match(banner, /busy && tapped === "accept" \? <BusyLabel label=\{answerBusyCopy\("accept"\)\.label\} \/>/);
+    assert.match(banner, /busy && tapped === "reject" \? <BusyLabel label=\{answerBusyCopy\("reject"\)\.label\} \/>/);
+    assert.doesNotMatch(banner, /\sdisabled=|loading=/, "a disabled button drops focus");
   });
 
   it("the tray's disabled mute is described by its reason, host rows are 44px, and the seat chip is readable", () => {
