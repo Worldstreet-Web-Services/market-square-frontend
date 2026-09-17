@@ -45,6 +45,7 @@ import {
   resolveSpeakerRequest,
   inviteToSpeak,
   fetchSpeakerInvites,
+  fetchSeatedSpeakers,
   muteSpeaker,
   type SpeakerRequestAction,
   fetchStreamByCode,
@@ -770,6 +771,20 @@ export function useSpeakerInvites(streamId: string, enabled: boolean) {
       enabled && !routeMissing(current.state.error as ApiErrorLike | null) ? SPEAKER_POLL_MS : false,
   });
   return { ...query, unavailable: invitesMissing || routeMissing(query.error as ApiErrorLike | null) };
+}
+
+/**
+ * The host's approved speakers, by row. The seat that settles an accepted
+ * invitation, read from the service rather than waiting on the LiveKit grant.
+ */
+export function useSeatedSpeakers(streamId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-requests", "approved"],
+    queryFn: () => fetchSeatedSpeakers(streamId),
+    enabled,
+    retry: false,
+    refetchInterval: enabled ? SPEAKER_POLL_MS : false,
+  });
 }
 
 /**

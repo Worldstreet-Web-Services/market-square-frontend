@@ -3827,6 +3827,20 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(hooks, /if \(request\.status === "invited"\) return;\s*toast\.success\("Request sent to the host"\);/);
   });
 
+  it("the countdown starts from when the session first saw the invitation, on both surfaces", () => {
+    assert.match(code("components/layout/room-session.tsx"), /if \(inviteSeen\.id !== inviteId\) setInviteSeen\(\{ id: inviteId, at: mine\.dataUpdatedAt \}\);/);
+    for (const surface of [player, room]) assert.match(surface, /seenAt=\{(session\.)?invite\.seenAt\}/);
+    assert.match(banner, /inviteView\(\{ id: requestId, status: "invited", inviteExpiresAt \}, now, seenAt\)/);
+  });
+
+  it("the host's invitations are remembered per stream, outside the room page, and settled on approved rows", () => {
+    assert.match(tools, /const inviteMemory = new Map<string, InviteMemory>\(\);/);
+    assert.match(tools, /const shown = visibleInvites\(step\.tracked, now\);/);
+    assert.doesNotMatch(tools, /useRef<TrackedInvite/);
+    assert.match(room, /const seatedRows = useSeatedSpeakers\(stream\.id, isHost && stream\.status === "live"\);/);
+    assert.match(code("features/streams/lib/api.ts"), /\{ status: "approved" \}/);
+  });
+
   it("the listener's own tool says it is theirs alone", () => {
     assert.match(sheet, /"Mute for me only"/);
     assert.match(code("features/profile/components/person-safety-rows.tsx"), /"Mute for me only"/);

@@ -294,9 +294,21 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   const inviteId = invitedRow?.id ?? null;
   // `inviteExpiresAt`, never `expiresAt`: on this row that is the join token's.
   const inviteExpiresAt = invitedRow?.inviteExpiresAt ?? null;
+  /*
+    When THIS tab first saw the invitation — the one reading the countdown is
+    taken from (lib/speaker-invite.ts `inviteDeadline`), so a device clock
+    that is off cannot hide it or run it past the server. It is the moment
+    the response that first carried it arrived (`dataUpdatedAt`). Held here
+    rather than in a banner, so moving between the room and the mini-player
+    does not restart it. Adjusted during render, React's pattern for state
+    that follows a value.
+  */
+  const [inviteSeen, setInviteSeen] = useState<{ id: string | null; at: number }>({ id: null, at: 0 });
+  if (inviteSeen.id !== inviteId) setInviteSeen({ id: inviteId, at: mine.dataUpdatedAt });
+  const inviteSeenAt = inviteSeen.id === inviteId ? inviteSeen.at : 0;
   const invite = useMemo(
-    () => (inviteId ? { requestId: inviteId, inviteExpiresAt } : null),
-    [inviteId, inviteExpiresAt]
+    () => (inviteId ? { requestId: inviteId, inviteExpiresAt, seenAt: inviteSeenAt } : null),
+    [inviteId, inviteExpiresAt, inviteSeenAt]
   );
   const answerInvite = useCallback(
     (action: "accept" | "reject") => {

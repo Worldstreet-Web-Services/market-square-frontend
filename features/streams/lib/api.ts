@@ -388,6 +388,21 @@ export async function fetchSpeakerInvites(streamId: string) {
 }
 
 /**
+ * The host's seated speakers — the request list filtered to `approved`.
+ *
+ * The plain list defaults to `pending` on the service, so an accepted
+ * invitation never shows up there; without this, an invitee whose grant had
+ * not reached LiveKit yet was reported to the host as "isn't available".
+ * Filtered again on the client for the same reason as the invited list.
+ */
+export async function fetchSeatedSpeakers(streamId: string) {
+  const list = SpeakerRequestListSchema.parse(
+    await msApi.authedGet(`/streams/${streamId}/speaker-requests`, { status: "approved" })
+  );
+  return { ...list, items: list.items.filter((item) => item.status === "approved") };
+}
+
+/**
  * The host's soft mute — `POST /streams/:id/speakers/:userId/mute`, owner only.
  *
  * Mutes the speaker's MICROPHONE on the server and sets `hostMuted='soft'` on

@@ -4,22 +4,32 @@ import { useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import type { SpeakerRequest } from "@/features/streams/lib/types";
-import { formatCountdown, inviteView } from "@/lib/speaker-invite";
+import { formatCountdown } from "@/lib/speaker-invite";
 
 /**
  * The host's "Invited" group — people asked up who have not answered yet.
  *
  * One list for the tray and the Speaker Request band, read from the host's
  * invited rows (`useSpeakerInvites`), so both show the same people with the
- * same clock. The countdown is each row's own `inviteExpiresAt`; a row that has run
- * out drops off here at zero rather than waiting for the next poll, and what
+ * same clock. Each row counts to its own deadline — read from
+ * `inviteExpiresAt` once, when the host first saw it
+ * (lib/speaker-invite.ts `inviteDeadline`) — and stays until then even if the
+ * invitee answered early, so the row going away never says "declined". What
  * the host is told about it ("isn't available to speak right now") is said
- * once, by the room, never "declined".
+ * once, by the room.
  */
+export interface InvitedItem {
+  request: SpeakerRequest;
+  /** Local epoch ms the row is shown until. */
+  deadline: number;
+  /** The deadline is the server's, so the countdown is drawn. */
+  timed: boolean;
+}
+
 export interface InvitedList {
-  items: readonly SpeakerRequest[];
+  items: readonly InvitedItem[];
   busy: boolean;
-  onCancel: (request: SpeakerRequest) => void;
+  onCancel: (item: InvitedItem) => void;
 }
 
 export function InvitedGroup({ invited, heading = true }: { invited: InvitedList; heading?: boolean }) {
@@ -31,15 +41,14 @@ export function InvitedGroup({ invited, heading = true }: { invited: InvitedList
     return () => clearInterval(timer);
   }, [any]);
 
-  const open = invited.items
-    .map((item) => ({ item, view: inviteView(item, now) }))
-    .filter(({ view }) => view.state === "open");
+  const open = invited.items.filter((item) => now < item.deadline);
   if (open.length === 0) return null;
 
   return (
     <section className="space-y-2">
       {heading && <p className="ws-meta">Invited · {open.length}</p>}
-      {open.map(({ item, view }) => {
+      {open.map((entry) => {
+        const item = entry.request;
         const name = item.profile?.displayName || item.profile?.username || "Listener";
         return (
           <div key={item.id} className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
@@ -48,15 +57,15 @@ export function InvitedGroup({ invited, heading = true }: { invited: InvitedList
               <span className="block truncate text-[13px] text-grey-300">{name}</span>
               <span className="block text-[11px] leading-4 text-meta">
                 Invited
-                {view.state === "open" && view.secondsLeft !== null && (
+                {entry.timed && (
                   <>
                     {" · "}
-                    <span className="tnum">{formatCountdown(view.secondsLeft)}</span>
+                    <span className="tnum">{formatCountdown((entry.deadline - now) / 1000)}</span>
                   </>
                 )}
               </span>
             </span>
-            <Button size="sm" variant="ghost" disabled={invited.busy} onClick={() => invited.onCancel(item)}>
+            <Button size="sm" variant="ghost" disabled={invited.busy} onClick={() => invited.onCancel(entry)}>
               Cancel
             </Button>
           </div>

@@ -28,6 +28,7 @@ import {
   useRequestToSpeak,
   useResolveSpeakerRequest,
   useSpeakerRequests,
+  useSeatedSpeakers,
   useStream,
 } from "@/features/streams/hooks/use-streams";
 import type { Ingest, Stream } from "@/features/streams/lib/types";
@@ -1188,13 +1189,16 @@ function LiveHouse({
     or approved for one, so an accepted invitation is never reported as
     "isn't available".
   */
+  // The plain queue is pending-only on the service, so approved rows are their
+  // own read: an accepted invitation settles on the row, not on the grant.
+  const seatedRows = useSeatedSpeakers(stream.id, isHost && stream.status === "live");
   const seatedUserIds = useMemo(() => {
     const ids = new Set(speakerIds);
-    for (const item of hostRequests.data?.items ?? []) {
+    for (const item of [...(hostRequests.data?.items ?? []), ...(seatedRows.data?.items ?? [])]) {
       if (item.status === "approved") ids.add(baseIdentity(item.userId));
     }
     return ids;
-  }, [speakerIds, hostRequests.data]);
+  }, [speakerIds, hostRequests.data, seatedRows.data]);
   const hostTools = useHostStageTools({
     stream,
     isHost,
@@ -1546,6 +1550,7 @@ function LiveHouse({
             key={session.invite.requestId}
             requestId={session.invite.requestId}
             inviteExpiresAt={session.invite.inviteExpiresAt}
+            seenAt={session.invite.seenAt}
             host={{ id: stream.owner?.id ?? stream.ownerId, name: ownerName ?? "The host", avatarUrl: stream.owner?.avatarUrl }}
             busy={session.answeringInvite}
             onAccept={() => session.answerInvite("accept")}

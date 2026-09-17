@@ -24,6 +24,7 @@ import { formatCountdown, inviteView } from "@/lib/speaker-invite";
 export function InviteBanner({
   requestId,
   inviteExpiresAt,
+  seenAt,
   host,
   busy,
   onAccept,
@@ -32,6 +33,8 @@ export function InviteBanner({
 }: {
   requestId: string;
   inviteExpiresAt: string | null;
+  /** When the session first saw this invitation (lib/speaker-invite.ts `inviteDeadline`). */
+  seenAt: number;
   host: { id?: string | null; name: string; avatarUrl?: string | null };
   busy: boolean;
   onAccept: () => void;
@@ -45,7 +48,7 @@ export function InviteBanner({
     return () => clearInterval(timer);
   }, [inviteExpiresAt]);
 
-  const view = inviteView({ id: requestId, status: "invited", inviteExpiresAt }, now);
+  const view = inviteView({ id: requestId, status: "invited", inviteExpiresAt }, now, seenAt);
   if (view.state !== "open") return null;
 
   return (

@@ -53,24 +53,49 @@ export type InviteView =
   | {
       state: "open";
       requestId: string;
-      /** Whole seconds left, or null when the server sent no expiry. */
+      /** Whole seconds left, or null when there is no countdown we can trust. */
       secondsLeft: number | null;
     };
 
+/** The contract's lifetime of an invitation. The server owns it; this only caps a reading. */
+export const INVITE_TTL_MS = 60_000;
+
 /**
- * What the invitee sees for their own row at `now` (epoch ms).
+ * When an invitation stops being answerable, on THIS device's clock.
  *
- * Only `invited` is an invitation. An expiry that has passed is `expired`,
- * which draws nothing — the lazy expiry on the server will turn the row into
- * `withdrawn` on the next read, and the banner must not hang on at 0:00 until
- * it does. A row with no parseable expiry is still an open invitation (the
- * server owns the timeout either way); it simply has no countdown.
+ * `inviteExpiresAt` is the server's clock and the device's may be minutes off.
+ * So the time left is read ONCE, when the row is first seen, and counted down
+ * locally from there, capped at the contract's 60 seconds (a slow device
+ * cannot count past the server's expiry by more than that). A reading at or
+ * below zero on a row the server still lists as `invited` means the device is
+ * FAST, not that the invitation is over: null, no countdown, and the poll
+ * (withdrawn) or INVITE_NOT_OPEN ends it instead.
  */
-export function inviteView(row: InviteRow | null | undefined, now: number): InviteView {
+export function inviteDeadline(
+  inviteExpiresAt: string | null | undefined,
+  firstSeenAt: number,
+  ttlMs: number = INVITE_TTL_MS
+): number | null {
+  const expires = inviteExpiresAt ? Date.parse(inviteExpiresAt) : Number.NaN;
+  if (!Number.isFinite(expires)) return null;
+  const left = expires - firstSeenAt;
+  if (left <= 0) return null;
+  return firstSeenAt + Math.min(left, ttlMs);
+}
+
+/**
+ * What the invitee sees for their own row at `now` (epoch ms), first seen at
+ * `firstSeenAt` (see `inviteDeadline`).
+ *
+ * Only `invited` is an invitation. Past the deadline it is `expired`, which
+ * draws nothing rather than hanging on at 0:00 until the next poll. A row with
+ * no trustworthy deadline is still an open invitation, without a countdown.
+ */
+export function inviteView(row: InviteRow | null | undefined, now: number, firstSeenAt: number = now): InviteView {
   if (!row || row.status !== "invited") return { state: "none" };
-  const expires = row.inviteExpiresAt ? Date.parse(row.inviteExpiresAt) : Number.NaN;
-  if (!Number.isFinite(expires)) return { state: "open", requestId: row.id, secondsLeft: null };
-  const left = Math.ceil((expires - now) / 1000);
+  const deadline = inviteDeadline(row.inviteExpiresAt, firstSeenAt);
+  if (deadline === null) return { state: "open", requestId: row.id, secondsLeft: null };
+  const left = Math.ceil((deadline - now) / 1000);
   if (left <= 0) return { state: "expired", requestId: row.id };
   return { state: "open", requestId: row.id, secondsLeft: left };
 }
@@ -209,61 +234,84 @@ export interface TrackedInvite {
   id: string;
   userId: string;
   name: string;
+  /** Local epoch ms the invitation is held open until (`inviteDeadline`, or first seen + 60s). */
+  deadline: number;
+  /** The deadline came from the server's expiry, so a countdown may be drawn. */
+  timed: boolean;
   /** When the row stopped being listed as invited, or null while it is. */
   goneAt: number | null;
 }
 
 /**
- * How long a vanished invitation waits to see its invitee seated before the
- * host is told they are not coming. The invited list, the request list and the
- * LiveKit grant all arrive separately; an accept seen in one before the other
- * must not read as a refusal.
+ * How long past an invitation's end the host waits before being told. The
+ * invited list, the approved list and the LiveKit grant all arrive
+ * separately; an accept seen in one before the other must not read as a
+ * refusal.
  */
 export const OUTCOME_GRACE_MS = 6_000;
 
 /**
  * Follow the host's invitations from one read to the next.
  *
- * An invitation that leaves the invited list is SETTLED by what happened to
- * its invitee, never by the status on a row: seated (a grant, or an approved
- * row) is an acceptance and says nothing; taken back by the host says
- * nothing; anything else, once the grace has passed, is "isn't available".
+ * Settled by what happened to the PERSON, never by a row's status: seated says
+ * nothing, taken back by the host says nothing. Anything else is "isn't
+ * available" — and never before the invitation's own deadline. A refusal
+ * leaves the invited list the moment it happens and a lapse only at the
+ * deadline, so a host who saw the row (or the toast) go early would learn
+ * "declined", which the product never tells them. Both are held to
+ * max(goneAt, deadline) + grace.
+ *
+ * The tracked list is plain data so it can outlive the room page: a host who
+ * minimised the room is told when they come back.
  */
 export function settleInvites(
   tracked: readonly TrackedInvite[],
   input: {
-    open: readonly { id: string; userId: string; name: string }[];
+    open: readonly { id: string; userId: string; name: string; inviteExpiresAt: string | null }[];
     seatedUserIds: ReadonlySet<string>;
     cancelledIds: ReadonlySet<string>;
     now: number;
     graceMs?: number;
+    ttlMs?: number;
   }
 ): { tracked: TrackedInvite[]; unavailable: TrackedInvite[] } {
   const grace = input.graceMs ?? OUTCOME_GRACE_MS;
+  const ttl = input.ttlMs ?? INVITE_TTL_MS;
   const openIds = new Map(input.open.map((item) => [item.id, item]));
   const next: TrackedInvite[] = [];
   const unavailable: TrackedInvite[] = [];
   const seen = new Set<string>();
   for (const invite of tracked) {
     seen.add(invite.id);
+    if (input.cancelledIds.has(invite.id)) continue;
     const still = openIds.get(invite.id);
     if (still) {
       next.push({ ...invite, name: still.name || invite.name, goneAt: null });
       continue;
     }
-    if (input.cancelledIds.has(invite.id)) continue;
     if (input.seatedUserIds.has(invite.userId)) continue;
-    if (invite.goneAt === null) {
-      next.push({ ...invite, goneAt: input.now });
-      continue;
-    }
-    if (input.now - invite.goneAt >= grace) unavailable.push(invite);
-    else next.push(invite);
+    const goneAt = invite.goneAt ?? input.now;
+    if (input.now >= Math.max(goneAt, invite.deadline) + grace) unavailable.push(invite);
+    else next.push({ ...invite, goneAt });
   }
   for (const item of input.open) {
-    if (!seen.has(item.id)) next.push({ id: item.id, userId: item.userId, name: item.name, goneAt: null });
+    if (seen.has(item.id) || input.cancelledIds.has(item.id)) continue;
+    const deadline = inviteDeadline(item.inviteExpiresAt, input.now, ttl);
+    next.push({
+      id: item.id,
+      userId: item.userId,
+      name: item.name,
+      deadline: deadline ?? input.now + ttl,
+      timed: deadline !== null,
+      goneAt: null,
+    });
   }
   return { tracked: next, unavailable };
+}
+
+/** The invitations the host still sees as open (the Invited rows, the card badge, Cancel). */
+export function visibleInvites(tracked: readonly TrackedInvite[], now: number): TrackedInvite[] {
+  return tracked.filter((invite) => now < invite.deadline);
 }
 
 /* ------------------------------------------------------------------ *

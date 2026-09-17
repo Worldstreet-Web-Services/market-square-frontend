@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   useInviteToSpeak,
@@ -17,14 +17,43 @@ import { SEAT_COUNT } from "@/features/houses/lib/seating";
 import {
   hostOutcomeLabel,
   inviteControl,
-  invitesByUser,
   settleInvites,
+  visibleInvites,
   type TrackedInvite,
 } from "@/lib/speaker-invite";
 import { hostMuteControl } from "@/lib/host-mute";
 
 const NO_REQUESTS: readonly SpeakerRequest[] = [];
-const NO_IDS: ReadonlySet<string> = new Set();
+
+/*
+  THE HOST'S INVITATIONS OUTLIVE THE ROOM PAGE.
+
+  A host who invites Ben and then minimises the room to read their DMs is not
+  looking at LiveHouse, and a component ref died with it: back in the room the
+  tracked list started empty, Ben's row was already gone, and nothing was ever
+  said. Held per stream for the page load instead, so a remount settles what
+  ended while the host was away (lib/speaker-invite.ts `settleInvites`).
+  Plain data, never shared between streams.
+*/
+interface InviteMemory {
+  tracked: TrackedInvite[];
+  /** The last row seen for each tracked invitation — what its Invited row draws. */
+  rows: Map<string, SpeakerRequest>;
+  cancelled: Set<string>;
+}
+const inviteMemory = new Map<string, InviteMemory>();
+function memoryFor(streamId: string): InviteMemory {
+  let memory = inviteMemory.get(streamId);
+  if (!memory) {
+    memory = { tracked: [], rows: new Map(), cancelled: new Set() };
+    inviteMemory.set(streamId, memory);
+  }
+  return memory;
+}
+
+function sameIds(a: readonly TrackedInvite[], b: readonly TrackedInvite[]): boolean {
+  return a.length === b.length && a.every((item, index) => item.id === b[index]?.id && item.deadline === b[index]?.deadline);
+}
 
 /**
  * THE HOST'S STAGE TOOLS: invite to speak and the soft mute.
@@ -38,8 +67,9 @@ const NO_IDS: ReadonlySet<string> = new Set();
  * What the host is told when an invitation ends without a seat is the same
  * whether it was refused or ran out — "<name> isn't available to speak right
  * now" — and is settled by what happened to the PERSON (`settleInvites`):
- * seated says nothing, a Cancel says nothing, and a grace keeps an accept seen
- * in one read before the seat lands in another from reading as a refusal.
+ * seated says nothing, a Cancel says nothing. It is never said, and the row
+ * never leaves the screen, before the invitation's own deadline: when it
+ * went would otherwise tell the host a refusal from a lapse.
  */
 export function useHostStageTools({
   stream,
@@ -68,43 +98,63 @@ export function useHostStageTools({
 
   const unavailable = invite.unavailable || invites.unavailable;
   const items = unavailable ? NO_REQUESTS : (invites.data?.items ?? NO_REQUESTS);
-  const openInvites = useMemo(() => invitesByUser(items), [items]);
+  const streamId = stream.id;
 
-  /* ---- cancel, and the host's outcome line ------------------------------ */
+  /* ---- tracking, cancel, and the host's outcome line --------------------- */
 
-  const resolveMutate = resolve.mutate;
-  const [cancelled, setCancelled] = useState<ReadonlySet<string>>(NO_IDS);
-  const cancel = useCallback(
-    (requestId: string) => {
-      setCancelled((current) => new Set(current).add(requestId));
-      resolveMutate({ requestId, action: "cancel" });
-    },
-    [resolveMutate]
-  );
-
-  const tracked = useRef<TrackedInvite[]>([]);
+  const [visible, setVisible] = useState<TrackedInvite[]>(() => visibleInvites(memoryFor(streamId).tracked, Date.now()));
   const settle = useCallback(() => {
-    const step = settleInvites(tracked.current, {
+    const now = Date.now();
+    const memory = memoryFor(streamId);
+    for (const item of items) memory.rows.set(item.id, item);
+    const step = settleInvites(memory.tracked, {
       open: items.map((item) => ({
         id: item.id,
         userId: baseIdentity(item.userId),
         name: item.profile?.displayName || item.profile?.username || "",
+        inviteExpiresAt: item.inviteExpiresAt,
       })),
       seatedUserIds,
-      cancelledIds: cancelled,
-      now: Date.now(),
+      cancelledIds: memory.cancelled,
+      now,
     });
-    tracked.current = step.tracked;
+    memory.tracked = step.tracked;
+    const keep = new Set(step.tracked.map((item) => item.id));
+    for (const id of memory.rows.keys()) if (!keep.has(id)) memory.rows.delete(id);
+    const shown = visibleInvites(step.tracked, now);
+    setVisible((current) => (sameIds(current, shown) ? current : shown));
     for (const gone of step.unavailable) toast(hostOutcomeLabel(gone.name));
-  }, [items, seatedUserIds, cancelled]);
+  }, [items, seatedUserIds, streamId]);
   const settling = live && !unavailable;
   useEffect(() => {
     if (!settling) return;
-    settle();
-    // The grace runs out between polls, so the reading is repeated.
-    const timer = setInterval(settle, 2_000);
+    // Every second: the deadline and the grace run out between polls.
+    const timer = setInterval(settle, 1_000);
     return () => clearInterval(timer);
   }, [settling, settle]);
+
+  const resolveMutate = resolve.mutate;
+  const cancel = useCallback(
+    (requestId: string) => {
+      memoryFor(streamId).cancelled.add(requestId);
+      settle();
+      // A Cancel on an invitation that already ended answers INVITE_NOT_OPEN,
+      // which useResolveSpeakerRequest takes as the success it is.
+      resolveMutate({ requestId, action: "cancel" });
+    },
+    [streamId, settle, resolveMutate]
+  );
+
+  const shownRows = useMemo(
+    () =>
+      visible.flatMap((tracked) => {
+        const request = memoryFor(streamId).rows.get(tracked.id);
+        return request ? [{ request, deadline: tracked.deadline, timed: tracked.timed }] : [];
+      }),
+    [visible, streamId]
+  );
+  /** Open invitations by bare user id — the card badge and the sheet's Cancel. */
+  const openInvites = useMemo(() => new Map(visible.map((tracked) => [tracked.userId, tracked])), [visible]);
 
   /* ---- the clock a cooldown reads ---------------------------------------- */
 
@@ -122,18 +172,23 @@ export function useHostStageTools({
   const muteMutate = mute.mutate;
   const busy = invite.isPending || mute.isPending || resolve.isPending;
 
+  /** The live seat behind a user id — never a snapshot taken when a sheet opened. */
+  const seatOf = (base: string) => slots.find((item) => item.role !== "host" && baseIdentity(item.identity) === base);
+
   /** The host's rows in the person sheet. Null for anyone but a live room's host. */
   const actionsFor = (person: PersonTarget | null): PersonHostActions | null => {
     if (!person || !live) return null;
     const userId = person.isRoomHost ? stream.ownerId : baseIdentity(person.identity);
     const isSelf = person.isRoomHost || userId === myId;
+    const seat = person.isRoomHost ? undefined : seatOf(userId);
+    const seated = person.isRoomHost || seat !== undefined;
     return {
       invite: inviteControl({
         viewerIsHost: true,
         isSelf,
         target: {
           identity: person.identity,
-          seated: person.seated,
+          seated,
           pendingRequestId: person.pendingRequestId,
           openInviteId: openInvites.get(userId)?.id ?? null,
         },
@@ -148,10 +203,12 @@ export function useHostStageTools({
       onCancelInvite: cancel,
       mute: hostMuteControl({
         viewerIsHost: true,
-        seated: person.seated,
+        seated,
         targetIsHost: person.isRoomHost,
         isSelf,
-        micMuted: person.micMuted,
+        // Read off the seat as it is NOW: after a mute lands the row turns to
+        // "Their mic is already off" instead of inviting a second one.
+        micMuted: seat ? seat.isMuted : true,
         unavailable: mute.unavailable,
       }),
       onMute: () => muteMutate({ userId, name: person.name }),
@@ -162,9 +219,10 @@ export function useHostStageTools({
   /** The tray's Seated rows: the same soft mute, read off the seat's live mic. */
   const muteFor = (userId: string) => {
     const base = baseIdentity(userId);
-    const slot = slots.find((item) => item.role !== "host" && baseIdentity(item.identity) === base);
+    const slot = seatOf(base);
     const name = slot ? (participantName(slot.name) ?? slot.name) : "them";
     return {
+      name,
       control: hostMuteControl({
         viewerIsHost: live,
         seated: slot !== undefined,
@@ -178,9 +236,9 @@ export function useHostStageTools({
   };
 
   const invited: InvitedList = {
-    items,
+    items: shownRows,
     busy: resolve.isPending,
-    onCancel: (item) => cancel(item.id),
+    onCancel: (item) => cancel(item.request.id),
   };
 
   return { openInvites, actionsFor, muteFor, invited };

@@ -75,7 +75,12 @@ export interface RoomSessionView {
    * their own speaker-request row, never from a push. The countdown is
    * `inviteExpiresAt`'s (lib/speaker-invite.ts `inviteView`).
    */
-  invite: { requestId: string; inviteExpiresAt: string | null } | null;
+  invite: {
+    requestId: string;
+    inviteExpiresAt: string | null;
+    /** When this tab first saw it — the countdown's starting reading. */
+    seenAt: number;
+  } | null;
   /** Join as speaker (seated, mic OFF) or Not now. */
   answerInvite: (action: "accept" | "reject") => void;
   answeringInvite: boolean;
