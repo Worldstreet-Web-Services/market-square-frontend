@@ -1890,6 +1890,20 @@ describe("The host finds a seated speaker's row in the approved read, not the pe
   });
 });
 
+describe("The phone's chat button says when somebody has spoken", () => {
+  it("counts from the shared chat poll, against the last message the reader saw", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /const chatFeed = useChat\(stream\.id, here && phone && stream\.status === "live"\);/);
+    assert.match(room, /const unreadChat = chatSheet \? 0 : unreadRoomChat\(chatItems, seenChat, me\.data\?\.id\);/);
+    assert.match(room, /<RoomPhoneBar\s*unreadChat=\{unreadChat\}/);
+  });
+  it("draws the badge and speaks the count", () => {
+    const bar = stripComments(read("features/houses/components/room-phone-bar.tsx"));
+    assert.match(bar, /aria-label=\{roomChatLabel\(unreadChat\)\}/);
+    assert.match(bar, /\{roomChatBadge\(unreadChat\) && \(/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");
