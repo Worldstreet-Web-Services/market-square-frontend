@@ -746,8 +746,8 @@ describe("miniPlayerChrome reads the CONNECTION, not the question", () => {
     assert.equal(chrome.line, "Lost connection");
   });
 
-  it("a listener never publishes, and a muted speaker is not a hot mic", () => {
-    assert.equal(miniPlayerChrome({ state: held("live"), presence: "listener", micOn: true, canPlayAudio: true }).publishing, false);
+  it("a listener with no open mic has no mic control, and a muted speaker is not a hot mic", () => {
+    assert.equal(miniPlayerChrome({ state: held("live"), presence: "listener", micOn: false, canPlayAudio: true }).publishing, false);
     const muted = miniPlayerChrome({ state: held("live"), presence: "speaker", micOn: false, canPlayAudio: true });
     assert.equal(muted.publishing, true);
     assert.equal(muted.hotMic, false);
@@ -1097,9 +1097,11 @@ describe("the mini-player says 'You're live' in its state line, not as a control
     assert.equal(chrome.hotMic, true, "the mic is still open and still drawn as open");
   });
 
-  it("a muted publisher or a listener has no badge", () => {
+  it("a muted publisher or a listener with no open mic has no badge", () => {
     assert.equal(miniPlayerChrome({ state: live(), presence: "host", micOn: false, canPlayAudio: true }).liveBadge, false);
-    assert.equal(miniPlayerChrome({ state: live(), presence: "listener", micOn: true, canPlayAudio: true }).liveBadge, false);
+    // A listener whose mic IS still open is live, and badged: see "the mute
+    // control follows the publication, not the seat".
+    assert.equal(miniPlayerChrome({ state: live(), presence: "listener", micOn: false, canPlayAudio: true }).liveBadge, false);
   });
 });
 
@@ -1371,5 +1373,24 @@ describe("a host's opening publish that outlives its Room", () => {
     release();
     await entering;
     assert.equal(current, false);
+  });
+});
+
+describe("the mute control follows the publication, not the seat", () => {
+  const live = (): SessionState =>
+    sessionReducer(sessionReducer(IDLE_SESSION, { type: "connect", target: { streamId: "A", role: "listener" } }), { type: "connected" });
+
+  it("a mic still open after presence dropped to listener keeps its off switch and its live badge", () => {
+    // The grant narrowed, or the request poll flipped `approved`, before the
+    // track actually came down: MUTING IS ALWAYS ALLOWED (lib/mic-consent.ts).
+    const chrome = miniPlayerChrome({ state: live(), presence: "listener", micOn: true, canPlayAudio: true });
+    assert.equal(chrome.publishing, true, "the only off switch for a live mic disappeared");
+    assert.equal(chrome.hotMic, true);
+    assert.equal(chrome.line, "You're live");
+  });
+
+  it("…but not once the connection is gone", () => {
+    const failed = sessionReducer(live(), { type: "failed", error: null });
+    assert.equal(miniPlayerChrome({ state: failed, presence: "listener", micOn: true, canPlayAudio: true }).publishing, false);
   });
 });

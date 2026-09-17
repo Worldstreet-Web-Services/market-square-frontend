@@ -881,7 +881,9 @@ function LiveHouse({
     live room, or the one they are being asked to switch to), it switched the
     mic of the room they ARE in, off screen, while this control said off.
   */
-  const onStage = here && (isHost || session.presence === "speaker");
+  // …or wherever a mic is actually open, seated or not: its off switch never
+  // disappears ahead of the track (lib/room-session/visibility.ts).
+  const onStage = here && (isHost || session.presence === "speaker" || session.micOn);
   // Approved but not (yet) seated is the stage panel's to explain, with its
   // own remedies — "Ask to speak" to somebody the host already said yes to
   // reads as the approval having been lost.

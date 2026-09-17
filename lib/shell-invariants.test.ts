@@ -3131,7 +3131,7 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
 
   it("the mic controls live only on the room the session is IN", () => {
     const room = code("features/houses/components/house-room.tsx");
-    assert.match(room, /const onStage = here && \(isHost \|\| session\.presence === "speaker"\);/);
+    assert.match(room, /const onStage = here && \(isHost \|\| session\.presence === "speaker" \|\| session\.micOn\);/);
     // Every publisher control, the M key included, reads that one flag.
     assert.match(room, /if \(key === "m" && onStage\)/);
     assert.doesNotMatch(room, /const onStage = isHost \|\|/);
@@ -3201,7 +3201,12 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
     assert.match(provider, /mediaSessionMetadata\(stream\.data\)/);
     assert.doesNotMatch(provider, /new MediaMetadata\(\{ title: topic/);
     assert.match(provider, /session\.setActionHandler\("pause", \(\) => void toggleMic\(\)\);/);
-    assert.match(provider, /setMicrophoneActive\?\.\(hotMic\)/);
+    assert.match(provider, /setMicrophoneActive\?\.\(micOn\)/);
+    // The browser's own mic toggle (media hub, PiP) works both ways for anyone
+    // with a mic to toggle, and the mute control follows the publication.
+    assert.match(provider, /session\.setActionHandler\("togglemicrophone" as MediaSessionAction, \(\) => void toggleMic\(\)\);/);
+    assert.match(provider, /const micControllable = holding && \(isHost \|\| presence === "speaker" \|\| stage\.micOn\);/);
+    assert.match(provider, /const hotMic = holding && stage\.micOn;/);
   });
 
   it("a failed room retries when the network or the tab comes back", () => {

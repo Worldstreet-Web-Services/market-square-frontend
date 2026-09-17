@@ -100,8 +100,14 @@ export interface MiniPlayerChrome {
 export function miniPlayerChrome({ state, presence, micOn, canPlayAudio }: MiniPlayerChromeInput): MiniPlayerChrome {
   const connection = state.connection;
   const asking = state.status === "conflict";
+  /*
+    THE MUTE CONTROL FOLLOWS THE PUBLICATION. Presence drops to "listener"
+    the moment the grant narrows or the request poll flips — before the track
+    is actually down — and hiding the mic then left a live mic with no off
+    switch (lib/mic-consent.ts: muting is always allowed).
+  */
   const publishing =
-    (presence === "host" || presence === "speaker") && (connection === "live" || connection === "reconnecting");
+    (presence === "host" || presence === "speaker" || micOn) && (connection === "live" || connection === "reconnecting");
   const finished = connection === "ended" || connection === "duplicate";
   const hotMic = publishing && micOn;
   const line =

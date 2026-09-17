@@ -570,23 +570,52 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   }, [holding, hangUpAllowed, leave]);
 
   /*
-    THE LOCK SCREEN'S PAUSE NEVER LEAVES A MIC OPEN. Without a handler the
-    browser's pause silences the incoming audio and nothing else — to the
-    reader it feels like they left, while their mic goes on publishing. With
-    the mic open, pause MUTES it (the room keeps playing, which is honest). A
-    muted or listening reader gets the browser's own pause back.
+    THE BROWSER'S MIC CONTROL. Chrome draws a microphone toggle in its media
+    hub and Picture-in-Picture for the `togglemicrophone` action, and reads
+    its state from `setMicrophoneActive`. Registered for anybody with a mic
+    to toggle — whether it is on or off, so the same button unmutes what it
+    muted — and for anybody whose mic is still open whatever their seat says.
   */
-  const hotMic = holding && (isHost || presence === "speaker") && stage.micOn;
+  const micOn = stage.micOn;
+  const micControllable = holding && (isHost || presence === "speaker" || stage.micOn);
   const toggleMic = stage.toggleMic;
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (!micControllable || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     const session = navigator.mediaSession as MediaSession & { setMicrophoneActive?: (active: boolean) => void };
     try {
-      session.setMicrophoneActive?.(hotMic);
+      session.setMicrophoneActive?.(micOn);
     } catch {
       // As above.
     }
-    if (!hotMic) return;
+    try {
+      session.setActionHandler("togglemicrophone" as MediaSessionAction, () => void toggleMic());
+    } catch {
+      // An action this browser does not know is not worth failing over.
+    }
+    return () => {
+      try {
+        session.setActionHandler("togglemicrophone" as MediaSessionAction, null);
+        session.setMicrophoneActive?.(false);
+      } catch {
+        // As above.
+      }
+    };
+  }, [micControllable, micOn, toggleMic]);
+
+  /*
+    THE LOCK SCREEN'S PAUSE NEVER LEAVES A MIC OPEN. Most lock screens have no
+    mic toggle, only pause — and without a handler the browser's pause
+    silences the incoming audio and nothing else: to the reader it feels like
+    they left, while their mic goes on publishing. So while a mic is open,
+    pause MUTES it (the room keeps playing, which is honest). Kept alongside
+    the mic toggle above, deliberately: a pause that could leave a hot mic
+    behind is the worse failure. Muted, the reader gets the browser's own
+    pause back.
+  */
+  const hotMic = holding && stage.micOn;
+  useEffect(() => {
+    if (!hotMic || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const session = navigator.mediaSession;
     try {
       session.setActionHandler("pause", () => void toggleMic());
     } catch {
@@ -595,7 +624,6 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     return () => {
       try {
         session.setActionHandler("pause", null);
-        session.setMicrophoneActive?.(false);
       } catch {
         // As above.
       }
