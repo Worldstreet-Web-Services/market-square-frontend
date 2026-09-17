@@ -17,7 +17,7 @@ import { useEvmSend } from "@/hooks/use-evm-send";
 import { useKashStatus } from "@/hooks/use-kash-status";
 import { isHouse } from "@/features/houses/lib/house";
 import { mergeStreamDetail } from "@/lib/stream-detail-merge";
-import { answerErrorMessage, inviteErrorOutcome, routeMissing, type ApiErrorLike } from "@/lib/speaker-invite";
+import { INVITE_ACCEPTED_HINT, answerErrorMessage, inviteErrorOutcome, routeMissing, type ApiErrorLike } from "@/lib/speaker-invite";
 import { muteErrorMessage } from "@/lib/host-mute";
 import {
   banFromChat,
@@ -823,6 +823,10 @@ export function useAnswerInvite(streamId: string) {
   return useMutation({
     mutationFn: ({ requestId, action }: { requestId: string; action: "accept" | "reject" }) =>
       resolveSpeakerRequest(streamId, requestId, action),
+    onSuccess: (row, { action }) => {
+      // The one-time hint: seated, and the mic is still theirs to open.
+      if (action === "accept" && row.status === "approved") toast(INVITE_ACCEPTED_HINT);
+    },
     onError: (error) => {
       const message = answerErrorMessage(error as ApiErrorLike);
       if (message) toast.error(message);

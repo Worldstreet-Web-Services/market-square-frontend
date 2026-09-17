@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { houseTopic, parseParticipantMeta, participantName } from "@/features/houses";
+import { InviteBanner, houseTopic, parseParticipantMeta, participantName } from "@/features/houses";
 import { useEndStream, useStageSlots } from "@/features/streams";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import {
   type MiniPlayerCardPlacement,
 } from "@/lib/room-session/visibility";
 import { sq, stripSquare } from "@/lib/square-path";
+import { inviteAnnouncement, inviteBannerVisible } from "@/lib/speaker-invite";
 
 /**
  * THE MINIMISED GIST ROOM.
@@ -83,6 +84,67 @@ function keepFocus() {
 }
 
 export function RoomMiniPlayer({ placement }: { placement: Placement }) {
+  // The invitation rides on the ONE instance the shell always mounts (the
+  // phone placement is mounted at every width and only CSS-hidden above md),
+  // so three placements never draw three banners.
+  return (
+    <>
+      {placement === "phone" && <SessionInvite />}
+      <MiniPlayer placement={placement} />
+    </>
+  );
+}
+
+/**
+ * A HOST'S INVITATION TO SPEAK, while the room is minimised.
+ *
+ * Read from the session — the provider's 8 s poll of the reader's own
+ * speaker-request row, nudged by the `speakerInvited` push — never from the
+ * push itself. Drawn on every page but the room's own, which draws its own
+ * (lib/speaker-invite.ts `inviteBannerVisible`). Up top, under the top bar,
+ * where neither the dock, this bar nor a thread's composer can cover it.
+ * Answering does not navigate: "Join as speaker" seats them over the call they
+ * already have, mic off, and the bar below grows its mic.
+ */
+function SessionInvite() {
+  const session = useRoomSession();
+  const pathname = stripSquare(usePathname());
+  const streamId = session.state.target?.streamId ?? null;
+  const invite = session.invite;
+  const visible = inviteBannerVisible({ pathname, streamId, hasInvite: invite !== null });
+  const owner = session.stream?.owner ?? null;
+  const hostName = owner?.displayName || owner?.username || "The host";
+  return (
+    <>
+      {/* Always mounted, so the announcement is read when it appears. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {visible ? inviteAnnouncement(owner?.displayName || owner?.username) : ""}
+      </p>
+      {visible && invite && (
+        <div
+          // A full-width card on a phone; 400 at the top-right from md.
+          className="fixed left-3 z-50 md:left-auto md:w-[400px]"
+          style={{
+            top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + 12px)",
+            right: "max(12px, env(safe-area-inset-right, 0px))",
+          }}
+        >
+          <InviteBanner
+            key={invite.requestId}
+            requestId={invite.requestId}
+            expiresAt={invite.expiresAt}
+            host={{ id: owner?.id, name: hostName, avatarUrl: owner?.avatarUrl }}
+            busy={session.answeringInvite}
+            onAccept={() => session.answerInvite("accept")}
+            onReject={() => session.answerInvite("reject")}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function MiniPlayer({ placement }: { placement: Placement }) {
   const session = useRoomSession();
   const pathname = stripSquare(usePathname());
   const chatOpen = useChatOpen();
