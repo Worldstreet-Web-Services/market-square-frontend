@@ -70,21 +70,39 @@ export function Backstage({
     // opening with a stale title is opening the wrong house.
     if (trimmed !== stream.title) update.mutate({ title: trimmed });
     if (note.trim() !== (stream.description ?? "")) update.mutate({ description: note.trim() });
-    goLive.mutate(stream.id, {
-      onSuccess: (result) => {
+    /*
+      THE FRESH OPEN GOES STRAIGHT TO THE SESSION. go-live's own cache write
+      flips this room to "live", and HouseRoom re-renders into the top-level
+      room view — unmounting this Backstage and HostScheduled with it. The
+      ingest used to reach the session only through HostScheduled's state, so
+      on some timings it was dropped: the host entered with no token, go-live
+      ran a second time, and the mic came up MUTED. A per-call `mutate`
+      onSuccess is dropped too once its observer unmounts; the promise is not,
+      and it settles before the cache notification renders anything.
+    */
+    goLive
+      .mutateAsync(stream.id)
+      .then((result) => {
         // The contract types `ingest` as nullable. It is never null for a
         // browser publish — but asserting that here is how a null reaches
-        // usePublisher and the room opens with nobody able to hear the host.
-        if (!result.ingest) return;
+        // the publisher and the room opens with nobody able to hear the host.
+        if (!result.ingest?.url || !result.ingest.roomToken) return;
         const micId = devices.micId;
         // Let go BEFORE the publisher opens its own capture: two live captures
         // of one microphone let the second inherit constraints negotiated for
         // the first, which is how a soundcheck can sound different from the
         // broadcast.
         devices.release();
+        session.enter(stream.id, "host", {
+          token: { url: result.ingest.url, token: result.ingest.roomToken },
+          fresh: true,
+          preferredMic: micId || undefined,
+        });
         onOpened(result.ingest, micId);
-      },
-    });
+      })
+      .catch(() => {
+        // useGoLive has already said why.
+      });
   };
 
   /*

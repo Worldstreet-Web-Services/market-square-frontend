@@ -3164,7 +3164,7 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
       "Backstage goes live before checking for a held room"
     );
     assert.doesNotMatch(open, /goLive\.mutate/);
-    assert.equal((backstage.match(/goLive\.mutate\(/g) ?? []).length, 1);
+    assert.equal((backstage.match(/goLive\s*\.mutate(?:Async)?\(/g) ?? []).length, 1);
     const leaveAndOpen = block(backstage, "const leaveAndOpen = async () => {", "\n  };\n");
     assert.ok(leaveAndOpen.indexOf("await session.vacate()") < leaveAndOpen.indexOf("openNow()"));
   });
@@ -3627,5 +3627,22 @@ describe("a host never walks out of their own room live", () => {
   it("an explicit sign-out closes a host's room first", () => {
     const provider = code("components/layout/room-session.tsx");
     assert.match(provider, /return isHost \? controller\.signOut\(\) : leave\(\);/);
+  });
+});
+
+describe("a host's fresh open reaches the session whichever branch renders next", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("Backstage enters the session with the ingest itself, before the cache flip can unmount it", () => {
+    const backstage = code("features/houses/components/backstage.tsx");
+    const openNow = block(backstage, "const openNow = () => {", "\n  };\n");
+    // A per-call mutate onSuccess is dropped once the observer unmounts, and
+    // go-live's own cache write is what unmounts it. The promise is not.
+    assert.doesNotMatch(openNow, /goLive\.mutate\(/);
+    assert.match(openNow, /goLive\s*\.mutateAsync\(stream\.id\)/);
+    const enter = openNow.indexOf("session.enter(stream.id, \"host\", {");
+    assert.notEqual(enter, -1, "the fresh open still travels through component state that can unmount");
+    assert.match(openNow, /token: \{ url: result\.ingest\.url, token: result\.ingest\.roomToken \},\s*fresh: true,/);
+    assert.ok(enter < openNow.indexOf("onOpened("), "the session hears of the open after the view that may already be gone");
   });
 });
