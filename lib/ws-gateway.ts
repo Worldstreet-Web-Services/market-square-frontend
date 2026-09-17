@@ -77,6 +77,39 @@ export function laneOfFrame(frame: GatewayFrame | null): string | null {
   return typeof lane === "string" && PUBLIC_LANES.has(lane) ? lane : null;
 }
 
+/* ─── THE SPEAKER SIGNALS, on the reader's own topic ─────────────────────────
+ * `user:<did>` carries three room events, each a REFETCH SIGNAL and nothing
+ * more: an invitation to speak, a speaker request changing, and a host's mute.
+ * Only the stream id is ever read out of one — to choose which queries to ask
+ * again — and never a request id, a status or an expiry: the banner and the
+ * queue render from `GET /speaker-requests/me` and the host's list, so a
+ * forged or stale frame can cause at most one extra read, never a banner.
+ */
+export const SPEAKER_INVITED = "speakerInvited";
+export const SPEAKER_REQUEST_CHANGED = "speakerRequestChanged";
+export const SPEAKER_MUTED = "speakerMuted";
+
+/** The reader's private topic, or null without an id. */
+export function userTopic(userId: string | null | undefined): string | null {
+  return userId ? `user:${userId}` : null;
+}
+
+export interface SpeakerSignal {
+  /** `requests` — refetch the reader's own row and the host's queue; `mute` — look at the mic. */
+  kind: "requests" | "mute";
+  streamId: string;
+}
+
+/** The refetch a speaker frame asks for, or null for anything else. */
+export function speakerSignalOf(frame: GatewayFrame | null): SpeakerSignal | null {
+  if (!frame) return null;
+  const streamId = frame.data.streamId;
+  if (typeof streamId !== "string" || streamId.length === 0) return null;
+  if (frame.type === SPEAKER_INVITED || frame.type === SPEAKER_REQUEST_CHANGED) return { kind: "requests", streamId };
+  if (frame.type === SPEAKER_MUTED) return { kind: "mute", streamId };
+  return null;
+}
+
 export const PING_MS = 25_000;
 export const BACKOFF_CAP_MS = 30_000;
 

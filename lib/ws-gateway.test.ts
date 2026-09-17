@@ -8,6 +8,8 @@ import {
   laneOfFrame,
   laneTopic,
   parseFrame,
+  speakerSignalOf,
+  userTopic,
   type SocketLike,
 } from "./ws-gateway.ts";
 
@@ -35,6 +37,34 @@ test("the lane comes from the TYPE and data.lane, never from anything else", () 
   assert.equal(laneOfFrame(parseFrame('{"type":"feedHeadChanged","data":{"lane":"following"}}')), null);
   assert.equal(laneOfFrame(parseFrame('{"type":"feedHeadChanged","data":{"lane":42}}')), null);
   assert.equal(laneOfFrame(null), null);
+});
+
+test("the reader's own topic is user:<did>, and there is none without an id", () => {
+  assert.equal(userTopic("did:privy:abc"), "user:did:privy:abc");
+  assert.equal(userTopic(null), null);
+  assert.equal(userTopic(""), null);
+});
+
+test("a speaker frame is a refetch signal: only the stream id comes out of it", () => {
+  const invited = speakerSignalOf(
+    parseFrame('{"type":"speakerInvited","data":{"requestId":"r1","streamId":"s1","expiresAt":"2026-09-17T12:01:00Z"}}')
+  );
+  assert.deepEqual(invited, { kind: "requests", streamId: "s1" });
+  // Nothing the banner could render from — no request id, no expiry, no status.
+  assert.deepEqual(Object.keys(invited ?? {}).sort(), ["kind", "streamId"]);
+  assert.deepEqual(
+    speakerSignalOf(parseFrame('{"type":"speakerRequestChanged","data":{"requestId":"r1","streamId":"s1","status":"approved"}}')),
+    { kind: "requests", streamId: "s1" }
+  );
+  assert.deepEqual(speakerSignalOf(parseFrame('{"type":"speakerMuted","data":{"streamId":"s1"}}')), { kind: "mute", streamId: "s1" });
+});
+
+test("a malformed or unrelated frame asks for nothing", () => {
+  assert.equal(speakerSignalOf(parseFrame('{"type":"speakerInvited","data":{}}')), null);
+  assert.equal(speakerSignalOf(parseFrame('{"type":"speakerInvited","data":{"streamId":42}}')), null);
+  assert.equal(speakerSignalOf(parseFrame('{"type":"speakerInvited","data":"s1"}')), null);
+  assert.equal(speakerSignalOf(parseFrame('{"type":"feedHeadChanged","data":{"streamId":"s1"}}')), null);
+  assert.equal(speakerSignalOf(parseFrame("garbage")), null);
 });
 
 test("backoff doubles from a second to the cap, with bounded jitter", () => {
