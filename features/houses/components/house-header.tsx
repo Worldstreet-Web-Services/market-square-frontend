@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { IconArrowLeft } from "@/components/ui/icons";
+import { IconArrowLeft, IconChevronDown } from "@/components/ui/icons";
 // The file's own glyphs, exported from it. See components/ui/room-icons.tsx.
-import { IconHouseGroup, IconRoomBack, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
+import { IconHouseGroup, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
 import { canGoBack } from "@/lib/nav-history";
 import { sq } from "@/lib/square-path";
 
@@ -183,9 +183,13 @@ export function HouseHeader({
           onClick={() => (canGoBack() ? router.back() : router.push(sq("/gist-rooms")))}
           /* 1285:92920 on a phone: the 16px `arrow-left` chevron, 8, then
              "Back" at 14/24. The desktop's 20px arrow and 16/24 from `md`. */
+          /* MINIMISE, NOT LEAVE. Going back no longer hangs up: the room keeps
+             playing in the mini-player, so the phone's glyph is the
+             chevron-down every call and music app uses for exactly that. */
+          aria-label="Minimise room"
           className="ws-press flex w-fit items-center gap-2 text-[14px] leading-6 text-white transition-opacity hover:opacity-80 md:text-[16px]"
         >
-          <IconRoomBack className="h-4 w-4 shrink-0 md:hidden" />
+          <IconChevronDown className="h-4 w-4 shrink-0 md:hidden" />
           <IconArrowLeft className="hidden h-5 w-5 shrink-0 md:block" />
           Back
         </button>

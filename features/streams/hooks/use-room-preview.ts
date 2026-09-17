@@ -5,6 +5,8 @@ import type { Participant, RemoteTrack, Room } from "livekit-client";
 import { fetchPreviewToken } from "@/features/streams/lib/api";
 import { registerRoom, unregisterRoom } from "@/features/streams/lib/live-room";
 import { errorCode } from "@/lib/api/envelope";
+import { useRoomSession } from "@/lib/room-session-store";
+import { isHolding } from "@/lib/room-session/reducer";
 
 /**
  * LISTEN TO A GIST ROOM FROM ITS CARD — the `unmute` on 415:12704.
@@ -60,10 +62,18 @@ type Settled = "idle" | "listening" | "quiet" | "backoff" | "failed";
 
 export function useRoomPreview(
   streamId: string,
-  active: boolean,
+  requested: boolean,
   /** Resolves a participant to a display name — the house room's own rule, handed in so this slice need not read another's. */
   nameOf: (participant: Participant) => string | null
 ): RoomPreview {
+  /*
+    NEVER PREVIEW THE ROOM YOU ARE IN. The session the shell owns is already
+    playing it; a second, subscribe-only connection would play every voice
+    twice, a beat apart.
+  */
+  const session = useRoomSession();
+  const connected = session.state.target?.streamId === streamId && isHolding(session.state.connection);
+  const active = requested && !connected;
   // Every transition below happens in a callback (a resolved fetch, an SDK
   // event, a timer, the cleanup) — never synchronously inside the effect.
   const [settled, setSettled] = useState<Settled>("idle");

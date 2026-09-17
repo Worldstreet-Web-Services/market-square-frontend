@@ -463,3 +463,16 @@ describe("isZoneExit", () => {
     assert.equal(isZoneExit("/squared", { base: "/square", origin }), true);
   });
 });
+
+describe("reconnect (the stage's rejoin)", () => {
+  it("replaces a held room with a fresh token, never holding two", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    await h.session.reconnect();
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.rooms[0]!.disconnects, 1);
+    assert.ok(h.log.indexOf("unregister:A-1") < h.log.indexOf("register:A-2"));
+    assert.equal(h.tokens.length, 2);
+    assert.equal(h.session.getState().status, "live");
+  });
+});

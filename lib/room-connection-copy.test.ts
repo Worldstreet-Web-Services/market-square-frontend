@@ -24,7 +24,10 @@ describe("a gist room names the real reason it could not connect", () => {
 describe("the room shows that reason", () => {
   it("renders the classified copy in the failure banner", () => {
     const room = readFileSync(new URL("../features/houses/components/house-room.tsx", import.meta.url), "utf8");
-    assert.match(room, /\{roomFailureCopy\(isHost \? asRoomFailure\(publisher\.state\) : "failed"\)\}/);
+    // A lost connection says so; a host whose MIC failed on a live connection
+    // gets the device's own remedy, read off the shell-owned session.
+    assert.match(room, /\{roomFailureCopy\("failed"\)\}/);
+    assert.match(room, /\{roomFailureCopy\(session\.micFailure\)\}/);
     assert.doesNotMatch(room, />Lost connection to the gist room\.</);
   });
 });

@@ -3020,3 +3020,63 @@ describe("links to a person go by id, not by a username they can change (QA)", (
     assert.match(stripComments(read("components/ui/post-text.tsx")), /segment\.id \? profileHref\(\{ id: segment\.id, username: segment\.handle \}\)/);
   });
 });
+
+describe("one room per tab, owned by the shell", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("mounts exactly one RoomSessionProvider, inside app-shell.tsx", () => {
+    const mounts: string[] = [];
+    const walk = (dir: string): string[] =>
+      readdirSync(resolve(import.meta.dirname, "..", dir), { withFileTypes: true }).flatMap((entry) => {
+        const path = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(path);
+        return /\.tsx$/.test(entry.name) ? [path] : [];
+      });
+    for (const file of [...walk("app"), ...walk("components"), ...walk("features")]) {
+      const count = (code(file).match(/<RoomSessionProvider\b/g) ?? []).length;
+      for (let i = 0; i < count; i += 1) mounts.push(file);
+    }
+    assert.deepEqual(mounts, ["components/layout/app-shell.tsx"]);
+    // Around BOTH shells — the bare /live/:id branch included — or switching
+    // between them unmounts it and hangs up.
+    const shell = code("components/layout/app-shell.tsx");
+    assert.match(shell, /<RoomSessionProvider>\s*<ShellFrame>\{children\}<\/ShellFrame>\s*<\/RoomSessionProvider>/);
+  });
+
+  it("keeps the connection out of the room view (the connect-in-route regression)", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    for (const name of ["useHouseConnection", "usePublisher", "RemoteAudio", "usePlaybackToken", "useStage("]) {
+      assert.equal(room.includes(name), false, `house-room.tsx uses ${name} again`);
+    }
+    assert.match(room, /enterRoom\(/, "the view no longer asks the session to enter");
+  });
+
+  it("the provider owns the audio sinks and the one-Room registry", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /<HouseAudioSinks\b/);
+    assert.match(provider, /register: registerRoom/);
+    assert.match(provider, /unregister: unregisterRoom/);
+    assert.doesNotMatch(provider, /consumeIntent/, "a gist room opens somebody's mic for them again");
+  });
+
+  it("the card preview never beats and never previews the room you are in", () => {
+    const hook = code("features/streams/hooks/use-room-preview.ts");
+    assert.doesNotMatch(hook, /sendHeartbeat/);
+    assert.match(hook, /const active = requested && !connected;/);
+  });
+
+  it("logout hangs up first", () => {
+    const logout = code("hooks/use-logout.ts");
+    assert.ok(logout.indexOf("getRoomSession().logout()") < logout.indexOf("logout()).catch"));
+  });
+
+  it("the phone's Back minimises", () => {
+    const header = code("features/houses/components/house-header.tsx");
+    assert.match(header, /aria-label="Minimise room"/);
+    assert.match(header, /<IconChevronDown className="h-4 w-4 shrink-0 md:hidden" \/>/);
+  });
+
+  it("a stream asks before it plays over a gist room", () => {
+    assert.match(code("components/layout/stream-room-screen.tsx"), /Leave the gist room to watch\?/);
+  });
+});

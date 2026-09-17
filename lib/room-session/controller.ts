@@ -66,7 +66,8 @@ export interface SessionClock {
 }
 
 export interface RoomSessionDeps<R> {
-  createRoom(target: SessionTarget): SessionRoom<R>;
+  /** May be async: the real one loads livekit-client on first use. */
+  createRoom(target: SessionTarget, options: { preferredMic?: string }): SessionRoom<R> | Promise<SessionRoom<R>>;
   fetchToken(target: SessionTarget): Promise<SessionToken>;
   sendHeartbeat(streamId: string, sessionId: string | null): Promise<{ sessionId: string }>;
   /** Tab close / leave: tell the service now rather than waiting for heartbeats to lapse. */
@@ -88,6 +89,8 @@ export interface EnterOptions {
   token?: SessionToken;
   /** The reader's own fresh open — the only connect that may publish an open mic. */
   fresh?: boolean;
+  /** The microphone the host chose in Backstage. Kept for this room's reconnects. */
+  preferredMic?: string;
 }
 
 export class RoomSessionController<R> {
@@ -103,6 +106,7 @@ export class RoomSessionController<R> {
   private latestToken: SessionToken | null = null;
   private pendingOptions: EnterOptions | undefined;
   private micIntent = false;
+  private preferredMic: string | undefined;
 
   constructor(deps: RoomSessionDeps<R>) {
     this.deps = deps;
@@ -147,6 +151,7 @@ export class RoomSessionController<R> {
       return Promise.resolve();
     }
     this.teardown();
+    this.preferredMic = options?.preferredMic;
     return this.connect({ streamId, role }, { token: options?.token, resumed: !options?.fresh });
   }
 
@@ -159,6 +164,7 @@ export class RoomSessionController<R> {
     const disconnected = this.teardown();
     this.dispatch({ type: "reset" });
     await disconnected;
+    this.preferredMic = options?.preferredMic;
     await this.connect(pending, { token: options?.token, resumed: !options?.fresh });
   }
 
@@ -264,6 +270,21 @@ export class RoomSessionController<R> {
   }
 
   /**
+   * Come back on a NEW connection with a fresh token, from any held state.
+   *
+   * The remedy for a speaker whose grant never landed on this connection (the
+   * stage's "rejoin"): the token re-minted for an approved speaker carries
+   * the publish right. Break-then-make, like every other replacement.
+   */
+  async reconnect(): Promise<void> {
+    const target = this.state.target;
+    if (!target || !isHolding(this.state.connection)) return;
+    const disconnected = this.teardown();
+    await disconnected;
+    await this.connect(target, { resumed: true });
+  }
+
+  /**
    * Anonymous listener → signed in. Break-then-make:
    *   1. fetch the identified token while still listening,
    *   2. disconnect and unregister the anon Room,
@@ -321,7 +342,15 @@ export class RoomSessionController<R> {
     if (generation !== this.generation) return;
     this.latestToken = token;
 
-    const room = this.deps.createRoom(target);
+    let room: SessionRoom<R>;
+    try {
+      room = await this.deps.createRoom(target, { preferredMic: this.preferredMic });
+    } catch (error) {
+      if (generation !== this.generation) return;
+      this.dispatch({ type: "failed", error: messageOf(error) });
+      return;
+    }
+    if (generation !== this.generation) return;
     try {
       this.deps.register(target.streamId, room.handle);
     } catch {

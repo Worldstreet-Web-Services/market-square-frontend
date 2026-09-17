@@ -158,11 +158,14 @@ export function useFollowingRooms() {
 
 export function useStream(
   id: string,
-  poll: boolean | number | readonly ["while-live", number] = false
+  poll: boolean | number | readonly ["while-live", number] = false,
+  /** Off while there is no id to read — the shell's room session before a room is entered. */
+  enabled = true
 ) {
   return useQuery({
     queryKey: ["ms", "stream", id],
     queryFn: () => fetchStream(id),
+    enabled,
     refetchInterval: Array.isArray(poll)
       ? (query) => (query.state.data?.status === "live" ? poll[1] : false)
       : poll === false

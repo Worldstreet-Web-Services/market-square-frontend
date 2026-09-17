@@ -14,27 +14,22 @@ import { describe, it } from "node:test";
        screen, unmounting the room and its connection;
     3. one failed token refresh marked the room "failed" while its audio was
        still playing.
-  These pin the fixes in the wiring, which has no pure half to test.
+
+  The connection now belongs to the shell's session controller, so (1) and (3)
+  are proved BEHAVIOURALLY in lib/room-session.test.ts ("a token refresh while
+  live never reconnects", "while failed reconnects with THAT token"). What is
+  left here is the wiring that has no pure half.
 */
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 describe("a gist room keeps its call through routine refreshes", () => {
-  const connection = strip(read("features/houses/hooks/use-house-connection.ts"));
+  const controller = strip(read("lib/room-session/controller.ts"));
   const room = strip(read("features/houses/components/house-room.tsx"));
 
-  it("does not reconnect when the playback token merely refreshes", () => {
-    const deps = connection.match(/\}, \[([^\]]*)\]\);\s*\n\s*return \{ room, state \}/);
-    assert.ok(deps, "the connect effect's dependency list was not found");
-    assert.doesNotMatch(deps[1]!, /\btoken\b/, "the connect effect re-runs on every token refresh again");
-    assert.match(deps[1]!, /connectToken/);
-  });
-
   it("takes a fresh token only to recover from a dead connection", () => {
-    assert.match(
-      connection,
-      /if \(token && token !== connectToken && \(connectToken === "" \|\| state === "failed"\)\) \{\s*setConnectToken\(token\);/
-    );
+    const refresh = controller.slice(controller.indexOf("onTokenRefreshed(token: SessionToken) {"));
+    assert.match(refresh.slice(0, 400), /if \(target && connection === "failed"\) \{/);
   });
 
   it("keeps the live room on screen when a background poll fails", () => {
@@ -42,7 +37,7 @@ describe("a gist room keeps its call through routine refreshes", () => {
     assert.doesNotMatch(room, /if \(stream\.isError\) \{/);
   });
 
-  it("does not call a playing room failed because a token refresh failed", () => {
-    assert.match(room, /: playback\.isError && !playback\.data\s*\? "failed"/);
+  it("no longer refreshes a playback token in the view at all", () => {
+    assert.doesNotMatch(room, /usePlaybackToken/, "the view holds a token again — the session owns the connection");
   });
 });

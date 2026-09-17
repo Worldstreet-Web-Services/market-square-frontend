@@ -58,6 +58,7 @@ import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import { AnnouncementBand } from "@/components/layout/announcement-band";
+import { RoomSessionProvider } from "@/components/layout/room-session";
 import {
   IconBell,
   IconDots,
@@ -1803,6 +1804,20 @@ export function MobileBar({
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  /*
+    THE ROOM SESSION WRAPS BOTH SHELLS — the framed one and the bare
+    `/live/:id` one below. Mounted anywhere inside either branch, switching
+    between them would unmount it and hang up the gist room the reader is in.
+    Exactly one mount, here (lib/shell-invariants.test.ts).
+  */
+  return (
+    <RoomSessionProvider>
+      <ShellFrame>{children}</ShellFrame>
+    </RoomSessionProvider>
+  );
+}
+
+function ShellFrame({ children }: { children: React.ReactNode }) {
   // Nav `href`s are LOGICAL keys (isActive, BADGE_FOR, the WIDE list), so the
   // pathname is compared without the /square prefix and prefixed only where rendered.
   const pathname = stripSquare(usePathname());

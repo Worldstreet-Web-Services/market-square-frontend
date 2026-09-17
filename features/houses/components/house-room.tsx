@@ -13,19 +13,16 @@ import { Sheet } from "@/components/ui/sheet";
 import { IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
+import { useAuth } from "@/hooks/use-auth";
+import { useRoomSession } from "@/lib/room-session-store";
 import { useMe } from "@/hooks/use-me";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
-import { RemoteAudio } from "@/features/streams/components/remote-audio";
-import { baseIdentity, participantLabel, remoteAudioSlots, type StageSlot } from "@/features/streams/lib/stage";
+import { baseIdentity, participantLabel, type StageSlot } from "@/features/streams/lib/stage";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
-import { usePublisher } from "@/features/streams/hooks/use-publisher";
-import { useStage } from "@/features/streams/hooks/use-stage";
-import { usePlaybackToken } from "@/features/streams/hooks/use-playback";
 import { useLiveReactions } from "@/features/streams/hooks/use-live-reactions";
 import {
   useEndStream,
-  useGoLive,
   useMySpeakerRequest,
   useRequestToSpeak,
   useResolveSpeakerRequest,
@@ -56,7 +53,6 @@ import { PersonSheet, type PersonTarget } from "@/features/houses/components/per
 import { useAudience, type AudienceMember } from "@/features/houses/hooks/use-audience";
 import { useHouseAnnouncer } from "@/features/houses/hooks/use-house-announcer";
 import { useHouseAudio } from "@/features/houses/hooks/use-house-audio";
-import { useHouseConnection } from "@/features/houses/hooks/use-house-connection";
 import { ANNOUNCE_STABLE_MS } from "@/features/houses/lib/audio-levels";
 import { houseShareUrl, houseTopic, isHouse } from "@/features/houses/lib/house";
 import { parseParticipantMeta, participantName } from "@/features/houses/lib/participant-meta";
@@ -75,7 +71,7 @@ import {
   seatsFull,
 } from "@/features/houses/lib/seating";
 import { sq } from "@/lib/square-path";
-import { asRoomFailure, roomFailureCopy } from "@/lib/room-connection-copy";
+import { roomFailureCopy } from "@/lib/room-connection-copy";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -210,6 +206,14 @@ export function HouseRoom({
 }: { houseId: string } & SlotProps) {
   const stream = useStream(houseId, 10_000);
   const me = useMe();
+  const auth = useAuth();
+  /*
+    WHO THE READER IS MUST BE SETTLED BEFORE THE ROOM IS ENTERED. The session
+    enters once per room (a second enter for the same id is a no-op), so a
+    host whose profile arrived a beat after the stream would have been seated
+    as a listener for good.
+  */
+  const identityKnown = auth.ready && (!auth.authenticated || me.data !== undefined || me.isError);
 
   if (stream.isPending) return <RoomSkeleton />;
 
@@ -269,6 +273,7 @@ export function HouseRoom({
       key={data.id}
       stream={data}
       isHost={isHost}
+      identityKnown={identityKnown}
       followSlot={followSlot}
       safetySlot={safetySlot}
     />
@@ -357,6 +362,7 @@ function HostScheduled({
         // work?".
         stream={{ ...stream, status: "live" }}
         isHost
+        identityKnown
         ingest={ingest}
         micId={micId}
         followSlot={followSlot}
@@ -554,6 +560,7 @@ type RoomState = "connecting" | "live" | "reconnecting" | "failed" | "duplicate"
 function LiveHouse({
   stream,
   isHost,
+  identityKnown,
   ingest: initialIngest = null,
   micId = "",
   followSlot,
@@ -565,6 +572,8 @@ function LiveHouse({
 }: {
   stream: Stream;
   isHost: boolean;
+  /** `/me` has settled (or there is no account), so the role below is final. */
+  identityKnown: boolean;
   ingest?: Ingest | null;
   micId?: string;
 } & SlotProps) {
@@ -586,46 +595,51 @@ function LiveHouse({
 
   /* ---- the one connection ------------------------------------------- */
 
-  /**
-   * A host who reloads a live house has no ingest — go-live is what mints it,
-   * and it is idempotent by design (the studio's "rejoin" does exactly this).
-   * So it is fired once, automatically, rather than making the host tap
-   * "rejoin" to get back into a room they never left.
-   */
-  const [ingest, setIngest] = useState<Ingest | null>(initialIngest);
-  const rejoin = useGoLive();
-  const rejoined = useRef(false);
+  /*
+    THIS VIEW DOES NOT OWN THE CONNECTION.
+
+    It used to: the publisher, the listener's connect effect, the stage and
+    the remote audio all lived here, so unmounting the page — Back, a DM, a
+    profile — hung up the call. The shell's RoomSessionProvider
+    (components/layout/room-session.tsx) owns all of it now. This view asks the
+    session to ENTER, reads what the session says, and calls its verbs.
+    Unmounting it disconnects nothing; entering the same room again is a no-op.
+  */
+  const session = useRoomSession();
+  const enterRoom = session.enter;
+  const role = isHost ? "host" : "listener";
+  // The host who just pressed Open in Backstage hands in the go-live ingest:
+  // their own fresh open, the only connect that publishes an open mic.
+  const ingestUrl = initialIngest?.url ?? "";
+  const ingestToken = initialIngest?.roomToken ?? "";
   useEffect(() => {
-    if (!isHost || ingest || rejoined.current) return;
-    rejoined.current = true;
-    rejoin.mutate(stream.id, { onSuccess: (result) => setIngest(result.ingest) });
-  }, [isHost, ingest, rejoin, stream.id]);
+    if (!identityKnown) return;
+    enterRoom(
+      stream.id,
+      role,
+      ingestUrl && ingestToken
+        ? { token: { url: ingestUrl, token: ingestToken }, fresh: true, preferredMic: micId || undefined }
+        : undefined
+    );
+  }, [enterRoom, identityKnown, stream.id, role, ingestUrl, ingestToken, micId]);
 
-  const publisher = usePublisher({
-    ingest: isHost ? ingest : null,
-    enabled: isHost,
-    streamId: stream.id,
-    // The whole promise, in one argument. See features/streams/lib/capture-plan.ts.
-    audioOnly: true,
-    preferredMic: micId || undefined,
-  });
+  const here = session.state.target?.streamId === stream.id;
+  /** Somebody asked to come in here while the session holds another room. */
+  const askingToSwitch = session.state.status === "conflict" && session.state.pending?.streamId === stream.id;
+  const connection = here ? session.state.connection : "idle";
 
-  const playback = usePlaybackToken(stream.id, !isHost);
-  const connection = useHouseConnection({
-    houseId: stream.id,
-    url: playback.data?.url ?? "",
-    token: playback.data?.token ?? "",
-    enabled: !isHost,
-  });
+  /*
+    Having been in this room and no longer being in it — the reader left, or
+    it was taken away — is not "connecting". Adjusted during render, React's
+    pattern for state that follows a prop.
+  */
+  const [wasHere, setWasHere] = useState(false);
+  if (here && !wasHere) setWasHere(true);
+  const gone = wasHere && !here && !askingToSwitch;
 
   /**
-   * The room, whichever path opened it.
-   *
-   * Read from the registry rather than from either hook's return, so this
-   * component does not have to know which one is driving. The registry is also
-   * the structural guard that there is only ever ONE — a host publishes on the
-   * room it registers, a listener registers the room its playback token
-   * opened, never two.
+   * The room, read from the registry rather than the session, so the ONE-Room
+   * guard is also the one thing this view trusts about which Room exists.
    */
   const room = useSyncExternalStore(
     useCallback((listener) => subscribeRoom(stream.id, listener), [stream.id]),
@@ -633,19 +647,16 @@ function LiveHouse({
     () => null as Room | null
   );
 
-  // A failed token REFRESH is not a failed room: the connection that is
-  // already up keeps playing. Only a listener who never got a token is failed.
-  const state: RoomState = isHost
-    ? publisher.state === "publishing"
+  const state: RoomState =
+    connection === "live"
       ? "live"
-      : publisher.state === "reconnecting"
+      : connection === "reconnecting"
         ? "reconnecting"
-        : publisher.state === "idle" || publisher.state === "connecting"
-          ? "connecting"
-          : "failed"
-    : playback.isError && !playback.data
-      ? "failed"
-      : connection.state;
+        : connection === "failed"
+          ? "failed"
+          : connection === "duplicate"
+            ? "duplicate"
+            : "connecting";
 
   /* ---- who is at the table ------------------------------------------ */
 
@@ -808,22 +819,7 @@ function LiveHouse({
   const mine = useMySpeakerRequest(stream.id, asking);
   const request = useRequestToSpeak(stream.id);
   const resolve = useResolveSpeakerRequest(stream.id);
-  const approved = mine.data?.status === "approved";
   const pendingMine = mine.data?.status === "pending";
-
-  /**
-   * The approved guest publishes over the connection they ALREADY have.
-   *
-   * No second token and no second room: the playback token and a speaker token
-   * carry the same LiveKit identity, so connecting twice evicts the viewer and
-   * starts the reconnect loop the registry exists to prevent. `withCamera:
-   * false` makes the camera absent from this path rather than skipped.
-   */
-  const stage = useStage({
-    streamId: stream.id,
-    approved: asking && approved,
-    withCamera: false,
-  });
 
   /** The host's own view of the queue, for the counted button and the tray. */
   const hostRequests = useSpeakerRequests(stream.id, isHost && stream.status === "live");
@@ -836,7 +832,12 @@ function LiveHouse({
    */
   const [requestsOpen, setRequestsOpen] = useState(true);
 
-  const onStage = isHost || (approved && stage.state === "live");
+  /*
+    On stage means the SESSION says so — approved and granted — never the row
+    alone. The approved guest publishes over the connection they already
+    have, with the mic OFF until they tap it.
+  */
+  const onStage = isHost || (here && session.presence === "speaker");
   const canAsk = !isHost && !onStage;
 
   const askReason = !requestsOpen
@@ -1016,18 +1017,19 @@ function LiveHouse({
 
   const [confirmLeave, setConfirmLeave] = useState(false);
 
-  // Read out of `mine.data` up here rather than inside the callback: the
-  // compiler infers the whole object as the dependency otherwise, which does
-  // not match a hand-written `mine.data?.id` and costs the memo entirely.
-  const myRequestId = mine.data?.status === "approved" ? mine.data.id : null;
-  const leaveNow = useCallback(() => {
-    // A seated person frees their seat on the way out, so the chair is
-    // available to the next person rather than held by somebody who has gone.
-    if (!isHost && myRequestId) {
-      resolve.mutate({ requestId: myRequestId, action: "leave" });
-    }
+  // Read off the session up here rather than inside the callback, so the memo
+  // depends on the verb and not on the whole session object.
+  const sessionLeave = session.leave;
+  const leaveNow = useCallback(async () => {
+    // The session frees a held seat or a raised hand on the way out, then
+    // hangs up — the only way a listener's call ends besides the mini-player.
+    await sessionLeave();
+    toast("You left the gist room.", {
+      duration: 5_000,
+      action: { label: "Rejoin", onClick: () => router.push(sq(`/gist-rooms/${stream.id}`)) },
+    });
     router.push(sq("/gist-rooms"));
-  }, [isHost, myRequestId, resolve, router]);
+  }, [sessionLeave, router, stream.id]);
 
   /*
     LEAVING ALWAYS ASKS. It used to ask ONCE: a `ms:house:leave-seen` flag was
@@ -1193,8 +1195,8 @@ function LiveHouse({
 
   /* ---- keyboard --------------------------------------------------------- */
 
-  const micToggle = isHost ? publisher.toggleMic : stage.toggleMic;
-  const micOn = isHost ? publisher.micOn : stage.micOn;
+  const micToggle = session.toggleMic;
+  const micOn = here && session.micOn;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1273,12 +1275,8 @@ function LiveHouse({
          dock (ogazboiz, 2026-09-13). The chat column is `h-full` inside. */
       className="flex w-full flex-col bg-chrome pb-[calc(80px+env(safe-area-inset-bottom,0px))] md:pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-room-top,var(--ws-crumb-h))-var(--ws-nav-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
     >
-      {/* The audio itself. Mounted from its OWN map so it can never become
-          conditional on anything visual — the reason RemoteAudio is its own
-          file at all. */}
-      {remoteAudioSlots(slots).map((slot) => (
-        <RemoteAudio key={slot.identity} slot={slot} mutedForMe={mutedForMe.has(slot.identity)} />
-      ))}
+      {/* The audio is NOT here. The shell's RoomSessionProvider mounts it
+          (HouseAudioSinks), so it keeps playing when this view unmounts. */}
 
       {/* One polite region for the whole room. Never assertive: everything
           here is ambient, and assertive interrupts whatever is being read. */}
@@ -1421,15 +1419,45 @@ function LiveHouse({
       {state === "failed" && (
         <div className="ws-inset mx-4 mb-4 px-4 py-3">
           <p className="text-[13px] leading-5 text-body">
-            {roomFailureCopy(isHost ? asRoomFailure(publisher.state) : "failed")}
+            {roomFailureCopy("failed")}
           </p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => session.retry()}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {/* The host is connected but their microphone could not be opened —
+          a device problem with its own remedy, not a lost room. */}
+      {here && isHost && state === "live" && session.micFailure && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">{roomFailureCopy(session.micFailure)}</p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => void session.toggleMic()}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {here && connection === "ended" && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">
+            {session.state.endReason === "removed"
+              ? "You were removed from this gist room."
+              : "This gist room has ended."}
+          </p>
+        </div>
+      )}
+
+      {gone && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">You&apos;re not in this gist room.</p>
           <Button
             size="sm"
             variant="secondary"
             className="mt-2"
-            onClick={() => (isHost ? publisher.retry() : playback.refetch())}
+            onClick={() => enterRoom(stream.id, role)}
           >
-            Try again
+            Join again
           </Button>
         </div>
       )}
@@ -1487,7 +1515,7 @@ function LiveHouse({
         </div>
       )}
 
-      <CaptionRail captionUrl={playback.data?.captionUrl ?? null} />
+      <CaptionRail captionUrl={here ? session.captionUrl : null} />
 
       {/* Everything above scrolls; the bar below is pinned to the column's
           bottom edge. `mt-auto` rather than `sticky`, because the column is
@@ -1819,6 +1847,41 @@ function LiveHouse({
         )}
       </Sheet>
 
+      {/* ANOTHER ROOM IS ALREADY PLAYING. One room per tab: joining this one
+          leaves that one, so the reader chooses — and staying takes them back
+          to the room they are still in. */}
+      <Sheet
+        open={askingToSwitch}
+        onClose={() => {
+          const current = session.state.target?.streamId;
+          session.dismissConflict();
+          if (current) router.push(sq(`/gist-rooms/${current}`));
+        }}
+        title="Leave your gist room?"
+      >
+        <p className="text-[13px] leading-5 text-body">
+          {session.stream
+            ? `You're in "${houseTopic(session.stream)}". Joining this room will leave it.`
+            : "You're in another gist room. Joining this room will leave it."}
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button
+            variant="ghost"
+            className="flex-1"
+            onClick={() => {
+              const current = session.state.target?.streamId;
+              session.dismissConflict();
+              if (current) router.push(sq(`/gist-rooms/${current}`));
+            }}
+          >
+            Stay there
+          </Button>
+          <Button className="flex-1" onClick={() => void session.confirmConflict()}>
+            Leave and join
+          </Button>
+        </div>
+      </Sheet>
+
       <Sheet
         open={confirmLeave}
         onClose={() => setConfirmLeave(false)}
@@ -1838,10 +1901,14 @@ function LiveHouse({
             loading={endHouse.isPending}
             onClick={() => {
               if (isHost) {
-                endHouse.mutate(stream.id, { onSuccess: () => router.push(sq("/gist-rooms")) });
+                endHouse.mutate(stream.id, {
+                  onSuccess: () => {
+                    void session.end().then(() => router.push(sq("/gist-rooms")));
+                  },
+                });
                 return;
               }
-              leaveNow();
+              void leaveNow();
             }}
           >
             {isHost ? "Close it" : "Leave"}

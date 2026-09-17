@@ -13,3 +13,11 @@ export type { FollowingRoom } from "./lib/types";
 export type { Stream } from "./lib/types";
 // The room card's listen-only hover preview (415:12704's `unmute`), composed in components/layout.
 export { useRoomPreview, type RoomPreview } from "./hooks/use-room-preview";
+// The shell-owned room session (components/layout/room-session.tsx): the one
+// Room registry, the tokens and heartbeat it connects with, and the stage it
+// puts a seated guest on.
+export { useMySpeakerRequest, useResolveSpeakerRequest } from "./hooks/use-streams";
+export { useStage } from "./hooks/use-stage";
+export { startPublishing } from "./hooks/use-publisher";
+export { fetchPlaybackToken, goLive, sendHeartbeat } from "./lib/api";
+export { getRoom, registerRoom, subscribeRoom, unregisterRoom } from "./lib/live-room";
