@@ -1875,6 +1875,21 @@ describe("A dropped speaker keeps the seat for the grace window, then joins the 
   });
 });
 
+describe("The host finds a seated speaker's row in the approved read, not the pending queue", () => {
+  // GET /streams/:id/speaker-requests answers PENDING only unless asked, so a
+  // seat looked for in that list was never there: "Move down" said "Couldn't
+  // find their seat." and the hand tray's Seated section was always empty.
+  it("moves a speaker down using the approved rows", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /const seated = \(seatedRows\.data\?\.items \?\? \[\]\)\.find\(/, "Move down looks in the pending-only queue again");
+  });
+  it("draws the tray's Seated section from the approved read", () => {
+    const tray = stripComments(read("features/houses/components/hand-tray.tsx"));
+    assert.match(tray, /const seatedQuery = useSeatedSpeakers\(stream\.id, stream\.status === "live"\);/);
+    assert.match(tray, /const seated = \(seatedQuery\.data\?\.items \?\? \[\]\)\.filter\(\(item\) => item\.status === "approved"\);/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");

@@ -8,6 +8,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import {
   useResolveSpeakerRequest,
+  useSeatedSpeakers,
   useSpeakerRequests,
 } from "@/features/streams/hooks/use-streams";
 import type { SpeakerRequest, Stream } from "@/features/streams/lib/types";
@@ -75,9 +76,13 @@ export function HandTray({
   const requests = useSpeakerRequests(stream.id, stream.status === "live");
   const resolve = useResolveSpeakerRequest(stream.id);
 
+  // The queue is PENDING-only on the service unless asked, so seated speakers
+  // are their own read (the same key the room's Move down uses).
+  const seatedQuery = useSeatedSpeakers(stream.id, stream.status === "live");
+
   const items = requests.data?.items ?? [];
   const pending = items.filter((item) => item.status === "pending");
-  const seated = items.filter((item) => item.status === "approved");
+  const seated = (seatedQuery.data?.items ?? []).filter((item) => item.status === "approved");
 
   /**
    * Announce an arrival — the host is talking, not watching a badge.

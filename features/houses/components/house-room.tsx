@@ -2034,7 +2034,9 @@ function LiveHouse({
           // An approved speaker's LiveKit identity is `<did>#speaker`; the
           // request row is keyed on the bare DID. Comparing them raw never
           // matched, which is a bug this codebase has already fixed once.
-          const seated = (hostRequests.data?.items ?? []).find(
+          // The APPROVED read: the plain queue is pending-only on the service,
+          // so a seat looked for there was never found.
+          const seated = (seatedRows.data?.items ?? []).find(
             (item) =>
               item.status === "approved" &&
               baseIdentity(item.userId) === baseIdentity(target.identity)
