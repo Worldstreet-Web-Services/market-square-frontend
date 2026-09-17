@@ -3189,6 +3189,57 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
   });
 });
 
+describe("the gist room's review fixes", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the duplicate panel on the room's own page is not a dead end: Use it here and Dismiss", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    const panel = block(room, '{state === "duplicate" && (', "\n      )}");
+    assert.match(panel, /session\.dismiss\(\);\s*enterRoom\(stream\.id, role\);/, "Use it here must clear the terminal state before entering");
+    assert.match(panel, />\s*Use it here\s*</);
+    assert.match(panel, /onClick=\{\(\) => session\.dismiss\(\)\}/);
+    assert.match(panel, />\s*Dismiss\s*</);
+  });
+
+  it("the houses slice builds a host's Room without importing the streams slice", () => {
+    const connection = code("features/houses/hooks/use-house-connection.ts");
+    assert.doesNotMatch(connection, /@\/features\/streams/);
+    assert.match(connection, /new RoomClass\(hostRoomOptions\(livekit, preferredMic\)\)/);
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /connectRoom\(target, \{ \.\.\.options, hostRoomOptions: publisherRoomOptions \}\)/);
+  });
+
+  it("a mic button's changing Mute/Unmute label is never paired with aria-pressed", () => {
+    for (const path of [
+      "components/layout/room-mini-player.tsx",
+      "features/houses/components/room-dock.tsx",
+      "features/houses/components/house-controls.tsx",
+      "features/houses/components/room-phone-bar.tsx",
+      "features/streams/components/guest-speaker-control.tsx",
+    ]) {
+      const source = code(path);
+      assert.doesNotMatch(source, /aria-pressed=\{!?\s*[\w.]*(?:mic|cam)[\w.]*\}/i, path);
+      assert.doesNotMatch(source, /pressed=\{!?\s*session\.micOn\}/, path);
+    }
+  });
+
+  it("the controller carries no unused scaffolding", () => {
+    const controller = code("lib/room-session/controller.ts");
+    assert.doesNotMatch(controller, /onTokenRefreshed|upgradeToIdentified|requestMic|consumeMicIntent|micIntent/);
+    assert.doesNotMatch(code("lib/room-session/reducer.ts"), /"anon"|switching/);
+  });
+
+  it("the heartbeat fires on connect, before the interval", () => {
+    const controller = code("lib/room-session/controller.ts");
+    assert.match(controller, /beat\(\);\s*this\.heartbeat = this\.deps\.clock\.setInterval\(beat, HEARTBEAT_MS\);/);
+  });
+
+  it("names the seat a passive sign-out cannot free as a backend dependency", () => {
+    const provider = read("components/layout/room-session.tsx");
+    assert.match(provider, /BACKEND B5: A SEAT HELD THROUGH A SIGN-OUT NOBODY PRESSED IS NOT FREED/);
+  });
+});
+
 describe("the mini-player's reach, contrast and announcements", () => {
   const code = (path: string) => stripComments(read(path));
   const player = code("components/layout/room-mini-player.tsx");
@@ -3199,11 +3250,21 @@ describe("the mini-player's reach, contrast and announcements", () => {
     assert.doesNotMatch(player, /status === "failed"/);
   });
 
-  it("keeps a hot mic on screen where the phone bar steps aside", () => {
-    assert.match(player, /hotMicChipVisible\(\{ \.\.\.where, hotMic: chrome\.hotMic \}\)/);
-    assert.match(player, /if \(chip && streamId\) return <HotMicChip/);
-    const chip = block(player, "function HotMicChip(", "\n}\n");
-    assert.match(chip, /<MicButton session=\{session\} \/>/);
+  it("keeps the room on screen, in every state, where the phone bar steps aside", () => {
+    assert.match(player, /const chip = onPhone && phone && roomChipVisible\(where\);/);
+    assert.doesNotMatch(player, /hotMicChipVisible|HotMicChip/, "the chip is gated on a hot mic again");
+    assert.match(player, /if \(chip && streamId\) return <RoomChip/);
+    const chip = block(player, "function RoomChip(", "\n}\n");
+    assert.match(chip, /\{chrome\.publishing && <MicButton session=\{session\} \/>\}/);
+    assert.match(chip, /\{chrome\.retry && \(/);
+    assert.match(chip, /\{chrome\.finished \? <DismissButton session=\{session\} \/> : <HangUp session=\{session\} streamId=\{streamId\} \/>\}/);
+    assert.match(chip, /\{chrome\.announcement\}/);
+  });
+
+  it("the bar and the chip share ONE hang-up, with its confirmations", () => {
+    assert.equal((player.match(/<HangUp session=\{session\} streamId=\{streamId\} \/>/g) ?? []).length, 2);
+    assert.equal((player.match(/title="Leave the stage\?"/g) ?? []).length, 1);
+    assert.equal((player.match(/title="Close the gist room\?"/g) ?? []).length, 1);
   });
 
   it("gives every round control a 44px target on touch, and Listen/Retry a 44px height", () => {

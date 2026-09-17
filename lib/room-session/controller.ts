@@ -11,16 +11,15 @@
  *   · `enter(otherId)` ASKS FIRST (`conflict`); confirming disconnects and
  *     unregisters the first room BEFORE the second one connects.
  *   · DUPLICATE_IDENTITY IS TERMINAL. No reconnect is ever scheduled.
- *   · A TOKEN REFRESH NEVER RECONNECTS a healthy room. A LiveKit connection
- *     keeps itself authorised once it is up; a fresh token is only used to
- *     recover a connection that has FAILED. (The `connectToken` rule that
+ *   · A TOKEN IS FOR JOINING, NOT FOR STAYING. A LiveKit connection keeps
+ *     itself authorised once it is up, so nothing here refreshes a token on
+ *     a schedule: one is fetched only to connect — an entry, a Retry, a
+ *     recovery from FAILED, the stage's rejoin. (The `connectToken` rule that
  *     `use-house-connection.ts` carried, kept.)
- *   · HEARTBEAT every 15 s for as long as the room is held — minimised
- *     included, every role included.
- *   · The anon → identified upgrade is BREAK-THEN-MAKE with the new token
- *     fetched first, so the registry never holds two Rooms.
- *   · The mic intent is consumed ONCE. Reconnects, remounts and re-entries
- *     never carry it.
+ *   · HEARTBEAT the moment the room connects, then every 15 s for as long as
+ *     it is held — minimised included, every role included.
+ *   · Nobody's mic is opened by the controller. The host's publish runs in
+ *     `afterConnect`, told whether the connect was the reader's own fresh open.
  *   · A FAILED ROOM RECOVERS BY ITSELF: a retry is scheduled on a capped
  *     backoff, and the network coming back (or the tab coming back into view)
  *     retries at once. Terminal states never schedule one.
@@ -55,7 +54,6 @@ export const RETRY_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000, 
 export interface SessionToken {
   url: string;
   token: string;
-  expiresAt?: string | null;
   captionUrl?: string | null;
 }
 
@@ -121,7 +119,6 @@ export class RoomSessionController<R> {
   private sessionId: string | null = null;
   private latestToken: SessionToken | null = null;
   private pendingOptions: EnterOptions | undefined;
-  private micIntent = false;
   private preferredMic: string | undefined;
   private retryTimer: unknown = null;
   private retryAttempt = 0;
@@ -165,7 +162,6 @@ export class RoomSessionController<R> {
       // The same room as SOMEBODY ELSE: an account that resolved as a listener
       // for a beat and turned out to be the host. Frozen, they would sit in
       // their own room with no publish grant until they left and came back.
-      if (target.role === "anon" && role === "listener") return this.upgradeToIdentified();
       return this.replace({ streamId, role }, options);
     }
     if (target && isHolding(connection)) {
@@ -287,21 +283,6 @@ export class RoomSessionController<R> {
     this.dispatch({ type: "ended", reason: "room-ended" });
   }
 
-  /**
-   * A refreshed token arrived.
-   *
-   * While the room is held and healthy it is only remembered — reconnecting a
-   * live call because a string changed was an audible drop every few minutes.
-   * A FAILED room takes it, because that is the Retry path.
-   */
-  onTokenRefreshed(token: SessionToken) {
-    this.latestToken = token;
-    const { target, connection } = this.state;
-    if (target && connection === "failed") {
-      void this.connect(target, { token, resumed: true });
-    }
-  }
-
   /** The reader's Retry on a failed room: a fresh token, a new Room. */
   retry(): Promise<void> {
     const { target, connection } = this.state;
@@ -332,57 +313,6 @@ export class RoomSessionController<R> {
     const target = this.state.target;
     if (!target || !isHolding(this.state.connection)) return;
     await this.replace(target, undefined);
-  }
-
-  /**
-   * Anonymous listener → signed in. Break-then-make:
-   *   1. fetch the identified token while still listening,
-   *   2. disconnect and unregister the anon Room,
-   *   3. connect under the account,
-   *   4. start a new heartbeat session.
-   */
-  async upgradeToIdentified(): Promise<void> {
-    const target = this.state.target;
-    if (!target || target.role !== "anon" || !isHolding(this.state.connection)) return;
-    const next: SessionTarget = { streamId: target.streamId, role: "listener" };
-    this.dispatch({ type: "switching", on: true });
-    const asked = this.generation;
-    let token: SessionToken;
-    try {
-      token = await this.deps.fetchToken(next);
-    } catch {
-      // Still listening anonymously — nothing was broken.
-      this.dispatch({ type: "switching", on: false });
-      return;
-    }
-    // Left, logged out or ended while the token was on its way: stay gone.
-    if (asked !== this.generation) {
-      this.dispatch({ type: "switching", on: false });
-      return;
-    }
-    const disconnected = this.teardown();
-    const tornDown = this.generation;
-    await disconnected;
-    if (tornDown !== this.generation) {
-      this.dispatch({ type: "switching", on: false });
-      return;
-    }
-    await this.connect(next, { token, resumed: true });
-    this.dispatch({ type: "switching", on: false });
-  }
-
-  /* ---- the mic intent ------------------------------------------------- */
-
-  /** Set only by the reader's own action in this session. */
-  requestMic() {
-    this.micIntent = true;
-  }
-
-  /** True exactly once per request. */
-  consumeMicIntent(): boolean {
-    const intent = this.micIntent;
-    this.micIntent = false;
-    return intent;
   }
 
   /* ---- internals ------------------------------------------------------- */
@@ -518,6 +448,9 @@ export class RoomSessionController<R> {
         }
       );
     };
+    // At once, as the stream player's heartbeat does: the room counts the
+    // reader from the moment they are in it, not 15 s later.
+    beat();
     this.heartbeat = this.deps.clock.setInterval(beat, HEARTBEAT_MS);
   }
 
@@ -535,7 +468,6 @@ export class RoomSessionController<R> {
     this.generation += 1;
     this.stopHeartbeat();
     this.cancelRetry();
-    this.micIntent = false;
     const room = this.current;
     const target = this.state.target;
     this.current = null;
@@ -546,7 +478,7 @@ export class RoomSessionController<R> {
     return room.disconnect().catch(() => undefined);
   }
 
-  /** The token most recently seen — for the provider's refresh schedule. */
+  /** The token the held room connected with — the provider reads its caption URL. */
   get token(): SessionToken | null {
     return this.latestToken;
   }

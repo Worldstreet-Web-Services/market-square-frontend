@@ -41,20 +41,22 @@ export function miniPlayerVisible({ pathname, session, chatOpen, isPhone, roomBa
 }
 
 /**
- * THE HOT MIC, while the bar itself has stepped aside on a phone.
+ * THE ROOM CHIP, while the bar itself has stepped aside on a phone.
  *
  * The bar hides for an open chat thread (it would sit on the composer) and
- * for another room's own bar — but a publisher with an open mic must never
- * lose sight of it: winked back into a DM, the room is still listening. So a
- * compact "You're live" chip with a mute control takes the bar's place, up
- * top where the keyboard and the composer cannot reach it.
+ * for another room's own bar. The room does not: winked back into a DM, it is
+ * still playing, and a reader who cannot see it cannot hang it up, retry it,
+ * dismiss "Room ended" or reach a mic they left open. So in EVERY connection
+ * state a compact chip takes the bar's place, up top where the keyboard and
+ * the composer cannot reach it — not only for a publisher with an open mic.
  */
-export function hotMicChipVisible(input: MiniPlayerInput & { hotMic: boolean }): boolean {
-  const { pathname, session, chatOpen, isPhone, roomBarUp = false, hotMic } = input;
-  if (!hotMic || !isPhone || !(chatOpen || roomBarUp)) return false;
+export function roomChipVisible(input: MiniPlayerInput): boolean {
+  const { pathname, session, chatOpen, isPhone, roomBarUp = false } = input;
+  if (!isPhone || !(chatOpen || roomBarUp)) return false;
   if (!session || !session.streamId || session.status === "idle") return false;
   if (miniPlayerVisible(input)) return false;
   const path = logical(pathname);
+  if (/^\/live\/[^/]+$/.test(path)) return false;
   return path !== `/gist-rooms/${session.streamId}`;
 }
 
@@ -96,9 +98,8 @@ export function miniPlayerChrome({ state, presence, micOn, canPlayAudio }: MiniP
   const publishing =
     (presence === "host" || presence === "speaker") && (connection === "live" || connection === "reconnecting");
   const finished = connection === "ended" || connection === "duplicate";
-  const line = state.switching
-    ? "Switching to your account…"
-    : connection === "connecting"
+  const line =
+    connection === "connecting"
       ? "Connecting…"
       : connection === "reconnecting"
         ? "Reconnecting…"

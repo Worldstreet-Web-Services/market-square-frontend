@@ -7,10 +7,9 @@ import {
   RoomSessionController,
   type RoomSessionDeps,
   type SessionRoom,
-  type SessionToken,
 } from "./room-session/controller.ts";
 import { classifyDisconnect, type DisconnectKind, type SessionTarget } from "./room-session/reducer.ts";
-import { hotMicChipVisible, isZoneExit, miniPlayerChrome, miniPlayerVisible } from "./room-session/visibility.ts";
+import { isZoneExit, miniPlayerChrome, miniPlayerVisible, roomChipVisible } from "./room-session/visibility.ts";
 import { mediaSessionMetadata } from "./room-session/media-session.ts";
 import { roomEntryReady } from "./room-session/entry.ts";
 import { IDLE_SESSION, sessionReducer, type SessionState } from "./room-session/reducer.ts";
@@ -230,6 +229,37 @@ describe("terminal disconnects", () => {
     assert.equal(h.rooms.length, 1);
   });
 
+  it("the room page's 'Use it here' — dismiss, then enter — takes the room back, once", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    disconnect(h.rooms[0]!, "DUPLICATE_IDENTITY");
+    // The dead end this replaces: enter alone does nothing out of a terminal state.
+    await h.session.enter("A", "listener");
+    assert.equal(h.rooms.length, 1);
+
+    h.session.dismiss();
+    await h.session.enter("A", "listener");
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.session.getState().status, "live");
+    assert.equal(h.registry.get("A"), h.rooms[1]);
+    // Evicted again by the other tab: terminal again, and nothing loops.
+    disconnect(h.rooms[1]!, "DUPLICATE_IDENTITY");
+    await h.clock.advance(120_000);
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.session.getState().status, "duplicate");
+  });
+
+  it("'Dismiss' clears the terminal state without connecting anything", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    disconnect(h.rooms[0]!, "DUPLICATE_IDENTITY");
+    h.session.dismiss();
+    await h.clock.advance(60_000);
+    assert.equal(h.session.getState().status, "idle");
+    assert.equal(h.rooms.length, 1);
+    assert.equal(h.clock.pending, 0);
+  });
+
   for (const [label, act] of [
     ["ROOM_DELETED", (h: ReturnType<typeof harness>) => disconnect(h.rooms[0]!, "ROOM_DELETED")],
     ["PARTICIPANT_REMOVED", (h: ReturnType<typeof harness>) => disconnect(h.rooms[0]!, "PARTICIPANT_REMOVED")],
@@ -262,40 +292,32 @@ describe("terminal disconnects", () => {
 });
 
 describe("tokens", () => {
-  it("a token refresh while live never reconnects", async () => {
+  it("a token is for joining, not for staying: a long live session fetches ONE and connects once", async () => {
     const h = harness();
     await h.session.enter("A", "listener");
-    h.session.onTokenRefreshed({ url: "wss://lk", token: "fresh" });
     h.rooms[0]!.emit("Reconnecting");
-    h.session.onTokenRefreshed({ url: "wss://lk", token: "fresher" });
     h.rooms[0]!.emit("Reconnected");
-    await flush();
+    await h.clock.advance(60 * 60_000);
+    assert.equal(h.tokens.length, 1);
     assert.equal(h.rooms.length, 1);
     assert.equal(h.rooms[0]!.connects.length, 1);
     assert.equal(h.rooms[0]!.disconnects, 0);
     assert.equal(h.session.getState().status, "live");
   });
 
-  it("a token refresh while failed reconnects with THAT token", async () => {
-    const h = harness();
-    await h.session.enter("A", "listener");
-    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
-    assert.equal(h.session.getState().status, "failed");
-    h.session.onTokenRefreshed({ url: "wss://lk", token: "fresh" } satisfies SessionToken);
-    await flush();
-    assert.equal(h.rooms.length, 2);
-    assert.deepEqual(h.rooms[1]!.connects, [{ url: "wss://lk", token: "fresh" }]);
-    assert.equal(h.session.getState().status, "live");
-    assert.equal(h.registry.get("A"), h.rooms[1]);
+  it("has no token-refresh entry point that could reconnect a healthy room", () => {
+    const surface = Object.getOwnPropertyNames(RoomSessionController.prototype);
+    assert.ok(!surface.some((name) => /refresh/i.test(name)), surface.join(", "));
   });
 });
 
 describe("heartbeat", () => {
-  it("beats every 15s while live — 3 in 45s — and stops on leave", async () => {
+  it("beats the moment it connects, then every 15s — 4 in 45s — and stops on leave", async () => {
     const h = harness();
     await h.session.enter("A", "listener");
+    assert.equal(h.heartbeats.length, 1, "the first beat waited for the interval");
     await h.clock.advance(45_000);
-    assert.equal(h.heartbeats.length, 3);
+    assert.equal(h.heartbeats.length, 4);
     assert.equal(HEARTBEAT_MS, 15_000);
     await h.session.leave();
     const before = h.heartbeats.length;
@@ -309,84 +331,22 @@ describe("heartbeat", () => {
     await h.clock.advance(30_000);
     assert.deepEqual(
       h.heartbeats.map((beat) => beat.sessionId),
-      [null, "s1"]
+      [null, "s1", "s1"]
     );
   });
 
-  it("an anonymous listener beats too", async () => {
+  it("a host beats too, and a new connection starts a new view session", async () => {
     const h = harness();
-    await h.session.enter("A", "anon");
-    await h.clock.advance(45_000);
-    assert.equal(h.heartbeats.length, 3);
+    await h.session.enter("A", "host");
+    await h.session.reconnect();
+    assert.deepEqual(
+      h.heartbeats.map((beat) => beat.sessionId),
+      [null, null]
+    );
   });
 });
 
-describe("anon → identified upgrade", () => {
-  it("fetches the identified token BEFORE dropping the anon room, never holds two", async () => {
-    let releaseToken: (() => void) | null = null;
-    const registrySizes: number[] = [];
-    const h = harness();
-    const base = h.deps.fetchToken;
-    h.deps.fetchToken = async (target) => {
-      if (target.role === "listener") {
-        await new Promise<void>((resolve) => {
-          releaseToken = resolve;
-        });
-      }
-      return base(target);
-    };
-    const register = h.deps.register;
-    h.deps.register = (streamId, handle) => {
-      register(streamId, handle);
-      registrySizes.push(h.registry.size);
-    };
-
-    await h.session.enter("A", "anon");
-    await h.clock.advance(30_000);
-    const upgrade = h.session.upgradeToIdentified();
-    await flush();
-    assert.equal(h.session.getState().switching, true);
-    assert.equal(h.rooms[0]!.disconnects, 0, "the anon room dropped before the new token was in hand");
-    releaseToken!();
-    await upgrade;
-
-    assert.ok(h.log.indexOf("token:A:listener") < h.log.indexOf("disconnect:A-1"));
-    assert.ok(h.log.indexOf("unregister:A-1") < h.log.indexOf("register:A-2"));
-    assert.ok(registrySizes.every((size) => size <= 1));
-    assert.equal(h.session.getState().target?.role, "listener");
-    assert.equal(h.session.getState().switching, false);
-
-    const beatsBefore = h.heartbeats.length;
-    await h.clock.advance(15_000);
-    assert.equal(h.heartbeats[beatsBefore]!.sessionId, null, "the upgraded session reused the anon heartbeat session");
-  });
-});
-
-describe("the mic intent", () => {
-  it("is consumed once when set by the reader's own request", async () => {
-    const h = harness();
-    await h.session.enter("A", "listener");
-    h.session.requestMic();
-    assert.equal(h.session.consumeMicIntent(), true);
-    assert.equal(h.session.consumeMicIntent(), false);
-  });
-
-  it("does not survive a reconnect, a remount or a re-entry", async () => {
-    const h = harness();
-    await h.session.enter("A", "listener");
-    assert.equal(h.session.consumeMicIntent(), false, "never set without the reader asking");
-
-    h.session.requestMic();
-    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
-    await h.session.retry();
-    assert.equal(h.session.consumeMicIntent(), false, "a reconnect carried the intent");
-
-    h.session.requestMic();
-    await h.session.leave();
-    await h.session.enter("A", "listener");
-    assert.equal(h.session.consumeMicIntent(), false, "a re-entry carried the intent");
-  });
-
+describe("the host's mic on connect", () => {
   it("hands a host's resumed connect resumed=true so the mic stays off", async () => {
     const contexts: boolean[] = [];
     const h = harness({
@@ -635,21 +595,6 @@ describe("resuming after an await never undoes a leave", () => {
     assert.equal(h.registry.size, 0);
   });
 
-  it("the anon upgrade stays gone when logout lands during its disconnect", async () => {
-    const h = harness();
-    const releases = slowDisconnects(h);
-    await h.session.enter("A", "anon");
-    const upgrading = h.session.upgradeToIdentified();
-    await flush();
-    await flush();
-    const loggingOut = h.session.logout();
-    for (const release of releases) release();
-    await Promise.all([upgrading, loggingOut]);
-    await flush();
-    assert.equal(h.rooms.length, 1, "the upgrade connected after logout");
-    assert.equal(h.session.getState().status, "idle");
-  });
-
   it("a second connect drops a Room an earlier in-flight connect already holds", async () => {
     const h = harness();
     const pending: { release: (() => void) | null } = { release: null };
@@ -724,30 +669,44 @@ describe("the conflict question belongs to the view that asked", () => {
   });
 });
 
-describe("the phone's hot mic while the bar steps aside", () => {
+describe("the phone's room chip while the bar steps aside", () => {
   const live = { status: "live" as const, streamId: "abc" };
   const base = { pathname: "/messages", session: live, chatOpen: true, isPhone: true };
 
-  it("the winked-into-a-DM case: a speaker with an open mic still sees it and can mute", () => {
+  it("the winked-into-a-DM case: the room is still on screen, for a LISTENER too", () => {
     // The bar itself still steps aside for the composer…
     assert.equal(miniPlayerVisible(base), false);
-    // …but the hot mic does not disappear with it.
-    assert.equal(hotMicChipVisible({ ...base, hotMic: true }), true);
+    // …but the room does not disappear with it: no mic is needed to see it.
+    assert.equal(roomChipVisible(base), true);
+  });
+
+  it("in every state a reader must act on: failed, ended, another tab, connecting", () => {
+    for (const status of ["failed", "ended", "duplicate", "connecting", "reconnecting", "conflict"] as const) {
+      assert.equal(roomChipVisible({ ...base, session: { status, streamId: "abc" } }), true, status);
+    }
   });
 
   it("also over another room's own phone bar (the conflict case)", () => {
-    assert.equal(
-      hotMicChipVisible({ ...base, pathname: "/gist-rooms/other", chatOpen: false, roomBarUp: true, hotMic: true }),
-      true
-    );
+    assert.equal(roomChipVisible({ ...base, pathname: "/gist-rooms/other", chatOpen: false, roomBarUp: true }), true);
   });
 
-  it("only for a hot mic, only on a phone, only where the bar is hidden", () => {
-    assert.equal(hotMicChipVisible({ ...base, hotMic: false }), false);
-    assert.equal(hotMicChipVisible({ ...base, isPhone: false, hotMic: true }), false);
-    assert.equal(hotMicChipVisible({ ...base, chatOpen: false, hotMic: true }), false, "the bar is up: one control is enough");
-    assert.equal(hotMicChipVisible({ ...base, pathname: "/gist-rooms/abc", hotMic: true }), false, "the room's own page has its mic");
-    assert.equal(hotMicChipVisible({ ...base, session: { status: "idle", streamId: null }, hotMic: true }), false);
+  it("only on a phone, only where the bar is hidden, never on the room's own page", () => {
+    assert.equal(roomChipVisible({ ...base, isPhone: false }), false);
+    assert.equal(roomChipVisible({ ...base, chatOpen: false }), false, "the bar is up: one control is enough");
+    assert.equal(roomChipVisible({ ...base, pathname: "/gist-rooms/abc" }), false, "the room's own page is the player");
+    assert.equal(roomChipVisible({ ...base, pathname: "/square/gist-rooms/abc" }), false);
+    assert.equal(roomChipVisible({ ...base, pathname: "/live/xyz" }), false);
+    assert.equal(roomChipVisible({ ...base, session: { status: "idle", streamId: null } }), false);
+    assert.equal(roomChipVisible({ ...base, session: null }), false);
+  });
+
+  it("never draws both the bar and the chip", () => {
+    for (const chatOpen of [true, false])
+      for (const isPhone of [true, false])
+        for (const roomBarUp of [true, false]) {
+          const input = { ...base, chatOpen, isPhone, roomBarUp };
+          assert.ok(!(miniPlayerVisible(input) && roomChipVisible(input)), JSON.stringify(input));
+        }
   });
 });
 

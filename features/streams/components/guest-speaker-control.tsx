@@ -97,7 +97,6 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
           <button
             onClick={() => void publisher.toggleMic()}
             aria-label={publisher.micOn ? "Mute your microphone" : "Unmute your microphone"}
-            aria-pressed={!publisher.micOn}
             className={cn(
               "ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full transition-colors",
               publisher.micOn ? "bg-black/50 text-heading" : "bg-down/80 text-ink"
@@ -111,7 +110,6 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
           <button
             onClick={() => void publisher.toggleCam()}
             aria-label={publisher.camOn ? "Turn your camera off" : "Turn your camera on"}
-            aria-pressed={!publisher.camOn}
             className={cn(
               "ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full transition-colors",
               publisher.camOn ? "bg-black/50 text-heading" : "bg-down/80 text-ink"

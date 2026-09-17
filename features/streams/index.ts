@@ -18,7 +18,7 @@ export { useRoomPreview, type RoomPreview } from "./hooks/use-room-preview";
 // puts a seated guest on.
 export { useMySpeakerRequest, useResolveSpeakerRequest } from "./hooks/use-streams";
 export { useStage } from "./hooks/use-stage";
-export { startPublishing } from "./hooks/use-publisher";
+export { publisherRoomOptions, startPublishing } from "./hooks/use-publisher";
 export { fetchPlaybackToken, goLive, sendHeartbeat } from "./lib/api";
 export { getRoom, registerRoom, subscribeRoom, unregisterRoom } from "./lib/live-room";
 // The mini-player's faces and the host's hang-up (components/layout/room-mini-player.tsx).

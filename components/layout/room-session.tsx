@@ -7,6 +7,7 @@ import {
   fetchPlaybackToken,
   getRoom,
   goLive,
+  publisherRoomOptions,
   registerRoom,
   sendHeartbeat,
   startPublishing,
@@ -104,7 +105,7 @@ function subscribeRejoin(listener: () => void) {
 }
 
 function playbackToken(grant: Awaited<ReturnType<typeof fetchPlaybackToken>>): SessionToken {
-  return { url: grant.url, token: grant.token, expiresAt: grant.expiresAt, captionUrl: grant.captionUrl };
+  return { url: grant.url, token: grant.token, captionUrl: grant.captionUrl };
 }
 
 export function RoomSessionProvider({ children }: { children: React.ReactNode }) {
@@ -117,7 +118,9 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   const [controller] = useState(
     () =>
       new RoomSessionController<Room>({
-        createRoom: (target, options) => connectRoom(target, options),
+        // The host's speech profile is the streams slice's; the houses slice
+        // builds the Room. Composed here, where both may be imported.
+        createRoom: (target, options) => connectRoom(target, { ...options, hostRoomOptions: publisherRoomOptions }),
         fetchToken: async (target) => {
           if (target.role === "host") {
             // go-live is idempotent by design: a host who reloads a live room
@@ -306,6 +309,16 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     false, and the room must not go on talking for a signed-out browser (or
     the next person in it). By then there is no session to free a seat with;
     the connection comes down and the rejoin record goes.
+
+    BACKEND B5: A SEAT HELD THROUGH A SIGN-OUT NOBODY PRESSED IS NOT FREED
+    HERE. Every sign-out that goes through a button (the shell's menus, the
+    /auth page) runs useLogout, which leaves the room — freeing the seat —
+    while the token still exists. Privy's session expiring, or a sign-out in
+    another tab, is only seen after the token is gone: the leave call would be
+    refused, and its error toast would land on a signed-out reader. Until the
+    service releases a speaker request whose holder has left the LiveKit room
+    (the participant-left webhook) or stopped heartbeating, that seat stays in
+    the host's tray until the host removes it.
   */
   const auth = useAuth();
   const wasAuthenticated = useRef(false);

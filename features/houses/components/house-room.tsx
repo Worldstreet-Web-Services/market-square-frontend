@@ -1503,12 +1503,32 @@ function LiveHouse({
 
       {state === "duplicate" && (
         <div className="ws-inset mx-4 mb-4 px-4 py-3">
-          {/* Terminal by design. Retrying evicts the other tab, whose own
-              reconnect evicts this one — retrying IS the eviction loop. */}
+          {/* Terminal by design: nothing retries by itself, because a retry
+              evicts the other tab, whose own reconnect evicts this one — that
+              IS the eviction loop. So the way on is the reader's own choice,
+              and it has to be HERE: this is the room's page, where the
+              mini-player is hidden, and `enter` does nothing out of a terminal
+              state. "Use it here" clears the state and enters again, taking
+              the room from the other tab (which lands in this same state and
+              stays there); "Dismiss" just clears it. */}
           <p className="text-[13px] leading-5 text-body">
             This house is open somewhere else. You can only be in a house from one tab or device
             at a time.
           </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                session.dismiss();
+                enterRoom(stream.id, role);
+              }}
+            >
+              Use it here
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => session.dismiss()}>
+              Dismiss
+            </Button>
+          </div>
         </div>
       )}
 

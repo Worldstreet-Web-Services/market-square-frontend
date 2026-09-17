@@ -1,7 +1,6 @@
 "use client";
 
-import type { Room } from "livekit-client";
-import { publisherRoomOptions } from "@/features/streams/hooks/use-publisher";
+import type { Room, RoomOptions } from "livekit-client";
 import type { SessionRoom } from "@/lib/room-session/controller";
 import { classifyDisconnect, type SessionTarget } from "@/lib/room-session/reducer";
 
@@ -25,17 +24,24 @@ import { classifyDisconnect, type SessionTarget } from "@/lib/room-session/reduc
  *     reconnects a healthy room, only a failed one.
  *
  * Still no video anywhere: a host's Room carries the speech capture profile
- * and nothing else, and a listener's Room subscribes.
+ * and nothing else, and a listener's Room subscribes. That profile belongs to
+ * the streams slice (`publisherRoomOptions`), and slices never import each
+ * other — so the shell, which composes both, hands it in as `hostRoomOptions`.
  */
+type HostRoomOptions = (
+  livekit: Pick<typeof import("livekit-client"), "AudioPresets">,
+  preferredMic?: string
+) => RoomOptions;
+
 export async function connectRoom(
   target: SessionTarget,
-  { preferredMic }: { preferredMic?: string } = {}
+  { preferredMic, hostRoomOptions }: { preferredMic?: string; hostRoomOptions: HostRoomOptions }
 ): Promise<SessionRoom<Room>> {
   const livekit = await import("livekit-client");
   const { Room: RoomClass, RoomEvent, DisconnectReason } = livekit;
   const room =
     target.role === "host"
-      ? new RoomClass(publisherRoomOptions(livekit, preferredMic))
+      ? new RoomClass(hostRoomOptions(livekit, preferredMic))
       : // adaptiveStream is a video optimisation and there is no video here,
         // but it costs nothing and keeps the paths identical to the player's.
         new RoomClass({ adaptiveStream: true });

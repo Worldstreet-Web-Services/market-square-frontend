@@ -16,7 +16,7 @@ import { useChatOpen } from "@/lib/chat-open-store";
 import { micControl } from "@/lib/mic-consent";
 import { setMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
 import { useRoomSession, type RoomSessionView } from "@/lib/room-session-store";
-import { hotMicChipVisible, miniPlayerChrome, miniPlayerVisible } from "@/lib/room-session/visibility";
+import { miniPlayerChrome, miniPlayerVisible, roomChipVisible } from "@/lib/room-session/visibility";
 import { sq, stripSquare } from "@/lib/square-path";
 
 /**
@@ -31,9 +31,10 @@ import { sq, stripSquare } from "@/lib/square-path";
  *     `setMiniPlayer`, and the shell stamps `data-mini-player` so the
  *     stylesheet adds its height to `--ws-nav-h` and to the floating `+`
  *     offsets: nothing scrolls under it and no button sits on it. Where the
- *     bar steps aside (an open chat thread, another room's own bar) a
- *     publisher with an open mic still gets a compact "You're live" chip with
- *     a mute control, up top where the keyboard and the composer cannot reach.
+ *     bar steps aside (an open chat thread, another room's own bar) a compact
+ *     chip takes its place in EVERY state — listening, failed, ended, another
+ *     tab, a publisher's mic — with the same state line, Retry, Dismiss, mic
+ *     and hang-up, up top where the keyboard and the composer cannot reach.
  *   · `card` — a 320px card at the bottom-left on desktop when the rail is off
  *     (guests included), clear of the centred dock. While a chat thread is
  *     open there is no dock and the thread's composer owns the foot, so the
@@ -41,7 +42,7 @@ import { sq, stripSquare } from "@/lib/square-path";
  *   · `rail` — the rail's foot when the rail is on.
  *
  * States: Connecting, Reconnecting, Room ended (cleared after 5 s by the
- * provider), Playing in another tab, Tap to listen, Switching to your account.
+ * provider), Playing in another tab, Tap to listen.
  * What is drawn reads the CONNECTION (lib/room-session/visibility.ts
  * `miniPlayerChrome`), never the open "join another room?" question — which
  * used to hide the mic, the live badge and Retry for as long as it stood.
@@ -73,13 +74,6 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
   const phone = useMediaQuery("(max-width: 767px)");
   const onPhone = placement === "phone";
   const streamId = session.state.target?.streamId ?? null;
-  const chrome = miniPlayerChrome({
-    state: session.state,
-    presence: session.presence,
-    micOn: session.micOn,
-    canPlayAudio: session.canPlayAudio,
-  });
-
   const where = {
     pathname,
     session: { status: session.state.status, streamId },
@@ -88,7 +82,7 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
     roomBarUp: roomBar,
   };
   const visible = onPhone === phone && miniPlayerVisible(where);
-  const chip = onPhone && phone && hotMicChipVisible({ ...where, hotMic: chrome.hotMic });
+  const chip = onPhone && phone && roomChipVisible(where);
 
   const offer = session.rejoinOffer;
   const offering =
@@ -144,7 +138,7 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
     );
   }
 
-  if (chip && streamId) return <HotMicChip session={session} streamId={streamId} />;
+  if (chip && streamId) return <RoomChip session={session} streamId={streamId} />;
   if (!visible || !streamId) return null;
   return <PlayerBody placement={placement} session={session} streamId={streamId} chatOpen={chatOpen} />;
 }
@@ -168,9 +162,6 @@ function PlayerBody({
   chatOpen: boolean;
 }) {
   const router = useRouter();
-  const [confirmClose, setConfirmClose] = useState(false);
-  const [confirmLeaveStage, setConfirmLeaveStage] = useState(false);
-  const endRoom = useEndStream();
   const { state, stream, presence, room } = session;
   const slots = useStageSlots(room, stream?.ownerId ?? "");
   const chrome = miniPlayerChrome({ state, presence, micOn: session.micOn, canPlayAudio: session.canPlayAudio });
@@ -179,11 +170,6 @@ function PlayerBody({
   const title = stream ? houseTopic(stream) : "Gist room";
   const roomHref = sq(`/gist-rooms/${streamId}`);
   const faces = slots.slice(0, 3);
-
-  const leave = () => {
-    keepFocus();
-    void session.leave();
-  };
 
   return (
     <Frame placement={placement} chatOpen={chatOpen} announcement={chrome.announcement}>
@@ -282,15 +268,7 @@ function PlayerBody({
       {publishing && <MicButton session={session} />}
 
       {finished ? (
-        <RoundButton
-          label="Dismiss"
-          onClick={() => {
-            keepFocus();
-            session.dismiss();
-          }}
-        >
-          <IconX className="h-3.5 w-3.5" />
-        </RoundButton>
+        <DismissButton session={session} />
       ) : (
         <>
           <RoundButton
@@ -300,24 +278,117 @@ function PlayerBody({
           >
             <IconChevronUp className="h-4 w-4" />
           </RoundButton>
-          <RoundButton
-            label={presence === "host" ? "Close the gist room" : "Leave the gist room"}
-            onClick={() =>
-              presence === "host"
-                ? setConfirmClose(true)
-                : presence === "speaker"
-                  ? setConfirmLeaveStage(true)
-                  : leave()
-            }
-            tone="danger"
-          >
-            <IconRoomLeave className="h-4 w-4" />
-          </RoundButton>
+          <HangUp session={session} streamId={streamId} />
         </>
       )}
+    </Frame>
+  );
+}
 
-      {/* The host's hang-up closes the room for everyone, so it asks — the
-          same question the room's own Close asks. */}
+/**
+ * THE ROOM, while the phone's bar has stepped aside for an open chat thread or
+ * another room's own bar. Up top — under the top strip and the thread's header
+ * — where neither the keyboard nor the composer can cover it. Every state gets
+ * it (lib/room-session/visibility.ts `roomChipVisible`): a listener must be
+ * able to hang up, and a failed or finished room to be retried or dismissed,
+ * from inside a DM as much as a publisher must reach an open mic.
+ */
+function RoomChip({ session, streamId }: { session: RoomSessionView; streamId: string }) {
+  const title = session.stream ? houseTopic(session.stream) : "your gist room";
+  const chrome = miniPlayerChrome({
+    state: session.state,
+    presence: session.presence,
+    micOn: session.micOn,
+    canPlayAudio: session.canPlayAudio,
+  });
+  const text = chrome.hotMic ? "You're live" : (chrome.line ?? "In a gist room");
+  return (
+    <div
+      role="region"
+      aria-label="Gist room"
+      className="ws-glass fixed right-3 z-40 flex max-w-[calc(100vw-24px)] items-center gap-1 rounded-full border border-white/10 bg-chrome/90 py-0.5 pl-1 pr-0.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] md:hidden"
+      style={{ top: "calc(var(--ws-topbar-h) + 88px)" }}
+    >
+      <p role="status" aria-live="polite" className="sr-only">
+        {chrome.announcement}
+      </p>
+      <Link
+        href={sq(`/gist-rooms/${streamId}`)}
+        aria-label={`${text} in ${title}. Return to the room`}
+        className="ws-press flex h-11 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold leading-none text-heading"
+      >
+        <span
+          className={cn(
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            chrome.live ? "ws-live-dot bg-accent" : chrome.finished ? "bg-grey-600" : "bg-grey-400"
+          )}
+          aria-hidden
+        />
+        <span className="truncate">{text}</span>
+      </Link>
+      {chrome.listen && (
+        <RoundButton label="Tap to listen" onClick={session.startAudio}>
+          <IconVolume className="h-4 w-4" />
+        </RoundButton>
+      )}
+      {chrome.retry && (
+        <RoundButton label="Retry the connection" onClick={session.retry}>
+          <IconRefresh className="h-4 w-4" />
+        </RoundButton>
+      )}
+      {chrome.publishing && <MicButton session={session} />}
+      {chrome.finished ? <DismissButton session={session} /> : <HangUp session={session} streamId={streamId} />}
+    </div>
+  );
+}
+
+/** Clear a finished room (ended, removed, another tab) off the screen. */
+function DismissButton({ session }: { session: RoomSessionView }) {
+  return (
+    <RoundButton
+      label="Dismiss"
+      onClick={() => {
+        keepFocus();
+        session.dismiss();
+      }}
+    >
+      <IconX className="h-3.5 w-3.5" />
+    </RoundButton>
+  );
+}
+
+/**
+ * THE RED BUTTON, one for the bar and the chip. A listener's leave costs nobody
+ * anything and stays one tap; a seated speaker gives up their seat, and the
+ * host closes the room for everyone, so both ask first.
+ */
+function HangUp({ session, streamId }: { session: RoomSessionView; streamId: string }) {
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmLeaveStage, setConfirmLeaveStage] = useState(false);
+  const endRoom = useEndStream();
+  const { presence } = session;
+
+  const leave = () => {
+    keepFocus();
+    void session.leave();
+  };
+
+  return (
+    <>
+      <RoundButton
+        label={presence === "host" ? "Close the gist room" : "Leave the gist room"}
+        onClick={() =>
+          presence === "host"
+            ? setConfirmClose(true)
+            : presence === "speaker"
+              ? setConfirmLeaveStage(true)
+              : leave()
+        }
+        tone="danger"
+      >
+        <IconRoomLeave className="h-4 w-4" />
+      </RoundButton>
+
       <Sheet open={confirmClose} onClose={() => setConfirmClose(false)} title="Close the gist room?">
         <p className="text-[13px] leading-5 text-body">Everyone will be sent out and the gist room will be closed.</p>
         <div className="mt-5 flex gap-2">
@@ -342,9 +413,6 @@ function PlayerBody({
         </div>
       </Sheet>
 
-      {/* A seated speaker gives up their seat by leaving — the same thing the
-          zone-exit guard asks about — so the red button asks too. A listener's
-          leave costs nobody anything and stays one tap. */}
       <Sheet open={confirmLeaveStage} onClose={() => setConfirmLeaveStage(false)} title="Leave the stage?">
         <p className="text-[13px] leading-5 text-body">You&apos;ll lose your seat. Coming back, you&apos;ll need to ask to speak again.</p>
         <div className="mt-5 flex gap-2">
@@ -362,37 +430,7 @@ function PlayerBody({
           </Button>
         </div>
       </Sheet>
-    </Frame>
-  );
-}
-
-/**
- * THE HOT MIC, while the phone's bar has stepped aside for an open chat thread
- * or another room's own bar. Up top — under the top strip and the thread's
- * header — where neither the keyboard nor the composer can cover it.
- */
-function HotMicChip({ session, streamId }: { session: RoomSessionView; streamId: string }) {
-  const title = session.stream ? houseTopic(session.stream) : "your gist room";
-  return (
-    <div
-      role="region"
-      aria-label="Gist room microphone"
-      className="ws-glass fixed right-3 z-40 flex items-center gap-1 rounded-full border border-white/10 bg-chrome/90 py-0.5 pl-1 pr-0.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] md:hidden"
-      style={{ top: "calc(var(--ws-topbar-h) + 88px)" }}
-    >
-      <p role="status" aria-live="polite" className="sr-only">
-        Your mic is live in {title}
-      </p>
-      <Link
-        href={sq(`/gist-rooms/${streamId}`)}
-        aria-label={`You're live in ${title}. Return to the room`}
-        className="ws-press flex h-11 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold leading-none text-heading"
-      >
-        <span className="ws-live-dot h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
-        You&apos;re live
-      </Link>
-      <MicButton session={session} />
-    </div>
+    </>
   );
 }
 
@@ -410,7 +448,6 @@ function MicButton({ session }: { session: RoomSessionView }) {
       label={control.label}
       onClick={() => void session.toggleMic()}
       disabled={control.disabled}
-      pressed={!session.micOn}
       tone={session.micOn ? "on" : "default"}
     >
       {control.icon === "lock" ? (
@@ -434,7 +471,6 @@ function RoundButton({
   onClick,
   children,
   disabled = false,
-  pressed,
   tone = "default",
   className,
 }: {
@@ -442,7 +478,6 @@ function RoundButton({
   onClick: () => void;
   children: React.ReactNode;
   disabled?: boolean;
-  pressed?: boolean;
   tone?: "default" | "on" | "danger";
   className?: string;
 }) {
@@ -453,7 +488,6 @@ function RoundButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      aria-pressed={pressed}
       className={cn(
         "ws-press group/round grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9",
         className

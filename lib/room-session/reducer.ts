@@ -15,8 +15,8 @@
  * No React, no livekit-client. `lib/room-session.test.ts` drives it.
  */
 
-/** Who this tab is in the room. `anon` is a listener without an account (not wired yet). */
-export type SessionRole = "host" | "speaker" | "listener" | "anon";
+/** Who this tab is in the room. Anonymous listening is backend-dependent and not in this build. */
+export type SessionRole = "host" | "speaker" | "listener";
 
 export type SessionStatus =
   | "idle"
@@ -68,8 +68,6 @@ export interface SessionState {
   pending: SessionTarget | null;
   endReason: EndReason | null;
   error: string | null;
-  /** Anonymous → identified upgrade in flight ("Switching to your account…"). */
-  switching: boolean;
 }
 
 export const IDLE_SESSION: SessionState = {
@@ -79,7 +77,6 @@ export const IDLE_SESSION: SessionState = {
   pending: null,
   endReason: null,
   error: null,
-  switching: false,
 };
 
 export type SessionAction =
@@ -92,7 +89,6 @@ export type SessionAction =
   | { type: "failed"; error: string | null }
   | { type: "duplicate" }
   | { type: "ended"; reason: EndReason }
-  | { type: "switching"; on: boolean }
   | { type: "reset" };
 
 function settle(state: Omit<SessionState, "status">): SessionState {
@@ -108,7 +104,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         pending: null,
         endReason: null,
         error: null,
-        switching: state.switching,
       });
     case "conflict":
       // Only meaningful while a room is actually held.
@@ -125,10 +120,10 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return settle({ ...state, connection: "reconnecting" });
     case "failed":
       if (!state.target || isTerminal(state.connection)) return state;
-      return settle({ ...state, connection: "failed", error: action.error, switching: false });
+      return settle({ ...state, connection: "failed", error: action.error });
     case "duplicate":
       if (!state.target) return state;
-      return settle({ ...state, connection: "duplicate", pending: null, switching: false });
+      return settle({ ...state, connection: "duplicate", pending: null });
     case "ended":
       if (!state.target) return state;
       return settle({
@@ -136,10 +131,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         connection: "ended",
         endReason: action.reason,
         pending: null,
-        switching: false,
       });
-    case "switching":
-      return settle({ ...state, switching: action.on });
     case "reset":
       return IDLE_SESSION;
   }
