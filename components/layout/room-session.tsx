@@ -333,9 +333,12 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
         writeRejoin(null);
         return controller.end();
       },
+      // Sign-out: a host's connection comes down (closing the room stays an
+      // explicit act); anyone else leaves properly, freeing a held seat while
+      // the session that authorises that call still exists.
       logout: () => {
         writeRejoin(null);
-        return controller.logout();
+        return isHost ? controller.logout() : leave();
       },
       confirmConflict: () => controller.confirmConflict(),
       dismissConflict: () => controller.dismissConflict(),
@@ -366,6 +369,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       leave,
       rejoinOffer,
       dismissRejoin,
+      isHost,
     ]
   );
 
