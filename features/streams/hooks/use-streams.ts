@@ -20,6 +20,7 @@ import { mergeStreamDetail } from "@/lib/stream-detail-merge";
 import {
   INVITE_ACCEPTED_HINT,
   answerErrorMessage,
+  answerLanding,
   inviteErrorOutcome,
   inviteSentMessage,
   quietResolveError,
@@ -889,28 +890,35 @@ export function useInviteToSpeak(streamId: string) {
  * OFF — nothing here, and nothing downstream, opens it (lib/mic-consent.ts).
  * Whatever the answer, the row is read again: an invitation that ran out while
  * the banner was up must disappear rather than wait for the next poll.
+ *
+ * `room` pins the answer to the room it was given in (lib/speaker-invite.ts
+ * `answerLanding`). This hook lives in the session provider, which stays
+ * mounted while the room changes, and a pending mutation runs the NEWEST
+ * callbacks: read from `streamId`, an accept that came back after "Leave and
+ * join" seated the reader in the next room.
  */
 export function useAnswerInvite(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ requestId, action }: { requestId: string; action: "accept" | "reject" }) =>
-      resolveSpeakerRequest(streamId, requestId, action),
-    onSuccess: (row, { action }) => {
+    mutationFn: ({ requestId, action, room }: { requestId: string; action: "accept" | "reject"; room: string }) =>
+      resolveSpeakerRequest(room, requestId, action),
+    onSuccess: (row, { action, room }) => {
+      const landing = answerLanding({ room, currentRoom: streamId, action, status: row.status });
       // The answered row goes straight into the cache, as asking to speak's
       // does: the banner goes at once (no second tap on a live button while a
       // slow refetch is out), and `approved` seats them without waiting a poll.
-      queryClient.setQueryData(["ms", "stream", streamId, "speaker-request", "me"], row);
+      queryClient.setQueryData(["ms", "stream", landing.room, "speaker-request", "me"], row);
       // The one-time hint: seated, and the mic is still theirs to open.
-      if (action === "accept" && row.status === "approved") toast(INVITE_ACCEPTED_HINT);
+      if (landing.hint) toast(INVITE_ACCEPTED_HINT);
     },
     onError: (error, { action }) => {
       // A Not now on an invitation that already ended is quiet (lib/speaker-invite.ts).
       const message = answerErrorMessage(error as ApiErrorLike, action);
       if (message) toast.error(message);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+    onSettled: (_row, _error, { room }) => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", room, "speaker-request", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", room, "speaker-requests"] });
     },
   });
 }

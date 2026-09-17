@@ -4,6 +4,7 @@ import { shouldAutoEnableMic } from "./mic-consent.ts";
 import {
   OUTCOME_GRACE_MS,
   createAnswerLatch,
+  answerLanding,
   answerErrorMessage,
   formatCountdown,
   hostOutcomeLabel,
@@ -629,6 +630,31 @@ describe("one answer per invitation", () => {
     latch.release("req-1");
     assert.equal(latch.claim("req-1"), true, "retry after a failure");
     assert.equal(latch.claim("req-2"), true, "a new invitation");
+  });
+
+  it("an answer that went through frees the latch once the invitation is gone, so a re-invite on the same row can be answered", () => {
+    const latch = createAnswerLatch();
+    assert.equal(latch.claim("req-1"), true);
+    latch.follow("req-1");
+    assert.equal(latch.claim("req-1"), false, "still the same open invitation: one answer");
+    // Not now went through: the row is no longer an invitation.
+    latch.follow(null);
+    // The host invites again and the service reuses the row id.
+    latch.follow("req-1");
+    assert.equal(latch.claim("req-1"), true, "the new invitation can be answered");
+  });
+});
+
+describe("an answer lands in the room it was sent from", () => {
+  it("the row is written under the answered room, whichever room the session is in now", () => {
+    assert.deepEqual(answerLanding({ room: "A", currentRoom: "A", action: "accept", status: "approved" }), { room: "A", hint: true });
+    assert.deepEqual(answerLanding({ room: "A", currentRoom: "B", action: "accept", status: "approved" }), { room: "A", hint: false });
+  });
+
+  it("the seated hint is said only for an accept that seated them in the room they are still in", () => {
+    assert.equal(answerLanding({ room: "A", currentRoom: "", action: "accept", status: "approved" }).hint, false, "left meanwhile");
+    assert.equal(answerLanding({ room: "A", currentRoom: "A", action: "reject", status: "rejected" }).hint, false);
+    assert.equal(answerLanding({ room: "A", currentRoom: "A", action: "accept", status: "withdrawn" }).hint, false);
   });
 });
 

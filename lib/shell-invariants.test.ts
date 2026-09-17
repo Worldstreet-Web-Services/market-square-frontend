@@ -3850,7 +3850,12 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
   it("an answer lands in the cache at once, and a closed invitation is not an error toast", () => {
     const hooks = code("features/streams/hooks/use-streams.ts");
     const answer = hooks.slice(hooks.indexOf("export function useAnswerInvite"), hooks.indexOf("export function useMuteSpeaker"));
-    assert.match(answer, /onSuccess: \(row, \{ action \}\) => \{\s*queryClient\.setQueryData\(\["ms", "stream", streamId, "speaker-request", "me"\], row\);/);
+    assert.match(answer, /resolveSpeakerRequest\(room, requestId, action\)/);
+    assert.match(
+      answer,
+      /const landing = answerLanding\(\{ room, currentRoom: streamId, action, status: row\.status \}\);[\s\S]*?queryClient\.setQueryData\(\["ms", "stream", landing\.room, "speaker-request", "me"\], row\);[\s\S]*?if \(landing\.hint\) toast\(INVITE_ACCEPTED_HINT\);/
+    );
+    assert.doesNotMatch(answer, /\["ms", "stream", streamId,/, "an answer never lands under the session's current room");
     const resolve = hooks.slice(hooks.indexOf("export function useResolveSpeakerRequest"));
     assert.match(resolve, /if \(quietResolveError\(error as ApiErrorLike, action\)\) \{/);
   });
@@ -3860,8 +3865,9 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(session, /const \[answerLatch\] = useState\(createAnswerLatch\);/);
     assert.match(
       session,
-      /if \(!inviteId \|\| !answerLatch\.claim\(inviteId\)\) return;\s*setAnsweredInviteId\(inviteId\);\s*const answer = inflightAnswers\.track\(inviteId, action, answerInviteAsync\(\{ requestId: inviteId, action \}\)\);\s*void answer\.settled\.then\(\(row\) => \{\s*if \(!row\) answerLatch\.release\(inviteId\);/
+      /if \(!inviteId \|\| !streamId \|\| !answerLatch\.claim\(inviteId\)\) return;\s*setAnsweredInviteId\(inviteId\);[\s\S]*?const answer = inflightAnswers\.track\(inviteId, action, answerInviteAsync\(\{ requestId: inviteId, action, room: streamId \}\)\);\s*void answer\.settled\.then\(\(row\) => \{\s*if \(!row\) answerLatch\.release\(inviteId\);/
     );
+    assert.match(session, /useEffect\(\(\) => \{\s*answerLatch\.follow\(inviteId\);\s*\}, \[answerLatch, inviteId\]\);/);
   });
 
   it("every leave releases the seat through releaseOnLeave, pinned to the room being left, so an accept in flight is not answered reject", () => {

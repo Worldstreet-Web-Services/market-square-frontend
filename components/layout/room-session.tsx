@@ -340,16 +340,22 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   const [answerLatch] = useState(createAnswerLatch);
   // The answer on the wire, so a leave during it can wait (lib/speaker-invite.ts `releaseOnLeave`).
   const [inflightAnswers] = useState(createInflightAnswers);
+  // An answer that went through lets go once its invitation is off screen,
+  // so a re-invite on the same row id can be answered (`AnswerLatch.follow`).
+  useEffect(() => {
+    answerLatch.follow(inviteId);
+  }, [answerLatch, inviteId]);
   const answerInvite = useCallback(
     (action: "accept" | "reject") => {
-      if (!inviteId || !answerLatch.claim(inviteId)) return;
+      if (!inviteId || !streamId || !answerLatch.claim(inviteId)) return;
       setAnsweredInviteId(inviteId);
-      const answer = inflightAnswers.track(inviteId, action, answerInviteAsync({ requestId: inviteId, action }));
+      // Pinned to this room: the session may have moved on when it comes back.
+      const answer = inflightAnswers.track(inviteId, action, answerInviteAsync({ requestId: inviteId, action, room: streamId }));
       void answer.settled.then((row) => {
         if (!row) answerLatch.release(inviteId);
       });
     },
-    [answerInviteAsync, answerLatch, inflightAnswers, inviteId]
+    [answerInviteAsync, answerLatch, inflightAnswers, inviteId, streamId]
   );
 
   // The room ended while the reader was somewhere else. ROOM_DELETED says the

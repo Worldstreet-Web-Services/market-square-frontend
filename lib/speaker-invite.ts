@@ -730,12 +730,19 @@ export function quietResolveError(error: ApiErrorLike | null | undefined, action
  * the first claim on an invitation wins and every later one is refused until
  * the answer FAILS and is released, so a network error can still be retried.
  * A new invitation is a new id and claims afresh.
+ *
+ * An answer that went through is let go once the invitation is no longer the
+ * one on screen (`follow`). Held for good, a later invitation the service
+ * opened on the SAME row id drew a banner whose buttons did nothing, and the
+ * host was told "isn't available" about someone who tried to accept.
  */
 export interface AnswerLatch {
   /** True for the first claim on this invitation; false while one is held. */
   claim(requestId: string): boolean;
   /** The answer failed: the reader may answer again. */
   release(requestId: string): void;
+  /** The invitation on screen now, or null: a hold on any other is let go. */
+  follow(currentId: string | null): void;
 }
 
 export function createAnswerLatch(): AnswerLatch {
@@ -749,5 +756,29 @@ export function createAnswerLatch(): AnswerLatch {
     release(requestId) {
       if (held === requestId) held = null;
     },
+    follow(currentId) {
+      if (held !== currentId) held = null;
+    },
+  };
+}
+
+/**
+ * Where an answer to an invitation lands once it comes back.
+ *
+ * The answer is pinned to the room it was sent from (`room`). The session can
+ * move on while it is out ("Leave and join" another room): the hook's own id
+ * is then the NEXT room's, and writing the answered row under it made the
+ * reader a seated speaker there. The seated hint is said only while the
+ * reader is still in that room.
+ */
+export function answerLanding(input: {
+  room: string;
+  currentRoom: string | null | undefined;
+  action: "accept" | "reject";
+  status: string;
+}): { room: string; hint: boolean } {
+  return {
+    room: input.room,
+    hint: input.action === "accept" && input.status === "approved" && input.room === input.currentRoom,
   };
 }
