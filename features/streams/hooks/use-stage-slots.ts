@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RemoteTrackPublication, Room } from "livekit-client";
 import { buildStage, type StageRoom, type StageSlot } from "@/features/streams/lib/stage";
+import { stepHostMuteBadges, type HostMuteBadgeState } from "@/lib/host-mute";
 
 /**
  * The room's publishers, kept fresh.
@@ -28,6 +29,12 @@ import { buildStage, type StageRoom, type StageSlot } from "@/features/streams/l
  */
 export function useStageSlots(room: Room | null, hostIdentity: string): StageSlot[] {
   const [slots, setSlots] = useState<StageSlot[]>([]);
+  /*
+    Whether each seat has unmuted since the host's mute. The attribute alone
+    outlives the speaker's own unmute, so without this memory their NEXT
+    self-mute was drawn to the whole room as "Muted by host".
+  */
+  const hostMutes = useRef<ReadonlyMap<string, HostMuteBadgeState>>(new Map());
 
   const recompute = useCallback(() => {
     const current = room;
@@ -46,7 +53,22 @@ export function useStageSlots(room: Room | null, hostIdentity: string): StageSlo
         }
       }
     }
-    const next = buildStage(current as unknown as StageRoom, hostIdentity);
+    const built = buildStage(current as unknown as StageRoom, hostIdentity);
+    const badges = stepHostMuteBadges(
+      hostMutes.current,
+      built.map((slot) => ({
+        identity: slot.identity,
+        token: slot.hostMuteToken,
+        published: slot.audioTrack !== null,
+        micMuted: slot.isMuted,
+      }))
+    );
+    hostMutes.current = badges.memory;
+    const next = built.map((slot) =>
+      slot.mutedByHost === (badges.badges.get(slot.identity) ?? false)
+        ? slot
+        : { ...slot, mutedByHost: badges.badges.get(slot.identity) ?? false }
+    );
     setSlots((previous) => (sameStage(previous, next) ? previous : next));
   }, [room, hostIdentity]);
 
@@ -112,6 +134,7 @@ function sameStage(a: readonly StageSlot[], b: readonly StageSlot[]): boolean {
       slot.isSpeaking === other.isSpeaking &&
       slot.isMuted === other.isMuted &&
       slot.mutedByHost === other.mutedByHost &&
+      slot.hostMuteToken === other.hostMuteToken &&
       slot.cameraOff === other.cameraOff &&
       slot.connectionQuality === other.connectionQuality &&
       slot.cameraTrack?.trackSid === other.cameraTrack?.trackSid &&

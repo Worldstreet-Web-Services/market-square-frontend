@@ -3854,6 +3854,12 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(code("features/profile/components/person-safety-rows.tsx"), /"Mute for me only"/);
   });
 
+  it("the badge follows the seat's memory, not the attribute alone, and the toast reads the attribute's value", () => {
+    const hook = code("features/streams/hooks/use-stage-slots.ts");
+    assert.match(hook, /const badges = stepHostMuteBadges\(\s*hostMutes\.current,/);
+    assert.match(code("components/layout/room-session.tsx"), /token: hostMuteToken\(local\.attributes\),/);
+  });
+
   it("everyone sees who turned a mic off, straight from the seat", () => {
     assert.match(room, /mutedByHost: slot\.mutedByHost,/);
     assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);

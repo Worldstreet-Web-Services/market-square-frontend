@@ -8,6 +8,7 @@ import {
   hostMuteOf,
   muteErrorMessage,
   mutedByHost,
+  stepHostMuteBadges,
   stepHostMuteToast,
   type HostMuteToastState,
 } from "./host-mute.ts";
@@ -31,6 +32,51 @@ describe("the Muted by host badge", () => {
 
   it("is never drawn for a speaker who muted themselves", () => {
     assert.equal(mutedByHost({}, true), false);
+  });
+});
+
+describe("the badge remembers whether the speaker has unmuted since the host's mute", () => {
+  type Seat = { identity: string; token: string; published: boolean; micMuted: boolean };
+  const seat = (token: string, micMuted: boolean, published = true): Seat => ({ identity: "did:ben#speaker", token, published, micMuted });
+  const play = (readings: Seat[][]) => {
+    let memory = new Map();
+    const out: boolean[] = [];
+    for (const seats of readings) {
+      const step = stepHostMuteBadges(memory, seats);
+      memory = step.memory;
+      out.push(step.badges.get("did:ben#speaker") ?? false);
+    }
+    return out;
+  };
+
+  it("host mutes, speaker unmutes and talks, then mutes themselves: no badge on their own choice", () => {
+    assert.deepEqual(
+      play([[seat("", false)], [seat("soft", false)], [seat("soft", true)], [seat("soft", false)], [seat("soft", true)]]),
+      [false, false, true, false, false]
+    );
+  });
+
+  it("a new host mute (a new attribute value) shows the badge again", () => {
+    assert.deepEqual(
+      play([[seat("soft:1", true)], [seat("soft:1", false)], [seat("soft:2", false)], [seat("soft:2", true)]]),
+      [true, false, false, true]
+    );
+  });
+
+  it("moved down and seated again with the mic unpublished: no badge before they have done anything", () => {
+    assert.deepEqual(play([[seat("soft", true)], [], [seat("soft", true, false)]]), [true, false, false]);
+  });
+
+  it("the attribute cleared is no badge, and forgets the seat", () => {
+    const first = stepHostMuteBadges(new Map(), [seat("soft", true)]);
+    const cleared = stepHostMuteBadges(first.memory, [seat("", true)]);
+    assert.equal(cleared.badges.get("did:ben#speaker"), false);
+    assert.equal(cleared.memory.size, 0);
+  });
+
+  it("reads a per-mute attribute value as a host mute", () => {
+    assert.equal(hostMuteOf({ hostMuted: "soft:1726570000000" }), "soft");
+    assert.equal(hostMuteOf({ hostMuted: "softly" }), "none");
   });
 });
 
@@ -129,6 +175,24 @@ describe("the muted speaker is told once", () => {
       first.state
     );
     assert.deepEqual(second.toasts, [1]);
+  });
+
+  it("a second mute is noticed WITHOUT the push when the service writes a new value per mute", () => {
+    let state = INITIAL_HOST_MUTE_TOAST;
+    const readings: { token: string; micOn: boolean; at: number }[] = [
+      { token: "", micOn: true, at: NOW },
+      { token: "soft:1", micOn: false, at: NOW + 1_000 },
+      { token: "soft:1", micOn: true, at: NOW + 60_000 },
+      { token: "soft:2", micOn: false, at: NOW + 90_000 },
+    ];
+    const toasts: number[] = [];
+    readings.forEach((reading, index) => {
+      const current = reading.token ? "soft" : "none";
+      const step = stepHostMuteToast(state, { current, token: reading.token, micOn: reading.micOn, signalled: false, now: reading.at });
+      state = step.state;
+      if (step.toast) toasts.push(index);
+    });
+    assert.deepEqual(toasts, [1, 3]);
   });
 
   it("the attribute and the push for one mute make one toast", () => {

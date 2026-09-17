@@ -37,7 +37,7 @@ import { useMe } from "@/hooks/use-me";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { releaseActionFor } from "@/lib/speaker-invite";
-import { HOST_MUTE_TOAST, INITIAL_HOST_MUTE_TOAST, hostMuteOf, stepHostMuteToast } from "@/lib/host-mute";
+import { HOST_MUTE_TOAST, INITIAL_HOST_MUTE_TOAST, hostMuteOf, hostMuteToken, stepHostMuteToast } from "@/lib/host-mute";
 import { speakerSignalOf, userTopic } from "@/lib/ws-gateway";
 import { sharedGateway } from "@/lib/ws-gateway-shared";
 
@@ -476,6 +476,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       const local = room.localParticipant;
       const step = stepHostMuteToast(toastState, {
         current: hostMuteOf(local.attributes),
+        token: hostMuteToken(local.attributes),
         micOn: local.isMicrophoneEnabled,
         signalled,
         now: Date.now(),
