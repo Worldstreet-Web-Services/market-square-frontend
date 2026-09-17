@@ -464,9 +464,10 @@ describe("the rejoin record", async () => {
   const { parseRejoin, serializeRejoin } = await import("./room-session/rejoin.ts");
 
   it("round-trips the room a reload interrupted", () => {
-    assert.deepEqual(parseRejoin(serializeRejoin({ streamId: "abc-123", title: "Late gist" })), {
+    assert.deepEqual(parseRejoin(serializeRejoin({ streamId: "abc-123", title: "Late gist", userId: "u1" })), {
       streamId: "abc-123",
       title: "Late gist",
+      userId: "u1",
     });
   });
 
@@ -758,7 +759,26 @@ describe("the OS media controls", () => {
     title: "  Late gist ",
     audience,
     owner: { displayName: "Amara" },
+    houseConversationId: visibility ? "h1" : null,
     house: visibility ? { visibility } : null,
+  });
+
+  it("FAIL CLOSED: a housed room whose doorplate is missing is named neutrally", () => {
+    // go-live's payload and useUpdateStream's merge carry no `house`, and a
+    // deleted house is `house: null` too.
+    const metadata = mediaSessionMetadata({ ...stream("public"), houseConversationId: "h1", house: null });
+    assert.deepEqual(metadata, { title: "Gist room", artist: "Market Square" });
+  });
+
+  it("FAIL CLOSED: an audience that is not known to be public is named neutrally", () => {
+    for (const audience of [undefined, "friends", ""]) {
+      const metadata = mediaSessionMetadata({ ...stream("public"), audience });
+      assert.deepEqual(metadata, { title: "Gist room", artist: "Market Square" }, String(audience));
+    }
+  });
+
+  it("names a room in a public house", () => {
+    assert.deepEqual(mediaSessionMetadata(stream("public", "public")), { title: "Late gist", artist: "Amara" });
   });
 
   it("name a public room and its host", () => {
@@ -989,5 +1009,64 @@ describe("ways in and out that used to reload the tab", async () => {
     assert.equal(gistRoomGuard({ ...held("g1"), streamId: "s2" }), "ask");
     assert.equal(gistRoomGuard({ holding: false, targetStreamId: "g1", streamId: "g1" }), "render");
     assert.equal(gistRoomGuard({ holding: false, targetStreamId: null, streamId: "s2" }), "render");
+  });
+});
+
+describe("a mutation's payload never makes a private room look public", async () => {
+  const { mergeStreamDetail } = await import("./stream-detail-merge.ts");
+  interface Detail {
+    id: string;
+    title: string;
+    audience: string;
+    houseConversationId: string | null;
+    house: { id: string; visibility: string } | null;
+    viewerCount: number;
+  }
+  const detail: Detail = {
+    id: "g1",
+    title: "Late gist",
+    audience: "private",
+    houseConversationId: "h1",
+    house: { id: "h1", visibility: "private" },
+    viewerCount: 12,
+  };
+
+  it("keeps the doorplate, the house link and a private audience the payload does not carry", () => {
+    const payload: Detail = { id: "g1", title: "Later gist", audience: "public", houseConversationId: null, house: null, viewerCount: 0 };
+    const merged = mergeStreamDetail(detail, payload);
+    assert.equal(merged.title, "Later gist");
+    assert.deepEqual(merged.house, detail.house);
+    assert.equal(merged.houseConversationId, "h1");
+    assert.equal(merged.audience, "private");
+  });
+
+  it("takes the payload whole with nothing cached, and a real doorplate over a cached one", () => {
+    const payload: Detail = { ...detail, house: { id: "h1", visibility: "public" } };
+    assert.equal(mergeStreamDetail(undefined, payload), payload);
+    assert.deepEqual(mergeStreamDetail(detail, payload).house, payload.house);
+  });
+});
+
+describe("tap to rejoin belongs to the account that was in the room", async () => {
+  const { rejoinOfferFor, parseRejoin: parse, serializeRejoin: serialize } = await import("./room-session/rejoin.ts");
+  const record = { streamId: "g1", title: "Late gist", userId: "u1" };
+
+  it("round-trips the owner", () => {
+    assert.deepEqual(parse(serialize(record)), record);
+    assert.equal(parse(JSON.stringify({ streamId: "g1", title: "x" }))?.userId, null);
+  });
+
+  it("is offered only to the signed-in account that wrote it", () => {
+    assert.deepEqual(rejoinOfferFor({ record, authReady: true, authenticated: true, meId: "u1" }), record);
+    assert.equal(rejoinOfferFor({ record, authReady: true, authenticated: false, meId: null }), null, "signed out");
+    assert.equal(rejoinOfferFor({ record, authReady: false, authenticated: false, meId: null }), null, "auth unsettled");
+    assert.equal(rejoinOfferFor({ record, authReady: true, authenticated: true, meId: "u2" }), null, "another account");
+    assert.equal(rejoinOfferFor({ record, authReady: true, authenticated: true, meId: null }), null, "/me not loaded");
+    assert.equal(
+      rejoinOfferFor({ record: { ...record, userId: null }, authReady: true, authenticated: true, meId: "u1" }),
+      null,
+      "an ownerless record"
+    );
+    assert.equal(rejoinOfferFor({ record: null, authReady: true, authenticated: true, meId: "u1" }), null);
   });
 });

@@ -16,6 +16,7 @@ import { useEmbeddedWallet } from "@/hooks/use-wallet";
 import { useEvmSend } from "@/hooks/use-evm-send";
 import { useKashStatus } from "@/hooks/use-kash-status";
 import { isHouse } from "@/features/houses/lib/house";
+import { mergeStreamDetail } from "@/lib/stream-detail-merge";
 import {
   banFromChat,
   cancelActivity,
@@ -460,7 +461,8 @@ export function useGoLive() {
   return useMutation({
     mutationFn: goLive,
     onSuccess: ({ stream }) => {
-      queryClient.setQueryData<Stream>(["ms", "stream", stream.id], stream);
+      // Merged, never replaced: go-live's stream carries no house doorplate.
+      queryClient.setQueryData<Stream>(["ms", "stream", stream.id], (old) => mergeStreamDetail(old, stream));
       invalidateStreamSurfaces(queryClient);
       toast.success("You're live");
     },
@@ -559,7 +561,7 @@ export function useUpdateStream(streamId: string) {
     mutationFn: (patch: Parameters<typeof updateStream>[1]) => updateStream(streamId, patch),
     onSuccess: (stream) => {
       queryClient.setQueryData(["ms", "stream", streamId], (old: Stream | undefined) =>
-        old ? { ...old, ...stream, myTicket: old.myTicket, viewerCount: old.viewerCount } : stream
+        old ? { ...mergeStreamDetail(old, stream), myTicket: old.myTicket, viewerCount: old.viewerCount } : stream
       );
       invalidateStreamSurfaces(queryClient);
       toast.success("Stream updated");

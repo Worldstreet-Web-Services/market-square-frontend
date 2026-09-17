@@ -23,10 +23,11 @@ import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 import { classifyCaptureError } from "@/lib/media-errors";
 import { asRoomFailure, type RoomFailure } from "@/lib/room-connection-copy";
 import { RoomSessionController, type SessionToken } from "@/lib/room-session/controller";
-import { mediaSessionMetadata } from "@/lib/room-session/media-session";
+import { PRIVATE_ROOM_METADATA, mediaSessionMetadata } from "@/lib/room-session/media-session";
 import { stagePresence } from "@/lib/room-session/presence";
 import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
-import { REJOIN_KEY, parseRejoin, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
+import { REJOIN_KEY, parseRejoin, rejoinOfferFor, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
+import { useMe } from "@/hooks/use-me";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
 
 /**
@@ -93,7 +94,13 @@ function writeRejoin(record: RejoinRecord | null) {
     // As above.
   }
   const current = readRejoin();
-  if (current?.streamId === record?.streamId && current?.title === record?.title) return;
+  if (
+    current?.streamId === record?.streamId &&
+    current?.title === record?.title &&
+    current?.userId === record?.userId
+  ) {
+    return;
+  }
   rejoinCache = record;
   for (const listener of rejoinListeners) listener();
 }
@@ -296,12 +303,29 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     mini-player only offers it back while the session is idle — which, with a
     record still standing, means a reload interrupted the room.
   */
-  const rejoinOffer = useSyncExternalStore(subscribeRejoin, readRejoin, () => null);
-  const liveTitle = state.connection === "live" && stream.data ? houseTopic(stream.data) : null;
+  const auth = useAuth();
+  const me = useMe();
+  const meId = me.data?.id ?? null;
+  const storedRejoin = useSyncExternalStore(subscribeRejoin, readRejoin, () => null);
+  // Only to the signed-in account that was in the room (lib/room-session/rejoin.ts).
+  const rejoinOffer = rejoinOfferFor({
+    record: storedRejoin,
+    authReady: auth.ready,
+    authenticated: auth.authenticated,
+    meId,
+  });
+  // A private room is remembered by the neutral name the lock screen uses:
+  // the chip is a surface anyone at the screen can read.
+  const liveTitle =
+    state.connection === "live" && stream.data
+      ? mediaSessionMetadata(stream.data).title === PRIVATE_ROOM_METADATA.title
+        ? PRIVATE_ROOM_METADATA.title
+        : houseTopic(stream.data)
+      : null;
   useEffect(() => {
-    if (!liveTitle || !streamId) return;
-    writeRejoin({ streamId, title: liveTitle });
-  }, [liveTitle, streamId]);
+    if (!liveTitle || !streamId || !meId) return;
+    writeRejoin({ streamId, title: liveTitle, userId: meId });
+  }, [liveTitle, streamId, meId]);
   // The room ending, or another tab taking it, is not something to offer back.
   useEffect(() => {
     if (state.connection === "ended" || state.connection === "duplicate") writeRejoin(null);
@@ -357,10 +381,12 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     (the participant-left webhook) or stopped heartbeating, that seat stays in
     the host's tray until the host removes it.
   */
-  const auth = useAuth();
   const wasAuthenticated = useRef(false);
   useEffect(() => {
     if (!auth.ready) return;
+    // Settled signed out — including a page that LOADED signed out after a
+    // sign-out this tab never saw — keeps no record of anybody's room.
+    if (!auth.authenticated) writeRejoin(null);
     if (auth.authenticated) {
       wasAuthenticated.current = true;
       return;

@@ -15,11 +15,36 @@ export const REJOIN_KEY = "ms:room-session";
 
 export interface RejoinRecord {
   streamId: string;
+  /** The name to show. A private room is stored as the neutral "Gist room". */
   title: string;
+  /** The account that was in the room. The offer is theirs alone. */
+  userId: string | null;
 }
 
 export function serializeRejoin(record: RejoinRecord): string {
-  return JSON.stringify({ streamId: record.streamId, title: record.title });
+  return JSON.stringify({ streamId: record.streamId, title: record.title, userId: record.userId });
+}
+
+/**
+ * WHOSE OFFER IS IT? sessionStorage outlives a sign-out the tab never saw (a
+ * session that expired while the laptop was shut, a sign-out on another
+ * device), so the chip was shown to a signed-out screen — and to the next
+ * account signed into that tab — naming the previous account's room. It is
+ * offered only once auth has settled signed in, to the account that wrote it.
+ */
+export function rejoinOfferFor({
+  record,
+  authReady,
+  authenticated,
+  meId,
+}: {
+  record: RejoinRecord | null;
+  authReady: boolean;
+  authenticated: boolean;
+  meId: string | null;
+}): RejoinRecord | null {
+  if (!record || !authReady || !authenticated || !meId) return null;
+  return record.userId === meId ? record : null;
 }
 
 export function parseRejoin(raw: string | null): RejoinRecord | null {
@@ -31,7 +56,11 @@ export function parseRejoin(raw: string | null): RejoinRecord | null {
     return null;
   }
   if (!value || typeof value !== "object") return null;
-  const { streamId, title } = value as Record<string, unknown>;
+  const { streamId, title, userId } = value as Record<string, unknown>;
   if (typeof streamId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(streamId)) return null;
-  return { streamId, title: typeof title === "string" ? title.slice(0, 200) : "" };
+  return {
+    streamId,
+    title: typeof title === "string" ? title.slice(0, 200) : "",
+    userId: typeof userId === "string" && userId.length <= 200 ? userId : null,
+  };
 }

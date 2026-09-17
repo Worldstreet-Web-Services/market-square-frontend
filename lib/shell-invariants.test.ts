@@ -3453,3 +3453,24 @@ describe("nothing inside the Square reloads the tab under a gist room", () => {
     assert.match(guard, /router\.replace\(sq\(`\/gist-rooms\/\$\{streamId\}`\)\)/);
   });
 });
+
+describe("a private room's name stays off lock screens and other accounts' screens", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("go-live and a stream update merge into the detail cache without dropping the doorplate", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    const goLive = block(hooks, "export function useGoLive(", "\n}\n");
+    assert.match(goLive, /mergeStreamDetail\(old, stream\)/);
+    const update = block(hooks, "export function useUpdateStream(", "\n}\n");
+    assert.match(update, /mergeStreamDetail\(old, stream\)/);
+  });
+
+  it("the rejoin record carries its owner and a neutral name, and is offered only to that account", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /writeRejoin\(\{ streamId, title: liveTitle, userId: meId \}\)/);
+    assert.match(provider, /mediaSessionMetadata\(stream\.data\)\.title/);
+    assert.match(provider, /const rejoinOffer = rejoinOfferFor\(\{/);
+    const backstop = block(provider, "const wasAuthenticated = useRef(false);", "}, [auth.ready, auth.authenticated, controller]);");
+    assert.match(backstop, /if \(!auth\.authenticated\) writeRejoin\(null\);/);
+  });
+});
