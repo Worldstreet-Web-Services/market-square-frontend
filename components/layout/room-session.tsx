@@ -42,7 +42,9 @@ import {
   createAnswerLatch,
   inviteView,
   liveInviteRow,
-  releaseActionFor,
+  createInflightAnswers,
+  releaseOnLeave,
+  type ReleasableRow,
   stepInviteAnnouncer,
   type InviteAnnouncerState,
 } from "@/lib/speaker-invite";
@@ -298,7 +300,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     intent, so nothing opens it until they tap.
   */
   const answer = useAnswerInvite(streamId);
-  const answerInviteMutate = answer.mutate;
+  const answerInviteAsync = answer.mutateAsync;
   // Only while the row is still being read: a room that ended or a reconnect
   // that gave up leaves the last data cached (lib/speaker-invite.ts `liveInviteRow`).
   const invitedRow = liveInviteRow(mine.data, { polling, isHost });
@@ -335,13 +337,18 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   const [answeredInviteId, setAnsweredInviteId] = useState<string | null>(null);
   // Same-frame taps: the banner's `busy` arrives a render late (lib/speaker-invite.ts `createAnswerLatch`).
   const [answerLatch] = useState(createAnswerLatch);
+  // The answer on the wire, so a leave during it can wait (lib/speaker-invite.ts `releaseOnLeave`).
+  const [inflightAnswers] = useState(createInflightAnswers);
   const answerInvite = useCallback(
     (action: "accept" | "reject") => {
       if (!inviteId || !answerLatch.claim(inviteId)) return;
       setAnsweredInviteId(inviteId);
-      answerInviteMutate({ requestId: inviteId, action }, { onError: () => answerLatch.release(inviteId) });
+      const answer = inflightAnswers.track(inviteId, action, answerInviteAsync({ requestId: inviteId, action }));
+      void answer.settled.then((row) => {
+        if (!row) answerLatch.release(inviteId);
+      });
     },
-    [answerInviteMutate, answerLatch, inviteId]
+    [answerInviteAsync, answerLatch, inflightAnswers, inviteId]
   );
 
   // The room ended while the reader was somewhere else. ROOM_DELETED says the
@@ -547,15 +554,31 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   /* ---- verbs ----------------------------------------------------------- */
 
   // A seat or a hand comes down; an unanswered invitation is answered (lib/speaker-invite.ts).
-  const releaseAction = releaseActionFor(mine.data?.status);
-  const requestId = mine.data && releaseAction ? mine.data.id : null;
+  /*
+    A seated person frees their seat on the way out, and a raised hand comes
+    down, so the host's tray never holds somebody who has gone. An invitation
+    still open is answered reject — unless "Join as speaker" is on the wire:
+    then the release waits for it and sends `leave` once it seated them, not
+    the reject the stale `invited` row asked for (which the service refuses
+    once the accept lands, keeping the seat). Pinned to the room being left.
+  */
+  const myRow = mine.data ?? null;
+  const resolveMutate = resolve.mutate;
+  const releaseSeat = useCallback(() => {
+    const room = streamId;
+    if (!room) return;
+    void releaseOnLeave({
+      row: myRow,
+      inflight: inflightAnswers.current(),
+      latest: () => queryClient.getQueryData<ReleasableRow>(["ms", "stream", room, "speaker-request", "me"]),
+      send: (requestId, action) => resolveMutate({ requestId, action, room }),
+    });
+  }, [inflightAnswers, myRow, queryClient, resolveMutate, streamId]);
   const leave = useCallback(async () => {
-    // A seated person frees their seat on the way out, and a raised hand comes
-    // down, so the host's tray never holds somebody who has gone.
-    if (requestId && releaseAction) resolve.mutate({ requestId, action: releaseAction });
+    releaseSeat();
     writeRejoin(null);
     await controller.leave();
-  }, [controller, requestId, releaseAction, resolve]);
+  }, [controller, releaseSeat]);
 
   /*
     "Leave and join" is a LEAVE of the room being left, and does what every
@@ -570,7 +593,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   */
   const confirmConflict = useCallback(async () => {
     if (!state.pending) return;
-    if (requestId && releaseAction) resolve.mutate({ requestId, action: releaseAction });
+    releaseSeat();
     const previous = readRejoin();
     writeRejoin(null);
     setSwitching(true);
@@ -582,7 +605,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     } finally {
       setSwitching(false);
     }
-  }, [controller, requestId, releaseAction, resolve, state.pending]);
+  }, [controller, releaseSeat, state.pending]);
 
   /*
     Making way for a room the reader opens themselves (Backstage). The same
@@ -590,7 +613,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     host's room is closed for everyone first. Rejects when that close fails.
   */
   const vacate = useCallback(async () => {
-    if (requestId && releaseAction) resolve.mutate({ requestId, action: releaseAction });
+    releaseSeat();
     const previous = readRejoin();
     writeRejoin(null);
     try {
@@ -599,7 +622,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       writeRejoin(previous);
       throw error;
     }
-  }, [controller, requestId, releaseAction, resolve]);
+  }, [controller, releaseSeat]);
 
   // Stable: the room view clears its own question in an effect cleanup, and a
   // new function per render would run that cleanup — and dismiss the question

@@ -227,6 +227,83 @@ export function releaseActionFor(status: string | null | undefined): "leave" | "
   return null;
 }
 
+/** The reader's own row, as far as releasing it goes. */
+export interface ReleasableRow {
+  id: string;
+  status: string;
+}
+
+/** An answer to an invitation that has been sent and has not come back yet. */
+export interface InflightAnswer {
+  requestId: string;
+  action: "accept" | "reject";
+  /** The row the service answered with, or null when the answer failed. Never rejects. */
+  settled: Promise<ReleasableRow | null>;
+}
+
+/**
+ * LEAVING WHILE "JOIN AS SPEAKER" IS STILL ON THE WIRE.
+ *
+ * The cached row still says `invited` until the accept comes back, so the
+ * plain rule answered `reject` — and if the accept landed first the reject
+ * was refused (the invitation was no longer open) and the service kept a
+ * SEAT for somebody who had gone. So:
+ *
+ *  - an accept in flight for this row: wait for it to settle, then release
+ *    what the row IS — `leave` once it is `approved`, `reject` if the accept
+ *    failed and the invitation is still open, nothing if it ended;
+ *  - a reject in flight: that is already the answer, send nothing more;
+ *  - otherwise the row's own status decides (`releaseActionFor`).
+ *
+ * `latest` reads the newest cached row (a successful answer writes it there
+ * before `settled` resolves). `send` must be bound to the room being LEFT:
+ * by the time an accept settles the session has moved on.
+ */
+export async function releaseOnLeave(input: {
+  row: ReleasableRow | null | undefined;
+  inflight: InflightAnswer | null;
+  latest: () => ReleasableRow | null | undefined;
+  send: (requestId: string, action: "leave" | "reject") => unknown;
+}): Promise<void> {
+  const { row, inflight, latest, send } = input;
+  const pending = inflight && (!row || row.id === inflight.requestId) ? inflight : null;
+  if (pending?.action === "reject") return;
+  if (pending?.action === "accept") {
+    const settled = await pending.settled;
+    const cached = latest();
+    const after = settled?.id === pending.requestId ? settled : cached?.id === pending.requestId ? cached : null;
+    const action = releaseActionFor(after?.status);
+    if (after && action) await send(after.id, action);
+    return;
+  }
+  const action = releaseActionFor(row?.status);
+  if (row && action) await send(row.id, action);
+}
+
+/**
+ * Keeps the answer that is on the wire, so a leave can wait for it. The
+ * returned entry's `settled` never rejects; the slot clears itself when the
+ * answer settles, unless a newer answer has taken it.
+ */
+export function createInflightAnswers() {
+  let current: InflightAnswer | null = null;
+  return {
+    current: () => current,
+    track(requestId: string, action: "accept" | "reject", answer: Promise<ReleasableRow>): InflightAnswer {
+      const settled = answer.then(
+        (row) => row,
+        () => null
+      );
+      const entry: InflightAnswer = { requestId, action, settled };
+      current = entry;
+      void settled.then(() => {
+        if (current === entry) current = null;
+      });
+      return entry;
+    },
+  };
+}
+
 /* ------------------------------------------------------------------ *
  * The host's control
  * ------------------------------------------------------------------ */

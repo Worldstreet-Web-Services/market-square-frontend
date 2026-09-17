@@ -22,6 +22,8 @@ import {
   visibleInvites,
   isAnonymousIdentity,
   releaseActionFor,
+  releaseOnLeave,
+  createInflightAnswers,
   routeMissing,
   settleInvites,
   trackInvite,
@@ -121,6 +123,92 @@ describe("leaving the room answers what the reader's row is waiting on", () => {
     for (const status of ["denied", "withdrawn", "removed", null, undefined]) {
       assert.equal(releaseActionFor(status), null, String(status));
     }
+  });
+});
+
+describe("leaving while an answer to the invitation is still on the wire", () => {
+  const invited = { id: "r1", status: "invited" };
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+
+  it("waits for an accept in flight and sends leave once it seated them, never the stale reject", async () => {
+    const answers = createInflightAnswers();
+    const accept = deferred<{ id: string; status: string }>();
+    answers.track("r1", "accept", accept.promise);
+    let cache: { id: string; status: string } | null = invited;
+    const sent: string[] = [];
+    const done = releaseOnLeave({
+      row: invited,
+      inflight: answers.current(),
+      latest: () => cache,
+      send: (id, action) => sent.push(`${id}:${action}`),
+    });
+    await Promise.resolve();
+    assert.deepEqual(sent, [], "nothing is sent while the accept is out");
+    cache = { id: "r1", status: "approved" };
+    accept.resolve({ id: "r1", status: "approved" });
+    await done;
+    assert.deepEqual(sent, ["r1:leave"]);
+    assert.equal(answers.current(), null, "the slot clears once the answer settles");
+  });
+
+  it("an accept that failed while the invitation is still open is answered reject", async () => {
+    const answers = createInflightAnswers();
+    const accept = deferred<{ id: string; status: string }>();
+    answers.track("r1", "accept", accept.promise);
+    const sent: string[] = [];
+    const done = releaseOnLeave({
+      row: invited,
+      inflight: answers.current(),
+      latest: () => invited,
+      send: (id, action) => sent.push(`${id}:${action}`),
+    });
+    accept.reject(new Error("STAGE_FULL"));
+    await done;
+    assert.deepEqual(sent, ["r1:reject"]);
+  });
+
+  it("an accept that found the invitation already ended releases nothing", async () => {
+    const answers = createInflightAnswers();
+    const accept = deferred<{ id: string; status: string }>();
+    answers.track("r1", "accept", accept.promise);
+    const sent: string[] = [];
+    const done = releaseOnLeave({
+      row: invited,
+      inflight: answers.current(),
+      latest: () => ({ id: "r1", status: "withdrawn" }),
+      send: (id, action) => sent.push(`${id}:${action}`),
+    });
+    accept.reject(new Error("INVITE_NOT_OPEN"));
+    await done;
+    assert.deepEqual(sent, []);
+  });
+
+  it("a reject already on the wire is the answer: nothing more is sent", async () => {
+    const answers = createInflightAnswers();
+    answers.track("r1", "reject", new Promise(() => {}));
+    const sent: string[] = [];
+    await releaseOnLeave({ row: invited, inflight: answers.current(), latest: () => invited, send: (id, action) => sent.push(`${id}:${action}`) });
+    assert.deepEqual(sent, []);
+  });
+
+  it("with nothing in flight the row decides, and an answer about another row does not hold it up", async () => {
+    const sent: string[] = [];
+    const send = (id: string, action: string) => sent.push(`${id}:${action}`);
+    await releaseOnLeave({ row: invited, inflight: null, latest: () => invited, send });
+    await releaseOnLeave({ row: { id: "r2", status: "approved" }, inflight: null, latest: () => null, send });
+    const answers = createInflightAnswers();
+    answers.track("old", "accept", new Promise(() => {}));
+    await releaseOnLeave({ row: { id: "r3", status: "pending" }, inflight: answers.current(), latest: () => null, send });
+    await releaseOnLeave({ row: { id: "r4", status: "denied" }, inflight: null, latest: () => null, send });
+    assert.deepEqual(sent, ["r1:reject", "r2:leave", "r3:leave"]);
   });
 });
 

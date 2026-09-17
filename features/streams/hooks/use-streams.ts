@@ -738,18 +738,24 @@ export function useRemoveGuest(streamId: string, enabled: boolean) {
 export function useResolveSpeakerRequest(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ requestId, action }: { requestId: string; action: SpeakerRequestAction }) =>
-      resolveSpeakerRequest(streamId, requestId, action),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+    /* `room` pins the call to the room it was decided in. A leave that waits
+       for an accept to settle (lib/speaker-invite.ts `releaseOnLeave`) fires
+       after the session has moved on, when this hook's own id is the next
+       room's, or nothing. */
+    mutationFn: ({ requestId, action, room }: { requestId: string; action: SpeakerRequestAction; room?: string }) =>
+      resolveSpeakerRequest(room ?? streamId, requestId, action),
+    onSuccess: (_row, { room }) => {
+      const id = room ?? streamId;
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-request", "me"] });
     },
-    onError: (error, { action }) => {
+    onError: (error, { action, room }) => {
+      const id = room ?? streamId;
       // The invitation had already ended (lib/speaker-invite.ts): true
       // already, so re-read the lists rather than raise an error.
       if (quietResolveError(error as ApiErrorLike, action)) {
-        queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
-        queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+        queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-request", "me"] });
         return;
       }
       toast.error(errorMessage(error, "Couldn't update the speaker."));

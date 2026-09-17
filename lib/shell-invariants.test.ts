@@ -3188,9 +3188,9 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
   it("'Leave and join' frees the seat and the rejoin record like every other leave", () => {
     const provider = code("components/layout/room-session.tsx");
     const confirm = block(provider, "const confirmConflict = useCallback(", "]);");
+    const release = confirm.indexOf("releaseSeat();");
     assert.ok(
-      confirm.indexOf("resolve.mutate({ requestId, action: releaseAction })") < confirm.indexOf("controller.confirmConflict()") &&
-        confirm.includes("writeRejoin(null)"),
+      release !== -1 && release < confirm.indexOf("controller.confirmConflict()") && confirm.includes("writeRejoin(null)"),
       "confirmConflict skips the seat release"
     );
     assert.doesNotMatch(provider, /confirmConflict: \(\) => controller\.confirmConflict\(\)/);
@@ -3860,8 +3860,20 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(session, /const \[answerLatch\] = useState\(createAnswerLatch\);/);
     assert.match(
       session,
-      /if \(!inviteId \|\| !answerLatch\.claim\(inviteId\)\) return;\s*setAnsweredInviteId\(inviteId\);\s*answerInviteMutate\(\{ requestId: inviteId, action \}, \{ onError: \(\) => answerLatch\.release\(inviteId\) \}\);/
+      /if \(!inviteId \|\| !answerLatch\.claim\(inviteId\)\) return;\s*setAnsweredInviteId\(inviteId\);\s*const answer = inflightAnswers\.track\(inviteId, action, answerInviteAsync\(\{ requestId: inviteId, action \}\)\);\s*void answer\.settled\.then\(\(row\) => \{\s*if \(!row\) answerLatch\.release\(inviteId\);/
     );
+  });
+
+  it("every leave releases the seat through releaseOnLeave, pinned to the room being left, so an accept in flight is not answered reject", () => {
+    const session = code("components/layout/room-session.tsx");
+    const release = block(session, "const releaseSeat = useCallback(", "]);");
+    assert.match(release, /void releaseOnLeave\(\{\s*row: myRow,\s*inflight: inflightAnswers\.current\(\),/);
+    assert.match(release, /send: \(requestId, action\) => resolveMutate\(\{ requestId, action, room \}\),/);
+    assert.doesNotMatch(session, /releaseActionFor\(mine\.data/, "the stale row alone must not decide a leave");
+    for (const verb of ["const leave = useCallback(", "const confirmConflict = useCallback(", "const vacate = useCallback("]) {
+      assert.match(block(session, verb, "]);"), /releaseSeat\(\);/, verb);
+    }
+    assert.match(code("features/streams/hooks/use-streams.ts"), /resolveSpeakerRequest\(room \?\? streamId, requestId, action\)/);
   });
 
   it("a host's tap on an undeployed mute or invite is answered, not swallowed", () => {
