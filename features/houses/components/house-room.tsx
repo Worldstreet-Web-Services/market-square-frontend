@@ -53,6 +53,7 @@ import { SpeakerRequestPanel } from "@/features/houses/components/speaker-reques
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PersonSheet, type PersonTarget } from "@/features/houses/components/person-sheet";
 import { InviteBanner } from "@/features/houses/components/invite-banner";
+import { AboveModals } from "@/components/ui/modal-layer";
 import { useHostStageTools } from "@/features/houses/hooks/use-host-stage-tools";
 import { useAudience, type AudienceMember } from "@/features/houses/hooks/use-audience";
 import { useHouseAnnouncer } from "@/features/houses/hooks/use-house-announcer";
@@ -1588,27 +1589,31 @@ function LiveHouse({
           looking, non-modal: the room keeps talking behind it. Read from the
           session's poll of the reader's own row, never from a push. */}
       {here && !isHost && session.invite && (
-        <div
-          // Over an open sheet's scrim: an invitation behind one ran out unseen.
-          className="fixed left-3 z-[65] md:left-auto md:w-[400px]"
-          style={{
-            top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + var(--ws-house-head-h) + 12px)",
-            right: "max(12px, env(safe-area-inset-right, 0px))",
-          }}
-        >
-          <InviteBanner
-            key={session.invite.requestId}
-            requestId={session.invite.requestId}
-            inviteExpiresAt={session.invite.inviteExpiresAt}
-            createdAt={session.invite.createdAt}
-            seenAt={session.invite.seenAt}
-            clockOffsetMs={session.invite.clockOffsetMs}
-            host={{ id: stream.owner?.id ?? stream.ownerId, name: ownerName ?? "The host", avatarUrl: stream.owner?.avatarUrl }}
-            busy={session.answeringInvite}
-            onAccept={() => session.answerInvite("accept")}
-            onReject={() => session.answerInvite("reject")}
-          />
-        </div>
+        // Inside an open sheet's dialog, not just painted over it: outside,
+        // aria-modal left it unreachable to a screen reader (modal-layer.tsx).
+        <AboveModals>
+          <div
+            // Over an open sheet's scrim: an invitation behind one ran out unseen.
+            className="fixed left-3 z-[65] md:left-auto md:w-[400px]"
+            style={{
+              top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + var(--ws-house-head-h) + 12px)",
+              right: "max(12px, env(safe-area-inset-right, 0px))",
+            }}
+          >
+            <InviteBanner
+              key={session.invite.requestId}
+              requestId={session.invite.requestId}
+              inviteExpiresAt={session.invite.inviteExpiresAt}
+              createdAt={session.invite.createdAt}
+              seenAt={session.invite.seenAt}
+              clockOffsetMs={session.invite.clockOffsetMs}
+              host={{ id: stream.owner?.id ?? stream.ownerId, name: ownerName ?? "The host", avatarUrl: stream.owner?.avatarUrl }}
+              busy={session.answeringInvite}
+              onAccept={() => session.answerInvite("accept")}
+              onReject={() => session.answerInvite("reject")}
+            />
+          </div>
+        </AboveModals>
       )}
 
       <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-10 xl:px-[30px]", state === "failed" && "opacity-40")}>

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/cn";
 import { IconArrowLeft, IconX } from "@/components/ui/icons";
+import { useModalHost } from "@/components/ui/modal-layer";
 
 // A single modal surface: bottom sheet on small screens, centered dialog on
 // desktop. Closes on backdrop tap and Escape.
@@ -63,6 +64,19 @@ export function Sheet({
   const reduceMotion = useReducedMotion();
   const panelOffset = reduceMotion ? 0 : 40;
 
+  /*
+    THE DIALOG IS THE WHOLE LAYER, not the panel. `aria-modal` makes everything
+    outside the dialog inert to assistive tech, so a surface that must stay
+    answerable over a sheet (the invitation to speak) portals INTO it through
+    `AboveModals` (components/ui/modal-layer.tsx). On the full-screen layer it
+    can keep its own fixed position; inside the panel it would be clipped by
+    the panel's overflow and positioned against its transform. Registered
+    while OPEN, not while mounted: the exit animation keeps the node a moment
+    longer, and the banner goes home as soon as the sheet is closing.
+  */
+  const [dialog, setDialog] = useState<HTMLDivElement | null>(null);
+  useModalHost(dialog, open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -103,16 +117,19 @@ export function Sheet({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+          ref={setDialog}
+          role="dialog"
+          aria-modal
+          aria-label={title}
+          // outline-none: focus handed to the dialog itself (a removed row's
+          // fallback) must not draw a ring round the whole screen.
+          className="fixed inset-0 z-50 flex items-end justify-center outline-none sm:items-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+          <div aria-hidden className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
           <motion.div
-            role="dialog"
-            aria-modal
-            aria-label={title}
             initial={{ y: panelOffset, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: panelOffset, opacity: 0 }}

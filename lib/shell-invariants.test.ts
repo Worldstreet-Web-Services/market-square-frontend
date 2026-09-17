@@ -3935,8 +3935,8 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
   it("the banner keeps focus in reach: busy is aria-disabled, focus is handed on to the page", () => {
     assert.doesNotMatch(banner, /(?<!aria-)disabled=\{busy\}/, "a disabled button drops its focus");
     assert.equal((banner.match(/aria-disabled=\{busy\}/g) ?? []).length, 2);
-    assert.match(banner, /window\.setTimeout\(returnFocus, 0\)/);
-    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[main\]\)/);
+    assert.match(banner, /window\.setTimeout\(\(\) => returnFocus\(landing\), 0\)/);
+    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[landing\]\)/);
   });
 
   it("someone the host blocked is never offered Invite to speak: hidden up front, not refused after a tap", () => {
@@ -4047,7 +4047,7 @@ describe("invite to speak and the soft mute, after review", () => {
     assert.match(banner, /className="flex w-full items-center justify-end gap-2"/);
     assert.doesNotMatch(banner, /whitespace-pre|max-\[359px\]/);
     assert.doesNotMatch(banner, /data-room-mic/, "a held Enter on Join would open the mic");
-    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[main\]\)/);
+    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[landing\]\)/);
   });
 
   it("the shell's invitation comes before <main> in reading order, above every sheet", () => {
@@ -4055,6 +4055,26 @@ describe("invite to speak and the soft mute, after review", () => {
     assert.doesNotMatch(player, /placement === "phone" && <SessionInvite \/>/);
     for (const surface of [player, room]) assert.match(surface, /className="fixed left-3 z-\[65\] md:left-auto md:w-\[400px\]"/);
     assert.match(code("components/ui/sheet.tsx"), /fixed inset-0 z-50 /);
+  });
+
+  it("an open sheet never hides the invitation from assistive tech: it and its announcer render inside the dialog", () => {
+    const sheetUi = code("components/ui/sheet.tsx");
+    // The dialog is the full-screen layer, so a portalled banner keeps its own fixed position inside it.
+    assert.match(sheetUi, /<motion\.div\s+ref=\{setDialog\}\s+role="dialog"\s+aria-modal\s+aria-label=\{title\}\s+className="fixed inset-0 z-50 /);
+    assert.equal((sheetUi.match(/role="dialog"/g) ?? []).length, 1, "one dialog element, the layer");
+    assert.match(sheetUi, /useModalHost\(dialog, open\);/);
+    const layer = code("components/ui/modal-layer.tsx");
+    assert.match(layer, /return host \? createPortal\(children, host\) : <>\{children\}<\/>;/);
+    for (const surface of [player, room]) {
+      assert.match(surface, /<AboveModals>\s*<div[\s\S]*?<InviteBanner[\s\S]*?<\/div>\s*<\/AboveModals>/);
+    }
+    assert.match(
+      code("components/layout/room-session.tsx"),
+      /<AboveModals>\s*<p role="status" aria-live="polite" className="sr-only">\s*\{spoken\.text\}\s*<\/p>\s*<\/AboveModals>/
+    );
+    // Answered inside a sheet, focus stays in that sheet rather than the inert page behind it.
+    assert.match(banner, /dialog\.current = event\.currentTarget\.closest<HTMLElement>\('\[role="dialog"\]'\);/);
+    assert.match(banner, /const landing = dialog\?\.isConnected \? dialog : main;/);
   });
 
   it("the invite hint is live only for the change it announces, never a ticking countdown", () => {

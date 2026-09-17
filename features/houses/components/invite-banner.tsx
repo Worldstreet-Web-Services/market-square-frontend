@@ -71,12 +71,17 @@ export function InviteBanner({
     that disables drops its focus in Chromium and WebKit.
   */
   const focusInside = useRef(false);
+  /* The open sheet it was drawn inside, if any (components/ui/modal-layer.tsx
+     `AboveModals`): focus stays in that dialog rather than landing on the
+     page behind it, which a screen reader treats as inert. */
+  const dialog = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!open) return;
     return () => {
       if (!focusInside.current) return;
       focusInside.current = false;
-      window.setTimeout(returnFocus, 0);
+      const landing = dialog.current;
+      window.setTimeout(() => returnFocus(landing), 0);
     };
   }, [open]);
 
@@ -86,8 +91,9 @@ export function InviteBanner({
     <div
       role="region"
       aria-label="Invitation to speak"
-      onFocus={() => {
+      onFocus={(event) => {
         focusInside.current = true;
+        dialog.current = event.currentTarget.closest<HTMLElement>('[role="dialog"]');
       }}
       onBlur={(event) => {
         // A removed element blurs with no relatedTarget: that is the case
@@ -150,10 +156,14 @@ export function InviteBanner({
   );
 }
 
-/** Where focus goes when the banner it was in goes away — only if it has nowhere better already. */
-function returnFocus() {
+/**
+ * Where focus goes when the banner it was in goes away — only if it has
+ * nowhere better already: the open sheet it was drawn in, else the page.
+ */
+function returnFocus(dialog: HTMLElement | null) {
   if (!focusLost(document.activeElement as HTMLElement | null, document.body)) return;
   const main = document.querySelector<HTMLElement>("main");
-  if (main && !main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
-  handFocusOn(document.activeElement as HTMLElement | null, document.body, [main]);
+  const landing = dialog?.isConnected ? dialog : main;
+  if (landing && !landing.hasAttribute("tabindex")) landing.setAttribute("tabindex", "-1");
+  handFocusOn(document.activeElement as HTMLElement | null, document.body, [landing]);
 }

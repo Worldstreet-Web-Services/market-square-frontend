@@ -51,6 +51,7 @@ import {
 import { HOST_MUTE_TOAST, INITIAL_HOST_MUTE_TOAST, hostMuteOf, hostMuteToken, stepHostMuteToast } from "@/lib/host-mute";
 import { speakerSignalOf, userTopic } from "@/lib/ws-gateway";
 import { sharedGateway } from "@/lib/ws-gateway-shared";
+import { AboveModals } from "@/components/ui/modal-layer";
 
 /**
  * ONE ROOM PER TAB, OWNED BY THE SHELL.
@@ -959,9 +960,13 @@ function InviteAnnouncer({
   // Adjusted during render, React's pattern for state that follows a value.
   if (changed) setSpoken({ state: step.state, text: step.say ?? spoken.text });
 
+  // In the open sheet's dialog while there is one: a live region outside an
+  // aria-modal dialog is not read, and the deadline is the news.
   return (
-    <p role="status" aria-live="polite" className="sr-only">
-      {spoken.text}
-    </p>
+    <AboveModals>
+      <p role="status" aria-live="polite" className="sr-only">
+        {spoken.text}
+      </p>
+    </AboveModals>
   );
 }

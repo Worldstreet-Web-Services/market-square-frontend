@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { InviteBanner, houseTopic, parseParticipantMeta, participantName } from "@/features/houses";
+import { AboveModals } from "@/components/ui/modal-layer";
 import { useEndStream, useStageSlots } from "@/features/streams";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -101,9 +102,11 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
  * The shell mounts ONE, straight after the top bar and BEFORE <main>: it is
  * drawn at the top of the page, so it is read and tabbed to there too. Mounted
  * with the bottom bar it sat after every post of a long feed in reading order,
- * well past the invitation's 60 seconds for a keyboard user. z-[65] keeps it
- * over an open sheet's scrim (z-50) and the shell's popovers (z-60/61), under
- * full-screen takeovers (z-70 and up).
+ * well past the invitation's 60 seconds for a keyboard user. While a sheet is
+ * open it is portalled INTO that dialog (`AboveModals`): drawn over the sheet
+ * but outside it, `aria-modal` left it inert to a screen reader until it ran
+ * out. z-[65] keeps it over an open sheet's scrim (z-50) and the shell's
+ * popovers (z-60/61), under full-screen takeovers (z-70 and up).
  */
 export function RoomInviteBanner() {
   const session = useRoomSession();
@@ -118,27 +121,29 @@ export function RoomInviteBanner() {
       {/* Announced by the session (room-session.tsx InviteAnnouncer), never
           here: a region that fills in on every route change repeats it. */}
       {visible && invite && (
-        <div
-          // A full-width card on a phone; 400 at the top-right from md.
-          className="fixed left-3 z-[65] md:left-auto md:w-[400px]"
-          style={{
-            top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + 12px)",
-            right: "max(12px, env(safe-area-inset-right, 0px))",
-          }}
-        >
-          <InviteBanner
-            key={invite.requestId}
-            requestId={invite.requestId}
-            inviteExpiresAt={invite.inviteExpiresAt}
-            createdAt={invite.createdAt}
-            seenAt={invite.seenAt}
-            clockOffsetMs={invite.clockOffsetMs}
-            host={{ id: owner?.id, name: hostName, avatarUrl: owner?.avatarUrl }}
-            busy={session.answeringInvite}
-            onAccept={() => session.answerInvite("accept")}
-            onReject={() => session.answerInvite("reject")}
-          />
-        </div>
+        <AboveModals>
+          <div
+            // A full-width card on a phone; 400 at the top-right from md.
+            className="fixed left-3 z-[65] md:left-auto md:w-[400px]"
+            style={{
+              top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + 12px)",
+              right: "max(12px, env(safe-area-inset-right, 0px))",
+            }}
+          >
+            <InviteBanner
+              key={invite.requestId}
+              requestId={invite.requestId}
+              inviteExpiresAt={invite.inviteExpiresAt}
+              createdAt={invite.createdAt}
+              seenAt={invite.seenAt}
+              clockOffsetMs={invite.clockOffsetMs}
+              host={{ id: owner?.id, name: hostName, avatarUrl: owner?.avatarUrl }}
+              busy={session.answeringInvite}
+              onAccept={() => session.answerInvite("accept")}
+              onReject={() => session.answerInvite("reject")}
+            />
+          </div>
+        </AboveModals>
       )}
     </>
   );
