@@ -75,6 +75,7 @@ import {
   seatsFull,
 } from "@/features/houses/lib/seating";
 import { sq } from "@/lib/square-path";
+import { asRoomFailure, roomFailureCopy } from "@/lib/room-connection-copy";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -212,7 +213,15 @@ export function HouseRoom({
 
   if (stream.isPending) return <RoomSkeleton />;
 
-  if (stream.isError) {
+  /*
+    ONLY WHEN THERE IS NOTHING TO SHOW. This polls every 10 s, and TanStack
+    flips `isError` on a failed refetch while KEEPING the data — so a single
+    network hiccup replaced a live room with this error screen, unmounting the
+    room and dropping its call until the next poll brought it back ("it say
+    time out then it will connect back"). A room we already have stays up; the
+    next poll catches up.
+  */
+  if (stream.isError && !stream.data) {
     return (
       <div className="mx-auto w-full max-w-[520px] px-4 py-10">
         <ErrorState
@@ -624,6 +633,8 @@ function LiveHouse({
     () => null as Room | null
   );
 
+  // A failed token REFRESH is not a failed room: the connection that is
+  // already up keeps playing. Only a listener who never got a token is failed.
   const state: RoomState = isHost
     ? publisher.state === "publishing"
       ? "live"
@@ -632,7 +643,7 @@ function LiveHouse({
         : publisher.state === "idle" || publisher.state === "connecting"
           ? "connecting"
           : "failed"
-    : playback.isError
+    : playback.isError && !playback.data
       ? "failed"
       : connection.state;
 
@@ -1409,7 +1420,9 @@ function LiveHouse({
 
       {state === "failed" && (
         <div className="ws-inset mx-4 mb-4 px-4 py-3">
-          <p className="text-[13px] leading-5 text-body">Lost connection to the gist room.</p>
+          <p className="text-[13px] leading-5 text-body">
+            {roomFailureCopy(isHost ? asRoomFailure(publisher.state) : "failed")}
+          </p>
           <Button
             size="sm"
             variant="secondary"

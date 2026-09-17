@@ -168,12 +168,23 @@ export function usePublisher({
 
     // The spin-forever guard. Cleared the moment the attempt settles either
     // way; if it fires first, the panel gets a real failure and a Retry.
-    const timer = setTimeout(() => {
-      if (cancelled || settled) return;
-      settled = true;
-      setState("timeout");
-      void room?.disconnect();
-    }, CONNECT_TIMEOUT_MS);
+    //
+    // ARMED ONLY FOR THE NETWORK CONNECT. It used to start with the effect, so
+    // its 15 s also covered loading livekit-client and the browser's
+    // "Allow microphone?" prompt — both of which take as long as the network
+    // or the PERSON takes. On a slow connection, or a host who read the prompt
+    // before answering, a healthy room "timed out" and dropped (ogazboiz,
+    // 2026-09-17). Device capture has its own failure states; only the
+    // connect can hang silently, so only the connect is timed.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const armTimeout = () => {
+      timer = setTimeout(() => {
+        if (cancelled || settled) return;
+        settled = true;
+        setState("timeout");
+        void room?.disconnect();
+      }, CONNECT_TIMEOUT_MS);
+    };
     const settle = (next: PublisherState, message: string | null = null) => {
       if (cancelled || settled) return;
       settled = true;
@@ -338,6 +349,7 @@ export function usePublisher({
         }
 
         try {
+          armTimeout();
           await instance.connect(url, token);
           for (const track of tracks) {
             await instance.localParticipant.publishTrack(track);

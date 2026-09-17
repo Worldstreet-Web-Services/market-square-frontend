@@ -55,8 +55,28 @@ export function useHouseConnection({
   const [room, setRoom] = useState<Room | null>(null);
   const [state, setState] = useState<HouseConnectionState>("connecting");
 
+  /*
+    THE TOKEN IS FOR JOINING, NOT FOR STAYING.
+
+    The playback token is short-lived and refetched before it expires, every
+    few minutes. Keying the connect effect on `token` meant every refresh tore
+    down a healthy room and connected again — an audible drop and a flash of
+    "Connecting…" on a schedule (ogazboiz: "any small things it breaks"). A
+    LiveKit connection keeps itself authorised once it is up; the SDK's own
+    reconnects do not need our token.
+
+    So the effect is keyed on `connectToken`, which takes the first token and
+    then only a token that arrives after the connection has FAILED — that is
+    the Retry path (a refetch hands a fresh token to a dead room). Adjusted
+    during render, React's pattern for state that follows a prop.
+  */
+  const [connectToken, setConnectToken] = useState(token);
+  if (token && token !== connectToken && (connectToken === "" || state === "failed")) {
+    setConnectToken(token);
+  }
+
   useEffect(() => {
-    if (!enabled || !url || !token) return;
+    if (!enabled || !url || !connectToken) return;
     let room: Room | null = null;
     let cancelled = false;
 
@@ -64,9 +84,7 @@ export function useHouseConnection({
       if (cancelled) return;
       // Announced here rather than in the effect body: a synchronous setState
       // on mount is a second render for a value the state already holds, and
-      // on a TOKEN REFRESH — which re-runs this effect on a room that is
-      // already up — it would flash "Connecting…" across a conversation that
-      // never stopped.
+      // on a retry after a failure it would flash "Connecting…" a render early.
       setState("connecting");
       // adaptiveStream is a video optimisation and there is no video here, but
       // it costs nothing and keeps the two connect paths identical rather than
@@ -93,7 +111,7 @@ export function useHouseConnection({
         // autoSubscribe is the default and is load-bearing: when the host
         // approves somebody, the server-side publish grant pushes that person's
         // mic to us with no reconnect, no new token, and nothing to do here.
-        await instance.connect(url, token);
+        await instance.connect(url, connectToken);
         if (cancelled) {
           void instance.disconnect();
           return;
@@ -110,7 +128,7 @@ export function useHouseConnection({
       if (room) unregisterRoom(houseId, room);
       void room?.disconnect();
     };
-  }, [houseId, url, token, enabled]);
+  }, [houseId, url, connectToken, enabled]);
 
   return { room, state };
 }
