@@ -21,6 +21,12 @@
  *     fetched first, so the registry never holds two Rooms.
  *   · The mic intent is consumed ONCE. Reconnects, remounts and re-entries
  *     never carry it.
+ *   · A FAILED ROOM RECOVERS BY ITSELF: a retry is scheduled on a capped
+ *     backoff, and the network coming back (or the tab coming back into view)
+ *     retries at once. Terminal states never schedule one.
+ *   · Every step that resumes after an `await` checks the generation, so a
+ *     Leave, a logout or the room ending while a reconnect is in flight is
+ *     never undone by it.
  *
  * No React and no livekit-client import.
  */
@@ -37,6 +43,14 @@ import {
 } from "./reducer.ts";
 
 export const HEARTBEAT_MS = 15_000;
+
+/**
+ * The automatic retries of a FAILED room, in order. Capped: a room that has
+ * not come back after these waits for the reader's Retry, the network coming
+ * back or the tab returning to view — a request that fails for a reason no
+ * retry can fix must not run every 30 s for as long as the tab is open.
+ */
+export const RETRY_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000, 30_000, 30_000];
 
 export interface SessionToken {
   url: string;
@@ -63,6 +77,8 @@ export interface SessionRoom<R> {
 export interface SessionClock {
   setInterval(callback: () => void, ms: number): unknown;
   clearInterval(handle: unknown): void;
+  setTimeout(callback: () => void, ms: number): unknown;
+  clearTimeout(handle: unknown): void;
 }
 
 export interface RoomSessionDeps<R> {
@@ -107,6 +123,8 @@ export class RoomSessionController<R> {
   private pendingOptions: EnterOptions | undefined;
   private micIntent = false;
   private preferredMic: string | undefined;
+  private retryTimer: unknown = null;
+  private retryAttempt = 0;
 
   constructor(deps: RoomSessionDeps<R>) {
     this.deps = deps;
@@ -139,11 +157,16 @@ export class RoomSessionController<R> {
 
   enter(streamId: string, role: SessionRole, options?: EnterOptions): Promise<void> {
     const { target, connection } = this.state;
-    if (target && target.streamId === streamId) {
+    if (target && target.streamId === streamId && connection !== "idle") {
       // The same room: a remount, Back/Forward, Strict Mode. Never a second
       // connection — and never out of a terminal state either, which only the
       // reader's explicit dismissal clears.
-      if (connection !== "idle") return Promise.resolve();
+      if (target.role === role || isTerminal(connection)) return Promise.resolve();
+      // The same room as SOMEBODY ELSE: an account that resolved as a listener
+      // for a beat and turned out to be the host. Frozen, they would sit in
+      // their own room with no publish grant until they left and came back.
+      if (target.role === "anon" && role === "listener") return this.upgradeToIdentified();
+      return this.replace({ streamId, role }, options);
     }
     if (target && isHolding(connection)) {
       this.pendingOptions = options;
@@ -168,7 +191,15 @@ export class RoomSessionController<R> {
     await this.connect(pending, { token: options?.token, resumed: !options?.fresh });
   }
 
-  dismissConflict() {
+  /**
+   * "Stay there", or the asking view going away. Given a room id, only a
+   * question about THAT room is cleared — a view unmounting must not dismiss
+   * a question another view has since asked.
+   */
+  dismissConflict(streamId?: string) {
+    const pending = this.state.pending;
+    if (!pending) return;
+    if (streamId !== undefined && pending.streamId !== streamId) return;
     this.pendingOptions = undefined;
     this.dispatch({ type: "conflict-dismissed" });
   }
@@ -196,12 +227,21 @@ export class RoomSessionController<R> {
     this.dispatch({ type: "reset" });
   }
 
-  /** Tab close. Synchronous by necessity — `pagehide` does not wait. */
+  /**
+   * Tab close. Synchronous by necessity — `pagehide` does not wait.
+   *
+   * The state goes to idle with the Room: a page restored from the back/forward
+   * cache would otherwise come back reading "live" over no connection, and
+   * `enter(sameId)` is a no-op out of a held state, so nothing could rejoin.
+   * The rejoin record is the provider's and survives, so the restored page
+   * offers "Tap to rejoin" instead.
+   */
   pageHide() {
     const target = this.state.target;
     if (!target || !isHolding(this.state.connection)) return;
     this.deps.sendLeaveBeacon(target.streamId, this.sessionId);
     this.teardown();
+    this.dispatch({ type: "reset" });
   }
 
   private async stop(): Promise<void> {
@@ -236,7 +276,7 @@ export class RoomSessionController<R> {
         return;
       default:
         this.teardown();
-        this.dispatch({ type: "failed", error: null });
+        this.fail(null);
     }
   }
 
@@ -266,7 +306,19 @@ export class RoomSessionController<R> {
   retry(): Promise<void> {
     const { target, connection } = this.state;
     if (!target || connection !== "failed") return Promise.resolve();
+    this.retryAttempt = 0;
     return this.connect(target, { resumed: true });
+  }
+
+  /**
+   * The network is back (`online`), or the tab is in view again. A failed room
+   * retries NOW, with the backoff started over — this is the moment a retry is
+   * most likely to work.
+   */
+  onNetworkBack(): Promise<void> {
+    if (this.state.connection !== "failed" || this.state.pending) return Promise.resolve();
+    this.cancelRetry();
+    return this.retry();
   }
 
   /**
@@ -279,9 +331,7 @@ export class RoomSessionController<R> {
   async reconnect(): Promise<void> {
     const target = this.state.target;
     if (!target || !isHolding(this.state.connection)) return;
-    const disconnected = this.teardown();
-    await disconnected;
-    await this.connect(target, { resumed: true });
+    await this.replace(target, undefined);
   }
 
   /**
@@ -296,6 +346,7 @@ export class RoomSessionController<R> {
     if (!target || target.role !== "anon" || !isHolding(this.state.connection)) return;
     const next: SessionTarget = { streamId: target.streamId, role: "listener" };
     this.dispatch({ type: "switching", on: true });
+    const asked = this.generation;
     let token: SessionToken;
     try {
       token = await this.deps.fetchToken(next);
@@ -304,7 +355,18 @@ export class RoomSessionController<R> {
       this.dispatch({ type: "switching", on: false });
       return;
     }
-    await this.teardown();
+    // Left, logged out or ended while the token was on its way: stay gone.
+    if (asked !== this.generation) {
+      this.dispatch({ type: "switching", on: false });
+      return;
+    }
+    const disconnected = this.teardown();
+    const tornDown = this.generation;
+    await disconnected;
+    if (tornDown !== this.generation) {
+      this.dispatch({ type: "switching", on: false });
+      return;
+    }
     await this.connect(next, { token, resumed: true });
     this.dispatch({ type: "switching", on: false });
   }
@@ -325,7 +387,25 @@ export class RoomSessionController<R> {
 
   /* ---- internals ------------------------------------------------------- */
 
+  /**
+   * Break-then-make onto `target`: the held Room is dropped and its disconnect
+   * awaited, then the new one connects — unless anything else happened to the
+   * session in between (a Leave, a logout, the room ending), which wins.
+   */
+  private async replace(target: SessionTarget, options: EnterOptions | undefined) {
+    const disconnected = this.teardown();
+    const tornDown = this.generation;
+    await disconnected;
+    if (tornDown !== this.generation) return;
+    if (options?.preferredMic !== undefined) this.preferredMic = options.preferredMic;
+    await this.connect(target, { token: options?.token, resumed: !options?.fresh });
+  }
+
   private async connect(target: SessionTarget, options: { token?: SessionToken; resumed: boolean }) {
+    // One Room at a time, even against a connect still in flight: its Room is
+    // dropped here rather than left connected and audible behind this one.
+    if (this.current) void this.teardown();
+    this.cancelRetry();
     const generation = ++this.generation;
     this.dispatch({ type: "connect", target });
 
@@ -335,7 +415,7 @@ export class RoomSessionController<R> {
         token = await this.deps.fetchToken(target);
       } catch (error) {
         if (generation !== this.generation) return;
-        this.dispatch({ type: "failed", error: messageOf(error) });
+        this.fail(messageOf(error));
         return;
       }
     }
@@ -347,7 +427,7 @@ export class RoomSessionController<R> {
       room = await this.deps.createRoom(target, { preferredMic: this.preferredMic });
     } catch (error) {
       if (generation !== this.generation) return;
-      this.dispatch({ type: "failed", error: messageOf(error) });
+      this.fail(messageOf(error));
       return;
     }
     if (generation !== this.generation) return;
@@ -377,10 +457,11 @@ export class RoomSessionController<R> {
     } catch (error) {
       if (generation !== this.generation) return;
       this.teardown();
-      this.dispatch({ type: "failed", error: messageOf(error) });
+      this.fail(messageOf(error));
       return;
     }
     if (generation !== this.generation) return;
+    this.retryAttempt = 0;
     this.dispatch({ type: "connected" });
     this.startHeartbeat(target.streamId, generation);
     if (this.deps.afterConnect) {
@@ -391,6 +472,36 @@ export class RoomSessionController<R> {
         // connection itself is up and stays up.
       }
     }
+  }
+
+  /** Into `failed`, with the next automatic retry scheduled. */
+  private fail(error: string | null) {
+    this.dispatch({ type: "failed", error });
+    if (this.state.connection === "failed") this.scheduleRetry();
+  }
+
+  private scheduleRetry() {
+    this.cancelRetry();
+    const delay = RETRY_DELAYS_MS[this.retryAttempt];
+    if (delay === undefined) return;
+    this.retryTimer = this.deps.clock.setTimeout(() => {
+      this.retryTimer = null;
+      if (this.state.connection !== "failed") return;
+      // A "join another room?" question is open: connecting now would answer
+      // it for the reader. Ask again after the same wait.
+      if (this.state.pending) {
+        this.scheduleRetry();
+        return;
+      }
+      this.retryAttempt += 1;
+      const target = this.state.target;
+      if (target) void this.connect(target, { resumed: true });
+    }, delay);
+  }
+
+  private cancelRetry() {
+    if (this.retryTimer !== null) this.deps.clock.clearTimeout(this.retryTimer);
+    this.retryTimer = null;
   }
 
   private startHeartbeat(streamId: string, generation: number) {
@@ -423,6 +534,7 @@ export class RoomSessionController<R> {
   private teardown(): Promise<void> {
     this.generation += 1;
     this.stopHeartbeat();
+    this.cancelRetry();
     this.micIntent = false;
     const room = this.current;
     const target = this.state.target;

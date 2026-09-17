@@ -3,13 +3,17 @@ import { EventEmitter } from "node:events";
 import { describe, it } from "node:test";
 import {
   HEARTBEAT_MS,
+  RETRY_DELAYS_MS,
   RoomSessionController,
   type RoomSessionDeps,
   type SessionRoom,
   type SessionToken,
 } from "./room-session/controller.ts";
 import { classifyDisconnect, type DisconnectKind, type SessionTarget } from "./room-session/reducer.ts";
-import { isZoneExit, miniPlayerVisible } from "./room-session/visibility.ts";
+import { hotMicChipVisible, isZoneExit, miniPlayerChrome, miniPlayerVisible } from "./room-session/visibility.ts";
+import { mediaSessionMetadata } from "./room-session/media-session.ts";
+import { roomEntryReady } from "./room-session/entry.ts";
+import { IDLE_SESSION, sessionReducer, type SessionState } from "./room-session/reducer.ts";
 import { ARK_BACK_FALLBACK, ARK_DESTINATIONS } from "./ark-links.ts";
 import { squarePaths } from "./square-path.ts";
 
@@ -64,6 +68,7 @@ function sessionRoomOf(room: FakeRoom, log: string[]): SessionRoom<FakeRoom> {
 
 class FakeClock {
   now = 0;
+  /** `every: 0` is a one-shot timeout. */
   private timers = new Map<number, { every: number; next: number; fn: () => void }>();
   private seq = 0;
   setInterval = (fn: () => void, ms: number) => {
@@ -74,6 +79,18 @@ class FakeClock {
   clearInterval = (handle: unknown) => {
     this.timers.delete(handle as number);
   };
+  setTimeout = (fn: () => void, ms: number) => {
+    const id = ++this.seq;
+    this.timers.set(id, { every: 0, next: this.now + ms, fn });
+    return id;
+  };
+  clearTimeout = (handle: unknown) => {
+    this.timers.delete(handle as number);
+  };
+  /** One-shot timers still waiting. */
+  get timeouts() {
+    return [...this.timers.values()].filter((timer) => timer.every === 0).length;
+  }
   get pending() {
     return this.timers.size;
   }
@@ -84,9 +101,10 @@ class FakeClock {
         .filter(([, timer]) => timer.next <= until)
         .sort((a, b) => a[1].next - b[1].next)[0];
       if (!due) break;
-      const [, timer] = due;
+      const [id, timer] = due;
       this.now = timer.next;
-      timer.next += timer.every;
+      if (timer.every === 0) this.timers.delete(id);
+      else timer.next += timer.every;
       timer.fn();
       await flush();
     }
@@ -496,5 +514,317 @@ describe("the rejoin record", async () => {
     for (const raw of [null, "", "not json", "[]", '{"streamId":"../admin"}', '{"streamId":42}', '{"title":"x"}']) {
       assert.equal(parseRejoin(raw), null, String(raw));
     }
+  });
+});
+
+describe("a failed room recovers by itself", () => {
+  it("retries on its own after the first backoff, with a fresh token", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+    assert.equal(h.session.getState().status, "failed");
+    assert.equal(h.clock.timeouts, 1, "no retry was scheduled");
+    await h.clock.advance(RETRY_DELAYS_MS[0]!);
+    await flush();
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.tokens.length, 2);
+    assert.equal(h.session.getState().status, "live");
+    assert.equal(h.clock.timeouts, 0, "a retry is still scheduled on a live room");
+  });
+
+  it("backs off, and stops after the last delay", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    h.deps.fetchToken = async () => {
+      throw new Error("offline");
+    };
+    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+    const total = RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
+    await h.clock.advance(total + 60_000);
+    await flush();
+    assert.equal(h.session.getState().status, "failed");
+    assert.equal(h.clock.timeouts, 0, "retries never stop");
+    assert.ok(Math.max(...RETRY_DELAYS_MS) <= 30_000);
+  });
+
+  it("the network coming back retries at once and starts the backoff over", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+    await h.session.onNetworkBack();
+    assert.equal(h.session.getState().status, "live");
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.clock.timeouts, 0);
+  });
+
+  it("never schedules out of a terminal state, a Leave or a dismissal", async () => {
+    for (const end of ["duplicate", "leave", "dismiss"] as const) {
+      const h = harness();
+      await h.session.enter("A", "listener");
+      if (end === "duplicate") disconnect(h.rooms[0]!, "DUPLICATE_IDENTITY");
+      else {
+        disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+        if (end === "leave") await h.session.leave();
+        else h.session.dismiss();
+      }
+      await h.clock.advance(120_000);
+      await h.session.onNetworkBack();
+      assert.equal(h.rooms.length, 1, end);
+      assert.equal(h.clock.timeouts, 0, end);
+    }
+  });
+
+  it("does not answer an open 'join another room?' question for the reader", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+    await h.session.enter("B", "listener");
+    assert.equal(h.session.getState().status, "conflict");
+    await h.clock.advance(RETRY_DELAYS_MS[0]! * 3);
+    assert.equal(h.session.getState().status, "conflict");
+    assert.equal(h.rooms.length, 1);
+  });
+});
+
+describe("tab close and the back/forward cache", () => {
+  it("pageHide drops the Room AND the state, so a restored page is not a zombie 'live'", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    h.session.pageHide();
+    assert.equal(h.rooms[0]!.disconnects, 1);
+    assert.equal(h.session.getState().status, "idle");
+    assert.equal(h.clock.pending, 0, "the heartbeat outlived the page");
+    // Restored from bfcache, opening the room page enters it again.
+    await h.session.enter("A", "listener");
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.session.getState().status, "live");
+  });
+});
+
+describe("resuming after an await never undoes a leave", () => {
+  function slowDisconnects(h: ReturnType<typeof harness>) {
+    const releases: Array<() => void> = [];
+    const create = h.deps.createRoom;
+    h.deps.createRoom = async (target, options) => {
+      const room = await create(target, options);
+      return {
+        ...room,
+        listen: room.listen.bind(room),
+        connect: room.connect.bind(room),
+        disconnect: async () => {
+          await room.disconnect();
+          await new Promise<void>((resolve) => releases.push(resolve));
+        },
+      };
+    };
+    return releases;
+  }
+
+  it("reconnect() stays gone when Leave lands during its disconnect", async () => {
+    const h = harness();
+    const releases = slowDisconnects(h);
+    await h.session.enter("A", "listener");
+    const rejoining = h.session.reconnect();
+    await flush();
+    await h.session.leave();
+    for (const release of releases) release();
+    await rejoining;
+    await flush();
+    assert.equal(h.rooms.length, 1, "reconnect connected the room the reader left");
+    assert.equal(h.session.getState().status, "idle");
+    assert.equal(h.registry.size, 0);
+  });
+
+  it("the anon upgrade stays gone when logout lands during its disconnect", async () => {
+    const h = harness();
+    const releases = slowDisconnects(h);
+    await h.session.enter("A", "anon");
+    const upgrading = h.session.upgradeToIdentified();
+    await flush();
+    await flush();
+    const loggingOut = h.session.logout();
+    for (const release of releases) release();
+    await Promise.all([upgrading, loggingOut]);
+    await flush();
+    assert.equal(h.rooms.length, 1, "the upgrade connected after logout");
+    assert.equal(h.session.getState().status, "idle");
+  });
+
+  it("a second connect drops a Room an earlier in-flight connect already holds", async () => {
+    const h = harness();
+    const pending: { release: (() => void) | null } = { release: null };
+    const create = h.deps.createRoom;
+    let first = true;
+    h.deps.createRoom = async (target, options) => {
+      const room = await create(target, options);
+      if (!first) return room;
+      first = false;
+      return {
+        ...room,
+        listen: room.listen.bind(room),
+        disconnect: room.disconnect.bind(room),
+        connect: async (url, token) => {
+          await room.connect(url, token);
+          await new Promise<void>((resolve) => {
+            pending.release = resolve;
+          });
+        },
+      };
+    };
+    const firstEnter = h.session.enter("A", "listener");
+    await flush();
+    await flush();
+    assert.ok(pending.release, "the first connect never started");
+    // The same room as the host: a role switch while the first is mid-connect.
+    await h.session.enter("A", "host");
+    pending.release();
+    await firstEnter;
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.rooms[0]!.disconnects, 1, "the first Room was left connected behind the second");
+    assert.equal(h.registry.get("A"), h.rooms[1]);
+    assert.equal(h.session.getState().status, "live");
+  });
+});
+
+describe("a role that settles late", () => {
+  it("enter(sameId, otherRole) switches roles, break-then-make", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    await h.session.enter("A", "host");
+    assert.equal(h.rooms.length, 2);
+    assert.equal(h.rooms[0]!.disconnects, 1);
+    assert.ok(h.log.indexOf("unregister:A-1") < h.log.indexOf("register:A-2"));
+    assert.equal(h.session.getState().target?.role, "host");
+    assert.deepEqual(
+      h.tokens.map((token) => token.role),
+      ["listener", "host"]
+    );
+  });
+
+  it("never switches out of a terminal state", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    disconnect(h.rooms[0]!, "DUPLICATE_IDENTITY");
+    await h.session.enter("A", "host");
+    assert.equal(h.rooms.length, 1);
+    assert.equal(h.session.getState().status, "duplicate");
+  });
+});
+
+describe("the conflict question belongs to the view that asked", () => {
+  it("dismissConflict(id) clears only a question about that room", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    await h.session.enter("B", "listener");
+    h.session.dismissConflict("C");
+    assert.equal(h.session.getState().status, "conflict");
+    h.session.dismissConflict("B");
+    assert.equal(h.session.getState().status, "live");
+    assert.equal(h.session.getState().pending, null);
+  });
+});
+
+describe("the phone's hot mic while the bar steps aside", () => {
+  const live = { status: "live" as const, streamId: "abc" };
+  const base = { pathname: "/messages", session: live, chatOpen: true, isPhone: true };
+
+  it("the winked-into-a-DM case: a speaker with an open mic still sees it and can mute", () => {
+    // The bar itself still steps aside for the composer…
+    assert.equal(miniPlayerVisible(base), false);
+    // …but the hot mic does not disappear with it.
+    assert.equal(hotMicChipVisible({ ...base, hotMic: true }), true);
+  });
+
+  it("also over another room's own phone bar (the conflict case)", () => {
+    assert.equal(
+      hotMicChipVisible({ ...base, pathname: "/gist-rooms/other", chatOpen: false, roomBarUp: true, hotMic: true }),
+      true
+    );
+  });
+
+  it("only for a hot mic, only on a phone, only where the bar is hidden", () => {
+    assert.equal(hotMicChipVisible({ ...base, hotMic: false }), false);
+    assert.equal(hotMicChipVisible({ ...base, isPhone: false, hotMic: true }), false);
+    assert.equal(hotMicChipVisible({ ...base, chatOpen: false, hotMic: true }), false, "the bar is up: one control is enough");
+    assert.equal(hotMicChipVisible({ ...base, pathname: "/gist-rooms/abc", hotMic: true }), false, "the room's own page has its mic");
+    assert.equal(hotMicChipVisible({ ...base, session: { status: "idle", streamId: null }, hotMic: true }), false);
+  });
+});
+
+describe("miniPlayerChrome reads the CONNECTION, not the question", () => {
+  const held = (connection: "live" | "reconnecting" | "failed"): SessionState => {
+    let state = sessionReducer(IDLE_SESSION, { type: "connect", target: { streamId: "A", role: "listener" } });
+    state = sessionReducer(state, { type: "connected" });
+    if (connection === "reconnecting") state = sessionReducer(state, { type: "reconnecting" });
+    if (connection === "failed") state = sessionReducer(state, { type: "failed", error: null });
+    return state;
+  };
+  const asking = (state: SessionState) =>
+    sessionReducer(state, { type: "conflict", pending: { streamId: "B", role: "listener" } });
+
+  it("a speaker with a pending 'join another room?' question keeps the mic and the live badge", () => {
+    const chrome = miniPlayerChrome({ state: asking(held("live")), presence: "speaker", micOn: true, canPlayAudio: true });
+    assert.equal(chrome.publishing, true);
+    assert.equal(chrome.hotMic, true);
+  });
+
+  it("a reconnecting publisher keeps the mic control", () => {
+    const chrome = miniPlayerChrome({ state: held("reconnecting"), presence: "host", micOn: true, canPlayAudio: true });
+    assert.equal(chrome.publishing, true);
+    assert.equal(chrome.line, "Reconnecting…");
+  });
+
+  it("a room that failed under an open question still offers Retry", () => {
+    const chrome = miniPlayerChrome({ state: asking(held("failed")), presence: "listener", micOn: false, canPlayAudio: true });
+    assert.equal(chrome.retry, true);
+    assert.equal(chrome.line, "Lost connection");
+  });
+
+  it("a listener never publishes, and a muted speaker is not a hot mic", () => {
+    assert.equal(miniPlayerChrome({ state: held("live"), presence: "listener", micOn: true, canPlayAudio: true }).publishing, false);
+    const muted = miniPlayerChrome({ state: held("live"), presence: "speaker", micOn: false, canPlayAudio: true });
+    assert.equal(muted.publishing, true);
+    assert.equal(muted.hotMic, false);
+  });
+
+  it("announces the mic state to a screen reader alongside the line", () => {
+    assert.match(miniPlayerChrome({ state: held("live"), presence: "speaker", micOn: true, canPlayAudio: true }).announcement, /mic is live/i);
+    assert.match(miniPlayerChrome({ state: held("live"), presence: "speaker", micOn: false, canPlayAudio: true }).announcement, /mic off/i);
+    assert.equal(miniPlayerChrome({ state: held("failed"), presence: "listener", micOn: false, canPlayAudio: true }).announcement, "Lost connection");
+  });
+});
+
+describe("the OS media controls", () => {
+  const stream = (audience: "public" | "private", visibility: "public" | "private" | null = null) => ({
+    title: "  Late gist ",
+    audience,
+    owner: { displayName: "Amara" },
+    house: visibility ? { visibility } : null,
+  });
+
+  it("name a public room and its host", () => {
+    assert.deepEqual(mediaSessionMetadata(stream("public")), { title: "Late gist", artist: "Amara" });
+  });
+
+  it("never put a private room's topic or host on a lock screen", () => {
+    for (const s of [stream("private"), stream("public", "private")]) {
+      const metadata = mediaSessionMetadata(s);
+      assert.doesNotMatch(JSON.stringify(metadata), /Late gist|Amara/);
+      assert.deepEqual(metadata, { title: "Gist room", artist: "Market Square" });
+    }
+  });
+});
+
+describe("who may enter a room", () => {
+  it("nobody without an account (anonymous listening is not in this build)", () => {
+    assert.equal(roomEntryReady({ authReady: true, authenticated: false, meLoaded: false, meFailed: false }), false);
+  });
+
+  it("an account once /me has settled", () => {
+    assert.equal(roomEntryReady({ authReady: false, authenticated: false, meLoaded: false, meFailed: false }), false);
+    assert.equal(roomEntryReady({ authReady: true, authenticated: true, meLoaded: false, meFailed: false }), false);
+    assert.equal(roomEntryReady({ authReady: true, authenticated: true, meLoaded: true, meFailed: false }), true);
+    // A failed /me enters as a listener; the session switches role if it later says host.
+    assert.equal(roomEntryReady({ authReady: true, authenticated: true, meLoaded: false, meFailed: true }), true);
   });
 });

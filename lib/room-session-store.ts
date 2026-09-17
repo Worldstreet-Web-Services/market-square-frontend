@@ -49,8 +49,10 @@ export interface RoomSessionView {
   end: () => Promise<void>;
   /** Sign-out: the host's connection comes down the same way a listener's does. */
   logout: () => Promise<void>;
+  /** "Leave and join": frees the seat or hand in the room being left, then switches. */
   confirmConflict: () => Promise<void>;
-  dismissConflict: () => void;
+  /** Given a room id, clears only a question about that room. */
+  dismissConflict: (streamId?: string) => void;
   /** Clear a finished session (ended, another tab, failed) off the screen. */
   dismiss: () => void;
   retry: () => void;

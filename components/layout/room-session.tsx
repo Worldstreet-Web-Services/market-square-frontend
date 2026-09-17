@@ -17,10 +17,12 @@ import {
   useStage,
   useStream,
 } from "@/features/streams";
+import { useAuth } from "@/hooks/use-auth";
 import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 import { classifyCaptureError } from "@/lib/media-errors";
 import { asRoomFailure, type RoomFailure } from "@/lib/room-connection-copy";
 import { RoomSessionController, type SessionToken } from "@/lib/room-session/controller";
+import { mediaSessionMetadata } from "@/lib/room-session/media-session";
 import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
 import { REJOIN_KEY, parseRejoin, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
@@ -136,6 +138,8 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
         clock: {
           setInterval: (callback, ms) => window.setInterval(callback, ms),
           clearInterval: (handle) => window.clearInterval(handle as number),
+          setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+          clearTimeout: (handle) => window.clearTimeout(handle as number),
         },
         register: registerRoom,
         unregister: unregisterRoom,
@@ -275,6 +279,48 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     await controller.leave();
   }, [controller, requestId, resolve]);
 
+  /*
+    "Leave and join" is a LEAVE of the room being left, and does what every
+    other leave does: the seat or the raised hand in it comes down, and the
+    rejoin record stops pointing at it. After the switch the streamId is the
+    new room's, so this is the last moment the old request can be reached.
+  */
+  const confirmConflict = useCallback(async () => {
+    if (!state.pending) return;
+    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    writeRejoin(null);
+    await controller.confirmConflict();
+  }, [controller, requestId, resolve, state.pending]);
+
+  // Stable: the room view clears its own question in an effect cleanup, and a
+  // new function per render would run that cleanup — and dismiss the question
+  // — on every state change while it is open.
+  const dismissConflict = useCallback((id?: string) => controller.dismissConflict(id), [controller]);
+
+  /* ---- signed out by any route ----------------------------------------- */
+
+  /*
+    useLogout brings the room down before it signs out. Everything else that
+    ends the account — the /auth page's button, Privy's session expiring, a
+    sign-out in another tab — reaches this only as `authenticated` going
+    false, and the room must not go on talking for a signed-out browser (or
+    the next person in it). By then there is no session to free a seat with;
+    the connection comes down and the rejoin record goes.
+  */
+  const auth = useAuth();
+  const wasAuthenticated = useRef(false);
+  useEffect(() => {
+    if (!auth.ready) return;
+    if (auth.authenticated) {
+      wasAuthenticated.current = true;
+      return;
+    }
+    if (!wasAuthenticated.current) return;
+    wasAuthenticated.current = false;
+    writeRejoin(null);
+    void controller.logout();
+  }, [auth.ready, auth.authenticated, controller]);
+
   const enter = useCallback<RoomSessionView["enter"]>(
     (id, role, options) => {
       void controller.enter(id, role, options);
@@ -290,13 +336,37 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     return () => window.removeEventListener("pagehide", onPageHide);
   }, [controller]);
 
-  const topic = stream.data ? houseTopic(stream.data) : null;
-  const host = stream.data?.owner?.displayName ?? null;
+  /*
+    A FAILED ROOM COMES BACK BY ITSELF. The controller retries on a capped
+    backoff; the network returning, or the tab coming back into view, is the
+    moment most likely to work, so those retry at once.
+  */
   useEffect(() => {
-    if (!holding || !topic || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const onOnline = () => void controller.onNetworkBack();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void controller.onNetworkBack();
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [controller]);
+
+  // A private room is named neutrally wherever the OS shows what is playing.
+  const metadata = stream.data ? mediaSessionMetadata(stream.data) : null;
+  const metaTitle = metadata?.title ?? null;
+  const metaArtist = metadata?.artist ?? null;
+  useEffect(() => {
+    if (!holding || !metaTitle || !metaArtist || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     const session = navigator.mediaSession;
     try {
-      session.metadata = new MediaMetadata({ title: topic, artist: host ?? "Gist room" });
+      session.metadata = new MediaMetadata({ title: metaTitle, artist: metaArtist });
+    } catch {
+      // A browser without MediaMetadata is not worth failing over.
+    }
+    try {
       session.setActionHandler("hangup" as MediaSessionAction, () => void leave());
     } catch {
       // An action this browser does not know is not worth failing over.
@@ -304,12 +374,49 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     return () => {
       try {
         session.metadata = null;
+      } catch {
+        // As above.
+      }
+      try {
         session.setActionHandler("hangup" as MediaSessionAction, null);
       } catch {
         // As above.
       }
     };
-  }, [holding, topic, host, leave]);
+  }, [holding, metaTitle, metaArtist, leave]);
+
+  /*
+    THE LOCK SCREEN'S PAUSE NEVER LEAVES A MIC OPEN. Without a handler the
+    browser's pause silences the incoming audio and nothing else — to the
+    reader it feels like they left, while their mic goes on publishing. With
+    the mic open, pause MUTES it (the room keeps playing, which is honest). A
+    muted or listening reader gets the browser's own pause back.
+  */
+  const hotMic = holding && (isHost || presence === "speaker") && stage.micOn;
+  const toggleMic = stage.toggleMic;
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const session = navigator.mediaSession as MediaSession & { setMicrophoneActive?: (active: boolean) => void };
+    try {
+      session.setMicrophoneActive?.(hotMic);
+    } catch {
+      // As above.
+    }
+    if (!hotMic) return;
+    try {
+      session.setActionHandler("pause", () => void toggleMic());
+    } catch {
+      // As above.
+    }
+    return () => {
+      try {
+        session.setActionHandler("pause", null);
+        session.setMicrophoneActive?.(false);
+      } catch {
+        // As above.
+      }
+    };
+  }, [hotMic, toggleMic]);
 
   /* ---- publish --------------------------------------------------------- */
 
@@ -340,8 +447,8 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
         writeRejoin(null);
         return isHost ? controller.logout() : leave();
       },
-      confirmConflict: () => controller.confirmConflict(),
-      dismissConflict: () => controller.dismissConflict(),
+      confirmConflict,
+      dismissConflict,
       dismiss: () => {
         writeRejoin(null);
         controller.dismiss();
@@ -367,6 +474,8 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       startAudio,
       enter,
       leave,
+      confirmConflict,
+      dismissConflict,
       rejoinOffer,
       dismissRejoin,
       isHost,

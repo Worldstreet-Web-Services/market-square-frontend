@@ -72,6 +72,7 @@ import {
 } from "@/features/houses/lib/seating";
 import { sq } from "@/lib/square-path";
 import { roomFailureCopy } from "@/lib/room-connection-copy";
+import { roomEntryReady } from "@/lib/room-session/entry";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -208,12 +209,19 @@ export function HouseRoom({
   const me = useMe();
   const auth = useAuth();
   /*
-    WHO THE READER IS MUST BE SETTLED BEFORE THE ROOM IS ENTERED. The session
-    enters once per room (a second enter for the same id is a no-op), so a
-    host whose profile arrived a beat after the stream would have been seated
-    as a listener for good.
+    WHO THE READER IS MUST BE SETTLED BEFORE THE ROOM IS ENTERED, and there
+    must BE a reader: anonymous listening is not in this build, so a signed-out
+    visitor is invited to sign in rather than put into a session that can only
+    fail (lib/room-session/entry.ts). A host who resolved as a listener for a
+    beat is switched to host by the session when their profile lands.
   */
-  const identityKnown = auth.ready && (!auth.authenticated || me.data !== undefined || me.isError);
+  const identityKnown = roomEntryReady({
+    authReady: auth.ready,
+    authenticated: auth.authenticated,
+    meLoaded: me.data !== undefined,
+    meFailed: me.isError,
+  });
+  const signedOut = auth.ready && !auth.authenticated;
 
   if (stream.isPending) return <RoomSkeleton />;
 
@@ -274,6 +282,7 @@ export function HouseRoom({
       stream={data}
       isHost={isHost}
       identityKnown={identityKnown}
+      signedOut={signedOut}
       followSlot={followSlot}
       safetySlot={safetySlot}
     />
@@ -561,6 +570,7 @@ function LiveHouse({
   stream,
   isHost,
   identityKnown,
+  signedOut = false,
   ingest: initialIngest = null,
   micId = "",
   followSlot,
@@ -572,8 +582,10 @@ function LiveHouse({
 }: {
   stream: Stream;
   isHost: boolean;
-  /** `/me` has settled (or there is no account), so the role below is final. */
+  /** Signed in and `/me` has settled, so the room may be entered (lib/room-session/entry.ts). */
   identityKnown: boolean;
+  /** No account: the room is not entered, and the reader is invited to sign in. */
+  signedOut?: boolean;
   ingest?: Ingest | null;
   micId?: string;
 } & SlotProps) {
@@ -636,6 +648,18 @@ function LiveHouse({
   const [wasHere, setWasHere] = useState(false);
   if (here && !wasHere) setWasHere(true);
   const gone = wasHere && !here && !askingToSwitch;
+
+  /*
+    AN UNANSWERED QUESTION GOES WITH THE VIEW THAT ASKED IT. Pressing Back on
+    "Leave your gist room?" unmounts this view without choosing, and a question
+    left standing kept the session in `conflict` everywhere else. Only a
+    question about THIS room is cleared.
+  */
+  const dismissConflict = session.dismissConflict;
+  useEffect(() => {
+    if (!askingToSwitch) return;
+    return () => dismissConflict(stream.id);
+  }, [askingToSwitch, dismissConflict, stream.id]);
 
   /**
    * The room, read from the registry rather than the session, so the ONE-Room
@@ -837,7 +861,13 @@ function LiveHouse({
     alone. The approved guest publishes over the connection they already
     have, with the mic OFF until they tap it.
   */
-  const onStage = isHost || (here && session.presence === "speaker");
+  /*
+    …and only in the room the session is IN. The mic toggle is the SESSION's
+    mic: drawn on a room the reader owns but is not connected to (their other
+    live room, or the one they are being asked to switch to), it switched the
+    mic of the room they ARE in, off screen, while this control said off.
+  */
+  const onStage = here && (isHost || session.presence === "speaker");
   const canAsk = !isHost && !onStage;
 
   const askReason = !requestsOpen
@@ -1434,6 +1464,15 @@ function LiveHouse({
           <p className="text-[13px] leading-5 text-body">{roomFailureCopy(session.micFailure)}</p>
           <Button size="sm" variant="secondary" className="mt-2" onClick={() => void session.toggleMic()}>
             Try again
+          </Button>
+        </div>
+      )}
+
+      {signedOut && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">Sign in to listen to this gist room.</p>
+          <Button size="sm" className="mt-2" onClick={() => gate(() => {})}>
+            Sign in
           </Button>
         </div>
       )}

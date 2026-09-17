@@ -3125,3 +3125,66 @@ describe("the minimised room, the zone-exit guard and the publisher's guards", (
     assert.match(code("components/layout/app-shell.tsx"), /<ZoneExitGuard \/>/);
   });
 });
+
+describe("the room session's review fixes, pinned where no pure half exists", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mic controls live only on the room the session is IN", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /const onStage = here && \(isHost \|\| session\.presence === "speaker"\);/);
+    // Every publisher control, the M key included, reads that one flag.
+    assert.match(room, /if \(key === "m" && onStage\)/);
+    assert.doesNotMatch(room, /const onStage = isHost \|\|/);
+  });
+
+  it("an unanswered conflict question is cleared when the asking view goes away", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /if \(!askingToSwitch\) return;\s*return \(\) => dismissConflict\(stream\.id\);/);
+    const provider = code("components/layout/room-session.tsx");
+    // Stable, or the cleanup above dismisses the question on every render.
+    assert.match(provider, /const dismissConflict = useCallback\(\(id\?: string\) => controller\.dismissConflict\(id\), \[controller\]\);/);
+  });
+
+  it("a signed-out reader is never entered into a room", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /const identityKnown = roomEntryReady\(\{/);
+    assert.match(room, /authenticated: auth\.authenticated,/);
+    assert.match(room, /if \(!identityKnown\) return;\s*enterRoom\(/);
+    assert.match(room, /Sign in to listen to this gist room\./);
+  });
+
+  it("'Leave and join' frees the seat and the rejoin record like every other leave", () => {
+    const provider = code("components/layout/room-session.tsx");
+    const confirm = block(provider, "const confirmConflict = useCallback(", "]);");
+    assert.ok(
+      confirm.indexOf('resolve.mutate({ requestId, action: "leave" })') < confirm.indexOf("controller.confirmConflict()") &&
+        confirm.includes("writeRejoin(null)"),
+      "confirmConflict skips the seat release"
+    );
+    assert.doesNotMatch(provider, /confirmConflict: \(\) => controller\.confirmConflict\(\)/);
+  });
+
+  it("any sign-out brings the room down, not only useLogout", () => {
+    assert.doesNotMatch(code("features/profile/components/auth-page.tsx"), /\blogout\b[^\n]*=\s*useAuth\(\)|const \{[^}]*\blogout\b[^}]*\} = useAuth\(\)/);
+    assert.match(code("features/profile/components/auth-page.tsx"), /const logout = useLogout\(\);/);
+    const provider = code("components/layout/room-session.tsx");
+    const backstop = block(provider, "const wasAuthenticated = useRef(false);", "}, [auth.ready, auth.authenticated, controller]);");
+    assert.ok(backstop.indexOf("writeRejoin(null)") < backstop.indexOf("void controller.logout()"));
+  });
+
+  it("the OS media controls name a private room neutrally, and pause mutes an open mic", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /mediaSessionMetadata\(stream\.data\)/);
+    assert.doesNotMatch(provider, /new MediaMetadata\(\{ title: topic/);
+    assert.match(provider, /session\.setActionHandler\("pause", \(\) => void toggleMic\(\)\);/);
+    assert.match(provider, /setMicrophoneActive\?\.\(hotMic\)/);
+  });
+
+  it("a failed room retries when the network or the tab comes back", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /window\.addEventListener\("online", onOnline\);/);
+    assert.match(provider, /document\.addEventListener\("visibilitychange", onVisible\);/);
+    assert.match(provider, /controller\.onNetworkBack\(\)/);
+    assert.match(provider, /setTimeout: \(callback, ms\) => window\.setTimeout\(callback, ms\),/);
+  });
+});
