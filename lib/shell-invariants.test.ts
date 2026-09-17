@@ -3533,7 +3533,7 @@ describe("a private room's name stays off lock screens and other accounts' scree
   it("the rejoin record carries its owner and a neutral name, and is offered only to that account", () => {
     const provider = code("components/layout/room-session.tsx");
     assert.match(provider, /writeRejoin\(\{ streamId, title: liveTitle, userId: meId \}\)/);
-    assert.match(provider, /mediaSessionMetadata\(stream\.data\)\.title/);
+    assert.match(provider, /sharedSurfaceTitle\(stream\.data, houseTopic\(stream\.data\)\)/);
     assert.match(provider, /const rejoinOffer = rejoinOfferFor\(\{/);
     const backstop = block(provider, "const wasAuthenticated = useRef(false);", "}, [auth.ready, auth.authenticated, controller]);");
     assert.match(backstop, /if \(!auth\.authenticated\) writeRejoin\(null\);/);
@@ -3712,5 +3712,25 @@ describe("the session, not the SDK, and not a stale flag, says what the mic is d
     assert.match(reset, /setCamOn\(false\);/);
     const result = block(stage, "  return {\n    state,", "\n  };\n");
     assert.match(result, /micOn: room \? micOn : false,/);
+  });
+});
+
+describe("the surfaces every page shows name a private room neutrally", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mini-player, the room chip, the hang-up and both guard sheets never print a private topic", () => {
+    for (const path of [
+      "components/layout/room-mini-player.tsx",
+      "components/layout/zone-exit-guard.tsx",
+      "components/layout/gist-room-guard.tsx",
+    ]) {
+      const source = code(path);
+      assert.match(source, /sharedSurfaceTitle\(/, path);
+      // Every topic read goes through the rule, and nothing else prints one.
+      const unguarded = source.replace(/sharedSurfaceTitle\(([\w.]+), houseTopic\(\1\)\)/g, "");
+      assert.doesNotMatch(unguarded, /houseTopic\(/, `${path} prints the raw topic`);
+    }
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /sharedSurfaceTitle\(stream\.data, houseTopic\(stream\.data\)\)/);
   });
 });

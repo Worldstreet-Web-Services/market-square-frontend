@@ -5,6 +5,7 @@ import { houseTopic } from "@/features/houses";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { useRoomSession } from "@/lib/room-session-store";
+import { sharedSurfaceTitle } from "@/lib/room-session/media-session";
 import { isZoneExit } from "@/lib/room-session/visibility";
 import { leaveSquare, setZoneExitHandler, type ZoneExitRequest } from "@/lib/zone-exit";
 
@@ -62,7 +63,8 @@ export function ZoneExitGuard() {
     return () => document.removeEventListener("click", onClickCapture, true);
   }, [speaking]);
 
-  const title = session.stream ? houseTopic(session.stream) : "your gist room";
+  // The sheet can open on any page: a private room is not named on it.
+  const title = session.stream ? sharedSurfaceTitle(session.stream, houseTopic(session.stream)) : "your gist room";
   const hosting = session.presence === "host";
   const close = () => setExit(null);
 

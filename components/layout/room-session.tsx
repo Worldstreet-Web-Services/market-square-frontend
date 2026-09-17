@@ -26,7 +26,7 @@ import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 import { classifyCaptureError } from "@/lib/media-errors";
 import { asRoomFailure, type RoomFailure } from "@/lib/room-connection-copy";
 import { RoomSessionController, type SessionToken } from "@/lib/room-session/controller";
-import { PRIVATE_ROOM_METADATA, mediaSessionMetadata, osHangUpAllowed } from "@/lib/room-session/media-session";
+import { mediaSessionMetadata, osHangUpAllowed, sharedSurfaceTitle } from "@/lib/room-session/media-session";
 import { stagePresence } from "@/lib/room-session/presence";
 import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
 import { REJOIN_KEY, parseRejoin, rejoinOfferFor, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
@@ -377,11 +377,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   // A private room is remembered by the neutral name the lock screen uses:
   // the chip is a surface anyone at the screen can read.
   const liveTitle =
-    state.connection === "live" && stream.data
-      ? mediaSessionMetadata(stream.data).title === PRIVATE_ROOM_METADATA.title
-        ? PRIVATE_ROOM_METADATA.title
-        : houseTopic(stream.data)
-      : null;
+    state.connection === "live" && stream.data ? sharedSurfaceTitle(stream.data, houseTopic(stream.data)) : null;
   useEffect(() => {
     if (!liveTitle || !streamId || !meId) return;
     writeRejoin({ streamId, title: liveTitle, userId: meId });

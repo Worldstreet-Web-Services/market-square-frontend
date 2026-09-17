@@ -1400,3 +1400,23 @@ describe("the mute control follows the publication, not the seat", () => {
     assert.equal(miniPlayerChrome({ state: failed, presence: "listener", micOn: true, canPlayAudio: true }).publishing, false);
   });
 });
+
+describe("a private room's topic stays on its own page", async () => {
+  const { sharedSurfaceTitle } = await import("./room-session/media-session.ts");
+  const room = (audience: string, visibility: "public" | "private" | null = null) => ({
+    title: "Late gist",
+    audience,
+    owner: { displayName: "Amara" },
+    houseConversationId: visibility ? "h1" : null,
+    house: visibility ? { visibility } : null,
+  });
+
+  it("the mini-player, the chip and the guard sheets name a room only when it is known to be public", () => {
+    assert.equal(sharedSurfaceTitle(room("public"), "Late gist"), "Late gist");
+    assert.equal(sharedSurfaceTitle(room("public", "public"), "Late gist"), "Late gist");
+    for (const hidden of [room("private"), room("public", "private"), room("unknown"), room("private", "public")]) {
+      assert.equal(sharedSurfaceTitle(hidden, "Late gist"), "Gist room");
+    }
+    assert.equal(sharedSurfaceTitle({ ...room("public"), houseConversationId: "h1", house: null }, "Late gist"), "Gist room");
+  });
+});

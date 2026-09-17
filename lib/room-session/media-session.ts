@@ -32,11 +32,24 @@ export interface MediaSessionText {
 
 export const PRIVATE_ROOM_METADATA: MediaSessionText = { title: "Gist room", artist: "Market Square" };
 
+function knownPublic(room: MediaSessionRoom): boolean {
+  return room.audience === "public" && (room.houseConversationId === null || room.house?.visibility === "public");
+}
+
 export function mediaSessionMetadata(room: MediaSessionRoom): MediaSessionText {
-  const knownPublic =
-    room.audience === "public" && (room.houseConversationId === null || room.house?.visibility === "public");
-  if (!knownPublic) return { ...PRIVATE_ROOM_METADATA };
+  if (!knownPublic(room)) return { ...PRIVATE_ROOM_METADATA };
   return { title: room.title.trim() || "Gist room", artist: room.owner?.displayName ?? "Gist room" };
+}
+
+/**
+ * THE ROOM'S NAME ON A SURFACE ANYONE AT THE SCREEN CAN READ — the minimised
+ * bar and chip that follow the reader onto every page, the hang-up's label,
+ * the guard sheets, the rejoin chip. The same rule as the lock screen: the
+ * topic only when the room is known to be public, "Gist room" otherwise. The
+ * room's own page, which the reader chose to open, keeps the real topic.
+ */
+export function sharedSurfaceTitle(room: MediaSessionRoom, topic: string): string {
+  return knownPublic(room) ? topic : PRIVATE_ROOM_METADATA.title;
 }
 
 /**

@@ -16,6 +16,7 @@ import { useChatOpen } from "@/lib/chat-open-store";
 import { micControl } from "@/lib/mic-consent";
 import { setMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
 import { useRoomSession, type RoomSessionView } from "@/lib/room-session-store";
+import { sharedSurfaceTitle } from "@/lib/room-session/media-session";
 import { miniPlayerChrome, miniPlayerVisible, roomChipVisible } from "@/lib/room-session/visibility";
 import { sq, stripSquare } from "@/lib/square-path";
 
@@ -179,7 +180,8 @@ function PlayerBody({
   const chrome = miniPlayerChrome({ state, presence, micOn: session.micOn, canPlayAudio: session.canPlayAudio });
   const { line, publishing, finished } = chrome;
 
-  const title = stream ? houseTopic(stream) : "Gist room";
+  // A private room's topic stays on its own page; this bar is on every page.
+  const title = stream ? sharedSurfaceTitle(stream, houseTopic(stream)) : "Gist room";
   const roomHref = sq(`/gist-rooms/${streamId}`);
   const faces = slots.slice(0, 3);
 
@@ -334,7 +336,7 @@ function RoomChip({
   streamId: string;
   chatOpen: boolean;
 }) {
-  const title = session.stream ? houseTopic(session.stream) : "your gist room";
+  const title = session.stream ? sharedSurfaceTitle(session.stream, houseTopic(session.stream)) : "your gist room";
   const chrome = miniPlayerChrome({
     state: session.state,
     presence: session.presence,
@@ -417,7 +419,7 @@ function HangUp({ session, streamId }: { session: RoomSessionView; streamId: str
   const endRoom = useEndStream({ successMessage: "Gist room closed" });
   const { presence } = session;
   // Named, so this red button cannot be mistaken for the one on another room's page.
-  const title = session.stream ? houseTopic(session.stream) : "the gist room";
+  const title = session.stream ? sharedSurfaceTitle(session.stream, houseTopic(session.stream)) : "the gist room";
 
   const leave = () => {
     keepFocus();
