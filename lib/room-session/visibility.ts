@@ -16,6 +16,8 @@ export interface MiniPlayerInput {
   /** A chat thread is open (lib/chat-open-store.ts). */
   chatOpen: boolean;
   isPhone: boolean;
+  /** Another room's own bottom bar is up (lib/room-bar-store.ts) — it owns a phone's foot. */
+  roomBarUp?: boolean;
 }
 
 /**
@@ -25,15 +27,16 @@ export interface MiniPlayerInput {
  *  · NOT on the active room's own page: the room IS the player there, and on a
  *    phone its own bottom bar owns that edge.
  *  · NOT on `/live/:id`, which renders bare and owns the whole viewport.
- *  · NOT on a phone while a chat thread is open: the bar would sit on the
- *    message composer. Audio carries on; only the chrome steps aside.
+ *  · NOT on a phone while a chat thread is open (the bar would sit on the
+ *    message composer) or while another room's own bottom bar is up. Audio
+ *    carries on; only the chrome steps aside.
  */
-export function miniPlayerVisible({ pathname, session, chatOpen, isPhone }: MiniPlayerInput): boolean {
+export function miniPlayerVisible({ pathname, session, chatOpen, isPhone, roomBarUp = false }: MiniPlayerInput): boolean {
   if (!session || !session.streamId || session.status === "idle") return false;
   const path = logical(pathname);
   if (path === `/gist-rooms/${session.streamId}`) return false;
   if (/^\/live\/[^/]+$/.test(path)) return false;
-  if (chatOpen && isPhone) return false;
+  if (isPhone && (chatOpen || roomBarUp)) return false;
   return true;
 }
 

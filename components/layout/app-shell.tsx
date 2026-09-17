@@ -27,7 +27,7 @@ import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { toast } from "sonner";
 import { useChatOpen } from "@/lib/chat-open-store";
-import { useRoomBar } from "@/lib/room-bar-store";
+import { useMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { setSidebarHidden, useSidebarHidden } from "@/lib/sidebar-pref-store";
 import { useAuth } from "@/hooks/use-auth";
@@ -59,6 +59,8 @@ import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import { AnnouncementBand } from "@/components/layout/announcement-band";
 import { RoomSessionProvider } from "@/components/layout/room-session";
+import { RoomMiniPlayer } from "@/components/layout/room-mini-player";
+import { ZoneExitGuard } from "@/components/layout/zone-exit-guard";
 import {
   IconBell,
   IconDots,
@@ -1182,6 +1184,7 @@ export function Sidebar({
             <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-grey-400 transition-[left] duration-150 motion-reduce:transition-none" />
           </button>
         </div>
+        <RoomMiniPlayer placement="rail" />
         {broadcast.live && (
           <div className="mb-2 flex justify-center group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:pl-2">
             <OnAirPill streamId={broadcast.streamId} compact />
@@ -1813,6 +1816,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <RoomSessionProvider>
       <ShellFrame>{children}</ShellFrame>
+      {/* Speakers and hosts are asked before a link leaves the Square zone. */}
+      <ZoneExitGuard />
     </RoomSessionProvider>
   );
 }
@@ -1859,6 +1864,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
   // A live gist room's OWN bottom bar is up, standing where the phone's dock
   // would (1285:93076). Phones only; see lib/room-bar-store.ts.
   const roomBar = useRoomBar();
+  const miniPlayer = useMiniPlayer();
 
   /*
     ONE SOURCE OF VIEWPORT TRUTH, published for the whole shell.
@@ -1973,6 +1979,9 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
          `--ws-nav-h` under md while a room's own bar has taken the dock's
          place, so nothing pads its foot for a dock that is not drawn. */
       data-dock={roomBar ? "room-bar" : "on"}
+      /* And the minimised room's phone bar above the dock: the stylesheet adds
+         its height to `--ws-nav-h` and the floating `+` offsets. */
+      data-mini-player={miniPlayer ? "on" : "off"}
     >
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*
@@ -2317,6 +2326,13 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           }
         />
         )}
+
+        {/* THE MINIMISED ROOM. The shell draws it, never a route: on a phone
+            the bar above the dock, on desktop a card at the bottom-left while
+            the rail is off (guests included). With the rail on it sits at the
+            rail's foot, inside `Sidebar`. */}
+        <RoomMiniPlayer placement="phone" />
+        {!railOn && <RoomMiniPlayer placement="card" />}
 
         <ComposeSheet
           open={composeOpen}

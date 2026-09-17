@@ -423,6 +423,11 @@ describe("miniPlayerVisible", () => {
     assert.equal(at("/messages", { chatOpen: true, isPhone: false }), true);
   });
 
+  it("steps aside for another room's own phone bar", () => {
+    assert.equal(at("/gist-rooms/other", { roomBarUp: true, isPhone: true }), false);
+    assert.equal(at("/gist-rooms/other", { roomBarUp: true, isPhone: false }), true);
+  });
+
   it("draws nothing without a session, and nothing over the bare live route", () => {
     assert.equal(at("/", { session: null }), false);
     assert.equal(at("/", { session: { status: "idle", streamId: null } }), false);
@@ -474,5 +479,22 @@ describe("reconnect (the stage's rejoin)", () => {
     assert.ok(h.log.indexOf("unregister:A-1") < h.log.indexOf("register:A-2"));
     assert.equal(h.tokens.length, 2);
     assert.equal(h.session.getState().status, "live");
+  });
+});
+
+describe("the rejoin record", async () => {
+  const { parseRejoin, serializeRejoin } = await import("./room-session/rejoin.ts");
+
+  it("round-trips the room a reload interrupted", () => {
+    assert.deepEqual(parseRejoin(serializeRejoin({ streamId: "abc-123", title: "Late gist" })), {
+      streamId: "abc-123",
+      title: "Late gist",
+    });
+  });
+
+  it("refuses anything that is not a room id, since it becomes a route", () => {
+    for (const raw of [null, "", "not json", "[]", '{"streamId":"../admin"}', '{"streamId":42}', '{"title":"x"}']) {
+      assert.equal(parseRejoin(raw), null, String(raw));
+    }
   });
 });

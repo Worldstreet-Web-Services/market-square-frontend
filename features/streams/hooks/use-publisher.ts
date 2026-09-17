@@ -160,8 +160,9 @@ export interface PublisherControls {
 
 // Everything the browser-publish path needs, shared by the cockpit layouts:
 // LiveKit connect + camera/mic publish, local preview, toggles, device
-// switching, connection quality, the shell's live indicator, and the two
-// leave-guards (beforeunload + in-app link confirm). The SDK owns reconnects.
+// switching, connection quality, the shell's live indicator, and the
+// beforeunload leave-guard (the Studio adds its own in-app link confirm).
+// The SDK owns reconnects.
 export function usePublisher({
   ingest,
   enabled,
@@ -419,8 +420,14 @@ export function usePublisher({
     };
   }, [active, url, token, streamId, audioOnlyMode, preferredCamera, preferredMic, previewRef, attempt]);
 
-  // Leave-guards while on air: tab close/reload asks first; in-app link
-  // clicks (except new-tab links) require an explicit confirm.
+  // Leave-guard while on air: tab close/reload asks first.
+  //
+  // The IN-APP link confirm that used to sit here is gone from the shared
+  // hook. A gist room no longer ends when its page unmounts — the shell owns
+  // that session and only a Square-leaving link needs asking about
+  // (components/layout/zone-exit-guard.tsx). The Studio cockpit, whose
+  // broadcast still lives in its page, keeps its confirm through
+  // `useInAppLeaveConfirm` (features/streams/hooks/use-in-app-leave-confirm.ts).
   useEffect(() => {
     if (state !== "publishing") return;
     const message = "You're live — leaving stops your broadcast.";
@@ -428,21 +435,9 @@ export function usePublisher({
       event.preventDefault();
       event.returnValue = message;
     };
-    const onClickCapture = (event: MouseEvent) => {
-      const anchor = (event.target as HTMLElement | null)?.closest?.("a[href]");
-      if (!anchor) return;
-      const href = anchor.getAttribute("href") ?? "";
-      if (anchor.getAttribute("target") === "_blank" || !href.startsWith("/")) return;
-      if (!window.confirm(message)) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
     window.addEventListener("beforeunload", onBeforeUnload);
-    document.addEventListener("click", onClickCapture, true);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
-      document.removeEventListener("click", onClickCapture, true);
     };
   }, [state]);
 

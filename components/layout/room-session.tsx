@@ -22,6 +22,7 @@ import { classifyCaptureError } from "@/lib/media-errors";
 import { asRoomFailure, type RoomFailure } from "@/lib/room-connection-copy";
 import { RoomSessionController, type SessionToken } from "@/lib/room-session/controller";
 import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
+import { REJOIN_KEY, parseRejoin, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
 
 /**
@@ -59,6 +60,46 @@ const ENDED_DISMISS_MS = 5_000;
 
 /** The captures that mean "your microphone", as opposed to the network. */
 const MIC_FAILURES = new Set(["denied", "device-busy", "device-missing"]);
+
+/*
+  The rejoin record, behind a `useSyncExternalStore` so the chip is read from
+  storage without an effect and without a server/client mismatch (the server
+  snapshot is null). sessionStorage can throw (private mode, storage off); a
+  lost chip is not worth a crash.
+*/
+let rejoinCache: RejoinRecord | null | undefined;
+const rejoinListeners = new Set<() => void>();
+
+function readRejoin(): RejoinRecord | null {
+  if (rejoinCache === undefined) {
+    try {
+      rejoinCache = parseRejoin(window.sessionStorage.getItem(REJOIN_KEY));
+    } catch {
+      rejoinCache = null;
+    }
+  }
+  return rejoinCache;
+}
+
+function writeRejoin(record: RejoinRecord | null) {
+  try {
+    if (record) window.sessionStorage.setItem(REJOIN_KEY, serializeRejoin(record));
+    else window.sessionStorage.removeItem(REJOIN_KEY);
+  } catch {
+    // As above.
+  }
+  const current = readRejoin();
+  if (current?.streamId === record?.streamId && current?.title === record?.title) return;
+  rejoinCache = record;
+  for (const listener of rejoinListeners) listener();
+}
+
+function subscribeRejoin(listener: () => void) {
+  rejoinListeners.add(listener);
+  return () => {
+    rejoinListeners.delete(listener);
+  };
+}
 
 function playbackToken(grant: Awaited<ReturnType<typeof fetchPlaybackToken>>): SessionToken {
   return { url: grant.url, token: grant.token, expiresAt: grant.expiresAt, captionUrl: grant.captionUrl };
@@ -204,6 +245,25 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     void room?.startAudio().catch(() => undefined);
   }, [room]);
 
+  /* ---- tap to rejoin after a reload ------------------------------------ */
+
+  /*
+    The record IS the offer: it is written while a room is held, and the
+    mini-player only offers it back while the session is idle — which, with a
+    record still standing, means a reload interrupted the room.
+  */
+  const rejoinOffer = useSyncExternalStore(subscribeRejoin, readRejoin, () => null);
+  const liveTitle = state.connection === "live" && stream.data ? houseTopic(stream.data) : null;
+  useEffect(() => {
+    if (!liveTitle || !streamId) return;
+    writeRejoin({ streamId, title: liveTitle });
+  }, [liveTitle, streamId]);
+  // The room ending, or another tab taking it, is not something to offer back.
+  useEffect(() => {
+    if (state.connection === "ended" || state.connection === "duplicate") writeRejoin(null);
+  }, [state.connection]);
+  const dismissRejoin = useCallback(() => writeRejoin(null), []);
+
   /* ---- verbs ----------------------------------------------------------- */
 
   const requestId = mine.data && (mine.data.status === "approved" || mine.data.status === "pending") ? mine.data.id : null;
@@ -211,6 +271,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     // A seated person frees their seat on the way out, and a raised hand comes
     // down, so the host's tray never holds somebody who has gone.
     if (requestId) resolve.mutate({ requestId, action: "leave" });
+    writeRejoin(null);
     await controller.leave();
   }, [controller, requestId, resolve]);
 
@@ -268,12 +329,23 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       startAudio,
       enter,
       leave,
-      end: () => controller.end(),
-      logout: () => controller.logout(),
+      end: () => {
+        writeRejoin(null);
+        return controller.end();
+      },
+      logout: () => {
+        writeRejoin(null);
+        return controller.logout();
+      },
       confirmConflict: () => controller.confirmConflict(),
       dismissConflict: () => controller.dismissConflict(),
-      dismiss: () => controller.dismiss(),
+      dismiss: () => {
+        writeRejoin(null);
+        controller.dismiss();
+      },
       retry: () => void controller.retry(),
+      rejoinOffer,
+      dismissRejoin,
     }),
     [
       state,
@@ -292,6 +364,8 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       startAudio,
       enter,
       leave,
+      rejoinOffer,
+      dismissRejoin,
     ]
   );
 

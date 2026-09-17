@@ -21,3 +21,6 @@ export { useStage } from "./hooks/use-stage";
 export { startPublishing } from "./hooks/use-publisher";
 export { fetchPlaybackToken, goLive, sendHeartbeat } from "./lib/api";
 export { getRoom, registerRoom, subscribeRoom, unregisterRoom } from "./lib/live-room";
+// The mini-player's faces and the host's hang-up (components/layout/room-mini-player.tsx).
+export { useStageSlots } from "./hooks/use-stage-slots";
+export { useEndStream } from "./hooks/use-streams";

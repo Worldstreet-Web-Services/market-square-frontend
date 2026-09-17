@@ -43,3 +43,33 @@ function subscribe(listener: () => void) {
 export function useRoomBar(): boolean {
   return useSyncExternalStore(subscribe, () => up, () => false);
 }
+
+/**
+ * Is the MINIMISED ROOM'S bar on screen right now?
+ *
+ * The same doorbell, for the other bar that can sit at the foot of a phone:
+ * the mini-player (components/layout/room-mini-player.tsx) rides ABOVE the
+ * dock, and the shell stamps `data-mini-player` from this so the stylesheet
+ * lifts `--ws-nav-h` and the floating `+` offsets by the bar's height. Rung by
+ * the mini-player itself, on show and off on hide or unmount, so nothing pads
+ * for a bar that is not drawn.
+ */
+let miniUp = false;
+const miniListeners = new Set<() => void>();
+
+export function setMiniPlayer(next: boolean) {
+  if (miniUp === next) return;
+  miniUp = next;
+  for (const listener of miniListeners) listener();
+}
+
+function subscribeMini(listener: () => void) {
+  miniListeners.add(listener);
+  return () => {
+    miniListeners.delete(listener);
+  };
+}
+
+export function useMiniPlayer(): boolean {
+  return useSyncExternalStore(subscribeMini, () => miniUp, () => false);
+}

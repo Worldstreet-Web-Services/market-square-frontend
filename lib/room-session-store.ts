@@ -5,6 +5,7 @@ import type { Room } from "livekit-client";
 import type { Stream } from "@/lib/api/schemas";
 import type { RoomFailure } from "@/lib/room-connection-copy";
 import type { EnterOptions } from "@/lib/room-session/controller";
+import type { RejoinRecord } from "@/lib/room-session/rejoin";
 import { IDLE_SESSION, type SessionRole, type SessionState } from "@/lib/room-session/reducer";
 import type { StageState } from "@/lib/stage-recovery";
 
@@ -53,6 +54,9 @@ export interface RoomSessionView {
   /** Clear a finished session (ended, another tab, failed) off the screen. */
   dismiss: () => void;
   retry: () => void;
+  /** The room a reload interrupted, offered back as "Tap to rejoin" (lib/room-session/rejoin.ts). */
+  rejoinOffer: RejoinRecord | null;
+  dismissRejoin: () => void;
 }
 
 const noop = () => {};
@@ -79,6 +83,8 @@ export const IDLE_VIEW: RoomSessionView = {
   dismissConflict: noop,
   dismiss: noop,
   retry: noop,
+  rejoinOffer: null,
+  dismissRejoin: noop,
 };
 
 let view: RoomSessionView = IDLE_VIEW;

@@ -1022,6 +1022,28 @@ body {
   }
 }
 
+/* ─── THE MINIMISED ROOM'S BAR RIDES ABOVE THE DOCK ON A PHONE ─────────────────
+   A gist room keeps playing while the reader moves around the Square, and on
+   a phone its mini-player is a 56px bar sitting 8px above the dock
+   (components/layout/room-mini-player.tsx, stamped as `data-mini-player` by
+   app-shell.tsx). Everything that reserves the dock's row, and every floating
+   `+` offset from it, has to reserve the bar too — or the last post scrolls
+   under it and a button lands on it. The same rule as the rail and the room
+   bar: the VARIABLES tell the truth, so no consumer has to know. Declared
+   before `[data-dock="room-bar"]` so a room's own bar, where there is no dock
+   to sit above, still wins. */
+:root {
+  --ws-mini-h: 0px;
+}
+@media (width < 48rem) {
+  [data-mini-player="on"] {
+    --ws-mini-h: 64px;
+    --ws-nav-h: calc(env(safe-area-inset-bottom, 0px) + 112px + var(--ws-mini-h));
+    --ws-fab-bottom: calc(env(safe-area-inset-bottom, 0px) + 81px + var(--ws-mini-h));
+    --ws-fab-clearance: calc(env(safe-area-inset-bottom, 0px) + 164px + var(--ws-mini-h));
+  }
+}
+
 /* ─── AND ON A PHONE, WHILE A ROOM'S OWN BAR HAS TAKEN THE DOCK'S PLACE ─────
    A live gist room pins its own 80px control bar to the bottom edge of a
    phone (node 1285:93076) and the shell hides the dock while it is up

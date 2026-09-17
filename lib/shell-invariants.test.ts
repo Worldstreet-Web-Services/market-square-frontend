@@ -3040,7 +3040,7 @@ describe("one room per tab, owned by the shell", () => {
     // Around BOTH shells — the bare /live/:id branch included — or switching
     // between them unmounts it and hangs up.
     const shell = code("components/layout/app-shell.tsx");
-    assert.match(shell, /<RoomSessionProvider>\s*<ShellFrame>\{children\}<\/ShellFrame>\s*<\/RoomSessionProvider>/);
+    assert.match(shell, /<RoomSessionProvider>\s*<ShellFrame>\{children\}<\/ShellFrame>[\s\S]*?<\/RoomSessionProvider>/);
   });
 
   it("keeps the connection out of the room view (the connect-in-route regression)", () => {
@@ -3078,5 +3078,50 @@ describe("one room per tab, owned by the shell", () => {
 
   it("a stream asks before it plays over a gist room", () => {
     assert.match(code("components/layout/stream-room-screen.tsx"), /Leave the gist room to watch\?/);
+  });
+});
+
+describe("the minimised room, the zone-exit guard and the publisher's guards", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mini-player is drawn by AppShell, never by a room route", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    assert.match(shell, /<RoomMiniPlayer placement="phone" \/>/);
+    assert.match(shell, /\{!railOn && <RoomMiniPlayer placement="card" \/>\}/);
+    assert.match(shell, /<RoomMiniPlayer placement="rail" \/>/);
+    for (const file of ["app/gist-rooms/[id]/page.tsx", "app/gist-rooms/page.tsx", "components/layout/house-room-screen.tsx", "features/houses/components/house-room.tsx"]) {
+      assert.doesNotMatch(code(file), /RoomMiniPlayer/, `${file} draws the mini-player`);
+    }
+  });
+
+  it("lifts the dock's row and the phone + offsets by the mini-player's height", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    assert.match(shell, /data-mini-player=\{miniPlayer \? "on" : "off"\}/);
+    const css = read("app/globals.css");
+    const rule = block(css, '[data-mini-player="on"] {', "}");
+    assert.match(rule, /--ws-nav-h: calc\([^;]*var\(--ws-mini-h\)\);/);
+    assert.match(rule, /--ws-fab-bottom: calc\([^;]*var\(--ws-mini-h\)\);/);
+    assert.match(rule, /--ws-fab-clearance: calc\([^;]*var\(--ws-mini-h\)\);/);
+    // A room's own bar still zeroes the row: it comes AFTER, so it wins.
+    assert.ok(css.indexOf('[data-mini-player="on"] {') < css.indexOf('[data-dock="room-bar"] {'));
+    // The bar rings the shell itself, on show and off on unmount.
+    assert.match(code("components/layout/room-mini-player.tsx"), /setMiniPlayer\(up\);\s*return \(\) => setMiniPlayer\(false\);/);
+  });
+
+  it("the publisher no longer confirms in-app links; beforeunload stays, the Studio keeps its own", () => {
+    const publisher = code("features/streams/hooks/use-publisher.ts");
+    assert.doesNotMatch(publisher, /addEventListener\("click"/, "use-publisher registers an anchor click listener again");
+    assert.match(publisher, /window\.addEventListener\("beforeunload", onBeforeUnload\);/);
+    assert.match(code("features/streams/components/live-cockpit.tsx"), /useInAppLeaveConfirm\(publisher\.state === "publishing"\);/);
+  });
+
+  it("the zone-exit guard asks only a host or a speaker, and only for a Square-leaving link", () => {
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.match(guard, /const speaking = session\.presence === "host" \|\| session\.presence === "speaker";/);
+    assert.match(guard, /if \(!speaking\) return;/);
+    assert.match(guard, /if \(!isZoneExit\(raw, \{ origin: window\.location\.origin \}\)\) return;/);
+    assert.match(guard, /document\.addEventListener\("click", onClickCapture, true\);/);
+    assert.ok(guard.indexOf("Open in new tab") < guard.indexOf("Leave and go"), "the safe choice is not first");
+    assert.match(code("components/layout/app-shell.tsx"), /<ZoneExitGuard \/>/);
   });
 });
