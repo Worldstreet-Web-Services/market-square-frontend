@@ -3347,7 +3347,7 @@ describe("the mini-player's reach, contrast and announcements", () => {
   it("moves the desktop card off the thread's composer while a chat is open", () => {
     const frame = block(player, "function Frame(", "\n}\n");
     assert.match(frame, /\{ top: "calc\(var\(--ws-crumb-h\) \+ 92px\)", right: "max\(24px, env\(safe-area-inset-right, 0px\)\)" \}/);
-    assert.match(frame, /\{ bottom: "calc\(var\(--ws-nav-h\) \+ 8px\)", left: "max\(24px, env\(safe-area-inset-left, 0px\)\)" \}/);
+    assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) - var\(--ws-mini-card-h, 0px\) \+ 8px\)",\s*left: "max\(24px, env\(safe-area-inset-left, 0px\)\)",/);
   });
 
   it("puts the phone bar before the dock in the document, and focus somewhere stable on leave", () => {
@@ -3745,5 +3745,33 @@ describe("no touch-only words on surfaces a mouse uses", () => {
     const player = code("components/layout/room-mini-player.tsx");
     assert.match(player, /aria-label=\{roomChipLabel\(\{ title, text, finished: chrome\.finished \}\)\}/);
     assert.match(player, /const label = rejoinLabel\(offer\.title\);/);
+  });
+});
+
+describe("the desktop mini-player card takes its own room", () => {
+  const code = (path: string) => stripComments(read(path));
+  const player = code("components/layout/room-mini-player.tsx");
+
+  it("rings the shell with where it sits, and the shell stamps it", () => {
+    assert.match(player, /setMiniCard\(cardMode\);\s*return \(\) => setMiniCard\("off"\);/);
+    assert.match(player, /miniPlayerCardPlacement\(\{ chatOpen, roomBarUp: roomBar \}\)/);
+    assert.match(code("components/layout/app-shell.tsx"), /data-mini-card=\{miniCard\}/);
+  });
+
+  it("reserves the card's height at the foot of every page, and in a thread's scroll top", () => {
+    const css = read("app/globals.css");
+    const foot = block(css, '[data-mini-card="foot"] {', "}");
+    assert.match(foot, /--ws-mini-card-h: 80px;/);
+    assert.match(foot, /--ws-nav-h: calc\(112px \+ var\(--ws-mini-card-h\)\);/);
+    assert.match(block(css, '[data-mini-card="thread"] {', "}"), /--ws-thread-top-inset: 80px;/);
+    // Before the room bar's rule, which still zeroes the foot.
+    assert.ok(css.indexOf('[data-mini-card="foot"] {') < css.indexOf('[data-dock="room-bar"] {'));
+    assert.match(code("features/messages/components/thread.tsx"), /pt-\[calc\(40px\+var\(--ws-thread-top-inset,0px\)\)\]/);
+  });
+
+  it("the card's own offset does not climb by the room it reserves, and clears a room's control bar", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) - var\(--ws-mini-card-h, 0px\) \+ 8px\)"/);
+    assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) \+ 96px\)"/);
   });
 });

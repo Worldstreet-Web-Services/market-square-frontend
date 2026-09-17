@@ -14,10 +14,18 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/cn";
 import { useChatOpen } from "@/lib/chat-open-store";
 import { micControl } from "@/lib/mic-consent";
-import { setMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
+import { setMiniCard, setMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
 import { useRoomSession, type RoomSessionView } from "@/lib/room-session-store";
 import { sharedSurfaceTitle } from "@/lib/room-session/media-session";
-import { miniPlayerChrome, miniPlayerVisible, rejoinLabel, roomChipLabel, roomChipVisible } from "@/lib/room-session/visibility";
+import {
+  miniPlayerCardPlacement,
+  miniPlayerChrome,
+  miniPlayerVisible,
+  rejoinLabel,
+  roomChipLabel,
+  roomChipVisible,
+  type MiniPlayerCardPlacement,
+} from "@/lib/room-session/visibility";
 import { sq, stripSquare } from "@/lib/square-path";
 
 /**
@@ -101,18 +109,25 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
     pathname !== `/gist-rooms/${offer.streamId}` &&
     !(phone && (chatOpen || roomBar));
 
-  // Only the phone bar moves the layout; the desktop placements and the chip float.
+  // The phone bar and the desktop card reserve their room; the rail and the chip float.
   const up = onPhone && (visible || offering);
   useEffect(() => {
     if (!onPhone) return;
     setMiniPlayer(up);
     return () => setMiniPlayer(false);
   }, [onPhone, up]);
+  const cardPlacement = miniPlayerCardPlacement({ chatOpen, roomBarUp: roomBar });
+  const cardMode = placement === "card" && !phone && (visible || offering) ? cardPlacement : "off";
+  useEffect(() => {
+    if (placement !== "card") return;
+    setMiniCard(cardMode);
+    return () => setMiniCard("off");
+  }, [placement, cardMode]);
 
   if (offering && offer) {
     const label = rejoinLabel(offer.title);
     return (
-      <Frame placement={placement} chatOpen={chatOpen} announcement={label}>
+      <Frame placement={placement} cardPlacement={cardPlacement} announcement={label}>
         <Link
           href={sq(`/gist-rooms/${offer.streamId}`)}
           onClick={() => session.dismissRejoin()}
@@ -151,7 +166,7 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
 
   if (chip && streamId) return <RoomChip session={session} streamId={streamId} chatOpen={chatOpen} />;
   if (!visible || !streamId) return null;
-  return <PlayerBody placement={placement} session={session} streamId={streamId} chatOpen={chatOpen} />;
+  return <PlayerBody placement={placement} session={session} streamId={streamId} cardPlacement={cardPlacement} />;
 }
 
 /**
@@ -167,12 +182,12 @@ function PlayerBody({
   placement,
   session,
   streamId,
-  chatOpen,
+  cardPlacement,
 }: {
   placement: Placement;
   session: RoomSessionView;
   streamId: string;
-  chatOpen: boolean;
+  cardPlacement: MiniPlayerCardPlacement;
 }) {
   const router = useRouter();
   const { state, stream, presence, room } = session;
@@ -186,7 +201,7 @@ function PlayerBody({
   const faces = slots.slice(0, 3);
 
   return (
-    <Frame placement={placement} chatOpen={chatOpen} announcement={chrome.announcement}>
+    <Frame placement={placement} cardPlacement={cardPlacement} announcement={chrome.announcement}>
       {/* Back to the room: the whole identity block, so the target is large. */}
       <Link
         href={roomHref}
@@ -567,12 +582,12 @@ function Controls({ children }: { children: React.ReactNode }) {
 /** Where the body sits. One body, three frames — and one live region in each. */
 function Frame({
   placement,
-  chatOpen,
+  cardPlacement,
   announcement,
   children,
 }: {
   placement: Placement;
-  chatOpen: boolean;
+  cardPlacement: MiniPlayerCardPlacement;
   announcement: string;
   children: React.ReactNode;
 }) {
@@ -614,13 +629,23 @@ function Frame({
           "ws-glass fixed z-40 hidden w-[320px] max-w-[calc(100vw-48px)] items-center gap-2 rounded-2xl border border-white/10 bg-chrome/90 p-3 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] md:flex"
         )}
         style={
-          chatOpen
+          cardPlacement === "thread"
             ? // No dock over an open thread, and its composer owns the foot:
               // the top-right of the thread, under the top bar and its header.
+              // The thread pads its scroll top by the card (--ws-thread-top-inset).
               { top: "calc(var(--ws-crumb-h) + 92px)", right: "max(24px, env(safe-area-inset-right, 0px))" }
-            : // Clear of the centred dock, which on a narrow desktop reaches this
-              // corner, and of a landscape phone's sensor housing.
-              { bottom: "calc(var(--ws-nav-h) + 8px)", left: "max(24px, env(safe-area-inset-left, 0px))" }
+            : cardPlacement === "above-room-bar"
+              ? // Another room's control bar owns the foot (--ws-nav-h is 0 there):
+                // above it, never on its mic or Ask to speak.
+                { bottom: "calc(var(--ws-nav-h) + 96px)", left: "max(24px, env(safe-area-inset-left, 0px))" }
+              : // Clear of the centred dock, which on a narrow desktop reaches this
+                // corner, and of a landscape phone's sensor housing. The page's
+                // foot reserves the card (--ws-mini-card-h), which the offset
+                // takes back out so the card does not climb by its own room.
+                {
+                  bottom: "calc(var(--ws-nav-h) - var(--ws-mini-card-h, 0px) + 8px)",
+                  left: "max(24px, env(safe-area-inset-left, 0px))",
+                }
         }
       >
         {live}

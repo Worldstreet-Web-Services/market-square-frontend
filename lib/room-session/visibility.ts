@@ -60,6 +60,25 @@ export function roomChipVisible(input: MiniPlayerInput): boolean {
   return path !== `/gist-rooms/${session.streamId}`;
 }
 
+export type MiniPlayerCardPlacement = "foot" | "thread" | "above-room-bar";
+
+/**
+ * WHERE THE DESKTOP CARD SITS (when the rail is off).
+ *
+ *  · `thread` — a chat thread is open: no dock, and the composer owns the
+ *    foot, so the card moves to the thread's top-right (and the thread pads
+ *    its scroll top by the card).
+ *  · `above-room-bar` — another room's own control bar is up (its mic and
+ *    Ask to speak pinned at the foot from 768 to 1279): the dock is gone and
+ *    `--ws-nav-h` is 0, so a card at the foot sat on those controls.
+ *  · `foot` — otherwise, above the dock, with the page's foot reserved for it.
+ */
+export function miniPlayerCardPlacement({ chatOpen, roomBarUp }: { chatOpen: boolean; roomBarUp: boolean }): MiniPlayerCardPlacement {
+  if (chatOpen) return "thread";
+  if (roomBarUp) return "above-room-bar";
+  return "foot";
+}
+
 export interface MiniPlayerChromeInput {
   state: SessionState;
   presence: "host" | "speaker" | "listener" | null;

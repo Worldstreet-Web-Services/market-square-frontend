@@ -73,3 +73,31 @@ function subscribeMini(listener: () => void) {
 export function useMiniPlayer(): boolean {
   return useSyncExternalStore(subscribeMini, () => miniUp, () => false);
 }
+
+/**
+ * Where the minimised room's DESKTOP CARD is, if anywhere
+ * (lib/room-session/visibility.ts `miniPlayerCardPlacement`). The shell stamps
+ * it as `data-mini-card`, and the stylesheet reserves the card's height at the
+ * foot of every page (`foot`) or at the top of an open thread (`thread`) — a
+ * floating card over the last row of a page is a row nobody can reach.
+ */
+export type MiniCardMode = "off" | "foot" | "thread" | "above-room-bar";
+let miniCard: MiniCardMode = "off";
+const miniCardListeners = new Set<() => void>();
+
+export function setMiniCard(next: MiniCardMode) {
+  if (miniCard === next) return;
+  miniCard = next;
+  for (const listener of miniCardListeners) listener();
+}
+
+function subscribeMiniCard(listener: () => void) {
+  miniCardListeners.add(listener);
+  return () => {
+    miniCardListeners.delete(listener);
+  };
+}
+
+export function useMiniCard(): MiniCardMode {
+  return useSyncExternalStore(subscribeMiniCard, () => miniCard, () => "off");
+}

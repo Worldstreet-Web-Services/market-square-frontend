@@ -27,7 +27,7 @@ import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { toast } from "sonner";
 import { useChatOpen } from "@/lib/chat-open-store";
-import { useMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
+import { useMiniCard, useMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { setSidebarHidden, useSidebarHidden } from "@/lib/sidebar-pref-store";
 import { useAuth } from "@/hooks/use-auth";
@@ -1869,6 +1869,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
   // would (1285:93076). Phones only; see lib/room-bar-store.ts.
   const roomBar = useRoomBar();
   const miniPlayer = useMiniPlayer();
+  const miniCard = useMiniCard();
 
   /*
     ONE SOURCE OF VIEWPORT TRUTH, published for the whole shell.
@@ -1986,6 +1987,9 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
       /* And the minimised room's phone bar above the dock: the stylesheet adds
          its height to `--ws-nav-h` and the floating `+` offsets. */
       data-mini-player={miniPlayer ? "on" : "off"}
+      /* …and the desktop card: its height reserved at the page's foot, or at
+         the top of an open thread (globals.css). */
+      data-mini-card={miniCard}
     >
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*

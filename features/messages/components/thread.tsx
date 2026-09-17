@@ -2467,7 +2467,7 @@ export function Thread({
         onScroll={(event) => {
           following.current = isAtBottom(event.currentTarget);
         }}
-        className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-6 pt-10"
+        className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-6 pt-[calc(40px+var(--ws-thread-top-inset,0px))]"
       >
         {messages.isPending && [0, 1, 2].map((i) => <RowSkeleton key={i} />)}
         {messages.isError && (

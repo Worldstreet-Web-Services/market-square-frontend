@@ -1044,6 +1044,29 @@ body {
   }
 }
 
+/* ─── THE DESKTOP CARD TAKES ITS OWN ROOM TOO ────────────────────────────────
+   With the rail off, the minimised room is a ~62px card floating above the
+   dock at the bottom-left (stamped as `data-mini-card` by app-shell.tsx). It
+   used to reserve nothing, so the last row of every page — a post's author
+   row and actions — sat under it with no further scroll to uncover it. At the
+   foot it adds its height to `--ws-nav-h` (the card's own offset subtracts
+   `--ws-mini-card-h` back out); over an open thread it is pinned top-right,
+   and the thread pads its scroll top by `--ws-thread-top-inset`. Declared
+   before `[data-dock="room-bar"]`, which still zeroes the foot. */
+:root {
+  --ws-mini-card-h: 0px;
+  --ws-thread-top-inset: 0px;
+}
+@media (width >= 48rem) {
+  [data-mini-card="foot"] {
+    --ws-mini-card-h: 80px;
+    --ws-nav-h: calc(112px + var(--ws-mini-card-h));
+  }
+  [data-mini-card="thread"] {
+    --ws-thread-top-inset: 80px;
+  }
+}
+
 /* ─── AND ON A PHONE, WHILE A ROOM'S OWN BAR HAS TAKEN THE DOCK'S PLACE ─────
    A live gist room pins its own 80px control bar to the bottom edge of a
    phone (node 1285:93076) and the shell hides the dock while it is up

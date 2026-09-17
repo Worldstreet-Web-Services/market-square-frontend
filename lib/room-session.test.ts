@@ -1444,3 +1444,17 @@ describe("the mini-player's words work with a mouse and read well aloud", async 
     assert.doesNotMatch(roomChipLabel({ title: "Friday gist", text: "You were removed", finished: true }), / in Friday gist|Return to the room/);
   });
 });
+
+describe("the desktop card never sits on another room's controls or the end of a page", async () => {
+  const { miniPlayerCardPlacement } = await import("./room-session/visibility.ts");
+
+  it("rides above another room's control bar instead of covering its mic and Ask to speak", () => {
+    assert.equal(miniPlayerCardPlacement({ chatOpen: false, roomBarUp: true }), "above-room-bar");
+  });
+
+  it("moves into the thread while a chat is open, and holds the foot otherwise", () => {
+    assert.equal(miniPlayerCardPlacement({ chatOpen: true, roomBarUp: false }), "thread");
+    assert.equal(miniPlayerCardPlacement({ chatOpen: true, roomBarUp: true }), "thread");
+    assert.equal(miniPlayerCardPlacement({ chatOpen: false, roomBarUp: false }), "foot");
+  });
+});
