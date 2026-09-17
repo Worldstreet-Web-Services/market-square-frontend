@@ -159,6 +159,46 @@ export function inviteBannerVisible(input: {
   return logicalPath(input.pathname) !== `/gist-rooms/${input.streamId}`;
 }
 
+/**
+ * The height kept free under the banner's top edge: its tallest phone layout
+ * (a two-line question over a row of 44px answers, ~136px) with some spare.
+ */
+export const INVITE_BANNER_RESERVE_PX = 150;
+const DOCK_GAP_PX = 12;
+
+/**
+ * Where the fixed banner's top edge goes, in px — `inviteDockStyle` is the
+ * same rule in CSS, which is what is drawn.
+ *
+ * Under the page's own chrome (`offsetPx`) when there is room for the whole
+ * banner below it; otherwise pulled up until the answers are on screen. On a
+ * landscape phone or a zoomed desktop the header alone can be taller than the
+ * viewport's spare room, and a fixed banner pushed past the bottom cannot be
+ * scrolled to: the invitation ran out with Join as speaker off screen.
+ * Never above the top safe area.
+ */
+export function inviteDockTop(input: { offsetPx: number; viewportPx: number; top: number; bottom: number }): number {
+  const wanted = input.offsetPx + DOCK_GAP_PX;
+  const lowest = input.viewportPx - INVITE_BANNER_RESERVE_PX - input.bottom - DOCK_GAP_PX;
+  return Math.max(input.top + DOCK_GAP_PX, Math.min(wanted, lowest));
+}
+
+/**
+ * `inviteDockTop` as inline style for the fixed banner, given the chrome above
+ * it as a CSS length expression. `maxHeight` with its own scroll is the
+ * backstop for a viewport shorter than the banner itself.
+ */
+export function inviteDockStyle(offset: string): { top: string; maxHeight: string; overflowY: "auto" } {
+  return {
+    top:
+      `max(calc(env(safe-area-inset-top, 0px) + ${DOCK_GAP_PX}px), ` +
+      `min(calc(${offset} + ${DOCK_GAP_PX}px), ` +
+      `calc(100dvh - ${INVITE_BANNER_RESERVE_PX}px - env(safe-area-inset-bottom, 0px) - ${DOCK_GAP_PX}px)))`,
+    maxHeight: `calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - ${2 * DOCK_GAP_PX}px)`,
+    overflowY: "auto",
+  };
+}
+
 /** Both spellings of a route — standalone `/x` and Ark's `/square/x` — as one. */
 const logicalPath = squarePaths("/square").stripSquare;
 

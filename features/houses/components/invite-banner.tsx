@@ -5,7 +5,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button, Spinner } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { focusLost, handFocusOn } from "@/lib/focus-handoff";
-import { answerBusyCopy, inviteCountdownLabel, inviteView } from "@/lib/speaker-invite";
+import { AboveModals } from "@/components/ui/modal-layer";
+import { answerBusyCopy, inviteCountdownLabel, inviteDockStyle, inviteView } from "@/lib/speaker-invite";
 
 /**
  * THE HOST'S INVITATION, ASKED — never a seat taken on the reader's behalf.
@@ -23,6 +24,44 @@ import { answerBusyCopy, inviteCountdownLabel, inviteView } from "@/lib/speaker-
  * "Join as speaker" seats them with the mic OFF — nothing downstream opens it
  * until they tap (lib/mic-consent.ts).
  */
+type InviteBannerProps = Parameters<typeof InviteBanner>[0];
+
+/**
+ * WHERE THE INVITATION IS DRAWN — one rule for the room and the mini-player.
+ *
+ * With no sheet open: fixed under the page's chrome (`offset`, a CSS length),
+ * top-right from md and full width on a phone, over the shell's popovers
+ * (z-60/61) and under full-screen takeovers (z-70 and up). Its top is clamped
+ * (lib/speaker-invite.ts `inviteDockStyle`) so the answers stay on screen on
+ * a landscape phone or a zoomed desktop, where a fixed banner below the fold
+ * can never be scrolled to.
+ *
+ * With a sheet open: inside that sheet's dialog, in its dock
+ * (components/ui/modal-layer.tsx `AboveModals`) — first in reading order and
+ * stacked above the panel, never over its header and Close.
+ */
+export function InviteBannerDock({ offset, ...banner }: InviteBannerProps & { offset: string }) {
+  const place = inviteDockStyle(offset);
+  // Scrolls inside itself when even the whole viewport is shorter than it.
+  const body = <InviteBanner {...banner} style={{ maxHeight: place.maxHeight, overflowY: place.overflowY }} />;
+  return (
+    <AboveModals>
+      {(docked) =>
+        docked ? (
+          <div className="px-3 pb-2 pt-[max(12px,env(safe-area-inset-top))] sm:px-0">{body}</div>
+        ) : (
+          <div
+            className="fixed left-3 z-[65] md:left-auto md:w-[400px]"
+            style={{ top: place.top, right: "max(12px, env(safe-area-inset-right, 0px))" }}
+          >
+            {body}
+          </div>
+        )
+      }
+    </AboveModals>
+  );
+}
+
 export function InviteBanner({
   requestId,
   inviteExpiresAt,
@@ -34,6 +73,7 @@ export function InviteBanner({
   onAccept,
   onReject,
   className,
+  style,
 }: {
   requestId: string;
   inviteExpiresAt: string | null;
@@ -48,6 +88,7 @@ export function InviteBanner({
   onAccept: () => void;
   onReject: () => void;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -109,6 +150,7 @@ export function InviteBanner({
         "ws-glass flex flex-wrap items-center gap-3 rounded-2xl border border-white/15 bg-chrome/95 p-3 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)]",
         className
       )}
+      style={style}
     >
       <Avatar name={host.name} seed={host.id ?? host.name} src={host.avatarUrl ?? null} size={36} />
       <div className="min-w-0 flex-1">

@@ -5,6 +5,9 @@ import {
   OUTCOME_GRACE_MS,
   createAnswerLatch,
   answerLanding,
+  INVITE_BANNER_RESERVE_PX,
+  inviteDockStyle,
+  inviteDockTop,
   answerBusyCopy,
   inviteCountdownLabel,
   invitedCountdownLabel,
@@ -671,6 +674,29 @@ describe("the countdowns say what they count, and an answer on the wire says so"
   it("names the answer being sent, on the tapped button and for a screen reader", () => {
     assert.deepEqual(answerBusyCopy("accept"), { label: "Joining…", status: "Joining the stage…" });
     assert.deepEqual(answerBusyCopy("reject"), { label: "Declining…", status: "Sending your answer…" });
+  });
+});
+
+describe("the banner's answers stay on screen however short the viewport", () => {
+  const insets = { top: 0, bottom: 0 };
+  it("sits under the room's header when there is room for the whole banner", () => {
+    // 844 tall phone: 72 top bar + 180 header.
+    assert.equal(inviteDockTop({ offsetPx: 252, viewportPx: 844, ...insets }), 264);
+  });
+
+  it("a landscape phone or a zoomed desktop pulls it up, so Join as speaker is never past the bottom", () => {
+    const top = inviteDockTop({ offsetPx: 252, viewportPx: 375, ...insets });
+    assert.ok(top + INVITE_BANNER_RESERVE_PX <= 375 - 12, `top ${top}`);
+    assert.equal(inviteDockTop({ offsetPx: 252, viewportPx: 375, top: 0, bottom: 21 }), 375 - INVITE_BANNER_RESERVE_PX - 21 - 12);
+  });
+
+  it("never above the safe area, and the banner scrolls inside itself when even that is too short", () => {
+    assert.equal(inviteDockTop({ offsetPx: 252, viewportPx: 120, top: 20, bottom: 0 }), 32);
+    const style = inviteDockStyle("var(--ws-topbar-h)");
+    assert.match(style.top, /^max\(calc\(env\(safe-area-inset-top, 0px\) \+ 12px\), min\(calc\(var\(--ws-topbar-h\) \+ 12px\), calc\(100dvh - \d+px - env\(safe-area-inset-bottom, 0px\) - 12px\)\)\)$/);
+    assert.ok(style.top.includes(`${INVITE_BANNER_RESERVE_PX}px`));
+    assert.match(style.maxHeight, /100dvh/);
+    assert.equal(style.overflowY, "auto");
   });
 });
 

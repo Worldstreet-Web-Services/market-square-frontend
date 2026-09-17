@@ -14,4 +14,4 @@ export { connectRoom } from "./hooks/use-house-connection";
 export { HouseAudioSinks } from "./components/house-audio-sinks";
 export { houseTopic } from "./lib/house";
 // The host's invitation to speak, asked — drawn by the room view and, while the room is minimised, by the shell's mini-player.
-export { InviteBanner } from "./components/invite-banner";
+export { InviteBanner, InviteBannerDock } from "./components/invite-banner";

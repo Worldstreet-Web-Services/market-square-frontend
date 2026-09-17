@@ -4065,21 +4065,43 @@ describe("invite to speak and the soft mute, after review", () => {
   it("the shell's invitation comes before <main> in reading order, above every sheet", () => {
     assert.match(shell, /<TopBar showBrand=\{!railOn\} wide=\{wide\} \/>\s*(\{\}\s*)?<RoomInviteBanner \/>/);
     assert.doesNotMatch(player, /placement === "phone" && <SessionInvite \/>/);
-    for (const surface of [player, room]) assert.match(surface, /className="fixed left-3 z-\[65\] md:left-auto md:w-\[400px\]"/);
+    // One placement rule for both surfaces (InviteBannerDock), over the sheet scrim's z-50.
+    assert.match(banner, /className="fixed left-3 z-\[65\] md:left-auto md:w-\[400px\]"/);
     assert.match(code("components/ui/sheet.tsx"), /fixed inset-0 z-50 /);
+    for (const surface of [player, room]) {
+      assert.match(surface, /<InviteBannerDock\s/);
+      assert.doesNotMatch(surface, /<InviteBanner\s|z-\[65\]/, "a second copy of the placement");
+    }
+    assert.match(room, /offset="var\(--ws-topbar-h\) \+ var\(--ws-crumb-h\) \+ var\(--ws-house-head-h\)"/);
+    assert.match(player, /offset="var\(--ws-topbar-h\) \+ var\(--ws-crumb-h\)"/);
+    // Clamped so the answers stay on a short screen (lib/speaker-invite.ts inviteDockStyle).
+    assert.match(banner, /const place = inviteDockStyle\(offset\);/);
+    assert.match(banner, /style=\{\{ top: place\.top, right: "max\(12px, env\(safe-area-inset-right, 0px\)\)" \}\}/);
+    assert.match(banner, /style=\{\{ maxHeight: place\.maxHeight, overflowY: place\.overflowY \}\}/);
   });
 
   it("an open sheet never hides the invitation from assistive tech: it and its announcer render inside the dialog", () => {
     const sheetUi = code("components/ui/sheet.tsx");
-    // The dialog is the full-screen layer, so a portalled banner keeps its own fixed position inside it.
-    assert.match(sheetUi, /<motion\.div\s+ref=\{setDialog\}\s+role="dialog"\s+aria-modal\s+aria-label=\{title\}\s+className="fixed inset-0 z-50 /);
+    // The dialog is the full-screen layer, a column: the dock first, then the panel.
+    assert.match(
+      sheetUi,
+      /<motion\.div\s+role="dialog"\s+aria-modal\s+aria-label=\{title\}\s+className="fixed inset-0 z-50 flex flex-col items-center justify-end outline-none sm:justify-center"/
+    );
     assert.equal((sheetUi.match(/role="dialog"/g) ?? []).length, 1, "one dialog element, the layer");
-    assert.match(sheetUi, /useModalHost\(dialog, open\);/);
+    const layerStart = sheetUi.indexOf('role="dialog"');
+    const dockAt = sheetUi.indexOf("<div ref={setDock}", layerStart);
+    assert.ok(dockAt > layerStart, "the dock is inside the dialog");
+    assert.ok(dockAt < sheetUi.indexOf("bg-black/70", layerStart), "first child: read and tabbed to before the sheet");
+    assert.ok(dockAt < sheetUi.indexOf("<motion.div", layerStart + 1), "stacked above the panel, not over it");
+    assert.match(sheetUi, /<div ref=\{setDock\} className="relative z-20 w-full shrink-0 sm:max-w-md" \/>/);
+    assert.match(sheetUi, /useModalHost\(dock, open\);/);
+    assert.match(sheetUi, /max-h-\[85dvh\] min-h-0 /, "the panel shrinks to make room for a docked banner");
     const layer = code("components/ui/modal-layer.tsx");
-    assert.match(layer, /return host \? createPortal\(children, host\) : <>\{children\}<\/>;/);
-    for (const surface of [player, room]) {
-      assert.match(surface, /<AboveModals>\s*<div[\s\S]*?<InviteBanner[\s\S]*?<\/div>\s*<\/AboveModals>/);
-    }
+    assert.match(layer, /const content = typeof children === "function" \? children\(host !== null\) : children;/);
+    assert.match(layer, /return host \? createPortal\(content, host\) : <>\{content\}<\/>;/);
+    // Docked, the banner is in flow above the panel: no fixed position over the sheet's header.
+    const dock = banner.slice(banner.indexOf("export function InviteBannerDock"), banner.indexOf("export function InviteBanner({"));
+    assert.match(dock, /<AboveModals>\s*\{\(docked\) =>\s*docked \? \(\s*<div className="px-3 pb-2 pt-\[max\(12px,env\(safe-area-inset-top\)\)\] sm:px-0">\{body\}<\/div>/);
     assert.match(
       code("components/layout/room-session.tsx"),
       /<AboveModals>\s*<p role="status" aria-live="polite" className="sr-only">\s*\{spoken\.text\}\s*<\/p>\s*<\/AboveModals>/

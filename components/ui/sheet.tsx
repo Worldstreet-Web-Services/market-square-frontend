@@ -68,14 +68,16 @@ export function Sheet({
     THE DIALOG IS THE WHOLE LAYER, not the panel. `aria-modal` makes everything
     outside the dialog inert to assistive tech, so a surface that must stay
     answerable over a sheet (the invitation to speak) portals INTO it through
-    `AboveModals` (components/ui/modal-layer.tsx). On the full-screen layer it
-    can keep its own fixed position; inside the panel it would be clipped by
-    the panel's overflow and positioned against its transform. Registered
+    `AboveModals` (components/ui/modal-layer.tsx) — into the DOCK: the layer's
+    first child, stacked right above the panel in one column. First, so it is
+    read and tabbed to before the sheet's rows; in flow, so it pushes the panel
+    down (the panel shrinks to fit) rather than covering its header and Close.
+    Inside the panel it would be clipped by the panel's overflow. Registered
     while OPEN, not while mounted: the exit animation keeps the node a moment
     longer, and the banner goes home as soon as the sheet is closing.
   */
-  const [dialog, setDialog] = useState<HTMLDivElement | null>(null);
-  useModalHost(dialog, open);
+  const [dock, setDock] = useState<HTMLDivElement | null>(null);
+  useModalHost(dock, open);
 
   useEffect(() => {
     if (!open) return;
@@ -117,17 +119,18 @@ export function Sheet({
     <AnimatePresence>
       {open && (
         <motion.div
-          ref={setDialog}
           role="dialog"
           aria-modal
           aria-label={title}
           // outline-none: focus handed to the dialog itself (a removed row's
           // fallback) must not draw a ring round the whole screen.
-          className="fixed inset-0 z-50 flex items-end justify-center outline-none sm:items-center"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-end outline-none sm:justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
+          {/* The dock: empty unless a surface is portalled in (AboveModals). */}
+          <div ref={setDock} className="relative z-20 w-full shrink-0 sm:max-w-md" />
           <div aria-hidden className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             initial={{ y: panelOffset, opacity: 0 }}
@@ -139,7 +142,7 @@ export function Sheet({
                 : { type: "spring", damping: 28, stiffness: 340 }
             }
             className={cn(
-              "ws-glass relative z-10 flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-sheet/95 sm:max-h-[88dvh] sm:rounded-3xl",
+              "ws-glass relative z-10 flex max-h-[85dvh] min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-sheet/95 sm:max-h-[88dvh] sm:rounded-3xl",
               wide ? "sm:max-w-2xl" : "sm:max-w-md",
               panelClassName
             )}

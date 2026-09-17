@@ -7,10 +7,10 @@
  * screen-reader user could see nothing of it — and its announcer — until it
  * had run out. Painting it on top was not the same as putting it in reach.
  *
- * So an open modal registers its dialog element here, and the few surfaces
- * that must stay reachable (components/ui/modal-layer.tsx `AboveModals`)
- * portal into the TOPMOST one while any is open, and render in place when
- * none is. A stack, because sheets open over sheets; removal is by identity,
+ * So an open modal registers its dock here (the dialog's first child, right
+ * above its panel), and the few surfaces that must stay reachable
+ * (components/ui/modal-layer.tsx `AboveModals`) portal into the TOPMOST one
+ * while any is open, and render in place when none is. A stack, because sheets open over sheets; removal is by identity,
  * so a sheet closing out of order takes only itself away.
  *
  * Pure: no DOM, no React, so `lib/modal-host.test.ts` can pin it.
