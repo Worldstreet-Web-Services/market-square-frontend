@@ -31,7 +31,7 @@ export interface RoomSessionView {
    */
   presence: "host" | "speaker" | "listener" | null;
   micOn: boolean;
-  /** Disabled with a reason behind a hard mute or a missing grant (lib/mic-consent.ts). */
+  /** Disabled with a reason behind a missing grant (lib/mic-consent.ts). */
   micDisabled: boolean;
   toggleMic: () => Promise<void>;
   /** The host's publish failure, classified — the copy is `roomFailureCopy`. */

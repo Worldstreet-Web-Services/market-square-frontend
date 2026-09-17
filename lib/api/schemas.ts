@@ -479,9 +479,6 @@ export const SpeakerRequestSchema = z.object({
   inviteExpiresAt: z.string().nullable().optional().default(null),
   /* The approved speaker's join-token expiry (see the note above the schema). */
   expiresAt: z.string().nullable().optional().default(null),
-  /* The host's mute on this speaker — soft (they may unmute) or hard (locked). Not emitted yet. */
-  hostMuted: z.boolean().optional().default(false),
-  muteHard: z.boolean().optional().default(false),
   createdAt: z.string().optional().default(""),
   resolvedAt: z.string().nullable().optional().default(null),
   resolvedBy: z.string().nullable().optional().default(null),

@@ -3812,9 +3812,14 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(tools, /inviteControl\(\{/);
     assert.match(tools, /hostMuteControl\(\{/);
     assert.match(tools, /toast\(hostOutcomeLabel\(gone\.name\)\)/);
-    for (const surface of [sheet, tray, room, tools]) {
+    for (const surface of [sheet, tray, room, tools, player]) {
       assert.doesNotMatch(surface, /Mute and lock|Unlock mic|Ask to unmute|muteHard|unmuteSpeaker/);
     }
+    // The hard-lock leftovers are gone, not dormant: no lock icon on the mic,
+    // no `hard` host mute, no muteHard on the speaker-request row.
+    assert.doesNotMatch(player, /IconLock|"lock"/);
+    assert.doesNotMatch(code("lib/api/schemas.ts"), /muteHard/);
+    assert.doesNotMatch(code("lib/mic-consent.ts"), /"hard"/);
   });
 
   it("the countdown is the invitation's own clock, never the join token's expiresAt", () => {

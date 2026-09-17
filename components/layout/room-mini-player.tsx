@@ -8,7 +8,7 @@ import { useEndStream, useStageSlots } from "@/features/streams";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
-import { IconChevronUp, IconLock, IconRefresh, IconVolume, IconX } from "@/components/ui/icons";
+import { IconChevronUp, IconRefresh, IconVolume, IconX } from "@/components/ui/icons";
 import { IconRoomLeave, IconRoomMic, IconRoomMicOff } from "@/components/ui/room-icons";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/cn";
@@ -561,11 +561,9 @@ function HangUp({ session, streamId }: { session: RoomSessionView; streamId: str
 }
 
 function MicButton({ session }: { session: RoomSessionView }) {
-  // One decision for every mic control (lib/mic-consent.ts). The host's hard
-  // mute is backend-dependent and reads "none" until it ships; the lock state
-  // arrives with it, already drawn.
+  // One decision for every mic control (lib/mic-consent.ts). A host's mute is
+  // soft, so it never disables this button: the speaker may unmute.
   const control = micControl({
-    hostMuted: "none",
     permissions: { canPublish: !session.micDisabled, microphone: !session.micDisabled },
     micOn: session.micOn,
   });
@@ -577,9 +575,7 @@ function MicButton({ session }: { session: RoomSessionView }) {
       data-room-mic
       tone={session.micOn ? "on" : "default"}
     >
-      {control.icon === "lock" ? (
-        <IconLock className="h-4 w-4" />
-      ) : control.icon === "mic" ? (
+      {control.icon === "mic" ? (
         <IconRoomMic className="h-4 w-4" />
       ) : (
         <IconRoomMicOff className="h-4 w-4" />
