@@ -1226,8 +1226,9 @@ function LiveHouse({
       person.isRoomHost ? slot.role === "host" : slot.role !== "host" && baseIdentity(slot.identity) === base
     );
     if (seat) return { ...person, identity: seat.identity, seated: true, micMuted: seat.isMuted, pendingRequestId: null };
-    return person.isRoomHost ? person : { ...person, seated: false, micMuted: true };
-  }, [person, slots]);
+    // Still in the audience: somebody who left is not offered an invitation.
+    return person.isRoomHost ? person : { ...person, seated: false, micMuted: true, present: presentIds.has(base) };
+  }, [person, slots, presentIds]);
 
   /*
     A HOUSE MEMBER WHO IS LISTENING OPENS THE SAME SHEET AS THE AUDIENCE. The
@@ -1598,7 +1599,9 @@ function LiveHouse({
             key={session.invite.requestId}
             requestId={session.invite.requestId}
             inviteExpiresAt={session.invite.inviteExpiresAt}
+            createdAt={session.invite.createdAt}
             seenAt={session.invite.seenAt}
+            clockOffsetMs={session.invite.clockOffsetMs}
             host={{ id: stream.owner?.id ?? stream.ownerId, name: ownerName ?? "The host", avatarUrl: stream.owner?.avatarUrl }}
             busy={session.answeringInvite}
             onAccept={() => session.answerInvite("accept")}

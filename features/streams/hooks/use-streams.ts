@@ -23,8 +23,11 @@ import {
   inviteErrorOutcome,
   quietResolveError,
   routeMissing,
+  trackInvite,
   type ApiErrorLike,
 } from "@/lib/speaker-invite";
+import { inviteMemoryFor } from "@/features/streams/lib/invite-memory";
+import { serverClockOffset } from "@/lib/server-clock";
 import { muteFailure } from "@/lib/host-mute";
 import {
   banFromChat,
@@ -808,19 +811,39 @@ export function useSeatedSpeakers(streamId: string, enabled: boolean) {
 
 /**
  * Invite a listener up. Carries what the service told us about particular
- * people for as long as the room is open on screen: who the host banned (the
+ * people for as long as the page is loaded (features/streams/lib/invite-memory.ts,
+ * so a remount of the room does not forget it): who the host banned (the
  * control is hidden for them) and who is in a cooldown until when. A BLOCKED
  * refusal changes nothing here — it may be the target's block.
+ *
+ * An invitation the service opened is tracked from THIS answer, not from the
+ * next read of the invited list: one declined before that read would
+ * otherwise never be told, while one that lapsed would.
  */
 export function useInviteToSpeak(streamId: string) {
   const queryClient = useQueryClient();
+  const memory = inviteMemoryFor(streamId);
   const [unavailable, setUnavailable] = useState(invitesMissing);
-  const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set());
-  const [cooldowns, setCooldowns] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set(memory.refused));
+  const [cooldowns, setCooldowns] = useState<ReadonlyMap<string, number>>(() => new Map(memory.cooldowns));
 
   const mutation = useMutation({
     mutationFn: ({ userId }: { userId: string; name: string }) => inviteToSpeak(streamId, userId),
-    onSuccess: (row, { name }) => {
+    onSuccess: (row, { userId, name }) => {
+      if (row.status === "invited") {
+        const held = inviteMemoryFor(streamId);
+        // Open on the server, whatever this page thought: a repeat invite
+        // answers the same id, and a Cancel that lost must not hide it.
+        held.cancelled.delete(row.id);
+        held.ended.delete(row.id);
+        held.rows.set(row.id, row);
+        held.tracked = trackInvite(
+          held.tracked,
+          { id: row.id, userId: baseIdentity(row.userId || userId), name, inviteExpiresAt: row.inviteExpiresAt, createdAt: row.createdAt },
+          Date.now(),
+          { offsetMs: serverClockOffset() }
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
       toast(row.status === "approved" ? `${name} already asked, so they're joining the stage` : `Invited ${name} to speak`);
     },
@@ -833,12 +856,14 @@ export function useInviteToSpeak(streamId: string) {
         return;
       }
       if (outcome.kind === "refused") {
+        inviteMemoryFor(streamId).refused.add(userId);
         setRefused((current) => new Set(current).add(userId));
         toast(outcome.message);
         return;
       }
       if (outcome.kind === "cooldown") {
         const until = Date.now() + outcome.retryAfterSeconds * 1000;
+        inviteMemoryFor(streamId).cooldowns.set(userId, until);
         setCooldowns((current) => new Map(current).set(userId, until));
         toast(outcome.message);
         return;
@@ -871,8 +896,9 @@ export function useAnswerInvite(streamId: string) {
       // The one-time hint: seated, and the mic is still theirs to open.
       if (action === "accept" && row.status === "approved") toast(INVITE_ACCEPTED_HINT);
     },
-    onError: (error) => {
-      const message = answerErrorMessage(error as ApiErrorLike);
+    onError: (error, { action }) => {
+      // A Not now on an invitation that already ended is quiet (lib/speaker-invite.ts).
+      const message = answerErrorMessage(error as ApiErrorLike, action);
       if (message) toast.error(message);
     },
     onSettled: () => {

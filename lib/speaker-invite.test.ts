@@ -24,6 +24,9 @@ import {
   releaseActionFor,
   routeMissing,
   settleInvites,
+  trackInvite,
+  cancelFailedForReal,
+  liveInviteRow,
   type InviteTarget,
 } from "./speaker-invite.ts";
 
@@ -31,61 +34,73 @@ const NOW = Date.parse("2026-09-17T12:00:00.000Z");
 const at = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();
 
 describe("the invitee's banner reads the server's clock", () => {
+  // The contract's row: created at server time NOW, open until NOW + 60s.
+  const row = (fields: Partial<{ status: string; inviteExpiresAt: string | null; createdAt: string }> = {}) => ({
+    id: "r1",
+    status: "invited",
+    inviteExpiresAt: at(60_000),
+    createdAt: at(0),
+    ...fields,
+  });
+
   it("draws nothing for anything but an invitation", () => {
     assert.deepEqual(inviteView(null, NOW), { state: "none" });
     for (const status of ["pending", "approved", "denied", "withdrawn", "removed"]) {
-      assert.deepEqual(inviteView({ id: "r1", status, inviteExpiresAt: at(30_000) }, NOW), { state: "none" }, status);
+      assert.deepEqual(inviteView(row({ status }), NOW), { state: "none" }, status);
     }
   });
 
-  it("counts down from inviteExpiresAt in whole seconds", () => {
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(60_000) }, NOW), {
-      state: "open",
-      requestId: "r1",
-      secondsLeft: 60,
-    });
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(1_200) }, NOW), {
-      state: "open",
-      requestId: "r1",
-      secondsLeft: 2,
-    });
-    const row = { id: "r1", status: "invited", inviteExpiresAt: at(60_000) };
-    assert.deepEqual(inviteView(row, NOW + 30_000, NOW), { state: "open", requestId: "r1", secondsLeft: 30 });
+  it("counts down to inviteExpiresAt on the server's clock, in whole seconds", () => {
+    assert.deepEqual(inviteView(row(), NOW, NOW, 0), { state: "open", requestId: "r1", secondsLeft: 60 });
+    assert.deepEqual(inviteView(row({ inviteExpiresAt: at(1_200) }), NOW, NOW, 0), { state: "open", requestId: "r1", secondsLeft: 2 });
+    assert.deepEqual(inviteView(row(), NOW + 30_000, NOW, 0), { state: "open", requestId: "r1", secondsLeft: 30 });
   });
 
   it("is expired AT its deadline, not a tick later", () => {
     const seen = NOW - 30_000;
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(0) }, NOW, seen), { state: "expired", requestId: "r1" });
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(-5_000) }, NOW, seen), { state: "expired", requestId: "r1" });
+    assert.deepEqual(inviteView(row({ inviteExpiresAt: at(0), createdAt: at(-60_000) }), NOW, seen, 0), { state: "expired", requestId: "r1" });
+    assert.deepEqual(inviteView(row({ inviteExpiresAt: at(-5_000), createdAt: at(-65_000) }), NOW, seen, 0), { state: "expired", requestId: "r1" });
   });
 
-  it("keeps an invitation with no readable expiry open, without a countdown", () => {
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: null }, NOW), {
-      state: "open",
-      requestId: "r1",
-      secondsLeft: null,
-    });
-    assert.equal(inviteView({ id: "r1", status: "invited", inviteExpiresAt: "soon" }, NOW).state, "open");
+  it("a device clock running FAST shows the invitation for as long as the server holds it open", () => {
+    // Phone 45s ahead. Seen one second after the invite, at server NOW+1s,
+    // which the phone reads as NOW+46s. The server still has 59 seconds.
+    const offset = -45_000;
+    const seenAt = NOW + 46_000;
+    assert.deepEqual(inviteView(row(), seenAt, seenAt, offset), { state: "open", requestId: "r1", secondsLeft: 59 });
+    assert.equal(inviteView(row(), seenAt + 58_000, seenAt, offset).state, "open");
+    assert.equal(inviteView(row(), seenAt + 59_000, seenAt, offset).state, "expired");
   });
 
-  it("a device clock running FAST never hides an invitation the server still holds open", () => {
-    // Phone 70s ahead: the server's now+60s reads as ten seconds ago. The row
-    // is `invited`, so the server had it open when it answered. Shown with no
-    // countdown; the poll (withdrawn) or INVITE_NOT_OPEN ends it.
-    const serverExpiry = at(-10_000);
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: serverExpiry }, NOW, NOW), {
-      state: "open",
-      requestId: "r1",
-      secondsLeft: null,
-    });
-    assert.equal(inviteDeadline(serverExpiry, NOW), null);
+  it("a device clock running SLOW ends it at the server's expiry, not past it", () => {
+    // Phone 70s behind, and the poll brought the row 8s after it was sent.
+    const offset = 70_000;
+    const seenAt = NOW + 8_000 - 70_000;
+    assert.deepEqual(inviteView(row(), seenAt, seenAt, offset), { state: "open", requestId: "r1", secondsLeft: 52 });
+    assert.equal(inviteView(row(), seenAt + 52_000, seenAt, offset).state, "expired");
   });
 
-  it("a device clock running SLOW never counts past the contract's 60 seconds", () => {
-    // Phone 70s behind: the server's now+60s reads as 130s away.
-    const row = { id: "r1", status: "invited", inviteExpiresAt: at(130_000) };
-    assert.deepEqual(inviteView(row, NOW, NOW), { state: "open", requestId: "r1", secondsLeft: 60 });
-    assert.deepEqual(inviteView(row, NOW + INVITE_TTL_MS, NOW), { state: "expired", requestId: "r1" });
+  it("a row the server still lists but whose expiry has passed on the server's clock is over, not open forever", () => {
+    const seenAt = NOW + 70_000;
+    assert.deepEqual(inviteView(row(), seenAt, seenAt, 0), { state: "expired", requestId: "r1" });
+  });
+
+  it("without a server clock, counts the row's own lifetime from when it was first seen: long, never short", () => {
+    // Phone 45s fast, no Date header read yet: the lifetime is both server
+    // readings (expiry minus creation), so the device's clock never enters it.
+    const seenAt = NOW + 46_000;
+    assert.deepEqual(inviteView(row(), seenAt, seenAt), { state: "open", requestId: "r1", secondsLeft: 60 });
+    assert.equal(inviteDeadline(at(60_000), seenAt, { createdAt: at(0) }), seenAt + 60_000);
+    // A lifetime longer than the contract's is capped at it.
+    assert.equal(inviteDeadline(at(130_000), seenAt, { createdAt: at(0) }), seenAt + INVITE_TTL_MS);
+  });
+
+  it("with no readable clock at all it is open without a countdown, and still ends after the contract's 60 seconds", () => {
+    assert.deepEqual(inviteView(row({ inviteExpiresAt: null }), NOW), { state: "open", requestId: "r1", secondsLeft: null });
+    assert.equal(inviteView(row({ inviteExpiresAt: "soon" }), NOW).state, "open");
+    assert.deepEqual(inviteView(row({ createdAt: "" }), NOW + 5_000, NOW), { state: "open", requestId: "r1", secondsLeft: null });
+    assert.equal(inviteDeadline(at(60_000), NOW, { createdAt: "" }), null);
+    assert.deepEqual(inviteView(row({ inviteExpiresAt: null }), NOW + INVITE_TTL_MS, NOW), { state: "expired", requestId: "r1" });
     assert.equal(INVITE_TTL_MS, 60_000);
   });
 
@@ -146,6 +161,13 @@ describe("the host's invite control", () => {
     assert.deepEqual(inviteControl({ ...base, target, unavailable: true }), { kind: "seat", requestId: "req-1" });
   });
 
+  it("is disabled with a reason for somebody who has left the room", () => {
+    const control = inviteControl({ ...base, target: { ...listener, present: false } });
+    assert.deepEqual(control, { kind: "invite", disabled: true, reason: "They've left the room." });
+    // An invitation already out stays cancellable.
+    assert.deepEqual(inviteControl({ ...base, target: { ...listener, present: false, openInviteId: "inv-1" } }), { kind: "invited", requestId: "inv-1" });
+  });
+
   it("is hidden when the route is not deployed", () => {
     assert.deepEqual(inviteControl({ ...base, unavailable: true }), { kind: "hidden" });
   });
@@ -193,46 +215,60 @@ describe("the host is never told 'declined'", () => {
     assert.doesNotMatch(hostOutcomeLabel("Ada"), /declin|reject|refus/i);
   });
 
-  const open = [{ id: "inv-1", userId: "did:a", name: "Ada", inviteExpiresAt: at(60_000) }];
-  const empty = { open: [], seatedUserIds: new Set<string>(), cancelledIds: new Set<string>() };
+  const open = [{ id: "inv-1", userId: "did:a", name: "Ada", inviteExpiresAt: at(60_000), createdAt: at(0) }];
+  const empty = { open: [], seatedUserIds: new Set<string>(), cancelledIds: new Set<string>(), offsetMs: 0 };
   const DEADLINE = NOW + 60_000;
+  type Tracked = readonly ReturnType<typeof settleInvites>["tracked"][number][];
 
-  it("starts tracking an open invitation silently, with the deadline it was first seen with", () => {
+  /** The host's room open the whole time: one settle a second, as the hook runs it. */
+  const run = (from: number, to: number, listed: (now: number) => boolean, start: Tracked = []) => {
+    let tracked = start;
+    const told: number[] = [];
+    for (let now = from; now <= to; now += 1_000) {
+      const step = settleInvites(tracked, { ...empty, open: listed(now) ? open : [], now });
+      tracked = step.tracked;
+      if (step.unavailable.length) told.push(now);
+    }
+    return { tracked, told };
+  };
+
+  it("starts tracking an open invitation silently, with the server's deadline", () => {
     const result = settleInvites([], { ...empty, open, now: NOW });
     assert.deepEqual(result.unavailable, []);
-    assert.deepEqual(result.tracked, [{ id: "inv-1", userId: "did:a", name: "Ada", deadline: DEADLINE, timed: true, goneAt: null }]);
+    assert.equal(result.tracked.length, 1);
+    assert.equal(result.tracked[0]?.deadline, DEADLINE);
+    assert.equal(result.tracked[0]?.timed, true);
   });
 
-  it("a refusal is told at the same moment as a lapse: never before the invitation's own deadline", () => {
-    // Ada taps Not now at +5s; the host's read stops listing her at once.
-    let state = settleInvites([], { ...empty, open, now: NOW }).tracked;
-    state = settleInvites(state, { ...empty, now: NOW + 5_000 }).tracked;
-    // The row, its countdown and her card's badge stay as they were.
-    assert.deepEqual(visibleInvites(state, NOW + 30_000).map((item) => item.id), ["inv-1"]);
-    assert.deepEqual(settleInvites(state, { ...empty, now: NOW + 5_000 + OUTCOME_GRACE_MS }).unavailable, []);
-    assert.deepEqual(settleInvites(state, { ...empty, now: DEADLINE + OUTCOME_GRACE_MS - 1 }).unavailable, []);
-    const refused = settleInvites(state, { ...empty, now: DEADLINE + OUTCOME_GRACE_MS });
-    assert.deepEqual(refused.unavailable.map((item) => item.name), ["Ada"]);
-    assert.deepEqual(refused.tracked, []);
+  it("a refusal and a lapse are told at the same instant, however late the poll sees the lapse", () => {
+    // Ada taps Not now at +5s: the next read stops listing her.
+    const refusal = run(NOW, DEADLINE + 20_000, (now) => now < NOW + 5_000);
+    // Ada ignores it: listed until a poll that lands 7s after the server lapsed it.
+    const lapse = run(NOW, DEADLINE + 20_000, (now) => now < DEADLINE + 7_000);
+    assert.deepEqual(refusal.told, [DEADLINE + OUTCOME_GRACE_MS]);
+    assert.deepEqual(lapse.told, [DEADLINE + OUTCOME_GRACE_MS]);
+    // The Invited row goes at the deadline in both.
+    const midway = run(NOW, NOW + 30_000, (now) => now < NOW + 5_000).tracked;
+    assert.deepEqual(visibleInvites(midway, NOW + 30_000).map((item) => item.id), ["inv-1"]);
+    assert.deepEqual(visibleInvites(midway, DEADLINE), []);
+  });
 
-    // The same invitation ignored: listed until the server lapses it.
-    let lapse = settleInvites([], { ...empty, open, now: NOW }).tracked;
-    lapse = settleInvites(lapse, { ...empty, open, now: DEADLINE - 1 }).tracked;
-    assert.deepEqual(visibleInvites(lapse, DEADLINE).map((item) => item.id), []);
-    lapse = settleInvites(lapse, { ...empty, now: DEADLINE }).tracked;
-    assert.deepEqual(settleInvites(lapse, { ...empty, now: DEADLINE + OUTCOME_GRACE_MS - 1 }).unavailable, []);
-    assert.deepEqual(settleInvites(lapse, { ...empty, now: DEADLINE + OUTCOME_GRACE_MS }).unavailable.map((item) => item.name), ["Ada"]);
+  it("an invitation already told is not tracked again while a late read still lists it", () => {
+    const told = run(NOW, DEADLINE + OUTCOME_GRACE_MS, () => true);
+    assert.deepEqual(told.told, [DEADLINE + OUTCOME_GRACE_MS]);
+    const again = settleInvites(told.tracked, { ...empty, open, endedIds: new Set(["inv-1"]), now: DEADLINE + OUTCOME_GRACE_MS + 1_000 });
+    assert.deepEqual(again, { tracked: [], unavailable: [] });
   });
 
   it("an invitation with no readable expiry is held for the contract's 60 seconds, without a countdown", () => {
-    const [tracked] = settleInvites([], { ...empty, open: [{ ...open[0], inviteExpiresAt: null }], now: NOW }).tracked;
+    const [tracked] = settleInvites([], { ...empty, offsetMs: null, open: [{ ...open[0], inviteExpiresAt: null }], now: NOW }).tracked;
     assert.equal(tracked?.deadline, NOW + INVITE_TTL_MS);
     assert.equal(tracked?.timed, false);
   });
 
   it("says nothing when the invitee took the seat, even if the lists disagree for a moment", () => {
-    const state = settleInvites(settleInvites([], { ...empty, open, now: NOW }).tracked, { ...empty, now: NOW + 500 }).tracked;
-    const seated = settleInvites(state, { ...empty, seatedUserIds: new Set(["did:a"]), now: NOW + 60_000 });
+    const state = run(NOW, NOW + 1_000, (now) => now < NOW + 1_000).tracked;
+    const seated = settleInvites(state, { ...empty, seatedUserIds: new Set(["did:a"]), now: NOW + 2_000 });
     assert.deepEqual(seated, { tracked: [], unavailable: [] });
   });
 
@@ -242,18 +278,37 @@ describe("the host is never told 'declined'", () => {
     assert.deepEqual(settleInvites(state, { ...empty, open, cancelledIds: new Set(["inv-1"]), now: NOW + 1_000 }).tracked, []);
   });
 
-  it("an invitation that reappears is open again", () => {
-    const gone = settleInvites(settleInvites([], { ...empty, open, now: NOW }).tracked, { ...empty, now: NOW + 100 }).tracked;
-    assert.equal(gone[0]?.goneAt, NOW + 100);
-    assert.equal(settleInvites(gone, { ...empty, open, now: NOW + 200 }).tracked[0]?.goneAt, null);
+  it("a Cancel that failed is tracked again from the next read, with the server's deadline", () => {
+    const cancelled = settleInvites(settleInvites([], { ...empty, open, now: NOW }).tracked, {
+      ...empty,
+      open,
+      cancelledIds: new Set(["inv-1"]),
+      now: NOW + 1_000,
+    });
+    assert.deepEqual(cancelled.tracked, []);
+    // The POST failed: the id leaves the cancelled set and the row is still listed.
+    const back = settleInvites(cancelled.tracked, { ...empty, open, now: NOW + 2_000 });
+    assert.deepEqual(back.tracked.map((item) => [item.id, item.deadline]), [["inv-1", DEADLINE]]);
+    assert.equal(cancelFailedForReal({ code: "RATE_LIMITED" }), true);
+    assert.equal(cancelFailedForReal({ code: "SERVICE_DOWN" }), true);
+    assert.equal(cancelFailedForReal({ code: "INVITE_NOT_OPEN" }), false);
+    assert.equal(cancelFailedForReal({ code: "AWAITING_INVITEE" }), false);
   });
 
-  it("an invitation that ended while the host was away from the room is settled when they come back", () => {
-    // The tracked list outlives the room page; the next read no longer lists Ben.
+  it("an invitation sent is tracked from the invite's own answer, before any list read", () => {
+    // The host invites and leaves the room page within the second; Ada declines at +5s.
+    const sent = trackInvite([], { ...open[0] }, NOW, { offsetMs: 0 });
+    assert.deepEqual(sent.map((item) => [item.id, item.deadline, item.timed]), [["inv-1", DEADLINE, true]]);
+    assert.equal(trackInvite(sent, { ...open[0] }, NOW + 3_000, { offsetMs: 0 }), sent, "a repeat answer changes nothing");
+    const back = run(NOW + 20_000, DEADLINE + 20_000, () => false, sent);
+    assert.equal(back.told.length, 1);
+  });
+
+  it("an invitation that ended while the host was away is settled when they come back, after a grace for the lists", () => {
     const remembered = settleInvites([], { ...empty, open, now: NOW }).tracked;
     const back = settleInvites(remembered, { ...empty, now: NOW + 120_000 });
     assert.deepEqual(back.unavailable, []);
-    assert.deepEqual(settleInvites(back.tracked, { ...empty, now: NOW + 120_000 + OUTCOME_GRACE_MS }).unavailable.map((item) => item.name), ["Ada"]);
+    assert.deepEqual(run(NOW + 121_000, NOW + 120_000 + OUTCOME_GRACE_MS, () => false, back.tracked).told, [NOW + 120_000 + OUTCOME_GRACE_MS]);
   });
 });
 
@@ -328,6 +383,13 @@ describe("error answers", () => {
     assert.match(answerErrorMessage({ code: "STAGE_FULL" }) ?? "", /filled up/);
     assert.equal(answerErrorMessage({ code: "NOT_FOUND", message: "Route not found" }), null);
     assert.equal(answerErrorMessage({ code: "NOT_FOUND", message: "Speaker request not found" }), "Couldn't answer the invitation.");
+  });
+
+  it("a Not now on an invitation that already ended says nothing; a Join still says it ended", () => {
+    assert.equal(answerErrorMessage({ code: "INVITE_NOT_OPEN" }, "reject"), null);
+    assert.equal(answerErrorMessage({ code: "AWAITING_INVITEE" }, "reject"), null);
+    assert.equal(answerErrorMessage({ code: "INVITE_NOT_OPEN" }, "accept"), "That invitation has ended.");
+    assert.equal(answerErrorMessage({ code: "STREAM_NOT_LIVE" }, "reject"), "The gist room isn't live any more.");
   });
 });
 
@@ -455,5 +517,22 @@ describe("one answer per invitation", () => {
     latch.release("req-1");
     assert.equal(latch.claim("req-1"), true, "retry after a failure");
     assert.equal(latch.claim("req-2"), true, "a new invitation");
+  });
+});
+
+describe("an invitation is only drawn off a row that is still being read", () => {
+  const row = { id: "r1", status: "invited" };
+  it("is the reader's invited row while the session polls it", () => {
+    assert.equal(liveInviteRow(row, { polling: true, isHost: false }), row);
+  });
+
+  it("is nothing once the room ended or the retries gave up, whatever the cache still holds", () => {
+    assert.equal(liveInviteRow(row, { polling: false, isHost: false }), null);
+  });
+
+  it("is nothing for the host, or for any row that is not an invitation", () => {
+    assert.equal(liveInviteRow(row, { polling: true, isHost: true }), null);
+    assert.equal(liveInviteRow({ ...row, status: "approved" }, { polling: true, isHost: false }), null);
+    assert.equal(liveInviteRow(null, { polling: true, isHost: false }), null);
   });
 });

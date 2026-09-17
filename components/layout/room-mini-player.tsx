@@ -131,7 +131,9 @@ function SessionInvite() {
             key={invite.requestId}
             requestId={invite.requestId}
             inviteExpiresAt={invite.inviteExpiresAt}
+            createdAt={invite.createdAt}
             seenAt={invite.seenAt}
+            clockOffsetMs={invite.clockOffsetMs}
             host={{ id: owner?.id, name: hostName, avatarUrl: owner?.avatarUrl }}
             busy={session.answeringInvite}
             onAccept={() => session.answerInvite("accept")}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Room } from "livekit-client";
+import { serverClockOffset } from "@/lib/server-clock";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { HouseAudioSinks, connectRoom, houseTopic } from "@/features/houses";
@@ -40,6 +41,7 @@ import {
   INITIAL_INVITE_ANNOUNCER,
   createAnswerLatch,
   inviteView,
+  liveInviteRow,
   releaseActionFor,
   stepInviteAnnouncer,
   type InviteAnnouncerState,
@@ -297,10 +299,13 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   */
   const answer = useAnswerInvite(streamId);
   const answerInviteMutate = answer.mutate;
-  const invitedRow = !isHost && mine.data?.status === "invited" ? mine.data : null;
+  // Only while the row is still being read: a room that ended or a reconnect
+  // that gave up leaves the last data cached (lib/speaker-invite.ts `liveInviteRow`).
+  const invitedRow = liveInviteRow(mine.data, { polling, isHost });
   const inviteId = invitedRow?.id ?? null;
   // `inviteExpiresAt`, never `expiresAt`: on this row that is the join token's.
   const inviteExpiresAt = invitedRow?.inviteExpiresAt ?? null;
+  const inviteCreatedAt = invitedRow?.createdAt ?? null;
   /*
     When THIS tab first saw the invitation — the one reading the countdown is
     taken from (lib/speaker-invite.ts `inviteDeadline`), so a device clock
@@ -310,12 +315,21 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     does not restart it. Adjusted during render, React's pattern for state
     that follows a value.
   */
-  const [inviteSeen, setInviteSeen] = useState<{ id: string | null; at: number }>({ id: null, at: 0 });
-  if (inviteSeen.id !== inviteId) setInviteSeen({ id: inviteId, at: mine.dataUpdatedAt });
+  const [inviteSeen, setInviteSeen] = useState<{ id: string | null; at: number; offset: number | null }>({
+    id: null,
+    at: 0,
+    offset: null,
+  });
+  // The server's clock as read off the response that carried the row (lib/server-clock.ts).
+  if (inviteSeen.id !== inviteId) setInviteSeen({ id: inviteId, at: mine.dataUpdatedAt, offset: serverClockOffset() });
   const inviteSeenAt = inviteSeen.id === inviteId ? inviteSeen.at : 0;
+  const inviteOffset = inviteSeen.id === inviteId ? inviteSeen.offset : null;
   const invite = useMemo(
-    () => (inviteId ? { requestId: inviteId, inviteExpiresAt, seenAt: inviteSeenAt } : null),
-    [inviteId, inviteExpiresAt, inviteSeenAt]
+    () =>
+      inviteId
+        ? { requestId: inviteId, inviteExpiresAt, createdAt: inviteCreatedAt, seenAt: inviteSeenAt, clockOffsetMs: inviteOffset }
+        : null,
+    [inviteId, inviteExpiresAt, inviteCreatedAt, inviteSeenAt, inviteOffset]
   );
   // Which invitation the reader answered: its end is then no news to announce.
   const [answeredInviteId, setAnsweredInviteId] = useState<string | null>(null);
@@ -896,7 +910,12 @@ function InviteAnnouncer({
   }, [ticking]);
 
   const view = invite
-    ? inviteView({ id: invite.requestId, status: "invited", inviteExpiresAt: invite.inviteExpiresAt }, now, invite.seenAt)
+    ? inviteView(
+        { id: invite.requestId, status: "invited", inviteExpiresAt: invite.inviteExpiresAt, createdAt: invite.createdAt },
+        now,
+        invite.seenAt,
+        invite.clockOffsetMs
+      )
     : null;
   const secondsLeft = view?.state === "open" ? view.secondsLeft : null;
   const [spoken, setSpoken] = useState<{ state: InviteAnnouncerState; text: string }>({

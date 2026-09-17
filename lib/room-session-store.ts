@@ -78,8 +78,12 @@ export interface RoomSessionView {
   invite: {
     requestId: string;
     inviteExpiresAt: string | null;
+    /** When the server opened it, on the server's clock. */
+    createdAt: string | null;
     /** When this tab first saw it — the countdown's starting reading. */
     seenAt: number;
+    /** The server's clock offset read at first sight, or null (lib/server-clock.ts). */
+    clockOffsetMs: number | null;
   } | null;
   /** Join as speaker (seated, mic OFF) or Not now. */
   answerInvite: (action: "accept" | "reject") => void;

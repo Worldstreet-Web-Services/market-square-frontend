@@ -149,10 +149,18 @@ export interface HostMuteToastState {
   previousToken?: string | null;
   /** A mute was seen and has not been told yet. */
   armed: boolean;
+  /** When it was armed: an arming that the mic never followed within the window is spent. */
+  armedAt?: number | null;
   lastToastAt: number | null;
 }
 
-export const INITIAL_HOST_MUTE_TOAST: HostMuteToastState = { previous: null, previousToken: null, armed: false, lastToastAt: null };
+export const INITIAL_HOST_MUTE_TOAST: HostMuteToastState = {
+  previous: null,
+  previousToken: null,
+  armed: false,
+  armedAt: null,
+  lastToastAt: null,
+};
 
 /**
  * Should the speaker be told the host muted them? One step per reading.
@@ -173,8 +181,11 @@ export const INITIAL_HOST_MUTE_TOAST: HostMuteToastState = { previous: null, pre
  *    (`soft:<ts>`) makes the attribute change itself the news.
  *
  * Armed waits for the mic to go off, so an attribute that lands before the
- * track mute still toasts. One mute, one toast: a second arming inside the
- * dedupe window is the same mute seen twice.
+ * track mute still toasts — but only for `MUTE_TOAST_DEDUPE_MS`. A push that
+ * arrives after the speaker already unmuted finds the mic on; left armed with
+ * no expiry, the speaker's OWN mute minutes later was told as the host's. One
+ * mute, one toast: a second arming inside the dedupe window is the same mute
+ * seen twice.
  */
 export function stepHostMuteToast(
   state: HostMuteToastState,
@@ -186,12 +197,18 @@ export function stepHostMuteToast(
   }
   const newValue =
     input.current === "soft" && state.previous !== null && (state.previous === "none" || (state.previousToken ?? "soft") !== token);
-  let armed = state.armed || input.signalled || newValue;
+  const heldArming = state.armed && (state.armedAt == null || input.now - state.armedAt <= MUTE_TOAST_DEDUPE_MS);
+  const freshArming = input.signalled || newValue;
+  let armed = heldArming || freshArming;
+  let armedAt = freshArming ? input.now : heldArming ? (state.armedAt ?? input.now) : null;
   // The mute was lifted before we could say anything: nothing to say.
-  if (state.previous === "soft" && input.current === "none") armed = false;
+  if (state.previous === "soft" && input.current === "none") {
+    armed = false;
+    armedAt = null;
+  }
   const recent = state.lastToastAt !== null && input.now - state.lastToastAt < MUTE_TOAST_DEDUPE_MS;
   if (armed && recent && input.current === "soft") {
-    return { state: { ...state, previous: input.current, previousToken: token, armed: false }, toast: false };
+    return { state: { ...state, previous: input.current, previousToken: token, armed: false, armedAt: null }, toast: false };
   }
   const toast = armed && input.current === "soft" && !input.micOn;
   return {
@@ -199,6 +216,7 @@ export function stepHostMuteToast(
       previous: input.current,
       previousToken: token,
       armed: toast ? false : armed,
+      armedAt: toast || !armed ? null : armedAt,
       lastToastAt: toast ? input.now : state.lastToastAt,
     },
     toast,

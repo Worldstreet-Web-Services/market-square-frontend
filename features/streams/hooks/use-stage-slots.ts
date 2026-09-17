@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { RemoteTrackPublication, Room } from "livekit-client";
 import { buildStage, type StageRoom, type StageSlot } from "@/features/streams/lib/stage";
 import { stepHostMuteBadges, type HostMuteBadgeState } from "@/lib/host-mute";
@@ -27,14 +27,20 @@ import { stepHostMuteBadges, type HostMuteBadgeState } from "@/lib/host-mute";
  * for a promotion: an approved guest is already in the room, so
  * `ParticipantConnected` will never fire for them again.
  */
+/*
+  Whether each seat has unmuted since the host's mute. The attribute alone
+  outlives the speaker's own unmute, so without this memory their NEXT
+  self-mute was drawn to the whole room as "Muted by host". Held per room for
+  the page load, NOT per mount: minimising the room and opening it again
+  remounted the stage with an empty memory, and a speaker who had unmuted and
+  then muted themselves was badged again for that viewer. (A viewer who
+  arrives after the unmute still cannot know; that is the service's to fix by
+  clearing the attribute on unmute.)
+*/
+const hostMuteMemory = new Map<string, ReadonlyMap<string, HostMuteBadgeState>>();
+
 export function useStageSlots(room: Room | null, hostIdentity: string): StageSlot[] {
   const [slots, setSlots] = useState<StageSlot[]>([]);
-  /*
-    Whether each seat has unmuted since the host's mute. The attribute alone
-    outlives the speaker's own unmute, so without this memory their NEXT
-    self-mute was drawn to the whole room as "Muted by host".
-  */
-  const hostMutes = useRef<ReadonlyMap<string, HostMuteBadgeState>>(new Map());
 
   const recompute = useCallback(() => {
     const current = room;
@@ -54,8 +60,10 @@ export function useStageSlots(room: Room | null, hostIdentity: string): StageSlo
       }
     }
     const built = buildStage(current as unknown as StageRoom, hostIdentity);
+    // Keyed on the LiveKit room's name: one per stream, stable across remounts.
+    const memoryKey = current.name || hostIdentity;
     const badges = stepHostMuteBadges(
-      hostMutes.current,
+      hostMuteMemory.get(memoryKey) ?? new Map(),
       built.map((slot) => ({
         identity: slot.identity,
         token: slot.hostMuteToken,
@@ -63,7 +71,7 @@ export function useStageSlots(room: Room | null, hostIdentity: string): StageSlo
         micMuted: slot.isMuted,
       }))
     );
-    hostMutes.current = badges.memory;
+    hostMuteMemory.set(memoryKey, badges.memory);
     const next = built.map((slot) =>
       slot.mutedByHost === (badges.badges.get(slot.identity) ?? false)
         ? slot

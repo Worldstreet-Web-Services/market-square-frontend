@@ -6,6 +6,7 @@ import {
   INITIAL_HOST_MUTE_TOAST,
   hostMuteControl,
   hostMuteOf,
+  MUTE_TOAST_DEDUPE_MS,
   MUTE_UNAVAILABLE,
   muteErrorMessage,
   muteFailure,
@@ -195,6 +196,28 @@ describe("the muted speaker is told once", () => {
       if (step.toast) toasts.push(index);
     });
     assert.deepEqual(toasts, [1, 3]);
+  });
+
+  it("a push that lands after the speaker already unmuted does not arm a toast for their own mute later", () => {
+    // The host mutes (track mute first, nothing armed), the speaker unmutes at
+    // once, THEN the push arrives with the mic on. Minutes later they mute themselves.
+    const { toasts } = run([
+      { current: "none", micOn: true, at: NOW },
+      { current: "soft", micOn: false, at: NOW + 100 },
+      { current: "soft", micOn: true, at: NOW + 6_000 },
+      { current: "soft", micOn: true, signalled: true, at: NOW + 6_500 },
+      { current: "soft", micOn: false, at: NOW + 180_000 },
+    ]);
+    assert.deepEqual(toasts, [1]);
+  });
+
+  it("an arming still toasts when the mic goes off within the window", () => {
+    const { toasts } = run([
+      { current: "soft", micOn: true, at: NOW },
+      { current: "soft", micOn: true, signalled: true, at: NOW + 60_000 },
+      { current: "soft", micOn: false, at: NOW + 60_000 + MUTE_TOAST_DEDUPE_MS - 1 },
+    ]);
+    assert.deepEqual(toasts, [2]);
   });
 
   it("the attribute and the push for one mute make one toast", () => {

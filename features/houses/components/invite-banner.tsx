@@ -17,15 +17,18 @@ import { formatCountdown, inviteView } from "@/lib/speaker-invite";
  * two apart) — so both read the reader's own speaker-request row, never a
  * push frame.
  *
- * The countdown is the SERVER's `inviteExpiresAt`, re-read every second; at zero the
- * banner draws nothing rather than hanging on at 0:00 until the next poll.
+ * The countdown is the SERVER's `inviteExpiresAt`, on the server's clock
+ * (lib/server-clock.ts), re-read every second; at zero the banner draws
+ * nothing rather than hanging on at 0:00 until the next poll.
  * "Join as speaker" seats them with the mic OFF — nothing downstream opens it
  * until they tap (lib/mic-consent.ts).
  */
 export function InviteBanner({
   requestId,
   inviteExpiresAt,
+  createdAt,
   seenAt,
+  clockOffsetMs,
   host,
   busy,
   onAccept,
@@ -34,8 +37,12 @@ export function InviteBanner({
 }: {
   requestId: string;
   inviteExpiresAt: string | null;
+  /** When the server opened it, on the server's clock. */
+  createdAt: string | null;
   /** When the session first saw this invitation (lib/speaker-invite.ts `inviteDeadline`). */
   seenAt: number;
+  /** The server's clock offset read when it was first seen, or null. */
+  clockOffsetMs: number | null;
   host: { id?: string | null; name: string; avatarUrl?: string | null };
   busy: boolean;
   onAccept: () => void;
@@ -44,12 +51,12 @@ export function InviteBanner({
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!inviteExpiresAt) return;
+    // Every second, countdown or not: one with no readable expiry still ends.
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
-  }, [inviteExpiresAt]);
+  }, []);
 
-  const view = inviteView({ id: requestId, status: "invited", inviteExpiresAt }, now, seenAt);
+  const view = inviteView({ id: requestId, status: "invited", inviteExpiresAt, createdAt }, now, seenAt, clockOffsetMs);
   const open = view.state === "open";
 
   /*

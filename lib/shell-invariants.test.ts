@@ -3833,13 +3833,13 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
   });
 
   it("the countdown starts from when the session first saw the invitation, on both surfaces", () => {
-    assert.match(code("components/layout/room-session.tsx"), /if \(inviteSeen\.id !== inviteId\) setInviteSeen\(\{ id: inviteId, at: mine\.dataUpdatedAt \}\);/);
+    assert.match(code("components/layout/room-session.tsx"), /if \(inviteSeen\.id !== inviteId\) setInviteSeen\(\{ id: inviteId, at: mine\.dataUpdatedAt, offset: serverClockOffset\(\) \}\);/);
     for (const surface of [player, room]) assert.match(surface, /seenAt=\{(session\.)?invite\.seenAt\}/);
-    assert.match(banner, /inviteView\(\{ id: requestId, status: "invited", inviteExpiresAt \}, now, seenAt\)/);
   });
 
   it("the host's invitations are remembered per stream, outside the room page, and settled on approved rows", () => {
-    assert.match(tools, /const inviteMemory = new Map<string, InviteMemory>\(\);/);
+    assert.match(code("features/streams/lib/invite-memory.ts"), /const memories = new Map<string, InviteMemory>\(\);/);
+    assert.match(tools, /const memoryFor = inviteMemoryFor;/);
     assert.match(tools, /const shown = visibleInvites\(step\.tracked, now\);/);
     assert.doesNotMatch(tools, /useRef<TrackedInvite/);
     assert.match(room, /const seatedRows = useSeatedSpeakers\(stream\.id, isHost && stream\.status === "live"\);/);
@@ -3886,7 +3886,7 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
 
   it("the badge follows the seat's memory, not the attribute alone, and the toast reads the attribute's value", () => {
     const hook = code("features/streams/hooks/use-stage-slots.ts");
-    assert.match(hook, /const badges = stepHostMuteBadges\(\s*hostMutes\.current,/);
+    assert.match(hook, /const badges = stepHostMuteBadges\(\s*hostMuteMemory\.get\(memoryKey\) \?\? new Map\(\),/);
     assert.match(code("components/layout/room-session.tsx"), /token: hostMuteToken\(local\.attributes\),/);
   });
 
@@ -3935,7 +3935,7 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(screen, /inviteGateSlot=\{\(username, row\) => <HideIfBlocked username=\{username\}>\{row\}<\/HideIfBlocked>\}/);
     const gate = code("features/profile/components/person-safety-rows.tsx");
     assert.match(gate, /export function HideIfBlocked\(/);
-    assert.match(gate, /if \(profile\.data\?\.isBlocked\) return null;/);
+    assert.match(gate, /if \(!profile\.data \|\| profile\.data\.isBlocked\) return null;/);
     assert.match(sheet, /username && inviteGateSlot \? inviteGateSlot\(username, inviteRow\) : inviteRow/);
     assert.ok((room.match(/inviteGateSlot=\{inviteGateSlot\}/g) ?? []).length >= 3, "the gate is not threaded to every LiveHouse and the sheet");
   });
@@ -3969,5 +3969,62 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
   it("everyone sees who turned a mic off, straight from the seat", () => {
     assert.match(room, /mutedByHost: slot\.mutedByHost,/);
     assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);
+  });
+});
+
+describe("invite to speak and the soft mute, after review", () => {
+  const code = (path: string) => stripComments(read(path));
+  const room = code("features/houses/components/house-room.tsx");
+  const player = code("components/layout/room-mini-player.tsx");
+  const banner = code("features/houses/components/invite-banner.tsx");
+  const tools = code("features/houses/hooks/use-host-stage-tools.ts");
+  const session = code("components/layout/room-session.tsx");
+  const hooks = code("features/streams/hooks/use-streams.ts");
+
+  it("every deadline the server writes is read on the server's clock, which the one transport records", () => {
+    assert.match(code("lib/api/client.ts"), /recordServerDate\(response\.headers\.get\("date"\)\);/);
+    assert.match(session, /offset: serverClockOffset\(\)/);
+    assert.match(tools, /offsetMs: serverClockOffset\(\),/);
+    for (const surface of [player, room]) {
+      assert.match(surface, /createdAt=\{(session\.)?invite\.createdAt\}/);
+      assert.match(surface, /clockOffsetMs=\{(session\.)?invite\.clockOffsetMs\}/);
+    }
+    assert.match(banner, /inviteView\(\{ id: requestId, status: "invited", inviteExpiresAt, createdAt \}, now, seenAt, clockOffsetMs\)/);
+  });
+
+  it("the invitation is drawn only off a row the session is still polling", () => {
+    assert.match(session, /const invitedRow = liveInviteRow\(mine\.data, \{ polling, isHost \}\);/);
+  });
+
+  it("a failed Cancel brings the invitation back, even if the room page has gone", () => {
+    assert.match(tools, /resolveMutateAsync\(\{ requestId, action: "cancel" \}\)\.catch\(/);
+    assert.match(tools, /if \(cancelFailedForReal\(error as ApiErrorLike\)\) memoryFor\(streamId\)\.cancelled\.delete\(requestId\);/);
+  });
+
+  it("an invitation sent is tracked from the invite's own answer, and bans and cooldowns outlive the room page", () => {
+    const invite = hooks.slice(hooks.indexOf("export function useInviteToSpeak"), hooks.indexOf("export function useAnswerInvite"));
+    assert.match(invite, /held\.tracked = trackInvite\(/);
+    assert.match(invite, /inviteMemoryFor\(streamId\)\.refused\.add\(userId\);/);
+    assert.match(invite, /inviteMemoryFor\(streamId\)\.cooldowns\.set\(userId, until\);/);
+    assert.match(tools, /for \(const gone of step\.unavailable\) memory\.ended\.add\(gone\.id\);/);
+    assert.doesNotMatch(tools, /const inviteMemory = new Map/);
+  });
+
+  it("a Not now on an ended invitation is quiet", () => {
+    const answer = hooks.slice(hooks.indexOf("export function useAnswerInvite"), hooks.indexOf("export function useMuteSpeaker"));
+    assert.match(answer, /answerErrorMessage\(error as ApiErrorLike, action\)/);
+  });
+
+  it("the Muted by host memory outlives a remount of the room page", () => {
+    const slots = code("features/streams/hooks/use-stage-slots.ts");
+    assert.doesNotMatch(slots, /useRef<ReadonlyMap<string, HostMuteBadgeState>>/);
+    assert.match(slots, /hostMuteMemory\.get\(memoryKey\)/);
+  });
+
+  it("the invite row waits for a block check that succeeded, and is off for someone who left", () => {
+    const gate = code("features/profile/components/person-safety-rows.tsx");
+    assert.match(gate, /if \(!profile\.data \|\| profile\.data\.isBlocked\) return null;/);
+    assert.match(room, /present: presentIds\.has\(base\)/);
+    assert.match(tools, /present: person\.present,/);
   });
 });

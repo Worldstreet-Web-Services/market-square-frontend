@@ -151,12 +151,13 @@ export function PersonFollow({ username }: { username: string }) {
  *
  * The host's Invite to speak row goes through this in a house: a person the
  * host blocked is simply not offered, rather than offered and then refused.
- * Shown while the profile loads — the host knows whom they blocked, so a row
- * that then leaves tells them nothing new. A block BY the target is not on
- * this edge and stays the service's to refuse quietly.
+ * NOT shown until the profile has loaded: while it loads, or when it fails,
+ * the block is unknown, and a row drawn then offered a blocked person the
+ * invitation. A block BY the target is not on this edge and stays the
+ * service's to refuse quietly.
  */
 export function HideIfBlocked({ username, children }: { username: string; children: React.ReactNode }) {
   const profile = useProfile(username);
-  if (profile.data?.isBlocked) return null;
+  if (!profile.data || profile.data.isBlocked) return null;
   return <>{children}</>;
 }

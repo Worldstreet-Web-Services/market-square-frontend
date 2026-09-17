@@ -14,42 +14,24 @@ import type { SpeakerRequest, Stream } from "@/features/streams/lib/types";
 import type { PersonHostActions, PersonTarget } from "@/features/houses/components/person-sheet";
 import type { InvitedList } from "@/features/houses/components/invited-group";
 import { SEAT_COUNT } from "@/features/houses/lib/seating";
+import { inviteMemoryFor } from "@/features/streams/lib/invite-memory";
+import { serverClockOffset } from "@/lib/server-clock";
 import {
+  cancelFailedForReal,
   hostOutcomeLabel,
   inviteControl,
   settleInvites,
   visibleInvites,
+  type ApiErrorLike,
   type TrackedInvite,
 } from "@/lib/speaker-invite";
 import { hostMuteControl } from "@/lib/host-mute";
 
 const NO_REQUESTS: readonly SpeakerRequest[] = [];
 
-/*
-  THE HOST'S INVITATIONS OUTLIVE THE ROOM PAGE.
-
-  A host who invites Ben and then minimises the room to read their DMs is not
-  looking at LiveHouse, and a component ref died with it: back in the room the
-  tracked list started empty, Ben's row was already gone, and nothing was ever
-  said. Held per stream for the page load instead, so a remount settles what
-  ended while the host was away (lib/speaker-invite.ts `settleInvites`).
-  Plain data, never shared between streams.
-*/
-interface InviteMemory {
-  tracked: TrackedInvite[];
-  /** The last row seen for each tracked invitation — what its Invited row draws. */
-  rows: Map<string, SpeakerRequest>;
-  cancelled: Set<string>;
-}
-const inviteMemory = new Map<string, InviteMemory>();
-function memoryFor(streamId: string): InviteMemory {
-  let memory = inviteMemory.get(streamId);
-  if (!memory) {
-    memory = { tracked: [], rows: new Map(), cancelled: new Set() };
-    inviteMemory.set(streamId, memory);
-  }
-  return memory;
-}
+// The host's invitations and what the service said about people are held per
+// stream for the page load, outside this hook (features/streams/lib/invite-memory.ts).
+const memoryFor = inviteMemoryFor;
 
 function sameIds(a: readonly TrackedInvite[], b: readonly TrackedInvite[]): boolean {
   return a.length === b.length && a.every((item, index) => item.id === b[index]?.id && item.deadline === b[index]?.deadline);
@@ -113,12 +95,16 @@ export function useHostStageTools({
         userId: baseIdentity(item.userId),
         name: item.profile?.displayName || item.profile?.username || "",
         inviteExpiresAt: item.inviteExpiresAt,
+        createdAt: item.createdAt,
       })),
       seatedUserIds,
       cancelledIds: memory.cancelled,
+      endedIds: memory.ended,
+      offsetMs: serverClockOffset(),
       now,
     });
     memory.tracked = step.tracked;
+    for (const gone of step.unavailable) memory.ended.add(gone.id);
     const keep = new Set(step.tracked.map((item) => item.id));
     for (const id of memory.rows.keys()) if (!keep.has(id)) memory.rows.delete(id);
     const shown = visibleInvites(step.tracked, now);
@@ -133,16 +119,22 @@ export function useHostStageTools({
     return () => clearInterval(timer);
   }, [settling, settle]);
 
-  const resolveMutate = resolve.mutate;
+  const resolveMutateAsync = resolve.mutateAsync;
   const cancel = useCallback(
     (requestId: string) => {
       memoryFor(streamId).cancelled.add(requestId);
       settle();
       // A Cancel on an invitation that already ended answers INVITE_NOT_OPEN,
-      // which useResolveSpeakerRequest takes as the success it is.
-      resolveMutate({ requestId, action: "cancel" });
+      // which useResolveSpeakerRequest takes as the success it is. Any other
+      // failure leaves the invitation open on the server, so it comes back on
+      // the host's screen (the next settle re-reads it) rather than staying
+      // hidden and uncancellable. The promise, not a per-call onError: that
+      // one is dropped if the room page unmounts first.
+      resolveMutateAsync({ requestId, action: "cancel" }).catch((error: unknown) => {
+        if (cancelFailedForReal(error as ApiErrorLike)) memoryFor(streamId).cancelled.delete(requestId);
+      });
     },
-    [streamId, settle, resolveMutate]
+    [streamId, settle, resolveMutateAsync]
   );
 
   const shownRows = useMemo(
@@ -191,6 +183,7 @@ export function useHostStageTools({
           seated,
           pendingRequestId: person.pendingRequestId,
           openInviteId: openInvites.get(userId)?.id ?? null,
+          present: person.present,
         },
         stageFull,
         seatCount: SEAT_COUNT,

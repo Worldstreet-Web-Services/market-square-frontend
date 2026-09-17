@@ -39,6 +39,8 @@ export interface PersonTarget {
   micMuted: boolean;
   /** This seat is the room's host — whom nobody mutes. */
   isRoomHost: boolean;
+  /** Still in the room, as the host's connection sees it. Absent means not known. */
+  present?: boolean;
 }
 
 /** The host's rows over one person, decided in lib/ (speaker-invite, host-mute) and only drawn here. */

@@ -16,8 +16,8 @@
  *  2. THE HOST IS NEVER TOLD "DECLINED". A refusal and an invitation that ran
  *     out read the same: "<name> isn't available to speak right now".
  *  3. THE CLOCK IS THE SERVER'S. The countdown is read from `inviteExpiresAt`
- *     (never `expiresAt`, which on the same row is the join token's expiry);
- *     the client never starts its own 60 seconds.
+ *     (never `expiresAt`, which on the same row is the join token's expiry),
+ *     moved onto the device by the server's own clock (lib/server-clock.ts).
  */
 
 import { squarePaths } from "./square-path.ts";
@@ -45,6 +45,8 @@ export interface InviteRow {
   id: string;
   status: string;
   inviteExpiresAt: string | null;
+  /** When the server opened the row, on the server's clock. */
+  createdAt?: string | null;
 }
 
 export type InviteView =
@@ -61,40 +63,63 @@ export type InviteView =
 export const INVITE_TTL_MS = 60_000;
 
 /**
- * When an invitation stops being answerable, on THIS device's clock.
+ * When an invitation stops being answerable, on THIS device's clock, or null
+ * when nothing trustworthy says.
  *
- * `inviteExpiresAt` is the server's clock and the device's may be minutes off.
- * So the time left is read ONCE, when the row is first seen, and counted down
- * locally from there, capped at the contract's 60 seconds (a slow device
- * cannot count past the server's expiry by more than that). A reading at or
- * below zero on a row the server still lists as `invited` means the device is
- * FAST, not that the invitation is over: null, no countdown, and the poll
- * (withdrawn) or INVITE_NOT_OPEN ends it instead.
+ * `inviteExpiresAt` is the SERVER's clock and the device's may be minutes off,
+ * so it is never read against `Date.now()` raw — a phone running 45 s fast hid
+ * an invitation the server held open for 45 s more. In order:
+ *
+ *  1. With the server's clock (`offsetMs`, lib/server-clock.ts): the expiry
+ *     moved onto this device's clock. It may already be past — a row the
+ *     server lists but has not lazily withdrawn yet is over, not open.
+ *  2. Without it, the row's own lifetime (`inviteExpiresAt - createdAt`, both
+ *     server readings) counted from when this device first saw it. It can only
+ *     run long (by the poll's delay), never short.
+ *  3. Neither: null. The view holds it open without a countdown for the
+ *     contract's 60 seconds from first sight, which is also never short.
+ *
+ * Capped at first sight + 60 s: the row was seen after it was created.
  */
 export function inviteDeadline(
   inviteExpiresAt: string | null | undefined,
   firstSeenAt: number,
-  ttlMs: number = INVITE_TTL_MS
+  clock: { offsetMs?: number | null; createdAt?: string | null; ttlMs?: number } = {}
 ): number | null {
+  const ttl = clock.ttlMs ?? INVITE_TTL_MS;
   const expires = inviteExpiresAt ? Date.parse(inviteExpiresAt) : Number.NaN;
   if (!Number.isFinite(expires)) return null;
-  const left = expires - firstSeenAt;
-  if (left <= 0) return null;
-  return firstSeenAt + Math.min(left, ttlMs);
+  const cap = firstSeenAt + ttl;
+  if (typeof clock.offsetMs === "number" && Number.isFinite(clock.offsetMs)) {
+    return Math.min(expires - clock.offsetMs, cap);
+  }
+  const created = clock.createdAt ? Date.parse(clock.createdAt) : Number.NaN;
+  if (Number.isFinite(created) && expires > created) return Math.min(firstSeenAt + (expires - created), cap);
+  return null;
 }
 
 /**
  * What the invitee sees for their own row at `now` (epoch ms), first seen at
- * `firstSeenAt` (see `inviteDeadline`).
+ * `firstSeenAt`, with the server's clock offset when one has been read (see
+ * `inviteDeadline`).
  *
  * Only `invited` is an invitation. Past the deadline it is `expired`, which
  * draws nothing rather than hanging on at 0:00 until the next poll. A row with
- * no trustworthy deadline is still an open invitation, without a countdown.
+ * no trustworthy deadline is open without a countdown, and ends after the
+ * contract's 60 seconds from first sight all the same.
  */
-export function inviteView(row: InviteRow | null | undefined, now: number, firstSeenAt: number = now): InviteView {
+export function inviteView(
+  row: InviteRow | null | undefined,
+  now: number,
+  firstSeenAt: number = now,
+  offsetMs: number | null = null
+): InviteView {
   if (!row || row.status !== "invited") return { state: "none" };
-  const deadline = inviteDeadline(row.inviteExpiresAt, firstSeenAt);
-  if (deadline === null) return { state: "open", requestId: row.id, secondsLeft: null };
+  const deadline = inviteDeadline(row.inviteExpiresAt, firstSeenAt, { offsetMs, createdAt: row.createdAt });
+  if (deadline === null) {
+    if (now >= firstSeenAt + INVITE_TTL_MS) return { state: "expired", requestId: row.id };
+    return { state: "open", requestId: row.id, secondsLeft: null };
+  }
   const left = Math.ceil((deadline - now) / 1000);
   if (left <= 0) return { state: "expired", requestId: row.id };
   return { state: "open", requestId: row.id, secondsLeft: left };
@@ -215,6 +240,8 @@ export interface InviteTarget {
   pendingRequestId: string | null;
   /** An invitation of ours they have not answered yet. */
   openInviteId: string | null;
+  /** Still in the room. Absent means not known, which is read as present. */
+  present?: boolean;
 }
 
 export type InviteControl =
@@ -251,6 +278,7 @@ export function inviteControl(input: {
   // that changes after one tap would tell the host so.
   if (input.refused) return { kind: "hidden" };
   if (target.openInviteId) return { kind: "invited", requestId: target.openInviteId };
+  if (target.present === false) return { kind: "invite", disabled: true, reason: "They've left the room." };
   if (isAnonymousIdentity(target.identity)) {
     return { kind: "invite", disabled: true, reason: "They're listening without an account, so they can't be invited to speak." };
   }
@@ -296,8 +324,10 @@ export interface TrackedInvite {
   deadline: number;
   /** The deadline came from the server's expiry, so a countdown may be drawn. */
   timed: boolean;
-  /** When the row stopped being listed as invited, or null while it is. */
-  goneAt: number | null;
+  /** The last reading that looked at it. */
+  checkedAt: number;
+  /** When the readings last started again after a gap (the host away from the room). */
+  resumedAt: number;
 }
 
 /**
@@ -308,61 +338,101 @@ export interface TrackedInvite {
  */
 export const OUTCOME_GRACE_MS = 6_000;
 
+/** The part of a row the host's tracking reads. */
+export interface OpenInvite {
+  id: string;
+  userId: string;
+  name: string;
+  inviteExpiresAt: string | null;
+  createdAt?: string | null;
+}
+
+function startTracking(item: OpenInvite, now: number, clock: { offsetMs?: number | null; ttlMs?: number }): TrackedInvite {
+  const ttl = clock.ttlMs ?? INVITE_TTL_MS;
+  const deadline = inviteDeadline(item.inviteExpiresAt, now, { offsetMs: clock.offsetMs, createdAt: item.createdAt, ttlMs: ttl });
+  return {
+    id: item.id,
+    userId: item.userId,
+    name: item.name,
+    deadline: deadline ?? now + ttl,
+    timed: deadline !== null,
+    checkedAt: now,
+    resumedAt: now,
+  };
+}
+
+/**
+ * Start following an invitation from the invite's own answer, before any list
+ * read has listed it. Without this an invitation answered before the host's
+ * first read (the host minimised the room at once, or the invitee answered
+ * off the push) was never tracked: a decline got no Invited row and no line,
+ * where a lapse got both — which told the host which one it was.
+ * The same array back when it is already tracked.
+ */
+export function trackInvite(
+  tracked: readonly TrackedInvite[],
+  item: OpenInvite,
+  now: number,
+  clock: { offsetMs?: number | null; ttlMs?: number } = {}
+): readonly TrackedInvite[] {
+  if (tracked.some((invite) => invite.id === item.id)) return tracked;
+  return [...tracked, startTracking(item, now, clock)];
+}
+
 /**
  * Follow the host's invitations from one read to the next.
  *
  * Settled by what happened to the PERSON, never by a row's status: seated says
  * nothing, taken back by the host says nothing. Anything else is "isn't
- * available" — and never before the invitation's own deadline. A refusal
- * leaves the invited list the moment it happens and a lapse only at the
- * deadline, so a host who saw the row (or the toast) go early would learn
- * "declined", which the product never tells them. Both are held to
- * max(goneAt, deadline) + grace.
+ * available", told at ONE moment for every ending: the invitation's own
+ * deadline plus the grace, whether or not the invited list still carries it.
+ * A refusal leaves the list at once and a lapse only at the first poll after
+ * the server's expiry, so a line timed from when the row left the list landed
+ * a poll's jitter later for a lapse, and "exactly six seconds after the row
+ * went" meant declined — which the product never tells the host.
  *
- * The tracked list is plain data so it can outlive the room page: a host who
- * minimised the room is told when they come back.
+ * The one exception is a host coming back to the room after the deadline:
+ * the lists they are about to read may be stale, so the line waits the grace
+ * from their return (`resumedAt`). That tells them nothing, since they were
+ * not watching when it ended.
+ *
+ * `endedIds` are invitations already told; a late read still listing one does
+ * not start it again. The tracked list is plain data so it can outlive the
+ * room page.
  */
 export function settleInvites(
   tracked: readonly TrackedInvite[],
   input: {
-    open: readonly { id: string; userId: string; name: string; inviteExpiresAt: string | null }[];
+    open: readonly OpenInvite[];
     seatedUserIds: ReadonlySet<string>;
     cancelledIds: ReadonlySet<string>;
+    endedIds?: ReadonlySet<string>;
+    /** The server's clock offset (lib/server-clock.ts), when one has been read. */
+    offsetMs?: number | null;
     now: number;
     graceMs?: number;
     ttlMs?: number;
   }
 ): { tracked: TrackedInvite[]; unavailable: TrackedInvite[] } {
   const grace = input.graceMs ?? OUTCOME_GRACE_MS;
-  const ttl = input.ttlMs ?? INVITE_TTL_MS;
+  const ended = input.endedIds ?? new Set<string>();
   const openIds = new Map(input.open.map((item) => [item.id, item]));
   const next: TrackedInvite[] = [];
   const unavailable: TrackedInvite[] = [];
   const seen = new Set<string>();
   for (const invite of tracked) {
     seen.add(invite.id);
-    if (input.cancelledIds.has(invite.id)) continue;
-    const still = openIds.get(invite.id);
-    if (still) {
-      next.push({ ...invite, name: still.name || invite.name, goneAt: null });
-      continue;
-    }
+    if (input.cancelledIds.has(invite.id) || ended.has(invite.id)) continue;
     if (input.seatedUserIds.has(invite.userId)) continue;
-    const goneAt = invite.goneAt ?? input.now;
-    if (input.now >= Math.max(goneAt, invite.deadline) + grace) unavailable.push(invite);
-    else next.push({ ...invite, goneAt });
+    const resumedAt = input.now - invite.checkedAt > grace ? input.now : invite.resumedAt;
+    const still = openIds.get(invite.id);
+    const current = { ...invite, name: still?.name || invite.name, checkedAt: input.now, resumedAt };
+    if (input.now >= Math.max(invite.deadline, resumedAt) + grace) unavailable.push(current);
+    else next.push(current);
   }
   for (const item of input.open) {
-    if (seen.has(item.id) || input.cancelledIds.has(item.id)) continue;
-    const deadline = inviteDeadline(item.inviteExpiresAt, input.now, ttl);
-    next.push({
-      id: item.id,
-      userId: item.userId,
-      name: item.name,
-      deadline: deadline ?? input.now + ttl,
-      timed: deadline !== null,
-      goneAt: null,
-    });
+    if (seen.has(item.id) || input.cancelledIds.has(item.id) || ended.has(item.id)) continue;
+    next.push(startTracking(item, input.now, { offsetMs: input.offsetMs, ttlMs: input.ttlMs }));
   }
   return { tracked: next, unavailable };
 }
@@ -370,6 +440,21 @@ export function settleInvites(
 /** The invitations the host still sees as open (the Invited rows, the card badge, Cancel). */
 export function visibleInvites(tracked: readonly TrackedInvite[], now: number): TrackedInvite[] {
   return tracked.filter((invite) => now < invite.deadline);
+}
+
+/**
+ * The reader's invitation, only off a row the session is still reading.
+ *
+ * The query keeps its last data when it is switched off, so a room that ended
+ * or a reconnect that gave up (a private room's 403) left a cached `invited`
+ * row drawing a Join banner for a room the reader was no longer in.
+ */
+export function liveInviteRow<T extends { status: string }>(
+  row: T | null | undefined,
+  input: { polling: boolean; isHost: boolean }
+): T | null {
+  if (!input.polling || input.isHost || !row || row.status !== "invited") return null;
+  return row;
 }
 
 /* ------------------------------------------------------------------ *
@@ -491,8 +576,13 @@ export function inviteErrorOutcome(error: ApiErrorLike | null | undefined, name?
   }
 }
 
-/** What the invitee is told when answering could not go through. */
-export function answerErrorMessage(error: ApiErrorLike | null | undefined): string | null {
+/**
+ * What the invitee is told when answering could not go through, or null for
+ * nothing. A Not now on an invitation that already ended is the answer they
+ * gave coming true, not an error (`quietResolveError`); a Join still says so.
+ */
+export function answerErrorMessage(error: ApiErrorLike | null | undefined, action: "accept" | "reject" = "accept"): string | null {
+  if (action === "reject" && quietResolveError(error, "reject")) return null;
   switch (error?.code) {
     case "INVITE_NOT_OPEN":
       return "That invitation has ended.";
@@ -503,6 +593,15 @@ export function answerErrorMessage(error: ApiErrorLike | null | undefined): stri
     default:
       return routeMissing(error) ? null : "Couldn't answer the invitation.";
   }
+}
+
+/**
+ * A Cancel that really did not go through, so the invitation is still open
+ * and must come back on the host's screen. One that failed only because the
+ * invitation had already ended is the Cancel's own outcome.
+ */
+export function cancelFailedForReal(error: ApiErrorLike | null | undefined): boolean {
+  return !quietResolveError(error, "cancel");
 }
 
 /**
