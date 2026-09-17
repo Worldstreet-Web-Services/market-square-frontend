@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
 import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots";
-import { withMicrofrontends } from "@vercel/microfrontends/next/config";
 import { parseBase } from "./lib/square-path";
 
 /**
@@ -83,7 +82,20 @@ const SECURITY_HEADERS = [
  */
 const EXTRA_PREVIEW_BOTS = ["Pinterestbot", "Mastodon", "Snap URL Preview", "Viber"];
 
+/*
+  WHICH BUILD THIS IS. Unset: the standalone square.tsionark.com, exactly as it
+  was. "/square": the zone www.tsionark.com mounts (Next.js Multi-Zones) — the
+  WSWS app rewrites `/square/:path*` to this deployment, so EVERYTHING the page
+  loads has to live under /square or it would be answered by WSWS instead.
+*/
+const base = parseBase(process.env.NEXT_PUBLIC_SQUARE_BASE_PATH);
+
 const nextConfig: NextConfig = {
+  // Styles, scripts and fonts: `/square/_next/static/…` rather than `/_next/…`.
+  ...(base ? { assetPrefix: base } : {}),
+  // The image optimiser is not covered by assetPrefix; `next/image` would ask
+  // WSWS's `/_next/image` for our files without this.
+  ...(base ? { images: { path: `${base}/_next/image` } } : {}),
   turbopack: {
     root: process.cwd(),
   },
@@ -92,14 +104,12 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
   /*
-    THE BUILD ARK MOUNTS answers under /square (see lib/square-path). The routes
-    and public files stay where they are; `/square/…` is rewritten onto them
-    BEFORE the filesystem is checked, so pages, route handlers and public files
-    all resolve. The standalone build (no base) gets no rewrites at all and is
-    exactly what it was.
+    The zone answers under /square (see lib/square-path). The routes and public
+    files stay where they are; `/square/…` is rewritten onto them BEFORE the
+    filesystem is checked, so pages, route handlers, public files and
+    `/square/_next/…` all resolve. The standalone build gets no rewrites.
   */
   async rewrites() {
-    const base = parseBase(process.env.NEXT_PUBLIC_SQUARE_BASE_PATH);
     if (base === "") return [];
     return {
       beforeFiles: [
@@ -112,12 +122,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-/*
-  THE BUILD ARK MOUNTS runs as a Vercel microfrontend at www.tsionark.com/square,
-  beside WSWS (microfrontends.json lives in wsws-frontend). `withMicrofrontends`
-  adds the asset prefix and reads the group's routing config, and it THROWS
-  when that config is absent ("Missing MFE_CONFIG"). So it is on only where
-  SQUARE_MICROFRONTENDS=1 — the Vercel project in the group — and never on the
-  standalone square.tsionark.com build.
-*/
-export default process.env.SQUARE_MICROFRONTENDS === "1" ? withMicrofrontends(nextConfig) : nextConfig;
+export default nextConfig;
