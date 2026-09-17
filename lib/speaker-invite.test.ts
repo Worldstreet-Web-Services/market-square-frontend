@@ -21,6 +21,7 @@ import {
   quietResolveError,
   visibleInvites,
   isAnonymousIdentity,
+  inviteGateHandle,
   releaseActionFor,
   releaseOnLeave,
   createInflightAnswers,
@@ -123,6 +124,23 @@ describe("leaving the room answers what the reader's row is waiting on", () => {
     for (const status of ["denied", "withdrawn", "removed", null, undefined]) {
       assert.equal(releaseActionFor(status), null, String(status));
     }
+  });
+});
+
+describe("the host's block gate always has somebody to look up", () => {
+  it("uses the username when the room token carries one", () => {
+    assert.equal(inviteGateHandle("ada", "did:privy:ada#speaker"), "ada");
+  });
+
+  it("falls back to the account id, without the seat suffix, when it does not", () => {
+    assert.equal(inviteGateHandle(null, "did:privy:ada"), "did:privy:ada");
+    assert.equal(inviteGateHandle(undefined, "did:privy:ada#speaker"), "did:privy:ada");
+    assert.equal(inviteGateHandle("", "did:privy:ada"), "did:privy:ada");
+  });
+
+  it("is nothing for an anonymous listener, who cannot be invited and has no profile", () => {
+    assert.equal(inviteGateHandle(null, "anon-123"), null);
+    assert.equal(inviteGateHandle(null, ""), null);
   });
 });
 

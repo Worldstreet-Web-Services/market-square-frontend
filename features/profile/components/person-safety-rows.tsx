@@ -147,7 +147,8 @@ export function PersonFollow({ username }: { username: string }) {
 }
 
 /**
- * Draws its children unless the viewer has blocked this handle.
+ * Draws its children unless the viewer has blocked this person, looked up by
+ * username or, when a room token carried none, by account id.
  *
  * The host's Invite to speak row goes through this in a house: a person the
  * host blocked is simply not offered, rather than offered and then refused.
@@ -156,8 +157,9 @@ export function PersonFollow({ username }: { username: string }) {
  * invitation. A block BY the target is not on this edge and stays the
  * service's to refuse quietly.
  */
-export function HideIfBlocked({ username, children }: { username: string; children: React.ReactNode }) {
-  const profile = useProfile(username);
+export function HideIfBlocked({ handle, children }: { handle: string; children: React.ReactNode }) {
+  // A username or an account id: `GET /profiles/:handle` resolves either.
+  const profile = useProfile(handle);
   if (!profile.data || profile.data.isBlocked) return null;
   return <>{children}</>;
 }

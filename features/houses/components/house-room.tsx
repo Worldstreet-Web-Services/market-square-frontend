@@ -205,7 +205,7 @@ interface SlotProps {
    * someone the host has blocked. A slot because the block edge is the profile
    * slice's. Hidden up front, never refused after a tap.
    */
-  inviteGateSlot?: (username: string, row: React.ReactNode) => React.ReactNode;
+  inviteGateSlot?: (handle: string, row: React.ReactNode) => React.ReactNode;
 }
 
 /** One frozen empty set, so an unresolved roster is not a new value per render. */

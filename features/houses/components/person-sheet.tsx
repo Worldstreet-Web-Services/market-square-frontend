@@ -11,7 +11,7 @@ import { IconChevronRight } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/sheet";
 import type { ParticipantMeta } from "@/features/houses/lib/participant-meta";
 import { sq } from "@/lib/square-path";
-import type { InviteControl } from "@/lib/speaker-invite";
+import { inviteGateHandle, type InviteControl } from "@/lib/speaker-invite";
 import type { HostMuteControl } from "@/lib/host-mute";
 
 /**
@@ -82,10 +82,12 @@ export function PersonSheet({
     mute: { muted: boolean; onToggle: () => void } | undefined
   ) => React.ReactNode;
   /** Hides the invite row for someone the host blocked (the profile slice knows). */
-  inviteGateSlot?: (username: string, row: React.ReactNode) => React.ReactNode;
+  inviteGateSlot?: (handle: string, row: React.ReactNode) => React.ReactNode;
 }) {
   if (!person) return null;
   const username = person.meta?.username ?? null;
+  // The username, or the account id when the room token carried none.
+  const gateHandle = inviteGateHandle(username, person.identity);
 
   /* ONE element for Invite and Cancel: swapping two conditional rows
      unmounted the focused one and dropped focus out of the modal. */
@@ -176,7 +178,7 @@ export function PersonSheet({
         )}
         {/* Someone the host blocked gets no invite row at all: the gate
             wraps whichever state it is in, so the element stays the same. */}
-        {inviteRow && (username && inviteGateSlot ? inviteGateSlot(username, inviteRow) : inviteRow)}
+        {inviteRow && (gateHandle && inviteGateSlot ? inviteGateSlot(gateHandle, inviteRow) : inviteRow)}
 
         {username && (
           <Link

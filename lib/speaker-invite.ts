@@ -28,6 +28,22 @@ export function isAnonymousIdentity(identity: string): boolean {
   return base.startsWith("anon-");
 }
 
+/**
+ * What the host's block gate looks a person up by: their handle when the room
+ * token carries one, otherwise their account id — the plain DID off the
+ * LiveKit identity, which `GET /profiles/:handle` also resolves (username
+ * first, then id). Keyed on the handle alone, a person whose token carried no
+ * username was never checked, and a host who had blocked them was still
+ * offered Invite to speak. Null only for an anonymous listener, who cannot be
+ * invited anyway (the control says why) and has no profile to look at.
+ */
+export function inviteGateHandle(username: string | null | undefined, identity: string): string | null {
+  if (username) return username;
+  if (isAnonymousIdentity(identity)) return null;
+  const base = identity.split("#")[0] ?? identity;
+  return base.length > 0 ? base : null;
+}
+
 /** `0:42`, `1:05`. Never negative. */
 export function formatCountdown(seconds: number): string {
   const whole = Math.max(0, Math.ceil(seconds));

@@ -24,7 +24,7 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
       houseId={houseId}
       followSlot={(username) => <PersonFollow username={username} />}
       safetySlot={(username, mute) => <PersonSafetyRows username={username} mute={mute} />}
-      inviteGateSlot={(username, row) => <HideIfBlocked username={username}>{row}</HideIfBlocked>}
+      inviteGateSlot={(handle, row) => <HideIfBlocked handle={handle}>{row}</HideIfBlocked>}
       // The wink + follow pair on every person card in the room (169:13368).
       personActionsSlot={(username, variant) => (
         <PersonQuickActions username={username} variant={variant} />
