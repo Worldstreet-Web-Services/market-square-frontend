@@ -14,8 +14,9 @@ import { createGateway, type Gateway } from "@/lib/ws-gateway";
  * AUTHENTICATED WHEN THE READER IS SIGNED IN. The speaker signals ride
  * `user:<did>`, which ws-gateway refuses on an anonymous socket
  * ("authentication required for personal topics"). So the client is handed
- * Privy's access token: it goes on the upgrade, and on a socket that was
- * opened before sign-in it is sent as `authenticate` (lib/ws-gateway.ts).
+ * Privy's access token, which it sends INSIDE the open socket as the gateway's
+ * `authenticate` frame — never on the upgrade URL, where every proxy and
+ * access log in between would keep a copy (lib/ws-gateway.ts).
  * Signed out, `getAccessToken` answers null and the socket stays anonymous,
  * which every public topic is happy with.
  */

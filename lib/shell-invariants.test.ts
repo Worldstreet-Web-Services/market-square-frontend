@@ -3876,6 +3876,11 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     const shared = code("lib/ws-gateway-shared.ts");
     assert.match(shared, /import \{ getAccessToken \} from "@privy-io\/react-auth";/);
     assert.match(shared, /createGateway\([\s\S]*\{\s*getToken: \(\) => getAccessToken\(\),\s*\}\)/);
+    // The token is a frame on the open socket, never a query string an access log would keep.
+    const client = code("lib/ws-gateway.ts");
+    assert.doesNotMatch(client, /searchParams\.set\("token"/);
+    assert.match(client, /open\(url\);/);
+    assert.match(client, /send\(\{ type: "authenticate", token \}\);/);
     const session = code("components/layout/room-session.tsx");
     assert.match(session, /sharedGateway\(\)\.subscribe\(myTopic,/);
   });

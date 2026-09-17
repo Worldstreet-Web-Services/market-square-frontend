@@ -4,7 +4,8 @@
  *
  * One socket per page at `wss://<gateway>/`, every topic multiplexed over
  * it. Frames OUT are exactly four: `subscribe`, `unsubscribe`, `ping`, and
- * `authenticate` (a fresh token, only when a personal topic needs one).
+ * `authenticate` (a fresh token, only when a personal topic needs one — and
+ * only ever as a frame, never on the upgrade URL, where logs would keep it).
  * Frames IN are `{ type, data, timestamp }`. The client reads `welcome` and
  * `authenticated` for who the gateway decided the socket is, `data.lane` on
  * a `feedHeadChanged` event, and `data.streamId` on the speaker signals —
@@ -155,13 +156,6 @@ export function personalTopicOwner(topic: string): string | null {
   return owner.length > 0 ? owner : null;
 }
 
-/** The upgrade address with the token on it: a browser cannot set headers on a WebSocket. */
-export function withToken(url: string, token: string | null): string {
-  if (!token) return url;
-  const address = new URL(url);
-  address.searchParams.set("token", token);
-  return address.toString();
-}
 
 export interface Gateway {
   /** Subscribe a listener to a topic. Returns the unsubscribe. */
@@ -176,35 +170,39 @@ export interface Gateway {
  * so callers need no branch of their own.
  *
  * ─── AUTHENTICATION (ADR-0009) ──────────────────────────────────────────────
- * With `getToken`, every connect asks for a fresh token first and puts it on
- * the upgrade (`?token=`). The gateway awaits that verification before it
- * answers any subscribe, so the topics sent on open are judged as the reader.
- * The gateway says who it decided we are (`welcome`, then `authenticated`
- * after a re-auth). A personal topic this socket is NOT authenticated for —
- * the page opened the socket signed out for the feed, and the reader signed
- * in later; or Privy had no token yet at connect — sends one
- * `{ type: "authenticate", token }` and, once the gateway answers as that
- * account, subscribes the personal topics again (the first attempt was
- * refused, and the gateway does not remember a refusal). A token that still
- * does not verify leaves the socket anonymous: nothing is retried until the
- * next connect, and the poll stays the floor.
+ * THE TOKEN NEVER GOES IN THE ADDRESS. The gateway would read `?token=` off
+ * the upgrade, but a URL is written down by every proxy, load balancer and
+ * access log it passes through, and a Privy access token there is a bearer
+ * credential sitting in somebody's log retention. So the socket always opens
+ * ANONYMOUS, and the token travels inside the connection as the gateway's own
+ * `{ type: "authenticate", token }` frame.
+ *
+ * On open, public topics are subscribed at once. Personal topics (`user:<id>`)
+ * are HELD: a subscribe sent before the gateway has verified the token is
+ * judged against the anonymous identity and refused, and the gateway does not
+ * remember a refusal. With a personal topic to carry, the open sends one
+ * `authenticate` with a fresh token; once the gateway answers `authenticated`
+ * as that account, the account's personal topics are subscribed. A personal
+ * topic that arrives later on a socket not yet authenticated as its owner
+ * sends `authenticate` the same way. A token that does not verify leaves the
+ * socket anonymous: nothing is retried on its own until the next connect or
+ * the next personal topic, and the poll stays the floor.
  */
 export function createGateway(url: string, makeSocket: SocketFactory, options: GatewayOptions = {}): Gateway {
   const { getToken } = options;
   const listeners = new Map<string, Set<(frame: GatewayFrame) => void>>();
   let socket: SocketLike | null = null;
-  let connecting = false;
-  /** Bumped by every deliberate disconnect, so a token that arrives after one opens nothing. */
-  let generation = 0;
   let opened = 0;
   let attempt = 0;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let closedOnPurpose = false;
-  /** Who the gateway last said this socket is; null before `welcome` and when anonymous. */
+  /** Who the gateway last said this socket is; null while anonymous. */
   let authedAs: string | null = null;
-  let welcomed = false;
-  let reauthing = false;
+  /** An `authenticate` is out and not yet answered. */
+  let authenticating = false;
+  /** The gateway has answered an `authenticate` on this socket: a late `welcome` cannot undo it. */
+  let answered = false;
 
   const send = (frame: Record<string, unknown>) => {
     if (socket && socket.readyState === OPEN) socket.send(JSON.stringify(frame));
@@ -217,6 +215,13 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
     reconnectTimer = null;
   };
 
+  /** Topics this socket can be heard on as it stands: every public one, and the personal ones it is authenticated for. */
+  const hearable = () =>
+    [...listeners.keys()].filter((topic) => {
+      const owner = personalTopicOwner(topic);
+      return owner === null || owner === authedAs;
+    });
+
   /** Personal topics held that this socket's identity cannot hear. */
   const unheardPersonal = () =>
     [...listeners.keys()].filter((topic) => {
@@ -224,38 +229,31 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
       return owner !== null && owner !== authedAs;
     });
 
-  const reauthenticate = () => {
-    if (!getToken || reauthing || !socket) return;
+  const authenticate = () => {
+    if (!getToken || authenticating || !socket || socket.readyState !== OPEN) return;
     const current = socket;
-    reauthing = true;
+    authenticating = true;
     void getToken()
       .catch(() => null)
       .then((token) => {
-        if (socket !== current) {
-          reauthing = false;
-          return;
-        }
+        if (socket !== current) return;
         if (!token) {
           // Signed out, or Privy has none to give: stay anonymous, quietly.
-          reauthing = false;
+          authenticating = false;
           return;
         }
         send({ type: "authenticate", token });
       });
   };
 
-  const onIdentity = (userId: string | null, afterReauth: boolean) => {
+  const onAuthenticated = (userId: string | null) => {
     authedAs = userId;
-    welcomed = true;
-    if (afterReauth) reauthing = false;
-    if (userId) {
-      const mine = [...listeners.keys()].filter((topic) => personalTopicOwner(topic) === userId);
-      // After a re-auth the earlier subscribe was refused: ask again.
-      if (afterReauth && mine.length > 0) send({ type: "subscribe", topics: mine });
-    }
-    // Only a welcome prompts a re-auth. An `authenticated` that still is not
-    // the right account is the gateway's final word until the next connect.
-    if (!afterReauth && unheardPersonal().length > 0) reauthenticate();
+    authenticating = false;
+    answered = true;
+    if (!userId) return;
+    // Held until now: a subscribe sent before the verification was refused.
+    const mine = [...listeners.keys()].filter((topic) => personalTopicOwner(topic) === userId);
+    if (mine.length > 0) send({ type: "subscribe", topics: mine });
   };
 
   const open = (address: string) => {
@@ -263,23 +261,30 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
     const next = makeSocket(address);
     socket = next;
     authedAs = null;
-    welcomed = false;
-    reauthing = false;
+    authenticating = false;
+    answered = false;
     next.onopen = () => {
       attempt = 0;
-      // Everything subscribed before or during the outage, again.
-      const topics = [...listeners.keys()];
+      // Everything subscribed before or during the outage, again — the
+      // personal topics once the gateway has verified who this is.
+      const topics = hearable();
       if (topics.length > 0) send({ type: "subscribe", topics });
+      if (unheardPersonal().length > 0) authenticate();
       if (pingTimer) clearInterval(pingTimer);
       pingTimer = setInterval(() => send({ type: "ping" }), PING_MS);
     };
     next.onmessage = (event) => {
       const frame = parseFrame(event.data);
       if (!frame || frame.type === "pong") return;
-      if (frame.type === "welcome" || frame.type === "authenticated") {
-        const ok = frame.type === "welcome" ? frame.data.authenticated === true : frame.data.ok === true;
-        const userId = typeof frame.data.userId === "string" && frame.data.userId ? frame.data.userId : null;
-        onIdentity(ok ? userId : null, frame.type === "authenticated");
+      const userId = typeof frame.data.userId === "string" && frame.data.userId ? frame.data.userId : null;
+      if (frame.type === "welcome") {
+        // The upgrade carried no token, so this is anonymous; it can arrive
+        // after an `authenticated` and must not wipe the identity that set.
+        if (!answered) authedAs = frame.data.authenticated === true ? userId : null;
+        return;
+      }
+      if (frame.type === "authenticated") {
+        onAuthenticated(frame.data.ok === true ? userId : null);
         return;
       }
       // Frames carry no topic, so every listener hears every frame and
@@ -294,8 +299,8 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
       if (socket !== next) return;
       socket = null;
       authedAs = null;
-      welcomed = false;
-      reauthing = false;
+      authenticating = false;
+      answered = false;
       if (pingTimer) clearInterval(pingTimer);
       pingTimer = null;
       if (closedOnPurpose || listeners.size === 0) return;
@@ -309,33 +314,20 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
   };
 
   const connect = () => {
-    if (!url || socket || connecting) return;
+    if (!url || socket) return;
     closedOnPurpose = false;
-    if (!getToken) {
-      open(url);
-      return;
-    }
-    connecting = true;
-    const mine = generation;
-    void getToken()
-      .catch(() => null)
-      .then((token) => {
-        connecting = false;
-        if (mine !== generation || socket || listeners.size === 0) return;
-        open(withToken(url, token));
-      });
+    // Always the bare address: the token is a frame, never a query string.
+    open(url);
   };
 
   const disconnect = () => {
     closedOnPurpose = true;
-    generation += 1;
-    connecting = false;
     stopTimers();
     const current = socket;
     socket = null;
     authedAs = null;
-    welcomed = false;
-    reauthing = false;
+    authenticating = false;
+    answered = false;
     current?.close();
   };
 
@@ -352,11 +344,11 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
         listeners.set(topic, set);
       }
       set.add(listener);
-      if (fresh) send({ type: "subscribe", topics: [topic] });
-      // A personal topic on a socket already welcomed as somebody else, or
-      // as nobody: it needs the reader's token before it can be heard.
       const owner = personalTopicOwner(topic);
-      if (fresh && owner !== null && welcomed && owner !== authedAs) reauthenticate();
+      if (fresh && (owner === null || owner === authedAs)) send({ type: "subscribe", topics: [topic] });
+      // A personal topic on an open socket that is not yet this account: it
+      // is subscribed once the gateway has verified the reader's token.
+      else if (fresh) authenticate();
       connect();
       return () => {
         const current = listeners.get(topic);
