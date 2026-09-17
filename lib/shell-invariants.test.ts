@@ -1865,7 +1865,7 @@ describe("A host approving a hand on a full stage is told why", () => {
 describe("A dropped speaker keeps the seat for the grace window, then joins the audience", () => {
   it("tells the speaker why, once, from the service's removedReason", () => {
     const session = stripComments(read("components/layout/room-session.tsx"));
-    assert.match(session, /const notice = seatReleasedNotice\(heldSeatStatus\.current, mine\.data\);/);
+    assert.match(session, /const notice = seatReleasedNotice\(heldSeat\.current, mine\.data\);/);
   });
   it("shows the host a seated speaker who is absent as reconnecting, counting seated and audience both", () => {
     const tray = stripComments(read("features/houses/components/hand-tray.tsx"));

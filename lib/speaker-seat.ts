@@ -17,10 +17,13 @@ export const SEAT_RELEASED_NOTICE =
   "You lost connection, so you were moved to the audience. Raise your hand to speak again.";
 
 export function seatReleasedNotice(
-  previousStatus: string | null,
-  row: { status: string; removedReason?: "host" | "disconnected" | null } | null | undefined
+  previous: { id: string; status: string } | null,
+  row: { id: string; status: string; removedReason?: "host" | "disconnected" | null } | null | undefined
 ): string | null {
-  if (previousStatus !== "approved" || !row) return null;
+  // The SAME request going from seated to released. /speaker-requests/me keeps
+  // answering with the removed row until the reader asks again, so matching
+  // the id is what makes this once — and never carries over between rooms.
+  if (!previous || previous.status !== "approved" || !row || row.id !== previous.id) return null;
   return row.status === "removed" && row.removedReason === "disconnected" ? SEAT_RELEASED_NOTICE : null;
 }
 

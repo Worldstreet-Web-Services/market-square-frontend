@@ -320,11 +320,11 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     `removedReason: 'disconnected'` (lib/speaker-seat.ts). Told once, on the
     transition from seated, never for a host's Move down.
   */
-  const heldSeatStatus = useRef<string | null>(null);
+  const heldSeat = useRef<{ id: string; status: string } | null>(null);
   useEffect(() => {
-    const notice = seatReleasedNotice(heldSeatStatus.current, mine.data);
+    const notice = seatReleasedNotice(heldSeat.current, mine.data);
     if (notice) toast(notice);
-    heldSeatStatus.current = mine.data?.status ?? null;
+    heldSeat.current = mine.data ? { id: mine.data.id, status: mine.data.status } : null;
   }, [mine.data]);
   useEffect(() => {
     const notice = endedInviteNotice(heldInviteId.current, mine.data);

@@ -8,20 +8,25 @@ import { SEAT_RELEASED_NOTICE, seatPresence, seatReleasedNotice } from "./speake
   do that"). The service says so with `removedReason: 'disconnected'`.
 */
 describe("a speaker who lost connection is told why they are in the audience", () => {
-  const row = (status: string, removedReason: "host" | "disconnected" | null) => ({ status, removedReason });
+  const row = (status: string, removedReason: "host" | "disconnected" | null, id = "r1") => ({ id, status, removedReason });
+  const seated = { id: "r1", status: "approved" };
 
   it("names the lost connection only when the seat was released for it", () => {
-    assert.equal(seatReleasedNotice("approved", row("removed", "disconnected")), SEAT_RELEASED_NOTICE);
+    assert.equal(seatReleasedNotice(seated, row("removed", "disconnected")), SEAT_RELEASED_NOTICE);
     assert.match(SEAT_RELEASED_NOTICE, /lost connection/i);
     assert.match(SEAT_RELEASED_NOTICE, /raise your hand/i);
   });
 
   it("stays quiet when the host moved them down, or nothing changed", () => {
-    assert.equal(seatReleasedNotice("approved", row("removed", "host")), null);
-    assert.equal(seatReleasedNotice("approved", row("removed", null)), null);
-    assert.equal(seatReleasedNotice("approved", row("approved", null)), null);
+    assert.equal(seatReleasedNotice(seated, row("removed", "host")), null);
+    assert.equal(seatReleasedNotice(seated, row("removed", null)), null);
+    assert.equal(seatReleasedNotice(seated, row("approved", null)), null);
     assert.equal(seatReleasedNotice(null, row("removed", "disconnected")), null);
-    assert.equal(seatReleasedNotice("removed", row("removed", "disconnected")), null);
+    assert.equal(seatReleasedNotice({ id: "r1", status: "removed" }, row("removed", "disconnected")), null);
+  });
+
+  it("never carries over to another request or another room", () => {
+    assert.equal(seatReleasedNotice(seated, row("removed", "disconnected", "r2")), null);
   });
 });
 

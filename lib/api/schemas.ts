@@ -481,6 +481,8 @@ export const SpeakerRequestSchema = z.object({
   withdrawnReason: z.enum(["expired", "cancelled"]).nullable().optional().default(null).catch(null),
   /* Why a seated speaker left the stage: the host moved them down, or they were gone past the grace window. */
   removedReason: z.enum(["host", "disconnected"]).nullable().optional().default(null).catch(null),
+  /* When the service last saw a seated speaker connected. Coarse (~15 s): not for "Reconnecting…", which reads LiveKit. */
+  lastSeenAt: z.string().nullable().optional().default(null),
   /* The approved speaker's join-token expiry (see the note above the schema). */
   expiresAt: z.string().nullable().optional().default(null),
   createdAt: z.string().optional().default(""),
