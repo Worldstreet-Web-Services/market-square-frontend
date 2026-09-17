@@ -39,12 +39,19 @@ export async function connectRoom(
 ): Promise<SessionRoom<Room>> {
   const livekit = await import("livekit-client");
   const { Room: RoomClass, RoomEvent, DisconnectReason } = livekit;
+  /*
+    `disconnectOnPageLeave: false` on both. The SDK's own default listens for
+    `beforeunload` and `pagehide` and disconnects — behind the controller's
+    back, which read it as a dropped connection and reconnected with a host's
+    mic MUTED. And `beforeunload` fires without any unload: a mailto: link, a
+    download. Tab close is the controller's (`pageHide`, wired by the shell).
+  */
   const room =
     target.role === "host"
-      ? new RoomClass(hostRoomOptions(livekit, preferredMic))
+      ? new RoomClass({ ...hostRoomOptions(livekit, preferredMic), disconnectOnPageLeave: false })
       : // adaptiveStream is a video optimisation and there is no video here,
         // but it costs nothing and keeps the paths identical to the player's.
-        new RoomClass({ adaptiveStream: true });
+        new RoomClass({ adaptiveStream: true, disconnectOnPageLeave: false });
 
   return {
     handle: room,

@@ -3228,7 +3228,7 @@ describe("the gist room's review fixes", () => {
   it("the houses slice builds a host's Room without importing the streams slice", () => {
     const connection = code("features/houses/hooks/use-house-connection.ts");
     assert.doesNotMatch(connection, /@\/features\/streams/);
-    assert.match(connection, /new RoomClass\(hostRoomOptions\(livekit, preferredMic\)\)/);
+    assert.match(connection, /new RoomClass\(\{ \.\.\.hostRoomOptions\(livekit, preferredMic\), disconnectOnPageLeave: false \}\)/);
     const provider = code("components/layout/room-session.tsx");
     assert.match(provider, /connectRoom\(target, \{ \.\.\.options, hostRoomOptions: publisherRoomOptions \}\)/);
   });
@@ -3682,5 +3682,25 @@ describe("a publish never outlives the Room or the provider it belongs to", () =
   it("a provider that unmounts (global-error) mutes the mic it can no longer show", () => {
     const provider = code("components/layout/room-session.tsx");
     assert.match(provider, /useEffect\(\s*\(\) => \(\) => \{\s*const held = controller\.room;\s*if \(held\) void stopPublishing\(held\);\s*\},\s*\[controller\]\s*\);/);
+  });
+});
+
+describe("the session, not the SDK, and not a stale flag, says what the mic is doing", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("a gist room's Room never disconnects itself on beforeunload; tab close is the controller's pageHide", () => {
+    const connection = code("features/houses/hooks/use-house-connection.ts");
+    assert.equal((connection.match(/disconnectOnPageLeave: false/g) ?? []).length, 2, "the host's and the listener's Room both");
+    assert.match(connection, /new RoomClass\(\{ adaptiveStream: true, disconnectOnPageLeave: false \}\)/);
+    assert.match(code("components/layout/room-session.tsx"), /const onPageHide = \(\) => controller\.pageHide\(\);/);
+  });
+
+  it("micOn is false with no Room, and reset with the Room it described", () => {
+    const stage = code("features/streams/hooks/use-stage.ts");
+    const reset = block(stage, "if (phaseRoom.streamId !== streamId || phaseRoom.room !== room) {", "\n  }\n");
+    assert.match(reset, /setMicOn\(false\);/);
+    assert.match(reset, /setCamOn\(false\);/);
+    const result = block(stage, "  return {\n    state,", "\n  };\n");
+    assert.match(result, /micOn: room \? micOn : false,/);
   });
 });

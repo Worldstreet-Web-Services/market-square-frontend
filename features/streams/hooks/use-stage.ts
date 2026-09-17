@@ -175,6 +175,11 @@ export function useStage({
     setError(null);
     setStalledAttempt(null);
     setAudioOnly(false);
+    // The mic and camera flags described THAT Room's publications. Kept, a
+    // failed or finished session went on reporting a hot mic — to the room
+    // view, the lock screen, and a voice note that muted a room nobody held.
+    setMicOn(false);
+    setCamOn(false);
   }
   /*
     WAS THE READER WAITING WHEN THE APPROVAL LANDED?
@@ -551,7 +556,8 @@ export function useStage({
 
   return {
     state,
-    micOn,
+    // Derived, like the grant: with no Room there is no mic to be on.
+    micOn: room ? micOn : false,
     // Both pinned on the audio-only path, for the same reason they are pinned
     // in usePublisher: nothing here can publish video, so reporting either from
     // state would describe a possibility that does not exist.
