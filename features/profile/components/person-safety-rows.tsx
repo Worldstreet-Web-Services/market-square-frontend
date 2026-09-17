@@ -145,3 +145,18 @@ export function PersonFollow({ username }: { username: string }) {
   if (!profile.data) return null;
   return <FollowPill profile={profile.data} />;
 }
+
+/**
+ * Draws its children unless the viewer has blocked this handle.
+ *
+ * The host's Invite to speak row goes through this in a house: a person the
+ * host blocked is simply not offered, rather than offered and then refused.
+ * Shown while the profile loads — the host knows whom they blocked, so a row
+ * that then leaves tells them nothing new. A block BY the target is not on
+ * this edge and stays the service's to refuse quietly.
+ */
+export function HideIfBlocked({ username, children }: { username: string; children: React.ReactNode }) {
+  const profile = useProfile(username);
+  if (profile.data?.isBlocked) return null;
+  return <>{children}</>;
+}

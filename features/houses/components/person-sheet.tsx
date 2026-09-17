@@ -63,6 +63,7 @@ export function PersonSheet({
   mute,
   followSlot,
   safetySlot,
+  inviteGateSlot,
 }: {
   person: PersonTarget | null;
   open: boolean;
@@ -78,9 +79,33 @@ export function PersonSheet({
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
   ) => React.ReactNode;
+  /** Hides the invite row for someone the host blocked (the profile slice knows). */
+  inviteGateSlot?: (username: string, row: React.ReactNode) => React.ReactNode;
 }) {
   if (!person) return null;
   const username = person.meta?.username ?? null;
+
+  /* ONE element for Invite and Cancel: swapping two conditional rows
+     unmounted the focused one and dropped focus out of the modal. */
+  const inviteRow =
+    isHost && hostActions && (hostActions.invite.kind === "invite" || hostActions.invite.kind === "invited") ? (
+      <HostRow
+        label={hostActions.invite.kind === "invited" ? "Cancel invitation" : "Invite to speak"}
+        hint={
+          hostActions.invite.kind === "invited"
+            ? "Invited. Waiting for them to answer."
+            : hostActions.invite.disabled
+              ? hostActions.invite.reason
+              : "They'll be asked first. Their mic stays off until they tap it."
+        }
+        live
+        disabled={(hostActions.invite.kind === "invite" && hostActions.invite.disabled) || hostActions.busy}
+        onClick={() => {
+          if (hostActions.invite.kind === "invited") hostActions.onCancelInvite(hostActions.invite.requestId);
+          else hostActions.onInvite();
+        }}
+      />
+    ) : null;
 
   return (
     <Sheet open={open} onClose={onClose} title={person.name}>
@@ -145,26 +170,9 @@ export function PersonSheet({
         {isHost && !person.seated && !hostActions && person.pendingRequestId && (
           <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
         )}
-        {/* ONE element for Invite and Cancel: swapping two conditional rows
-            unmounted the focused one and dropped focus out of the modal. */}
-        {isHost && hostActions && (hostActions.invite.kind === "invite" || hostActions.invite.kind === "invited") && (
-          <HostRow
-            label={hostActions.invite.kind === "invited" ? "Cancel invitation" : "Invite to speak"}
-            hint={
-              hostActions.invite.kind === "invited"
-                ? "Invited. Waiting for them to answer."
-                : hostActions.invite.disabled
-                  ? hostActions.invite.reason
-                  : "They'll be asked first. Their mic stays off until they tap it."
-            }
-            live
-            disabled={(hostActions.invite.kind === "invite" && hostActions.invite.disabled) || hostActions.busy}
-            onClick={() => {
-              if (hostActions.invite.kind === "invited") hostActions.onCancelInvite(hostActions.invite.requestId);
-              else hostActions.onInvite();
-            }}
-          />
-        )}
+        {/* Someone the host blocked gets no invite row at all: the gate
+            wraps whichever state it is in, so the element stays the same. */}
+        {inviteRow && (username && inviteGateSlot ? inviteGateSlot(username, inviteRow) : inviteRow)}
 
         {username && (
           <Link

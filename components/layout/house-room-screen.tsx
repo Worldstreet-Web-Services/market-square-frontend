@@ -13,7 +13,7 @@ import { isListeningHouseMember } from "@/lib/house-presence";
 import { GRID_CELLS, HouseRoom, RoomPeopleSection, type RoomPerson } from "@/features/houses";
 import { useConversationMembers, useJoinGroup } from "@/features/messages";
 import { PersonQuickActions as QuickActions } from "@/features/profile";
-import { PersonFollow, PersonQuickActions, PersonSafetyRows } from "@/features/profile";
+import { HideIfBlocked, PersonFollow, PersonQuickActions, PersonSafetyRows } from "@/features/profile";
 import { TipButton } from "@/features/tips";
 import { UpcomingRoomCard } from "@/components/layout/upcoming-room-card";
 
@@ -24,6 +24,7 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
       houseId={houseId}
       followSlot={(username) => <PersonFollow username={username} />}
       safetySlot={(username, mute) => <PersonSafetyRows username={username} mute={mute} />}
+      inviteGateSlot={(username, row) => <HideIfBlocked username={username}>{row}</HideIfBlocked>}
       // The wink + follow pair on every person card in the room (169:13368).
       personActionsSlot={(username, variant) => (
         <PersonQuickActions username={username} variant={variant} />

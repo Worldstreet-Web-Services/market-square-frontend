@@ -3900,6 +3900,16 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     }
   });
 
+  it("someone the host blocked is never offered Invite to speak: hidden up front, not refused after a tap", () => {
+    const screen = code("components/layout/house-room-screen.tsx");
+    assert.match(screen, /inviteGateSlot=\{\(username, row\) => <HideIfBlocked username=\{username\}>\{row\}<\/HideIfBlocked>\}/);
+    const gate = code("features/profile/components/person-safety-rows.tsx");
+    assert.match(gate, /export function HideIfBlocked\(/);
+    assert.match(gate, /if \(profile\.data\?\.isBlocked\) return null;/);
+    assert.match(sheet, /username && inviteGateSlot \? inviteGateSlot\(username, inviteRow\) : inviteRow/);
+    assert.ok((room.match(/inviteGateSlot=\{inviteGateSlot\}/g) ?? []).length >= 3, "the gate is not threaded to every LiveHouse and the sheet");
+  });
+
   it("the sheet's host rows stay focusable, keep one invite toggle, and explain themselves at full contrast", () => {
     assert.doesNotMatch(sheet, /label="Cancel invitation"|label="Invite to speak"/, "invite and cancel are two elements again");
     assert.match(sheet, /\? "Cancel invitation" : "Invite to speak"/);

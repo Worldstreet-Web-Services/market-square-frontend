@@ -200,6 +200,12 @@ interface SlotProps {
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
   ) => React.ReactNode;
+  /**
+   * Wraps the host's Invite to speak row for one handle, and draws nothing for
+   * someone the host has blocked. A slot because the block edge is the profile
+   * slice's. Hidden up front, never refused after a tap.
+   */
+  inviteGateSlot?: (username: string, row: React.ReactNode) => React.ReactNode;
 }
 
 /** One frozen empty set, so an unresolved roster is not a new value per render. */
@@ -209,6 +215,7 @@ export function HouseRoom({
   houseId,
   followSlot,
   safetySlot,
+  inviteGateSlot,
   houseSlot,
   personActionsSlot,
   tipSlot,
@@ -280,7 +287,7 @@ export function HouseRoom({
 
   if (data.status === "scheduled") {
     return isHost ? (
-      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} tipSlot={tipSlot} upcomingCardSlot={upcomingCardSlot} />
+      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} inviteGateSlot={inviteGateSlot} tipSlot={tipSlot} upcomingCardSlot={upcomingCardSlot} />
     ) : (
       <NotOpenYet stream={data} upcomingCardSlot={upcomingCardSlot} />
     );
@@ -295,6 +302,7 @@ export function HouseRoom({
       signedOut={signedOut}
       followSlot={followSlot}
       safetySlot={safetySlot}
+      inviteGateSlot={inviteGateSlot}
     />
   );
 }
@@ -349,12 +357,14 @@ function HostScheduled({
   houseSlot,
   personActionsSlot,
   safetySlot,
+  inviteGateSlot,
   tipSlot,
   upcomingCardSlot,
 }: {
   stream: Stream;
   followSlot: SlotProps["followSlot"];
   safetySlot: SlotProps["safetySlot"];
+  inviteGateSlot?: SlotProps["inviteGateSlot"];
   houseSlot?: SlotProps["houseSlot"];
   personActionsSlot?: SlotProps["personActionsSlot"];
   tipSlot?: SlotProps["tipSlot"];
@@ -386,6 +396,7 @@ function HostScheduled({
         micId={micId}
         followSlot={followSlot}
         safetySlot={safetySlot}
+        inviteGateSlot={inviteGateSlot}
       />
     );
   }
@@ -585,6 +596,7 @@ function LiveHouse({
   micId = "",
   followSlot,
   safetySlot,
+  inviteGateSlot,
   houseSlot,
   personActionsSlot,
   tipSlot,
@@ -2044,6 +2056,7 @@ function LiveHouse({
         }
         followSlot={followSlot}
         safetySlot={safetySlot}
+        inviteGateSlot={inviteGateSlot}
       />
 
       <Sheet open={overflowSheet} onClose={() => setOverflowSheet(false)} title="This house">
