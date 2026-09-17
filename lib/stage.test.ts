@@ -868,3 +868,28 @@ describe("the host arriving on the publisher token", () => {
     assert.equal(slots[0].role, "host");
   });
 });
+
+describe("the host's soft mute on a seat", () => {
+  const guest = (muted: boolean, attributes: Record<string, string> | undefined) =>
+    participant("did:privy:guest#speaker", {
+      permissions: { canPublish: true },
+      attributes,
+      audioTrackPublications: new Map([["a", publication("guest-a", muted)]]),
+    });
+
+  it("marks a seat Muted by host while the attribute is set and the mic is muted", () => {
+    const [, slot] = buildStage(room(publishing(HOST), guest(true, { hostMuted: "soft" })), HOST);
+    assert.equal(slot.mutedByHost, true);
+  });
+
+  it("drops the badge the moment the speaker unmutes themselves", () => {
+    const [, slot] = buildStage(room(publishing(HOST), guest(false, { hostMuted: "soft" })), HOST);
+    assert.equal(slot.mutedByHost, false);
+  });
+
+  it("never marks a self-muted speaker, and keeps a muted host-muted speaker SEATED", () => {
+    const stage = buildStage(room(publishing(HOST), guest(true, undefined)), HOST);
+    assert.equal(stage.length, 2);
+    assert.equal(stage[1].mutedByHost, false);
+  });
+});

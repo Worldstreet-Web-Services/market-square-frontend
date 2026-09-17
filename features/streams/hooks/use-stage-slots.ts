@@ -76,6 +76,8 @@ export function useStageSlots(room: Room | null, hostIdentity: string): StageSlo
         RoomEvent.Connected,
         RoomEvent.Reconnected,
         RoomEvent.ParticipantNameChanged,
+        // The host's soft mute arrives as an attribute; the badge follows it.
+        RoomEvent.ParticipantAttributesChanged,
       ] as const;
       for (const event of events) room.on(event, recompute);
       unsubscribe = () => {
@@ -109,6 +111,7 @@ function sameStage(a: readonly StageSlot[], b: readonly StageSlot[]): boolean {
       slot.state === other.state &&
       slot.isSpeaking === other.isSpeaking &&
       slot.isMuted === other.isMuted &&
+      slot.mutedByHost === other.mutedByHost &&
       slot.cameraOff === other.cameraOff &&
       slot.connectionQuality === other.connectionQuality &&
       slot.cameraTrack?.trackSid === other.cameraTrack?.trackSid &&
