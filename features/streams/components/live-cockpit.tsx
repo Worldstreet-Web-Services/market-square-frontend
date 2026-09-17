@@ -20,6 +20,7 @@ import {
   IconX,
 } from "@/components/ui/icons";
 import { usePublisher } from "@/features/streams/hooks/use-publisher";
+import { useInAppLeaveConfirm } from "@/features/streams/hooks/use-in-app-leave-confirm";
 import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
 import { LiveStage, type TileFitReport } from "@/features/streams/components/live-stage";
 import {
@@ -285,6 +286,7 @@ export function LiveCockpit({
     preferredCamera: devices?.cameraId || undefined,
     preferredMic: devices?.micId || undefined,
   });
+  useInAppLeaveConfirm(publisher.state === "publishing");
   // The host's own Room, read from the single-room registry that usePublisher
   // registered it in. This is the whole reason the host could not see or hear an
   // approved guest: usePublisher wires LocalTrackPublished and nothing else, so

@@ -1837,9 +1837,17 @@ describe("Inside Ark the Square leads back to Ark: a pill on phones, Ark's secti
   });
 
   it("leaves by full page loads: the other zone has those routes, this build does not", () => {
-    assert.match(nav, /else window\.location\.assign\(ARK_BACK_FALLBACK\);/);
-    assert.match(shell, /window\.location\.assign\(destination\.href\);/);
+    assert.match(nav, /else leaveSquare\(ARK_BACK_FALLBACK\);/);
+    assert.match(shell, /leaveSquare\(destination\.href\)/);
     assert.doesNotMatch(nav, /router\.push|<Link/);
+  });
+});
+
+describe("The mini-player's Close it cannot drop its teardown", () => {
+  it("awaits the end through mutateAsync, not a per-call onSuccess that dies with the unmounting chip", () => {
+    const player = stripComments(read("components/layout/room-mini-player.tsx"));
+    assert.doesNotMatch(player, /endRoom\.mutate\(streamId, \{/, "a per-call onSuccess is back on the host's close");
+    assert.match(player, /endRoom\s*\.mutateAsync\(streamId\)\s*\.then\(\(\) => \{/);
   });
 });
 
@@ -3018,5 +3026,760 @@ describe("links to a person go by id, not by a username they can change (QA)", (
 
   it("links a mention by the recorded profile id when there is one", () => {
     assert.match(stripComments(read("components/ui/post-text.tsx")), /segment\.id \? profileHref\(\{ id: segment\.id, username: segment\.handle \}\)/);
+  });
+});
+
+describe("one room per tab, owned by the shell", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("mounts exactly one RoomSessionProvider, inside app-shell.tsx", () => {
+    const mounts: string[] = [];
+    const walk = (dir: string): string[] =>
+      readdirSync(resolve(import.meta.dirname, "..", dir), { withFileTypes: true }).flatMap((entry) => {
+        const path = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) return entry.name === "node_modules" ? [] : walk(path);
+        return /\.tsx$/.test(entry.name) ? [path] : [];
+      });
+    for (const file of [...walk("app"), ...walk("components"), ...walk("features")]) {
+      const count = (code(file).match(/<RoomSessionProvider\b/g) ?? []).length;
+      for (let i = 0; i < count; i += 1) mounts.push(file);
+    }
+    assert.deepEqual(mounts, ["components/layout/app-shell.tsx"]);
+    // Around BOTH shells — the bare /live/:id branch included — or switching
+    // between them unmounts it and hangs up.
+    const shell = code("components/layout/app-shell.tsx");
+    assert.match(shell, /<RoomSessionProvider>\s*<ShellFrame>\{children\}<\/ShellFrame>[\s\S]*?<\/RoomSessionProvider>/);
+  });
+
+  it("keeps the connection out of the room view (the connect-in-route regression)", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    for (const name of ["useHouseConnection", "usePublisher", "RemoteAudio", "usePlaybackToken", "useStage("]) {
+      assert.equal(room.includes(name), false, `house-room.tsx uses ${name} again`);
+    }
+    assert.match(room, /enterRoom\(/, "the view no longer asks the session to enter");
+  });
+
+  it("the provider owns the audio sinks and the one-Room registry", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /<HouseAudioSinks\b/);
+    assert.match(provider, /register: registerRoom/);
+    assert.match(provider, /unregister: unregisterRoom/);
+    assert.doesNotMatch(provider, /consumeIntent/, "a gist room opens somebody's mic for them again");
+  });
+
+  it("the card preview never beats and never previews the room you are in", () => {
+    const hook = code("features/streams/hooks/use-room-preview.ts");
+    assert.doesNotMatch(hook, /sendHeartbeat/);
+    assert.match(hook, /const active = requested && !connected;/);
+  });
+
+  it("logout hangs up first", () => {
+    const logout = code("hooks/use-logout.ts");
+    assert.ok(logout.indexOf("getRoomSession().logout()") < logout.indexOf("logout()).catch"));
+  });
+
+  it("the phone's Back minimises", () => {
+    const header = code("features/houses/components/house-header.tsx");
+    assert.match(header, /aria-label="Minimise room"/);
+    assert.match(header, /<IconChevronDown className="h-4 w-4 shrink-0 md:hidden" \/>/);
+  });
+
+  it("a stream asks before it plays over a gist room", () => {
+    assert.match(code("components/layout/stream-room-screen.tsx"), /Leave the gist room to watch\?/);
+  });
+});
+
+describe("the minimised room, the zone-exit guard and the publisher's guards", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mini-player is drawn by AppShell, never by a room route", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    assert.match(shell, /<RoomMiniPlayer placement="phone" \/>/);
+    assert.match(shell, /\{!railOn && <RoomMiniPlayer placement="card" \/>\}/);
+    assert.match(shell, /<RoomMiniPlayer placement="rail" \/>/);
+    for (const file of ["app/gist-rooms/[id]/page.tsx", "app/gist-rooms/page.tsx", "components/layout/house-room-screen.tsx", "features/houses/components/house-room.tsx"]) {
+      assert.doesNotMatch(code(file), /RoomMiniPlayer/, `${file} draws the mini-player`);
+    }
+  });
+
+  it("lifts the dock's row and the phone + offsets by the mini-player's height", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    assert.match(shell, /data-mini-player=\{miniPlayer \? "on" : "off"\}/);
+    const css = read("app/globals.css");
+    const rule = block(css, '[data-mini-player="on"] {', "}");
+    assert.match(rule, /--ws-nav-h: calc\([^;]*var\(--ws-mini-h\)\);/);
+    assert.match(rule, /--ws-fab-bottom: calc\([^;]*var\(--ws-mini-h\)\);/);
+    assert.match(rule, /--ws-fab-clearance: calc\([^;]*var\(--ws-mini-h\)\);/);
+    // A room's own bar still zeroes the row: it comes AFTER, so it wins.
+    assert.ok(css.indexOf('[data-mini-player="on"] {') < css.indexOf('[data-dock="room-bar"] {'));
+    // The bar rings the shell itself, on show and off on unmount.
+    assert.match(code("components/layout/room-mini-player.tsx"), /setMiniPlayer\(up\);\s*return \(\) => setMiniPlayer\(false\);/);
+  });
+
+  it("the publisher no longer confirms in-app links; beforeunload stays, the Studio keeps its own", () => {
+    const publisher = code("features/streams/hooks/use-publisher.ts");
+    assert.doesNotMatch(publisher, /addEventListener\("click"/, "use-publisher registers an anchor click listener again");
+    assert.match(publisher, /window\.addEventListener\("beforeunload", onBeforeUnload\);/);
+    assert.match(code("features/streams/components/live-cockpit.tsx"), /useInAppLeaveConfirm\(publisher\.state === "publishing"\);/);
+  });
+
+  it("the zone-exit guard asks only a host or a speaker, and only for a Square-leaving link", () => {
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.match(guard, /const speaking = session\.presence === "host" \|\| session\.presence === "speaker";/);
+    assert.match(guard, /if \(!speaking\) return;/);
+    assert.match(guard, /if \(!isZoneExit\(raw, \{ origin: window\.location\.origin \}\)\) return;/);
+    assert.match(guard, /document\.addEventListener\("click", onClickCapture, true\);/);
+    assert.ok(guard.indexOf("Open in new tab") < guard.indexOf("Leave and go"), "the safe choice is not first");
+    assert.match(code("components/layout/app-shell.tsx"), /<ZoneExitGuard \/>/);
+  });
+});
+
+describe("the room session's review fixes, pinned where no pure half exists", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mic controls live only on the room the session is IN", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /const onStage = here && \(isHost \|\| session\.presence === "speaker" \|\| session\.micOn\);/);
+    // Every publisher control, the M key included, reads that one flag.
+    assert.match(room, /if \(key === "m" && onStage\)/);
+    assert.doesNotMatch(room, /const onStage = isHost \|\|/);
+  });
+
+  it("an unanswered conflict question is cleared when the asking view goes away", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /if \(!askingToSwitch\) return;\s*return \(\) => dismissConflict\(stream\.id\);/);
+    const provider = code("components/layout/room-session.tsx");
+    // Stable, or the cleanup above dismisses the question on every render.
+    assert.match(provider, /const dismissConflict = useCallback\(\(id\?: string\) => controller\.dismissConflict\(id\), \[controller\]\);/);
+  });
+
+  it("a host's 'Leave and join' says it CLOSES their room, and the end-stream call is wired", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /const hostingOther = askingToSwitch && session\.state\.target\?\.role === "host";/);
+    assert.match(room, /Joining this room will close it for everyone\./);
+    assert.match(room, /\{hostingOther \? "Close and join" : "Leave and join"\}/);
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /closeRoom: \(streamId\) => closeRoomCall\.current\(streamId\),/);
+    assert.match(provider, /await endRoomAsync\(id\);/);
+  });
+
+  it("Backstage asks about a held room BEFORE go-live, never after", () => {
+    const backstage = code("features/houses/components/backstage.tsx");
+    const open = block(backstage, "const open = () => {", "\n  };\n");
+    assert.ok(
+      open.indexOf("backstageOpenStep(session.state, stream.id)") >= 0 &&
+        open.indexOf("backstageOpenStep(session.state, stream.id)") < open.indexOf("openNow()"),
+      "Backstage goes live before checking for a held room"
+    );
+    assert.doesNotMatch(open, /goLive\.mutate/);
+    assert.equal((backstage.match(/goLive\s*\.mutate(?:Async)?\(/g) ?? []).length, 1);
+    const leaveAndOpen = block(backstage, "const leaveAndOpen = async () => {", "\n  };\n");
+    assert.ok(leaveAndOpen.indexOf("await session.vacate()") < leaveAndOpen.indexOf("openNow()"));
+  });
+
+  it("a signed-out reader is never entered into a room", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /const identityKnown = roomEntryReady\(\{/);
+    assert.match(room, /authenticated: auth\.authenticated,/);
+    assert.match(room, /if \(!identityKnown\) return;\s*enterRoom\(/);
+    assert.match(room, /Sign in to listen to this gist room\./);
+  });
+
+  it("'Leave and join' frees the seat and the rejoin record like every other leave", () => {
+    const provider = code("components/layout/room-session.tsx");
+    const confirm = block(provider, "const confirmConflict = useCallback(", "]);");
+    assert.ok(
+      confirm.indexOf('resolve.mutate({ requestId, action: "leave" })') < confirm.indexOf("controller.confirmConflict()") &&
+        confirm.includes("writeRejoin(null)"),
+      "confirmConflict skips the seat release"
+    );
+    assert.doesNotMatch(provider, /confirmConflict: \(\) => controller\.confirmConflict\(\)/);
+  });
+
+  it("any sign-out brings the room down, not only useLogout", () => {
+    assert.doesNotMatch(code("features/profile/components/auth-page.tsx"), /\blogout\b[^\n]*=\s*useAuth\(\)|const \{[^}]*\blogout\b[^}]*\} = useAuth\(\)/);
+    assert.match(code("features/profile/components/auth-page.tsx"), /const logout = useLogout\(\);/);
+    const provider = code("components/layout/room-session.tsx");
+    const backstop = block(provider, "const wasAuthenticated = useRef(false);", "}, [auth.ready, auth.authenticated, controller]);");
+    assert.ok(backstop.indexOf("writeRejoin(null)") < backstop.indexOf("void controller.logout()"));
+  });
+
+  it("the OS media controls name a private room neutrally, and pause mutes an open mic", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /mediaSessionMetadata\(stream\.data\)/);
+    assert.doesNotMatch(provider, /new MediaMetadata\(\{ title: topic/);
+    assert.match(provider, /session\.setActionHandler\("pause", \(\) => void toggleMic\(\)\);/);
+    assert.match(provider, /setMicrophoneActive\?\.\(micOn\)/);
+    // The browser's own mic toggle (media hub, PiP) works both ways for anyone
+    // with a mic to toggle, and the mute control follows the publication.
+    assert.match(provider, /session\.setActionHandler\("togglemicrophone" as MediaSessionAction, \(\) => void toggleMic\(\)\);/);
+    assert.match(provider, /const micControllable = holding && \(isHost \|\| presence === "speaker" \|\| stage\.micOn\);/);
+    assert.match(provider, /const hotMic = holding && stage\.micOn;/);
+  });
+
+  it("a failed room retries when the network or the tab comes back", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /window\.addEventListener\("online", onOnline\);/);
+    assert.match(provider, /document\.addEventListener\("visibilitychange", onVisible\);/);
+    assert.match(provider, /controller\.onNetworkBack\(\)/);
+    assert.match(provider, /setTimeout: \(callback, ms\) => window\.setTimeout\(callback, ms\),/);
+  });
+});
+
+describe("the gist room's review fixes", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the duplicate panel on the room's own page is not a dead end: Use it here and Dismiss", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    const panel = block(room, '{state === "duplicate" && (', "\n      )}");
+    assert.match(panel, /session\.dismiss\(\);\s*enterRoom\(stream\.id, role\);/, "Use it here must clear the terminal state before entering");
+    assert.match(panel, />\s*Use it here\s*</);
+    assert.match(panel, /onClick=\{\(\) => session\.dismiss\(\)\}/);
+    assert.match(panel, />\s*Dismiss\s*</);
+  });
+
+  it("the houses slice builds a host's Room without importing the streams slice", () => {
+    const connection = code("features/houses/hooks/use-house-connection.ts");
+    assert.doesNotMatch(connection, /@\/features\/streams/);
+    assert.match(connection, /new RoomClass\(\{ \.\.\.hostRoomOptions\(livekit, preferredMic\), disconnectOnPageLeave: false \}\)/);
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /connectRoom\(target, \{ \.\.\.options, hostRoomOptions: publisherRoomOptions \}\)/);
+  });
+
+  it("a mic button's changing Mute/Unmute label is never paired with aria-pressed", () => {
+    for (const path of [
+      "components/layout/room-mini-player.tsx",
+      "features/houses/components/room-dock.tsx",
+      "features/houses/components/house-controls.tsx",
+      "features/houses/components/room-phone-bar.tsx",
+      "features/streams/components/guest-speaker-control.tsx",
+    ]) {
+      const source = code(path);
+      assert.doesNotMatch(source, /aria-pressed=\{!?\s*[\w.]*(?:mic|cam)[\w.]*\}/i, path);
+      assert.doesNotMatch(source, /pressed=\{!?\s*session\.micOn\}/, path);
+    }
+  });
+
+  it("the controller carries no unused scaffolding", () => {
+    const controller = code("lib/room-session/controller.ts");
+    assert.doesNotMatch(controller, /onTokenRefreshed|upgradeToIdentified|requestMic|consumeMicIntent|micIntent/);
+    assert.doesNotMatch(code("lib/room-session/reducer.ts"), /"anon"|switching/);
+  });
+
+  it("the heartbeat fires on connect, before the interval", () => {
+    const controller = code("lib/room-session/controller.ts");
+    assert.match(controller, /beat\(\);\s*this\.heartbeat = this\.deps\.clock\.setInterval\(beat, HEARTBEAT_MS\);/);
+  });
+
+  it("names the seat a passive sign-out cannot free as a backend dependency", () => {
+    const provider = read("components/layout/room-session.tsx");
+    assert.match(provider, /BACKEND B5: A SEAT HELD THROUGH A SIGN-OUT NOBODY PRESSED IS NOT FREED/);
+  });
+});
+
+describe("the mini-player's reach, contrast and announcements", () => {
+  const code = (path: string) => stripComments(read(path));
+  const player = code("components/layout/room-mini-player.tsx");
+
+  it("reads the connection through miniPlayerChrome, never status === \"live\"", () => {
+    assert.match(player, /miniPlayerChrome\(\{/);
+    assert.doesNotMatch(player, /status === "live"/);
+    assert.doesNotMatch(player, /status === "failed"/);
+  });
+
+  it("keeps the room on screen, in every state, where the phone bar steps aside", () => {
+    assert.match(player, /const chip = onPhone && phone && roomChipVisible\(where\);/);
+    assert.doesNotMatch(player, /hotMicChipVisible|HotMicChip/, "the chip is gated on a hot mic again");
+    assert.match(player, /if \(chip && streamId\) return <RoomChip/);
+    const chip = block(player, "function RoomChip(", "\n}\n");
+    assert.match(chip, /\{chrome\.publishing && <MicButton session=\{session\} \/>\}/);
+    assert.match(chip, /\{chrome\.retry && \(/);
+    assert.match(chip, /\{chrome\.finished \? <DismissButton session=\{session\} \/> : <HangUp session=\{session\} streamId=\{streamId\} \/>\}/);
+    assert.match(chip, /\{chrome\.announcement\}/);
+  });
+
+  it("the bar and the chip share ONE hang-up, with its confirmations", () => {
+    assert.equal((player.match(/<HangUp session=\{session\} streamId=\{streamId\} \/>/g) ?? []).length, 2);
+    assert.equal((player.match(/title="Leave the stage\?"/g) ?? []).length, 1);
+    assert.equal((player.match(/title="Close the gist room\?"/g) ?? []).length, 1);
+  });
+
+  it("gives every round control a 44px target on touch, and Listen/Retry a 44px height", () => {
+    const button = block(player, "function RoundButton(", "\n}\n");
+    assert.match(button, /grid h-11 w-11 shrink-0 place-items-center[^"]*pointer-fine:h-9 pointer-fine:w-9/);
+    assert.match(button, /"grid h-9 w-9 place-items-center rounded-full/);
+    assert.equal((player.match(/size="sm" variant="secondary"[^>]*pointer-coarse:h-11/g) ?? []).length, 2);
+  });
+
+  it("sets state copy in grey-400, never text-meta, which fails AA at 11px on the glass", () => {
+    assert.doesNotMatch(player, /text-meta/);
+  });
+
+  it("asks a seated speaker before the red button gives up their seat", () => {
+    assert.match(player, /presence === "speaker"\s*\? setConfirmLeaveStage\(true\)/);
+    assert.match(player, /title="Leave the stage\?"/);
+  });
+
+  it("keeps Listen and Retry reachable in the icon rail, and the return link a real target", () => {
+    assert.match(player, /label="Listen"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
+    assert.match(player, /label="Retry the connection"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
+    assert.match(
+      player,
+      /group-data-\[rail=icon\]\/rail:h-11 group-data-\[rail=icon\]\/rail:w-11 group-data-\[rail=icon\]\/rail:pointer-fine:h-10 group-data-\[rail=icon\]\/rail:pointer-fine:w-10/,
+      "the icon rail's return link is under 44px on touch"
+    );
+    assert.doesNotMatch(player, /group-data-\[rail=icon\]\/rail:h-10 group-data-\[rail=icon\]\/rail:w-10/);
+    // Hidden in the icon rail only as TEXT buttons; each has its icon twin there.
+    const body = block(player, "function PlayerBody(", "\n}\n");
+    for (const verb of ["startAudio", "retry"]) {
+      assert.match(
+        body,
+        new RegExp(`onClick=\\{session\\.${verb}\\} className="shrink-0 pointer-coarse:h-11 group-data-\\[rail=icon\\]\\/rail:hidden"`),
+        `${verb}: the text button is no longer the one hidden in the icon rail`
+      );
+      assert.match(
+        body,
+        new RegExp(`placement === "rail" && \\(\\s*<RoundButton label="[^"]+" onClick=\\{session\\.${verb}\\} className="hidden group-data-\\[rail=icon\\]\\/rail:grid"`),
+        `${verb}: no icon control reaches it in the icon rail`
+      );
+    }
+  });
+
+  it("announces through one always-mounted live region, and the link carries the state", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /<p role="status" aria-live="polite" className="sr-only">\s*\{announcement\}/);
+    assert.equal((frame.match(/\{live\}/g) ?? []).length, 3);
+    assert.match(player, /aria-label=\{line \? `Return to \$\{title\}, \$\{line\}` : `Return to \$\{title\}`\}/);
+  });
+
+  it("moves the desktop card off the thread's composer while a chat is open", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /\{ top: "calc\(var\(--ws-crumb-h\) \+ 92px\)", right: "max\(24px, env\(safe-area-inset-right, 0px\)\)" \}/);
+    assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) - var\(--ws-mini-card-h, 0px\) \+ 8px\)",\s*left: "max\(24px, env\(safe-area-inset-left, 0px\)\)",/);
+  });
+
+  it("puts the phone bar before the dock in the document, and focus somewhere stable on leave", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    assert.ok(shell.indexOf('<RoomMiniPlayer placement="phone" />') < shell.indexOf("<BottomDock"));
+    assert.match(player, /keepFocus\(\);\s*void session\.leave\(\);/);
+    assert.match(player, /keepFocus\(\);\s*session\.dismiss\(\);/);
+  });
+});
+
+describe("one live microphone per tab, and no stale question", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("recording a voice note mutes an open gist-room mic first", () => {
+    const recorder = code("features/messages/hooks/use-voice-recorder.ts");
+    const mute = recorder.indexOf("if (room.micOn)");
+    assert.notEqual(mute, -1, "the recorder no longer checks the room's mic");
+    assert.match(recorder, /const room = getRoomSession\(\);\s*if \(room\.micOn\) \{\s*await room\.toggleMic\(\);/);
+    assert.ok(mute < recorder.indexOf("getUserMedia({ audio: true })"), "the room mic is muted after the second capture opens");
+  });
+
+  it("the Studio asks before it broadcasts over a gist room", () => {
+    const page = code("app/studio/[id]/page.tsx");
+    assert.match(page, /<StudioRoomScreen streamId=\{id\} \/>/);
+    const screen = code("components/layout/studio-room-screen.tsx");
+    assert.match(screen, /<GistRoomGuard/);
+    assert.match(screen, /Leave the gist room to go live\?/);
+    assert.match(screen, /<StudioStreamScreen streamId=\{streamId\} \/>/);
+    // The same one guard the stream room uses.
+    assert.match(code("components/layout/stream-room-screen.tsx"), /<GistRoomGuard/);
+    const guard = code("components/layout/gist-room-guard.tsx");
+    assert.match(guard, /holding: isHolding\(session\.state\.connection\),/);
+  });
+
+  it("the zone-exit sheet forgets its link when the reader stops speaking", () => {
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.match(guard, /if \(!speaking && exit !== null\) setExit\(null\);/);
+  });
+});
+
+describe("the room session's second review round", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("a remounted provider adopts the page's one controller instead of starting idle beside a live Room", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /let sharedController: RoomSessionController<Room> \| null = null;/);
+    assert.match(provider, /if \(typeof window === "undefined"\) return createController\(\);/);
+    assert.match(provider, /const \[controller\] = useState\(sessionController\);/);
+    assert.doesNotMatch(provider, /useState\(\s*\(\) =>\s*new RoomSessionController/);
+  });
+
+  it("the polls stop once the automatic retries have given up", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /const polling = holding && !state\.retriesExhausted;/);
+    assert.match(provider, /useStream\(streamId, 10_000, Boolean\(streamId\) && polling\)/);
+    assert.match(provider, /useMySpeakerRequest\(streamId, polling && !isHost\)/);
+  });
+
+  it("captions come from the live room only, and a new URL starts a new transcript", () => {
+    assert.match(code("components/layout/room-session.tsx"), /captionUrl: controller\.captionUrl,/);
+    assert.match(
+      code("features/houses/components/house-room.tsx"),
+      /<CaptionRail key=\{here \? \(session\.captionUrl \?\? "none"\) : "none"\} captionUrl=\{here \? session\.captionUrl : null\} \/>/
+    );
+  });
+
+  it("a room page whose switch question vanished unanswered offers Join instead of Connecting forever", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /if \(askingToSwitch && !wasAsked\) setWasAsked\(true\);/);
+    assert.match(room, /const gone = \(wasHere \|\| wasAsked\) && !here && !askingToSwitch;/);
+  });
+});
+
+describe("a speaker's stage has a way back, and a mic banner that tells the truth", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("presence counts a granted speaker as seated through a failed tap to talk", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /stagePresence\(\{/);
+    assert.doesNotMatch(provider, /approved && stage\.state === "live"/);
+  });
+
+  it("the host's mic banner clears once the mic is open, and its Try again opens rather than toggles", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /if \(stage\.micOn && publishFailure\) setPublishFailure\(null\);/);
+    assert.match(provider, /const retryMic = useCallback\(\(\) => \{\s*setPublishFailure\(null\);\s*stageRetry\(\);/);
+    const room = code("features/houses/components/house-room.tsx");
+    const banner = block(room, "{here && isHost && state === \"live\" && session.micFailure && (", "\n      )}");
+    assert.match(banner, /onClick=\{\(\) => session\.stage\.retry\(\)\}/);
+    assert.doesNotMatch(banner, /toggleMic/);
+  });
+
+  it("the room view draws the stage recovery panel and wires every remedy", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /roomStagePanel\(\{/);
+    assert.match(room, /if \(action === "rejoin"\) return session\.stage\.rejoin\(\);/);
+    assert.match(room, /if \(action === "retry"\) return session\.stage\.retry\(\);/);
+  });
+
+  it("never offers Ask to speak to somebody already approved", () => {
+    assert.match(
+      code("features/houses/components/house-room.tsx"),
+      /const canAsk = !isHost && !onStage && myRequestStatus !== "approved";/
+    );
+  });
+
+  it("the voice recorder refuses to record while the room mic is still actually open", () => {
+    const recorder = code("features/messages/hooks/use-voice-recorder.ts");
+    assert.match(recorder, /room\.room\?\.localParticipant\.isMicrophoneEnabled/);
+  });
+});
+
+describe("nothing inside the Square reloads the tab under a gist room", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("a tapped push asks the open Square tab to navigate itself, and reloads only without an answer", () => {
+    const sw = code("public/sw.js");
+    assert.match(sw, /client\.postMessage\(\{ type: "ms:navigate", url: target\.href, deadline \}, \[channel\.port2\]\)/);
+    const click = block(sw, 'self.addEventListener("notificationclick"', "\n});");
+    assert.ok(click.indexOf("postMessage") < click.indexOf("client.navigate("), "navigate() is not the fallback");
+    assert.match(click, /if \(!acknowledged && "navigate" in client\) await client\.navigate\(target\.href\);/);
+    const listener = code("components/layout/push-navigation.tsx");
+    assert.match(listener, /navigator\.serviceWorker\.addEventListener\("message", onMessage\);/);
+    assert.match(listener, /router\.push\(path\);/);
+    assert.match(listener, /event\.ports\[0\]\?\.postMessage\("ok"\);/);
+    // Answered BEFORE anything that can block (a confirm), or the worker's
+    // timer runs out and reloads the tab under the question.
+    assert.ok(listener.indexOf('postMessage("ok")') < listener.indexOf("window.confirm("));
+    assert.ok(listener.indexOf("window.confirm(") < listener.indexOf("router.push(path)"));
+    assert.match(listener, /const guard = inAppLeaveGuard\(\);\s*if \(guard && !window\.confirm\(guard\)\) return;/);
+    assert.match(listener, /now: Date\.now\(\)/);
+    // A visible, focused tab gets time to answer; the deadline travels with the message.
+    assert.match(sw, /const wait = client\.visibilityState === "visible" \? NAVIGATE_ACK_VISIBLE_MS : NAVIGATE_ACK_MS;/);
+    assert.match(sw, /const deadline = Date\.now\(\) \+ wait;/);
+    // The in-page broadcasts raise the guard.
+    assert.match(code("features/streams/hooks/use-in-app-leave-confirm.ts"), /setInAppLeaveGuard\(message\)/);
+    assert.match(code("features/streams/components/guest-speaker-control.tsx"), /useInAppLeaveGuard\(onStage, /);
+    assert.match(code("components/layout/app-shell.tsx"), /<PushNavigation \/>/);
+  });
+
+  it("no layout component or the Gistroom banner leaves by a bare location.assign", () => {
+    const layout = readdirSync(resolve(import.meta.dirname, "../components/layout")).filter((name) => /\.tsx?$/.test(name));
+    for (const name of layout) {
+      assert.doesNotMatch(code(`components/layout/${name}`), /window\.location\.assign\(/, name);
+    }
+    assert.doesNotMatch(code("features/streams/components/live-cta.tsx"), /location\.assign/);
+    assert.match(code("features/streams/components/live-cta.tsx"), /router\.push\(sq\("\/gist-rooms\?open=1"\)\)/);
+  });
+
+  it("the rail's Ark menu and Back to Ark go through the zone-exit question", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    const menu = block(shell, "function ArkMenu(", "\n}\n");
+    assert.match(menu, /requestZoneExit\(\{ href: destination\.href, go: \(\) => leaveSquare\(destination\.href\) \}\)/);
+    assert.match(menu, /goBackToArk\(\)/);
+    assert.match(code("components/layout/ark-nav.tsx"), /requestZoneExit\(\{/);
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.match(guard, /setZoneExitHandler\(/);
+  });
+
+  it("the guard sends /live/:id and /studio/:id of the room you are in back to that room", () => {
+    const guard = code("components/layout/gist-room-guard.tsx");
+    assert.match(guard, /gistRoomGuard\(\{/);
+    assert.match(guard, /router\.replace\(sq\(`\/gist-rooms\/\$\{streamId\}`\)\)/);
+  });
+});
+
+describe("a private room's name stays off lock screens and other accounts' screens", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("go-live and a stream update merge into the detail cache without dropping the doorplate", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    const goLive = block(hooks, "export function useGoLive(", "\n}\n");
+    assert.match(goLive, /mergeStreamDetail\(old, stream\)/);
+    const update = block(hooks, "export function useUpdateStream(", "\n}\n");
+    assert.match(update, /mergeStreamDetail\(old, stream\)/);
+    // Ending a room writes its payload too — during a host's "Close and join"
+    // the session is still holding it, and the lock screen reads this cache.
+    const end = block(hooks, "export function useEndStream(", "\n}\n");
+    assert.match(end, /mergeStreamDetail\(old, stream\)/);
+    assert.doesNotMatch(end, /setQueryData\(\["ms", "stream", stream\.id\], stream\)/);
+  });
+
+  it("the rejoin record carries its owner and a neutral name, and is offered only to that account", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /writeRejoin\(\{ streamId, title: liveTitle, userId: meId \}\)/);
+    assert.match(provider, /sharedSurfaceTitle\(stream\.data, houseTopic\(stream\.data\)\)/);
+    assert.match(provider, /const rejoinOffer = rejoinOfferFor\(\{/);
+    const backstop = block(provider, "const wasAuthenticated = useRef(false);", "}, [auth.ready, auth.authenticated, controller]);");
+    assert.match(backstop, /if \(!auth\.authenticated\) writeRejoin\(null\);/);
+  });
+});
+
+describe("the mini-player fits every frame it is drawn in", () => {
+  const code = (path: string) => stripComments(read(path));
+  const player = code("components/layout/room-mini-player.tsx");
+
+  it("the labelled rail stacks the title over a wrapping control row, so hang-up is never clipped", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.doesNotMatch(frame, /rail=full\]\/rail:flex-row/, "the rail placement is one overflowing row again");
+    const controls = block(player, "function Controls(", "\n}\n");
+    assert.match(controls, /group-data-\[rail=full\]\/rail:flex-wrap/);
+    assert.match(controls, /group-data-\[rail=full\]\/rail:justify-end/);
+  });
+
+  it("'You're live' is a badge in the state line, never a pill in the control row", () => {
+    assert.match(player, /chrome\.liveBadge/);
+    assert.doesNotMatch(player, /\{chrome\.hotMic && \(\s*<span/);
+  });
+
+  it("a phone and the icon rail get the icon form of Listen and Retry", () => {
+    const body = block(player, "function PlayerBody(", "\n}\n");
+    assert.match(body, /placement === "phone"/);
+    assert.equal((player.match(/size="sm" variant="secondary"[^>]*pointer-coarse:h-11/g) ?? []).length, 2);
+  });
+
+  it("the icon rail frame fits its 48px column: no border, no side padding", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /group-data-\[rail=icon\]\/rail:border-0 group-data-\[rail=icon\]\/rail:px-0/);
+    const offer = block(player, "if (offering && offer) {", "\n  }\n");
+    assert.doesNotMatch(offer, /label="Dismiss"[^>]*rail=icon\]\/rail:hidden/, "the rejoin offer hides Dismiss in the icon rail again");
+    assert.match(player, /title=\{line \? `Return to \$\{title\}, \$\{line\}` : `Return to \$\{title\}`\}/);
+  });
+
+  it("the phone chip sits under the other room's measured header, and names the room it leaves", () => {
+    const chip = block(player, "function RoomChip(", "\n}\n");
+    assert.match(chip, /calc\(var\(--ws-topbar-h\) \+ var\(--ws-house-head-h\) \+ 8px\)/);
+    const hangUp = block(player, "function HangUp(", "\n}\n");
+    assert.match(hangUp, /`Leave \$\{title\}`/);
+    assert.match(hangUp, /`Close \$\{title\}`/);
+  });
+
+  it("destructive confirmations share one sheet: Stay focused, the act in danger red", () => {
+    const sheet = code("components/ui/destructive-confirm-sheet.tsx");
+    assert.match(sheet, /<Button variant="ghost" className="flex-1" autoFocus onClick=\{onClose\}>/);
+    assert.match(sheet, /bg-danger text-white/);
+    for (const path of [
+      "components/layout/room-mini-player.tsx",
+      "features/houses/components/house-header.tsx",
+      "features/houses/components/house-room.tsx",
+    ]) {
+      assert.match(code(path), /<DestructiveConfirmSheet\b/, path);
+    }
+    assert.equal((player.match(/<DestructiveConfirmSheet\b/g) ?? []).length, 2);
+    assert.match(player, /useEndStream\(\{ successMessage: "Gist room closed" \}\)/);
+    assert.match(code("features/streams/hooks/use-streams.ts"), /toast\.success\(options\?\.successMessage \?\? "Stream ended"\)/);
+  });
+
+  it("touch keeps 44px targets at every width; only a fine pointer shrinks them", () => {
+    const button = block(player, "function RoundButton(", "\n}\n");
+    assert.match(button, /h-11 w-11[^"]*pointer-fine:h-9 pointer-fine:w-9/);
+    assert.doesNotMatch(player, /md:h-9|md:w-9|md:min-h-9/);
+  });
+
+  it("floating placements respect the horizontal safe-area insets", () => {
+    assert.match(player, /max\(24px, env\(safe-area-inset-left, 0px\)\)/);
+    assert.match(player, /max\(24px, env\(safe-area-inset-right, 0px\)\)/);
+    assert.match(player, /max\(12px, env\(safe-area-inset-right, 0px\)\)/);
+    assert.match(player, /max\(12px, env\(safe-area-inset-left, 0px\)\)/);
+  });
+
+  it("the rejoin offer does not pulse like a live connection", () => {
+    const offer = block(player, "if (offering && offer) {", "\n  }\n");
+    assert.doesNotMatch(offer, /ws-live-dot/);
+  });
+
+  it("the room page offers Tap to listen when the browser refused autoplay", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /here && connection === "live" && !session\.canPlayAudio/);
+    assert.match(room, /onClick=\{session\.startAudio\}/);
+  });
+});
+
+describe("a host never walks out of their own room live", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the Stream/Studio door closes a host's room (vacate), never a bare leave", () => {
+    const guard = code("components/layout/gist-room-guard.tsx");
+    assert.doesNotMatch(guard, /session\.leave\(\)/, "the guard disconnects a host and leaves their room live");
+    assert.match(guard, /session\.vacate\(\)/);
+    assert.match(guard, /hosting \? hostConfirmLabel : confirmLabel/);
+    for (const screen of ["components/layout/stream-room-screen.tsx", "components/layout/studio-room-screen.tsx"]) {
+      assert.match(code(screen), /hostConfirmLabel="Close and /, screen);
+    }
+  });
+
+  it("the Ark exit sheet's Leave and go closes a host's room, and goes only once it has", () => {
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.doesNotMatch(guard, /session\.leave\(\)/);
+    assert.match(guard, /void session\.vacate\(\)\.then\(\s*\(\) => target\.go\(\),/);
+    assert.match(guard, /\{hosting \? "Close room and go" : "Leave and go"\}/);
+  });
+
+  it("the OS media hang-up is registered for a listener only", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /const hangUpAllowed = osHangUpAllowed\(presence\);/);
+    assert.match(provider, /if \(hangUpAllowed\) \{\s*try \{\s*session\.setActionHandler\("hangup" as MediaSessionAction, \(\) => void leave\(\)\);/);
+  });
+
+  it("an explicit sign-out closes a host's room first", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /return isHost \? controller\.signOut\(\) : leave\(\);/);
+  });
+});
+
+describe("a host's fresh open reaches the session whichever branch renders next", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("Backstage enters the session with the ingest itself, before the cache flip can unmount it", () => {
+    const backstage = code("features/houses/components/backstage.tsx");
+    const openNow = block(backstage, "const openNow = () => {", "\n  };\n");
+    // A per-call mutate onSuccess is dropped once the observer unmounts, and
+    // go-live's own cache write is what unmounts it. The promise is not.
+    assert.doesNotMatch(openNow, /goLive\.mutate\(/);
+    assert.match(openNow, /goLive\s*\.mutateAsync\(stream\.id\)/);
+    const enter = openNow.indexOf("session.enter(stream.id, \"host\", {");
+    assert.notEqual(enter, -1, "the fresh open still travels through component state that can unmount");
+    assert.match(openNow, /token: \{ url: result\.ingest\.url, token: result\.ingest\.roomToken \},\s*fresh: true,/);
+    assert.ok(enter < openNow.indexOf("onOpened("), "the session hears of the open after the view that may already be gone");
+  });
+});
+
+describe("a publish never outlives the Room or the provider it belongs to", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the host's opening publish drops a stale outcome and turns a stale capture off", () => {
+    const provider = code("components/layout/room-session.tsx");
+    const after = block(provider, "afterConnect: async (room, target, { resumed, isCurrent }) => {", "\n    },\n");
+    assert.match(after, /if \(!isCurrent\(\)\) \{\s*await releaseCapture\(room\.handle\);\s*return;\s*\}/);
+    assert.ok(after.indexOf("isCurrent()") < after.indexOf("onPublishRef.current(null)"));
+    const failure = after.slice(after.indexOf("catch (error)"));
+    assert.match(failure, /if \(!isCurrent\(\)\) \{\s*await releaseCapture\(room\.handle\);\s*return;\s*\}/, "a stale failure raises the banner on the current room");
+    // …and a banner never follows the reader into another room.
+    assert.match(provider, /if \(publishFailureFor !== streamId\) \{\s*setPublishFailureFor\(streamId\);\s*setPublishFailure\(null\);/);
+  });
+
+  it("the stage's Try again turns the mic back off when its Room has gone", () => {
+    const stage = code("features/streams/hooks/use-stage.ts");
+    const retry = block(stage, "const retry = useCallback(() => {", "}, [room, cameraAllowed, streamId]);");
+    assert.match(retry, /if \(getRoom\(streamId\) !== room\) \{\s*await releaseCapture\(room\);\s*return;\s*\}/);
+  });
+
+  it("a provider that unmounts (global-error) mutes the mic it can no longer show", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /useEffect\(\s*\(\) => \(\) => \{\s*const held = controller\.room;\s*if \(held\) void stopPublishing\(held\);\s*\},\s*\[controller\]\s*\);/);
+  });
+});
+
+describe("the session, not the SDK, and not a stale flag, says what the mic is doing", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("a gist room's Room never disconnects itself on beforeunload; tab close is the controller's pageHide", () => {
+    const connection = code("features/houses/hooks/use-house-connection.ts");
+    assert.equal((connection.match(/disconnectOnPageLeave: false/g) ?? []).length, 2, "the host's and the listener's Room both");
+    assert.match(connection, /new RoomClass\(\{ adaptiveStream: true, disconnectOnPageLeave: false \}\)/);
+    assert.match(code("components/layout/room-session.tsx"), /const onPageHide = \(\) => controller\.pageHide\(\);/);
+  });
+
+  it("micOn is false with no Room, and reset with the Room it described", () => {
+    const stage = code("features/streams/hooks/use-stage.ts");
+    const reset = block(stage, "if (phaseRoom.streamId !== streamId || phaseRoom.room !== room) {", "\n  }\n");
+    assert.match(reset, /setMicOn\(false\);/);
+    assert.match(reset, /setCamOn\(false\);/);
+    const result = block(stage, "  return {\n    state,", "\n  };\n");
+    assert.match(result, /micOn: room \? micOn : false,/);
+  });
+});
+
+describe("the surfaces every page shows name a private room neutrally", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mini-player, the room chip, the hang-up and both guard sheets never print a private topic", () => {
+    for (const path of [
+      "components/layout/room-mini-player.tsx",
+      "components/layout/zone-exit-guard.tsx",
+      "components/layout/gist-room-guard.tsx",
+    ]) {
+      const source = code(path);
+      assert.match(source, /sharedSurfaceTitle\(/, path);
+      // Every topic read goes through the rule, and nothing else prints one.
+      const unguarded = source.replace(/sharedSurfaceTitle\(([\w.]+), houseTopic\(\1\)\)/g, "");
+      assert.doesNotMatch(unguarded, /houseTopic\(/, `${path} prints the raw topic`);
+    }
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /sharedSurfaceTitle\(stream\.data, houseTopic\(stream\.data\)\)/);
+  });
+});
+
+describe("no touch-only words on surfaces a mouse uses", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mini-player, its chip and the room page say Listen and Rejoin, not Tap to", () => {
+    for (const path of ["components/layout/room-mini-player.tsx", "features/houses/components/house-room.tsx", "lib/room-session/visibility.ts"]) {
+      assert.doesNotMatch(code(path), /Tap to (listen|rejoin)/, path);
+    }
+    const player = code("components/layout/room-mini-player.tsx");
+    assert.match(player, /aria-label=\{roomChipLabel\(\{ title, text, finished: chrome\.finished \}\)\}/);
+    assert.match(player, /const label = rejoinLabel\(offer\.title\);/);
+  });
+});
+
+describe("the desktop mini-player card takes its own room", () => {
+  const code = (path: string) => stripComments(read(path));
+  const player = code("components/layout/room-mini-player.tsx");
+
+  it("rings the shell with where it sits, and the shell stamps it", () => {
+    assert.match(player, /setMiniCard\(cardMode\);\s*return \(\) => setMiniCard\("off"\);/);
+    assert.match(player, /miniPlayerCardPlacement\(\{ chatOpen, roomBarUp: roomBar \}\)/);
+    assert.match(code("components/layout/app-shell.tsx"), /data-mini-card=\{miniCard\}/);
+  });
+
+  it("reserves the card's height at the foot of every page, and in a thread's scroll top", () => {
+    const css = read("app/globals.css");
+    const foot = block(css, '[data-mini-card="foot"] {', "}");
+    assert.match(foot, /--ws-mini-card-h: 80px;/);
+    assert.match(foot, /--ws-nav-h: calc\(112px \+ var\(--ws-mini-card-h\)\);/);
+    assert.match(block(css, '[data-mini-card="thread"] {', "}"), /--ws-thread-top-inset: 80px;/);
+    // Before the room bar's rule, which still zeroes the foot.
+    assert.ok(css.indexOf('[data-mini-card="foot"] {') < css.indexOf('[data-dock="room-bar"] {'));
+    assert.match(code("features/messages/components/thread.tsx"), /pt-\[calc\(40px\+var\(--ws-thread-top-inset,0px\)\)\]/);
+  });
+
+  it("the card's own offset does not climb by the room it reserves, and clears a room's control bar", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) - var\(--ws-mini-card-h, 0px\) \+ 8px\)"/);
+    assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) \+ 96px\)"/);
   });
 });

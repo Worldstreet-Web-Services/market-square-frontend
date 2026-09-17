@@ -357,7 +357,14 @@ export const StreamSchema = z.object({
    * All optional with a default, the forward-compatible shape `orgBadge` uses:
    * a backend that has not shipped them parses exactly as it does today.
    */
-  audience: z.enum(["public", "private"]).optional().default("public").catch("public"),
+  /*
+    FAIL CLOSED. A missing or unrecognised audience is "unknown", never
+    "public": every reader that names a room on a shared surface (the lock
+    screen, the rejoin chip, the room code) asks for "public" explicitly, and
+    defaulting to it put a room's topic and host on the lock screen whenever
+    the field went missing or grew a new value.
+  */
+  audience: z.enum(["public", "private", "unknown"]).optional().default("unknown").catch("unknown"),
   houseConversationId: z.string().nullable().optional().default(null),
   /**
    * THE HOUSE GROUP THIS ROOM BELONGS TO, inline on the room.
@@ -428,6 +435,53 @@ export const StreamSchema = z.object({
 
 export type Ticket = z.infer<typeof TicketSchema>;
 export type Stream = z.infer<typeof StreamSchema>;
+
+/**
+ * `SpeakerRequest` in the served spec.
+ *
+ * Three fields were wrong at once and each broke something different:
+ * `requestedAt` does not exist (it is `createdAt`), so every request-to-join
+ * threw; the status enum was missing `denied`/`withdrawn` with no `.catch()`,
+ * so those two states threw as well; and the hydrated profile arrives as
+ * `profile`, not `user`, so the host's queue rendered "Viewer" for everyone.
+ *
+ * `joinUrl` / `joinToken` / `expiresAt` ARE in the spec, but only while the
+ * request is approved — the service omits them in every other state, which is
+ * what makes the publish gate in guest-speaker-control safe. They stay
+ * optional here for exactly that reason, not because they are absent.
+ * `POST /streams/:id/speaker-token` re-mints the pair when it expires;
+ * `playback-token` is subscribe-only and cannot be used to broadcast.
+ */
+export const SpeakerRequestSchema = z.object({
+  id: z.string(),
+  streamId: z.string().optional().default(""),
+  userId: z.string(),
+  // The list endpoint hydrates this as `profile` on top of the base schema.
+  profile: ProfileSchema.nullable().optional().default(null),
+  /*
+    `invited` is WIDENED AHEAD OF THE BACKEND (invite to speak). It ships
+    first so that the day the service starts emitting it, GET
+    /speaker-requests/me still parses on every client already in people's
+    browsers. An unknown status is still not carried through: it falls to
+    `pending`, exactly as before.
+  */
+  status: z
+    .enum(["pending", "approved", "denied", "withdrawn", "removed", "invited"])
+    .catch("pending"),
+  /* Who opened the row. Absent on every payload today, which is a listener's ask. */
+  initiatedBy: z.enum(["listener", "host"]).catch("listener").optional().default("listener"),
+  /* When an invitation lapses. Null for a listener's request. */
+  expiresAt: z.string().nullable().optional().default(null),
+  /* The host's mute on this speaker — soft (they may unmute) or hard (locked). Not emitted yet. */
+  hostMuted: z.boolean().optional().default(false),
+  muteHard: z.boolean().optional().default(false),
+  createdAt: z.string().optional().default(""),
+  resolvedAt: z.string().nullable().optional().default(null),
+  resolvedBy: z.string().nullable().optional().default(null),
+  joinUrl: z.string().nullable().optional().default(null),
+  joinToken: z.string().nullable().optional().default(null),
+});
+
 
 export const MentionSchema = z.object({
   type: z.enum(["profile", "group"]),

@@ -16,6 +16,7 @@ import { useEmbeddedWallet } from "@/hooks/use-wallet";
 import { useEvmSend } from "@/hooks/use-evm-send";
 import { useKashStatus } from "@/hooks/use-kash-status";
 import { isHouse } from "@/features/houses/lib/house";
+import { mergeStreamDetail } from "@/lib/stream-detail-merge";
 import {
   banFromChat,
   cancelActivity,
@@ -158,11 +159,14 @@ export function useFollowingRooms() {
 
 export function useStream(
   id: string,
-  poll: boolean | number | readonly ["while-live", number] = false
+  poll: boolean | number | readonly ["while-live", number] = false,
+  /** Off while there is no id to read — the shell's room session before a room is entered. */
+  enabled = true
 ) {
   return useQuery({
     queryKey: ["ms", "stream", id],
     queryFn: () => fetchStream(id),
+    enabled,
     refetchInterval: Array.isArray(poll)
       ? (query) => (query.state.data?.status === "live" ? poll[1] : false)
       : poll === false
@@ -457,7 +461,8 @@ export function useGoLive() {
   return useMutation({
     mutationFn: goLive,
     onSuccess: ({ stream }) => {
-      queryClient.setQueryData<Stream>(["ms", "stream", stream.id], stream);
+      // Merged, never replaced: go-live's stream carries no house doorplate.
+      queryClient.setQueryData<Stream>(["ms", "stream", stream.id], (old) => mergeStreamDetail(old, stream));
       invalidateStreamSurfaces(queryClient);
       toast.success("You're live");
     },
@@ -465,17 +470,22 @@ export function useGoLive() {
   });
 }
 
-export function useEndStream() {
+export function useEndStream(options?: {
+  /** What the surface calls the thing it ended — a gist room is not a "stream". */
+  successMessage?: string;
+}) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: endStream,
     onSuccess: (stream) => {
-      queryClient.setQueryData(["ms", "stream", stream.id], stream);
+      // Merged, never replaced: the session may still hold this room (a host's
+      // "Close and join"), and the lock screen reads the doorplate from here.
+      queryClient.setQueryData<Stream>(["ms", "stream", stream.id], (old) => mergeStreamDetail(old, stream));
       // The playback token and chat live under this prefix and are both dead
       // once the broadcast stops.
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", stream.id] });
       invalidateStreamSurfaces(queryClient);
-      toast.success("Stream ended");
+      toast.success(options?.successMessage ?? "Stream ended");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't end the stream.")),
   });
@@ -556,7 +566,7 @@ export function useUpdateStream(streamId: string) {
     mutationFn: (patch: Parameters<typeof updateStream>[1]) => updateStream(streamId, patch),
     onSuccess: (stream) => {
       queryClient.setQueryData(["ms", "stream", streamId], (old: Stream | undefined) =>
-        old ? { ...old, ...stream, myTicket: old.myTicket, viewerCount: old.viewerCount } : stream
+        old ? { ...mergeStreamDetail(old, stream), myTicket: old.myTicket, viewerCount: old.viewerCount } : stream
       );
       invalidateStreamSurfaces(queryClient);
       toast.success("Stream updated");

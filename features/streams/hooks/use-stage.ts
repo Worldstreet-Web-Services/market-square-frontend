@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useQueryClient } from "@tanstack/react-query";
 import { captureErrorMessage, classifyCaptureError } from "@/lib/media-errors";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
+import { releaseCapture } from "@/features/streams/hooks/use-publisher";
 import { stageSources } from "@/features/streams/lib/capture-plan";
 import { STAGE_STALL_MS, type StageState } from "@/lib/stage-recovery";
+import { deriveMicOn, micControl, shouldAutoEnableMic, type HostMute } from "@/lib/mic-consent";
 
 export { STAGE_FAILURES, type StageState } from "@/lib/stage-recovery";
 
@@ -57,7 +59,15 @@ export interface StageControls {
   rejoin: () => void;
   toggleMic: () => Promise<void>;
   toggleCam: () => Promise<void>;
+  /** Whether the server's grant includes the microphone right now. */
+  canPublishMic: boolean;
 }
+
+/**
+ * `TrackSource.MICROPHONE` in LiveKit's protocol enum. An empty
+ * `canPublishSources` means every source is allowed.
+ */
+const MICROPHONE_SOURCE = 2;
 
 /**
  * Publish once, retrying a single time on a permission refusal.
@@ -91,9 +101,20 @@ export function useStage({
   approved,
   withCamera = true,
   previewRef,
+  consumeIntent,
+  hostMuted = "none",
 }: {
   streamId: string;
   approved: boolean;
+  /**
+   * The reader's own "put me on stage" intent, consumed ONCE.
+   *
+   * Absent means the mic is never opened for anybody: a gist room, where every
+   * speaker joins with the mic off and taps to talk. See lib/mic-consent.ts.
+   */
+  consumeIntent?: () => boolean;
+  /** A host's mute on this speaker (backend-dependent; `none` until it ships). */
+  hostMuted?: HostMute;
   /**
    * Whether going on stage includes a camera. FALSE in a house, permanently.
    *
@@ -120,6 +141,11 @@ export function useStage({
   // about `approved` and `room`, so they are derived below rather than pushed
   // into state from an effect.
   const [phase, setPhase] = useState<StageState>("idle");
+  /*
+    MIC ON IS READ OFF THE PUBLICATION. A local flag set after our own toggle
+    drifts the moment anything else touches the track — a server-side mute
+    flips the publication and left the flag drawing a live mic.
+  */
   const [micOn, setMicOn] = useState(false);
   const [camOn, setCamOn] = useState(false);
   const [audioOnly, setAudioOnly] = useState(false);
@@ -135,9 +161,39 @@ export function useStage({
    * that can disagree with reality.
    */
   const [stalledAttempt, setStalledAttempt] = useState<number | null>(null);
-  // Publishing is a one-shot per approval; without this the effect re-runs on
-  // every room notification and re-acquires the devices.
-  const startedFor = useRef<string | null>(null);
+  /*
+    A FAILURE BELONGS TO ITS ROOM. The shell holds one of these for the whole
+    tab, so a `device-busy` from one room, or from a Room since replaced by a
+    reconnect, used to greet a speaker approved later somewhere else before
+    they had tapped anything. Reset when either changes — during render,
+    React's pattern for state that follows a prop.
+  */
+  const [phaseRoom, setPhaseRoom] = useState({ streamId, room });
+  if (phaseRoom.streamId !== streamId || phaseRoom.room !== room) {
+    setPhaseRoom({ streamId, room });
+    setPhase("idle");
+    setError(null);
+    setStalledAttempt(null);
+    setAudioOnly(false);
+    // The mic and camera flags described THAT Room's publications. Kept, a
+    // failed or finished session went on reporting a hot mic — to the room
+    // view, the lock screen, and a voice note that muted a room nobody held.
+    setMicOn(false);
+    setCamOn(false);
+  }
+  /*
+    WAS THE READER WAITING WHEN THE APPROVAL LANDED?
+
+    The only moment the mic may open on its own is the reader's own request
+    being approved while this surface watched it happen. A surface that mounts
+    with the approval already in place — a route change, a remount, a reload,
+    a reconnect — is not that moment, and must leave the mic exactly as it is.
+    Cleared the first time the decision is taken, so no later re-run (a grant
+    that flickers through a reconnect) can ever count as the approval again.
+    A query still loading also reads as unapproved, which is why the reader's
+    recorded intent (`consumeIntent`) is the real gate, not this flag alone.
+  */
+  const sawUnapproved = useRef(false);
 
   /**
    * Whether the SERVER says we may publish, read fresh off the participant.
@@ -149,9 +205,10 @@ export function useStage({
    * no permission), and nobody else ever receives them. That is precisely the
    * reported symptom.
    */
-  const [granted, setGranted] = useState(false);
+  const [granted, setGranted] = useState({ canPublish: false, microphone: false });
   // Derived, not stored: with no room there is no grant to speak of.
-  const canPublish = room ? granted : false;
+  const canPublish = room ? granted.canPublish : false;
+  const canPublishMic = room ? granted.microphone : false;
   useEffect(() => {
     if (!room) return;
     let cancelled = false;
@@ -161,7 +218,14 @@ export function useStage({
       // Re-read `permissions` off the participant on every notification rather
       // than trusting the event payload or anything cached at join — LiveKit
       // documents races where the cached role trails the grant.
-      const sync = () => setGranted(room.localParticipant.permissions?.canPublish === true);
+      const sync = () => {
+        const allowed = room.localParticipant.permissions?.canPublish === true;
+        const sources = room.localParticipant.permissions?.canPublishSources ?? [];
+        setGranted({
+          canPublish: allowed,
+          microphone: allowed && (sources.length === 0 || sources.includes(MICROPHONE_SOURCE)),
+        });
+      };
       room.on(RoomEvent.ParticipantPermissionsChanged, sync);
       room.on(RoomEvent.Connected, sync);
       room.on(RoomEvent.Reconnected, sync);
@@ -179,17 +243,52 @@ export function useStage({
   }, [room]);
 
   useEffect(() => {
+    if (!room) return;
+    let cancelled = false;
+    let off: (() => void) | undefined;
+    void import("livekit-client").then(({ RoomEvent, Track }) => {
+      if (cancelled) return;
+      const sync = () =>
+        setMicOn(deriveMicOn(room.localParticipant.getTrackPublication(Track.Source.Microphone)));
+      const events = [
+        RoomEvent.LocalTrackPublished,
+        RoomEvent.LocalTrackUnpublished,
+        RoomEvent.TrackMuted,
+        RoomEvent.TrackUnmuted,
+        RoomEvent.Reconnected,
+      ] as const;
+      for (const event of events) room.on(event, sync);
+      off = () => {
+        for (const event of events) room.off(event, sync);
+      };
+      sync();
+    });
+    return () => {
+      cancelled = true;
+      off?.();
+    };
+  }, [room]);
+
+  const consumeRef = useRef(consumeIntent);
+  useEffect(() => {
+    consumeRef.current = consumeIntent;
+  }, [consumeIntent]);
+
+  useEffect(() => {
     if (!approved) {
-      startedFor.current = null;
+      sawUnapproved.current = true;
       return;
     }
     if (!room) return;
     // The gate. LiveKit Cloud reissues the token on `updateParticipant`, so the
     // grant can land a beat after the host's approve call returns.
     if (!canPublish) return;
-    const key = `${streamId}:${attempt}`;
-    if (startedFor.current === key) return;
-    startedFor.current = key;
+    const reason = sawUnapproved.current ? "ownRequestApproved" : "remount";
+    sawUnapproved.current = false;
+    const intent = reason === "ownRequestApproved" && (consumeRef.current?.() ?? false);
+    // With no consent the speaker is on stage with the mic OFF — `state`
+    // derives "live" from the grant — and taps to talk.
+    if (!shouldAutoEnableMic({ approved, canPublish, intent, reason })) return;
 
     let cancelled = false;
     setPhase("starting");
@@ -201,7 +300,6 @@ export function useStage({
       try {
         await enableOnce(() => room.localParticipant.setMicrophoneEnabled(true));
         if (cancelled) return;
-        setMicOn(true);
       } catch (micError) {
         if (cancelled) return;
         if (isPermissionRefusal(micError)) {
@@ -242,7 +340,7 @@ export function useStage({
     return () => {
       cancelled = true;
     };
-  }, [approved, room, streamId, attempt, canPublish, cameraAllowed]);
+  }, [approved, room, canPublish, cameraAllowed]);
 
   // Mirror the local camera into the caller's preview box. Never entered on
   // the audio-only path: there is no camera track and no preview box.
@@ -282,7 +380,6 @@ export function useStage({
         await room.localParticipant.setCameraEnabled(false).catch(() => {});
       }
       if (cancelled) return;
-      setMicOn(false);
       setCamOn(false);
       setAudioOnly(false);
       setPhase("idle");
@@ -292,12 +389,35 @@ export function useStage({
     };
   }, [approved, room, cameraAllowed]);
 
+  /*
+    THE TAP TO TALK. Refused behind a hard mute or a grant without the mic —
+    the control is disabled there too, and this is the backstop. A capture
+    failure is classified rather than rejected unhandled; `micOn` follows the
+    publication's events, never this call.
+  */
   const toggleMic = useCallback(async () => {
     if (!room) return;
-    const next = !micOn;
-    await room.localParticipant.setMicrophoneEnabled(next);
-    setMicOn(next);
-  }, [room, micOn]);
+    const control = micControl({
+      hostMuted,
+      permissions: { canPublish, microphone: canPublishMic },
+      micOn,
+    });
+    // The backstop gates OPENING the mic only: muting a live one is never refused.
+    if (!micOn && control.disabled) return;
+    try {
+      await room.localParticipant.setMicrophoneEnabled(!micOn);
+      setError(null);
+      setPhase((current) => (current === "live" || current === "idle" ? current : "live"));
+    } catch (micError) {
+      if (isPermissionRefusal(micError)) {
+        setPhase("not-permitted");
+        setError("The host hasn't finished bringing you on stage yet.");
+        return;
+      }
+      setPhase(classifyCaptureError(micError));
+      setError(captureErrorMessage(micError));
+    }
+  }, [room, micOn, hostMuted, canPublish, canPublishMic]);
 
   const toggleCam = useCallback(async () => {
     if (!room) return;
@@ -327,11 +447,51 @@ export function useStage({
     }
   }, [room, camOn, cameraAllowed]);
 
+  /*
+    RE-ACQUIRE THE DEVICES — the reader's own tap, which is the consent a
+    device needs. It used to bump `attempt` and let the publish effect run
+    again; that effect no longer opens anything by itself, so retry opens the
+    mic (and the camera, where there is one) directly.
+  */
   const retry = useCallback(() => {
+    if (!room) return;
     setError(null);
     setAudioOnly(false);
     setAttempt((n) => n + 1);
-  }, []);
+    setPhase("starting");
+    void (async () => {
+      try {
+        await enableOnce(() => room.localParticipant.setMicrophoneEnabled(true));
+        // The prompt outlived this Room (a leave, a close, a replaced
+        // connection): the capture belongs to nobody and comes straight down.
+        if (getRoom(streamId) !== room) {
+          await releaseCapture(room);
+          return;
+        }
+      } catch (micError) {
+        if (getRoom(streamId) !== room) return;
+        if (isPermissionRefusal(micError)) {
+          setPhase("not-permitted");
+          setError("The host hasn't finished bringing you on stage yet.");
+          return;
+        }
+        setPhase(classifyCaptureError(micError));
+        setError(captureErrorMessage(micError));
+        return;
+      }
+      if (cameraAllowed) {
+        try {
+          await enableOnce(() => room.localParticipant.setCameraEnabled(true));
+          setCamOn(true);
+        } catch (cameraError) {
+          setCamOn(false);
+          setAudioOnly(true);
+          setError(captureErrorMessage(cameraError));
+        }
+      }
+      setPhase("live");
+    })();
+  }, [room, cameraAllowed, streamId]);
 
   /**
    * Reconnect on a fresh token.
@@ -353,7 +513,6 @@ export function useStage({
     setMicOn(false);
     setCamOn(false);
     setPhase("idle");
-    startedFor.current = null;
     setAttempt((n) => n + 1);
     void queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "playback"] });
   }, [queryClient, streamId]);
@@ -390,11 +549,15 @@ export function useStage({
         ? stalled
           ? "grant-stalled"
           : "awaiting-grant"
-        : phase;
+        : // Granted with nothing started: on stage, mic off, tap to talk.
+          phase === "idle"
+          ? "live"
+          : phase;
 
   return {
     state,
-    micOn,
+    // Derived, like the grant: with no Room there is no mic to be on.
+    micOn: room ? micOn : false,
     // Both pinned on the audio-only path, for the same reason they are pinned
     // in usePublisher: nothing here can publish video, so reporting either from
     // state would describe a possibility that does not exist.
@@ -405,5 +568,6 @@ export function useStage({
     rejoin,
     toggleMic,
     toggleCam,
+    canPublishMic,
   };
 }

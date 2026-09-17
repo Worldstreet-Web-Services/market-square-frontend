@@ -10,22 +10,20 @@ import type { Room } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
 import { Sheet } from "@/components/ui/sheet";
+import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
 import { IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
+import { useAuth } from "@/hooks/use-auth";
+import { useRoomSession } from "@/lib/room-session-store";
 import { useMe } from "@/hooks/use-me";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
-import { RemoteAudio } from "@/features/streams/components/remote-audio";
-import { baseIdentity, participantLabel, remoteAudioSlots, type StageSlot } from "@/features/streams/lib/stage";
+import { baseIdentity, participantLabel, type StageSlot } from "@/features/streams/lib/stage";
 import { useStageSlots } from "@/features/streams/hooks/use-stage-slots";
-import { usePublisher } from "@/features/streams/hooks/use-publisher";
-import { useStage } from "@/features/streams/hooks/use-stage";
-import { usePlaybackToken } from "@/features/streams/hooks/use-playback";
 import { useLiveReactions } from "@/features/streams/hooks/use-live-reactions";
 import {
   useEndStream,
-  useGoLive,
   useMySpeakerRequest,
   useRequestToSpeak,
   useResolveSpeakerRequest,
@@ -56,7 +54,6 @@ import { PersonSheet, type PersonTarget } from "@/features/houses/components/per
 import { useAudience, type AudienceMember } from "@/features/houses/hooks/use-audience";
 import { useHouseAnnouncer } from "@/features/houses/hooks/use-house-announcer";
 import { useHouseAudio } from "@/features/houses/hooks/use-house-audio";
-import { useHouseConnection } from "@/features/houses/hooks/use-house-connection";
 import { ANNOUNCE_STABLE_MS } from "@/features/houses/lib/audio-levels";
 import { houseShareUrl, houseTopic, isHouse } from "@/features/houses/lib/house";
 import { parseParticipantMeta, participantName } from "@/features/houses/lib/participant-meta";
@@ -75,6 +72,10 @@ import {
   seatsFull,
 } from "@/features/houses/lib/seating";
 import { sq } from "@/lib/square-path";
+import { roomFailureCopy } from "@/lib/room-connection-copy";
+import { roomEntryReady } from "@/lib/room-session/entry";
+import { roomStagePanel } from "@/lib/room-session/presence";
+import type { StageAction } from "@/lib/stage-recovery";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -209,10 +210,33 @@ export function HouseRoom({
 }: { houseId: string } & SlotProps) {
   const stream = useStream(houseId, 10_000);
   const me = useMe();
+  const auth = useAuth();
+  /*
+    WHO THE READER IS MUST BE SETTLED BEFORE THE ROOM IS ENTERED, and there
+    must BE a reader: anonymous listening is not in this build, so a signed-out
+    visitor is invited to sign in rather than put into a session that can only
+    fail (lib/room-session/entry.ts). A host who resolved as a listener for a
+    beat is switched to host by the session when their profile lands.
+  */
+  const identityKnown = roomEntryReady({
+    authReady: auth.ready,
+    authenticated: auth.authenticated,
+    meLoaded: me.data !== undefined,
+    meFailed: me.isError,
+  });
+  const signedOut = auth.ready && !auth.authenticated;
 
   if (stream.isPending) return <RoomSkeleton />;
 
-  if (stream.isError) {
+  /*
+    ONLY WHEN THERE IS NOTHING TO SHOW. This polls every 10 s, and TanStack
+    flips `isError` on a failed refetch while KEEPING the data — so a single
+    network hiccup replaced a live room with this error screen, unmounting the
+    room and dropping its call until the next poll brought it back ("it say
+    time out then it will connect back"). A room we already have stays up; the
+    next poll catches up.
+  */
+  if (stream.isError && !stream.data) {
     return (
       <div className="mx-auto w-full max-w-[520px] px-4 py-10">
         <ErrorState
@@ -260,6 +284,8 @@ export function HouseRoom({
       key={data.id}
       stream={data}
       isHost={isHost}
+      identityKnown={identityKnown}
+      signedOut={signedOut}
       followSlot={followSlot}
       safetySlot={safetySlot}
     />
@@ -348,6 +374,7 @@ function HostScheduled({
         // work?".
         stream={{ ...stream, status: "live" }}
         isHost
+        identityKnown
         ingest={ingest}
         micId={micId}
         followSlot={followSlot}
@@ -545,6 +572,8 @@ type RoomState = "connecting" | "live" | "reconnecting" | "failed" | "duplicate"
 function LiveHouse({
   stream,
   isHost,
+  identityKnown,
+  signedOut = false,
   ingest: initialIngest = null,
   micId = "",
   followSlot,
@@ -556,6 +585,10 @@ function LiveHouse({
 }: {
   stream: Stream;
   isHost: boolean;
+  /** Signed in and `/me` has settled, so the room may be entered (lib/room-session/entry.ts). */
+  identityKnown: boolean;
+  /** No account: the room is not entered, and the reader is invited to sign in. */
+  signedOut?: boolean;
   ingest?: Ingest | null;
   micId?: string;
 } & SlotProps) {
@@ -577,46 +610,74 @@ function LiveHouse({
 
   /* ---- the one connection ------------------------------------------- */
 
-  /**
-   * A host who reloads a live house has no ingest — go-live is what mints it,
-   * and it is idempotent by design (the studio's "rejoin" does exactly this).
-   * So it is fired once, automatically, rather than making the host tap
-   * "rejoin" to get back into a room they never left.
-   */
-  const [ingest, setIngest] = useState<Ingest | null>(initialIngest);
-  const rejoin = useGoLive();
-  const rejoined = useRef(false);
+  /*
+    THIS VIEW DOES NOT OWN THE CONNECTION.
+
+    It used to: the publisher, the listener's connect effect, the stage and
+    the remote audio all lived here, so unmounting the page — Back, a DM, a
+    profile — hung up the call. The shell's RoomSessionProvider
+    (components/layout/room-session.tsx) owns all of it now. This view asks the
+    session to ENTER, reads what the session says, and calls its verbs.
+    Unmounting it disconnects nothing; entering the same room again is a no-op.
+  */
+  const session = useRoomSession();
+  const enterRoom = session.enter;
+  const role = isHost ? "host" : "listener";
+  // The host who just pressed Open in Backstage hands in the go-live ingest:
+  // their own fresh open, the only connect that publishes an open mic.
+  const ingestUrl = initialIngest?.url ?? "";
+  const ingestToken = initialIngest?.roomToken ?? "";
   useEffect(() => {
-    if (!isHost || ingest || rejoined.current) return;
-    rejoined.current = true;
-    rejoin.mutate(stream.id, { onSuccess: (result) => setIngest(result.ingest) });
-  }, [isHost, ingest, rejoin, stream.id]);
+    if (!identityKnown) return;
+    enterRoom(
+      stream.id,
+      role,
+      ingestUrl && ingestToken
+        ? { token: { url: ingestUrl, token: ingestToken }, fresh: true, preferredMic: micId || undefined }
+        : undefined
+    );
+  }, [enterRoom, identityKnown, stream.id, role, ingestUrl, ingestToken, micId]);
 
-  const publisher = usePublisher({
-    ingest: isHost ? ingest : null,
-    enabled: isHost,
-    streamId: stream.id,
-    // The whole promise, in one argument. See features/streams/lib/capture-plan.ts.
-    audioOnly: true,
-    preferredMic: micId || undefined,
-  });
+  const here = session.state.target?.streamId === stream.id;
+  /** Somebody asked to come in here while the session holds another room. */
+  const askingToSwitch = session.state.status === "conflict" && session.state.pending?.streamId === stream.id;
+  /** …and the room being left is the reader's OWN: switching closes it. */
+  const hostingOther = askingToSwitch && session.state.target?.role === "host";
+  const connection = here ? session.state.connection : "idle";
 
-  const playback = usePlaybackToken(stream.id, !isHost);
-  const connection = useHouseConnection({
-    houseId: stream.id,
-    url: playback.data?.url ?? "",
-    token: playback.data?.token ?? "",
-    enabled: !isHost,
-  });
+  /*
+    Having been in this room and no longer being in it — the reader left, or
+    it was taken away — is not "connecting". Adjusted during render, React's
+    pattern for state that follows a prop.
+  */
+  const [wasHere, setWasHere] = useState(false);
+  if (here && !wasHere) setWasHere(true);
+  /*
+    …and nor is a "Leave your gist room?" question that went away unanswered.
+    The other room can be hung up from the mini-player on THIS page, end, or
+    be taken by another tab while the sheet is open; the question is cleared
+    with it, the session is free, and this view — which only enters on mount —
+    sat on "Connecting…" with nothing to press. It offers Join instead.
+  */
+  const [wasAsked, setWasAsked] = useState(false);
+  if (askingToSwitch && !wasAsked) setWasAsked(true);
+  const gone = (wasHere || wasAsked) && !here && !askingToSwitch;
+
+  /*
+    AN UNANSWERED QUESTION GOES WITH THE VIEW THAT ASKED IT. Pressing Back on
+    "Leave your gist room?" unmounts this view without choosing, and a question
+    left standing kept the session in `conflict` everywhere else. Only a
+    question about THIS room is cleared.
+  */
+  const dismissConflict = session.dismissConflict;
+  useEffect(() => {
+    if (!askingToSwitch) return;
+    return () => dismissConflict(stream.id);
+  }, [askingToSwitch, dismissConflict, stream.id]);
 
   /**
-   * The room, whichever path opened it.
-   *
-   * Read from the registry rather than from either hook's return, so this
-   * component does not have to know which one is driving. The registry is also
-   * the structural guard that there is only ever ONE — a host publishes on the
-   * room it registers, a listener registers the room its playback token
-   * opened, never two.
+   * The room, read from the registry rather than the session, so the ONE-Room
+   * guard is also the one thing this view trusts about which Room exists.
    */
   const room = useSyncExternalStore(
     useCallback((listener) => subscribeRoom(stream.id, listener), [stream.id]),
@@ -624,17 +685,16 @@ function LiveHouse({
     () => null as Room | null
   );
 
-  const state: RoomState = isHost
-    ? publisher.state === "publishing"
+  const state: RoomState =
+    connection === "live"
       ? "live"
-      : publisher.state === "reconnecting"
+      : connection === "reconnecting"
         ? "reconnecting"
-        : publisher.state === "idle" || publisher.state === "connecting"
-          ? "connecting"
-          : "failed"
-    : playback.isError
-      ? "failed"
-      : connection.state;
+        : connection === "failed"
+          ? "failed"
+          : connection === "duplicate"
+            ? "duplicate"
+            : "connecting";
 
   /* ---- who is at the table ------------------------------------------ */
 
@@ -797,22 +857,7 @@ function LiveHouse({
   const mine = useMySpeakerRequest(stream.id, asking);
   const request = useRequestToSpeak(stream.id);
   const resolve = useResolveSpeakerRequest(stream.id);
-  const approved = mine.data?.status === "approved";
   const pendingMine = mine.data?.status === "pending";
-
-  /**
-   * The approved guest publishes over the connection they ALREADY have.
-   *
-   * No second token and no second room: the playback token and a speaker token
-   * carry the same LiveKit identity, so connecting twice evicts the viewer and
-   * starts the reconnect loop the registry exists to prevent. `withCamera:
-   * false` makes the camera absent from this path rather than skipped.
-   */
-  const stage = useStage({
-    streamId: stream.id,
-    approved: asking && approved,
-    withCamera: false,
-  });
 
   /** The host's own view of the queue, for the counted button and the tray. */
   const hostRequests = useSpeakerRequests(stream.id, isHost && stream.status === "live");
@@ -825,8 +870,55 @@ function LiveHouse({
    */
   const [requestsOpen, setRequestsOpen] = useState(true);
 
-  const onStage = isHost || (approved && stage.state === "live");
-  const canAsk = !isHost && !onStage;
+  /*
+    On stage means the SESSION says so — approved and granted — never the row
+    alone. The approved guest publishes over the connection they already
+    have, with the mic OFF until they tap it.
+  */
+  /*
+    …and only in the room the session is IN. The mic toggle is the SESSION's
+    mic: drawn on a room the reader owns but is not connected to (their other
+    live room, or the one they are being asked to switch to), it switched the
+    mic of the room they ARE in, off screen, while this control said off.
+  */
+  // …or wherever a mic is actually open, seated or not: its off switch never
+  // disappears ahead of the track (lib/room-session/visibility.ts).
+  const onStage = here && (isHost || session.presence === "speaker" || session.micOn);
+  // Approved but not (yet) seated is the stage panel's to explain, with its
+  // own remedies — "Ask to speak" to somebody the host already said yes to
+  // reads as the approval having been lost.
+  const myRequestStatus = mine.data?.status ?? null;
+  const canAsk = !isHost && !onStage && myRequestStatus !== "approved";
+
+  /*
+    AN APPROVED SPEAKER WHO IS NOT SIMPLY SEATED is told why and given the
+    remedy: the grant on its way, the grant that never landed on this
+    connection (Rejoin — a fresh token on a fresh connection), or a mic that
+    would not open (Try again, which is the reader's own tap).
+  */
+  const stagePanel = useMemo(
+    () =>
+      roomStagePanel({
+        here,
+        isHost,
+        status: myRequestStatus,
+        connection,
+        stageState: session.stage.state,
+        error: session.stage.error,
+      }),
+    [here, isHost, myRequestStatus, connection, session.stage.state, session.stage.error]
+  );
+  const myRequestId = mine.data?.id ?? null;
+  const runStageAction = (action: StageAction) => {
+    if (action === "rejoin") return session.stage.rejoin();
+    if (action === "retry") return session.stage.retry();
+    if (!myRequestId) return;
+    if (action === "request-again") {
+      resolve.mutate({ requestId: myRequestId, action: "leave" }, { onSuccess: () => request.mutate() });
+      return;
+    }
+    resolve.mutate({ requestId: myRequestId, action: "leave" });
+  };
 
   const askReason = !requestsOpen
     ? "The host isn't taking requests right now."
@@ -919,7 +1011,7 @@ function LiveHouse({
   const wasOnStage = useRef(onStage);
   useEffect(() => {
     if (onStage && !wasOnStage.current) {
-      announce("You're on the stage. Your microphone is open.");
+      announce("You're on the stage. Your microphone is off — tap it to talk.");
     }
     wasOnStage.current = onStage;
   }, [onStage, announce]);
@@ -1005,18 +1097,19 @@ function LiveHouse({
 
   const [confirmLeave, setConfirmLeave] = useState(false);
 
-  // Read out of `mine.data` up here rather than inside the callback: the
-  // compiler infers the whole object as the dependency otherwise, which does
-  // not match a hand-written `mine.data?.id` and costs the memo entirely.
-  const myRequestId = mine.data?.status === "approved" ? mine.data.id : null;
-  const leaveNow = useCallback(() => {
-    // A seated person frees their seat on the way out, so the chair is
-    // available to the next person rather than held by somebody who has gone.
-    if (!isHost && myRequestId) {
-      resolve.mutate({ requestId: myRequestId, action: "leave" });
-    }
+  // Read off the session up here rather than inside the callback, so the memo
+  // depends on the verb and not on the whole session object.
+  const sessionLeave = session.leave;
+  const leaveNow = useCallback(async () => {
+    // The session frees a held seat or a raised hand on the way out, then
+    // hangs up — the only way a listener's call ends besides the mini-player.
+    await sessionLeave();
+    toast("You left the gist room.", {
+      duration: 5_000,
+      action: { label: "Rejoin", onClick: () => router.push(sq(`/gist-rooms/${stream.id}`)) },
+    });
     router.push(sq("/gist-rooms"));
-  }, [isHost, myRequestId, resolve, router]);
+  }, [sessionLeave, router, stream.id]);
 
   /*
     LEAVING ALWAYS ASKS. It used to ask ONCE: a `ms:house:leave-seen` flag was
@@ -1035,7 +1128,7 @@ function LiveHouse({
   */
   const leave = useCallback(() => setConfirmLeave(true), []);
 
-  const endHouse = useEndStream();
+  const endHouse = useEndStream({ successMessage: "Gist room closed" });
 
   /* ---- sheets ---------------------------------------------------------- */
 
@@ -1182,8 +1275,8 @@ function LiveHouse({
 
   /* ---- keyboard --------------------------------------------------------- */
 
-  const micToggle = isHost ? publisher.toggleMic : stage.toggleMic;
-  const micOn = isHost ? publisher.micOn : stage.micOn;
+  const micToggle = session.toggleMic;
+  const micOn = here && session.micOn;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1262,12 +1355,8 @@ function LiveHouse({
          dock (ogazboiz, 2026-09-13). The chat column is `h-full` inside. */
       className="flex w-full flex-col bg-chrome pb-[calc(80px+env(safe-area-inset-bottom,0px))] md:pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-room-top,var(--ws-crumb-h))-var(--ws-nav-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
     >
-      {/* The audio itself. Mounted from its OWN map so it can never become
-          conditional on anything visual — the reason RemoteAudio is its own
-          file at all. */}
-      {remoteAudioSlots(slots).map((slot) => (
-        <RemoteAudio key={slot.identity} slot={slot} mutedForMe={mutedForMe.has(slot.identity)} />
-      ))}
+      {/* The audio is NOT here. The shell's RoomSessionProvider mounts it
+          (HouseAudioSinks), so it keeps playing when this view unmounts. */}
 
       {/* One polite region for the whole room. Never assertive: everything
           here is ambient, and assertive interrupts whatever is being read. */}
@@ -1409,26 +1498,120 @@ function LiveHouse({
 
       {state === "failed" && (
         <div className="ws-inset mx-4 mb-4 px-4 py-3">
-          <p className="text-[13px] leading-5 text-body">Lost connection to the gist room.</p>
+          <p className="text-[13px] leading-5 text-body">
+            {roomFailureCopy("failed")}
+          </p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => session.retry()}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {/* The host is connected but their microphone could not be opened —
+          a device problem with its own remedy, not a lost room. */}
+      {here && isHost && state === "live" && session.micFailure && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">{roomFailureCopy(session.micFailure)}</p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => session.stage.retry()}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {/* The browser refused to play the room without a gesture — a reload or a
+          shared link opened in a fresh tab. The mini-player's Listen is hidden
+          on this page, so the page offers its own. */}
+      {here && connection === "live" && !session.canPlayAudio && (
+        <div className="ws-inset mx-4 mb-4 flex items-center gap-3 px-4 py-3">
+          <p className="min-w-0 flex-1 text-[13px] leading-5 text-body">Your browser paused the room&apos;s sound.</p>
+          <Button size="sm" className="shrink-0 pointer-coarse:h-11" onClick={session.startAudio}>
+            Listen
+          </Button>
+        </div>
+      )}
+
+      {stagePanel && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3" role="status">
+          <p className="text-[13px] leading-5 text-body">{stagePanel.message}</p>
+          {stagePanel.actions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {stagePanel.actions.map((action, index) => (
+                <Button
+                  key={action}
+                  size="sm"
+                  variant={index === 0 ? "secondary" : "ghost"}
+                  disabled={(action === "request-again" || action === "leave") && resolve.isPending}
+                  onClick={() => runStageAction(action)}
+                >
+                  {STAGE_ACTION_LABEL[action]}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {signedOut && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">Sign in to listen to this gist room.</p>
+          <Button size="sm" className="mt-2" onClick={() => gate(() => {})}>
+            Sign in
+          </Button>
+        </div>
+      )}
+
+      {here && connection === "ended" && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">
+            {session.state.endReason === "removed"
+              ? "You were removed from this gist room."
+              : "This gist room has ended."}
+          </p>
+        </div>
+      )}
+
+      {gone && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3">
+          <p className="text-[13px] leading-5 text-body">You&apos;re not in this gist room.</p>
           <Button
             size="sm"
             variant="secondary"
             className="mt-2"
-            onClick={() => (isHost ? publisher.retry() : playback.refetch())}
+            onClick={() => enterRoom(stream.id, role)}
           >
-            Try again
+            {wasHere ? "Join again" : "Join"}
           </Button>
         </div>
       )}
 
       {state === "duplicate" && (
         <div className="ws-inset mx-4 mb-4 px-4 py-3">
-          {/* Terminal by design. Retrying evicts the other tab, whose own
-              reconnect evicts this one — retrying IS the eviction loop. */}
+          {/* Terminal by design: nothing retries by itself, because a retry
+              evicts the other tab, whose own reconnect evicts this one — that
+              IS the eviction loop. So the way on is the reader's own choice,
+              and it has to be HERE: this is the room's page, where the
+              mini-player is hidden, and `enter` does nothing out of a terminal
+              state. "Use it here" clears the state and enters again, taking
+              the room from the other tab (which lands in this same state and
+              stays there); "Dismiss" just clears it. */}
           <p className="text-[13px] leading-5 text-body">
             This house is open somewhere else. You can only be in a house from one tab or device
             at a time.
           </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                session.dismiss();
+                enterRoom(stream.id, role);
+              }}
+            >
+              Use it here
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => session.dismiss()}>
+              Dismiss
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1474,7 +1657,8 @@ function LiveHouse({
         </div>
       )}
 
-      <CaptionRail captionUrl={playback.data?.captionUrl ?? null} />
+      {/* Keyed on the URL: a transcript never carries over into another stream. */}
+      <CaptionRail key={here ? (session.captionUrl ?? "none") : "none"} captionUrl={here ? session.captionUrl : null} />
 
       {/* Everything above scrolls; the bar below is pinned to the column's
           bottom edge. `mt-auto` rather than `sticky`, because the column is
@@ -1806,35 +1990,67 @@ function LiveHouse({
         )}
       </Sheet>
 
+      {/* ANOTHER ROOM IS ALREADY PLAYING. One room per tab: joining this one
+          leaves that one, so the reader chooses — and staying takes them back
+          to the room they are still in. */}
       <Sheet
-        open={confirmLeave}
-        onClose={() => setConfirmLeave(false)}
-        title={isHost ? "Close the gist room?" : "Leave quietly?"}
+        open={askingToSwitch}
+        onClose={() => {
+          const current = session.state.target?.streamId;
+          session.dismissConflict();
+          if (current) router.push(sq(`/gist-rooms/${current}`));
+        }}
+        title={hostingOther ? "Close your gist room?" : "Leave your gist room?"}
       >
+        {/* A HOST who switches does not just leave: their room would go on
+            with nobody running it, so joining CLOSES it, and says so. */}
         <p className="text-[13px] leading-5 text-body">
-          {isHost
-            ? "Everyone will be sent out and the gist room will be closed."
-            : "Nobody is told you left."}
+          {hostingOther
+            ? session.stream
+              ? `You're hosting "${houseTopic(session.stream)}". Joining this room will close it for everyone.`
+              : "You're hosting another gist room. Joining this room will close it for everyone."
+            : session.stream
+              ? `You're in "${houseTopic(session.stream)}". Joining this room will leave it.`
+              : "You're in another gist room. Joining this room will leave it."}
         </p>
         <div className="mt-5 flex gap-2">
-          <Button variant="ghost" className="flex-1" onClick={() => setConfirmLeave(false)}>
-            Stay
-          </Button>
           <Button
+            variant="ghost"
             className="flex-1"
-            loading={endHouse.isPending}
+            disabled={session.switching}
             onClick={() => {
-              if (isHost) {
-                endHouse.mutate(stream.id, { onSuccess: () => router.push(sq("/gist-rooms")) });
-                return;
-              }
-              leaveNow();
+              const current = session.state.target?.streamId;
+              session.dismissConflict();
+              if (current) router.push(sq(`/gist-rooms/${current}`));
             }}
           >
-            {isHost ? "Close it" : "Leave"}
+            Stay there
+          </Button>
+          <Button className="flex-1" loading={session.switching} onClick={() => void session.confirmConflict()}>
+            {hostingOther ? "Close and join" : "Leave and join"}
           </Button>
         </div>
       </Sheet>
+
+      <DestructiveConfirmSheet
+        open={confirmLeave}
+        onClose={() => setConfirmLeave(false)}
+        title={isHost ? "Close the gist room?" : "Leave quietly?"}
+        body={isHost ? "Everyone will be sent out and the gist room will be closed." : "Nobody is told you left."}
+        confirmLabel={isHost ? "Close it" : "Leave"}
+        loading={endHouse.isPending}
+        onConfirm={() => {
+          if (isHost) {
+            endHouse.mutate(stream.id, {
+              onSuccess: () => {
+                void session.end().then(() => router.push(sq("/gist-rooms")));
+              },
+            });
+            return;
+          }
+          void leaveNow();
+        }}
+      />
     </main>
   );
 }
@@ -1868,6 +2084,15 @@ function RosterSurface({
     </div>
   );
 }
+
+/** What each stage remedy is called on its button. */
+const STAGE_ACTION_LABEL: Record<StageAction, string> = {
+  request: "Ask to speak",
+  retry: "Try again",
+  rejoin: "Rejoin the stage",
+  "request-again": "Ask again",
+  leave: "Leave the stage",
+};
 
 /**
  * "Hand up · 4m".

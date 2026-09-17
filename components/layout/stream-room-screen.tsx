@@ -7,7 +7,18 @@
 
 import { StreamRoom } from "@/features/streams";
 import { FollowPill } from "@/features/profile";
+import { GistRoomGuard } from "@/components/layout/gist-room-guard";
 
 export function StreamRoomScreen({ streamId }: { streamId: string }) {
-  return <StreamRoom streamId={streamId} followSlot={(owner) => <FollowPill profile={owner} />} />;
+  return (
+    <GistRoomGuard
+      streamId={streamId}
+      title="Leave the gist room to watch?"
+      consequence="Watching this stream will leave it."
+      confirmLabel="Leave and watch"
+      hostConfirmLabel="Close and watch"
+    >
+      <StreamRoom streamId={streamId} followSlot={(owner) => <FollowPill profile={owner} />} />
+    </GistRoomGuard>
+  );
 }

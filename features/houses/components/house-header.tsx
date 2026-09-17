@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Sheet } from "@/components/ui/sheet";
-import { IconArrowLeft } from "@/components/ui/icons";
+import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
+import { IconArrowLeft, IconChevronDown } from "@/components/ui/icons";
 // The file's own glyphs, exported from it. See components/ui/room-icons.tsx.
-import { IconHouseGroup, IconRoomBack, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
+import { IconHouseGroup, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
 import { canGoBack } from "@/lib/nav-history";
 import { sq } from "@/lib/square-path";
 
@@ -183,9 +182,13 @@ export function HouseHeader({
           onClick={() => (canGoBack() ? router.back() : router.push(sq("/gist-rooms")))}
           /* 1285:92920 on a phone: the 16px `arrow-left` chevron, 8, then
              "Back" at 14/24. The desktop's 20px arrow and 16/24 from `md`. */
+          /* MINIMISE, NOT LEAVE. Going back no longer hangs up: the room keeps
+             playing in the mini-player, so the phone's glyph is the
+             chevron-down every call and music app uses for exactly that. */
+          aria-label="Minimise room"
           className="ws-press flex w-fit items-center gap-2 text-[14px] leading-6 text-white transition-opacity hover:opacity-80 md:text-[16px]"
         >
-          <IconRoomBack className="h-4 w-4 shrink-0 md:hidden" />
+          <IconChevronDown className="h-4 w-4 shrink-0 md:hidden" />
           <IconArrowLeft className="hidden h-5 w-5 shrink-0 md:block" />
           Back
         </button>
@@ -359,32 +362,17 @@ export function HouseHeader({
       reader user on the destructive button is the same mis-tap with a keyboard.
     */}
     {onLeave && (
-      <Sheet open={confirming} onClose={closeConfirm} title="Leave this gist room?">
-        <p className="text-[13px] leading-5 text-body">
-          You will drop out of the conversation straight away.
-        </p>
-        <div className="mt-5 flex gap-2">
-          <Button variant="ghost" className="flex-1" autoFocus onClick={closeConfirm}>
-            Stay
-          </Button>
-          {/*
-            `--color-danger`, the slice's one destructive red, filled rather
-            than washed so the committing button is the loudest thing in the
-            dialog. Not `Button`'s own `danger` variant: that paints
-            `--color-down`, which means a value going down on a price, and
-            `features/houses` is asserted never to borrow it.
-          */}
-          <Button
-            className="flex-1 bg-danger text-white hover:bg-danger/90 active:bg-danger/80"
-            onClick={() => {
-              setConfirming(false);
-              onLeave();
-            }}
-          >
-            Leave Room
-          </Button>
-        </div>
-      </Sheet>
+      <DestructiveConfirmSheet
+        open={confirming}
+        onClose={closeConfirm}
+        title="Leave this gist room?"
+        body="You will drop out of the conversation straight away."
+        confirmLabel="Leave Room"
+        onConfirm={() => {
+          setConfirming(false);
+          onLeave();
+        }}
+      />
     )}
     </>
   );
