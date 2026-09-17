@@ -405,8 +405,9 @@ export async function fetchSeatedSpeakers(streamId: string) {
 /**
  * The host's soft mute — `POST /streams/:id/speakers/:userId/mute`, owner only.
  *
- * Mutes the speaker's MICROPHONE on the server and sets `hostMuted='soft'` on
- * them; they may unmute themselves. There is no unmute route and no lock, by
+ * Mutes the speaker's MICROPHONE on the server and sets the `hostMuted`
+ * attribute on them (the service writes `'true'`; lib/host-mute.ts reads any
+ * value set); they may unmute themselves. There is no unmute route and no lock, by
  * decision. `userId` is the BARE user id (`baseIdentity`), never `#speaker`.
  * NOT DEPLOYED YET: a route 404 hides the control.
  */

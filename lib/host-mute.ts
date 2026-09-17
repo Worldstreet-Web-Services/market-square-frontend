@@ -2,7 +2,12 @@
  * THE HOST'S MUTE — soft, and only soft.
  *
  * `POST /streams/:id/speakers/:userId/mute` mutes the speaker's MICROPHONE
- * track on the server and sets the participant attribute `hostMuted='soft'`.
+ * track on the server and sets the participant attribute `hostMuted`. The
+ * agreed contract said `'soft'`; the service writes `'true'` and clears the
+ * attribute (an empty value) when the speaker is seated again, removed or
+ * leaves. So ANY value set, other than an explicit false, is a host mute
+ * (`hostMuteOf`) — reading only `soft` meant no seat ever showed "Muted by
+ * host" and the speaker was never told.
  * The speaker may unmute themselves the moment they have something to say.
  * The product owner's rules (2026-09-17), all held here:
  *
@@ -11,24 +16,25 @@
  *  · nobody can mute the host;
  *  · the listener's own tool is "Mute for me only", a different act entirely
  *    (lib/muted-for-me, client-local, nobody told);
- *  · "Muted by host" is drawn only while the attribute is set AND the mic
- *    has stayed muted since the host's mute — the attribute outlives the
- *    speaker's own unmute, so a badge read off the attribute alone was drawn
- *    again the next time they muted THEMSELVES (`stepHostMuteBadges`).
+ *  · "Muted by host" is drawn while the attribute is set AND the mic is muted
+ *    (`stepHostMuteBadges`).
  *
- * BACKEND DEPENDENCY: the service should clear `hostMuted` when the speaker
- * unmutes (track_unmuted) and on demotion, and write a new value per mute
- * (`soft:<ts>`), so a second mute is news without the push. The client reads
- * both shapes today.
+ * WHAT A CONSTANT VALUE CANNOT TELL. The attribute outlives the speaker's own
+ * unmute. With one value for every mute (`'true'`, `'soft'`), a speaker who
+ * unmuted and later muted THEMSELVES looks exactly like one the host muted a
+ * second time. The badge follows the product rule and shows for both: hiding
+ * a real second mute from the room is the worse lie. Only a value that
+ * changes per mute (`soft:<ts>`) lets the badge remember that this mute was
+ * already spent. BACKEND DEPENDENCY: clear `hostMuted` on track_unmuted, or
+ * write a new value per mute, and the self-mute is no longer badged.
  *
- * WHAT IS NOT SUPPORTED UNTIL THEN: with the attribute a constant `soft`, a
- * SECOND mute (the speaker unmuted themselves, the host muted them again) is
- * only announced through the `speakerMuted` push on `user:<did>`. That push
- * needs the ws-gateway configured (`NEXT_PUBLIC_MS_WS_GATEWAY_URL`) and the
- * shared socket authenticated with the reader's token
- * (lib/ws-gateway-shared.ts). Without the gateway, or while the socket is
- * down, the second mute still mutes and the badge still shows, but the
- * speaker gets no toast until the service writes `soft:<ts>`.
+ * The speaker's toast: a first mute is told off the attribute changing; a
+ * SECOND mute under a constant value only through the `speakerMuted` push on
+ * `user:<did>`, which needs the ws-gateway configured
+ * (`NEXT_PUBLIC_MS_WS_GATEWAY_URL`) and the shared socket authenticated with
+ * the reader's token (lib/ws-gateway-shared.ts). Without the gateway, or while
+ * the socket is down, the second mute still mutes and still badges, but the
+ * speaker gets no toast.
  *
  * Pure, so `lib/host-mute.test.ts` pins it.
  */
@@ -45,10 +51,25 @@ export function hostMuteToken(attributes: Readonly<Record<string, string>> | nul
   return attributes?.[HOST_MUTED_ATTRIBUTE] ?? "";
 }
 
-/** Read the attribute. `soft`, or `soft:<anything>` (one value per mute), is a host mute. */
+/** Values that say "not muted by the host", should the service ever write one rather than clearing. */
+const NOT_HOST_MUTED = new Set(["", "false", "none", "0"]);
+
+/**
+ * Read the attribute. Any value set — the service's `true`, the contract's
+ * `soft`, a per-mute `soft:<ts>` — is a host mute; unset or an explicit false
+ * is not.
+ */
 export function hostMuteOf(attributes: Readonly<Record<string, string>> | null | undefined): HostMuteAttribute {
-  const value = hostMuteToken(attributes);
-  return value === "soft" || value.startsWith("soft:") ? "soft" : "none";
+  return NOT_HOST_MUTED.has(hostMuteToken(attributes).trim().toLowerCase()) ? "none" : "soft";
+}
+
+/**
+ * A value written once per mute (`soft:<ts>`): a change in it is a new mute,
+ * and while it stays the same the mute is the same one. `true` and `soft` are
+ * the same value for every mute.
+ */
+export function perMuteToken(token: string): boolean {
+  return /^[^:]+:.+$/.test(token);
 }
 
 export interface HostMuteBadgeSeat {
@@ -62,6 +83,12 @@ export interface HostMuteBadgeSeat {
 
 export interface HostMuteBadgeState {
   token: string;
+  /**
+   * This viewer saw the value change to this token. False when the state was
+   * made on first sight of the seat (a viewer who just arrived, a seat that
+   * came back), where the mute may be long spent.
+   */
+  witnessed: boolean;
   /** The mic has been seen muted under this mute. */
   sawMuted: boolean;
   /** …and then seen on: the speaker unmuted themselves, so this mute is spent. */
@@ -71,13 +98,22 @@ export interface HostMuteBadgeState {
 /**
  * The "Muted by host" badge on every seat, one reading at a time.
  *
- * Per identity, remember whether the speaker has unmuted since the host's
- * mute (the attribute's current value). A new value is a new mute and starts
- * over. No microphone publication is never a badge: a speaker moved down and
- * seated again has not published yet, and the host muted nothing of theirs.
- * A seat no longer present is forgotten. What cannot be told apart — somebody
- * who unmuted before this viewer arrived and has since muted themselves — is
- * the backend's to fix by clearing the attribute on unmute.
+ * Every seat is remembered, the unset value included, so a change to a host
+ * mute is something this viewer WITNESSED. Per identity:
+ *
+ *  · a witnessed change: the attribute may land a beat before the track mute,
+ *    so a mic still on only lifts the mute once it has been seen off under it;
+ *  · first sight of a seat already carrying a mute (a late arrival, or a seat
+ *    that went and came back): nothing says the mute is fresh, so a mic seen
+ *    on lifts it at once — a speaker who had already unmuted is not badged
+ *    for muting themselves later;
+ *  · a constant value (`true`, `soft`, see `perMuteToken`): the mic going off
+ *    again cannot be told from the host's second mute, so it badges again —
+ *    the product rule, attribute set AND mic muted (see the module note);
+ *  · no microphone publication is never a badge: a speaker seated again has
+ *    not published, and the host muted nothing of theirs.
+ *
+ * A seat no longer present is forgotten.
  */
 export function stepHostMuteBadges(
   memory: ReadonlyMap<string, HostMuteBadgeState>,
@@ -86,16 +122,22 @@ export function stepHostMuteBadges(
   const next = new Map<string, HostMuteBadgeState>();
   const badges = new Map<string, boolean>();
   for (const seat of seats) {
+    const previous = memory.get(seat.identity);
+    let state: HostMuteBadgeState =
+      previous && previous.token === seat.token
+        ? { ...previous }
+        : { token: seat.token, witnessed: previous !== undefined, sawMuted: false, lifted: false };
     if (hostMuteOf({ [HOST_MUTED_ATTRIBUTE]: seat.token }) !== "soft") {
+      next.set(seat.identity, state);
       badges.set(seat.identity, false);
       continue;
     }
     const mutedNow = seat.published && seat.micMuted;
-    const previous = memory.get(seat.identity);
-    let state: HostMuteBadgeState =
-      previous && previous.token === seat.token ? { ...previous } : { token: seat.token, sawMuted: false, lifted: false };
-    if (mutedNow) state = { ...state, sawMuted: true };
-    else if (seat.published && state.sawMuted) state = { ...state, lifted: true };
+    if (mutedNow) {
+      state = { ...state, sawMuted: true, lifted: state.lifted && perMuteToken(seat.token) };
+    } else if (seat.published && (state.sawMuted || !state.witnessed)) {
+      state = { ...state, lifted: true };
+    }
     next.set(seat.identity, state);
     badges.set(seat.identity, mutedNow && !state.lifted);
   }

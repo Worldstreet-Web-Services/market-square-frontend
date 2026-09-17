@@ -882,6 +882,11 @@ describe("the host's soft mute on a seat", () => {
     assert.equal(slot.mutedByHost, true);
   });
 
+  it("marks the seat for the value the service writes, 'true'", () => {
+    const [, slot] = buildStage(room(publishing(HOST), guest(true, { hostMuted: "true" })), HOST);
+    assert.equal(slot.mutedByHost, true);
+  });
+
   it("drops the badge the moment the speaker unmutes themselves", () => {
     const [, slot] = buildStage(room(publishing(HOST), guest(false, { hostMuted: "soft" })), HOST);
     assert.equal(slot.mutedByHost, false);
