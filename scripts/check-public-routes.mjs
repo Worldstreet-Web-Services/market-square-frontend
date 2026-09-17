@@ -228,6 +228,26 @@ function collectCalls(root) {
  */
 const PENDING_ROUTES = {
 
+  // ── invite to speak and the host's soft mute (agreed contract, not deployed) ─
+  // Both are authenticated, owner-only writes. The frontend calls them ahead
+  // of the backend and degrades quietly: a route 404 (no `details.resource`)
+  // hides the controls for the page load (lib/speaker-invite.ts
+  // `routeMissing`). The new `accept` / `reject` / `cancel` actions and the
+  // `?status=invited` filter ride on routes the spec already documents, so
+  // they need no entry here. DELETE BOTH ENTRIES when the routes deploy.
+  "post /streams/{}/speaker-invites": {
+    reason:
+      "The host invites a listener to speak ({ userId }, 60s consent " +
+      "handshake). Agreed contract, not deployed; a 404 hides Invite to " +
+      "speak. DELETE THIS ENTRY when it deploys.",
+  },
+  "post /streams/{}/speakers/{}/mute": {
+    reason:
+      "The host's soft mute, 'Mute for everyone' (MICROPHONE only, sets " +
+      "hostMuted='soft'). Agreed contract, not deployed; a 404 hides the " +
+      "control. DELETE THIS ENTRY when it deploys.",
+  },
+
   // ── scheduled-room reminders (backend PR #206, served locally) ────────────
   // "Remind me" on an upcoming gist room. Both verbs are live on the local
   // stack and in the served spec, but #206 has not merged, so production

@@ -17,6 +17,8 @@ import { useEvmSend } from "@/hooks/use-evm-send";
 import { useKashStatus } from "@/hooks/use-kash-status";
 import { isHouse } from "@/features/houses/lib/house";
 import { mergeStreamDetail } from "@/lib/stream-detail-merge";
+import { answerErrorMessage, inviteErrorOutcome, routeMissing, type ApiErrorLike } from "@/lib/speaker-invite";
+import { muteErrorMessage } from "@/lib/host-mute";
 import {
   banFromChat,
   cancelActivity,
@@ -41,6 +43,10 @@ import {
   fetchMySpeakerRequest,
   fetchSpeakerRequests,
   resolveSpeakerRequest,
+  inviteToSpeak,
+  fetchSpeakerInvites,
+  muteSpeaker,
+  type SpeakerRequestAction,
   fetchStreamByCode,
   remindStream,
   fetchFollowingRooms,
@@ -716,7 +722,7 @@ export function useRemoveGuest(streamId: string, enabled: boolean) {
 export function useResolveSpeakerRequest(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ requestId, action }: { requestId: string; action: "approve" | "decline" | "remove" | "leave" }) =>
+    mutationFn: ({ requestId, action }: { requestId: string; action: SpeakerRequestAction }) =>
       resolveSpeakerRequest(streamId, requestId, action),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
@@ -724,4 +730,132 @@ export function useResolveSpeakerRequest(streamId: string) {
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't update the speaker.")),
   });
+}
+
+/* ---- invite to speak, and the host's soft mute ---------------------------
+
+   Both are AHEAD OF THE BACKEND. Every call degrades quietly: the first answer
+   that says the route is not deployed (lib/speaker-invite.ts `routeMissing`)
+   is remembered for the page load and the controls go away, rather than
+   offering a button that fails every time. Nothing is ever reported as done
+   that the service did not do. */
+
+let invitesMissing = false;
+let muteMissing = false;
+
+/**
+ * The host's open invitations. Shares the request list's key prefix, so every
+ * invalidation of the queue refetches these too; polls on the queue's cadence
+ * and stops for good once the service says the filter does not exist.
+ */
+export function useSpeakerInvites(streamId: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-requests", "invited"],
+    queryFn: async () => {
+      try {
+        return await fetchSpeakerInvites(streamId);
+      } catch (error) {
+        if (routeMissing(error as ApiErrorLike)) invitesMissing = true;
+        throw error;
+      }
+    },
+    enabled: enabled && !invitesMissing,
+    retry: false,
+    refetchInterval: (current) =>
+      enabled && !routeMissing(current.state.error as ApiErrorLike | null) ? SPEAKER_POLL_MS : false,
+  });
+  return { ...query, unavailable: invitesMissing || routeMissing(query.error as ApiErrorLike | null) };
+}
+
+/**
+ * Invite a listener up. Carries what the service told us about particular
+ * people for as long as the room is open on screen: who may not be invited
+ * (banned, or they blocked the host — the control is hidden, and nobody is
+ * told which) and who is in a cooldown until when.
+ */
+export function useInviteToSpeak(streamId: string) {
+  const queryClient = useQueryClient();
+  const [unavailable, setUnavailable] = useState(invitesMissing);
+  const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set());
+  const [cooldowns, setCooldowns] = useState<ReadonlyMap<string, number>>(() => new Map());
+
+  const mutation = useMutation({
+    mutationFn: ({ userId }: { userId: string; name: string }) => inviteToSpeak(streamId, userId),
+    onSuccess: (row, { name }) => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+      toast(row.status === "approved" ? `${name} already asked, so they're joining the stage` : `Invited ${name} to speak`);
+    },
+    onError: (error, { userId, name }) => {
+      const outcome = inviteErrorOutcome(error as ApiErrorLike, name);
+      if (outcome.kind === "unavailable") {
+        invitesMissing = true;
+        setUnavailable(true);
+        return;
+      }
+      if (outcome.kind === "refused") {
+        setRefused((current) => new Set(current).add(userId));
+        toast(outcome.message);
+        return;
+      }
+      if (outcome.kind === "cooldown") {
+        const until = Date.now() + outcome.retryAfterSeconds * 1000;
+        setCooldowns((current) => new Map(current).set(userId, until));
+        toast(outcome.message);
+        return;
+      }
+      toast.error(outcome.message);
+    },
+  });
+
+  return { ...mutation, unavailable: unavailable || invitesMissing, refused, cooldowns };
+}
+
+/**
+ * The invitee's answer: Join as speaker, or Not now.
+ *
+ * Accepting seats them over the connection they already have, with the mic
+ * OFF — nothing here, and nothing downstream, opens it (lib/mic-consent.ts).
+ * Whatever the answer, the row is read again: an invitation that ran out while
+ * the banner was up must disappear rather than wait for the next poll.
+ */
+export function useAnswerInvite(streamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, action }: { requestId: string; action: "accept" | "reject" }) =>
+      resolveSpeakerRequest(streamId, requestId, action),
+    onError: (error) => {
+      const message = answerErrorMessage(error as ApiErrorLike);
+      if (message) toast.error(message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+    },
+  });
+}
+
+/** The host's "Mute for everyone". Soft: the speaker may unmute themselves. */
+export function useMuteSpeaker(streamId: string) {
+  const [unavailable, setUnavailable] = useState(muteMissing);
+  const mutation = useMutation({
+    mutationFn: ({ userId }: { userId: string; name: string }) => muteSpeaker(streamId, baseIdentity(userId)),
+    onSuccess: (result, { name }) => {
+      // `reached` false: they had already dropped off the connection, and
+      // nothing was muted. Said plainly rather than as a success.
+      if (result && result.reached === false) {
+        toast(`${name} isn't connected right now.`);
+        return;
+      }
+      toast(`${name}'s mic is off for everyone. They can unmute when it's their turn.`);
+    },
+    onError: (error, { name }) => {
+      if (routeMissing(error as ApiErrorLike)) {
+        muteMissing = true;
+        setUnavailable(true);
+        return;
+      }
+      toast.error(muteErrorMessage(error as ApiErrorLike, name));
+    },
+  });
+  return { ...mutation, unavailable: unavailable || muteMissing };
 }
