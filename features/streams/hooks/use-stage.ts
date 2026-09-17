@@ -7,7 +7,7 @@ import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
 import { releaseCapture } from "@/features/streams/hooks/use-publisher";
 import { stageSources } from "@/features/streams/lib/capture-plan";
 import { STAGE_STALL_MS, type StageState } from "@/lib/stage-recovery";
-import { deriveMicOn, micControl, shouldAutoEnableMic, type HostMute } from "@/lib/mic-consent";
+import { deriveMicOn, micControl, shouldAutoEnableMic } from "@/lib/mic-consent";
 
 export { STAGE_FAILURES, type StageState } from "@/lib/stage-recovery";
 
@@ -102,7 +102,6 @@ export function useStage({
   withCamera = true,
   previewRef,
   consumeIntent,
-  hostMuted = "none",
 }: {
   streamId: string;
   approved: boolean;
@@ -113,8 +112,6 @@ export function useStage({
    * speaker joins with the mic off and taps to talk. See lib/mic-consent.ts.
    */
   consumeIntent?: () => boolean;
-  /** A host's mute on this speaker (backend-dependent; `none` until it ships). */
-  hostMuted?: HostMute;
   /**
    * Whether going on stage includes a camera. FALSE in a house, permanently.
    *
@@ -390,7 +387,7 @@ export function useStage({
   }, [approved, room, cameraAllowed]);
 
   /*
-    THE TAP TO TALK. Refused behind a hard mute or a grant without the mic —
+    THE TAP TO TALK. Refused behind a grant without the mic —
     the control is disabled there too, and this is the backstop. A capture
     failure is classified rather than rejected unhandled; `micOn` follows the
     publication's events, never this call.
@@ -398,7 +395,6 @@ export function useStage({
   const toggleMic = useCallback(async () => {
     if (!room) return;
     const control = micControl({
-      hostMuted,
       permissions: { canPublish, microphone: canPublishMic },
       micOn,
     });
@@ -417,7 +413,7 @@ export function useStage({
       setPhase(classifyCaptureError(micError));
       setError(captureErrorMessage(micError));
     }
-  }, [room, micOn, hostMuted, canPublish, canPublishMic]);
+  }, [room, micOn, canPublish, canPublishMic]);
 
   const toggleCam = useCallback(async () => {
     if (!room) return;

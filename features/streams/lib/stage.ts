@@ -25,6 +25,8 @@
  * lib/stage.test.ts without a browser, a Room, or the SDK.
  */
 
+import { hostMuteToken, mutedByHost } from "../../../lib/host-mute.ts";
+
 /**
  * LiveKit's `Track.Source` values, as strings.
  *
@@ -67,6 +69,11 @@ export interface StageParticipant {
    * naming a person who has no chat message and no request row.
    */
   metadata?: string | null;
+  /**
+   * LiveKit participant attributes. Read for ONE key, the host's soft mute
+   * (`hostMuted`), and only through lib/host-mute.ts.
+   */
+  attributes?: Readonly<Record<string, string>> | null;
   isSpeaking?: boolean;
   connectionQuality?: string;
   videoTrackPublications: ReadonlyMap<string, StagePublication>;
@@ -103,6 +110,14 @@ export interface StageSlot {
   isSpeaking: boolean;
   /** No audio publication at all, or one that is muted. */
   isMuted: boolean;
+  /**
+   * The host muted them and the mic is muted — the "Muted by host" badge, as
+   * this one reading can tell. `useStageSlots` narrows it with memory
+   * (lib/host-mute.ts `stepHostMuteBadges`) to "and they have not unmuted since".
+   */
+  mutedByHost: boolean;
+  /** The raw `hostMuted` attribute, "" when unset: a new value is a new mute. */
+  hostMuteToken: string;
   /** No video publication, or one that is muted — render an avatar, never black. */
   cameraOff: boolean;
   connectionQuality: string;
@@ -154,6 +169,8 @@ function toSlot(participant: StageParticipant, role: "host" | "guest"): StageSlo
     audioTrack: audio,
     isSpeaking: participant.isSpeaking === true,
     isMuted: !audio || audio.isMuted,
+    mutedByHost: audio !== null && mutedByHost(participant.attributes, audio.isMuted),
+    hostMuteToken: hostMuteToken(participant.attributes),
     cameraOff: !camera || camera.isMuted,
     connectionQuality: participant.connectionQuality ?? "unknown",
     // Any publication means they are on air. Nothing published means the grant

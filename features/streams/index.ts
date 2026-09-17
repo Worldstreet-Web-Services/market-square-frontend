@@ -16,7 +16,7 @@ export { useRoomPreview, type RoomPreview } from "./hooks/use-room-preview";
 // The shell-owned room session (components/layout/room-session.tsx): the one
 // Room registry, the tokens and heartbeat it connects with, and the stage it
 // puts a seated guest on.
-export { useMySpeakerRequest, useResolveSpeakerRequest } from "./hooks/use-streams";
+export { useAnswerInvite, useMySpeakerRequest, useResolveSpeakerRequest } from "./hooks/use-streams";
 export { useStage } from "./hooks/use-stage";
 export { publisherRoomOptions, releaseCapture, startPublishing, stopPublishing } from "./hooks/use-publisher";
 export { fetchPlaybackToken, goLive, sendHeartbeat } from "./lib/api";

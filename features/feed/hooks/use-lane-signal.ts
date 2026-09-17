@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MARKET_FLAGS } from "@/lib/market-config";
-import { createGateway, laneOfFrame, laneTopic, type Gateway } from "@/lib/ws-gateway";
+import { laneOfFrame, laneTopic } from "@/lib/ws-gateway";
+import { sharedGateway } from "@/lib/ws-gateway-shared";
 import type { Lane } from "@/features/feed/lib/types";
 
 /**
@@ -20,18 +21,6 @@ import type { Lane } from "@/features/feed/lib/types";
  * broadcast, so both keep the poll alone. An unconfigured gateway, a refused
  * socket or a dropped one are all invisible: the poll never stopped.
  */
-let gateway: Gateway | null = null;
-function sharedGateway(): Gateway {
-  if (!gateway) {
-    const url = MARKET_FLAGS.wsGatewayUrl;
-    gateway = createGateway(
-      typeof WebSocket === "undefined" ? "" : url,
-      (address) => new WebSocket(address)
-    );
-  }
-  return gateway;
-}
-
 export function useLaneSignal(lane: Lane, topics: readonly string[], enabled: boolean) {
   const queryClient = useQueryClient();
   const key = topics.join(",");

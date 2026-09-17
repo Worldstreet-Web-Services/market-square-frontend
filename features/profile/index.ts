@@ -21,7 +21,7 @@ export { CitizenSpotlightRail } from "./components/citizen-spotlight-rail";
 // Safety rows and a follow control that take a HANDLE rather than a Profile —
 // composed into the houses room through a route slot, because a room learns a
 // username off the media plane and never holds the whole object.
-export { PersonSafetyRows, PersonFollow } from "./components/person-safety-rows";
+export { PersonSafetyRows, PersonFollow, HideIfBlocked } from "./components/person-safety-rows";
 export {
   useProfile,
   useProfileSafety,

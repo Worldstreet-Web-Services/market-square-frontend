@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { houseTopic, parseParticipantMeta, participantName } from "@/features/houses";
+import { InviteBannerDock, houseTopic, parseParticipantMeta, participantName } from "@/features/houses";
 import { useEndStream, useStageSlots } from "@/features/streams";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
-import { IconChevronUp, IconLock, IconRefresh, IconVolume, IconX } from "@/components/ui/icons";
+import { IconChevronUp, IconRefresh, IconVolume, IconX } from "@/components/ui/icons";
 import { IconRoomLeave, IconRoomMic, IconRoomMicOff } from "@/components/ui/room-icons";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/cn";
@@ -27,6 +27,7 @@ import {
   type MiniPlayerCardPlacement,
 } from "@/lib/room-session/visibility";
 import { sq, stripSquare } from "@/lib/square-path";
+import { inviteBannerVisible } from "@/lib/speaker-invite";
 
 /**
  * THE MINIMISED GIST ROOM.
@@ -83,6 +84,58 @@ function keepFocus() {
 }
 
 export function RoomMiniPlayer({ placement }: { placement: Placement }) {
+  return <MiniPlayer placement={placement} />;
+}
+
+/**
+ * A HOST'S INVITATION TO SPEAK, while the room is minimised.
+ *
+ * Read from the session — the provider's 8 s poll of the reader's own
+ * speaker-request row, nudged by the `speakerInvited` push — never from the
+ * push itself. Drawn on every page but the room's own, which draws its own
+ * (lib/speaker-invite.ts `inviteBannerVisible`). Up top, under the top bar,
+ * where neither the dock, this bar nor a thread's composer can cover it.
+ * Answering does not navigate: "Join as speaker" seats them over the call they
+ * already have, mic off, and the bar below grows its mic.
+ *
+ * The shell mounts ONE, straight after the top bar and BEFORE <main>: it is
+ * drawn at the top of the page, so it is read and tabbed to there too. Mounted
+ * with the bottom bar it sat after every post of a long feed in reading order,
+ * well past the invitation's 60 seconds for a keyboard user. Where it is
+ * drawn, and inside an open sheet, is `InviteBannerDock`'s one rule.
+ */
+export function RoomInviteBanner() {
+  const session = useRoomSession();
+  const pathname = stripSquare(usePathname());
+  const streamId = session.state.target?.streamId ?? null;
+  const invite = session.invite;
+  const visible = inviteBannerVisible({ pathname, streamId, hasInvite: invite !== null });
+  const owner = session.stream?.owner ?? null;
+  const hostName = owner?.displayName || owner?.username || "The host";
+  return (
+    <>
+      {/* Announced by the session (room-session.tsx InviteAnnouncer), never
+          here: a region that fills in on every route change repeats it. */}
+      {visible && invite && (
+        <InviteBannerDock
+          key={invite.requestId}
+          offset="var(--ws-topbar-h) + var(--ws-crumb-h)"
+          requestId={invite.requestId}
+          inviteExpiresAt={invite.inviteExpiresAt}
+          createdAt={invite.createdAt}
+          seenAt={invite.seenAt}
+          clockOffsetMs={invite.clockOffsetMs}
+          host={{ id: owner?.id, name: hostName, avatarUrl: owner?.avatarUrl }}
+          busy={session.answeringInvite}
+          onAccept={() => session.answerInvite("accept")}
+          onReject={() => session.answerInvite("reject")}
+        />
+      )}
+    </>
+  );
+}
+
+function MiniPlayer({ placement }: { placement: Placement }) {
   const session = useRoomSession();
   const pathname = stripSquare(usePathname());
   const chatOpen = useChatOpen();
@@ -500,11 +553,9 @@ function HangUp({ session, streamId }: { session: RoomSessionView; streamId: str
 }
 
 function MicButton({ session }: { session: RoomSessionView }) {
-  // One decision for every mic control (lib/mic-consent.ts). The host's hard
-  // mute is backend-dependent and reads "none" until it ships; the lock state
-  // arrives with it, already drawn.
+  // One decision for every mic control (lib/mic-consent.ts). A host's mute is
+  // soft, so it never disables this button: the speaker may unmute.
   const control = micControl({
-    hostMuted: "none",
     permissions: { canPublish: !session.micDisabled, microphone: !session.micDisabled },
     micOn: session.micOn,
   });
@@ -513,11 +564,10 @@ function MicButton({ session }: { session: RoomSessionView }) {
       label={control.label}
       onClick={() => void session.toggleMic()}
       disabled={control.disabled}
+      data-room-mic
       tone={session.micOn ? "on" : "default"}
     >
-      {control.icon === "lock" ? (
-        <IconLock className="h-4 w-4" />
-      ) : control.icon === "mic" ? (
+      {control.icon === "mic" ? (
         <IconRoomMic className="h-4 w-4" />
       ) : (
         <IconRoomMicOff className="h-4 w-4" />
@@ -539,7 +589,10 @@ function RoundButton({
   disabled = false,
   tone = "default",
   className,
+  "data-room-mic": roomMic,
 }: {
+  /** Marks the mic control, where an accepted invitation hands focus. */
+  "data-room-mic"?: boolean;
   label: string;
   onClick: () => void;
   children: React.ReactNode;
@@ -552,6 +605,7 @@ function RoundButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-room-mic={roomMic ? "" : undefined}
       aria-label={label}
       title={label}
       className={cn(

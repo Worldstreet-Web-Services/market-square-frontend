@@ -1851,6 +1851,45 @@ describe("The mini-player's Close it cannot drop its teardown", () => {
   });
 });
 
+describe("A host approving a hand on a full stage is told why", () => {
+  it("maps STAGE_FULL on approve to the stage copy, not a generic failure", () => {
+    const hooks = stripComments(read("features/streams/hooks/use-streams.ts"));
+    assert.match(hooks, /if \(action === "approve" && \(error as ApiErrorLike\)\?\.code === "STAGE_FULL"\) \{\s*toast\.error\("Every seat is taken\. Move someone down first\."\);/);
+  });
+  it("tells an invitee why an unanswered invitation went away", () => {
+    const session = stripComments(read("components/layout/room-session.tsx"));
+    assert.match(session, /const notice = endedInviteNotice\(heldInviteId\.current, mine\.data\);/);
+  });
+});
+
+describe("A dropped speaker keeps the seat for the grace window, then joins the audience", () => {
+  it("tells the speaker why, once, from the service's removedReason", () => {
+    const session = stripComments(read("components/layout/room-session.tsx"));
+    assert.match(session, /const notice = seatReleasedNotice\(heldSeat\.current, mine\.data\);/);
+  });
+  it("shows the host a seated speaker who is absent as reconnecting, counting seated and audience both", () => {
+    const tray = stripComments(read("features/houses/components/hand-tray.tsx"));
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(tray, /seatPresence\(item\.userId, connected\) === "reconnecting"/);
+    assert.match(room, /new Set\(\[\.\.\.presentIds, \.\.\.slots\.map\(\(slot\) => baseIdentity\(slot\.identity\)\)\]\)/);
+  });
+});
+
+describe("The host finds a seated speaker's row in the approved read, not the pending queue", () => {
+  // GET /streams/:id/speaker-requests answers PENDING only unless asked, so a
+  // seat looked for in that list was never there: "Move down" said "Couldn't
+  // find their seat." and the hand tray's Seated section was always empty.
+  it("moves a speaker down using the approved rows", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /const seated = \(seatedRows\.data\?\.items \?\? \[\]\)\.find\(/, "Move down looks in the pending-only queue again");
+  });
+  it("draws the tray's Seated section from the approved read", () => {
+    const tray = stripComments(read("features/houses/components/hand-tray.tsx"));
+    assert.match(tray, /const seatedQuery = useSeatedSpeakers\(stream\.id, stream\.status === "live"\);/);
+    assert.match(tray, /const seated = \(seatedQuery\.data\?\.items \?\? \[\]\)\.filter\(\(item\) => item\.status === "approved"\);/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");
@@ -3188,9 +3227,9 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
   it("'Leave and join' frees the seat and the rejoin record like every other leave", () => {
     const provider = code("components/layout/room-session.tsx");
     const confirm = block(provider, "const confirmConflict = useCallback(", "]);");
+    const release = confirm.indexOf("releaseSeat();");
     assert.ok(
-      confirm.indexOf('resolve.mutate({ requestId, action: "leave" })') < confirm.indexOf("controller.confirmConflict()") &&
-        confirm.includes("writeRejoin(null)"),
+      release !== -1 && release < confirm.indexOf("controller.confirmConflict()") && confirm.includes("writeRejoin(null)"),
       "confirmConflict skips the seat release"
     );
     assert.doesNotMatch(provider, /confirmConflict: \(\) => controller\.confirmConflict\(\)/);
@@ -3455,10 +3494,10 @@ describe("a speaker's stage has a way back, and a mic banner that tells the trut
     assert.match(room, /if \(action === "retry"\) return session\.stage\.retry\(\);/);
   });
 
-  it("never offers Ask to speak to somebody already approved", () => {
+  it("never offers Ask to speak to somebody already approved, or already invited", () => {
     assert.match(
       code("features/houses/components/house-room.tsx"),
-      /const canAsk = !isHost && !onStage && myRequestStatus !== "approved";/
+      /const canAsk = !isHost && !onStage && myRequestStatus !== "approved" && myRequestStatus !== "invited";/
     );
   });
 
@@ -3781,5 +3820,357 @@ describe("the desktop mini-player card takes its own room", () => {
     const frame = block(player, "function Frame(", "\n}\n");
     assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) - var\(--ws-mini-card-h, 0px\) \+ 8px\)"/);
     assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) \+ 96px\)"/);
+  });
+});
+
+describe("invite to speak and the host's soft mute, wired where no pure half exists", () => {
+  const code = (path: string) => stripComments(read(path));
+  const room = code("features/houses/components/house-room.tsx");
+  const player = code("components/layout/room-mini-player.tsx");
+  const banner = code("features/houses/components/invite-banner.tsx");
+  const sheet = code("features/houses/components/person-sheet.tsx");
+  const tray = code("features/houses/components/hand-tray.tsx");
+  const tools = code("features/houses/hooks/use-host-stage-tools.ts");
+
+  it("the minimised room carries the invitation from ONE placement, off the room's own page", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    assert.equal((shell.match(/<RoomInviteBanner \/>/g) ?? []).length, 1);
+    assert.match(player, /inviteBannerVisible\(\{ pathname, streamId, hasInvite: invite !== null \}\)/);
+    assert.match(room, /\{here && !isHost && session\.invite && \(/);
+  });
+
+  it("both banners answer through the session and never touch a microphone", () => {
+    for (const surface of [player, room]) {
+      assert.match(surface, /onAccept=\{\(\) => session\.answerInvite\("accept"\)\}/);
+      assert.match(surface, /onReject=\{\(\) => session\.answerInvite\("reject"\)\}/);
+    }
+    assert.doesNotMatch(banner, /getUserMedia|setMicrophoneEnabled|toggleMic/);
+    assert.match(banner, /inviteView\(/, "the countdown reads the server's expiresAt");
+  });
+
+  it("the host's rows are decided in lib/, and there is no lock and no host unmute", () => {
+    assert.match(tools, /inviteControl\(\{/);
+    assert.match(tools, /hostMuteControl\(\{/);
+    assert.match(tools, /toast\(hostOutcomeLabel\(gone\.name\)\)/);
+    for (const surface of [sheet, tray, room, tools, player]) {
+      assert.doesNotMatch(surface, /Mute and lock|Unlock mic|Ask to unmute|muteHard|unmuteSpeaker/);
+    }
+    // The hard-lock leftovers are gone, not dormant: no lock icon on the mic,
+    // no `hard` host mute, no muteHard on the speaker-request row.
+    assert.doesNotMatch(player, /IconLock|"lock"/);
+    assert.doesNotMatch(code("lib/api/schemas.ts"), /muteHard/);
+    assert.doesNotMatch(code("lib/mic-consent.ts"), /"hard"/);
+  });
+
+  it("the countdown is the invitation's own clock, never the join token's expiresAt", () => {
+    assert.match(code("components/layout/room-session.tsx"), /const inviteExpiresAt = invitedRow\?\.inviteExpiresAt \?\? null;/);
+    for (const surface of [player, room, banner]) assert.doesNotMatch(surface, /[^e]expiresAt[=}]/);
+  });
+
+  it("asking to speak when the host already invited you says nothing about a request", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    assert.match(hooks, /if \(request\.status === "invited"\) return;\s*toast\.success\("Request sent to the host"\);/);
+  });
+
+  it("the countdown starts from when the session first saw the invitation, on both surfaces", () => {
+    assert.match(code("components/layout/room-session.tsx"), /if \(inviteSeen\.id !== inviteId\) setInviteSeen\(\{ id: inviteId, at: mine\.dataUpdatedAt, offset: serverClockOffset\(\) \}\);/);
+    for (const surface of [player, room]) assert.match(surface, /seenAt=\{(session\.)?invite\.seenAt\}/);
+  });
+
+  it("the host's invitations are remembered per stream, outside the room page, and settled on approved rows", () => {
+    assert.match(code("features/streams/lib/invite-memory.ts"), /const memories = new Map<string, InviteMemory>\(\);/);
+    assert.match(tools, /const memoryFor = inviteMemoryFor;/);
+    assert.match(tools, /const shown = visibleInvites\(step\.tracked, now\);/);
+    assert.doesNotMatch(tools, /useRef<TrackedInvite/);
+    assert.match(room, /const seatedRows = useSeatedSpeakers\(stream\.id, isHost && stream\.status === "live"\);/);
+    assert.match(code("features/streams/lib/api.ts"), /\{ status: "approved" \}/);
+  });
+
+  it("an answer lands in the cache at once, and a closed invitation is not an error toast", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    const answer = hooks.slice(hooks.indexOf("export function useAnswerInvite"), hooks.indexOf("export function useMuteSpeaker"));
+    assert.match(answer, /resolveSpeakerRequest\(room, requestId, action\)/);
+    assert.match(
+      answer,
+      /const landing = answerLanding\(\{ room, currentRoom: streamId, action, status: row\.status \}\);[\s\S]*?queryClient\.setQueryData\(\["ms", "stream", landing\.room, "speaker-request", "me"\], row\);[\s\S]*?if \(landing\.hint\) toast\(INVITE_ACCEPTED_HINT\);/
+    );
+    assert.doesNotMatch(answer, /\["ms", "stream", streamId,/, "an answer never lands under the session's current room");
+    const resolve = hooks.slice(hooks.indexOf("export function useResolveSpeakerRequest"));
+    assert.match(resolve, /if \(quietResolveError\(error as ApiErrorLike, action\)\) \{/);
+  });
+
+  it("the session latches an answer before sending it, so a double tap sends one", () => {
+    const session = code("components/layout/room-session.tsx");
+    assert.match(session, /const \[answerLatch\] = useState\(createAnswerLatch\);/);
+    assert.match(
+      session,
+      /if \(!inviteId \|\| !streamId \|\| !answerLatch\.claim\(inviteId\)\) return;\s*setAnsweredInviteId\(inviteId\);[\s\S]*?const answer = inflightAnswers\.track\(inviteId, action, answerInviteAsync\(\{ requestId: inviteId, action, room: streamId \}\)\);\s*void answer\.settled\.then\(\(row\) => \{\s*if \(!row\) answerLatch\.release\(inviteId\);/
+    );
+    assert.match(session, /useEffect\(\(\) => \{\s*answerLatch\.follow\(inviteId\);\s*\}, \[answerLatch, inviteId\]\);/);
+  });
+
+  it("every leave releases the seat through releaseOnLeave, pinned to the room being left, so an accept in flight is not answered reject", () => {
+    const session = code("components/layout/room-session.tsx");
+    const release = block(session, "const releaseSeat = useCallback(", "]);");
+    assert.match(release, /void releaseOnLeave\(\{\s*row: myRow,\s*inflight: inflightAnswers\.current\(\),/);
+    assert.match(release, /send: \(requestId, action\) => resolveMutate\(\{ requestId, action, room \}\),/);
+    assert.doesNotMatch(session, /releaseActionFor\(mine\.data/, "the stale row alone must not decide a leave");
+    for (const verb of ["const leave = useCallback(", "const confirmConflict = useCallback(", "const vacate = useCallback("]) {
+      assert.match(block(session, verb, "]);"), /releaseSeat\(\);/, verb);
+    }
+    assert.match(code("features/streams/hooks/use-streams.ts"), /resolveSpeakerRequest\(room \?\? streamId, requestId, action\)/);
+  });
+
+  it("a host's tap on an undeployed mute or invite is answered, not swallowed", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    const mute = hooks.slice(hooks.indexOf("export function useMuteSpeaker"));
+    assert.match(mute, /if \(failure\.unavailable\) \{[\s\S]*?setUnavailable\(true\);\s*toast\(failure\.message\);\s*return;/);
+    const invite = hooks.slice(hooks.indexOf("export function useInviteToSpeak"), hooks.indexOf("export function useAnswerInvite"));
+    assert.match(invite, /if \(outcome\.kind === "unavailable"\) \{[\s\S]*?setUnavailable\(true\);\s*toast\(outcome\.message\);\s*return;/);
+  });
+
+  it("the page's one socket carries the reader's token, or user:<did> is refused and no speaker signal arrives", () => {
+    const shared = code("lib/ws-gateway-shared.ts");
+    assert.match(shared, /import \{ getAccessToken \} from "@privy-io\/react-auth";/);
+    assert.match(shared, /createGateway\([\s\S]*\{\s*getToken: \(\) => getAccessToken\(\),\s*\}\)/);
+    // The token is a frame on the open socket, never a query string an access log would keep.
+    const client = code("lib/ws-gateway.ts");
+    assert.doesNotMatch(client, /searchParams\.set\("token"/);
+    assert.match(client, /open\(url\);/);
+    assert.match(client, /send\(\{ type: "authenticate", token \}\);/);
+    const session = code("components/layout/room-session.tsx");
+    assert.match(session, /sharedGateway\(\)\.subscribe\(myTopic,/);
+  });
+
+  it("the listener's own tool says it is theirs alone", () => {
+    assert.match(sheet, /"Mute for me only"/);
+    assert.match(code("features/profile/components/person-safety-rows.tsx"), /"Mute for me only"/);
+  });
+
+  it("the badge follows the seat's memory, not the attribute alone, and the toast reads the attribute's value", () => {
+    const hook = code("features/streams/hooks/use-stage-slots.ts");
+    assert.match(hook, /const badges = stepHostMuteBadges\(\s*hostMuteMemory\.get\(memoryKey\) \?\? new Map\(\),/);
+    assert.match(code("components/layout/room-session.tsx"), /token: hostMuteToken\(local\.attributes\),/);
+  });
+
+  it("a listening house member opens the same person sheet, and shows the Invited ring", () => {
+    const screen = code("components/layout/house-room-screen.tsx");
+    assert.match(screen, /onOpen=\{stage\.onOpen\}/);
+    assert.match(screen, /invitedIds=\{stage\.invitedIds\}/);
+    assert.match(screen, /invited: invitedIds\.has\(profileId\),\s*onOpen: \(\) => onOpen\(profileId\),/);
+    assert.match(room, /onOpen: openPresent,\s*invitedIds: isHost \? invitedIds : EMPTY_IDS,/);
+  });
+
+  it("the person sheet reads the live seat, not the snapshot it opened with", () => {
+    assert.match(room, /<PersonSheet\s+person=\{livePerson\}/);
+    assert.match(room, /hostActions=\{hostTools\.actionsFor\(livePerson\)\}/);
+    assert.match(tools, /micMuted: seat \? seat\.isMuted : true,/);
+  });
+
+  it("the invitation is announced by the session alone, never by a surface that remounts", () => {
+    const session = code("components/layout/room-session.tsx");
+    assert.match(session, /<InviteAnnouncer\s/);
+    assert.match(session, /const step = stepInviteAnnouncer\(spoken\.state, \{/);
+    for (const surface of [player, room]) {
+      assert.doesNotMatch(surface, /inviteAnnouncement/, "a surface is announcing the invitation again");
+      assert.doesNotMatch(surface, /role="status"[^>]*>\s*\{visible \?/);
+    }
+  });
+
+  it("the banner keeps focus in reach: busy is aria-disabled, focus is handed on to the page", () => {
+    assert.doesNotMatch(banner, /(?<!aria-)disabled=\{busy\}/, "a disabled button drops its focus");
+    assert.equal((banner.match(/aria-disabled=\{busy\}/g) ?? []).length, 2);
+    assert.match(banner, /window\.setTimeout\(\(\) => returnFocus\(landing\), 0\)/);
+    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[landing\]\)/);
+  });
+
+  it("someone the host blocked is never offered Invite to speak: hidden up front, not refused after a tap", () => {
+    const screen = code("components/layout/house-room-screen.tsx");
+    assert.match(screen, /inviteGateSlot=\{\(handle, row\) => <HideIfBlocked handle=\{handle\}>\{row\}<\/HideIfBlocked>\}/);
+    const gate = code("features/profile/components/person-safety-rows.tsx");
+    assert.match(gate, /export function HideIfBlocked\(/);
+    assert.match(gate, /if \(!profile\.data \|\| profile\.data\.isBlocked\) return null;/);
+    // Keyed on the account id when the token carried no username, so nobody the host blocked slips past the gate.
+    assert.match(sheet, /const gateHandle = inviteGateHandle\(username, person\.identity\);/);
+    assert.match(sheet, /gateHandle && inviteGateSlot \? inviteGateSlot\(gateHandle, inviteRow\) : inviteRow/);
+    assert.ok((room.match(/inviteGateSlot=\{inviteGateSlot\}/g) ?? []).length >= 3, "the gate is not threaded to every LiveHouse and the sheet");
+  });
+
+  it("the sheet's host rows stay focusable, keep one invite toggle, and explain themselves at full contrast", () => {
+    assert.doesNotMatch(sheet, /label="Cancel invitation"|label="Invite to speak"/, "invite and cancel are two elements again");
+    assert.match(sheet, /\? "Cancel invitation" : "Invite to speak"/);
+    const row = sheet.slice(sheet.indexOf("function HostRow"));
+    assert.match(row, /aria-disabled=\{disabled\}/);
+    assert.doesNotMatch(row, /(?<!aria-)disabled=\{disabled\}|disabled:opacity-50/);
+    assert.match(row, /className="mt-0\.5 text-\[11px\] leading-4 text-grey-300"/);
+    assert.match(row, /handFocusOn\(/);
+  });
+
+  it("the Invited rows: named, touch-sized, readable, and a Cancel hands focus on", () => {
+    const group = code("features/houses/components/invited-group.tsx");
+    assert.match(group, /aria-label=\{`Cancel invitation for \$\{name\}`\}/);
+    assert.match(group, /aria-disabled=\{invited\.busy\}/);
+    assert.match(group, /pointer-coarse:h-11 pointer-coarse:min-w-11/);
+    assert.doesNotMatch(group, /text-meta/);
+    assert.match(group, /handFocusOn\(/);
+  });
+
+  it("the tray's mute is named, touch-sized, and says why it is off in words, not a tooltip", () => {
+    assert.match(tray, /aria-label=\{`Mute \$\{mute\.name\} for everyone`\}/);
+    assert.doesNotMatch(tray, /title=\{mute\.control/);
+    assert.match(tray, /\{mute\.control\.kind === "mute" && mute\.control\.disabled && \(\s*<span id=\{`mute-reason-\$\{item\.id\}`\} className="block text-\[11px\] leading-4 text-grey-300">\{mute\.control\.reason\}<\/span>/);
+    assert.ok((tray.match(/pointer-coarse:h-11 pointer-coarse:min-w-11/g) ?? []).length >= 2, "Mute and Move down are not 44px on touch");
+  });
+
+  it("everyone sees who turned a mic off, straight from the seat", () => {
+    assert.match(room, /mutedByHost: slot\.mutedByHost,/);
+    assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);
+  });
+});
+
+describe("invite to speak and the soft mute, after review", () => {
+  const code = (path: string) => stripComments(read(path));
+  const room = code("features/houses/components/house-room.tsx");
+  const player = code("components/layout/room-mini-player.tsx");
+  const banner = code("features/houses/components/invite-banner.tsx");
+  const sheet = code("features/houses/components/person-sheet.tsx");
+  const tray = code("features/houses/components/hand-tray.tsx");
+  const tools = code("features/houses/hooks/use-host-stage-tools.ts");
+  const session = code("components/layout/room-session.tsx");
+  const hooks = code("features/streams/hooks/use-streams.ts");
+  const shell = code("components/layout/app-shell.tsx");
+
+  it("every deadline the server writes is read on the server's clock, which the one transport records", () => {
+    assert.match(code("lib/api/client.ts"), /recordServerDate\(response\.headers\.get\("date"\)\);/);
+    assert.match(session, /offset: serverClockOffset\(\)/);
+    assert.match(tools, /offsetMs: serverClockOffset\(\),/);
+    for (const surface of [player, room]) {
+      assert.match(surface, /createdAt=\{(session\.)?invite\.createdAt\}/);
+      assert.match(surface, /clockOffsetMs=\{(session\.)?invite\.clockOffsetMs\}/);
+    }
+    assert.match(banner, /inviteView\(\{ id: requestId, status: "invited", inviteExpiresAt, createdAt \}, now, seenAt, clockOffsetMs\)/);
+  });
+
+  it("the invitation is drawn only off a row the session is still polling", () => {
+    assert.match(session, /const invitedRow = liveInviteRow\(mine\.data, \{ polling, isHost \}\);/);
+  });
+
+  it("a failed Cancel brings the invitation back, even if the room page has gone", () => {
+    assert.match(tools, /resolveMutateAsync\(\{ requestId, action: "cancel" \}\)\.catch\(/);
+    assert.match(tools, /if \(cancelFailedForReal\(error as ApiErrorLike\)\) memoryFor\(streamId\)\.cancelled\.delete\(requestId\);/);
+  });
+
+  it("an invitation sent is tracked from the invite's own answer, and bans and cooldowns outlive the room page", () => {
+    const invite = hooks.slice(hooks.indexOf("export function useInviteToSpeak"), hooks.indexOf("export function useAnswerInvite"));
+    assert.match(invite, /held\.tracked = trackInvite\(/);
+    assert.match(invite, /rememberBan\(inviteMemoryFor\(streamId\), userId\);/);
+    assert.match(invite, /inviteMemoryFor\(streamId\)\.cooldowns\.set\(userId, until\);/);
+    // Read live from the shared memory, never a copy taken at mount.
+    assert.match(invite, /const refused: ReadonlySet<string> = memory\.refused;\s*const cooldowns: ReadonlyMap<string, number> = memory\.cooldowns;/);
+    assert.doesNotMatch(invite, /new Set\(memory\.refused\)|new Map\(memory\.cooldowns\)/);
+    // A chat ban hides the control before any tap; an ended invitation starts the cooldown the service started.
+    const ban = hooks.slice(hooks.indexOf("export function useBanFromChat"), hooks.indexOf("const SPEAKER_POLL_MS"));
+    assert.match(ban, /onSuccess: \(_result, userId\) => \{[\s\S]*?rememberBan\(inviteMemoryFor\(streamId\), userId\);/);
+    assert.match(tools, /for \(const gone of step\.unavailable\) \{\s*memory\.ended\.add\(gone\.id\);[\s\S]*?rememberEndedInvite\(memory, gone\);\s*\}/);
+    assert.doesNotMatch(tools, /const inviteMemory = new Map/);
+  });
+
+  it("a Not now on an ended invitation is quiet", () => {
+    const answer = hooks.slice(hooks.indexOf("export function useAnswerInvite"), hooks.indexOf("export function useMuteSpeaker"));
+    assert.match(answer, /answerErrorMessage\(error as ApiErrorLike, action\)/);
+  });
+
+  it("the Muted by host memory outlives a remount of the room page", () => {
+    const slots = code("features/streams/hooks/use-stage-slots.ts");
+    assert.doesNotMatch(slots, /useRef<ReadonlyMap<string, HostMuteBadgeState>>/);
+    assert.match(slots, /hostMuteMemory\.get\(memoryKey\)/);
+  });
+
+  it("the invite row waits for a block check that succeeded, and is off for someone who left", () => {
+    const gate = code("features/profile/components/person-safety-rows.tsx");
+    assert.match(gate, /if \(!profile\.data \|\| profile\.data\.isBlocked\) return null;/);
+    assert.match(room, /present: presentIds\.has\(base\)/);
+    assert.match(tools, /present: person\.present,/);
+  });
+
+  it("the banner puts the question on its own line and the answers on theirs, and focus never lands on the mic", () => {
+    assert.match(banner, /<p className="line-clamp-2 text-\[13px\] leading-5 text-heading">\s*<span className="font-bold">\{host\.name\}<\/span> invited you to speak\s*<\/p>/);
+    assert.match(banner, /className="flex w-full items-center justify-end gap-2"/);
+    assert.doesNotMatch(banner, /whitespace-pre|max-\[359px\]/);
+    assert.doesNotMatch(banner, /data-room-mic/, "a held Enter on Join would open the mic");
+    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[landing\]\)/);
+  });
+
+  it("the shell's invitation comes before <main> in reading order, above every sheet", () => {
+    assert.match(shell, /<TopBar showBrand=\{!railOn\} wide=\{wide\} \/>\s*(\{\}\s*)?<RoomInviteBanner \/>/);
+    assert.doesNotMatch(player, /placement === "phone" && <SessionInvite \/>/);
+    // One placement rule for both surfaces (InviteBannerDock), over the sheet scrim's z-50.
+    assert.match(banner, /className="fixed left-3 z-\[65\] md:left-auto md:w-\[400px\]"/);
+    assert.match(code("components/ui/sheet.tsx"), /fixed inset-0 z-50 /);
+    for (const surface of [player, room]) {
+      assert.match(surface, /<InviteBannerDock\s/);
+      assert.doesNotMatch(surface, /<InviteBanner\s|z-\[65\]/, "a second copy of the placement");
+    }
+    assert.match(room, /offset="var\(--ws-topbar-h\) \+ var\(--ws-crumb-h\) \+ var\(--ws-house-head-h\)"/);
+    assert.match(player, /offset="var\(--ws-topbar-h\) \+ var\(--ws-crumb-h\)"/);
+    // Clamped so the answers stay on a short screen (lib/speaker-invite.ts inviteDockStyle).
+    assert.match(banner, /const place = inviteDockStyle\(offset\);/);
+    assert.match(banner, /style=\{\{ top: place\.top, right: "max\(12px, env\(safe-area-inset-right, 0px\)\)" \}\}/);
+    assert.match(banner, /style=\{\{ maxHeight: place\.maxHeight, overflowY: place\.overflowY \}\}/);
+  });
+
+  it("an open sheet never hides the invitation from assistive tech: it and its announcer render inside the dialog", () => {
+    const sheetUi = code("components/ui/sheet.tsx");
+    // The dialog is the full-screen layer, a column: the dock first, then the panel.
+    assert.match(
+      sheetUi,
+      /<motion\.div\s+role="dialog"\s+aria-modal\s+aria-label=\{title\}\s+className="fixed inset-0 z-50 flex flex-col items-center justify-end outline-none sm:justify-center"/
+    );
+    assert.equal((sheetUi.match(/role="dialog"/g) ?? []).length, 1, "one dialog element, the layer");
+    const layerStart = sheetUi.indexOf('role="dialog"');
+    const dockAt = sheetUi.indexOf("<div ref={setDock}", layerStart);
+    assert.ok(dockAt > layerStart, "the dock is inside the dialog");
+    assert.ok(dockAt < sheetUi.indexOf("bg-black/70", layerStart), "first child: read and tabbed to before the sheet");
+    assert.ok(dockAt < sheetUi.indexOf("<motion.div", layerStart + 1), "stacked above the panel, not over it");
+    assert.match(sheetUi, /<div ref=\{setDock\} className="relative z-20 w-full shrink-0 sm:max-w-md" \/>/);
+    assert.match(sheetUi, /useModalHost\(dock, open\);/);
+    assert.match(sheetUi, /max-h-\[85dvh\] min-h-0 /, "the panel shrinks to make room for a docked banner");
+    const layer = code("components/ui/modal-layer.tsx");
+    assert.match(layer, /const content = typeof children === "function" \? children\(host !== null\) : children;/);
+    assert.match(layer, /return host \? createPortal\(content, host\) : <>\{content\}<\/>;/);
+    // Docked, the banner is in flow above the panel: no fixed position over the sheet's header.
+    const dock = banner.slice(banner.indexOf("export function InviteBannerDock"), banner.indexOf("export function InviteBanner({"));
+    assert.match(dock, /<AboveModals>\s*\{\(docked\) =>\s*docked \? \(\s*<div className="px-3 pb-2 pt-\[max\(12px,env\(safe-area-inset-top\)\)\] sm:px-0">\{body\}<\/div>/);
+    assert.match(
+      code("components/layout/room-session.tsx"),
+      /<AboveModals>\s*<p role="status" aria-live="polite" className="sr-only">\s*\{spoken\.text\}\s*<\/p>\s*<\/AboveModals>/
+    );
+    // Answered inside a sheet, focus stays in that sheet rather than the inert page behind it.
+    assert.match(banner, /dialog\.current = event\.currentTarget\.closest<HTMLElement>\('\[role="dialog"\]'\);/);
+    assert.match(banner, /const landing = dialog\?\.isConnected \? dialog : main;/);
+  });
+
+  it("one tap on Invite to speak is announced once, by its toast: the sheet's hint is not a live region", () => {
+    assert.doesNotMatch(sheet, /aria-live/);
+    assert.match(code("features/streams/hooks/use-streams.ts"), /toast\(inviteSentMessage\(row\.status, name\)\);/);
+  });
+
+  it("the countdowns say what they count, and the answer on the wire shows and says so without disabling", () => {
+    assert.match(banner, /<span className="tnum">\{inviteCountdownLabel\(view\.secondsLeft\)\}<\/span>/);
+    assert.match(code("features/houses/components/invited-group.tsx"), /<span className="tnum">\{invitedCountdownLabel\(\(entry\.deadline - now\) \/ 1000\)\}<\/span>/);
+    assert.match(banner, /<p role="status" className="sr-only">\s*\{sending\?\.status \?\? ""\}\s*<\/p>/);
+    assert.match(banner, /busy && tapped === "accept" \? <BusyLabel label=\{answerBusyCopy\("accept"\)\.label\} \/>/);
+    assert.match(banner, /busy && tapped === "reject" \? <BusyLabel label=\{answerBusyCopy\("reject"\)\.label\} \/>/);
+    assert.doesNotMatch(banner, /\sdisabled=|loading=/, "a disabled button drops focus");
+  });
+
+  it("the tray's disabled mute is described by its reason, host rows are 44px, and the seat chip is readable", () => {
+    assert.match(tray, /aria-describedby=\{mute\.control\.kind === "mute" && mute\.control\.disabled \? `mute-reason-\$\{item\.id\}` : undefined\}/);
+    assert.match(tray, /<span id=\{`mute-reason-\$\{item\.id\}`\} className="block text-\[11px\] leading-4 text-grey-300">/);
+    const row = sheet.slice(sheet.indexOf("function HostRow"));
+    assert.match(row, /min-h-11 flex-col justify-center/);
+    const people = code("features/houses/components/room-people.tsx");
+    assert.doesNotMatch(people, /text-\[9px\]/);
+    assert.match(people, /text-\[11px\] font-bold leading-4/);
   });
 });

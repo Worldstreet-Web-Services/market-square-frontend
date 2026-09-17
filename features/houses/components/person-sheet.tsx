@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { cn } from "@/lib/cn";
+import { focusLost, handFocusOn } from "@/lib/focus-handoff";
 import { atHandle } from "@/lib/handle";
 import { Avatar } from "@/components/ui/avatar";
 import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
@@ -8,6 +11,8 @@ import { IconChevronRight } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/sheet";
 import type { ParticipantMeta } from "@/features/houses/lib/participant-meta";
 import { sq } from "@/lib/square-path";
+import { inviteGateHandle, type InviteControl } from "@/lib/speaker-invite";
+import type { HostMuteControl } from "@/lib/host-mute";
 
 /**
  * A profile, OVER the room.
@@ -30,6 +35,22 @@ export interface PersonTarget {
   seated: boolean;
   /** Present when this person is in the audience with a hand up. */
   pendingRequestId: string | null;
+  /** Their microphone is muted or not published (seated people only). */
+  micMuted: boolean;
+  /** This seat is the room's host — whom nobody mutes. */
+  isRoomHost: boolean;
+  /** Still in the room, as the host's connection sees it. Absent means not known. */
+  present?: boolean;
+}
+
+/** The host's rows over one person, decided in lib/ (speaker-invite, host-mute) and only drawn here. */
+export interface PersonHostActions {
+  invite: InviteControl;
+  onInvite: () => void;
+  onCancelInvite: (requestId: string) => void;
+  mute: HostMuteControl;
+  onMute: () => void;
+  busy: boolean;
 }
 
 export function PersonSheet({
@@ -40,9 +61,11 @@ export function PersonSheet({
   hostBusy,
   onMoveDown,
   onSeat,
+  hostActions,
   mute,
   followSlot,
   safetySlot,
+  inviteGateSlot,
 }: {
   person: PersonTarget | null;
   open: boolean;
@@ -51,15 +74,43 @@ export function PersonSheet({
   hostBusy: boolean;
   onMoveDown: (person: PersonTarget) => void;
   onSeat: (person: PersonTarget) => void;
+  hostActions: PersonHostActions | null;
   mute: { muted: boolean; onToggle: () => void } | null;
   followSlot: (username: string) => React.ReactNode;
   safetySlot: (
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
   ) => React.ReactNode;
+  /** Hides the invite row for someone the host blocked (the profile slice knows). */
+  inviteGateSlot?: (handle: string, row: React.ReactNode) => React.ReactNode;
 }) {
   if (!person) return null;
   const username = person.meta?.username ?? null;
+  // The username, or the account id when the room token carried none.
+  const gateHandle = inviteGateHandle(username, person.identity);
+
+  /* ONE element for Invite and Cancel: swapping two conditional rows
+     unmounted the focused one and dropped focus out of the modal. */
+  const inviteRow =
+    isHost && hostActions && (hostActions.invite.kind === "invite" || hostActions.invite.kind === "invited") ? (
+      <HostRow
+        label={hostActions.invite.kind === "invited" ? "Cancel invitation" : "Invite to speak"}
+        hint={
+          hostActions.invite.kind === "invited"
+            ? "Invited. Waiting for them to answer."
+            : hostActions.invite.disabled
+              ? hostActions.invite.reason
+              : "They'll be asked first. Their mic stays off until they tap it."
+        }
+        // Not a live region: the invite's own toast ("Invited Ada to speak.")
+        // already says it, and a live hint made one tap three announcements.
+        disabled={(hostActions.invite.kind === "invite" && hostActions.invite.disabled) || hostActions.busy}
+        onClick={() => {
+          if (hostActions.invite.kind === "invited") hostActions.onCancelInvite(hostActions.invite.requestId);
+          else hostActions.onInvite();
+        }}
+      />
+    ) : null;
 
   return (
     <Sheet open={open} onClose={onClose} title={person.name}>
@@ -104,26 +155,29 @@ export function PersonSheet({
       <div className="ws-hair mt-4 border-t pt-2">
         {/* Host actions first: they are the ones with a decision to make, and
             they are the ones this sheet was opened FOR mid-conversation. */}
+        {/* Soft only: the speaker may unmute themselves. There is no lock and
+            no host unmute; the escalation is "Move down to audience". */}
+        {isHost && hostActions && hostActions.mute.kind === "mute" && (
+          <HostRow
+            label={hostActions.mute.label}
+            hint={hostActions.mute.disabled ? hostActions.mute.reason : "They can unmute when it's their turn."}
+            disabled={hostActions.mute.disabled || hostActions.busy}
+            onClick={hostActions.onMute}
+          />
+        )}
         {isHost && person.seated && (
-          <button
-            type="button"
-            disabled={hostBusy}
-            onClick={() => onMoveDown(person)}
-            className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body transition-colors disabled:opacity-50"
-          >
-            Move down to audience
-          </button>
+          <HostRow label="Move down to audience" disabled={hostBusy} onClick={() => onMoveDown(person)} />
         )}
-        {isHost && !person.seated && person.pendingRequestId && (
-          <button
-            type="button"
-            disabled={hostBusy}
-            onClick={() => onSeat(person)}
-            className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body transition-colors disabled:opacity-50"
-          >
-            Seat them
-          </button>
+        {isHost && !person.seated && hostActions?.invite.kind === "seat" && (
+          <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
         )}
+        {/* Without the invite routes (not deployed) a raised hand still seats. */}
+        {isHost && !person.seated && !hostActions && person.pendingRequestId && (
+          <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
+        )}
+        {/* Someone the host blocked gets no invite row at all: the gate
+            wraps whichever state it is in, so the element stays the same. */}
+        {inviteRow && (gateHandle && inviteGateSlot ? inviteGateSlot(gateHandle, inviteRow) : inviteRow)}
 
         {username && (
           <Link
@@ -147,10 +201,74 @@ export function PersonSheet({
                 onClick={mute.onToggle}
                 className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body"
               >
-                {mute.muted ? "Unmute for me" : "Mute for me"}
+                {mute.muted ? "Unmute for me" : "Mute for me only"}
               </button>
             )}
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * A host action. Disabled is `aria-disabled`, never `disabled`: a button that
+ * disables drops its focus, and the row explaining WHY it is off must stay
+ * reachable and readable, so only the label dims. A row that leaves while
+ * focused (Invite once they are seated, Seat once they are up) hands focus to
+ * the first host row left, or the sheet itself — never to <body> outside it.
+ */
+function HostRow({
+  label,
+  hint,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  hint?: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const button = useRef<HTMLButtonElement>(null);
+  const focused = useRef(false);
+  useEffect(() => {
+    const dialog = button.current?.closest<HTMLElement>('[role="dialog"]') ?? null;
+    return () => {
+      if (!focused.current) return;
+      window.setTimeout(() => {
+        const active = document.activeElement as HTMLElement | null;
+        if (!focusLost(active, document.body) || !dialog) return;
+        if (!dialog.hasAttribute("tabindex")) dialog.setAttribute("tabindex", "-1");
+        handFocusOn(active, document.body, [dialog.querySelector<HTMLElement>("[data-host-row]"), dialog]);
+      }, 0);
+    };
+  }, []);
+  return (
+    <button
+      ref={button}
+      type="button"
+      data-host-row=""
+      aria-disabled={disabled}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+      onFocus={() => {
+        focused.current = true;
+      }}
+      onBlur={(event) => {
+        // Removal blurs with no relatedTarget; the cleanup above handles that.
+        if (event.relatedTarget) focused.current = false;
+      }}
+      className={cn(
+        // 44px on touch with or without a hint: a 13px label in py-3 is 43.5.
+        "ws-row flex w-full min-h-11 flex-col justify-center items-start px-1 py-3 text-left transition-colors",
+        disabled && "cursor-not-allowed"
+      )}
+    >
+      <span className={cn("text-[13px] font-semibold text-body", disabled && "opacity-50")}>{label}</span>
+      {hint && (
+        <span className="mt-0.5 text-[11px] leading-4 text-grey-300">
+          {hint}
+        </span>
+      )}
+    </button>
   );
 }

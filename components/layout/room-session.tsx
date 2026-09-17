@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Room } from "livekit-client";
+import { serverClockOffset } from "@/lib/server-clock";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { HouseAudioSinks, connectRoom, houseTopic } from "@/features/houses";
 import {
   fetchPlaybackToken,
@@ -15,6 +18,7 @@ import {
   stopPublishing,
   subscribeRoom,
   unregisterRoom,
+  useAnswerInvite,
   useMySpeakerRequest,
   useResolveSpeakerRequest,
   useEndStream,
@@ -32,6 +36,24 @@ import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
 import { REJOIN_KEY, parseRejoin, rejoinOfferFor, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
 import { useMe } from "@/hooks/use-me";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
+import { seatReleasedNotice } from "@/lib/speaker-seat";
+import { MARKET_FLAGS } from "@/lib/market-config";
+import {
+  INITIAL_INVITE_ANNOUNCER,
+  createAnswerLatch,
+  endedInviteNotice,
+  inviteView,
+  liveInviteRow,
+  createInflightAnswers,
+  releaseOnLeave,
+  type ReleasableRow,
+  stepInviteAnnouncer,
+  type InviteAnnouncerState,
+} from "@/lib/speaker-invite";
+import { HOST_MUTE_TOAST, INITIAL_HOST_MUTE_TOAST, hostMuteOf, hostMuteToken, stepHostMuteToast } from "@/lib/host-mute";
+import { speakerSignalOf, userTopic } from "@/lib/ws-gateway";
+import { sharedGateway } from "@/lib/ws-gateway-shared";
+import { AboveModals } from "@/components/ui/modal-layer";
 
 /**
  * ONE ROOM PER TAB, OWNED BY THE SHELL.
@@ -272,6 +294,98 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   const resolve = useResolveSpeakerRequest(streamId);
   const approved = mine.data?.status === "approved";
 
+  /*
+    A HOST'S INVITATION TO SPEAK, read off the same 8 s poll as everything
+    else about the reader's own row — so it reaches them on any page, with
+    the room minimised. The banner (room view, mini-player) renders from THIS,
+    never from the push that may have prompted the read. Accepting seats them
+    through `approved` above, with the mic off: `useStage` below is given no
+    intent, so nothing opens it until they tap.
+  */
+  const answer = useAnswerInvite(streamId);
+  const answerInviteAsync = answer.mutateAsync;
+  // Only while the row is still being read: a room that ended or a reconnect
+  // that gave up leaves the last data cached (lib/speaker-invite.ts `liveInviteRow`).
+  const invitedRow = liveInviteRow(mine.data, { polling, isHost });
+  const inviteId = invitedRow?.id ?? null;
+  /*
+    The invitation this tab was showing, remembered past the moment it closes,
+    so the reader is told WHY it went away — the host cancelled it, or it ran
+    out (lib/speaker-invite.ts `endedInviteNotice`). Once per invitation.
+  */
+  const heldInviteId = useRef<string | null>(null);
+  /*
+    A SEAT RELEASED FOR A LOST CONNECTION. The service keeps a dropped
+    speaker's seat for its grace window, then moves them to the audience with
+    `removedReason: 'disconnected'` (lib/speaker-seat.ts). Told once, on the
+    transition from seated, never for a host's Move down.
+  */
+  const heldSeat = useRef<{ id: string; status: string } | null>(null);
+  useEffect(() => {
+    const notice = seatReleasedNotice(heldSeat.current, mine.data);
+    if (notice) toast(notice);
+    heldSeat.current = mine.data ? { id: mine.data.id, status: mine.data.status } : null;
+  }, [mine.data]);
+  useEffect(() => {
+    const notice = endedInviteNotice(heldInviteId.current, mine.data);
+    if (notice) {
+      toast(notice);
+      heldInviteId.current = null;
+    }
+    if (inviteId) heldInviteId.current = inviteId;
+  }, [inviteId, mine.data]);
+  // `inviteExpiresAt`, never `expiresAt`: on this row that is the join token's.
+  const inviteExpiresAt = invitedRow?.inviteExpiresAt ?? null;
+  const inviteCreatedAt = invitedRow?.createdAt ?? null;
+  /*
+    When THIS tab first saw the invitation — the one reading the countdown is
+    taken from (lib/speaker-invite.ts `inviteDeadline`), so a device clock
+    that is off cannot hide it or run it past the server. It is the moment
+    the response that first carried it arrived (`dataUpdatedAt`). Held here
+    rather than in a banner, so moving between the room and the mini-player
+    does not restart it. Adjusted during render, React's pattern for state
+    that follows a value.
+  */
+  const [inviteSeen, setInviteSeen] = useState<{ id: string | null; at: number; offset: number | null }>({
+    id: null,
+    at: 0,
+    offset: null,
+  });
+  // The server's clock as read off the response that carried the row (lib/server-clock.ts).
+  if (inviteSeen.id !== inviteId) setInviteSeen({ id: inviteId, at: mine.dataUpdatedAt, offset: serverClockOffset() });
+  const inviteSeenAt = inviteSeen.id === inviteId ? inviteSeen.at : 0;
+  const inviteOffset = inviteSeen.id === inviteId ? inviteSeen.offset : null;
+  const invite = useMemo(
+    () =>
+      inviteId
+        ? { requestId: inviteId, inviteExpiresAt, createdAt: inviteCreatedAt, seenAt: inviteSeenAt, clockOffsetMs: inviteOffset }
+        : null,
+    [inviteId, inviteExpiresAt, inviteCreatedAt, inviteSeenAt, inviteOffset]
+  );
+  // Which invitation the reader answered: its end is then no news to announce.
+  const [answeredInviteId, setAnsweredInviteId] = useState<string | null>(null);
+  // Same-frame taps: the banner's `busy` arrives a render late (lib/speaker-invite.ts `createAnswerLatch`).
+  const [answerLatch] = useState(createAnswerLatch);
+  // The answer on the wire, so a leave during it can wait (lib/speaker-invite.ts `releaseOnLeave`).
+  const [inflightAnswers] = useState(createInflightAnswers);
+  // An answer that went through lets go once its invitation is off screen,
+  // so a re-invite on the same row id can be answered (`AnswerLatch.follow`).
+  useEffect(() => {
+    answerLatch.follow(inviteId);
+  }, [answerLatch, inviteId]);
+  const answerInvite = useCallback(
+    (action: "accept" | "reject") => {
+      if (!inviteId || !streamId || !answerLatch.claim(inviteId)) return;
+      setAnsweredInviteId(inviteId);
+      // Pinned to this room: the session may have moved on when it comes back.
+      const answer = inflightAnswers.track(inviteId, action, answerInviteAsync({ requestId: inviteId, action, room: streamId }));
+      void answer.settled.then((row) => {
+        if (!row) answerLatch.release(inviteId);
+      });
+    },
+    [answerInviteAsync, answerLatch, inflightAnswers, inviteId, streamId]
+  );
+
   // The room ended while the reader was somewhere else. ROOM_DELETED says the
   // same thing from the SDK; whichever arrives first ends the session.
   const status = stream.data?.status;
@@ -388,16 +502,118 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   }, [state.connection]);
   const dismissRejoin = useCallback(() => writeRejoin(null), []);
 
+  /* ---- the speaker signals on the reader's own topic -------------------- */
+
+  /*
+    `user:<did>` on the ws-gateway says "your row, or your mic, just changed".
+    It is a REFETCH SIGNAL (lib/ws-gateway.ts `speakerSignalOf` keeps only the
+    stream id): the 8 s poll stays the floor, and a frame about another room,
+    a forged one or a malformed one does nothing a read would not. The
+    gateway hands a personal topic only to a socket authenticated as its
+    owner, so the shared socket carries the reader's Privy token
+    (lib/ws-gateway-shared.ts). Off unless the gateway is configured, and a
+    refused socket is invisible.
+  */
+  const queryClient = useQueryClient();
+  const myTopic = userTopic(meId);
+  const muteSignal = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!holding || !streamId || !myTopic || !MARKET_FLAGS.wsGatewayUrl) return;
+    return sharedGateway().subscribe(myTopic, (frame) => {
+      const signal = speakerSignalOf(frame);
+      if (!signal || signal.streamId !== streamId) return;
+      if (signal.kind === "mute") {
+        muteSignal.current();
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+      void queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+    });
+  }, [holding, streamId, myTopic, queryClient]);
+
+  /*
+    "THE HOST MUTED YOUR MIC." Said once per mute, on whatever page the reader
+    is on, from the room's own truth: the `hostMuted` attribute on our
+    participant and our microphone publication (lib/host-mute.ts). The push
+    only asks to look. A connect or a reconnect starts the reading over, so
+    its replay of the attribute is never news. Nobody mutes the host.
+  */
+  useEffect(() => {
+    if (!room || isHost) return;
+    let cancelled = false;
+    let off: (() => void) | undefined;
+    let toastState = INITIAL_HOST_MUTE_TOAST;
+    const check = (signalled: boolean) => {
+      const local = room.localParticipant;
+      const step = stepHostMuteToast(toastState, {
+        current: hostMuteOf(local.attributes),
+        token: hostMuteToken(local.attributes),
+        micOn: local.isMicrophoneEnabled,
+        signalled,
+        now: Date.now(),
+      });
+      toastState = step.state;
+      if (step.toast) toast(HOST_MUTE_TOAST);
+    };
+    void import("livekit-client").then(({ RoomEvent }) => {
+      if (cancelled) return;
+      // Both events hand the participant LAST: (changed, participant) and
+      // (publication, participant). Only our own changes are ours to announce.
+      const onChange = (...args: unknown[]) => {
+        const who = args[args.length - 1] as { isLocal?: boolean } | undefined;
+        if (who?.isLocal !== true) return;
+        check(false);
+      };
+      const onReconnected = () => {
+        toastState = INITIAL_HOST_MUTE_TOAST;
+        check(false);
+      };
+      room.on(RoomEvent.ParticipantAttributesChanged, onChange);
+      room.on(RoomEvent.TrackMuted, onChange);
+      room.on(RoomEvent.Reconnected, onReconnected);
+      muteSignal.current = () => check(true);
+      off = () => {
+        room.off(RoomEvent.ParticipantAttributesChanged, onChange);
+        room.off(RoomEvent.TrackMuted, onChange);
+        room.off(RoomEvent.Reconnected, onReconnected);
+      };
+      check(false);
+    });
+    return () => {
+      cancelled = true;
+      muteSignal.current = () => {};
+      off?.();
+    };
+  }, [room, isHost]);
+
   /* ---- verbs ----------------------------------------------------------- */
 
-  const requestId = mine.data && (mine.data.status === "approved" || mine.data.status === "pending") ? mine.data.id : null;
+  // A seat or a hand comes down; an unanswered invitation is answered (lib/speaker-invite.ts).
+  /*
+    A seated person frees their seat on the way out, and a raised hand comes
+    down, so the host's tray never holds somebody who has gone. An invitation
+    still open is answered reject — unless "Join as speaker" is on the wire:
+    then the release waits for it and sends `leave` once it seated them, not
+    the reject the stale `invited` row asked for (which the service refuses
+    once the accept lands, keeping the seat). Pinned to the room being left.
+  */
+  const myRow = mine.data ?? null;
+  const resolveMutate = resolve.mutate;
+  const releaseSeat = useCallback(() => {
+    const room = streamId;
+    if (!room) return;
+    void releaseOnLeave({
+      row: myRow,
+      inflight: inflightAnswers.current(),
+      latest: () => queryClient.getQueryData<ReleasableRow>(["ms", "stream", room, "speaker-request", "me"]),
+      send: (requestId, action) => resolveMutate({ requestId, action, room }),
+    });
+  }, [inflightAnswers, myRow, queryClient, resolveMutate, streamId]);
   const leave = useCallback(async () => {
-    // A seated person frees their seat on the way out, and a raised hand comes
-    // down, so the host's tray never holds somebody who has gone.
-    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    releaseSeat();
     writeRejoin(null);
     await controller.leave();
-  }, [controller, requestId, resolve]);
+  }, [controller, releaseSeat]);
 
   /*
     "Leave and join" is a LEAVE of the room being left, and does what every
@@ -412,7 +628,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   */
   const confirmConflict = useCallback(async () => {
     if (!state.pending) return;
-    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    releaseSeat();
     const previous = readRejoin();
     writeRejoin(null);
     setSwitching(true);
@@ -424,7 +640,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     } finally {
       setSwitching(false);
     }
-  }, [controller, requestId, resolve, state.pending]);
+  }, [controller, releaseSeat, state.pending]);
 
   /*
     Making way for a room the reader opens themselves (Backstage). The same
@@ -432,7 +648,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     host's room is closed for everyone first. Rejects when that close fails.
   */
   const vacate = useCallback(async () => {
-    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    releaseSeat();
     const previous = readRejoin();
     writeRejoin(null);
     try {
@@ -441,7 +657,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       writeRejoin(previous);
       throw error;
     }
-  }, [controller, requestId, resolve]);
+  }, [controller, releaseSeat]);
 
   // Stable: the room view clears its own question in an effect cleanup, and a
   // new function per render would run that cleanup — and dismiss the question
@@ -667,6 +883,9 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       retry: () => void controller.retry(),
       rejoinOffer,
       dismissRejoin,
+      invite,
+      answerInvite,
+      answeringInvite: answer.isPending,
     }),
     [
       state,
@@ -692,6 +911,9 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       rejoinOffer,
       dismissRejoin,
       isHost,
+      invite,
+      answerInvite,
+      answer.isPending,
     ]
   );
 
@@ -704,11 +926,81 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   return (
     <>
       {children}
+      {/* The ONE place the invitation is announced, whichever surface draws it. */}
+      <InviteAnnouncer
+        invite={invite}
+        hostName={stream.data?.owner?.displayName || stream.data?.owner?.username || null}
+        // Leaving the room ends the invitation too; that is not news either.
+        answered={!holding || (invite !== null && answeredInviteId === invite.requestId)}
+      />
       {/* The audio itself, outside every route. Mounted from its own map so it
           can never become conditional on anything visual. */}
       {room && stream.data && (
         <HouseAudioSinks room={room} streamId={streamId} ownerId={stream.data.ownerId} />
       )}
     </>
+  );
+}
+
+/**
+ * THE INVITATION, SAID ONCE. It used to be announced by the room page (on
+ * mount, and again after a reconnect) and by the mini-player (whenever the
+ * reader left the room's page), so moving around the Square repeated it. The
+ * session is always mounted, so it says it: the invitation with its deadline,
+ * one warning near the end, and a closing line when it ends unanswered
+ * (lib/speaker-invite.ts `stepInviteAnnouncer`).
+ */
+function InviteAnnouncer({
+  invite,
+  hostName,
+  answered,
+}: {
+  invite: RoomSessionView["invite"];
+  hostName: string | null;
+  answered: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const ticking = invite !== null;
+  useEffect(() => {
+    if (!ticking) return;
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [ticking]);
+
+  const view = invite
+    ? inviteView(
+        { id: invite.requestId, status: "invited", inviteExpiresAt: invite.inviteExpiresAt, createdAt: invite.createdAt },
+        now,
+        invite.seenAt,
+        invite.clockOffsetMs
+      )
+    : null;
+  const secondsLeft = view?.state === "open" ? view.secondsLeft : null;
+  const [spoken, setSpoken] = useState<{ state: InviteAnnouncerState; text: string }>({
+    state: INITIAL_INVITE_ANNOUNCER,
+    text: "",
+  });
+  const step = stepInviteAnnouncer(spoken.state, {
+    requestId: invite && view?.state !== "expired" ? invite.requestId : null,
+    hostName,
+    secondsLeft,
+    answered,
+  });
+  const changed =
+    step.say !== null ||
+    step.state.requestId !== spoken.state.requestId ||
+    step.state.warned !== spoken.state.warned ||
+    step.state.answered !== spoken.state.answered;
+  // Adjusted during render, React's pattern for state that follows a value.
+  if (changed) setSpoken({ state: step.state, text: step.say ?? spoken.text });
+
+  // In the open sheet's dialog while there is one: a live region outside an
+  // aria-modal dialog is not read, and the deadline is the news.
+  return (
+    <AboveModals>
+      <p role="status" aria-live="polite" className="sr-only">
+        {spoken.text}
+      </p>
+    </AboveModals>
   );
 }

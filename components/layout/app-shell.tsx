@@ -59,7 +59,7 @@ import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import { AnnouncementBand } from "@/components/layout/announcement-band";
 import { RoomSessionProvider } from "@/components/layout/room-session";
-import { RoomMiniPlayer } from "@/components/layout/room-mini-player";
+import { RoomInviteBanner, RoomMiniPlayer } from "@/components/layout/room-mini-player";
 import { ZoneExitGuard } from "@/components/layout/zone-exit-guard";
 import { PushNavigation } from "@/components/layout/push-navigation";
 import { leaveSquare, requestZoneExit } from "@/lib/zone-exit";
@@ -2202,6 +2202,9 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
       */}
         <div className="flex min-w-0 flex-1 flex-col bg-chrome">
           <TopBar showBrand={!railOn} wide={wide} />
+          {/* The invitation to speak, while the room is minimised: before
+              <main>, where it is drawn (room-mini-player.tsx). */}
+          <RoomInviteBanner />
           {/* justify-START, not center. Centering the column+rail group inside
             the leftover width of the 1600px shell split that slack in two and
             left a dead band between the sidebar and the column — the column

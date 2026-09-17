@@ -20,7 +20,7 @@ const yes = { approved: true, canPublish: true, intent: true };
 
 describe("shouldAutoEnableMic", () => {
   it("is false for every reason but the reader's own approved request", () => {
-    const never: MicConsentReason[] = ["remount", "reconnect", "reload", "inviteAccept", "unlock"];
+    const never: MicConsentReason[] = ["remount", "reconnect", "reload", "inviteAccept"];
     for (const reason of never) {
       assert.equal(shouldAutoEnableMic({ ...yes, reason }), false, reason);
     }
@@ -53,44 +53,35 @@ describe("deriveMicOn", () => {
 describe("micControl", () => {
   const granted = { canPublish: true, microphone: true };
 
-  it("locks the control while the host has hard-muted the speaker", () => {
-    assert.deepEqual(micControl({ hostMuted: "hard", permissions: granted, micOn: false }), {
-      disabled: true,
-      icon: "lock",
-      label: "The host turned off your mic",
-    });
-  });
-
-  it("leaves a soft mute in the speaker's hands", () => {
-    const control = micControl({ hostMuted: "soft", permissions: granted, micOn: false });
-    assert.equal(control.disabled, false);
-    assert.equal(control.icon, "mic-off");
+  it("has no locked state: a host's soft mute leaves the mic in the speaker's hands", () => {
+    const control = micControl({ permissions: granted, micOn: false });
+    assert.deepEqual(control, { disabled: false, icon: "mic-off", label: "Unmute your mic" });
+    // The rule takes no host-mute input at all, so nothing can lock it.
+    assert.doesNotMatch(strip(read("lib/mic-consent.ts")), /hostMuted|"hard"|"lock"/);
   });
 
   it("refuses without the mic permission", () => {
     assert.equal(
-      micControl({ hostMuted: "none", permissions: { canPublish: true, microphone: false }, micOn: false }).disabled,
+      micControl({ permissions: { canPublish: true, microphone: false }, micOn: false }).disabled,
       true
     );
     assert.equal(
-      micControl({ hostMuted: "none", permissions: { canPublish: false, microphone: true }, micOn: false }).disabled,
+      micControl({ permissions: { canPublish: false, microphone: true }, micOn: false }).disabled,
       true
     );
   });
 
   it("never disables MUTING an open mic, whatever else is true", () => {
-    for (const hostMuted of ["none", "soft", "hard"] as const) {
-      for (const permissions of [granted, { canPublish: true, microphone: false }, { canPublish: false, microphone: false }]) {
-        const control = micControl({ hostMuted, permissions, micOn: true });
-        assert.equal(control.disabled, false, `${hostMuted} ${JSON.stringify(permissions)}`);
-        assert.equal(control.label, "Mute your mic");
-      }
+    for (const permissions of [granted, { canPublish: true, microphone: false }, { canPublish: false, microphone: false }]) {
+      const control = micControl({ permissions, micOn: true });
+      assert.equal(control.disabled, false, JSON.stringify(permissions));
+      assert.equal(control.label, "Mute your mic");
     }
   });
 
   it("names the next action", () => {
-    assert.equal(micControl({ hostMuted: "none", permissions: granted, micOn: true }).label, "Mute your mic");
-    assert.equal(micControl({ hostMuted: "none", permissions: granted, micOn: false }).label, "Unmute your mic");
+    assert.equal(micControl({ permissions: granted, micOn: true }).label, "Mute your mic");
+    assert.equal(micControl({ permissions: granted, micOn: false }).label, "Unmute your mic");
   });
 });
 
@@ -118,7 +109,8 @@ describe("useStage asks the consent rule and nothing else", () => {
     assert.doesNotMatch(stage, /setMicOn\(next\)/, "a local flag is written again after the toggle");
   });
 
-  it("refuses to OPEN the mic behind a hard mute or a missing mic permission — never to mute it", () => {
+  it("refuses to OPEN the mic without the mic permission — never to mute it", () => {
+    assert.doesNotMatch(stage, /hostMuted/);
     assert.match(stage, /micControl\(\{/);
     assert.match(stage, /if \(!micOn && control\.disabled\) return;/);
     assert.doesNotMatch(stage, /if \(control\.disabled\) return;/);

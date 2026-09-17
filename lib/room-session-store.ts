@@ -31,7 +31,7 @@ export interface RoomSessionView {
    */
   presence: "host" | "speaker" | "listener" | null;
   micOn: boolean;
-  /** Disabled with a reason behind a hard mute or a missing grant (lib/mic-consent.ts). */
+  /** Disabled with a reason behind a missing grant (lib/mic-consent.ts). */
   micDisabled: boolean;
   toggleMic: () => Promise<void>;
   /** The host's publish failure, classified — the copy is `roomFailureCopy`. */
@@ -70,6 +70,24 @@ export interface RoomSessionView {
   /** The room a reload interrupted, offered back as "Rejoin" (lib/room-session/rejoin.ts). */
   rejoinOffer: RejoinRecord | null;
   dismissRejoin: () => void;
+  /**
+   * The host's invitation to speak, waiting on the reader's answer — read from
+   * their own speaker-request row, never from a push. The countdown is
+   * `inviteExpiresAt`'s (lib/speaker-invite.ts `inviteView`).
+   */
+  invite: {
+    requestId: string;
+    inviteExpiresAt: string | null;
+    /** When the server opened it, on the server's clock. */
+    createdAt: string | null;
+    /** When this tab first saw it — the countdown's starting reading. */
+    seenAt: number;
+    /** The server's clock offset read at first sight, or null (lib/server-clock.ts). */
+    clockOffsetMs: number | null;
+  } | null;
+  /** Join as speaker (seated, mic OFF) or Not now. */
+  answerInvite: (action: "accept" | "reject") => void;
+  answeringInvite: boolean;
 }
 
 const noop = () => {};
@@ -100,6 +118,9 @@ export const IDLE_VIEW: RoomSessionView = {
   retry: noop,
   rejoinOffer: null,
   dismissRejoin: noop,
+  invite: null,
+  answerInvite: noop,
+  answeringInvite: false,
 };
 
 let view: RoomSessionView = IDLE_VIEW;

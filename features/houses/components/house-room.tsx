@@ -28,6 +28,7 @@ import {
   useRequestToSpeak,
   useResolveSpeakerRequest,
   useSpeakerRequests,
+  useSeatedSpeakers,
   useStream,
 } from "@/features/streams/hooks/use-streams";
 import type { Ingest, Stream } from "@/features/streams/lib/types";
@@ -51,6 +52,8 @@ import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PersonSheet, type PersonTarget } from "@/features/houses/components/person-sheet";
+import { InviteBannerDock } from "@/features/houses/components/invite-banner";
+import { useHostStageTools } from "@/features/houses/hooks/use-host-stage-tools";
 import { useAudience, type AudienceMember } from "@/features/houses/hooks/use-audience";
 import { useHouseAnnouncer } from "@/features/houses/hooks/use-house-announcer";
 import { useHouseAudio } from "@/features/houses/hooks/use-house-audio";
@@ -152,6 +155,10 @@ interface SlotProps {
        * the room reaching down for a roster it is not allowed to fetch.
        */
       onViewAll: (title: string, people: RoomPerson[]) => void;
+      /** Opens a listening member's person sheet — the same sheet the Audience opens. */
+      onOpen: (userId: string) => void;
+      /** Members the host has invited up and who have not answered. Empty for anyone but the host. */
+      invitedIds: ReadonlySet<string>;
     }
   ) => React.ReactNode;
   /**
@@ -193,6 +200,12 @@ interface SlotProps {
     username: string,
     mute: { muted: boolean; onToggle: () => void } | undefined
   ) => React.ReactNode;
+  /**
+   * Wraps the host's Invite to speak row for one handle, and draws nothing for
+   * someone the host has blocked. A slot because the block edge is the profile
+   * slice's. Hidden up front, never refused after a tap.
+   */
+  inviteGateSlot?: (handle: string, row: React.ReactNode) => React.ReactNode;
 }
 
 /** One frozen empty set, so an unresolved roster is not a new value per render. */
@@ -202,6 +215,7 @@ export function HouseRoom({
   houseId,
   followSlot,
   safetySlot,
+  inviteGateSlot,
   houseSlot,
   personActionsSlot,
   tipSlot,
@@ -273,7 +287,7 @@ export function HouseRoom({
 
   if (data.status === "scheduled") {
     return isHost ? (
-      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} tipSlot={tipSlot} upcomingCardSlot={upcomingCardSlot} />
+      <HostScheduled stream={data} followSlot={followSlot} safetySlot={safetySlot} inviteGateSlot={inviteGateSlot} tipSlot={tipSlot} upcomingCardSlot={upcomingCardSlot} />
     ) : (
       <NotOpenYet stream={data} upcomingCardSlot={upcomingCardSlot} />
     );
@@ -288,6 +302,7 @@ export function HouseRoom({
       signedOut={signedOut}
       followSlot={followSlot}
       safetySlot={safetySlot}
+      inviteGateSlot={inviteGateSlot}
     />
   );
 }
@@ -342,12 +357,14 @@ function HostScheduled({
   houseSlot,
   personActionsSlot,
   safetySlot,
+  inviteGateSlot,
   tipSlot,
   upcomingCardSlot,
 }: {
   stream: Stream;
   followSlot: SlotProps["followSlot"];
   safetySlot: SlotProps["safetySlot"];
+  inviteGateSlot?: SlotProps["inviteGateSlot"];
   houseSlot?: SlotProps["houseSlot"];
   personActionsSlot?: SlotProps["personActionsSlot"];
   tipSlot?: SlotProps["tipSlot"];
@@ -379,6 +396,7 @@ function HostScheduled({
         micId={micId}
         followSlot={followSlot}
         safetySlot={safetySlot}
+        inviteGateSlot={inviteGateSlot}
       />
     );
   }
@@ -578,6 +596,7 @@ function LiveHouse({
   micId = "",
   followSlot,
   safetySlot,
+  inviteGateSlot,
   houseSlot,
   personActionsSlot,
   tipSlot,
@@ -837,14 +856,12 @@ function LiveHouse({
     [audience]
   );
 
-  const houseMembers = stream.houseConversationId
-    ? (houseSlot?.(stream.houseConversationId, {
-        speakerIds,
-        presentIds,
-        onRoster: setHouseMemberIds,
-        onViewAll: openRoster,
-      }) ?? null)
-    : null;
+  // Everyone connected, seated or not: the audience band leaves speakers out,
+  // so the hand tray's "Reconnecting…" reads both. Null before the room is up.
+  const connectedIds = useMemo(
+    () => (room ? new Set([...presentIds, ...slots.map((slot) => baseIdentity(slot.identity))]) : null),
+    [room, presentIds, slots]
+  );
 
   const seating = useMemo(() => buildSeating(slots), [slots]);
   const audio = useHouseAudio(room);
@@ -888,7 +905,7 @@ function LiveHouse({
   // own remedies — "Ask to speak" to somebody the host already said yes to
   // reads as the approval having been lost.
   const myRequestStatus = mine.data?.status ?? null;
-  const canAsk = !isHost && !onStage && myRequestStatus !== "approved";
+  const canAsk = !isHost && !onStage && myRequestStatus !== "approved" && myRequestStatus !== "invited";
 
   /*
     AN APPROVED SPEAKER WHO IS NOT SIMPLY SEATED is told why and given the
@@ -1015,6 +1032,10 @@ function LiveHouse({
     }
     wasOnStage.current = onStage;
   }, [onStage, announce]);
+
+  // An invitation to speak is announced by the session, once, wherever the
+  // reader is (room-session.tsx InviteAnnouncer) — never again on this page's mount.
+  const ownerName = stream.owner?.displayName || stream.owner?.username || null;
 
   // Your own hand.
   const handWas = useRef<string | null>(null);
@@ -1147,6 +1168,8 @@ function LiveHouse({
         meta,
         seated: true,
         pendingRequestId: null,
+        micMuted: slot.isMuted,
+        isRoomHost: slot.role === "host",
       });
     },
     []
@@ -1163,10 +1186,85 @@ function LiveHouse({
         meta: member.meta,
         seated: false,
         pendingRequestId: waiting?.id ?? null,
+        micMuted: true,
+        isRoomHost: false,
       });
     },
     [handsUp]
   );
+
+  /*
+    THE HOST'S STAGE TOOLS — invite to speak and the soft mute
+    (features/houses/hooks/use-host-stage-tools.ts). Seated means on a seat
+    or approved for one, so an accepted invitation is never reported as
+    "isn't available".
+  */
+  // The plain queue is pending-only on the service, so approved rows are their
+  // own read: an accepted invitation settles on the row, not on the grant.
+  const seatedRows = useSeatedSpeakers(stream.id, isHost && stream.status === "live");
+  const seatedUserIds = useMemo(() => {
+    const ids = new Set(speakerIds);
+    for (const item of [...(hostRequests.data?.items ?? []), ...(seatedRows.data?.items ?? [])]) {
+      if (item.status === "approved") ids.add(baseIdentity(item.userId));
+    }
+    return ids;
+  }, [speakerIds, hostRequests.data, seatedRows.data]);
+  const hostTools = useHostStageTools({
+    stream,
+    isHost,
+    myId,
+    slots,
+    seatedUserIds,
+    stageFull: full,
+    sheetOpen: person !== null,
+  });
+  const openInvites = hostTools.openInvites;
+
+  /*
+    THE SHEET READS THE ROOM AS IT IS NOW. `person` is the snapshot taken when
+    it opened; a mute that lands, an invitee who takes a seat or a speaker
+    moved down all change what its rows should say. The seat is looked up
+    live, by base identity (an approved speaker is `<did>#speaker`).
+  */
+  const livePerson = useMemo<PersonTarget | null>(() => {
+    if (!person) return null;
+    const base = baseIdentity(person.identity);
+    const seat = slots.find((slot) =>
+      person.isRoomHost ? slot.role === "host" : slot.role !== "host" && baseIdentity(slot.identity) === base
+    );
+    if (seat) return { ...person, identity: seat.identity, seated: true, micMuted: seat.isMuted, pendingRequestId: null };
+    // Still in the audience: somebody who left is not offered an invitation.
+    return person.isRoomHost ? person : { ...person, seated: false, micMuted: true, present: presentIds.has(base) };
+  }, [person, slots, presentIds]);
+
+  /*
+    A HOUSE MEMBER WHO IS LISTENING OPENS THE SAME SHEET AS THE AUDIENCE. The
+    roster slot draws them, and the Audience drops them (they are in
+    `houseMemberIds`), so without this the people a host is most likely to
+    invite up were the only faces in the room with no sheet — no Invite, no
+    Invited ring. Keyed on the user id the slot has; the connection itself is
+    the audience member the room already knows.
+  */
+  const openPresent = useCallback(
+    (userId: string) => {
+      const member = audience.find((item) => item.userId === userId);
+      if (member) openMember(member);
+    },
+    [audience, openMember]
+  );
+  const invitedIds = useMemo<ReadonlySet<string>>(() => new Set(openInvites.keys()), [openInvites]);
+
+  const houseMembers = stream.houseConversationId
+    ? (houseSlot?.(stream.houseConversationId, {
+        speakerIds,
+        presentIds,
+        onRoster: setHouseMemberIds,
+        onViewAll: openRoster,
+        onOpen: openPresent,
+        invitedIds: isHost ? invitedIds : EMPTY_IDS,
+      }) ?? null)
+    : null;
+
 
   /*
     THE FILE'S THREE LISTS, from the state the room already had.
@@ -1235,6 +1333,9 @@ function LiveHouse({
             // and falls back to muted when this viewer has silenced them — a
             // person you cannot hear must not be drawn as talking.
             mic: slot.isMuted || mutedForMe.has(slot.identity) ? "muted" : "on",
+            // The host's soft mute, for everyone to see — only while the mic
+            // really is still off (lib/host-mute.ts).
+            mutedByHost: slot.mutedByHost,
             // No wink-and-follow aimed at yourself.
             actions:
               owner && owner.id !== myId
@@ -1267,10 +1368,12 @@ function LiveHouse({
               isMe || !member.meta?.username
                 ? undefined
                 : personActionsSlot?.(member.meta.username),
+            // The host's own screen only: nobody else reads the invitations.
+            invited: openInvites.has(member.userId),
             onOpen: () => openMember(member),
           };
         }),
-    [audience, houseMemberIds, openMember, personActionsSlot, myId, myName, myAvatar]
+    [audience, houseMemberIds, openMember, personActionsSlot, myId, myName, myAvatar, openInvites]
   );
 
   /* ---- keyboard --------------------------------------------------------- */
@@ -1487,6 +1590,28 @@ function LiveHouse({
       {/* The phone's 342 column at x=24 (px-6), Speakers 24 under the header
           (1285:92941 at y=307.37 against the head ending at 283.37) — the
           header's own bottom padding is that 24, so no top padding here. */}
+      {/* THE HOST'S INVITATION, asked on the room's own page (the shell's copy
+          stays away from here). Pinned under the header where the reader is
+          looking, non-modal: the room keeps talking behind it. Read from the
+          session's poll of the reader's own row, never from a push. */}
+      {here && !isHost && session.invite && (
+        // Under the room's header, clamped on screen, and inside an open
+        // sheet's dialog while there is one (InviteBannerDock).
+        <InviteBannerDock
+          key={session.invite.requestId}
+          offset="var(--ws-topbar-h) + var(--ws-crumb-h) + var(--ws-house-head-h)"
+          requestId={session.invite.requestId}
+          inviteExpiresAt={session.invite.inviteExpiresAt}
+          createdAt={session.invite.createdAt}
+          seenAt={session.invite.seenAt}
+          clockOffsetMs={session.invite.clockOffsetMs}
+          host={{ id: stream.owner?.id ?? stream.ownerId, name: ownerName ?? "The host", avatarUrl: stream.owner?.avatarUrl }}
+          busy={session.answeringInvite}
+          onAccept={() => session.answerInvite("accept")}
+          onReject={() => session.answerInvite("reject")}
+        />
+      )}
+
       <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-10 xl:px-[30px]", state === "failed" && "opacity-40")}>
         <RoomPeopleSection
           title="Speakers"
@@ -1749,6 +1874,7 @@ function LiveHouse({
             stream={stream}
             seatsFull={full}
             onManage={() => setTray(true)}
+            invited={hostTools.invited}
           />
         )}
 
@@ -1892,11 +2018,14 @@ function LiveHouse({
           seatsFull={full}
           requestsOpen={requestsOpen}
           onRequestsOpenChange={setRequestsOpen}
+          invited={hostTools.invited}
+          connected={connectedIds}
+          muteFor={hostTools.muteFor}
         />
       )}
 
       <PersonSheet
-        person={person}
+        person={livePerson}
         open={person !== null}
         onClose={() => setPerson(null)}
         isHost={isHost}
@@ -1905,7 +2034,9 @@ function LiveHouse({
           // An approved speaker's LiveKit identity is `<did>#speaker`; the
           // request row is keyed on the bare DID. Comparing them raw never
           // matched, which is a bug this codebase has already fixed once.
-          const seated = (hostRequests.data?.items ?? []).find(
+          // The APPROVED read: the plain queue is pending-only on the service,
+          // so a seat looked for there was never found.
+          const seated = (seatedRows.data?.items ?? []).find(
             (item) =>
               item.status === "approved" &&
               baseIdentity(item.userId) === baseIdentity(target.identity)
@@ -1922,16 +2053,18 @@ function LiveHouse({
           resolve.mutate({ requestId: target.pendingRequestId, action: "approve" });
           setPerson(null);
         }}
+        hostActions={hostTools.actionsFor(livePerson)}
         mute={
           // Only a person with a seat is publishing, so only they have audio to
           // silence. Offering the row over an audience member would be a
           // control that does nothing.
-          person?.seated
-            ? { muted: mutedForMe.has(person.identity), onToggle: () => toggleMute(person.identity) }
+          livePerson?.seated
+            ? { muted: mutedForMe.has(livePerson.identity), onToggle: () => toggleMute(livePerson.identity) }
             : null
         }
         followSlot={followSlot}
         safetySlot={safetySlot}
+        inviteGateSlot={inviteGateSlot}
       />
 
       <Sheet open={overflowSheet} onClose={() => setOverflowSheet(false)} title="This house">

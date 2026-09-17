@@ -218,26 +218,30 @@ describe("SpeakerRequestSchema accepts the invite-to-speak fields before the bac
     assert.equal(parsed.status, "pending");
     assert.equal(parsed.initiatedBy, "listener");
     assert.equal(parsed.expiresAt, null);
-    assert.equal(parsed.hostMuted, false);
-    assert.equal(parsed.muteHard, false);
   });
 
-  it("parses a host invitation with its expiry", () => {
+  it("parses a host invitation with its expiry, which is inviteExpiresAt and never expiresAt", () => {
+    // The service's field (wsws-monorepo market-square SpeakerRequest):
+    // `expiresAt` on /me is the approved speaker's JOIN TOKEN expiry, so the
+    // invitation's own clock has a name of its own.
     const parsed = SpeakerRequestSchema.parse({
       ...legacy,
       status: "invited",
       initiatedBy: "host",
-      expiresAt: "2026-09-17T10:01:00.000Z",
+      inviteExpiresAt: "2026-09-17T10:01:00.000Z",
+      expiresAt: "2026-09-17T11:00:00.000Z",
     });
     assert.equal(parsed.status, "invited");
     assert.equal(parsed.initiatedBy, "host");
-    assert.equal(parsed.expiresAt, "2026-09-17T10:01:00.000Z");
+    assert.equal(parsed.inviteExpiresAt, "2026-09-17T10:01:00.000Z");
+    assert.equal(parsed.expiresAt, "2026-09-17T11:00:00.000Z");
+    assert.equal(SpeakerRequestSchema.parse(legacy).inviteExpiresAt, null);
   });
 
-  it("carries the host's mute flags through", () => {
+  it("carries no mute flags: the host's mute is the LiveKit attribute, and there is no hard mute", () => {
     const parsed = SpeakerRequestSchema.parse({ ...legacy, status: "approved", hostMuted: true, muteHard: true });
-    assert.equal(parsed.hostMuted, true);
-    assert.equal(parsed.muteHard, true);
+    assert.equal("hostMuted" in parsed, false);
+    assert.equal("muteHard" in parsed, false);
   });
 
   it("still refuses an unknown status as a status: it never reaches the client as itself", () => {

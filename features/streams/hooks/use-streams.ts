@@ -18,6 +18,20 @@ import { useKashStatus } from "@/hooks/use-kash-status";
 import { isHouse } from "@/features/houses/lib/house";
 import { mergeStreamDetail } from "@/lib/stream-detail-merge";
 import {
+  INVITE_ACCEPTED_HINT,
+  answerErrorMessage,
+  answerLanding,
+  inviteErrorOutcome,
+  inviteSentMessage,
+  quietResolveError,
+  routeMissing,
+  trackInvite,
+  type ApiErrorLike,
+} from "@/lib/speaker-invite";
+import { inviteMemoryFor, rememberBan } from "@/features/streams/lib/invite-memory";
+import { serverClockOffset } from "@/lib/server-clock";
+import { muteFailure } from "@/lib/host-mute";
+import {
   banFromChat,
   cancelActivity,
   deleteChatMessage,
@@ -41,6 +55,11 @@ import {
   fetchMySpeakerRequest,
   fetchSpeakerRequests,
   resolveSpeakerRequest,
+  inviteToSpeak,
+  fetchSpeakerInvites,
+  fetchSeatedSpeakers,
+  muteSpeaker,
+  type SpeakerRequestAction,
   fetchStreamByCode,
   remindStream,
   fetchFollowingRooms,
@@ -614,7 +633,10 @@ export function useBanFromChat(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (userId: string) => banFromChat(streamId, userId),
-    onSuccess: () => {
+    onSuccess: (_result, userId) => {
+      // The service refuses to invite anyone it banned: the host's Invite to
+      // speak is hidden for them from now on, not refused after a tap.
+      rememberBan(inviteMemoryFor(streamId), userId);
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "chat"] });
       toast.success("Banned from chat");
     },
@@ -660,6 +682,10 @@ export function useRequestToSpeak(streamId: string) {
       // The host's queue is a different query; without this the request only
       // appeared on their next 3 s poll.
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+      // The host had already invited them: the service hands back that open
+      // invitation (200) rather than a new request, and the banner asks the
+      // question. "Request sent" would be a claim about a request that is not there.
+      if (request.status === "invited") return;
       toast.success("Request sent to the host");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't request to speak.")),
@@ -716,12 +742,225 @@ export function useRemoveGuest(streamId: string, enabled: boolean) {
 export function useResolveSpeakerRequest(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ requestId, action }: { requestId: string; action: "approve" | "decline" | "remove" | "leave" }) =>
-      resolveSpeakerRequest(streamId, requestId, action),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+    /* `room` pins the call to the room it was decided in. A leave that waits
+       for an accept to settle (lib/speaker-invite.ts `releaseOnLeave`) fires
+       after the session has moved on, when this hook's own id is the next
+       room's, or nothing. */
+    mutationFn: ({ requestId, action, room }: { requestId: string; action: SpeakerRequestAction; room?: string }) =>
+      resolveSpeakerRequest(room ?? streamId, requestId, action),
+    onSuccess: (_row, { room }) => {
+      const id = room ?? streamId;
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-request", "me"] });
     },
-    onError: (error) => toast.error(errorMessage(error, "Couldn't update the speaker.")),
+    onError: (error, { action, room }) => {
+      const id = room ?? streamId;
+      // The invitation had already ended (lib/speaker-invite.ts): true
+      // already, so re-read the lists rather than raise an error.
+      if (quietResolveError(error as ApiErrorLike, action)) {
+        queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-request", "me"] });
+        return;
+      }
+      // The stage cap (7 guests + host) also holds on approve now.
+      if (action === "approve" && (error as ApiErrorLike)?.code === "STAGE_FULL") {
+        toast.error("Every seat is taken. Move someone down first.");
+        return;
+      }
+      toast.error(errorMessage(error, "Couldn't update the speaker."));
+    },
   });
+}
+
+/* ---- invite to speak, and the host's soft mute ---------------------------
+
+   Both are AHEAD OF THE BACKEND. Every call degrades quietly: the first answer
+   that says the route is not deployed (lib/speaker-invite.ts `routeMissing` —
+   the router's own "Route not found", never a 404 about a missing PERSON) is
+   remembered for the page load and the controls go away, rather than
+   offering a button that fails every time. A background read that finds the
+   route missing says nothing; a host's TAP that finds it says so once ("Mute
+   for everyone isn't available yet"), because a moderation action that ends
+   with the control vanishing and no word reads as broken. Nothing is ever
+   reported as done that the service did not do. */
+
+let invitesMissing = false;
+let muteMissing = false;
+
+/**
+ * The host's open invitations. Shares the request list's key prefix, so every
+ * invalidation of the queue refetches these too; polls on the queue's cadence
+ * and stops for good once the service says the filter does not exist.
+ */
+export function useSpeakerInvites(streamId: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-requests", "invited"],
+    queryFn: async () => {
+      try {
+        return await fetchSpeakerInvites(streamId);
+      } catch (error) {
+        if (routeMissing(error as ApiErrorLike)) invitesMissing = true;
+        throw error;
+      }
+    },
+    enabled: enabled && !invitesMissing,
+    retry: false,
+    refetchInterval: (current) =>
+      enabled && !routeMissing(current.state.error as ApiErrorLike | null) ? SPEAKER_POLL_MS : false,
+  });
+  return { ...query, unavailable: invitesMissing || routeMissing(query.error as ApiErrorLike | null) };
+}
+
+/**
+ * The host's approved speakers, by row. The seat that settles an accepted
+ * invitation, read from the service rather than waiting on the LiveKit grant.
+ */
+export function useSeatedSpeakers(streamId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ms", "stream", streamId, "speaker-requests", "approved"],
+    queryFn: () => fetchSeatedSpeakers(streamId),
+    enabled,
+    retry: false,
+    refetchInterval: enabled ? SPEAKER_POLL_MS : false,
+  });
+}
+
+/**
+ * Invite a listener up. Carries what the service told us about particular
+ * people for as long as the page is loaded (features/streams/lib/invite-memory.ts,
+ * so a remount of the room does not forget it): who the host banned (the
+ * control is hidden for them) and who is in a cooldown until when. A BLOCKED
+ * refusal changes nothing here — it may be the target's block.
+ *
+ * An invitation the service opened is tracked from THIS answer, not from the
+ * next read of the invited list: one declined before that read would
+ * otherwise never be told, while one that lapsed would.
+ */
+export function useInviteToSpeak(streamId: string) {
+  const queryClient = useQueryClient();
+  const memory = inviteMemoryFor(streamId);
+  const [unavailable, setUnavailable] = useState(invitesMissing);
+  // Who is refused and who is cooling down are read from the shared memory
+  // itself, not a copy taken at mount: a chat ban (useBanFromChat) and an
+  // invitation that ended (use-host-stage-tools) write there too. A new
+  // answer here only has to draw again.
+  const [, redraw] = useState(0);
+
+  const mutation = useMutation({
+    mutationFn: ({ userId }: { userId: string; name: string }) => inviteToSpeak(streamId, userId),
+    onSuccess: (row, { userId, name }) => {
+      if (row.status === "invited") {
+        const held = inviteMemoryFor(streamId);
+        // Open on the server, whatever this page thought: a repeat invite
+        // answers the same id, and a Cancel that lost must not hide it.
+        held.cancelled.delete(row.id);
+        held.ended.delete(row.id);
+        held.rows.set(row.id, row);
+        held.tracked = trackInvite(
+          held.tracked,
+          { id: row.id, userId: baseIdentity(row.userId || userId), name, inviteExpiresAt: row.inviteExpiresAt, createdAt: row.createdAt },
+          Date.now(),
+          { offsetMs: serverClockOffset() }
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+      toast(inviteSentMessage(row.status, name));
+    },
+    onError: (error, { userId, name }) => {
+      const outcome = inviteErrorOutcome(error as ApiErrorLike, name);
+      if (outcome.kind === "unavailable") {
+        invitesMissing = true;
+        setUnavailable(true);
+        toast(outcome.message);
+        return;
+      }
+      if (outcome.kind === "refused") {
+        rememberBan(inviteMemoryFor(streamId), userId);
+        redraw((count) => count + 1);
+        toast(outcome.message);
+        return;
+      }
+      if (outcome.kind === "cooldown") {
+        const until = Date.now() + outcome.retryAfterSeconds * 1000;
+        inviteMemoryFor(streamId).cooldowns.set(userId, until);
+        redraw((count) => count + 1);
+        toast(outcome.message);
+        return;
+      }
+      toast.error(outcome.message);
+    },
+  });
+
+  const refused: ReadonlySet<string> = memory.refused;
+  const cooldowns: ReadonlyMap<string, number> = memory.cooldowns;
+  return { ...mutation, unavailable: unavailable || invitesMissing, refused, cooldowns };
+}
+
+/**
+ * The invitee's answer: Join as speaker, or Not now.
+ *
+ * Accepting seats them over the connection they already have, with the mic
+ * OFF — nothing here, and nothing downstream, opens it (lib/mic-consent.ts).
+ * Whatever the answer, the row is read again: an invitation that ran out while
+ * the banner was up must disappear rather than wait for the next poll.
+ *
+ * `room` pins the answer to the room it was given in (lib/speaker-invite.ts
+ * `answerLanding`). This hook lives in the session provider, which stays
+ * mounted while the room changes, and a pending mutation runs the NEWEST
+ * callbacks: read from `streamId`, an accept that came back after "Leave and
+ * join" seated the reader in the next room.
+ */
+export function useAnswerInvite(streamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, action, room }: { requestId: string; action: "accept" | "reject"; room: string }) =>
+      resolveSpeakerRequest(room, requestId, action),
+    onSuccess: (row, { action, room }) => {
+      const landing = answerLanding({ room, currentRoom: streamId, action, status: row.status });
+      // The answered row goes straight into the cache, as asking to speak's
+      // does: the banner goes at once (no second tap on a live button while a
+      // slow refetch is out), and `approved` seats them without waiting a poll.
+      queryClient.setQueryData(["ms", "stream", landing.room, "speaker-request", "me"], row);
+      // The one-time hint: seated, and the mic is still theirs to open.
+      if (landing.hint) toast(INVITE_ACCEPTED_HINT);
+    },
+    onError: (error, { action }) => {
+      // A Not now on an invitation that already ended is quiet (lib/speaker-invite.ts).
+      const message = answerErrorMessage(error as ApiErrorLike, action);
+      if (message) toast.error(message);
+    },
+    onSettled: (_row, _error, { room }) => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", room, "speaker-request", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", room, "speaker-requests"] });
+    },
+  });
+}
+
+/** The host's "Mute for everyone". Soft: the speaker may unmute themselves. */
+export function useMuteSpeaker(streamId: string) {
+  const [unavailable, setUnavailable] = useState(muteMissing);
+  const mutation = useMutation({
+    mutationFn: ({ userId }: { userId: string; name: string }) => muteSpeaker(streamId, baseIdentity(userId)),
+    onSuccess: (result, { name }) => {
+      // `reached` false: they had already dropped off the connection, and
+      // nothing was muted. Said plainly rather than as a success.
+      if (result && result.reached === false) {
+        toast(`${name} isn't connected right now.`);
+        return;
+      }
+      toast(`${name}'s mic is off for everyone. They can unmute when it's their turn.`);
+    },
+    onError: (error, { name }) => {
+      const failure = muteFailure({ missing: routeMissing(error as ApiErrorLike), error: error as ApiErrorLike, name });
+      if (failure.unavailable) {
+        // The control goes, and the host is told why their tap did nothing.
+        muteMissing = true;
+        setUnavailable(true);
+        toast(failure.message);
+        return;
+      }
+      toast.error(failure.message);
+    },
+  });
+  return { ...mutation, unavailable: unavailable || muteMissing };
 }

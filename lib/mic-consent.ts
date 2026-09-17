@@ -26,10 +26,8 @@ export type MicConsentReason =
   | "reconnect"
   /** The tab reloaded. */
   | "reload"
-  /** The reader accepted a host's invitation (backend-dependent, not wired). */
-  | "inviteAccept"
-  /** The host lifted a hard mute (backend-dependent, not wired). */
-  | "unlock";
+  /** The reader accepted a host's invitation: seated with the mic off. */
+  | "inviteAccept";
 
 export function shouldAutoEnableMic(input: {
   approved: boolean;
@@ -52,10 +50,12 @@ export function deriveMicOn(publication: { isMuted: boolean } | null | undefined
   return publication ? !publication.isMuted : false;
 }
 
-/** A host's mute on a speaker. `hard` locks the mic (backend-dependent, not wired yet). */
-export type HostMute = "none" | "soft" | "hard";
-
-export type MicIcon = "mic" | "mic-off" | "lock";
+/*
+  A host's mute is SOFT ONLY (lib/host-mute.ts): the speaker may unmute
+  themselves, so it never disables this control and is not an input to it.
+  There is no locked state and no lock icon.
+*/
+export type MicIcon = "mic" | "mic-off";
 
 export interface MicControl {
   disabled: boolean;
@@ -64,22 +64,16 @@ export interface MicControl {
 }
 
 export function micControl({
-  hostMuted,
   permissions,
   micOn,
 }: {
-  hostMuted: HostMute;
   /** `microphone` false when the grant does not include the mic source. */
   permissions: { canPublish: boolean; microphone: boolean };
   micOn: boolean;
 }): MicControl {
-  // MUTING IS ALWAYS ALLOWED. A grant that narrows, or a hard mute landing,
-  // while the track is still unmuted must never leave a live mic with its
-  // only off switch disabled.
+  // MUTING IS ALWAYS ALLOWED. A grant that narrows while the track is still
+  // unmuted must never leave a live mic with its only off switch disabled.
   if (micOn) return { disabled: false, icon: "mic", label: "Mute your mic" };
-  if (hostMuted === "hard") {
-    return { disabled: true, icon: "lock", label: "The host turned off your mic" };
-  }
   if (!permissions.canPublish || !permissions.microphone) {
     return { disabled: true, icon: "mic-off", label: "You can't speak in this room yet" };
   }
