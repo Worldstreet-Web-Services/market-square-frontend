@@ -79,6 +79,8 @@ import { roomFailureCopy } from "@/lib/room-connection-copy";
 import { roomEntryReady } from "@/lib/room-session/entry";
 import { roomStagePanel } from "@/lib/room-session/presence";
 import type { StageAction } from "@/lib/stage-recovery";
+import { newestRoomChat, unreadRoomChat } from "@/lib/room-chat-unread";
+import { useChat } from "@/features/streams/hooks/use-chat";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -1156,6 +1158,26 @@ function LiveHouse({
   const [tray, setTray] = useState(false);
   // The phone's chat sheet — 1285:93095 in the bottom bar opens it.
   const [chatSheet, setChatSheet] = useState(false);
+  /*
+    THE CHAT'S UNREAD COUNT, on a phone only.
+
+    The chat is a sheet here, so a message that lands while it is closed left
+    no trace at all (ogazboiz, 2026-09-17). The poll is the SAME query the
+    panel reads, so this shares its cache rather than adding a second one; it
+    is only enabled on a phone, where the panel itself is not mounted. The
+    mark is the last message the reader had on screen, not a counter, so a
+    repeated poll cannot double count (lib/room-chat-unread.ts).
+  */
+  const chatFeed = useChat(stream.id, here && phone && stream.status === "live");
+  const chatItems = chatFeed.data?.items;
+  const [seenChat, setSeenChat] = useState<{ id: string; createdAt: string } | null>(null);
+  // Adjusted during render, React's pattern for state that follows a value:
+  // while the sheet is open, everything on screen has been read.
+  const newestChat = newestRoomChat(chatItems);
+  if (chatSheet && newestChat && seenChat?.id !== newestChat.id) {
+    setSeenChat({ id: newestChat.id, createdAt: newestChat.createdAt });
+  }
+  const unreadChat = chatSheet ? 0 : unreadRoomChat(chatItems, seenChat, me.data?.id);
   const [overflowSheet, setOverflowSheet] = useState(false);
   const [person, setPerson] = useState<PersonTarget | null>(null);
 
@@ -1953,6 +1975,7 @@ function LiveHouse({
         mutations, the same reaction channel, the same tray.
       */}
       <RoomPhoneBar
+        unreadChat={unreadChat}
         mic={
           onStage
             ? {
