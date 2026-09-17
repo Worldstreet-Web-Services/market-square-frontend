@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AudioCaptureOptions, LocalAudioTrack, LocalTrack, Room } from "livekit-client";
+import type { AudioCaptureOptions, LocalAudioTrack, LocalTrack, Room, RoomOptions } from "livekit-client";
 import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 // The taxonomy is pure and lives in lib/ so it can be pinned by tests —
 // lib/media-errors.test.ts owns the name → class table.
@@ -34,6 +34,61 @@ const SPEECH_CAPTURE: AudioCaptureOptions = {
   voiceIsolation: true,
   channelCount: 1,
 };
+
+/**
+ * The Room a talking publisher opens — one definition for the Studio cockpit
+ * (`usePublisher` below) and the gist-room session the shell owns
+ * (components/layout/room-session.tsx), so a host's audio is processed the
+ * same way whichever of them opened the connection.
+ */
+export function publisherRoomOptions(
+  livekit: Pick<typeof import("livekit-client"), "AudioPresets">,
+  preferredMic?: string
+): RoomOptions {
+  const audioCapture: AudioCaptureOptions = preferredMic
+    ? { ...SPEECH_CAPTURE, deviceId: preferredMic }
+    : SPEECH_CAPTURE;
+  return {
+    // Mirrors the initial capture so a mic toggle (which re-creates the
+    // track through the SDK) republishes with the same processing and
+    // the same device instead of falling back to the system default.
+    audioCaptureDefaults: audioCapture,
+    publishDefaults: {
+      // 48 kbps mono Opus. Stated rather than inherited, and *not*
+      // dropped to AudioPresets.speech (24 kbps): the reported symptom
+      // is quality, not bandwidth, and RED already doubles the effective
+      // audio rate — ~96 kbps total is still ~5% of the 1.7 Mbps the
+      // 720p video track budgets, so there is nothing to buy by
+      // squeezing speech further.
+      audioPreset: livekit.AudioPresets.music,
+      // Explicit because the SDK only defaults these on for tracks it
+      // considers mono; pinning them means a mic that misreports its
+      // channel count cannot quietly turn off loss concealment.
+      red: true,
+      dtx: true,
+      forceStereo: false,
+    },
+  };
+}
+
+/**
+ * IMPERATIVE START — for the session the shell owns, which has no component
+ * lifetime to hang an effect on.
+ *
+ * `micOn: false` is how a host comes back after a reload, a retry or a
+ * reconnect: on the stage, mic MUTED, nothing captured until they tap. Only
+ * the host's own fresh open (they just checked their mic in Backstage and
+ * pressed Open) publishes an open mic.
+ */
+export async function startPublishing(room: Room, { micOn }: { micOn: boolean }): Promise<void> {
+  if (!micOn) return;
+  await room.localParticipant.setMicrophoneEnabled(true);
+}
+
+/** IMPERATIVE STOP — the mic comes down; the connection is the session's to end. */
+export async function stopPublishing(room: Room): Promise<void> {
+  await room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+}
 
 /**
  * A WebRTC connect that has not settled in this long is not going to. Without
@@ -209,27 +264,7 @@ export function usePublisher({
         const audioCapture: AudioCaptureOptions = preferredMic
           ? { ...SPEECH_CAPTURE, deviceId: preferredMic }
           : SPEECH_CAPTURE;
-        const instance = new Room({
-          // Mirrors the initial capture so a mic toggle (which re-creates the
-          // track through the SDK) republishes with the same processing and
-          // the same device instead of falling back to the system default.
-          audioCaptureDefaults: audioCapture,
-          publishDefaults: {
-            // 48 kbps mono Opus. Stated rather than inherited, and *not*
-            // dropped to AudioPresets.speech (24 kbps): the reported symptom
-            // is quality, not bandwidth, and RED already doubles the effective
-            // audio rate — ~96 kbps total is still ~5% of the 1.7 Mbps the
-            // 720p video track budgets, so there is nothing to buy by
-            // squeezing speech further.
-            audioPreset: AudioPresets.music,
-            // Explicit because the SDK only defaults these on for tracks it
-            // considers mono; pinning them means a mic that misreports its
-            // channel count cannot quietly turn off loss concealment.
-            red: true,
-            dtx: true,
-            forceStereo: false,
-          },
-        });
+        const instance = new Room(publisherRoomOptions({ AudioPresets }, preferredMic));
         room = instance;
         roomRef.current = instance;
         // The host cockpit is the only other thing that opens a Room. Claiming

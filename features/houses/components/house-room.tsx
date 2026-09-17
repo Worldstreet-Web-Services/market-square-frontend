@@ -930,7 +930,7 @@ function LiveHouse({
   const wasOnStage = useRef(onStage);
   useEffect(() => {
     if (onStage && !wasOnStage.current) {
-      announce("You're on the stage. Your microphone is open.");
+      announce("You're on the stage. Your microphone is off — tap it to talk.");
     }
     wasOnStage.current = onStage;
   }, [onStage, announce]);

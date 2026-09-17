@@ -31,7 +31,19 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
   // connecting with it evicts the viewer and starts the reconnect loop that
   // killed the page on mobile. The playback token the player already refetches
   // is what carries the publish grant.
-  const publisher = useStage({ streamId: stream.id, approved, previewRef });
+  /*
+    THE GUEST'S OWN ASK, recorded where they make it and consumed once. A
+    stream guest who asks and is approved while watching goes on with mic and
+    camera, as before; one who arrives already approved — a reload, a remount
+    — does not have their devices opened for them (lib/mic-consent.ts).
+  */
+  const asked = useRef(false);
+  const consumeIntent = useCallback(() => {
+    const intent = asked.current;
+    asked.current = false;
+    return intent;
+  }, []);
+  const publisher = useStage({ streamId: stream.id, approved, previewRef, consumeIntent });
 
   /**
    * On stage means PUBLISHING, not "the host said yes".
@@ -67,7 +79,12 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
     if (!requestId) return;
     resolve.mutate(
       { requestId, action: "leave" },
-      { onSuccess: () => request.mutate() }
+      {
+        onSuccess: () => {
+          asked.current = true;
+          request.mutate();
+        },
+      }
     );
   }, [requestId, resolve, request]);
 
@@ -148,7 +165,10 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
               <p className="text-sm font-semibold text-heading">Ask to speak with the host</p>
               <p className="mt-1 text-xs leading-5 text-grey-400">{panel.message}</p>
             </div>
-            <Button className="w-full" loading={request.isPending} onClick={() => request.mutate()}>
+            <Button className="w-full" loading={request.isPending} onClick={() => {
+                asked.current = true;
+                request.mutate();
+              }}>
               Request to join
             </Button>
           </div>
