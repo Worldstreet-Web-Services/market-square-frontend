@@ -762,6 +762,11 @@ export function useResolveSpeakerRequest(streamId: string) {
         queryClient.invalidateQueries({ queryKey: ["ms", "stream", id, "speaker-request", "me"] });
         return;
       }
+      // The stage cap (7 guests + host) also holds on approve now.
+      if (action === "approve" && (error as ApiErrorLike)?.code === "STAGE_FULL") {
+        toast.error("Every seat is taken. Move someone down first.");
+        return;
+      }
       toast.error(errorMessage(error, "Couldn't update the speaker."));
     },
   });

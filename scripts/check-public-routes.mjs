@@ -244,7 +244,7 @@ const PENDING_ROUTES = {
   "post /streams/{}/speakers/{}/mute": {
     reason:
       "The host's soft mute, 'Mute for everyone' (MICROPHONE only, sets " +
-      "hostMuted='soft'). Agreed contract, not deployed; a 404 hides the " +
+      "hostMuted='true'). Agreed contract, not deployed; a 404 hides the " +
       "control. DELETE THIS ENTRY when it deploys.",
   },
 

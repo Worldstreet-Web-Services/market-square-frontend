@@ -40,6 +40,7 @@ import { MARKET_FLAGS } from "@/lib/market-config";
 import {
   INITIAL_INVITE_ANNOUNCER,
   createAnswerLatch,
+  endedInviteNotice,
   inviteView,
   liveInviteRow,
   createInflightAnswers,
@@ -306,6 +307,20 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   // that gave up leaves the last data cached (lib/speaker-invite.ts `liveInviteRow`).
   const invitedRow = liveInviteRow(mine.data, { polling, isHost });
   const inviteId = invitedRow?.id ?? null;
+  /*
+    The invitation this tab was showing, remembered past the moment it closes,
+    so the reader is told WHY it went away — the host cancelled it, or it ran
+    out (lib/speaker-invite.ts `endedInviteNotice`). Once per invitation.
+  */
+  const heldInviteId = useRef<string | null>(null);
+  useEffect(() => {
+    const notice = endedInviteNotice(heldInviteId.current, mine.data);
+    if (notice) {
+      toast(notice);
+      heldInviteId.current = null;
+    }
+    if (inviteId) heldInviteId.current = inviteId;
+  }, [inviteId, mine.data]);
   // `inviteExpiresAt`, never `expiresAt`: on this row that is the join token's.
   const inviteExpiresAt = invitedRow?.inviteExpiresAt ?? null;
   const inviteCreatedAt = invitedRow?.createdAt ?? null;

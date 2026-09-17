@@ -1851,6 +1851,17 @@ describe("The mini-player's Close it cannot drop its teardown", () => {
   });
 });
 
+describe("A host approving a hand on a full stage is told why", () => {
+  it("maps STAGE_FULL on approve to the stage copy, not a generic failure", () => {
+    const hooks = stripComments(read("features/streams/hooks/use-streams.ts"));
+    assert.match(hooks, /if \(action === "approve" && \(error as ApiErrorLike\)\?\.code === "STAGE_FULL"\) \{\s*toast\.error\("Every seat is taken\. Move someone down first\."\);/);
+  });
+  it("tells an invitee why an unanswered invitation went away", () => {
+    const session = stripComments(read("components/layout/room-session.tsx"));
+    assert.match(session, /const notice = endedInviteNotice\(heldInviteId\.current, mine\.data\);/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");

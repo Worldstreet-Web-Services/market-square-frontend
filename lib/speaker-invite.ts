@@ -872,3 +872,23 @@ export function answerLanding(input: {
     hint: input.action === "accept" && input.status === "approved" && input.room === input.currentRoom,
   };
 }
+
+/**
+ * WHY AN INVITATION WENT AWAY, for the person it was addressed to.
+ *
+ * The service closes an invitation the invitee never answered as `withdrawn`
+ * and says which kind in `withdrawnReason`: `cancelled` (the host took it
+ * back) or `expired` (the minute ran out). Reading that rather than comparing
+ * `inviteExpiresAt` with this device's clock keeps a phone whose clock is off
+ * from calling a cancellation an expiry. Only for the invitation this tab was
+ * holding; an answered one (approved, denied) says nothing here.
+ */
+export function endedInviteNotice(
+  previousInviteId: string | null,
+  row: { id: string; status: string; withdrawnReason?: "expired" | "cancelled" | null } | null | undefined
+): string | null {
+  if (!previousInviteId || !row || row.id !== previousInviteId || row.status !== "withdrawn") return null;
+  if (row.withdrawnReason === "cancelled") return "The host cancelled the invite.";
+  if (row.withdrawnReason === "expired") return "The invite expired.";
+  return null;
+}

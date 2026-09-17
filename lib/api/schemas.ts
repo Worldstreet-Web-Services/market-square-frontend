@@ -477,6 +477,8 @@ export const SpeakerRequestSchema = z.object({
     invitation's clock draws a countdown to the wrong moment.
   */
   inviteExpiresAt: z.string().nullable().optional().default(null),
+  /* Why an unanswered invitation closed: the host cancelled it, or it ran out. Null otherwise. */
+  withdrawnReason: z.enum(["expired", "cancelled"]).nullable().optional().default(null).catch(null),
   /* The approved speaker's join-token expiry (see the note above the schema). */
   expiresAt: z.string().nullable().optional().default(null),
   createdAt: z.string().optional().default(""),

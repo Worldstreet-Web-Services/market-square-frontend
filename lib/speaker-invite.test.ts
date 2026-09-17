@@ -729,3 +729,19 @@ describe("an invitation is only drawn off a row that is still being read", () =>
     assert.equal(liveInviteRow(null, { polling: true, isHost: false }), null);
   });
 });
+
+describe("an invitation that ends names why, to the invitee only", async () => {
+  const { endedInviteNotice } = await import("./speaker-invite.ts");
+  const row = (status: string, withdrawnReason: "expired" | "cancelled" | null) => ({ id: "r1", status, withdrawnReason });
+  it("says the host cancelled, or that it expired, from the service's own reason", () => {
+    assert.equal(endedInviteNotice("r1", row("withdrawn", "cancelled")), "The host cancelled the invite.");
+    assert.equal(endedInviteNotice("r1", row("withdrawn", "expired")), "The invite expired.");
+  });
+  it("says nothing for a row it was not holding, an answered one, or no reason", () => {
+    assert.equal(endedInviteNotice(null, row("withdrawn", "cancelled")), null);
+    assert.equal(endedInviteNotice("r2", row("withdrawn", "cancelled")), null);
+    assert.equal(endedInviteNotice("r1", row("approved", null)), null);
+    assert.equal(endedInviteNotice("r1", row("denied", null)), null);
+    assert.equal(endedInviteNotice("r1", row("withdrawn", null)), null);
+  });
+});
