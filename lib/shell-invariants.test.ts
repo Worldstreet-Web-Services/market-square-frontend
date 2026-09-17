@@ -3188,3 +3188,63 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
     assert.match(provider, /setTimeout: \(callback, ms\) => window\.setTimeout\(callback, ms\),/);
   });
 });
+
+describe("the mini-player's reach, contrast and announcements", () => {
+  const code = (path: string) => stripComments(read(path));
+  const player = code("components/layout/room-mini-player.tsx");
+
+  it("reads the connection through miniPlayerChrome, never status === \"live\"", () => {
+    assert.match(player, /miniPlayerChrome\(\{/);
+    assert.doesNotMatch(player, /status === "live"/);
+    assert.doesNotMatch(player, /status === "failed"/);
+  });
+
+  it("keeps a hot mic on screen where the phone bar steps aside", () => {
+    assert.match(player, /hotMicChipVisible\(\{ \.\.\.where, hotMic: chrome\.hotMic \}\)/);
+    assert.match(player, /if \(chip && streamId\) return <HotMicChip/);
+    const chip = block(player, "function HotMicChip(", "\n}\n");
+    assert.match(chip, /<MicButton session=\{session\} \/>/);
+  });
+
+  it("gives every round control a 44px target on touch, and Listen/Retry a 44px height", () => {
+    const button = block(player, "function RoundButton(", "\n}\n");
+    assert.match(button, /grid h-11 w-11 shrink-0 place-items-center[^"]*md:h-9 md:w-9/);
+    assert.match(button, /"grid h-9 w-9 place-items-center rounded-full/);
+    assert.equal((player.match(/size="sm" variant="secondary"[^>]*max-md:h-11/g) ?? []).length, 2);
+  });
+
+  it("sets state copy in grey-400, never text-meta, which fails AA at 11px on the glass", () => {
+    assert.doesNotMatch(player, /text-meta/);
+  });
+
+  it("asks a seated speaker before the red button gives up their seat", () => {
+    assert.match(player, /presence === "speaker"\s*\? setConfirmLeaveStage\(true\)/);
+    assert.match(player, /title="Leave the stage\?"/);
+  });
+
+  it("keeps Listen and Retry reachable in the icon rail, and the return link a real target", () => {
+    assert.match(player, /label="Tap to listen"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
+    assert.match(player, /label="Retry the connection"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
+    assert.match(player, /group-data-\[rail=icon\]\/rail:h-10 group-data-\[rail=icon\]\/rail:w-10/);
+  });
+
+  it("announces through one always-mounted live region, and the link carries the state", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /<p role="status" aria-live="polite" className="sr-only">\s*\{announcement\}/);
+    assert.equal((frame.match(/\{live\}/g) ?? []).length, 3);
+    assert.match(player, /aria-label=\{line \? `Return to \$\{title\}, \$\{line\}` : `Return to \$\{title\}`\}/);
+  });
+
+  it("moves the desktop card off the thread's composer while a chat is open", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /chatOpen \? "right-6" : "left-6"/);
+    assert.match(frame, /\{ top: "calc\(var\(--ws-crumb-h\) \+ 92px\)" \}/);
+  });
+
+  it("puts the phone bar before the dock in the document, and focus somewhere stable on leave", () => {
+    const shell = code("components/layout/app-shell.tsx");
+    assert.ok(shell.indexOf('<RoomMiniPlayer placement="phone" />') < shell.indexOf("<BottomDock"));
+    assert.match(player, /keepFocus\(\);\s*void session\.leave\(\);/);
+    assert.match(player, /keepFocus\(\);\s*session\.dismiss\(\);/);
+  });
+});

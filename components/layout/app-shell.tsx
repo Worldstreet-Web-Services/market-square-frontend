@@ -2289,6 +2289,13 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
             across the thread's foot on desktop. `MessagesPage` reports the
             open thread through `lib/chat-open-store`, and the dock returns
             the moment the thread closes. */}
+        {/* THE MINIMISED ROOM. The shell draws it, never a route: on a phone
+            the bar above the dock, on desktop a card at the bottom-left while
+            the rail is off (guests included). With the rail on it sits at the
+            rail's foot, inside `Sidebar`. The phone bar comes BEFORE the dock
+            in the document because it is drawn above it: keyboard and
+            screen-reader order follow what the eye meets first. */}
+        <RoomMiniPlayer placement="phone" />
         {!chatOpen && (
         <BottomDock
           guest={guest}
@@ -2327,11 +2334,6 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
         />
         )}
 
-        {/* THE MINIMISED ROOM. The shell draws it, never a route: on a phone
-            the bar above the dock, on desktop a card at the bottom-left while
-            the rail is off (guests included). With the rail on it sits at the
-            rail's foot, inside `Sidebar`. */}
-        <RoomMiniPlayer placement="phone" />
         {!railOn && <RoomMiniPlayer placement="card" />}
 
         <ComposeSheet
