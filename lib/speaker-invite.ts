@@ -429,6 +429,26 @@ export interface TrackedInvite {
 }
 
 /**
+ * The service's pause before the same person can be invited again, started on
+ * every refusal and every lapse (wsws-monorepo stream-service
+ * `inviteCooldownActive`).
+ */
+export const INVITE_COOLDOWN_MS = 180_000;
+
+/**
+ * Until when the host's control stays disabled after an invitation ended
+ * without a seat.
+ *
+ * Counted from the invitation's DEADLINE for both endings: the host is told
+ * the two the same way, and a cooldown that ran out sooner after a refusal
+ * would tell them which it was. It can only run long, never offer a tap the
+ * service refuses. A longer "not yet" the service already named is kept.
+ */
+export function endedInviteCooldownUntil(invite: Pick<TrackedInvite, "deadline">, current: number | null | undefined): number {
+  return Math.max(current ?? 0, invite.deadline + INVITE_COOLDOWN_MS);
+}
+
+/**
  * How long past an invitation's end the host waits before being told. The
  * invited list, the approved list and the LiveKit grant all arrive
  * separately; an accept seen in one before the other must not read as a

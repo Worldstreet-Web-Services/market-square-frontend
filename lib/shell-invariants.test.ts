@@ -4024,9 +4024,15 @@ describe("invite to speak and the soft mute, after review", () => {
   it("an invitation sent is tracked from the invite's own answer, and bans and cooldowns outlive the room page", () => {
     const invite = hooks.slice(hooks.indexOf("export function useInviteToSpeak"), hooks.indexOf("export function useAnswerInvite"));
     assert.match(invite, /held\.tracked = trackInvite\(/);
-    assert.match(invite, /inviteMemoryFor\(streamId\)\.refused\.add\(userId\);/);
+    assert.match(invite, /rememberBan\(inviteMemoryFor\(streamId\), userId\);/);
     assert.match(invite, /inviteMemoryFor\(streamId\)\.cooldowns\.set\(userId, until\);/);
-    assert.match(tools, /for \(const gone of step\.unavailable\) memory\.ended\.add\(gone\.id\);/);
+    // Read live from the shared memory, never a copy taken at mount.
+    assert.match(invite, /const refused: ReadonlySet<string> = memory\.refused;\s*const cooldowns: ReadonlyMap<string, number> = memory\.cooldowns;/);
+    assert.doesNotMatch(invite, /new Set\(memory\.refused\)|new Map\(memory\.cooldowns\)/);
+    // A chat ban hides the control before any tap; an ended invitation starts the cooldown the service started.
+    const ban = hooks.slice(hooks.indexOf("export function useBanFromChat"), hooks.indexOf("const SPEAKER_POLL_MS"));
+    assert.match(ban, /onSuccess: \(_result, userId\) => \{[\s\S]*?rememberBan\(inviteMemoryFor\(streamId\), userId\);/);
+    assert.match(tools, /for \(const gone of step\.unavailable\) \{\s*memory\.ended\.add\(gone\.id\);[\s\S]*?rememberEndedInvite\(memory, gone\);\s*\}/);
     assert.doesNotMatch(tools, /const inviteMemory = new Map/);
   });
 

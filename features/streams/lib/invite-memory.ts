@@ -1,5 +1,8 @@
 import type { SpeakerRequest } from "@/features/streams/lib/types";
 import type { TrackedInvite } from "@/lib/speaker-invite";
+// Relative, with the extension: lib/invite-memory.test.ts runs this under node.
+import { endedInviteCooldownUntil } from "../../../lib/speaker-invite.ts";
+import { baseIdentity } from "./stage.ts";
 
 /*
   THE HOST'S INVITATIONS OUTLIVE THE ROOM PAGE.
@@ -24,7 +27,7 @@ export interface InviteMemory {
   cancelled: Set<string>;
   /** Already told "isn't available": a late read still listing one does not start it again. */
   ended: Set<string>;
-  /** Banned from this room by the host (SPEAKER_BANNED), by bare user id. */
+  /** Banned from this room by the host (a chat ban, or SPEAKER_BANNED), by bare user id. */
   refused: Set<string>;
   /** Bare user id → epoch ms the service said "not yet" until. */
   cooldowns: Map<string, number>;
@@ -39,4 +42,22 @@ export function inviteMemoryFor(streamId: string): InviteMemory {
     memories.set(streamId, memory);
   }
   return memory;
+}
+
+/**
+ * The host banned this person (`POST /streams/:id/bans`). The service refuses
+ * to invite anyone on that list, and the product hides the control for them
+ * up front rather than refusing it after a tap.
+ */
+export function rememberBan(memory: InviteMemory, userId: string) {
+  memory.refused.add(baseIdentity(userId));
+}
+
+/**
+ * An invitation ended without a seat (the host was told "isn't available").
+ * The service has started its cooldown for that person, so the control is
+ * disabled with a countdown now, not after a tap answers 429.
+ */
+export function rememberEndedInvite(memory: InviteMemory, invite: TrackedInvite) {
+  memory.cooldowns.set(invite.userId, endedInviteCooldownUntil(invite, memory.cooldowns.get(invite.userId)));
 }

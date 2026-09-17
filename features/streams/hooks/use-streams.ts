@@ -28,7 +28,7 @@ import {
   trackInvite,
   type ApiErrorLike,
 } from "@/lib/speaker-invite";
-import { inviteMemoryFor } from "@/features/streams/lib/invite-memory";
+import { inviteMemoryFor, rememberBan } from "@/features/streams/lib/invite-memory";
 import { serverClockOffset } from "@/lib/server-clock";
 import { muteFailure } from "@/lib/host-mute";
 import {
@@ -633,7 +633,10 @@ export function useBanFromChat(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (userId: string) => banFromChat(streamId, userId),
-    onSuccess: () => {
+    onSuccess: (_result, userId) => {
+      // The service refuses to invite anyone it banned: the host's Invite to
+      // speak is hidden for them from now on, not refused after a tap.
+      rememberBan(inviteMemoryFor(streamId), userId);
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "chat"] });
       toast.success("Banned from chat");
     },
@@ -832,8 +835,11 @@ export function useInviteToSpeak(streamId: string) {
   const queryClient = useQueryClient();
   const memory = inviteMemoryFor(streamId);
   const [unavailable, setUnavailable] = useState(invitesMissing);
-  const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set(memory.refused));
-  const [cooldowns, setCooldowns] = useState<ReadonlyMap<string, number>>(() => new Map(memory.cooldowns));
+  // Who is refused and who is cooling down are read from the shared memory
+  // itself, not a copy taken at mount: a chat ban (useBanFromChat) and an
+  // invitation that ended (use-host-stage-tools) write there too. A new
+  // answer here only has to draw again.
+  const [, redraw] = useState(0);
 
   const mutation = useMutation({
     mutationFn: ({ userId }: { userId: string; name: string }) => inviteToSpeak(streamId, userId),
@@ -864,15 +870,15 @@ export function useInviteToSpeak(streamId: string) {
         return;
       }
       if (outcome.kind === "refused") {
-        inviteMemoryFor(streamId).refused.add(userId);
-        setRefused((current) => new Set(current).add(userId));
+        rememberBan(inviteMemoryFor(streamId), userId);
+        redraw((count) => count + 1);
         toast(outcome.message);
         return;
       }
       if (outcome.kind === "cooldown") {
         const until = Date.now() + outcome.retryAfterSeconds * 1000;
         inviteMemoryFor(streamId).cooldowns.set(userId, until);
-        setCooldowns((current) => new Map(current).set(userId, until));
+        redraw((count) => count + 1);
         toast(outcome.message);
         return;
       }
@@ -880,6 +886,8 @@ export function useInviteToSpeak(streamId: string) {
     },
   });
 
+  const refused: ReadonlySet<string> = memory.refused;
+  const cooldowns: ReadonlyMap<string, number> = memory.cooldowns;
   return { ...mutation, unavailable: unavailable || invitesMissing, refused, cooldowns };
 }
 

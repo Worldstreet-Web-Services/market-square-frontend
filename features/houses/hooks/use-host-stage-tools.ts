@@ -14,7 +14,7 @@ import type { SpeakerRequest, Stream } from "@/features/streams/lib/types";
 import type { PersonHostActions, PersonTarget } from "@/features/houses/components/person-sheet";
 import type { InvitedList } from "@/features/houses/components/invited-group";
 import { SEAT_COUNT } from "@/features/houses/lib/seating";
-import { inviteMemoryFor } from "@/features/streams/lib/invite-memory";
+import { inviteMemoryFor, rememberEndedInvite } from "@/features/streams/lib/invite-memory";
 import { serverClockOffset } from "@/lib/server-clock";
 import {
   cancelFailedForReal,
@@ -104,7 +104,11 @@ export function useHostStageTools({
       now,
     });
     memory.tracked = step.tracked;
-    for (const gone of step.unavailable) memory.ended.add(gone.id);
+    for (const gone of step.unavailable) {
+      memory.ended.add(gone.id);
+      // The service's cooldown started when it ended: the control says so now.
+      rememberEndedInvite(memory, gone);
+    }
     const keep = new Set(step.tracked.map((item) => item.id));
     for (const id of memory.rows.keys()) if (!keep.has(id)) memory.rows.delete(id);
     const shown = visibleInvites(step.tracked, now);
