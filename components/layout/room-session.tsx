@@ -449,8 +449,11 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     `user:<did>` on the ws-gateway says "your row, or your mic, just changed".
     It is a REFETCH SIGNAL (lib/ws-gateway.ts `speakerSignalOf` keeps only the
     stream id): the 8 s poll stays the floor, and a frame about another room,
-    a forged one or a malformed one does nothing a read would not. Off unless
-    the gateway is configured, and a refused socket is invisible.
+    a forged one or a malformed one does nothing a read would not. The
+    gateway hands a personal topic only to a socket authenticated as its
+    owner, so the shared socket carries the reader's Privy token
+    (lib/ws-gateway-shared.ts). Off unless the gateway is configured, and a
+    refused socket is invisible.
   */
   const queryClient = useQueryClient();
   const myTopic = userTopic(meId);

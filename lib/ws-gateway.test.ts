@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import {
   BACKOFF_CAP_MS,
   FEED_HEAD_CHANGED,
@@ -8,8 +8,10 @@ import {
   laneOfFrame,
   laneTopic,
   parseFrame,
+  personalTopicOwner,
   speakerSignalOf,
   userTopic,
+  withToken,
   type SocketLike,
 } from "./ws-gateway.ts";
 
@@ -150,7 +152,7 @@ test("one socket, subscribe on open, refcounted unsubscribe, close when empty", 
   assert.equal(gateway.socketsOpened, 1);
 });
 
-test("only subscribe, unsubscribe and ping are ever sent", () => {
+test("only subscribe, unsubscribe and ping are ever sent by an anonymous client", () => {
   const sockets: Fake[] = [];
   const gateway = createGateway("wss://gw.example/", () => {
     const sock = fakeSocket();
@@ -164,4 +166,129 @@ test("only subscribe, unsubscribe and ping are ever sent", () => {
   off();
   const types = sock.sent.map((raw) => (JSON.parse(raw) as { type: string }).type);
   assert.ok(types.every((type) => ["subscribe", "unsubscribe", "ping"].includes(type)), types.join(","));
+});
+
+/* ─── AUTHENTICATION: the speaker signals ride user:<did> ─────────────────── */
+
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+const sentFrames = (sock: Fake) => sock.sent.map((raw) => JSON.parse(raw) as Record<string, unknown>);
+const ME = "did:privy:abc";
+
+function authedGateway(token: () => Promise<string | null>) {
+  const sockets: Fake[] = [];
+  const urls: string[] = [];
+  const gateway = createGateway(
+    "wss://gw.example/",
+    (address) => {
+      urls.push(address);
+      const sock = fakeSocket();
+      sockets.push(sock);
+      return sock;
+    },
+    { getToken: token }
+  );
+  // Every subscription is released after the test, so no ping timer outlives it.
+  const offs: (() => void)[] = [];
+  const tracked = {
+    get socketsOpened() {
+      return gateway.socketsOpened;
+    },
+    subscribe: (topic: string, listener: Parameters<typeof gateway.subscribe>[1]) => {
+      const off = gateway.subscribe(topic, listener);
+      offs.push(off);
+      return off;
+    },
+  };
+  after(() => offs.forEach((off) => off()));
+  return { gateway: tracked, sockets, urls };
+}
+
+test("a personal topic is user:<did> whole; a public one has no owner", () => {
+  assert.equal(personalTopicOwner(`user:${ME}`), ME);
+  assert.equal(personalTopicOwner("user:"), null);
+  assert.equal(personalTopicOwner("market-square:feed:live"), null);
+  assert.equal(withToken("wss://gw.example/", null), "wss://gw.example/");
+  assert.equal(withToken("wss://gw.example/", "a b&c"), "wss://gw.example/?token=a+b%26c");
+});
+
+test("the upgrade carries the reader's token, so user:<did> is heard (the gateway refuses it anonymously)", async () => {
+  const { gateway, sockets, urls } = authedGateway(async () => "tok-1");
+  const heard: string[] = [];
+  gateway.subscribe(`user:${ME}`, (frame) => heard.push(frame.type));
+  assert.equal(sockets.length, 0, "no socket before the token is in hand");
+  await flush();
+  assert.deepEqual(urls, ["wss://gw.example/?token=tok-1"]);
+  const sock = sockets[0]!;
+  sock.state = 1;
+  fire(sock, "onopen");
+  assert.deepEqual(sentFrames(sock)[0], { type: "subscribe", topics: [`user:${ME}`] });
+  fire(sock, "onmessage", JSON.stringify({ type: "welcome", data: { ok: true, authenticated: true, userId: ME } }));
+  await flush();
+  assert.ok(!sentFrames(sock).some((frame) => frame.type === "authenticate"), "already the right account");
+  fire(sock, "onmessage", '{"type":"speakerMuted","data":{"streamId":"s1"}}');
+  assert.deepEqual(heard, ["speakerMuted"], "identity frames are the client's own; signals reach the listener");
+});
+
+test("a socket opened signed out authenticates when a personal topic arrives, then subscribes it again", async () => {
+  let token: string | null = null;
+  const { gateway, sockets, urls } = authedGateway(async () => token);
+  gateway.subscribe("market-square:feed:for-you", () => {});
+  await flush();
+  assert.deepEqual(urls, ["wss://gw.example/"], "no token, no query string");
+  const sock = sockets[0]!;
+  sock.state = 1;
+  fire(sock, "onopen");
+  fire(sock, "onmessage", JSON.stringify({ type: "welcome", data: { ok: true, authenticated: false, userId: null } }));
+  await flush();
+  assert.ok(!sentFrames(sock).some((frame) => frame.type === "authenticate"), "nothing personal: stays anonymous");
+
+  token = "tok-2";
+  gateway.subscribe(`user:${ME}`, () => {});
+  await flush();
+  const frames = sentFrames(sock);
+  assert.deepEqual(frames.at(-1), { type: "authenticate", token: "tok-2" });
+  assert.equal(sockets.length, 1, "the same socket, re-authenticated");
+
+  fire(sock, "onmessage", JSON.stringify({ type: "authenticated", data: { ok: true, userId: ME, revoked: [] } }));
+  assert.deepEqual(sentFrames(sock).at(-1), { type: "subscribe", topics: [`user:${ME}`] });
+});
+
+test("a welcome that is anonymous while a personal topic waits asks once, and a refusal is final until reconnect", async () => {
+  const calls: number[] = [];
+  const { gateway, sockets } = authedGateway(async () => {
+    calls.push(1);
+    return "stale";
+  });
+  gateway.subscribe(`user:${ME}`, () => {});
+  await flush();
+  const sock = sockets[0]!;
+  sock.state = 1;
+  fire(sock, "onopen");
+  fire(sock, "onmessage", JSON.stringify({ type: "welcome", data: { ok: true, authenticated: false, userId: null } }));
+  await flush();
+  assert.deepEqual(sentFrames(sock).at(-1), { type: "authenticate", token: "stale" });
+  fire(sock, "onmessage", JSON.stringify({ type: "authenticated", data: { ok: false, userId: null, revoked: [] } }));
+  await flush();
+  assert.equal(sentFrames(sock).filter((frame) => frame.type === "authenticate").length, 1, "no loop on a bad token");
+  assert.equal(calls.length, 2, "one token for the upgrade, one for the re-auth");
+});
+
+test("a signed-out reader's token source answering null never sends authenticate", async () => {
+  const { gateway, sockets } = authedGateway(async () => null);
+  gateway.subscribe(`user:${ME}`, () => {});
+  await flush();
+  const sock = sockets[0]!;
+  sock.state = 1;
+  fire(sock, "onopen");
+  fire(sock, "onmessage", JSON.stringify({ type: "welcome", data: { ok: true, authenticated: false, userId: null } }));
+  await flush();
+  assert.ok(!sentFrames(sock).some((frame) => frame.type === "authenticate"));
+});
+
+test("unsubscribing while the token is still out opens nothing", async () => {
+  const { gateway, sockets } = authedGateway(async () => "tok");
+  const off = gateway.subscribe(`user:${ME}`, () => {});
+  off();
+  await flush();
+  assert.equal(sockets.length, 0);
 });

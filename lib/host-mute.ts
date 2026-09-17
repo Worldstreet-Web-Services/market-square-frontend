@@ -19,7 +19,16 @@
  * BACKEND DEPENDENCY: the service should clear `hostMuted` when the speaker
  * unmutes (track_unmuted) and on demotion, and write a new value per mute
  * (`soft:<ts>`), so a second mute is news without the push. The client reads
- * both shapes today and does not need either to be correct.
+ * both shapes today.
+ *
+ * WHAT IS NOT SUPPORTED UNTIL THEN: with the attribute a constant `soft`, a
+ * SECOND mute (the speaker unmuted themselves, the host muted them again) is
+ * only announced through the `speakerMuted` push on `user:<did>`. That push
+ * needs the ws-gateway configured (`NEXT_PUBLIC_MS_WS_GATEWAY_URL`) and the
+ * shared socket authenticated with the reader's token
+ * (lib/ws-gateway-shared.ts). Without the gateway, or while the socket is
+ * down, the second mute still mutes and the badge still shows, but the
+ * speaker gets no toast until the service writes `soft:<ts>`.
  *
  * Pure, so `lib/host-mute.test.ts` pins it.
  */

@@ -3849,6 +3849,14 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(resolve, /if \(quietResolveError\(error as ApiErrorLike, action\)\) \{/);
   });
 
+  it("the page's one socket carries the reader's token, or user:<did> is refused and no speaker signal arrives", () => {
+    const shared = code("lib/ws-gateway-shared.ts");
+    assert.match(shared, /import \{ getAccessToken \} from "@privy-io\/react-auth";/);
+    assert.match(shared, /createGateway\([\s\S]*\{\s*getToken: \(\) => getAccessToken\(\),\s*\}\)/);
+    const session = code("components/layout/room-session.tsx");
+    assert.match(session, /sharedGateway\(\)\.subscribe\(myTopic,/);
+  });
+
   it("the listener's own tool says it is theirs alone", () => {
     assert.match(sheet, /"Mute for me only"/);
     assert.match(code("features/profile/components/person-safety-rows.tsx"), /"Mute for me only"/);

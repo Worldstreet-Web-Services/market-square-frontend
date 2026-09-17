@@ -3,10 +3,12 @@
  * the feed's 30-second head check, which stays as the floor.
  *
  * One socket per page at `wss://<gateway>/`, every topic multiplexed over
- * it. Frames OUT are exactly three: `subscribe`, `unsubscribe`, `ping`.
- * Frames IN are `{ type, data, timestamp }`, and the only thing this client
- * ever reads out of one is `data.lane` on a `feedHeadChanged` event — the
- * payload is a public broadcast and is trusted for nothing else.
+ * it. Frames OUT are exactly four: `subscribe`, `unsubscribe`, `ping`, and
+ * `authenticate` (a fresh token, only when a personal topic needs one).
+ * Frames IN are `{ type, data, timestamp }`. The client reads `welcome` and
+ * `authenticated` for who the gateway decided the socket is, `data.lane` on
+ * a `feedHeadChanged` event, and `data.streamId` on the speaker signals —
+ * every payload is a signal to refetch and is trusted for nothing else.
  *
  * ─── OFF UNLESS CONFIGURED ──────────────────────────────────────────────────
  * `MARKET_FLAGS.wsGatewayUrl` (from `NEXT_PUBLIC_MS_WS_GATEWAY_URL`) absent
@@ -18,7 +20,7 @@
  * `laneTopic`, `parseFrame`, `laneOfFrame` and `backoffDelay` have no I/O in
  * them and are pinned by `lib/ws-gateway.test.ts`, together with the guard
  * that an unconfigured client constructs nothing. `createGateway` takes the
- * socket constructor so the test can hand it a fake.
+ * socket constructor and the token source so the test can hand it fakes.
  */
 
 /**
@@ -131,7 +133,35 @@ export type SocketLike = Pick<
 >;
 export type SocketFactory = (url: string) => SocketLike;
 
+/**
+ * The reader's access token, or null when signed out. The gateway verifies it
+ * with the same Privy call every REST service makes; without one a socket is
+ * anonymous and is refused every `user:<id>` topic.
+ */
+export type TokenSource = () => Promise<string | null>;
+
+export interface GatewayOptions {
+  /** Absent: an anonymous client, public topics only. */
+  getToken?: TokenSource;
+}
+
 const OPEN = 1;
+const PERSONAL_PREFIX = "user:";
+
+/** The account a personal topic belongs to, or null for a public topic. */
+export function personalTopicOwner(topic: string): string | null {
+  if (!topic.startsWith(PERSONAL_PREFIX)) return null;
+  const owner = topic.slice(PERSONAL_PREFIX.length);
+  return owner.length > 0 ? owner : null;
+}
+
+/** The upgrade address with the token on it: a browser cannot set headers on a WebSocket. */
+export function withToken(url: string, token: string | null): string {
+  if (!token) return url;
+  const address = new URL(url);
+  address.searchParams.set("token", token);
+  return address.toString();
+}
 
 export interface Gateway {
   /** Subscribe a listener to a topic. Returns the unsubscribe. */
@@ -144,15 +174,37 @@ export interface Gateway {
  * Build a client. An empty `url` builds one that never opens a socket and
  * whose `subscribe` is a no-op that still returns a working unsubscribe —
  * so callers need no branch of their own.
+ *
+ * ─── AUTHENTICATION (ADR-0009) ──────────────────────────────────────────────
+ * With `getToken`, every connect asks for a fresh token first and puts it on
+ * the upgrade (`?token=`). The gateway awaits that verification before it
+ * answers any subscribe, so the topics sent on open are judged as the reader.
+ * The gateway says who it decided we are (`welcome`, then `authenticated`
+ * after a re-auth). A personal topic this socket is NOT authenticated for —
+ * the page opened the socket signed out for the feed, and the reader signed
+ * in later; or Privy had no token yet at connect — sends one
+ * `{ type: "authenticate", token }` and, once the gateway answers as that
+ * account, subscribes the personal topics again (the first attempt was
+ * refused, and the gateway does not remember a refusal). A token that still
+ * does not verify leaves the socket anonymous: nothing is retried until the
+ * next connect, and the poll stays the floor.
  */
-export function createGateway(url: string, makeSocket: SocketFactory): Gateway {
+export function createGateway(url: string, makeSocket: SocketFactory, options: GatewayOptions = {}): Gateway {
+  const { getToken } = options;
   const listeners = new Map<string, Set<(frame: GatewayFrame) => void>>();
   let socket: SocketLike | null = null;
+  let connecting = false;
+  /** Bumped by every deliberate disconnect, so a token that arrives after one opens nothing. */
+  let generation = 0;
   let opened = 0;
   let attempt = 0;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let closedOnPurpose = false;
+  /** Who the gateway last said this socket is; null before `welcome` and when anonymous. */
+  let authedAs: string | null = null;
+  let welcomed = false;
+  let reauthing = false;
 
   const send = (frame: Record<string, unknown>) => {
     if (socket && socket.readyState === OPEN) socket.send(JSON.stringify(frame));
@@ -165,12 +217,54 @@ export function createGateway(url: string, makeSocket: SocketFactory): Gateway {
     reconnectTimer = null;
   };
 
-  const connect = () => {
-    if (!url || socket) return;
-    closedOnPurpose = false;
+  /** Personal topics held that this socket's identity cannot hear. */
+  const unheardPersonal = () =>
+    [...listeners.keys()].filter((topic) => {
+      const owner = personalTopicOwner(topic);
+      return owner !== null && owner !== authedAs;
+    });
+
+  const reauthenticate = () => {
+    if (!getToken || reauthing || !socket) return;
+    const current = socket;
+    reauthing = true;
+    void getToken()
+      .catch(() => null)
+      .then((token) => {
+        if (socket !== current) {
+          reauthing = false;
+          return;
+        }
+        if (!token) {
+          // Signed out, or Privy has none to give: stay anonymous, quietly.
+          reauthing = false;
+          return;
+        }
+        send({ type: "authenticate", token });
+      });
+  };
+
+  const onIdentity = (userId: string | null, afterReauth: boolean) => {
+    authedAs = userId;
+    welcomed = true;
+    if (afterReauth) reauthing = false;
+    if (userId) {
+      const mine = [...listeners.keys()].filter((topic) => personalTopicOwner(topic) === userId);
+      // After a re-auth the earlier subscribe was refused: ask again.
+      if (afterReauth && mine.length > 0) send({ type: "subscribe", topics: mine });
+    }
+    // Only a welcome prompts a re-auth. An `authenticated` that still is not
+    // the right account is the gateway's final word until the next connect.
+    if (!afterReauth && unheardPersonal().length > 0) reauthenticate();
+  };
+
+  const open = (address: string) => {
     opened += 1;
-    const next = makeSocket(url);
+    const next = makeSocket(address);
     socket = next;
+    authedAs = null;
+    welcomed = false;
+    reauthing = false;
     next.onopen = () => {
       attempt = 0;
       // Everything subscribed before or during the outage, again.
@@ -182,6 +276,12 @@ export function createGateway(url: string, makeSocket: SocketFactory): Gateway {
     next.onmessage = (event) => {
       const frame = parseFrame(event.data);
       if (!frame || frame.type === "pong") return;
+      if (frame.type === "welcome" || frame.type === "authenticated") {
+        const ok = frame.type === "welcome" ? frame.data.authenticated === true : frame.data.ok === true;
+        const userId = typeof frame.data.userId === "string" && frame.data.userId ? frame.data.userId : null;
+        onIdentity(ok ? userId : null, frame.type === "authenticated");
+        return;
+      }
       // Frames carry no topic, so every listener hears every frame and
       // decides from the TYPE and its own lane — never from the topic.
       for (const set of listeners.values()) for (const listener of set) listener(frame);
@@ -193,6 +293,9 @@ export function createGateway(url: string, makeSocket: SocketFactory): Gateway {
     next.onclose = () => {
       if (socket !== next) return;
       socket = null;
+      authedAs = null;
+      welcomed = false;
+      reauthing = false;
       if (pingTimer) clearInterval(pingTimer);
       pingTimer = null;
       if (closedOnPurpose || listeners.size === 0) return;
@@ -205,11 +308,34 @@ export function createGateway(url: string, makeSocket: SocketFactory): Gateway {
     };
   };
 
+  const connect = () => {
+    if (!url || socket || connecting) return;
+    closedOnPurpose = false;
+    if (!getToken) {
+      open(url);
+      return;
+    }
+    connecting = true;
+    const mine = generation;
+    void getToken()
+      .catch(() => null)
+      .then((token) => {
+        connecting = false;
+        if (mine !== generation || socket || listeners.size === 0) return;
+        open(withToken(url, token));
+      });
+  };
+
   const disconnect = () => {
     closedOnPurpose = true;
+    generation += 1;
+    connecting = false;
     stopTimers();
     const current = socket;
     socket = null;
+    authedAs = null;
+    welcomed = false;
+    reauthing = false;
     current?.close();
   };
 
@@ -227,6 +353,10 @@ export function createGateway(url: string, makeSocket: SocketFactory): Gateway {
       }
       set.add(listener);
       if (fresh) send({ type: "subscribe", topics: [topic] });
+      // A personal topic on a socket already welcomed as somebody else, or
+      // as nobody: it needs the reader's token before it can be heard.
+      const owner = personalTopicOwner(topic);
+      if (fresh && owner !== null && welcomed && owner !== authedAs) reauthenticate();
       connect();
       return () => {
         const current = listeners.get(topic);

@@ -1,3 +1,4 @@
+import { getAccessToken } from "@privy-io/react-auth";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { createGateway, type Gateway } from "@/lib/ws-gateway";
 
@@ -9,13 +10,23 @@ import { createGateway, type Gateway } from "@/lib/ws-gateway";
  * topics multiplexed, never one per feature. Built lazily on first use; with
  * no gateway configured (or no WebSocket, on the server) it is the client that
  * never opens anything.
+ *
+ * AUTHENTICATED WHEN THE READER IS SIGNED IN. The speaker signals ride
+ * `user:<did>`, which ws-gateway refuses on an anonymous socket
+ * ("authentication required for personal topics"). So the client is handed
+ * Privy's access token: it goes on the upgrade, and on a socket that was
+ * opened before sign-in it is sent as `authenticate` (lib/ws-gateway.ts).
+ * Signed out, `getAccessToken` answers null and the socket stays anonymous,
+ * which every public topic is happy with.
  */
 let gateway: Gateway | null = null;
 
 export function sharedGateway(): Gateway {
   if (!gateway) {
     const url = MARKET_FLAGS.wsGatewayUrl;
-    gateway = createGateway(typeof WebSocket === "undefined" ? "" : url, (address) => new WebSocket(address));
+    gateway = createGateway(typeof WebSocket === "undefined" ? "" : url, (address) => new WebSocket(address), {
+      getToken: () => getAccessToken(),
+    });
   }
   return gateway;
 }
