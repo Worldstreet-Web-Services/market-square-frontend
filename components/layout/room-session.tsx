@@ -52,7 +52,7 @@ import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-sto
  *   · the remote audio sinks, in a hidden div;
  *   · the stream poll (10 s, to notice the room ending off-route) and the
  *     speaker-request poll (8 s);
- *   · media-session metadata and hang-up, autoplay recovery ("Tap to listen"),
+ *   · media-session metadata and hang-up, autoplay recovery ("Listen"),
  *     and tab close.
  *
  * The room VIEW (features/houses/components/house-room.tsx) and the

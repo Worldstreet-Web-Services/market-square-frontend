@@ -3313,7 +3313,7 @@ describe("the mini-player's reach, contrast and announcements", () => {
   });
 
   it("keeps Listen and Retry reachable in the icon rail, and the return link a real target", () => {
-    assert.match(player, /label="Tap to listen"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
+    assert.match(player, /label="Listen"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
     assert.match(player, /label="Retry the connection"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
     assert.match(
       player,
@@ -3732,5 +3732,18 @@ describe("the surfaces every page shows name a private room neutrally", () => {
     }
     const provider = code("components/layout/room-session.tsx");
     assert.match(provider, /sharedSurfaceTitle\(stream\.data, houseTopic\(stream\.data\)\)/);
+  });
+});
+
+describe("no touch-only words on surfaces a mouse uses", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the mini-player, its chip and the room page say Listen and Rejoin, not Tap to", () => {
+    for (const path of ["components/layout/room-mini-player.tsx", "features/houses/components/house-room.tsx", "lib/room-session/visibility.ts"]) {
+      assert.doesNotMatch(code(path), /Tap to (listen|rejoin)/, path);
+    }
+    const player = code("components/layout/room-mini-player.tsx");
+    assert.match(player, /aria-label=\{roomChipLabel\(\{ title, text, finished: chrome\.finished \}\)\}/);
+    assert.match(player, /const label = rejoinLabel\(offer\.title\);/);
   });
 });

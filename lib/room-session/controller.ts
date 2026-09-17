@@ -330,7 +330,7 @@ export class RoomSessionController<R> {
    * cache would otherwise come back reading "live" over no connection, and
    * `enter(sameId)` is a no-op out of a held state, so nothing could rejoin.
    * The rejoin record is the provider's and survives, so the restored page
-   * offers "Tap to rejoin" instead.
+   * offers "Rejoin" instead.
    */
   pageHide() {
     const target = this.state.target;

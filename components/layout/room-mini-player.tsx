@@ -17,7 +17,7 @@ import { micControl } from "@/lib/mic-consent";
 import { setMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
 import { useRoomSession, type RoomSessionView } from "@/lib/room-session-store";
 import { sharedSurfaceTitle } from "@/lib/room-session/media-session";
-import { miniPlayerChrome, miniPlayerVisible, roomChipVisible } from "@/lib/room-session/visibility";
+import { miniPlayerChrome, miniPlayerVisible, rejoinLabel, roomChipLabel, roomChipVisible } from "@/lib/room-session/visibility";
 import { sq, stripSquare } from "@/lib/square-path";
 
 /**
@@ -43,7 +43,7 @@ import { sq, stripSquare } from "@/lib/square-path";
  *   · `rail` — the rail's foot when the rail is on.
  *
  * States: Connecting, Reconnecting, Room ended (cleared after 5 s by the
- * provider), Playing in another tab, Tap to listen.
+ * provider), Playing in another tab, Audio paused.
  * What is drawn reads the CONNECTION (lib/room-session/visibility.ts
  * `miniPlayerChrome`), never the open "join another room?" question — which
  * used to hide the mic, the live badge and Retry for as long as it stood.
@@ -62,7 +62,7 @@ import { sq, stripSquare } from "@/lib/square-path";
  * announces the state and the mic.
  *
  * After a reload there is no session (nobody's call resumes without them), so
- * the same placement offers "Tap to rejoin <room>" instead.
+ * the same placement offers "Rejoin <room>" instead.
  */
 type Placement = "phone" | "card" | "rail";
 
@@ -110,7 +110,7 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
   }, [onPhone, up]);
 
   if (offering && offer) {
-    const label = `Tap to rejoin ${offer.title || "your gist room"}`;
+    const label = rejoinLabel(offer.title);
     return (
       <Frame placement={placement} chatOpen={chatOpen} announcement={label}>
         <Link
@@ -127,7 +127,7 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
           <span className="h-2 w-2 shrink-0 rounded-full bg-grey-400" aria-hidden />
           <span className="min-w-0 flex-1 group-data-[rail=icon]/rail:hidden">
             <span className="block text-[11px] font-semibold uppercase leading-4 tracking-[0.04em] text-grey-400">
-              Tap to rejoin
+              Rejoin
             </span>
             <span className="block truncate text-[13px] font-bold leading-5 text-heading">
               {offer.title || "Your gist room"}
@@ -256,12 +256,12 @@ function PlayerBody({
       </Link>
 
       <Controls>
-        {/* "Tap to listen": the browser refused to autoplay, and this tap is the
+        {/* Listen: the browser refused to autoplay, and this press is the
             gesture it wants. A glyph on a phone and in the icon rail, where a
             text button squeezed the title to nothing. */}
         {chrome.listen &&
           (placement === "phone" ? (
-            <RoundButton label="Tap to listen" onClick={session.startAudio}>
+            <RoundButton label="Listen" onClick={session.startAudio}>
               <IconVolume className="h-4 w-4" />
             </RoundButton>
           ) : (
@@ -270,7 +270,7 @@ function PlayerBody({
                 Listen
               </Button>
               {placement === "rail" && (
-                <RoundButton label="Tap to listen" onClick={session.startAudio} className="hidden group-data-[rail=icon]/rail:grid">
+                <RoundButton label="Listen" onClick={session.startAudio} className="hidden group-data-[rail=icon]/rail:grid">
                   <IconVolume className="h-4 w-4" />
                 </RoundButton>
               )}
@@ -365,7 +365,7 @@ function RoomChip({
       </p>
       <Link
         href={sq(`/gist-rooms/${streamId}`)}
-        aria-label={`${text} in ${title}. Return to the room`}
+        aria-label={roomChipLabel({ title, text, finished: chrome.finished })}
         className="ws-press flex h-11 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold leading-none text-heading"
       >
         <span
@@ -378,7 +378,7 @@ function RoomChip({
         <span className="truncate">{text}</span>
       </Link>
       {chrome.listen && (
-        <RoundButton label="Tap to listen" onClick={session.startAudio}>
+        <RoundButton label="Listen" onClick={session.startAudio}>
           <IconVolume className="h-4 w-4" />
         </RoundButton>
       )}

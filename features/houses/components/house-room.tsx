@@ -1525,7 +1525,7 @@ function LiveHouse({
         <div className="ws-inset mx-4 mb-4 flex items-center gap-3 px-4 py-3">
           <p className="min-w-0 flex-1 text-[13px] leading-5 text-body">Your browser paused the room&apos;s sound.</p>
           <Button size="sm" className="shrink-0 pointer-coarse:h-11" onClick={session.startAudio}>
-            Tap to listen
+            Listen
           </Button>
         </div>
       )}

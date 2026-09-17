@@ -128,7 +128,7 @@ export function miniPlayerChrome({ state, presence, micOn, canPlayAudio }: MiniP
                 : asking
                 ? "Still playing"
                 : !canPlayAudio
-                  ? "Tap to listen"
+                  ? "Audio paused"
                   : null;
   const mic = publishing ? (micOn ? "Your mic is live" : "Mic off") : null;
   return {
@@ -142,6 +142,22 @@ export function miniPlayerChrome({ state, presence, micOn, canPlayAudio }: MiniP
     listen: connection === "live" && !canPlayAudio,
     announcement: [line, mic].filter(Boolean).join(". ") || (connection === "live" ? "Live" : ""),
   };
+}
+
+/**
+ * WORDS THAT WORK WITH A MOUSE. "Tap to…" sat beside a Listen button on the
+ * desktop card and the rail; the offer and the chip name the verb and the room.
+ */
+export function rejoinLabel(title: string): string {
+  return `Rejoin ${title || "your gist room"}`;
+}
+
+/**
+ * The phone chip's accessible name: "<room>: <state>". A room that is over
+ * (ended, removed, another tab) is not offered as somewhere to return to.
+ */
+export function roomChipLabel({ title, text, finished }: { title: string; text: string; finished: boolean }): string {
+  return finished ? `${title}: ${text}` : `${title}: ${text}. Return to the room`;
 }
 
 /**

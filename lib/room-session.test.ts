@@ -1420,3 +1420,27 @@ describe("a private room's topic stays on its own page", async () => {
     assert.equal(sharedSurfaceTitle({ ...room("public"), houseConversationId: "h1", house: null }, "Late gist"), "Gist room");
   });
 });
+
+describe("the mini-player's words work with a mouse and read well aloud", async () => {
+  const { roomChipLabel, rejoinLabel } = await import("./room-session/visibility.ts");
+  const live = (): SessionState =>
+    sessionReducer(sessionReducer(IDLE_SESSION, { type: "connect", target: { streamId: "A", role: "listener" } }), { type: "connected" });
+
+  it("the autoplay line names the state, not a touch gesture", () => {
+    const chrome = miniPlayerChrome({ state: live(), presence: "listener", micOn: false, canPlayAudio: false });
+    assert.equal(chrome.listen, true);
+    assert.doesNotMatch(chrome.line ?? "", /tap/i, "'Tap to listen' beside a Listen button on a mouse desktop");
+    assert.equal(chrome.line, "Audio paused");
+  });
+
+  it("the rejoin offer is a verb and the room, with no gesture in it", () => {
+    assert.equal(rejoinLabel("Friday gist"), "Rejoin Friday gist");
+    assert.equal(rejoinLabel(""), "Rejoin your gist room");
+  });
+
+  it("the chip reads 'room: state', and offers no way back into a room that is over", () => {
+    assert.equal(roomChipLabel({ title: "Friday gist", text: "You're live", finished: false }), "Friday gist: You're live. Return to the room");
+    assert.equal(roomChipLabel({ title: "Friday gist", text: "Room ended", finished: true }), "Friday gist: Room ended");
+    assert.doesNotMatch(roomChipLabel({ title: "Friday gist", text: "You were removed", finished: true }), / in Friday gist|Return to the room/);
+  });
+});

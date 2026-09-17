@@ -39,7 +39,7 @@ export interface RoomSessionView {
   /** A seated guest's stage state and remedies (features/streams/hooks/use-stage.ts). */
   stage: { state: StageState; error: string | null; retry: () => void; rejoin: () => void };
   captionUrl: string | null;
-  /** False when the browser refused autoplay — the "Tap to listen" state. */
+  /** False when the browser refused autoplay — the "Audio paused" state. */
   canPlayAudio: boolean;
   startAudio: () => void;
   enter: (streamId: string, role: SessionRole, options?: EnterOptions) => void;
@@ -67,7 +67,7 @@ export interface RoomSessionView {
   /** Clear a finished session (ended, another tab, failed) off the screen. */
   dismiss: () => void;
   retry: () => void;
-  /** The room a reload interrupted, offered back as "Tap to rejoin" (lib/room-session/rejoin.ts). */
+  /** The room a reload interrupted, offered back as "Rejoin" (lib/room-session/rejoin.ts). */
   rejoinOffer: RejoinRecord | null;
   dismissRejoin: () => void;
 }
