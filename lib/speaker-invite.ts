@@ -19,6 +19,8 @@
  *     client never starts its own 60 seconds.
  */
 
+import { squarePaths } from "./square-path.ts";
+
 /** Anonymous listeners join as `anon-<id>`; the service refuses to invite them. */
 export function isAnonymousIdentity(identity: string): boolean {
   const base = identity.split("#")[0] ?? identity;
@@ -71,6 +73,36 @@ export function inviteView(row: InviteRow | null | undefined, now: number): Invi
   if (left <= 0) return { state: "expired", requestId: row.id };
   return { state: "open", requestId: row.id, secondsLeft: left };
 }
+
+/**
+ * Is the shell's banner (the mini-player's) drawn?
+ *
+ * The room's own page draws the banner inside the room, so the shell's stays
+ * away there — two "Join as speaker" buttons for one invitation is a question
+ * asked twice. Everywhere else in the Square, with the room minimised, the
+ * invitation has to reach the reader, or a host's 60 seconds run out on a
+ * reader who is reading their DMs.
+ */
+export function inviteBannerVisible(input: {
+  pathname: string;
+  streamId: string | null;
+  hasInvite: boolean;
+}): boolean {
+  if (!input.hasInvite || !input.streamId) return false;
+  return logicalPath(input.pathname) !== `/gist-rooms/${input.streamId}`;
+}
+
+/** Both spellings of a route — standalone `/x` and Ark's `/square/x` — as one. */
+const logicalPath = squarePaths("/square").stripSquare;
+
+/** Said once to a screen reader when the banner appears. It promises nothing about a seat or a mic. */
+export function inviteAnnouncement(hostName: string | null | undefined): string {
+  const who = hostName?.trim();
+  return `${who || "The host"} invited you to speak.`;
+}
+
+/** The one-time hint once an accepted invitation has seated them: the mic is theirs to open. */
+export const INVITE_ACCEPTED_HINT = "You're on the stage with your mic off. Tap the mic when you're ready to talk.";
 
 /**
  * What leaving the room does to the reader's own row.
@@ -145,6 +177,20 @@ export function inviteControl(input: {
     return { kind: "invite", disabled: true, reason: `You can invite them again in ${left}.` };
   }
   return { kind: "invite", disabled: false };
+}
+
+/**
+ * The host's open invitations by person, keyed on the BARE user id — an
+ * identity in the room may carry `#speaker`, a row's `userId` never should,
+ * and comparing the two raw is a bug this codebase has fixed before.
+ */
+export function invitesByUser<T extends { userId: string; status: string }>(rows: readonly T[]): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const row of rows) {
+    if (row.status !== "invited") continue;
+    map.set(row.userId.split("#")[0] ?? row.userId, row);
+  }
+  return map;
 }
 
 /* ------------------------------------------------------------------ *

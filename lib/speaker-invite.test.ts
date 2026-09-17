@@ -8,7 +8,10 @@ import {
   hostOutcomeLabel,
   inviteControl,
   inviteErrorOutcome,
+  inviteAnnouncement,
+  inviteBannerVisible,
   inviteView,
+  invitesByUser,
   isAnonymousIdentity,
   releaseActionFor,
   routeMissing,
@@ -234,5 +237,43 @@ describe("error answers", () => {
     assert.equal(answerErrorMessage({ code: "INVITE_NOT_OPEN" }), "That invitation has ended.");
     assert.match(answerErrorMessage({ code: "STAGE_FULL" }) ?? "", /filled up/);
     assert.equal(answerErrorMessage({ code: "NOT_FOUND" }), null);
+  });
+});
+
+describe("where the invitee's banner is drawn", () => {
+  const base = { streamId: "s1", hasInvite: true };
+  it("the room's own page draws its own banner, so the shell's stays away", () => {
+    assert.equal(inviteBannerVisible({ ...base, pathname: "/gist-rooms/s1" }), false);
+    assert.equal(inviteBannerVisible({ ...base, pathname: "/square/gist-rooms/s1" }), false);
+  });
+
+  it("anywhere else in the Square, with the room minimised, it is drawn", () => {
+    for (const pathname of ["/", "/messages", "/gist-rooms/other", "/u/ada"]) {
+      assert.equal(inviteBannerVisible({ ...base, pathname }), true, pathname);
+    }
+  });
+
+  it("no invitation or no room is no banner", () => {
+    assert.equal(inviteBannerVisible({ ...base, hasInvite: false, pathname: "/" }), false);
+    assert.equal(inviteBannerVisible({ ...base, streamId: null, pathname: "/" }), false);
+  });
+});
+
+describe("the host's open invitations, keyed on the person", () => {
+  it("keys on the bare user id and ignores anything that is not an invitation", () => {
+    const map = invitesByUser([
+      { id: "r1", userId: "did:privy:ada#speaker", status: "invited", expiresAt: "x" },
+      { id: "r2", userId: "did:privy:tobi", status: "pending", expiresAt: null },
+    ]);
+    assert.deepEqual([...map.keys()], ["did:privy:ada"]);
+    assert.equal(map.get("did:privy:ada")?.id, "r1");
+  });
+});
+
+describe("the invitee is told once, by name", () => {
+  it("names the host when it can and never promises a seat", () => {
+    assert.equal(inviteAnnouncement("Ada"), "Ada invited you to speak.");
+    assert.equal(inviteAnnouncement("  "), "The host invited you to speak.");
+    assert.doesNotMatch(inviteAnnouncement(null), /seat|mic/i);
   });
 });
