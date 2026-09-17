@@ -43,7 +43,7 @@ describe("a house room shows who is here, not who belongs", () => {
   it("filters the House Members grid through presence", () => {
     assert.match(
       screen,
-      /isListeningHouseMember\(member\.profile\.id, presentIds, speakerIds\)/,
+      /isListeningHouseMember\((?:member\.profile\.id|profileId), presentIds, speakerIds\)/,
       "House Members is drawing the whole roster again"
     );
     assert.match(screen, /presentIds=\{stage\.presentIds\}/, "presence is not passed into the grid");

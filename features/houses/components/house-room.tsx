@@ -156,6 +156,10 @@ interface SlotProps {
        * the room reaching down for a roster it is not allowed to fetch.
        */
       onViewAll: (title: string, people: RoomPerson[]) => void;
+      /** Opens a listening member's person sheet — the same sheet the Audience opens. */
+      onOpen: (userId: string) => void;
+      /** Members the host has invited up and who have not answered. Empty for anyone but the host. */
+      invitedIds: ReadonlySet<string>;
     }
   ) => React.ReactNode;
   /**
@@ -841,15 +845,6 @@ function LiveHouse({
     [audience]
   );
 
-  const houseMembers = stream.houseConversationId
-    ? (houseSlot?.(stream.houseConversationId, {
-        speakerIds,
-        presentIds,
-        onRoster: setHouseMemberIds,
-        onViewAll: openRoster,
-      }) ?? null)
-    : null;
-
   const seating = useMemo(() => buildSeating(slots), [slots]);
   const audio = useHouseAudio(room);
 
@@ -1209,6 +1204,51 @@ function LiveHouse({
     sheetOpen: person !== null,
   });
   const openInvites = hostTools.openInvites;
+
+  /*
+    THE SHEET READS THE ROOM AS IT IS NOW. `person` is the snapshot taken when
+    it opened; a mute that lands, an invitee who takes a seat or a speaker
+    moved down all change what its rows should say. The seat is looked up
+    live, by base identity (an approved speaker is `<did>#speaker`).
+  */
+  const livePerson = useMemo<PersonTarget | null>(() => {
+    if (!person) return null;
+    const base = baseIdentity(person.identity);
+    const seat = slots.find((slot) =>
+      person.isRoomHost ? slot.role === "host" : slot.role !== "host" && baseIdentity(slot.identity) === base
+    );
+    if (seat) return { ...person, identity: seat.identity, seated: true, micMuted: seat.isMuted, pendingRequestId: null };
+    return person.isRoomHost ? person : { ...person, seated: false, micMuted: true };
+  }, [person, slots]);
+
+  /*
+    A HOUSE MEMBER WHO IS LISTENING OPENS THE SAME SHEET AS THE AUDIENCE. The
+    roster slot draws them, and the Audience drops them (they are in
+    `houseMemberIds`), so without this the people a host is most likely to
+    invite up were the only faces in the room with no sheet — no Invite, no
+    Invited ring. Keyed on the user id the slot has; the connection itself is
+    the audience member the room already knows.
+  */
+  const openPresent = useCallback(
+    (userId: string) => {
+      const member = audience.find((item) => item.userId === userId);
+      if (member) openMember(member);
+    },
+    [audience, openMember]
+  );
+  const invitedIds = useMemo<ReadonlySet<string>>(() => new Set(openInvites.keys()), [openInvites]);
+
+  const houseMembers = stream.houseConversationId
+    ? (houseSlot?.(stream.houseConversationId, {
+        speakerIds,
+        presentIds,
+        onRoster: setHouseMemberIds,
+        onViewAll: openRoster,
+        onOpen: openPresent,
+        invitedIds: isHost ? invitedIds : EMPTY_IDS,
+      }) ?? null)
+    : null;
+
 
   /*
     THE FILE'S THREE LISTS, from the state the room already had.
@@ -1971,7 +2011,7 @@ function LiveHouse({
       )}
 
       <PersonSheet
-        person={person}
+        person={livePerson}
         open={person !== null}
         onClose={() => setPerson(null)}
         isHost={isHost}
@@ -1997,13 +2037,13 @@ function LiveHouse({
           resolve.mutate({ requestId: target.pendingRequestId, action: "approve" });
           setPerson(null);
         }}
-        hostActions={hostTools.actionsFor(person)}
+        hostActions={hostTools.actionsFor(livePerson)}
         mute={
           // Only a person with a seat is publishing, so only they have audio to
           // silence. Offering the row over an audience member would be a
           // control that does nothing.
-          person?.seated
-            ? { muted: mutedForMe.has(person.identity), onToggle: () => toggleMute(person.identity) }
+          livePerson?.seated
+            ? { muted: mutedForMe.has(livePerson.identity), onToggle: () => toggleMute(livePerson.identity) }
             : null
         }
         followSlot={followSlot}

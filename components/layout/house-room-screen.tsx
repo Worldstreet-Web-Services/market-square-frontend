@@ -48,6 +48,8 @@ export function HouseRoomScreen({ houseId }: { houseId: string }) {
           presentIds={stage.presentIds}
           onRoster={stage.onRoster}
           onViewAll={stage.onViewAll}
+          onOpen={stage.onOpen}
+          invitedIds={stage.invitedIds}
         />
       )}
       // "Join House" — `POST /conversations/:id/join`. The room decides whether
@@ -98,6 +100,8 @@ function HouseMembers({
   presentIds,
   onRoster,
   onViewAll,
+  onOpen,
+  invitedIds,
 }: {
   conversationId: string;
   speakerIds: ReadonlySet<string>;
@@ -105,6 +109,9 @@ function HouseMembers({
   onRoster: (ids: ReadonlySet<string>) => void;
   /** Hands the whole roster up so the ROOM can open it over the chat column. */
   onViewAll: (title: string, people: RoomPerson[]) => void;
+  /** The room's person sheet — Invite to speak lives there for the host. */
+  onOpen: (userId: string) => void;
+  invitedIds: ReadonlySet<string>;
 }) {
   const members = useConversationMembers(conversationId, true);
   const items = members.data?.items;
@@ -118,8 +125,9 @@ function HouseMembers({
 
   // A member whose profile did not come back is DROPPED rather than drawn as
   // a blank tile: the membership is the record, the profile is the display.
-  const people = (items ?? []).flatMap((member) =>
-    member.profile && isListeningHouseMember(member.profile.id, presentIds, speakerIds)
+  const people = (items ?? []).flatMap((member) => {
+    const profileId = member.profile?.id;
+    return member.profile && profileId && isListeningHouseMember(profileId, presentIds, speakerIds)
       ? [
           {
             id: member.profile.id,
@@ -132,10 +140,12 @@ function HouseMembers({
             username: member.profile.username,
             followerCount: member.profile.followerCount,
             actions: <QuickActions username={member.profile.username} />,
+            invited: invitedIds.has(profileId),
+            onOpen: () => onOpen(profileId),
           },
         ]
-      : []
-  );
+      : [];
+  });
   if (members.isPending || members.isError) return null;
   return (
     <RoomPeopleSection

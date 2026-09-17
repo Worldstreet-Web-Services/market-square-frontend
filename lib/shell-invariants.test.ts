@@ -3860,6 +3860,20 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(code("components/layout/room-session.tsx"), /token: hostMuteToken\(local\.attributes\),/);
   });
 
+  it("a listening house member opens the same person sheet, and shows the Invited ring", () => {
+    const screen = code("components/layout/house-room-screen.tsx");
+    assert.match(screen, /onOpen=\{stage\.onOpen\}/);
+    assert.match(screen, /invitedIds=\{stage\.invitedIds\}/);
+    assert.match(screen, /invited: invitedIds\.has\(profileId\),\s*onOpen: \(\) => onOpen\(profileId\),/);
+    assert.match(room, /onOpen: openPresent,\s*invitedIds: isHost \? invitedIds : EMPTY_IDS,/);
+  });
+
+  it("the person sheet reads the live seat, not the snapshot it opened with", () => {
+    assert.match(room, /<PersonSheet\s+person=\{livePerson\}/);
+    assert.match(room, /hostActions=\{hostTools\.actionsFor\(livePerson\)\}/);
+    assert.match(tools, /micMuted: seat \? seat\.isMuted : true,/);
+  });
+
   it("everyone sees who turned a mic off, straight from the seat", () => {
     assert.match(room, /mutedByHost: slot\.mutedByHost,/);
     assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);
