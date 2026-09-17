@@ -152,7 +152,7 @@ export function inviteControl(input: {
   seatCount: number;
   /** The invite route answered "not deployed" this page load. */
   unavailable: boolean;
-  /** The service refused this person as banned or blocked. */
+  /** The host banned this person from the room (SPEAKER_BANNED). */
   refused: boolean;
   /** Epoch ms until which the service said "not yet", or null. */
   cooldownUntil: number | null;
@@ -163,8 +163,9 @@ export function inviteControl(input: {
   // A raised hand is the existing flow and works without the new routes.
   if (target.pendingRequestId) return { kind: "seat", requestId: target.pendingRequestId };
   if (input.unavailable) return { kind: "hidden" };
-  // Hidden, not disabled: a greyed "Invite" on somebody who blocked you tells
-  // the host something the person chose not to say.
+  // Hidden, not disabled, on the host's own ban. A BLOCKED refusal never sets
+  // this (inviteErrorOutcome): the block may be the target's, and a control
+  // that changes after one tap would tell the host so.
   if (input.refused) return { kind: "hidden" };
   if (target.openInviteId) return { kind: "invited", requestId: target.openInviteId };
   if (isAnonymousIdentity(target.identity)) {
@@ -272,23 +273,42 @@ export function settleInvites(
 export interface ApiErrorLike {
   code?: string | null;
   status?: number;
+  message?: string | null;
   details?: unknown;
 }
 
 /**
+ * The router's own "no such route", as opposed to "no such thing".
+ *
+ * Every Market Square service ends its Express app with
+ * `fail('NOT_FOUND', 'Route not found')`; an entity that is missing is a
+ * `NotFoundError` with its own sentence ("Profile not found", "Stream not
+ * found") and — on this service — no `details` at all. A proxy with no
+ * envelope answers Express's default page ("Cannot POST /…"). Only those two
+ * shapes say the route is absent.
+ */
+const ROUTE_MISS = [/^\s*route not found\.?\s*$/i, /\bCannot (GET|POST|PUT|PATCH|DELETE) \//];
+
+/**
  * Did this call reach a route that is not deployed?
  *
- * The service answers `NOT_FOUND` for everything, and says what was missing in
- * `details.resource` only when an ENTITY was — so a 404 without it is a route
- * that does not exist. Before invite ships, the existing action route and the
- * list's `status` filter refuse the new values with a VALIDATION_ERROR naming
- * `action` or `status`; that is the same answer in a different shape.
+ * NOT every 404: a write aimed at a PERSON answers 404 when that person has
+ * gone (a deleted profile, a private room they can't see, a speaker who just
+ * left). Reading that as "not deployed" switched the whole feature off for the
+ * tab — every Invite, the Invited list and its Cancel buttons — on one invite
+ * to one missing person. So a 404 is "not deployed" only in the router's own
+ * words, and never when the service named the missing resource. Before invite
+ * ships, the existing action route and the list's `status` filter refuse the
+ * new values with a VALIDATION_ERROR naming `action` or `status`; that is the
+ * same answer in a different shape.
  */
 export function routeMissing(error: ApiErrorLike | null | undefined): boolean {
   if (!error) return false;
   const details = error.details as { resource?: unknown } | unknown[] | null | undefined;
   if (error.code === "NOT_FOUND") {
-    return !(details && !Array.isArray(details) && typeof details === "object" && "resource" in details);
+    if (details && !Array.isArray(details) && typeof details === "object" && "resource" in details) return false;
+    const message = error.message ?? "";
+    return ROUTE_MISS.some((pattern) => pattern.test(message));
   }
   if (error.code === "VALIDATION_ERROR" && Array.isArray(details)) {
     return details.some((detail) => {
@@ -303,7 +323,7 @@ export function routeMissing(error: ApiErrorLike | null | undefined): boolean {
 export type InviteErrorOutcome =
   /** Not deployed: hide the control, say nothing. */
   | { kind: "unavailable" }
-  /** Banned or blocked: hide the control for this person, say nothing more than a neutral line. */
+  /** Banned from this room by the host: hide the control for this person. */
   | { kind: "refused"; message: string }
   /** Try again later: disable with a countdown. */
   | { kind: "cooldown"; message: string; retryAfterSeconds: number }
@@ -313,6 +333,8 @@ function retryAfter(details: unknown): number | null {
   const value = (details as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds;
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
+
+const GENERIC_INVITE_FAILURE = "Couldn't send the invitation.";
 
 /** What the host is told when an invitation could not be sent. */
 export function inviteErrorOutcome(error: ApiErrorLike | null | undefined, name?: string | null): InviteErrorOutcome {
@@ -325,9 +347,13 @@ export function inviteErrorOutcome(error: ApiErrorLike | null | undefined, name?
       return { kind: "message", message: "You're already on the stage." };
     case "NOT_FOUND":
       return { kind: "message", message: `${who} can't be invited to this room.` };
+    // The host's own ban: nothing here they don't already know.
     case "SPEAKER_BANNED":
-    case "BLOCKED":
       return { kind: "refused", message: `${who} can't be invited to speak.` };
+    // BLOCKED is either direction, and a block by the TARGET is theirs to keep
+    // quiet: the same line as any failure, and the control stays as it was.
+    case "BLOCKED":
+      return { kind: "message", message: GENERIC_INVITE_FAILURE };
     case "NOT_IN_ROOM":
       return { kind: "message", message: `${who} isn't in the room any more.` };
     case "ALREADY_SPEAKER":
@@ -352,7 +378,7 @@ export function inviteErrorOutcome(error: ApiErrorLike | null | undefined, name?
       };
     }
     default:
-      return { kind: "message", message: "Couldn't send the invitation." };
+      return { kind: "message", message: GENERIC_INVITE_FAILURE };
   }
 }
 

@@ -363,7 +363,7 @@ export async function resolveSpeakerRequest(
 /**
  * Ask a listener up — `POST /streams/:id/speaker-invites { userId }`, host only.
  *
- * NOT DEPLOYED YET: a 404 without `details.resource` hides the control
+ * NOT DEPLOYED YET: the router's "Route not found" hides the control
  * (lib/speaker-invite.ts). 201 is a new invitation (`invited`, 60s), 200 the
  * one already open; a listener whose hand was already up is simply seated,
  * and the row comes back `approved`. Nothing here seats anybody on a guess.

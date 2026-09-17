@@ -200,9 +200,23 @@ describe("the host is never told 'declined'", () => {
 });
 
 describe("error answers", () => {
-  it("a 404 without a named resource is an undeployed route; with one it is a real answer", () => {
-    assert.equal(routeMissing({ code: "NOT_FOUND", status: 404 }), true);
-    assert.equal(routeMissing({ code: "NOT_FOUND", status: 404, details: { resource: "profile" } }), false);
+  it("only the router's own 404 is an undeployed route", () => {
+    // wsws-monorepo market-square app.ts: the fallback answers
+    // fail('NOT_FOUND', 'Route not found').
+    assert.equal(routeMissing({ code: "NOT_FOUND", status: 404, message: "Route not found" }), true);
+    // A proxy in front with no envelope at all (Express's default page).
+    assert.equal(routeMissing({ code: "NOT_FOUND", status: 404, message: "<pre>Cannot POST /v1/market-square/streams/s1/speaker-invites</pre>" }), true);
+    assert.equal(routeMissing({ code: "NOT_FOUND", status: 404, details: { resource: "profile" }, message: "Route not found" }), false);
+  });
+
+  it("an ENTITY 404 from a write is a per-person answer, never 'not deployed'", () => {
+    // NotFoundError carries no details: "Profile not found" (deleted account),
+    // "Stream not found" (a private room they can't see), "Speaker request not found".
+    for (const message of ["Profile not found", "Stream not found", "Speaker request not found", "Not found"]) {
+      assert.equal(routeMissing({ code: "NOT_FOUND", status: 404, message }), false, message);
+      assert.equal(inviteErrorOutcome({ code: "NOT_FOUND", message }, "Ada").kind, "message", message);
+    }
+    assert.equal(routeMissing({ code: "NOT_FOUND", status: 404 }), false);
   });
 
   it("the pre-invite service refusing the new action or status is also 'not deployed'", () => {
@@ -214,10 +228,13 @@ describe("error answers", () => {
   });
 
   it("maps every contract code to its outcome", () => {
-    assert.deepEqual(inviteErrorOutcome({ code: "NOT_FOUND" }), { kind: "unavailable" });
+    assert.deepEqual(inviteErrorOutcome({ code: "NOT_FOUND", message: "Route not found" }), { kind: "unavailable" });
+    // The host's own ban: they know it, so the control goes for that person.
     assert.equal(inviteErrorOutcome({ code: "SPEAKER_BANNED" }, "Ada").kind, "refused");
-    assert.equal(inviteErrorOutcome({ code: "BLOCKED" }, "Ada").kind, "refused");
-    assert.doesNotMatch(JSON.stringify(inviteErrorOutcome({ code: "BLOCKED" }, "Ada")), /block/i);
+    // A block can be the TARGET's, which the host must not learn: the same
+    // line as any failure, and nothing about the control changes.
+    assert.deepEqual(inviteErrorOutcome({ code: "BLOCKED" }, "Ada"), inviteErrorOutcome({ code: "SOMETHING_ELSE" }, "Ada"));
+    assert.deepEqual(inviteErrorOutcome({ code: "BLOCKED" }, "Ada"), { kind: "message", message: "Couldn't send the invitation." });
     for (const code of ["STREAM_NOT_LIVE", "CANNOT_INVITE_SELF", "NOT_IN_ROOM", "ALREADY_SPEAKER", "STAGE_FULL", "RATE_LIMITED", "TOO_MANY_REQUESTS"]) {
       assert.equal(inviteErrorOutcome({ code }, "Ada").kind, "message", code);
     }
@@ -248,7 +265,8 @@ describe("error answers", () => {
   it("tells the invitee plainly why an answer did not land", () => {
     assert.equal(answerErrorMessage({ code: "INVITE_NOT_OPEN" }), "That invitation has ended.");
     assert.match(answerErrorMessage({ code: "STAGE_FULL" }) ?? "", /filled up/);
-    assert.equal(answerErrorMessage({ code: "NOT_FOUND" }), null);
+    assert.equal(answerErrorMessage({ code: "NOT_FOUND", message: "Route not found" }), null);
+    assert.equal(answerErrorMessage({ code: "NOT_FOUND", message: "Speaker request not found" }), "Couldn't answer the invitation.");
   });
 });
 

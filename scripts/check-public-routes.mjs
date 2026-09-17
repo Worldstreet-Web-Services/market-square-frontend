@@ -230,7 +230,7 @@ const PENDING_ROUTES = {
 
   // ── invite to speak and the host's soft mute (agreed contract, not deployed) ─
   // Both are authenticated, owner-only writes. The frontend calls them ahead
-  // of the backend and degrades quietly: a route 404 (no `details.resource`)
+  // of the backend and degrades quietly: a route 404 ("Route not found")
   // hides the controls for the page load (lib/speaker-invite.ts
   // `routeMissing`). The new `accept` / `reject` / `cancel` actions and the
   // `?status=invited` filter ride on routes the spec already documents, so

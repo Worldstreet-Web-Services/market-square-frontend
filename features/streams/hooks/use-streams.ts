@@ -739,8 +739,9 @@ export function useResolveSpeakerRequest(streamId: string) {
 /* ---- invite to speak, and the host's soft mute ---------------------------
 
    Both are AHEAD OF THE BACKEND. Every call degrades quietly: the first answer
-   that says the route is not deployed (lib/speaker-invite.ts `routeMissing`)
-   is remembered for the page load and the controls go away, rather than
+   that says the route is not deployed (lib/speaker-invite.ts `routeMissing` —
+   the router's own "Route not found", never a 404 about a missing PERSON) is
+   remembered for the page load and the controls go away, rather than
    offering a button that fails every time. Nothing is ever reported as done
    that the service did not do. */
 
@@ -773,9 +774,9 @@ export function useSpeakerInvites(streamId: string, enabled: boolean) {
 
 /**
  * Invite a listener up. Carries what the service told us about particular
- * people for as long as the room is open on screen: who may not be invited
- * (banned, or they blocked the host — the control is hidden, and nobody is
- * told which) and who is in a cooldown until when.
+ * people for as long as the room is open on screen: who the host banned (the
+ * control is hidden for them) and who is in a cooldown until when. A BLOCKED
+ * refusal changes nothing here — it may be the target's block.
  */
 export function useInviteToSpeak(streamId: string) {
   const queryClient = useQueryClient();
