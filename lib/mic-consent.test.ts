@@ -78,6 +78,16 @@ describe("micControl", () => {
     );
   });
 
+  it("never disables MUTING an open mic, whatever else is true", () => {
+    for (const hostMuted of ["none", "soft", "hard"] as const) {
+      for (const permissions of [granted, { canPublish: true, microphone: false }, { canPublish: false, microphone: false }]) {
+        const control = micControl({ hostMuted, permissions, micOn: true });
+        assert.equal(control.disabled, false, `${hostMuted} ${JSON.stringify(permissions)}`);
+        assert.equal(control.label, "Mute your mic");
+      }
+    }
+  });
+
   it("names the next action", () => {
     assert.equal(micControl({ hostMuted: "none", permissions: granted, micOn: true }).label, "Mute your mic");
     assert.equal(micControl({ hostMuted: "none", permissions: granted, micOn: false }).label, "Unmute your mic");
@@ -108,8 +118,18 @@ describe("useStage asks the consent rule and nothing else", () => {
     assert.doesNotMatch(stage, /setMicOn\(next\)/, "a local flag is written again after the toggle");
   });
 
-  it("refuses the toggle behind a hard mute or a missing mic permission", () => {
+  it("refuses to OPEN the mic behind a hard mute or a missing mic permission — never to mute it", () => {
     assert.match(stage, /micControl\(\{/);
-    assert.match(stage, /if \(control\.disabled\) return;/);
+    assert.match(stage, /if \(!micOn && control\.disabled\) return;/);
+    assert.doesNotMatch(stage, /if \(control\.disabled\) return;/);
+  });
+
+  it("forgets a previous room's failure when the stream or the Room changes", () => {
+    assert.match(stage, /if \(phaseRoom\.streamId !== streamId \|\| phaseRoom\.room !== room\) \{/);
+    const from = stage.indexOf("if (phaseRoom.streamId !== streamId");
+    const reset = stage.slice(from, stage.indexOf("\n  }\n", from));
+    for (const call of ['setPhase("idle")', "setError(null)", "setStalledAttempt(null)"]) {
+      assert.ok(reset.includes(call), call);
+    }
   });
 });

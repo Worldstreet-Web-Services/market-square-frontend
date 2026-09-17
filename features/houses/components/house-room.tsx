@@ -73,6 +73,8 @@ import {
 import { sq } from "@/lib/square-path";
 import { roomFailureCopy } from "@/lib/room-connection-copy";
 import { roomEntryReady } from "@/lib/room-session/entry";
+import { roomStagePanel } from "@/lib/room-session/presence";
+import type { StageAction } from "@/lib/stage-recovery";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -877,7 +879,41 @@ function LiveHouse({
     mic of the room they ARE in, off screen, while this control said off.
   */
   const onStage = here && (isHost || session.presence === "speaker");
-  const canAsk = !isHost && !onStage;
+  // Approved but not (yet) seated is the stage panel's to explain, with its
+  // own remedies — "Ask to speak" to somebody the host already said yes to
+  // reads as the approval having been lost.
+  const myRequestStatus = mine.data?.status ?? null;
+  const canAsk = !isHost && !onStage && myRequestStatus !== "approved";
+
+  /*
+    AN APPROVED SPEAKER WHO IS NOT SIMPLY SEATED is told why and given the
+    remedy: the grant on its way, the grant that never landed on this
+    connection (Rejoin — a fresh token on a fresh connection), or a mic that
+    would not open (Try again, which is the reader's own tap).
+  */
+  const stagePanel = useMemo(
+    () =>
+      roomStagePanel({
+        here,
+        isHost,
+        status: myRequestStatus,
+        connection,
+        stageState: session.stage.state,
+        error: session.stage.error,
+      }),
+    [here, isHost, myRequestStatus, connection, session.stage.state, session.stage.error]
+  );
+  const myRequestId = mine.data?.id ?? null;
+  const runStageAction = (action: StageAction) => {
+    if (action === "rejoin") return session.stage.rejoin();
+    if (action === "retry") return session.stage.retry();
+    if (!myRequestId) return;
+    if (action === "request-again") {
+      resolve.mutate({ requestId: myRequestId, action: "leave" }, { onSuccess: () => request.mutate() });
+      return;
+    }
+    resolve.mutate({ requestId: myRequestId, action: "leave" });
+  };
 
   const askReason = !requestsOpen
     ? "The host isn't taking requests right now."
@@ -1471,9 +1507,30 @@ function LiveHouse({
       {here && isHost && state === "live" && session.micFailure && (
         <div className="ws-inset mx-4 mb-4 px-4 py-3">
           <p className="text-[13px] leading-5 text-body">{roomFailureCopy(session.micFailure)}</p>
-          <Button size="sm" variant="secondary" className="mt-2" onClick={() => void session.toggleMic()}>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => session.stage.retry()}>
             Try again
           </Button>
+        </div>
+      )}
+
+      {stagePanel && (
+        <div className="ws-inset mx-4 mb-4 px-4 py-3" role="status">
+          <p className="text-[13px] leading-5 text-body">{stagePanel.message}</p>
+          {stagePanel.actions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {stagePanel.actions.map((action, index) => (
+                <Button
+                  key={action}
+                  size="sm"
+                  variant={index === 0 ? "secondary" : "ghost"}
+                  disabled={(action === "request-again" || action === "leave") && resolve.isPending}
+                  onClick={() => runStageAction(action)}
+                >
+                  {STAGE_ACTION_LABEL[action]}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2017,6 +2074,15 @@ function RosterSurface({
     </div>
   );
 }
+
+/** What each stage remedy is called on its button. */
+const STAGE_ACTION_LABEL: Record<StageAction, string> = {
+  request: "Ask to speak",
+  retry: "Try again",
+  rejoin: "Rejoin the stage",
+  "request-again": "Ask again",
+  leave: "Leave the stage",
+};
 
 /**
  * "Hand up · 4m".

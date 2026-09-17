@@ -161,6 +161,21 @@ export function useStage({
    */
   const [stalledAttempt, setStalledAttempt] = useState<number | null>(null);
   /*
+    A FAILURE BELONGS TO ITS ROOM. The shell holds one of these for the whole
+    tab, so a `device-busy` from one room, or from a Room since replaced by a
+    reconnect, used to greet a speaker approved later somewhere else before
+    they had tapped anything. Reset when either changes — during render,
+    React's pattern for state that follows a prop.
+  */
+  const [phaseRoom, setPhaseRoom] = useState({ streamId, room });
+  if (phaseRoom.streamId !== streamId || phaseRoom.room !== room) {
+    setPhaseRoom({ streamId, room });
+    setPhase("idle");
+    setError(null);
+    setStalledAttempt(null);
+    setAudioOnly(false);
+  }
+  /*
     WAS THE READER WAITING WHEN THE APPROVAL LANDED?
 
     The only moment the mic may open on its own is the reader's own request
@@ -381,7 +396,8 @@ export function useStage({
       permissions: { canPublish, microphone: canPublishMic },
       micOn,
     });
-    if (control.disabled) return;
+    // The backstop gates OPENING the mic only: muting a live one is never refused.
+    if (!micOn && control.disabled) return;
     try {
       await room.localParticipant.setMicrophoneEnabled(!micOn);
       setError(null);

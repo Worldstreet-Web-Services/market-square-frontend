@@ -73,13 +73,15 @@ export function micControl({
   permissions: { canPublish: boolean; microphone: boolean };
   micOn: boolean;
 }): MicControl {
+  // MUTING IS ALWAYS ALLOWED. A grant that narrows, or a hard mute landing,
+  // while the track is still unmuted must never leave a live mic with its
+  // only off switch disabled.
+  if (micOn) return { disabled: false, icon: "mic", label: "Mute your mic" };
   if (hostMuted === "hard") {
     return { disabled: true, icon: "lock", label: "The host turned off your mic" };
   }
   if (!permissions.canPublish || !permissions.microphone) {
     return { disabled: true, icon: "mic-off", label: "You can't speak in this room yet" };
   }
-  return micOn
-    ? { disabled: false, icon: "mic", label: "Mute your mic" }
-    : { disabled: false, icon: "mic-off", label: "Unmute your mic" };
+  return { disabled: false, icon: "mic-off", label: "Unmute your mic" };
 }

@@ -884,3 +884,59 @@ describe("the controller's second review round", () => {
     assert.equal(h.session.token, null);
   });
 });
+
+describe("who is on the stage, and what an approved speaker is offered", async () => {
+  const { stagePresence, roomStagePanel } = await import("./room-session/presence.ts");
+
+  it("a host is the host whatever the stage says", () => {
+    assert.equal(stagePresence({ role: "host", approved: false, stageState: "idle", canPublishMic: false }), "host");
+    assert.equal(stagePresence({ role: null, approved: true, stageState: "live", canPublishMic: true }), null);
+  });
+
+  it("an approved speaker with the grant keeps their seat through a failed tap to talk", () => {
+    for (const stageState of ["live", "starting", "denied", "device-busy", "device-missing", "failed"] as const) {
+      assert.equal(
+        stagePresence({ role: "listener", approved: true, stageState, canPublishMic: true }),
+        "speaker",
+        `${stageState} dropped the speaker to the audience`
+      );
+    }
+  });
+
+  it("is not seated without the approval or without the grant", () => {
+    assert.equal(stagePresence({ role: "listener", approved: false, stageState: "idle", canPublishMic: true }), "listener");
+    for (const stageState of ["waiting-for-room", "awaiting-grant", "grant-stalled", "not-permitted", "idle"] as const) {
+      assert.equal(stagePresence({ role: "listener", approved: true, stageState, canPublishMic: false }), "listener", stageState);
+    }
+  });
+
+  const live = { here: true, isHost: false, status: "approved" as const, connection: "live" as const };
+
+  it("offers Rejoin to an approved speaker whose grant never landed", () => {
+    for (const stageState of ["grant-stalled", "not-permitted"] as const) {
+      const panel = roomStagePanel({ ...live, stageState, error: null });
+      assert.equal(panel?.kind, "recover");
+      assert.equal(panel?.actions[0], "rejoin");
+    }
+  });
+
+  it("offers Try again beside the mic after a capture failure", () => {
+    for (const stageState of ["denied", "device-busy", "device-missing", "failed"] as const) {
+      assert.equal(roomStagePanel({ ...live, stageState, error: null })?.actions[0], "retry", stageState);
+    }
+  });
+
+  it("says what is happening while the grant is on its way, and nothing once seated", () => {
+    assert.equal(roomStagePanel({ ...live, stageState: "awaiting-grant", error: null })?.kind, "connecting");
+    assert.equal(roomStagePanel({ ...live, stageState: "live", error: null }), null);
+  });
+
+  it("draws nothing for a host, a listener, another room or a room that is not connected", () => {
+    const failing = { ...live, stageState: "grant-stalled" as const, error: null };
+    assert.equal(roomStagePanel({ ...failing, isHost: true }), null);
+    assert.equal(roomStagePanel({ ...failing, status: "pending" }), null);
+    assert.equal(roomStagePanel({ ...failing, status: null }), null);
+    assert.equal(roomStagePanel({ ...failing, here: false }), null);
+    assert.equal(roomStagePanel({ ...failing, connection: "reconnecting" }), null);
+  });
+});

@@ -108,6 +108,13 @@ export function useVoiceRecorder() {
     const room = getRoomSession();
     if (room.micOn) {
       await room.toggleMic();
+      // Read the PUBLICATION, not the session's flag (which re-renders a beat
+      // later): a mute that did not take must never be announced as done,
+      // with the room still hearing everything this note records.
+      if (room.room?.localParticipant.isMicrophoneEnabled) {
+        setError("Mute your gist room mic before recording a voice note.");
+        return false;
+      }
       toast("Your gist room mic is muted while you record.");
     }
 

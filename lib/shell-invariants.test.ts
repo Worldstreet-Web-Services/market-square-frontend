@@ -3372,3 +3372,42 @@ describe("the room session's second review round", () => {
     assert.match(room, /const gone = \(wasHere \|\| wasAsked\) && !here && !askingToSwitch;/);
   });
 });
+
+describe("a speaker's stage has a way back, and a mic banner that tells the truth", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("presence counts a granted speaker as seated through a failed tap to talk", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /stagePresence\(\{/);
+    assert.doesNotMatch(provider, /approved && stage\.state === "live"/);
+  });
+
+  it("the host's mic banner clears once the mic is open, and its Try again opens rather than toggles", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /if \(stage\.micOn && publishFailure\) setPublishFailure\(null\);/);
+    assert.match(provider, /const retryMic = useCallback\(\(\) => \{\s*setPublishFailure\(null\);\s*stageRetry\(\);/);
+    const room = code("features/houses/components/house-room.tsx");
+    const banner = block(room, "{here && isHost && state === \"live\" && session.micFailure && (", "\n      )}");
+    assert.match(banner, /onClick=\{\(\) => session\.stage\.retry\(\)\}/);
+    assert.doesNotMatch(banner, /toggleMic/);
+  });
+
+  it("the room view draws the stage recovery panel and wires every remedy", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /roomStagePanel\(\{/);
+    assert.match(room, /if \(action === "rejoin"\) return session\.stage\.rejoin\(\);/);
+    assert.match(room, /if \(action === "retry"\) return session\.stage\.retry\(\);/);
+  });
+
+  it("never offers Ask to speak to somebody already approved", () => {
+    assert.match(
+      code("features/houses/components/house-room.tsx"),
+      /const canAsk = !isHost && !onStage && myRequestStatus !== "approved";/
+    );
+  });
+
+  it("the voice recorder refuses to record while the room mic is still actually open", () => {
+    const recorder = code("features/messages/hooks/use-voice-recorder.ts");
+    assert.match(recorder, /room\.room\?\.localParticipant\.isMicrophoneEnabled/);
+  });
+});

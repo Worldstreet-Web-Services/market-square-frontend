@@ -24,6 +24,7 @@ import { classifyCaptureError } from "@/lib/media-errors";
 import { asRoomFailure, type RoomFailure } from "@/lib/room-connection-copy";
 import { RoomSessionController, type SessionToken } from "@/lib/room-session/controller";
 import { mediaSessionMetadata } from "@/lib/room-session/media-session";
+import { stagePresence } from "@/lib/room-session/presence";
 import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
 import { REJOIN_KEY, parseRejoin, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
@@ -232,16 +233,30 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     withCamera: false,
   });
 
-  const presence: RoomSessionView["presence"] = !target
-    ? null
-    : isHost
-      ? "host"
-      : approved && stage.state === "live"
-        ? "speaker"
-        : "listener";
+  // Seated is the approval AND the mic grant — a failed tap to talk does not
+  // hand the seat back (lib/room-session/presence.ts).
+  const presence: RoomSessionView["presence"] = stagePresence({
+    role: target?.role ?? null,
+    approved,
+    stageState: stage.state,
+    canPublishMic: stage.canPublishMic,
+  });
 
   const stageFailure = MIC_FAILURES.has(stage.state) ? asRoomFailure(stage.state) : null;
+  /*
+    The go-live publish failure is about a mic that could not be opened; once
+    it IS open the banner has nothing left to say. Adjusted during render,
+    React's pattern for state that follows another value.
+  */
+  if (stage.micOn && publishFailure) setPublishFailure(null);
   const micFailure = isHost ? (stageFailure ?? publishFailure) : null;
+  // The banner's Try again: an explicit OPEN, never the toggle — a second tap
+  // on a toggle mutes the host under a banner saying the mic would not open.
+  const stageRetry = stage.retry;
+  const retryMic = useCallback(() => {
+    setPublishFailure(null);
+    stageRetry();
+  }, [stageRetry]);
 
   /* ---- the shell's "you're live" -------------------------------------- */
 
@@ -465,7 +480,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       micDisabled: !room || !stage.canPublishMic,
       toggleMic: stage.toggleMic,
       micFailure,
-      stage: { state: stage.state, error: stage.error, retry: stage.retry, rejoin: () => void controller.reconnect() },
+      stage: { state: stage.state, error: stage.error, retry: retryMic, rejoin: () => void controller.reconnect() },
       // The live room's own captions, never the previous room's while the next connects.
       captionUrl: controller.captionUrl,
       canPlayAudio,
@@ -503,7 +518,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       stage.toggleMic,
       stage.state,
       stage.error,
-      stage.retry,
+      retryMic,
       micFailure,
       controller,
       canPlayAudio,
