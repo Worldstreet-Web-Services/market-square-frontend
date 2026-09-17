@@ -1,0 +1,302 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  HOST_MUTE_LABEL,
+  HOST_MUTE_TOAST,
+  INITIAL_HOST_MUTE_TOAST,
+  hostMuteControl,
+  hostMuteOf,
+  MUTE_TOAST_DEDUPE_MS,
+  MUTE_UNAVAILABLE,
+  muteErrorMessage,
+  muteFailure,
+  mutedByHost,
+  stepHostMuteBadges,
+  stepHostMuteToast,
+  type HostMuteToastState,
+} from "./host-mute.ts";
+
+describe("the Muted by host badge", () => {
+  it("reads the attribute: any value set, other than an explicit false, is a host mute", () => {
+    assert.equal(hostMuteOf({ hostMuted: "soft" }), "soft");
+    // What the service actually writes (streaming-provider muteMicrophone).
+    assert.equal(hostMuteOf({ hostMuted: "true" }), "soft");
+    assert.equal(hostMuteOf({ hostMuted: "false" }), "none");
+    assert.equal(hostMuteOf({ hostMuted: "" }), "none");
+    assert.equal(hostMuteOf({ hostMuted: "none" }), "none");
+    assert.equal(hostMuteOf({}), "none");
+    assert.equal(hostMuteOf(null), "none");
+  });
+
+  it("shows while the attribute is set AND the mic is muted", () => {
+    assert.equal(mutedByHost({ hostMuted: "soft" }, true), true);
+    assert.equal(mutedByHost({ hostMuted: "true" }, true), true);
+  });
+
+  it("goes away when the speaker unmutes themselves, though the attribute stays", () => {
+    assert.equal(mutedByHost({ hostMuted: "soft" }, false), false);
+  });
+
+  it("is never drawn for a speaker who muted themselves", () => {
+    assert.equal(mutedByHost({}, true), false);
+  });
+});
+
+describe("the badge remembers whether the speaker has unmuted since the host's mute", () => {
+  type Seat = { identity: string; token: string; published: boolean; micMuted: boolean };
+  const seat = (token: string, micMuted: boolean, published = true): Seat => ({ identity: "did:ben#speaker", token, published, micMuted });
+  const play = (readings: Seat[][]) => {
+    let memory = new Map();
+    const out: boolean[] = [];
+    for (const seats of readings) {
+      const step = stepHostMuteBadges(memory, seats);
+      memory = step.memory;
+      out.push(step.badges.get("did:ben#speaker") ?? false);
+    }
+    return out;
+  };
+
+  it("per-mute values: host mutes, speaker unmutes and talks, then mutes themselves: no badge on their own choice", () => {
+    assert.deepEqual(
+      play([[seat("", false)], [seat("soft:1", false)], [seat("soft:1", true)], [seat("soft:1", false)], [seat("soft:1", true)]]),
+      [false, false, true, false, false]
+    );
+  });
+
+  it("the service's constant 'true': a second host mute after a self-unmute shows the badge again", () => {
+    // The value does not change, so nothing tells a second mute from the first;
+    // the product rule (attribute set AND mic muted) decides.
+    assert.deepEqual(
+      play([[seat("", false)], [seat("true", false)], [seat("true", true)], [seat("true", false)], [seat("true", true)]]),
+      [false, false, true, false, true]
+    );
+  });
+
+  it("the attribute that lands before the track mute is not lifted by the mic still being on", () => {
+    assert.deepEqual(play([[seat("", false)], [seat("soft:1", false)], [seat("soft:1", true)]]), [false, false, true]);
+    assert.deepEqual(play([[seat("", false)], [seat("true", false)], [seat("true", true)]]), [false, false, true]);
+  });
+
+  it("per-mute values: a viewer who arrives after the speaker unmuted never reads their own mute as the host's", () => {
+    assert.deepEqual(play([[seat("soft:1", false)], [seat("soft:1", true)]]), [false, false]);
+  });
+
+  it("per-mute values: moved down, seated again, mic on and then off by themselves is no badge", () => {
+    assert.deepEqual(
+      play([[seat("soft:1", true)], [], [seat("soft:1", true, false)], [seat("soft:1", false)], [seat("soft:1", true)]]),
+      [true, false, false, false, false]
+    );
+  });
+
+  it("a new host mute (a new attribute value) shows the badge again", () => {
+    assert.deepEqual(
+      play([[seat("soft:1", true)], [seat("soft:1", false)], [seat("soft:2", false)], [seat("soft:2", true)]]),
+      [true, false, false, true]
+    );
+  });
+
+  it("moved down and seated again with the mic unpublished: no badge before they have done anything", () => {
+    assert.deepEqual(play([[seat("soft", true)], [], [seat("soft", true, false)]]), [true, false, false]);
+  });
+
+  it("the attribute cleared is no badge, and a mute after it is witnessed", () => {
+    assert.deepEqual(
+      play([[seat("soft:1", true)], [seat("", true)], [seat("soft:2", false)], [seat("soft:2", true)]]),
+      [true, false, false, true]
+    );
+  });
+
+  it("reads a per-mute attribute value as a host mute", () => {
+    assert.equal(hostMuteOf({ hostMuted: "soft:1726570000000" }), "soft");
+  });
+});
+
+const seatedGuest = {
+  viewerIsHost: true,
+  seated: true,
+  targetIsHost: false,
+  isSelf: false,
+  micMuted: false,
+  unavailable: false,
+};
+
+describe("the host's Mute for everyone", () => {
+  it("is offered on a seated guest whose mic is on", () => {
+    assert.deepEqual(hostMuteControl(seatedGuest), { kind: "mute", disabled: false, label: HOST_MUTE_LABEL });
+    assert.equal(HOST_MUTE_LABEL, "Mute for everyone");
+  });
+
+  it("nobody can mute the host — not even the host", () => {
+    assert.deepEqual(hostMuteControl({ ...seatedGuest, targetIsHost: true }), { kind: "hidden" });
+    assert.deepEqual(hostMuteControl({ ...seatedGuest, isSelf: true }), { kind: "hidden" });
+  });
+
+  it("is hidden from anyone but the host, over the audience, and while the route is not deployed", () => {
+    assert.deepEqual(hostMuteControl({ ...seatedGuest, viewerIsHost: false }), { kind: "hidden" });
+    assert.deepEqual(hostMuteControl({ ...seatedGuest, seated: false }), { kind: "hidden" });
+    assert.deepEqual(hostMuteControl({ ...seatedGuest, unavailable: true }), { kind: "hidden" });
+  });
+
+  it("is disabled with a reason when their mic is already off", () => {
+    assert.deepEqual(hostMuteControl({ ...seatedGuest, micMuted: true }), {
+      kind: "mute",
+      disabled: true,
+      label: HOST_MUTE_LABEL,
+      reason: "Their mic is already off.",
+    });
+  });
+
+  it("offers no lock and no unmute, anywhere", () => {
+    const labels = JSON.stringify([hostMuteControl(seatedGuest), hostMuteControl({ ...seatedGuest, micMuted: true })]);
+    assert.doesNotMatch(labels, /lock|unmute/i);
+  });
+});
+
+const NOW = 1_000_000;
+type Reading = { current: "none" | "soft"; micOn: boolean; signalled?: boolean; at?: number };
+const run = (readings: Reading[], from: HostMuteToastState = INITIAL_HOST_MUTE_TOAST) => {
+  let state = from;
+  const toasts: number[] = [];
+  readings.forEach((reading, index) => {
+    const step = stepHostMuteToast(state, {
+      current: reading.current,
+      micOn: reading.micOn,
+      signalled: reading.signalled ?? false,
+      now: reading.at ?? NOW + index * 10,
+    });
+    state = step.state;
+    if (step.toast) toasts.push(index);
+  });
+  return { state, toasts };
+};
+
+describe("the muted speaker is told once", () => {
+  it("toasts for the value the service really writes ('true')", () => {
+    let state = INITIAL_HOST_MUTE_TOAST;
+    const toasts: number[] = [];
+    [{ hostMuted: "" }, { hostMuted: "true" }].forEach((attributes, index) => {
+      const step = stepHostMuteToast(state, { current: hostMuteOf(attributes), token: attributes.hostMuted, micOn: index === 0, signalled: false, now: NOW + index });
+      state = step.state;
+      if (step.toast) toasts.push(index);
+    });
+    assert.deepEqual(toasts, [1]);
+  });
+
+  it("toasts when the attribute turns to soft and the mic is off", () => {
+    assert.deepEqual(run([{ current: "none", micOn: true }, { current: "soft", micOn: false }]).toasts, [1]);
+    assert.equal(HOST_MUTE_TOAST, "The host muted your mic. You can unmute when it's your turn.");
+  });
+
+  it("the first reading on a connection is the room as found, not news — a reconnect replay included", () => {
+    assert.deepEqual(run([{ current: "soft", micOn: false }]).toasts, []);
+    assert.deepEqual(run([{ current: "soft", micOn: false }, { current: "soft", micOn: false }]).toasts, []);
+  });
+
+  it("an attribute that lands before the track mute still toasts, once the mic is off", () => {
+    assert.deepEqual(
+      run([{ current: "none", micOn: true }, { current: "soft", micOn: true }, { current: "soft", micOn: false }]).toasts,
+      [2]
+    );
+  });
+
+  it("the push is a signal to look: it toasts only once the attribute and the mic agree", () => {
+    assert.deepEqual(run([{ current: "none", micOn: true }, { current: "none", micOn: true, signalled: true }]).toasts, []);
+    assert.deepEqual(
+      run([{ current: "none", micOn: true }, { current: "none", micOn: true, signalled: true }, { current: "soft", micOn: false }]).toasts,
+      [2]
+    );
+  });
+
+  it("a second mute, after the speaker unmuted themselves, is noticed through the push", () => {
+    const first = run([{ current: "none", micOn: true }, { current: "soft", micOn: false }]);
+    const second = run(
+      [
+        { current: "soft", micOn: true, at: NOW + 60_000 },
+        { current: "soft", micOn: false, signalled: true, at: NOW + 61_000 },
+      ],
+      first.state
+    );
+    assert.deepEqual(second.toasts, [1]);
+  });
+
+  it("a second mute is noticed WITHOUT the push when the service writes a new value per mute", () => {
+    let state = INITIAL_HOST_MUTE_TOAST;
+    const readings: { token: string; micOn: boolean; at: number }[] = [
+      { token: "", micOn: true, at: NOW },
+      { token: "soft:1", micOn: false, at: NOW + 1_000 },
+      { token: "soft:1", micOn: true, at: NOW + 60_000 },
+      { token: "soft:2", micOn: false, at: NOW + 90_000 },
+    ];
+    const toasts: number[] = [];
+    readings.forEach((reading, index) => {
+      const current = reading.token ? "soft" : "none";
+      const step = stepHostMuteToast(state, { current, token: reading.token, micOn: reading.micOn, signalled: false, now: reading.at });
+      state = step.state;
+      if (step.toast) toasts.push(index);
+    });
+    assert.deepEqual(toasts, [1, 3]);
+  });
+
+  it("a push that lands after the speaker already unmuted does not arm a toast for their own mute later", () => {
+    // The host mutes (track mute first, nothing armed), the speaker unmutes at
+    // once, THEN the push arrives with the mic on. Minutes later they mute themselves.
+    const { toasts } = run([
+      { current: "none", micOn: true, at: NOW },
+      { current: "soft", micOn: false, at: NOW + 100 },
+      { current: "soft", micOn: true, at: NOW + 6_000 },
+      { current: "soft", micOn: true, signalled: true, at: NOW + 6_500 },
+      { current: "soft", micOn: false, at: NOW + 180_000 },
+    ]);
+    assert.deepEqual(toasts, [1]);
+  });
+
+  it("an arming still toasts when the mic goes off within the window", () => {
+    const { toasts } = run([
+      { current: "soft", micOn: true, at: NOW },
+      { current: "soft", micOn: true, signalled: true, at: NOW + 60_000 },
+      { current: "soft", micOn: false, at: NOW + 60_000 + MUTE_TOAST_DEDUPE_MS - 1 },
+    ]);
+    assert.deepEqual(toasts, [2]);
+  });
+
+  it("the attribute and the push for one mute make one toast", () => {
+    const { toasts } = run([
+      { current: "none", micOn: true },
+      { current: "soft", micOn: false },
+      { current: "soft", micOn: false, signalled: true },
+    ]);
+    assert.deepEqual(toasts, [1]);
+  });
+
+  it("never toasts about a mic that is on, or a mute already lifted", () => {
+    assert.deepEqual(run([{ current: "none", micOn: true }, { current: "soft", micOn: true }]).toasts, []);
+    assert.deepEqual(
+      run([{ current: "none", micOn: true }, { current: "soft", micOn: true }, { current: "none", micOn: false }]).toasts,
+      []
+    );
+  });
+});
+
+describe("mute errors", () => {
+  it("an undeployed mute route hides the control AND tells the host, never a silent no-op", () => {
+    assert.deepEqual(muteFailure({ missing: true, error: { code: "NOT_FOUND" }, name: "Ada" }), {
+      unavailable: true,
+      message: "Mute for everyone isn't available yet.",
+    });
+    assert.equal(MUTE_UNAVAILABLE, "Mute for everyone isn't available yet.");
+    assert.deepEqual(muteFailure({ missing: false, error: { code: "NOT_A_SPEAKER" }, name: "Ada" }), {
+      unavailable: false,
+      message: "Ada is not on the stage any more.",
+    });
+  });
+
+  it("names the problem without blaming anybody", () => {
+    assert.equal(muteErrorMessage({ code: "STREAM_NOT_LIVE" }), "The gist room isn't live.");
+    assert.equal(muteErrorMessage({ code: "NOT_A_SPEAKER" }, "Ada"), "Ada is not on the stage any more.");
+    assert.equal(muteErrorMessage({ code: "BAD_RESPONSE" }, "Ada"), "Couldn't mute Ada.");
+    assert.equal(muteErrorMessage(null), "Couldn't mute them.");
+    for (const code of ["TOO_MANY_REQUESTS", "RATE_LIMITED"]) {
+      assert.equal(muteErrorMessage({ code }), "Too many mutes at once. Try again in a moment.", code);
+    }
+  });
+});

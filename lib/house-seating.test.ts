@@ -32,6 +32,8 @@ function slot(identity: string, role: "host" | "guest"): StageSlot {
     audioTrack: null,
     isSpeaking: false,
     isMuted: false,
+    mutedByHost: false,
+    hostMuteToken: "",
     cameraOff: true,
     connectionQuality: "unknown",
     state: "live",

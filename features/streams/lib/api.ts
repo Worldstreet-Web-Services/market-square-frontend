@@ -338,12 +338,81 @@ export async function fetchSpeakerRequests(streamId: string) {
   );
 }
 
+/**
+ * What may be done to a speaker-request row.
+ *
+ * `accept` / `reject` are the INVITEE's answers to a host's invitation and
+ * `cancel` the host taking one back — widened ahead of the backend (invite to
+ * speak). Until it ships the service refuses them with a VALIDATION_ERROR on
+ * `action`, which lib/speaker-invite.ts `routeMissing` reads as "not deployed".
+ * A host's `approve` on an invited row answers 409 AWAITING_INVITEE: consent is
+ * the invitee's, never the host's.
+ */
+export type SpeakerRequestAction = "approve" | "decline" | "remove" | "leave" | "accept" | "reject" | "cancel";
+
 export async function resolveSpeakerRequest(
   streamId: string,
   requestId: string,
-  action: "approve" | "decline" | "remove" | "leave"
+  action: SpeakerRequestAction
 ) {
   return SpeakerRequestSchema.parse(
     await msApi.post(`/streams/${streamId}/speaker-requests/${requestId}/${action}`)
+  );
+}
+
+/**
+ * Ask a listener up — `POST /streams/:id/speaker-invites { userId }`, host only.
+ *
+ * NOT DEPLOYED YET: the router's "Route not found" hides the control
+ * (lib/speaker-invite.ts). 201 is a new invitation (`invited`, 60s), 200 the
+ * one already open; a listener whose hand was already up is simply seated,
+ * and the row comes back `approved`. Nothing here seats anybody on a guess.
+ */
+export async function inviteToSpeak(streamId: string, userId: string) {
+  return SpeakerRequestSchema.parse(
+    await msApi.post(`/streams/${streamId}/speaker-invites`, { userId })
+  );
+}
+
+/**
+ * The host's open invitations — the request list filtered to `invited`.
+ *
+ * Filtered AGAIN on the client: an older service that ignored the filter
+ * would otherwise hand back the pending queue under an "Invited" heading.
+ */
+export async function fetchSpeakerInvites(streamId: string) {
+  const list = SpeakerRequestListSchema.parse(
+    await msApi.authedGet(`/streams/${streamId}/speaker-requests`, { status: "invited" })
+  );
+  return { ...list, items: list.items.filter((item) => item.status === "invited") };
+}
+
+/**
+ * The host's seated speakers — the request list filtered to `approved`.
+ *
+ * The plain list defaults to `pending` on the service, so an accepted
+ * invitation never shows up there; without this, an invitee whose grant had
+ * not reached LiveKit yet was reported to the host as "isn't available".
+ * Filtered again on the client for the same reason as the invited list.
+ */
+export async function fetchSeatedSpeakers(streamId: string) {
+  const list = SpeakerRequestListSchema.parse(
+    await msApi.authedGet(`/streams/${streamId}/speaker-requests`, { status: "approved" })
+  );
+  return { ...list, items: list.items.filter((item) => item.status === "approved") };
+}
+
+/**
+ * The host's soft mute — `POST /streams/:id/speakers/:userId/mute`, owner only.
+ *
+ * Mutes the speaker's MICROPHONE on the server and sets the `hostMuted`
+ * attribute on them (the service writes `'true'`; lib/host-mute.ts reads any
+ * value set); they may unmute themselves. There is no unmute route and no lock, by
+ * decision. `userId` is the BARE user id (`baseIdentity`), never `#speaker`.
+ * NOT DEPLOYED YET: a route 404 hides the control.
+ */
+export async function muteSpeaker(streamId: string, userId: string) {
+  return msApi.post<{ userId: string; muted: boolean; reached: boolean; tracksMuted: number }>(
+    `/streams/${streamId}/speakers/${encodeURIComponent(userId)}/mute`
   );
 }

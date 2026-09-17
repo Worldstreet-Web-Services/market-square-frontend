@@ -8,11 +8,15 @@ import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import {
   useResolveSpeakerRequest,
+  useSeatedSpeakers,
   useSpeakerRequests,
 } from "@/features/streams/hooks/use-streams";
 import type { SpeakerRequest, Stream } from "@/features/streams/lib/types";
 import { RequestRow } from "@/features/houses/components/request-row";
 import { SEAT_COUNT } from "@/features/houses/lib/seating";
+import { InvitedGroup, type InvitedList } from "@/features/houses/components/invited-group";
+import type { HostMuteControl } from "@/lib/host-mute";
+import { seatPresence } from "@/lib/speaker-seat";
 
 /**
  * The host's triage sheet.
@@ -46,6 +50,9 @@ export function HandTray({
   seatsFull,
   requestsOpen,
   onRequestsOpenChange,
+  invited,
+  connected,
+  muteFor,
 }: {
   stream: Stream;
   open: boolean;
@@ -54,14 +61,28 @@ export function HandTray({
   seatsFull: boolean;
   requestsOpen: boolean;
   onRequestsOpenChange: (next: boolean) => void;
+  /** The host's open invitations, with Cancel. Empty until invite ships. */
+  invited: InvitedList;
+  /**
+    Bare user ids of everyone connected, seated or not. A seated speaker not
+    in it has dropped and is inside the service's grace window. Null until
+    the room is read.
+  */
+  connected: ReadonlySet<string> | null;
+  /** The host's soft mute over one seated person, by user id. */
+  muteFor: (userId: string) => { name: string; control: HostMuteControl; onMute: () => void };
 }) {
   // The SAME key the control bar's counter reads: one cache, one poll.
   const requests = useSpeakerRequests(stream.id, stream.status === "live");
   const resolve = useResolveSpeakerRequest(stream.id);
 
+  // The queue is PENDING-only on the service unless asked, so seated speakers
+  // are their own read (the same key the room's Move down uses).
+  const seatedQuery = useSeatedSpeakers(stream.id, stream.status === "live");
+
   const items = requests.data?.items ?? [];
   const pending = items.filter((item) => item.status === "pending");
-  const seated = items.filter((item) => item.status === "approved");
+  const seated = (seatedQuery.data?.items ?? []).filter((item) => item.status === "approved");
 
   /**
    * Announce an arrival — the host is talking, not watching a badge.
@@ -150,10 +171,14 @@ export function HandTray({
           )}
         </section>
 
+        <InvitedGroup invited={invited} />
+
         {seated.length > 0 && (
           <section className="space-y-2">
             <p className="ws-meta">Seated</p>
-            {seated.map((item) => (
+            {seated.map((item) => {
+              const mute = muteFor(item.userId);
+              return (
               <div key={item.id} className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
                 <Avatar
                   name={item.profile?.displayName ?? "Speaker"}
@@ -161,19 +186,54 @@ export function HandTray({
                   src={item.profile?.avatarUrl}
                   size={32}
                 />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-grey-300">
-                  {item.profile?.displayName ?? "Speaker"}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-grey-300">
+                    {item.profile?.displayName ?? "Speaker"}
+                  </span>
+                  {/* Dropped, inside the grace window: the seat is held for a
+                      minute, then the service moves them to the audience. */}
+                  {seatPresence(item.userId, connected) === "reconnecting" && (
+                    <span className="block text-[11px] leading-4 text-grey-400">Reconnecting…</span>
+                  )}
+                  {/* The reason in words: a title tooltip never reaches a phone
+                      or a screen reader. */}
+                  {mute.control.kind === "mute" && mute.control.disabled && (
+                    <span id={`mute-reason-${item.id}`} className="block text-[11px] leading-4 text-grey-300">{mute.control.reason}</span>
+                  )}
                 </span>
+                {/* Soft: they can unmute. Never a lock, never a host unmute.
+                    44px on touch, and gap-3 keeps it 12px off Move down. */}
+                {mute.control.kind === "mute" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Mute ${mute.name} for everyone`}
+                    // Its reason is read with it, not only seen beside it.
+                    aria-describedby={mute.control.kind === "mute" && mute.control.disabled ? `mute-reason-${item.id}` : undefined}
+                    aria-disabled={mute.control.disabled}
+                    onClick={() => {
+                      if (mute.control.kind === "mute" && !mute.control.disabled) mute.onMute();
+                    }}
+                    className={cn(
+                      "pointer-coarse:h-11 pointer-coarse:min-w-11",
+                      mute.control.disabled && "cursor-not-allowed opacity-50"
+                    )}
+                  >
+                    {mute.control.label}
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
                   disabled={resolve.isPending}
                   onClick={() => act(item, "remove")}
+                  className="pointer-coarse:h-11 pointer-coarse:min-w-11"
                 >
                   Move down
                 </Button>
               </div>
-            ))}
+              );
+            })}
             {/* Survives verbatim from the stream tray, and it is still the
                 honest sentence: `approved` is a decision the host made, not
                 proof the guest's browser acquired a microphone. */}

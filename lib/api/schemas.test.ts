@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ProfileSchema } from "./schemas.ts";
+import { ProfileSchema, SpeakerRequestSchema } from "./schemas.ts";
 import { readFileSync } from "node:fs";
 
 // A minimal ProfileSummary as the service hydrates it.
@@ -200,5 +200,92 @@ describe("ProfileSchema.username picks the handle to route and print by", () => 
     assert.equal(given.displayName, "Member ·C123");
     const chose = ProfileSchema.parse({ ...base, username: "amara", displayName: null });
     assert.equal(chose.displayName, "amara");
+  });
+});
+
+describe("SpeakerRequestSchema accepts the invite-to-speak fields before the backend sends them", () => {
+  // A row exactly as GET /speaker-requests/me serves it today.
+  const legacy = {
+    id: "req_1",
+    streamId: "str_1",
+    userId: "did:privy:abc123",
+    status: "pending",
+    createdAt: "2026-09-17T10:00:00.000Z",
+  };
+
+  it("parses a legacy payload with every new field defaulted", () => {
+    const parsed = SpeakerRequestSchema.parse(legacy);
+    assert.equal(parsed.status, "pending");
+    assert.equal(parsed.initiatedBy, "listener");
+    assert.equal(parsed.expiresAt, null);
+  });
+
+  it("parses a host invitation with its expiry, which is inviteExpiresAt and never expiresAt", () => {
+    // The service's field (wsws-monorepo market-square SpeakerRequest):
+    // `expiresAt` on /me is the approved speaker's JOIN TOKEN expiry, so the
+    // invitation's own clock has a name of its own.
+    const parsed = SpeakerRequestSchema.parse({
+      ...legacy,
+      status: "invited",
+      initiatedBy: "host",
+      inviteExpiresAt: "2026-09-17T10:01:00.000Z",
+      expiresAt: "2026-09-17T11:00:00.000Z",
+    });
+    assert.equal(parsed.status, "invited");
+    assert.equal(parsed.initiatedBy, "host");
+    assert.equal(parsed.inviteExpiresAt, "2026-09-17T10:01:00.000Z");
+    assert.equal(parsed.expiresAt, "2026-09-17T11:00:00.000Z");
+    assert.equal(SpeakerRequestSchema.parse(legacy).inviteExpiresAt, null);
+  });
+
+  it("carries no mute flags: the host's mute is the LiveKit attribute, and there is no hard mute", () => {
+    const parsed = SpeakerRequestSchema.parse({ ...legacy, status: "approved", hostMuted: true, muteHard: true });
+    assert.equal("hostMuted" in parsed, false);
+    assert.equal("muteHard" in parsed, false);
+  });
+
+  it("still refuses an unknown status as a status: it never reaches the client as itself", () => {
+    // The whole payload must still parse — a new status breaking /me is the
+    // outage this widening exists to prevent — but the value is not accepted:
+    // it falls to `pending`, as it always has, and never masquerades as
+    // `invited` or `approved`.
+    const parsed = SpeakerRequestSchema.parse({ ...legacy, status: "expired" });
+    assert.equal(parsed.status, "pending");
+    assert.equal(SpeakerRequestSchema.shape.status.safeParse("expired").data, "pending");
+    assert.equal(SpeakerRequestSchema.parse({ ...legacy, initiatedBy: "robot" }).initiatedBy, "listener");
+  });
+});
+
+describe("StreamSchema.audience fails closed", async () => {
+  const { StreamSchema } = await import("./schemas.ts");
+  const { mediaSessionMetadata, PRIVATE_ROOM_METADATA } = await import("../room-session/media-session.ts");
+  const room = {
+    id: "g1",
+    ownerId: "did:privy:host",
+    owner: base,
+    title: "Late gist",
+    status: "live",
+    visibility: "public",
+    houseConversationId: null,
+  };
+
+  it("a payload with no audience is NOT read as public", () => {
+    const parsed = StreamSchema.parse(room);
+    assert.notEqual(parsed.audience, "public");
+    assert.deepEqual(mediaSessionMetadata(parsed), PRIVATE_ROOM_METADATA, "a room's topic reached the lock screen on a missing field");
+  });
+
+  it("an audience this client does not know is NOT read as public", () => {
+    for (const audience of ["followers", "unlisted", 7, null]) {
+      const parsed = StreamSchema.parse({ ...room, audience });
+      assert.notEqual(parsed.audience, "public", String(audience));
+      assert.deepEqual(mediaSessionMetadata(parsed), PRIVATE_ROOM_METADATA, String(audience));
+    }
+  });
+
+  it("an explicit public or private is kept", () => {
+    assert.equal(StreamSchema.parse({ ...room, audience: "public" }).audience, "public");
+    assert.equal(StreamSchema.parse({ ...room, audience: "private" }).audience, "private");
+    assert.deepEqual(mediaSessionMetadata(StreamSchema.parse({ ...room, audience: "public" })), { title: "Late gist", artist: "Amara Okafor" });
   });
 });

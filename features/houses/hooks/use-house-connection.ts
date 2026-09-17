@@ -1,116 +1,78 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { Room } from "livekit-client";
-import { registerRoom, unregisterRoom } from "@/features/streams/lib/live-room";
+import type { Room, RoomOptions } from "livekit-client";
+import type { SessionRoom } from "@/lib/room-session/controller";
+import { classifyDisconnect, type SessionTarget } from "@/lib/room-session/reducer";
 
 /**
- * Listener-side connect, with nothing rendered.
+ * A gist room's LiveKit Room, built for the session the SHELL owns.
  *
- * This is `LiveKitPlayer`'s connect effect, verbatim in behaviour: claim the
- * registry slot BEFORE connecting, narrate reconnects, and refuse to fight a
- * duplicate identity. What it does not do is render — `LiveKitPlayer` exists to
- * mount `LiveStage`, which is video all the way down (tile backdrops, fit
- * choices, screen-share branches, self-view mirroring), and importing it here
- * is precisely how a camera affordance comes back into a room that must never
- * have one.
+ * This was `useHouseConnection`, a hook whose effect connected on mount and
+ * disconnected on unmount — which is precisely why Back, a DM or a profile hung
+ * up the call. It is now an imperative constructor the RoomSessionProvider
+ * (components/layout/room-session.tsx) hands to the session controller
+ * (lib/room-session/controller.ts). The controller decides WHEN to connect,
+ * retry and tear down; this file only knows HOW a Room is made and which SDK
+ * events mean what.
  *
- * So the effect is copied and the component is not. That is a duplication, and
- * it is the cheaper of the two: the alternative is a shared component whose
- * every future change has to be checked against a surface with no video.
+ * Its rules are unchanged, and now tested behaviourally in
+ * lib/room-session.test.ts:
+ *   · the registry slot is claimed before connecting (the controller does it);
+ *   · reconnects are narrated;
+ *   · DUPLICATE_IDENTITY is terminal — retrying IS the eviction loop;
+ *   · THE TOKEN IS FOR JOINING, NOT FOR STAYING: a refreshed token never
+ *     reconnects a healthy room, only a failed one.
  *
- * ONE Room per stream, still. The registry (features/streams/lib/live-room.ts)
- * is the structural guard, and a house uses the same one — a host publishes on
- * the room it registers, a listener registers the room its playback token
- * opened, never two.
+ * Still no video anywhere: a host's Room carries the speech capture profile
+ * and nothing else, and a listener's Room subscribes. That profile belongs to
+ * the streams slice (`publisherRoomOptions`), and slices never import each
+ * other — so the shell, which composes both, hands it in as `hostRoomOptions`.
  */
-export type HouseConnectionState =
-  | "connecting"
-  | "live"
-  | "reconnecting"
-  | "failed"
-  /**
-   * The server evicted us because another connection joined with our identity.
-   * Reconnecting would evict that one back, so this is terminal by design —
-   * retrying IS the eviction loop.
-   */
-  | "duplicate";
+type HostRoomOptions = (
+  livekit: Pick<typeof import("livekit-client"), "AudioPresets">,
+  preferredMic?: string
+) => RoomOptions;
 
-export interface HouseConnection {
-  room: Room | null;
-  state: HouseConnectionState;
-}
+export async function connectRoom(
+  target: SessionTarget,
+  { preferredMic, hostRoomOptions }: { preferredMic?: string; hostRoomOptions: HostRoomOptions }
+): Promise<SessionRoom<Room>> {
+  const livekit = await import("livekit-client");
+  const { Room: RoomClass, RoomEvent, DisconnectReason } = livekit;
+  /*
+    `disconnectOnPageLeave: false` on both. The SDK's own default listens for
+    `beforeunload` and `pagehide` and disconnects — behind the controller's
+    back, which read it as a dropped connection and reconnected with a host's
+    mic MUTED. And `beforeunload` fires without any unload: a mailto: link, a
+    download. Tab close is the controller's (`pageHide`, wired by the shell).
+  */
+  const room =
+    target.role === "host"
+      ? new RoomClass({ ...hostRoomOptions(livekit, preferredMic), disconnectOnPageLeave: false })
+      : // adaptiveStream is a video optimisation and there is no video here,
+        // but it costs nothing and keeps the paths identical to the player's.
+        new RoomClass({ adaptiveStream: true, disconnectOnPageLeave: false });
 
-export function useHouseConnection({
-  houseId,
-  url,
-  token,
-  enabled,
-}: {
-  houseId: string;
-  url: string;
-  token: string;
-  enabled: boolean;
-}): HouseConnection {
-  const [room, setRoom] = useState<Room | null>(null);
-  const [state, setState] = useState<HouseConnectionState>("connecting");
-
-  useEffect(() => {
-    if (!enabled || !url || !token) return;
-    let room: Room | null = null;
-    let cancelled = false;
-
-    void import("livekit-client").then(async ({ Room, RoomEvent, DisconnectReason }) => {
-      if (cancelled) return;
-      // Announced here rather than in the effect body: a synchronous setState
-      // on mount is a second render for a value the state already holds, and
-      // on a TOKEN REFRESH — which re-runs this effect on a room that is
-      // already up — it would flash "Connecting…" across a conversation that
-      // never stopped.
-      setState("connecting");
-      // adaptiveStream is a video optimisation and there is no video here, but
-      // it costs nothing and keeps the two connect paths identical rather than
-      // subtly different for no stated reason.
-      const instance = new Room({ adaptiveStream: true });
-      room = instance;
-      try {
-        registerRoom(houseId, instance);
-      } catch {
-        setState("duplicate");
-        room = null;
-        return;
-      }
-      setRoom(instance);
-
-      instance
-        .on(RoomEvent.Reconnecting, () => setState("reconnecting"))
-        .on(RoomEvent.Reconnected, () => setState("live"))
-        .on(RoomEvent.Disconnected, (reason) => {
-          setState(reason === DisconnectReason.DUPLICATE_IDENTITY ? "duplicate" : "failed");
-        });
-
-      try {
-        // autoSubscribe is the default and is load-bearing: when the host
-        // approves somebody, the server-side publish grant pushes that person's
-        // mic to us with no reconnect, no new token, and nothing to do here.
-        await instance.connect(url, token);
-        if (cancelled) {
-          void instance.disconnect();
-          return;
-        }
-        setState("live");
-      } catch {
-        if (!cancelled) setState("failed");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      setRoom(null);
-      if (room) unregisterRoom(houseId, room);
-      void room?.disconnect();
-    };
-  }, [houseId, url, token, enabled]);
-
-  return { room, state };
+  return {
+    handle: room,
+    // autoSubscribe is the default and is load-bearing: when the host approves
+    // somebody, the server-side publish grant pushes that person's mic to us
+    // with no reconnect, no new token, and nothing to do here.
+    connect: (url, token) => room.connect(url, token),
+    disconnect: () => room.disconnect(),
+    listen(signals) {
+      const onReconnecting = () => signals.reconnecting();
+      const onReconnected = () => signals.reconnected();
+      const onDisconnected = (reason?: number) =>
+        signals.disconnected(classifyDisconnect(reason === undefined ? undefined : DisconnectReason[reason]));
+      room.on(RoomEvent.Reconnecting, onReconnecting);
+      room.on(RoomEvent.Reconnected, onReconnected);
+      room.on(RoomEvent.Disconnected, onDisconnected);
+      return () => {
+        room.off(RoomEvent.Reconnecting, onReconnecting);
+        room.off(RoomEvent.Reconnected, onReconnected);
+        room.off(RoomEvent.Disconnected, onDisconnected);
+      };
+    },
+  };
 }

@@ -85,7 +85,7 @@ export function PersonSafetyRows({
       {mute && (
         <Row
           icon={<IconVolume className="h-4 w-4" muted={!mute.muted} />}
-          label={mute.muted ? "Unmute for me" : "Mute for me"}
+          label={mute.muted ? "Unmute for me" : "Mute for me only"}
           hint="Only you stop hearing them. Nobody is told."
           onClick={mute.onToggle}
         />
@@ -144,4 +144,22 @@ export function PersonFollow({ username }: { username: string }) {
   const profile = useProfile(username);
   if (!profile.data) return null;
   return <FollowPill profile={profile.data} />;
+}
+
+/**
+ * Draws its children unless the viewer has blocked this person, looked up by
+ * username or, when a room token carried none, by account id.
+ *
+ * The host's Invite to speak row goes through this in a house: a person the
+ * host blocked is simply not offered, rather than offered and then refused.
+ * NOT shown until the profile has loaded: while it loads, or when it fails,
+ * the block is unknown, and a row drawn then offered a blocked person the
+ * invitation. A block BY the target is not on this edge and stays the
+ * service's to refuse quietly.
+ */
+export function HideIfBlocked({ handle, children }: { handle: string; children: React.ReactNode }) {
+  // A username or an account id: `GET /profiles/:handle` resolves either.
+  const profile = useProfile(handle);
+  if (!profile.data || profile.data.isBlocked) return null;
+  return <>{children}</>;
 }

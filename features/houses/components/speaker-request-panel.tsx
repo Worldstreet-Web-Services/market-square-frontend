@@ -7,6 +7,7 @@ import {
 } from "@/features/streams/hooks/use-streams";
 import type { Stream } from "@/features/streams/lib/types";
 import { SEAT_COUNT } from "@/features/houses/lib/seating";
+import { InvitedGroup, type InvitedList } from "@/features/houses/components/invited-group";
 
 /**
  * SPEAKER REQUEST — node 129:12809, the band that opens the room's right
@@ -45,10 +46,13 @@ export function SpeakerRequestPanel({
   stream,
   seatsFull,
   onManage,
+  invited,
 }: {
   stream: Stream;
   seatsFull: boolean;
   onManage: () => void;
+  /** The host's open invitations — drawn here too, so a Cancel is as close as an Approve. */
+  invited: InvitedList;
 }) {
   const requests = useSpeakerRequests(stream.id, stream.status === "live");
   const resolve = useResolveSpeakerRequest(stream.id);
@@ -61,8 +65,9 @@ export function SpeakerRequestPanel({
   const seated = items.some((item) => item.status === "approved");
   const fullReason = `All ${SEAT_COUNT} seats are taken. Move someone down first.`;
 
-  // Nothing waiting, nothing drawn. See note 1.
-  if (pending.length === 0) return null;
+  // Nothing waiting, nothing drawn. See note 1. An open invitation is
+  // something waiting too — on the listener rather than the host.
+  if (pending.length === 0 && invited.items.length === 0) return null;
 
   return (
     <div className="ws-hair border-b p-6">
@@ -81,6 +86,7 @@ export function SpeakerRequestPanel({
         </div>
 
         {/* 52 − 16 − 20 = 16px between the heading and the first row. */}
+        {pending.length > 0 && (
         <div className="mt-4 flex max-h-[220px] flex-col gap-2 overflow-y-auto">
           {pending.map((item) => (
             <RequestRow
@@ -94,8 +100,15 @@ export function SpeakerRequestPanel({
             />
           ))}
         </div>
+        )}
 
-        {seatsFull && (
+        {invited.items.length > 0 && (
+          <div className="mt-3">
+            <InvitedGroup invited={invited} />
+          </div>
+        )}
+
+        {seatsFull && pending.length > 0 && (
           <p className="mt-2 text-[11px] leading-4 text-white/50">{fullReason}</p>
         )}
       </div>
