@@ -3900,6 +3900,32 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     }
   });
 
+  it("the sheet's host rows stay focusable, keep one invite toggle, and explain themselves at full contrast", () => {
+    assert.doesNotMatch(sheet, /label="Cancel invitation"|label="Invite to speak"/, "invite and cancel are two elements again");
+    assert.match(sheet, /\? "Cancel invitation" : "Invite to speak"/);
+    const row = sheet.slice(sheet.indexOf("function HostRow"));
+    assert.match(row, /aria-disabled=\{disabled\}/);
+    assert.doesNotMatch(row, /(?<!aria-)disabled=\{disabled\}|disabled:opacity-50/);
+    assert.match(row, /className="mt-0\.5 text-\[11px\] leading-4 text-grey-300"/);
+    assert.match(row, /handFocusOn\(/);
+  });
+
+  it("the Invited rows: named, touch-sized, readable, and a Cancel hands focus on", () => {
+    const group = code("features/houses/components/invited-group.tsx");
+    assert.match(group, /aria-label=\{`Cancel invitation for \$\{name\}`\}/);
+    assert.match(group, /aria-disabled=\{invited\.busy\}/);
+    assert.match(group, /pointer-coarse:h-11 pointer-coarse:min-w-11/);
+    assert.doesNotMatch(group, /text-meta/);
+    assert.match(group, /handFocusOn\(/);
+  });
+
+  it("the tray's mute is named, touch-sized, and says why it is off in words, not a tooltip", () => {
+    assert.match(tray, /aria-label=\{`Mute \$\{mute\.name\} for everyone`\}/);
+    assert.doesNotMatch(tray, /title=\{mute\.control/);
+    assert.match(tray, /\{mute\.control\.kind === "mute" && mute\.control\.disabled && \(\s*<span className="block text-\[11px\] leading-4 text-grey-300">\{mute\.control\.reason\}<\/span>/);
+    assert.ok((tray.match(/pointer-coarse:h-11 pointer-coarse:min-w-11/g) ?? []).length >= 2, "Mute and Move down are not 44px on touch");
+  });
+
   it("everyone sees who turned a mic off, straight from the seat", () => {
     assert.match(room, /mutedByHost: slot\.mutedByHost,/);
     assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);

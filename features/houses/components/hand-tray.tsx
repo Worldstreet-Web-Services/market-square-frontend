@@ -61,7 +61,7 @@ export function HandTray({
   /** The host's open invitations, with Cancel. Empty until invite ships. */
   invited: InvitedList;
   /** The host's soft mute over one seated person, by user id. */
-  muteFor: (userId: string) => { control: HostMuteControl; onMute: () => void };
+  muteFor: (userId: string) => { name: string; control: HostMuteControl; onMute: () => void };
 }) {
   // The SAME key the control bar's counter reads: one cache, one poll.
   const requests = useSpeakerRequests(stream.id, stream.status === "live");
@@ -173,17 +173,31 @@ export function HandTray({
                   src={item.profile?.avatarUrl}
                   size={32}
                 />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-grey-300">
-                  {item.profile?.displayName ?? "Speaker"}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-grey-300">
+                    {item.profile?.displayName ?? "Speaker"}
+                  </span>
+                  {/* The reason in words: a title tooltip never reaches a phone
+                      or a screen reader. */}
+                  {mute.control.kind === "mute" && mute.control.disabled && (
+                    <span className="block text-[11px] leading-4 text-grey-300">{mute.control.reason}</span>
+                  )}
                 </span>
-                {/* Soft: they can unmute. Never a lock, never a host unmute. */}
+                {/* Soft: they can unmute. Never a lock, never a host unmute.
+                    44px on touch, and gap-3 keeps it 12px off Move down. */}
                 {mute.control.kind === "mute" && (
                   <Button
                     size="sm"
                     variant="ghost"
-                    disabled={mute.control.disabled}
-                    title={mute.control.disabled ? mute.control.reason : undefined}
-                    onClick={mute.onMute}
+                    aria-label={`Mute ${mute.name} for everyone`}
+                    aria-disabled={mute.control.disabled}
+                    onClick={() => {
+                      if (mute.control.kind === "mute" && !mute.control.disabled) mute.onMute();
+                    }}
+                    className={cn(
+                      "pointer-coarse:h-11 pointer-coarse:min-w-11",
+                      mute.control.disabled && "cursor-not-allowed opacity-50"
+                    )}
                   >
                     {mute.control.label}
                   </Button>
@@ -193,6 +207,7 @@ export function HandTray({
                   variant="ghost"
                   disabled={resolve.isPending}
                   onClick={() => act(item, "remove")}
+                  className="pointer-coarse:h-11 pointer-coarse:min-w-11"
                 >
                   Move down
                 </Button>

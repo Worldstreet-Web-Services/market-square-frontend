@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { cn } from "@/lib/cn";
+import { focusLost, handFocusOn } from "@/lib/focus-handoff";
 import { atHandle } from "@/lib/handle";
 import { Avatar } from "@/components/ui/avatar";
 import { RoleChip, VerifiedBadge } from "@/components/ui/badge";
@@ -142,21 +145,23 @@ export function PersonSheet({
         {isHost && !person.seated && !hostActions && person.pendingRequestId && (
           <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
         )}
-        {isHost && hostActions?.invite.kind === "invite" && (
+        {/* ONE element for Invite and Cancel: swapping two conditional rows
+            unmounted the focused one and dropped focus out of the modal. */}
+        {isHost && hostActions && (hostActions.invite.kind === "invite" || hostActions.invite.kind === "invited") && (
           <HostRow
-            label="Invite to speak"
-            hint={hostActions.invite.disabled ? hostActions.invite.reason : "They'll be asked first. Their mic stays off until they tap it."}
-            disabled={hostActions.invite.disabled || hostActions.busy}
-            onClick={hostActions.onInvite}
-          />
-        )}
-        {isHost && hostActions?.invite.kind === "invited" && (
-          <HostRow
-            label="Cancel invitation"
-            hint="Invited. Waiting for them to answer."
-            disabled={hostActions.busy}
+            label={hostActions.invite.kind === "invited" ? "Cancel invitation" : "Invite to speak"}
+            hint={
+              hostActions.invite.kind === "invited"
+                ? "Invited. Waiting for them to answer."
+                : hostActions.invite.disabled
+                  ? hostActions.invite.reason
+                  : "They'll be asked first. Their mic stays off until they tap it."
+            }
+            live
+            disabled={(hostActions.invite.kind === "invite" && hostActions.invite.disabled) || hostActions.busy}
             onClick={() => {
               if (hostActions.invite.kind === "invited") hostActions.onCancelInvite(hostActions.invite.requestId);
+              else hostActions.onInvite();
             }}
           />
         )}
@@ -191,26 +196,65 @@ export function PersonSheet({
   );
 }
 
+/**
+ * A host action. Disabled is `aria-disabled`, never `disabled`: a button that
+ * disables drops its focus, and the row explaining WHY it is off must stay
+ * reachable and readable, so only the label dims. A row that leaves while
+ * focused (Invite once they are seated, Seat once they are up) hands focus to
+ * the first host row left, or the sheet itself — never to <body> outside it.
+ */
 function HostRow({
   label,
   hint,
   disabled,
   onClick,
+  live = false,
 }: {
   label: string;
   hint?: string;
   disabled: boolean;
   onClick: () => void;
+  /** The hint changes in place (Invited. Waiting…) and is read when it does. */
+  live?: boolean;
 }) {
+  const button = useRef<HTMLButtonElement>(null);
+  const focused = useRef(false);
+  useEffect(() => {
+    const dialog = button.current?.closest<HTMLElement>('[role="dialog"]') ?? null;
+    return () => {
+      if (!focused.current) return;
+      window.setTimeout(() => {
+        const active = document.activeElement as HTMLElement | null;
+        if (!focusLost(active, document.body) || !dialog) return;
+        if (!dialog.hasAttribute("tabindex")) dialog.setAttribute("tabindex", "-1");
+        handFocusOn(active, document.body, [dialog.querySelector<HTMLElement>("[data-host-row]"), dialog]);
+      }, 0);
+    };
+  }, []);
   return (
     <button
+      ref={button}
       type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="ws-row flex w-full flex-col items-start px-1 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+      data-host-row=""
+      aria-disabled={disabled}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
+      onFocus={() => {
+        focused.current = true;
+      }}
+      onBlur={(event) => {
+        // Removal blurs with no relatedTarget; the cleanup above handles that.
+        if (event.relatedTarget) focused.current = false;
+      }}
+      className={cn("ws-row flex w-full flex-col items-start px-1 py-3 text-left transition-colors", disabled && "cursor-not-allowed")}
     >
-      <span className="text-[13px] font-semibold text-body">{label}</span>
-      {hint && <span className="mt-0.5 text-[11px] leading-4 text-meta">{hint}</span>}
+      <span className={cn("text-[13px] font-semibold text-body", disabled && "opacity-50")}>{label}</span>
+      {hint && (
+        <span className="mt-0.5 text-[11px] leading-4 text-grey-300" aria-live={live ? "polite" : undefined}>
+          {hint}
+        </span>
+      )}
     </button>
   );
 }
