@@ -1820,6 +1820,29 @@ describe("One app, two addresses: square.tsionark.com untouched, Ark mounts it a
   });
 });
 
+describe("Inside Ark the Square leads back to Ark: a pill on phones, Ark's sections on desktop", () => {
+  const shell = stripComments(read("components/layout/app-shell.tsx"));
+  const nav = stripComments(read("components/layout/ark-nav.tsx"));
+
+  it("renders only in the build Ark mounts, never on square.tsionark.com", () => {
+    assert.match(shell, /\{SHOWS_ARK_NAV && <BackToArk \/>\}/, "the phone pill lost its gate");
+    assert.match(shell, /\{SHOWS_ARK_NAV && \(\s*<div className="mr-5 flex h-\[76px\] shrink-0 items-center">\s*<ArkMenu \/>/, "the desktop menu lost its gate");
+    assert.match(stripComments(read("lib/ark-links.ts")), /export const SHOWS_ARK_NAV = SQUARE_BASE !== "";/);
+  });
+
+  it("uses the mobile app's own pill and wordmark", () => {
+    assert.match(nav, /h-\[30px\] shrink-0 items-center gap-1\.5 rounded-full border border-white\/15 px-2\.5/);
+    assert.match(nav, /viewBox="0 0 40 8"/);
+    assert.match(nav, /aria-label="Back to Ark"/);
+  });
+
+  it("leaves by full page loads: the other zone has those routes, this build does not", () => {
+    assert.match(nav, /else window\.location\.assign\(ARK_BACK_FALLBACK\);/);
+    assert.match(shell, /window\.location\.assign\(destination\.href\);/);
+    assert.doesNotMatch(nav, /router\.push|<Link/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");
@@ -2497,7 +2520,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // exactly what wrapped the word under the mark. The lockup carries the
     // `flex` too, because BrandLockup renders bare inline content by design
     // and inline content wraps.
-    assert.match(shell, /<span className="flex h-10 shrink-0 items-center">/);
+    assert.match(shell, /<span className="flex h-10 shrink-0 items-center gap-3">/);
     assert.doesNotMatch(shell, /border-b-\[0\.53px\]/, "the short hairline under the phone lockup came back");
     assert.match(shell, /<BrandLockup markHeight=\{24\} label="Square" className="flex" \/>/);
     // THE SEARCH GLYPH THE NODE DRAWS IS DELIBERATELY ABSENT (ogazboiz: "use
