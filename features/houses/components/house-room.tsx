@@ -856,6 +856,13 @@ function LiveHouse({
     [audience]
   );
 
+  // Everyone connected, seated or not: the audience band leaves speakers out,
+  // so the hand tray's "Reconnecting…" reads both. Null before the room is up.
+  const connectedIds = useMemo(
+    () => (room ? new Set([...presentIds, ...slots.map((slot) => baseIdentity(slot.identity))]) : null),
+    [room, presentIds, slots]
+  );
+
   const seating = useMemo(() => buildSeating(slots), [slots]);
   const audio = useHouseAudio(room);
 
@@ -2012,6 +2019,7 @@ function LiveHouse({
           requestsOpen={requestsOpen}
           onRequestsOpenChange={setRequestsOpen}
           invited={hostTools.invited}
+          connected={connectedIds}
           muteFor={hostTools.muteFor}
         />
       )}

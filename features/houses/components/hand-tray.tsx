@@ -15,6 +15,7 @@ import { RequestRow } from "@/features/houses/components/request-row";
 import { SEAT_COUNT } from "@/features/houses/lib/seating";
 import { InvitedGroup, type InvitedList } from "@/features/houses/components/invited-group";
 import type { HostMuteControl } from "@/lib/host-mute";
+import { seatPresence } from "@/lib/speaker-seat";
 
 /**
  * The host's triage sheet.
@@ -49,6 +50,7 @@ export function HandTray({
   requestsOpen,
   onRequestsOpenChange,
   invited,
+  connected,
   muteFor,
 }: {
   stream: Stream;
@@ -60,6 +62,12 @@ export function HandTray({
   onRequestsOpenChange: (next: boolean) => void;
   /** The host's open invitations, with Cancel. Empty until invite ships. */
   invited: InvitedList;
+  /**
+    Bare user ids of everyone connected, seated or not. A seated speaker not
+    in it has dropped and is inside the service's grace window. Null until
+    the room is read.
+  */
+  connected: ReadonlySet<string> | null;
   /** The host's soft mute over one seated person, by user id. */
   muteFor: (userId: string) => { name: string; control: HostMuteControl; onMute: () => void };
 }) {
@@ -177,6 +185,11 @@ export function HandTray({
                   <span className="block truncate text-[13px] text-grey-300">
                     {item.profile?.displayName ?? "Speaker"}
                   </span>
+                  {/* Dropped, inside the grace window: the seat is held for a
+                      minute, then the service moves them to the audience. */}
+                  {seatPresence(item.userId, connected) === "reconnecting" && (
+                    <span className="block text-[11px] leading-4 text-grey-400">Reconnecting…</span>
+                  )}
                   {/* The reason in words: a title tooltip never reaches a phone
                       or a screen reader. */}
                   {mute.control.kind === "mute" && mute.control.disabled && (

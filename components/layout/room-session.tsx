@@ -36,6 +36,7 @@ import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
 import { REJOIN_KEY, parseRejoin, rejoinOfferFor, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
 import { useMe } from "@/hooks/use-me";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
+import { seatReleasedNotice } from "@/lib/speaker-seat";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import {
   INITIAL_INVITE_ANNOUNCER,
@@ -313,6 +314,18 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     out (lib/speaker-invite.ts `endedInviteNotice`). Once per invitation.
   */
   const heldInviteId = useRef<string | null>(null);
+  /*
+    A SEAT RELEASED FOR A LOST CONNECTION. The service keeps a dropped
+    speaker's seat for its grace window, then moves them to the audience with
+    `removedReason: 'disconnected'` (lib/speaker-seat.ts). Told once, on the
+    transition from seated, never for a host's Move down.
+  */
+  const heldSeatStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const notice = seatReleasedNotice(heldSeatStatus.current, mine.data);
+    if (notice) toast(notice);
+    heldSeatStatus.current = mine.data?.status ?? null;
+  }, [mine.data]);
   useEffect(() => {
     const notice = endedInviteNotice(heldInviteId.current, mine.data);
     if (notice) {

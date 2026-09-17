@@ -1862,6 +1862,19 @@ describe("A host approving a hand on a full stage is told why", () => {
   });
 });
 
+describe("A dropped speaker keeps the seat for the grace window, then joins the audience", () => {
+  it("tells the speaker why, once, from the service's removedReason", () => {
+    const session = stripComments(read("components/layout/room-session.tsx"));
+    assert.match(session, /const notice = seatReleasedNotice\(heldSeatStatus\.current, mine\.data\);/);
+  });
+  it("shows the host a seated speaker who is absent as reconnecting, counting seated and audience both", () => {
+    const tray = stripComments(read("features/houses/components/hand-tray.tsx"));
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(tray, /seatPresence\(item\.userId, connected\) === "reconnecting"/);
+    assert.match(room, /new Set\(\[\.\.\.presentIds, \.\.\.slots\.map\(\(slot\) => baseIdentity\(slot\.identity\)\)\]\)/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");
