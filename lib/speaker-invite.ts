@@ -427,8 +427,8 @@ export function routeMissing(error: ApiErrorLike | null | undefined): boolean {
 }
 
 export type InviteErrorOutcome =
-  /** Not deployed: hide the control, say nothing. */
-  | { kind: "unavailable" }
+  /** Not deployed: hide the control, and say so once — the host's tap must not vanish unanswered. */
+  | { kind: "unavailable"; message: string }
   /** Banned from this room by the host: hide the control for this person. */
   | { kind: "refused"; message: string }
   /** Try again later: disable with a countdown. */
@@ -442,9 +442,12 @@ function retryAfter(details: unknown): number | null {
 
 const GENERIC_INVITE_FAILURE = "Couldn't send the invitation.";
 
+/** What the host is told when the invite route is not deployed yet. */
+export const INVITE_UNAVAILABLE = "Invite to speak isn't available yet.";
+
 /** What the host is told when an invitation could not be sent. */
 export function inviteErrorOutcome(error: ApiErrorLike | null | undefined, name?: string | null): InviteErrorOutcome {
-  if (routeMissing(error)) return { kind: "unavailable" };
+  if (routeMissing(error)) return { kind: "unavailable", message: INVITE_UNAVAILABLE };
   const who = name?.trim() || "They";
   switch (error?.code) {
     case "STREAM_NOT_LIVE":

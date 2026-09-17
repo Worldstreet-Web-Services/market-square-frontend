@@ -285,7 +285,10 @@ describe("error answers", () => {
   });
 
   it("maps every contract code to its outcome", () => {
-    assert.deepEqual(inviteErrorOutcome({ code: "NOT_FOUND", message: "Route not found" }), { kind: "unavailable" });
+    assert.deepEqual(inviteErrorOutcome({ code: "NOT_FOUND", message: "Route not found" }), {
+      kind: "unavailable",
+      message: "Invite to speak isn't available yet.",
+    });
     // The host's own ban: they know it, so the control goes for that person.
     assert.equal(inviteErrorOutcome({ code: "SPEAKER_BANNED" }, "Ada").kind, "refused");
     // A block can be the TARGET's, which the host must not learn: the same

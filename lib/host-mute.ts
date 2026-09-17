@@ -205,7 +205,25 @@ export function stepHostMuteToast(
   };
 }
 
-/** What the host is told when a mute did not go through (an undeployed route is `routeMissing`, and says nothing). */
+/** What the host is told when the mute route is not deployed yet. */
+export const MUTE_UNAVAILABLE = "Mute for everyone isn't available yet.";
+
+/**
+ * A mute that did not go through, in full: whether the control goes (the
+ * route is not deployed — lib/speaker-invite.ts `routeMissing`, passed in as
+ * `missing`) and, EITHER WAY, what the host is told. A moderation action never
+ * ends with the control vanishing and nothing said.
+ */
+export function muteFailure(input: {
+  missing: boolean;
+  error: { code?: string | null } | null | undefined;
+  name?: string | null;
+}): { unavailable: boolean; message: string } {
+  if (input.missing) return { unavailable: true, message: MUTE_UNAVAILABLE };
+  return { unavailable: false, message: muteErrorMessage(input.error, input.name) };
+}
+
+/** What the host is told when a mute was refused (see `muteFailure` for an undeployed route). */
 export function muteErrorMessage(error: { code?: string | null } | null | undefined, name?: string | null): string {
   const who = name?.trim() || "them";
   switch (error?.code) {

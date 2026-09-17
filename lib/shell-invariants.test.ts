@@ -3854,6 +3854,14 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(resolve, /if \(quietResolveError\(error as ApiErrorLike, action\)\) \{/);
   });
 
+  it("a host's tap on an undeployed mute or invite is answered, not swallowed", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    const mute = hooks.slice(hooks.indexOf("export function useMuteSpeaker"));
+    assert.match(mute, /if \(failure\.unavailable\) \{[\s\S]*?setUnavailable\(true\);\s*toast\(failure\.message\);\s*return;/);
+    const invite = hooks.slice(hooks.indexOf("export function useInviteToSpeak"), hooks.indexOf("export function useAnswerInvite"));
+    assert.match(invite, /if \(outcome\.kind === "unavailable"\) \{[\s\S]*?setUnavailable\(true\);\s*toast\(outcome\.message\);\s*return;/);
+  });
+
   it("the page's one socket carries the reader's token, or user:<did> is refused and no speaker signal arrives", () => {
     const shared = code("lib/ws-gateway-shared.ts");
     assert.match(shared, /import \{ getAccessToken \} from "@privy-io\/react-auth";/);

@@ -6,7 +6,9 @@ import {
   INITIAL_HOST_MUTE_TOAST,
   hostMuteControl,
   hostMuteOf,
+  MUTE_UNAVAILABLE,
   muteErrorMessage,
+  muteFailure,
   mutedByHost,
   stepHostMuteBadges,
   stepHostMuteToast,
@@ -214,6 +216,18 @@ describe("the muted speaker is told once", () => {
 });
 
 describe("mute errors", () => {
+  it("an undeployed mute route hides the control AND tells the host, never a silent no-op", () => {
+    assert.deepEqual(muteFailure({ missing: true, error: { code: "NOT_FOUND" }, name: "Ada" }), {
+      unavailable: true,
+      message: "Mute for everyone isn't available yet.",
+    });
+    assert.equal(MUTE_UNAVAILABLE, "Mute for everyone isn't available yet.");
+    assert.deepEqual(muteFailure({ missing: false, error: { code: "NOT_A_SPEAKER" }, name: "Ada" }), {
+      unavailable: false,
+      message: "Ada is not on the stage any more.",
+    });
+  });
+
   it("names the problem without blaming anybody", () => {
     assert.equal(muteErrorMessage({ code: "STREAM_NOT_LIVE" }), "The gist room isn't live.");
     assert.equal(muteErrorMessage({ code: "NOT_A_SPEAKER" }, "Ada"), "Ada is not on the stage any more.");

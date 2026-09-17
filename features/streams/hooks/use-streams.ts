@@ -25,7 +25,7 @@ import {
   routeMissing,
   type ApiErrorLike,
 } from "@/lib/speaker-invite";
-import { muteErrorMessage } from "@/lib/host-mute";
+import { muteFailure } from "@/lib/host-mute";
 import {
   banFromChat,
   cancelActivity,
@@ -759,8 +759,11 @@ export function useResolveSpeakerRequest(streamId: string) {
    that says the route is not deployed (lib/speaker-invite.ts `routeMissing` —
    the router's own "Route not found", never a 404 about a missing PERSON) is
    remembered for the page load and the controls go away, rather than
-   offering a button that fails every time. Nothing is ever reported as done
-   that the service did not do. */
+   offering a button that fails every time. A background read that finds the
+   route missing says nothing; a host's TAP that finds it says so once ("Mute
+   for everyone isn't available yet"), because a moderation action that ends
+   with the control vanishing and no word reads as broken. Nothing is ever
+   reported as done that the service did not do. */
 
 let invitesMissing = false;
 let muteMissing = false;
@@ -826,6 +829,7 @@ export function useInviteToSpeak(streamId: string) {
       if (outcome.kind === "unavailable") {
         invitesMissing = true;
         setUnavailable(true);
+        toast(outcome.message);
         return;
       }
       if (outcome.kind === "refused") {
@@ -893,12 +897,15 @@ export function useMuteSpeaker(streamId: string) {
       toast(`${name}'s mic is off for everyone. They can unmute when it's their turn.`);
     },
     onError: (error, { name }) => {
-      if (routeMissing(error as ApiErrorLike)) {
+      const failure = muteFailure({ missing: routeMissing(error as ApiErrorLike), error: error as ApiErrorLike, name });
+      if (failure.unavailable) {
+        // The control goes, and the host is told why their tap did nothing.
         muteMissing = true;
         setUnavailable(true);
+        toast(failure.message);
         return;
       }
-      toast.error(muteErrorMessage(error as ApiErrorLike, name));
+      toast.error(failure.message);
     },
   });
   return { ...mutation, unavailable: unavailable || muteMissing };
