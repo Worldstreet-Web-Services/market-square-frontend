@@ -3523,6 +3523,11 @@ describe("a private room's name stays off lock screens and other accounts' scree
     assert.match(goLive, /mergeStreamDetail\(old, stream\)/);
     const update = block(hooks, "export function useUpdateStream(", "\n}\n");
     assert.match(update, /mergeStreamDetail\(old, stream\)/);
+    // Ending a room writes its payload too — during a host's "Close and join"
+    // the session is still holding it, and the lock screen reads this cache.
+    const end = block(hooks, "export function useEndStream(", "\n}\n");
+    assert.match(end, /mergeStreamDetail\(old, stream\)/);
+    assert.doesNotMatch(end, /setQueryData\(\["ms", "stream", stream\.id\], stream\)/);
   });
 
   it("the rejoin record carries its owner and a neutral name, and is offered only to that account", () => {

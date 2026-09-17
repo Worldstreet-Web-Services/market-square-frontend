@@ -251,3 +251,37 @@ describe("SpeakerRequestSchema accepts the invite-to-speak fields before the bac
     assert.equal(SpeakerRequestSchema.parse({ ...legacy, initiatedBy: "robot" }).initiatedBy, "listener");
   });
 });
+
+describe("StreamSchema.audience fails closed", async () => {
+  const { StreamSchema } = await import("./schemas.ts");
+  const { mediaSessionMetadata, PRIVATE_ROOM_METADATA } = await import("../room-session/media-session.ts");
+  const room = {
+    id: "g1",
+    ownerId: "did:privy:host",
+    owner: base,
+    title: "Late gist",
+    status: "live",
+    visibility: "public",
+    houseConversationId: null,
+  };
+
+  it("a payload with no audience is NOT read as public", () => {
+    const parsed = StreamSchema.parse(room);
+    assert.notEqual(parsed.audience, "public");
+    assert.deepEqual(mediaSessionMetadata(parsed), PRIVATE_ROOM_METADATA, "a room's topic reached the lock screen on a missing field");
+  });
+
+  it("an audience this client does not know is NOT read as public", () => {
+    for (const audience of ["followers", "unlisted", 7, null]) {
+      const parsed = StreamSchema.parse({ ...room, audience });
+      assert.notEqual(parsed.audience, "public", String(audience));
+      assert.deepEqual(mediaSessionMetadata(parsed), PRIVATE_ROOM_METADATA, String(audience));
+    }
+  });
+
+  it("an explicit public or private is kept", () => {
+    assert.equal(StreamSchema.parse({ ...room, audience: "public" }).audience, "public");
+    assert.equal(StreamSchema.parse({ ...room, audience: "private" }).audience, "private");
+    assert.deepEqual(mediaSessionMetadata(StreamSchema.parse({ ...room, audience: "public" })), { title: "Late gist", artist: "Amara Okafor" });
+  });
+});

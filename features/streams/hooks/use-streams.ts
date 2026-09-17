@@ -478,7 +478,9 @@ export function useEndStream(options?: {
   return useMutation({
     mutationFn: endStream,
     onSuccess: (stream) => {
-      queryClient.setQueryData(["ms", "stream", stream.id], stream);
+      // Merged, never replaced: the session may still hold this room (a host's
+      // "Close and join"), and the lock screen reads the doorplate from here.
+      queryClient.setQueryData<Stream>(["ms", "stream", stream.id], (old) => mergeStreamDetail(old, stream));
       // The playback token and chat live under this prefix and are both dead
       // once the broadcast stops.
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", stream.id] });

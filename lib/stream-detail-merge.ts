@@ -26,7 +26,13 @@ export function mergeStreamDetail<T extends DetailPrivacy>(old: T | undefined, n
     house: next.house ?? old.house,
     houseConversationId: next.houseConversationId ?? old.houseConversationId,
     // Only ever narrowed by a payload: a private room stays private until the
-    // detail itself says otherwise.
-    audience: old.audience === "private" || next.audience === "private" ? "private" : next.audience,
+    // detail itself says otherwise, and a payload that does not know the
+    // audience never replaces one the detail does know.
+    audience:
+      old.audience === "private" || next.audience === "private"
+        ? "private"
+        : next.audience === "public"
+          ? "public"
+          : old.audience,
   };
 }

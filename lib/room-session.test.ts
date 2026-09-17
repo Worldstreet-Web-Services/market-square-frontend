@@ -1046,6 +1046,12 @@ describe("a mutation's payload never makes a private room look public", async ()
     assert.equal(merged.audience, "private");
   });
 
+  it("a payload whose audience is unknown keeps the audience the detail knows", () => {
+    const publicDetail: Detail = { ...detail, audience: "public", houseConversationId: null, house: null };
+    assert.equal(mergeStreamDetail(publicDetail, { ...publicDetail, audience: "unknown" }).audience, "public");
+    assert.equal(mergeStreamDetail(undefined, { ...publicDetail, audience: "unknown" }).audience, "unknown");
+  });
+
   it("takes the payload whole with nothing cached, and a real doorplate over a cached one", () => {
     const payload: Detail = { ...detail, house: { id: "h1", visibility: "public" } };
     assert.equal(mergeStreamDetail(undefined, payload), payload);

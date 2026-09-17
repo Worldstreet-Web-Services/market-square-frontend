@@ -357,7 +357,14 @@ export const StreamSchema = z.object({
    * All optional with a default, the forward-compatible shape `orgBadge` uses:
    * a backend that has not shipped them parses exactly as it does today.
    */
-  audience: z.enum(["public", "private"]).optional().default("public").catch("public"),
+  /*
+    FAIL CLOSED. A missing or unrecognised audience is "unknown", never
+    "public": every reader that names a room on a shared surface (the lock
+    screen, the rejoin chip, the room code) asks for "public" explicitly, and
+    defaulting to it put a room's topic and host on the lock screen whenever
+    the field went missing or grew a new value.
+  */
+  audience: z.enum(["public", "private", "unknown"]).optional().default("unknown").catch("unknown"),
   houseConversationId: z.string().nullable().optional().default(null),
   /**
    * THE HOUSE GROUP THIS ROOM BELONGS TO, inline on the room.
