@@ -2,6 +2,7 @@
 
 import { LIVE_GIFTS } from "@/lib/gifts";
 import { useReceivedTips } from "@/features/tips";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE GIFT GALLERY — node 492:41810, the panel under the account strip.
@@ -149,7 +150,7 @@ export function ProfileGiftGallery() {
                 {/* The file's own coin, exported rather than substituted — the
                     line-art `IconCoin` is a different object. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/gifts/coin-stack.svg" alt="" aria-hidden className="h-3 w-3 shrink-0" />
+                <img src={asset("/gifts/coin-stack.svg")} alt="" aria-hidden className="h-3 w-3 shrink-0" />
               </span>
 
               <span className="flex items-center gap-1">

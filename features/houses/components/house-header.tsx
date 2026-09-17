@@ -8,6 +8,7 @@ import { IconArrowLeft } from "@/components/ui/icons";
 // The file's own glyphs, exported from it. See components/ui/room-icons.tsx.
 import { IconHouseGroup, IconRoomBack, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
 import { canGoBack } from "@/lib/nav-history";
+import { sq } from "@/lib/square-path";
 
 /**
  * The room's header. The topic is the room, so the topic is the header.
@@ -179,7 +180,7 @@ export function HouseHeader({
           everything under it started at 0.
         */}
         <button
-          onClick={() => (canGoBack() ? router.back() : router.push("/gist-rooms"))}
+          onClick={() => (canGoBack() ? router.back() : router.push(sq("/gist-rooms")))}
           /* 1285:92920 on a phone: the 16px `arrow-left` chevron, 8, then
              "Back" at 14/24. The desktop's 20px arrow and 16/24 from `md`. */
           className="ws-press flex w-fit items-center gap-2 text-[14px] leading-6 text-white transition-opacity hover:opacity-80 md:text-[16px]"

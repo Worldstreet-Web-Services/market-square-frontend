@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { apiFetch } from "@/lib/api/client";
 import { readUtm, withoutShareChannel, type UtmParams } from "@/lib/utm";
+import { api } from "./square-path.ts";
 
 export type MarketEventName =
   | "feed_viewed"
@@ -110,7 +111,7 @@ export function trackMarketEvent(name: MarketEventName, input: MarketEventInput)
     // already takes — so a view can be traced back to the share that brought it.
     ...(metadata ? { metadata } : {}),
   };
-  void apiFetch("/api/market-square/analytics/events", {
+  void apiFetch(api("/api/market-square/analytics/events"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

@@ -1,3 +1,4 @@
+import { asset } from "@/lib/square-path";
 /* eslint-disable @next/next/no-img-element -- a fixed local asset, not remote media */
 
 /**
@@ -15,7 +16,7 @@
 export function KashCoin({ size = 16, className }: { size?: number; className?: string }) {
   return (
     <img
-      src="/kash/kash-coin.png"
+      src={asset("/kash/kash-coin.png")}
       alt=""
       aria-hidden
       width={size}

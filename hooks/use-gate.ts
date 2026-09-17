@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { useAuth } from "@/hooks/use-auth";
+import { sq } from "@/lib/square-path";
 
 // Public browsing works signed-out; any gated action (post, follow, buy,
 // chat) runs through this. Signed out, it opens the app's own sign-in card
@@ -22,6 +23,6 @@ export function useGate(): (action: () => void) => void {
       return;
     }
     login();
-    router.prefetch("/auth");
+    router.prefetch(sq("/auth"));
   };
 }

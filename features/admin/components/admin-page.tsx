@@ -22,6 +22,7 @@ import {
   ReportsSection,
   VerificationSection,
 } from "@/features/admin/components/admin-sections";
+import { sq } from "@/lib/square-path";
 
 type Tab = "overview" | "applications" | "verification" | "reports" | "people" | "announcements";
 
@@ -119,7 +120,7 @@ export function AdminPage() {
             body="This area is limited to Square operators."
             action={
               <Link
-                href="/"
+                href={sq("/")}
                 className="ws-press inline-flex rounded-full border border-white/20 px-4 py-1.5 text-[13px] font-bold text-body transition-colors hover:bg-white/10"
               >
                 Back to the square

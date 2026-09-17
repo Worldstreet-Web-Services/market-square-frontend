@@ -13,6 +13,7 @@ import { opensAtLabel } from "@/lib/format";
 import { housePath, parseParticipantMeta, participantName } from "@/features/houses";
 import { useRoomPreview, useStream } from "@/features/streams";
 import { previewCaption } from "@/lib/room-preview-caption";
+import { asset } from "@/lib/square-path";
 
 /**
  * "X opened a gist room" — the invite card a room posts into its house group.
@@ -333,7 +334,7 @@ export function GistRoomCard({
             >
               {caption.kind === "speaking" && (
                 /* eslint-disable-next-line @next/next/no-img-element -- the file's own frame */
-                <img src="/gist-rooms/speaking-wave.png" alt="" aria-hidden className="-mr-0.5 h-[16.59px] w-[16.59px] shrink-0" />
+                <img src={asset("/gist-rooms/speaking-wave.png")} alt="" aria-hidden className="-mr-0.5 h-[16.59px] w-[16.59px] shrink-0" />
               )}
               <span className="truncate">{caption.text}</span>
             </span>

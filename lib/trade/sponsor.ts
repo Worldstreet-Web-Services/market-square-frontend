@@ -5,6 +5,7 @@ import { createBundlerClient } from "viem/account-abstraction";
 import { to7702SimpleSmartAccount } from "permissionless/accounts";
 import { getSponsoredEvmChainById } from "@/lib/trade/sponsored-evm";
 import { isReceiptChain, publicClientForChain } from "@/lib/trade/receipt";
+import { api } from "../square-path.ts";
 
 // The shared 7702 Simple Account implementation used by permissionless. The
 // EOA delegates to this logic at the same address, so sponsorship does not
@@ -13,7 +14,7 @@ const SIMPLE_7702_IMPL = "0xe6Cae83BdE06E4c305530e199D7217f42808555B" as const;
 
 // Every sponsored EVM transaction routes through our own proxy instead of
 // Alchemy directly, so the API key and policy id never reach the client.
-const BUNDLER_PATH = "/api/alchemy-bundler";
+const BUNDLER_PATH = api("/api/alchemy-bundler");
 
 export interface SponsoredCall {
   to: `0x${string}`;

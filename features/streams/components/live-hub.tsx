@@ -16,6 +16,7 @@ import { LiveSection } from "@/features/streams/components/live-section";
 import { IconSearchLive } from "@/features/streams/components/live-icons";
 import { ActivityRow } from "@/features/streams/components/upcoming-activity-row";
 import type { Stream } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 type Section = "live" | "scheduled" | "replay";
 
@@ -55,18 +56,18 @@ const EMPTY: Record<Section, SectionEmpty> = {
   live: {
     title: "Nobody's live right now",
     body: "Streams appear here the second they start.",
-    cta: { label: "Go live", href: "/studio", authed: true },
+    cta: { label: "Go live", href: sq("/studio"), authed: true },
   },
   scheduled: {
     title: "Nothing scheduled",
     body: "Creators announce sessions ahead of time here.",
-    cta: { label: "Schedule a stream", href: "/schedule", authed: true },
+    cta: { label: "Schedule a stream", href: sq("/schedule"), authed: true },
   },
   replay: {
     // Only reachable with the flag ON; with it off the tab cannot be selected.
     title: "No replays yet",
     body: "Ended streams with a replay saved land here.",
-    cta: { label: "Find creators to follow", href: "/spotlight" },
+    cta: { label: "Find creators to follow", href: sq("/spotlight") },
   },
 };
 
@@ -292,7 +293,7 @@ export function LiveHub() {
           <LiveSection
             title="Recommended live streams"
             streams={visible}
-            viewAllHref="/explore?tab=live"
+            viewAllHref={sq("/explore?tab=live")}
           />
 
           {/* Per-category sections only once there is more than one category
@@ -303,7 +304,7 @@ export function LiveHub() {
                 key={group.key}
                 title={label(group.key)}
                 streams={group.streams}
-                viewAllHref={`/explore?tab=live&topic=${encodeURIComponent(group.key)}`}
+                viewAllHref={sq(`/explore?tab=live&topic=${encodeURIComponent(group.key)}`)}
               />
             ))}
         </>

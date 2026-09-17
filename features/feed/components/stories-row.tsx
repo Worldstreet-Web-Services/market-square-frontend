@@ -39,6 +39,7 @@ import { useStoryViewers } from "@/features/feed/hooks/use-story-viewers";
 import { StoryViewersPanel } from "@/features/feed/components/story-viewers";
 import { seenByLabel } from "@/lib/story-viewers";
 import type { FeedItem, Post } from "@/features/feed/lib/types";
+import { sq } from "@/lib/square-path";
 
 /**
  * Everything the frame can put keyboard focus on, for the dialog's focus trap.
@@ -215,8 +216,8 @@ function groupByAuthor(posts: Post[]): StoryGroup[] {
  */
 function liveHref(entry: LiveEntry, meId?: string): string {
   return entry.hostId && entry.hostId === meId
-    ? `/studio/${entry.id}`
-    : `/live/${entry.id}?source=home:stories`;
+    ? sq(`/studio/${entry.id}`)
+    : sq(`/live/${entry.id}?source=home:stories`);
 }
 
 /*

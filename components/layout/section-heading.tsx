@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { asset } from "@/lib/square-path";
 
 /**
  * A SECTION HEADING ON HOME — the object the 2026-09-12 design repeats four
@@ -69,7 +70,7 @@ function SectionAction({ label, href, onPress }: { label: string; href?: string;
     <>
       {label}
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-      <img src="/home/view-more-arrow.svg" alt="" aria-hidden className="h-4 w-4" />
+      <img src={asset("/home/view-more-arrow.svg")} alt="" aria-hidden className="h-4 w-4" />
     </>
   );
   return href ? (

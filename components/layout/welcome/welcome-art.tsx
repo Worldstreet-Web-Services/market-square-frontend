@@ -1,6 +1,7 @@
 import { cn } from "@/lib/cn";
 import { bandCapWidth, welcomeAir } from "@/lib/welcome-fit";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE WELCOME SCREENS' ARTWORK — Desktop 35, 33, 36 and 34.
@@ -114,7 +115,7 @@ export function WelcomeStage({
           // eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size
           <img
             key={p.src + p.left}
-            src={`/onboarding/welcome/${p.src}.webp`}
+            src={asset(`/onboarding/welcome/${p.src}.webp`)}
             alt=""
             className={cn("absolute", p.motion)}
             style={{
@@ -141,7 +142,7 @@ export function WelcomeStage({
             // eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size
             <img
               key={`star-${s.cx}-${s.cy}`}
-              src="/onboarding/welcome/star.svg"
+              src={asset("/onboarding/welcome/star.svg")}
               alt=""
               className="ws-twinkle absolute"
               style={{
@@ -183,7 +184,7 @@ export function WelcomeWash() {
     // eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size
     <img
       aria-hidden
-      src="/onboarding/rings.svg"
+      src={asset("/onboarding/rings.svg")}
       alt=""
       className="pointer-events-none absolute top-1/2 left-1/2 max-w-none -translate-x-1/2 -translate-y-1/2"
       style={{ width: "max(127.5vw, 127.5vh)" }}
@@ -507,6 +508,6 @@ export function prefetchArt(pieces: ArtPiece[]) {
   if (typeof window === "undefined") return;
   for (const p of pieces) {
     const img = new window.Image();
-    img.src = `/onboarding/welcome/${p.src}.webp`;
+    img.src = asset(`/onboarding/welcome/${p.src}.webp`);
   }
 }

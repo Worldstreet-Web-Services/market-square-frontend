@@ -8,6 +8,7 @@ import { formatKash, relativeTime } from "@/lib/format";
 import { LIVE_GIFTS } from "@/lib/gifts";
 import { useKashAccount, KashBuySheet } from "@/features/kash";
 import { useReceivedTips, type ReceivedTip } from "@/features/tips";
+import { asset, sq } from "@/lib/square-path";
 
 /**
  * THE EARNINGS PANEL — nodes 492:46239 (empty) and 492:46539 (populated).
@@ -123,7 +124,7 @@ function EarnedRow({ tip }: { tip: ReceivedTip }) {
                picture that failed to load. A plain tip gets it too: the coin
                is true of both. */
             // eslint-disable-next-line @next/next/no-img-element
-            <img src="/gifts/coin-stack.svg" alt="" aria-hidden className="h-4 w-4" />
+            <img src={asset("/gifts/coin-stack.svg")} alt="" aria-hidden className="h-4 w-4" />
           )}
         </span>
       )}
@@ -154,7 +155,7 @@ function EarnedRow({ tip }: { tip: ReceivedTip }) {
               {formatKash(amountKash)}
             </span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/gifts/coin-stack.svg" alt="" aria-hidden className="h-3 w-3 shrink-0" />
+            <img src={asset("/gifts/coin-stack.svg")} alt="" aria-hidden className="h-3 w-3 shrink-0" />
           </span>
 
           {/* 435:27602 — the source, and ONLY when the service gave us one.
@@ -221,7 +222,7 @@ export function ProfileEarnings() {
       <div className="ws-kash-card flex items-center gap-4 rounded-[20px] px-6 py-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/gifts/kash-balance-art.png"
+          src={asset("/gifts/kash-balance-art.png")}
           alt=""
           aria-hidden
           className="h-20 w-20 shrink-0 object-contain"
@@ -257,7 +258,7 @@ export function ProfileEarnings() {
         /* 435:26118 — 486 wide, centred, 24 between each block. */
         <div className="mx-auto flex max-w-[486px] flex-col items-center gap-6 py-6 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/gifts/earnings-empty.svg" alt="" aria-hidden className="h-[120px] w-[120px]" />
+          <img src={asset("/gifts/earnings-empty.svg")} alt="" aria-hidden className="h-[120px] w-[120px]" />
           <div className="flex flex-col gap-2">
             <h3 className="text-[20px] font-bold leading-[23.4px] text-white">No earnings yet</h3>
             {/* The file breaks this line itself, after "keep track". Kept as a
@@ -279,7 +280,7 @@ export function ProfileEarnings() {
             one useful thing an empty state can do.
           */}
           <Link
-            href="/gist-rooms"
+            href={sq("/gist-rooms")}
             className="ws-press flex h-12 items-center gap-2.5 rounded-full bg-spotlight px-5 text-[16px] font-bold leading-[22px] text-white transition-opacity hover:opacity-90"
           >
             <IconMic className="h-6 w-6 shrink-0" />

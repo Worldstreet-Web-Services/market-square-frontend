@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 import { x, y } from "@/components/layout/welcome/welcome-art";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE GIST CARD — `Group 1000002777`, rebuilt from its parts.
@@ -84,7 +85,7 @@ function Part({
   return (
     // eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size
     <img
-      src={`/onboarding/welcome/${src}.webp`}
+      src={asset(`/onboarding/welcome/${src}.webp`)}
       alt=""
       className="absolute"
       style={{ left: x(left), top: y(top), width: x(w), height: y(h) }}
@@ -174,7 +175,7 @@ export function LiveOnPill() {
       <div aria-hidden className="ws-live-bloom" />
       {/* eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size */}
       <img
-        src="/onboarding/welcome/s1-live-on.webp"
+        src={asset("/onboarding/welcome/s1-live-on.webp")}
         alt=""
         className="absolute inset-0 h-full w-full"
       />

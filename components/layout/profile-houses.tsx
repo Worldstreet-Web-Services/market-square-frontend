@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useConversations } from "@/features/messages";
 import { HOUSE_CARD, HouseCard } from "@/components/layout/house-card";
+import { sq } from "@/lib/square-path";
 
 /**
  * THE HOUSES ON A PROFILE — nodes 534:16949 (the section) and 534:16951 (the
@@ -49,7 +50,7 @@ export function ProfileHouses() {
           inbox on its Houses tab. */}
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-[12px] font-bold leading-4 text-grey-100">Houses</h2>
-        <Link href="/messages?tab=houses" className="text-[12px] font-bold leading-4 text-white transition-opacity hover:opacity-80">
+        <Link href={sq("/messages?tab=houses")} className="text-[12px] font-bold leading-4 text-white transition-opacity hover:opacity-80">
           View All
         </Link>
       </div>
@@ -64,7 +65,7 @@ export function ProfileHouses() {
             `--color-create` `#9F65FD`, the ramp's light stop, because the two
             are a hair apart and this repo deliberately keeps two purples. */}
         <Link
-          href="/messages?compose=house"
+          href={sq("/messages?compose=house")}
           className={`${HOUSE_CARD} ws-press flex h-[112px] w-[136px] flex-col items-center justify-center px-4 py-3 transition-colors hover:bg-white/[0.06]`}
         >
           <span aria-hidden className="text-[41.6px] font-semibold leading-[62.4px] text-create">
@@ -84,7 +85,7 @@ export function ProfileHouses() {
             description={house.description}
             members={house.members}
             memberCount={house.memberCount}
-            action={{ label: "View House", href: `/messages?conversation=${house.id}` }}
+            action={{ label: "View House", href: sq(`/messages?conversation=${house.id}`) }}
           />
         ))}
       </div>

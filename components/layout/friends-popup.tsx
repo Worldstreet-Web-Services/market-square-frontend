@@ -26,6 +26,7 @@ import { winkCardFileName, winkCardQuery } from "@/lib/wink-card";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import { useFriendsCardRequest } from "@/lib/friends-card-store";
 import type { Profile } from "@/lib/api/schemas";
+import { api, asset, sq } from "@/lib/square-path";
 
 /** Node 647:16629 — the card's width, and its height while its text is two
     lines; more lines grow it (see the text column), and it is scaled to fit. */
@@ -151,7 +152,7 @@ export function FriendsPopup() {
         onDone={(created: Post) => {
           setDraft(null);
           toast.success("Posted to Square", {
-            action: { label: "View post", onClick: () => router.push(`/p/${created.id}`) },
+            action: { label: "View post", onClick: () => router.push(sq(`/p/${created.id}`)) },
           });
         }}
       />
@@ -214,7 +215,7 @@ function FriendsDialog({
   /* The picture Download and Share hand over: THIS card, redrawn by the route
      from the same moment, copy, labels and avatars (`lib/wink-card`), so what
      is saved is what is on screen. */
-  const cardImage = `/api/wink-card?${winkCardQuery({ kind: moment.kind, other: moment.actor, viewer })}`;
+  const cardImage = api(`/api/wink-card?${winkCardQuery({ kind: moment.kind, other: moment.actor, viewer })}`);
   const wink = useWink(other);
   const follow = useFollow(other);
   const chat = useOpenConversation();
@@ -309,7 +310,7 @@ function FriendsDialog({
     chat.mutate(other, {
       onSuccess: (conversation) => {
         onClose();
-        router.push(`/messages?c=${conversation.id}`);
+        router.push(sq(`/messages?c=${conversation.id}`));
       },
     });
   };
@@ -383,16 +384,16 @@ function FriendsDialog({
       >
         {/* 647:16629 — the rays, at the file's own placement and its own 6%. */}
         {/* eslint-disable-next-line @next/next/no-img-element -- the file's own artwork, served locally */}
-        <img src="/friends/rays.svg" alt="" aria-hidden className="absolute" style={{ left: -72, top: -121, width: 601, height: 602 }} />
+        <img src={asset("/friends/rays.svg")} alt="" aria-hidden className="absolute" style={{ left: -72, top: -121, width: 601, height: 602 }} />
         {/* 647:16661 / 647:16662 — the two glows. */}
         <span aria-hidden className="absolute rounded-full bg-spotlight" style={{ left: -119, top: 438, width: 178, height: 176, filter: "blur(99px)" }} />
         <span aria-hidden className="absolute rounded-full bg-spotlight" style={{ left: 390, top: -85, width: 178, height: 176, filter: "blur(99px)" }} />
 
         {/* 647:16663 then 647:16630 — the stars behind the hugging heart. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/friends/stars.svg" alt="" aria-hidden className="absolute" style={{ left: 127, top: 37, width: 181, height: 110 }} />
+        <img src={asset("/friends/stars.svg")} alt="" aria-hidden className="absolute" style={{ left: 127, top: 37, width: 181, height: 110 }} />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/friends/hug.svg" alt="" aria-hidden className="absolute" style={{ left: 159, top: 43, width: 124, height: 107 }} />
+        <img src={asset("/friends/hug.svg")} alt="" aria-hidden className="absolute" style={{ left: 159, top: 43, width: 124, height: 107 }} />
 
         {/* How many more are in the fan — beside the close, only when there
             are any. Not in the file, which draws one person. */}

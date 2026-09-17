@@ -14,6 +14,7 @@ import type { FeedItem, FeedStream, Post } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
 import { PostCard } from "@/features/feed/components/post-card";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { sq } from "@/lib/square-path";
 
 export function pricePillLabel(stream: FeedStream): string {
   if (stream.ticketPriceKash) return formatKash(stream.ticketPriceKash);
@@ -26,7 +27,7 @@ export function pricePillLabel(stream: FeedStream): string {
 function StreamFeedCard({ stream }: { stream: FeedStream }) {
   const owner = stream.owner;
   const reshare = async () => {
-    const url = `${window.location.origin}/live/${stream.id}`;
+    const url = `${window.location.origin}${sq(`/live/${stream.id}`)}`;
     try {
       if (navigator.share) await navigator.share({ title: stream.title, text: `Watch ${stream.title} live on Square`, url });
       else {
@@ -79,7 +80,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
         <p className="mt-3 px-1 text-[13px] leading-relaxed text-body">{stream.title}</p>
 
         <TransitionLink
-          href={`/live/${stream.id}?source=feed:stream:${stream.id}`}
+          href={sq(`/live/${stream.id}?source=feed:stream:${stream.id}`)}
           className="ws-hair group mt-3 block overflow-hidden rounded-2xl border transition-colors hover:bg-white/4"
         >
           <GradientThumb
@@ -122,7 +123,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
         </TransitionLink>
         <div className="mt-3 flex items-center gap-3 px-1">
           <TransitionLink
-            href={`/live/${stream.id}?source=feed:stream:${stream.id}`}
+            href={sq(`/live/${stream.id}?source=feed:stream:${stream.id}`)}
             className="ws-press rounded-full bg-accent px-4 py-1.5 text-[12px] font-bold text-ink transition-colors hover:bg-white"
           >
             {stream.status === "live" ? "Watch live" : "View session"}

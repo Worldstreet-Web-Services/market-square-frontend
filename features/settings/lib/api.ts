@@ -16,7 +16,7 @@ const UnsubscribeResultSchema = z.object({ unsubscribed: z.boolean() });
  */
 export async function unsubscribeEmailDigest(token: string) {
   const res = await apiFetch(
-    `/api/market-square/email/unsubscribe?token=${encodeURIComponent(token)}`,
+    api(`/api/market-square/email/unsubscribe?token=${encodeURIComponent(token)}`),
     { method: "POST" },
     { breaker: false }
   );
@@ -24,6 +24,7 @@ export async function unsubscribeEmailDigest(token: string) {
 }
 import { ProfileSettingsSchema } from "@/features/settings/lib/types";
 import type { SettingsPatch } from "@/features/settings/lib/merge";
+import { api } from "../../../lib/square-path.ts";
 
 /** The reader's settings, defaults filled in by the service for anyone who never saved. */
 export async function fetchSettings() {

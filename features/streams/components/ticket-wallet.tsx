@@ -9,6 +9,7 @@ import { RowSkeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { IconTicket } from "@/components/ui/icons";
 import { useMyTickets } from "@/features/streams/hooks/use-streams";
+import { sq } from "@/lib/square-path";
 
 // The stream-ticket half of /tickets; the route composes it with the store's
 // order list. Rendered as column rows with a perforated stub down the left,
@@ -42,7 +43,7 @@ export function TicketWallet() {
             title="No tickets yet"
             body="Tickets you buy for streams live here, with a one-tap way back in."
             action={
-              <Link href="/live" className="text-sm font-semibold text-accent hover:underline">
+              <Link href={sq("/live")} className="text-sm font-semibold text-accent hover:underline">
                 Browse Live →
               </Link>
             }
@@ -92,7 +93,7 @@ export function TicketWallet() {
 
           {ticket.stream && (
             <Link
-              href={`/live/${ticket.stream.id}`}
+              href={sq(`/live/${ticket.stream.id}`)}
               className="ws-press shrink-0 self-center rounded-full bg-accent px-4 py-1.5 text-sm font-bold text-ink transition-colors hover:bg-white"
             >
               {ticket.stream.status === "live" ? "Watch" : "Open"}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DeckDots } from "@/components/ui/deck-dots";
+import { asset } from "@/lib/square-path";
 
 /**
  * HOME'S BANNER — three slides, nodes 1676:17254, 1682:17344 and 1683:17370
@@ -74,9 +75,9 @@ function HouseSlide() {
   return (
     <div className="relative h-[86px] overflow-hidden rounded-[15px] bg-[linear-gradient(90deg,#AD46FF_-16.5%,#682A99_82%)]">
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 449) */}
-      <img src="/home/slides/house-arc-top.svg" alt="" aria-hidden className={`${SOFT} left-[-47px] top-[-65px] h-[115px] w-[272px]`} />
+      <img src={asset("/home/slides/house-arc-top.svg")} alt="" aria-hidden className={`${SOFT} left-[-47px] top-[-65px] h-[115px] w-[272px]`} />
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 448), right-anchored */}
-      <img src="/home/slides/house-arc-bottom.svg" alt="" aria-hidden className={`${SOFT} right-[-59px] top-[12px] h-[165px] w-[390px]`} />
+      <img src={asset("/home/slides/house-arc-bottom.svg")} alt="" aria-hidden className={`${SOFT} right-[-59px] top-[12px] h-[165px] w-[390px]`} />
       {/* Ellipse 1282 — the shadow the cube stands on. The node is LEFT-anchored
           while the cube is CENTER-anchored, so on a wider card the file's own
           constraints would leave the shadow behind; it rides with the cube
@@ -93,7 +94,7 @@ function HouseSlide() {
         </span>
       </p>
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Group 48098403), centre-anchored */}
-      <img src="/home/slides/house-chat-cube.svg" alt="" aria-hidden className={`${ART} left-[calc(50%+67px)] top-[2px] h-[82px] w-[111px]`} />
+      <img src={asset("/home/slides/house-chat-cube.svg")} alt="" aria-hidden className={`${ART} left-[calc(50%+67px)] top-[2px] h-[82px] w-[111px]`} />
     </div>
   );
 }
@@ -102,9 +103,9 @@ function GistSlide() {
   return (
     <div className="relative h-[86px] overflow-hidden rounded-[15px] bg-[#F84538]">
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 450) */}
-      <img src="/home/slides/gist-arc-short.svg" alt="" aria-hidden className={`${SOFT} left-[-25px] top-[-29px] h-[77px] w-[112px]`} />
+      <img src={asset("/home/slides/gist-arc-short.svg")} alt="" aria-hidden className={`${SOFT} left-[-25px] top-[-29px] h-[77px] w-[112px]`} />
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 449) */}
-      <img src="/home/slides/gist-arc-loop.svg" alt="" aria-hidden className={`${SOFT} left-[59px] top-0 h-[148px] w-[284px]`} />
+      <img src={asset("/home/slides/gist-arc-loop.svg")} alt="" aria-hidden className={`${SOFT} left-[59px] top-0 h-[148px] w-[284px]`} />
       <p className="absolute left-4 top-[21px] flex h-[44px] w-[204px] items-center text-[14px] font-bold leading-[22px] text-white">
         <span>
           Vibe in gistrooms, and
@@ -113,7 +114,7 @@ function GistSlide() {
         </span>
       </p>
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Group 1000002879), right-anchored */}
-      <img src="/home/slides/gist-faces.png" alt="" aria-hidden draggable={false} className={`${ART} right-[10.42px] top-[10px] h-[68.96px] w-[114.58px]`} />
+      <img src={asset("/home/slides/gist-faces.png")} alt="" aria-hidden draggable={false} className={`${ART} right-[10.42px] top-[10px] h-[68.96px] w-[114.58px]`} />
     </div>
   );
 }
@@ -122,7 +123,7 @@ function ExploreSlide() {
   return (
     <div className="relative h-[86px] overflow-hidden rounded-[15px] bg-[#0DCF51]">
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Vector 449) */}
-      <img src="/home/slides/explore-arc.svg" alt="" aria-hidden className={`${SOFT} left-[107px] top-[-56px] h-[115px] w-[272px]`} />
+      <img src={asset("/home/slides/explore-arc.svg")} alt="" aria-hidden className={`${SOFT} left-[107px] top-[-56px] h-[115px] w-[272px]`} />
       <p className="absolute left-4 top-[28px] flex h-[40px] w-[210px] items-center text-[14px] font-bold leading-[20px] text-white">
         <span>
           Explore what’s trending and
@@ -131,14 +132,14 @@ function ExploreSlide() {
         </span>
       </p>
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Group 1000002912) */}
-      <img src="/home/slides/explore-clouds.svg" alt="" aria-hidden className={`${SOFT} left-[12px] top-[62px] h-[48px] w-[94px]`} />
+      <img src={asset("/home/slides/explore-clouds.svg")} alt="" aria-hidden className={`${SOFT} left-[12px] top-[62px] h-[48px] w-[94px]`} />
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Layer 2), the torn paper over the corner */}
-      <img src="/home/slides/explore-paper.svg" alt="" aria-hidden className={`${ART} left-[-43px] top-[-78px] h-[121px] w-[121px]`} />
+      <img src={asset("/home/slides/explore-paper.svg")} alt="" aria-hidden className={`${ART} left-[-43px] top-[-78px] h-[121px] w-[121px]`} />
       {/* Frame 1000002913 — the people and the mic, flush with the card's right
           edge (234 + 108 = 342). The node is LEFT-anchored, which on a wider
           card would strand it mid-banner, so it holds the right edge instead. */}
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export (Frame 1000002913) */}
-      <img src="/home/slides/explore-people.png" alt="" aria-hidden draggable={false} className={`${ART} right-0 top-0 h-[86px] w-[108px]`} />
+      <img src={asset("/home/slides/explore-people.png")} alt="" aria-hidden draggable={false} className={`${ART} right-0 top-0 h-[86px] w-[108px]`} />
     </div>
   );
 }

@@ -30,6 +30,7 @@ import { z } from "zod";
 import { ProfileSchema } from "./api/schemas.ts";
 import { atHandle } from "./handle.ts";
 import type { OgFetchResult } from "./server/og-fetch.ts";
+import { sq } from "./square-path.ts";
 
 export const SITE_ORIGIN = "https://square.tsionark.com";
 
@@ -46,7 +47,20 @@ export const SITE_ORIGIN = "https://square.tsionark.com";
  */
 export function siteOrigin(env: Readonly<Record<string, string | undefined>>): string {
   const host = env.VERCEL_URL?.trim();
-  return env.VERCEL_ENV === "preview" && host && /^[a-z0-9.-]+$/i.test(host) ? `https://${host}` : SITE_ORIGIN;
+  if (env.VERCEL_ENV === "preview" && host && /^[a-z0-9.-]+$/i.test(host)) return `https://${host}`;
+  /*
+    THE CANONICAL HOST IS CONFIGURATION, NOT CODE. The Square moves to
+    www.tsionark.com/square as a Vercel microfrontend, and every canonical and
+    og:url should name that address once it serves the Square. Before the
+    microfrontends group exists, www.tsionark.com/square routes nowhere, so a
+    hard-coded www canonical would send search engines and preview scrapers to a
+    404. Set SQUARE_CANONICAL_ORIGIN=https://www.tsionark.com when it is live;
+    until then it stays square.tsionark.com, which serves the same /square paths.
+    A value that is not a bare https origin is ignored rather than trusted.
+  */
+  const canonical = env.SQUARE_CANONICAL_ORIGIN?.trim();
+  if (canonical && /^https:\/\/[a-z0-9.-]+$/i.test(canonical)) return canonical;
+  return SITE_ORIGIN;
 }
 export const SITE_NAME = "Square";
 export const SITE_DESCRIPTION =
@@ -69,7 +83,7 @@ export interface OgImage {
  * `generateMetadata`, which would put this card over every post's own photo.
  */
 export const FALLBACK_OG_IMAGE: OgImage = {
-  url: "/share-card",
+  url: sq("/share-card"),
   width: 1200,
   height: 630,
   type: "image/png",
@@ -315,7 +329,7 @@ function generic(url: string | undefined, title: string): ShareMetadata {
 }
 
 export function postPath(shortId: string): string {
-  return `/p/${shortId}`;
+  return sq(`/p/${shortId}`);
 }
 
 /** The card for a post we could not (or chose not to) read. */
@@ -350,7 +364,7 @@ export function buildPostMetadata(post: OgPost, shortId: string): ShareMetadata 
 }
 
 export function profilePath(username: string): string {
-  return `/u/${username}`;
+  return sq(`/u/${username}`);
 }
 
 /** The card for a profile we could not (or chose not to) read. No canonical for an invalid handle. */

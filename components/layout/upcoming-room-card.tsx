@@ -13,6 +13,7 @@ import { housePath } from "@/features/houses";
 import { clockLabel, shortDateLabel, startsInLabel } from "@/lib/format";
 import { useRemindMe } from "@/features/streams";
 import type { Stream } from "@/features/streams";
+import { asset } from "@/lib/square-path";
 
 /**
  * A GIST ROOM THAT HAS NOT OPENED YET — node 1295:140164, drawn exactly.
@@ -136,7 +137,7 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
             <span className="flex h-full w-full items-center justify-center bg-[#D8D8D8]">
               {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
               <img
-                src="/gist-rooms/card-default-cover.svg"
+                src={asset("/gist-rooms/card-default-cover.svg")}
                 alt=""
                 aria-hidden
                 style={{ width: u(64.24), height: u(47.04) }}
@@ -148,7 +149,7 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
         {/* 1295:140189 — the mic mark, in its own column between artwork and title. */}
         {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export, fixed ramp */}
         <img
-          src="/gist-rooms/card-mark.svg"
+          src={asset("/gist-rooms/card-mark.svg")}
           alt=""
           aria-hidden
           className="absolute"
@@ -191,7 +192,7 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
             ) : (
               /* eslint-disable-next-line @next/next/no-img-element -- the node's own export */
               <img
-                src="/gist-rooms/card-topic-trading.svg"
+                src={asset("/gist-rooms/card-topic-trading.svg")}
                 alt=""
                 aria-hidden
                 className="shrink-0"
@@ -245,7 +246,7 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
               <img
-                src="/gist-rooms/card-calendar.svg"
+                src={asset("/gist-rooms/card-calendar.svg")}
                 alt=""
                 aria-hidden
                 className="shrink-0"
@@ -325,7 +326,7 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
           <img
-            src="/gist-rooms/card-share.svg"
+            src={asset("/gist-rooms/card-share.svg")}
             alt=""
             aria-hidden
             className="shrink-0"

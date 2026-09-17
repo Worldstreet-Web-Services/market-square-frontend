@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { cn } from "@/lib/cn";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE EMPTY STATE THE DESIGNER ASKED FOR — node 543:45867.
@@ -45,7 +46,7 @@ export function EmptyPanel({
     <div className={cn("flex w-full flex-col items-center px-6 py-10", className)}>
       <div className="flex w-[486px] max-w-full flex-col items-center gap-6">
         <Image
-          src="/empty-illustration.svg"
+          src={asset("/empty-illustration.svg")}
           alt=""
           width={120}
           height={120}

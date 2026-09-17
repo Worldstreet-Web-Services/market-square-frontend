@@ -4,6 +4,7 @@ import { FeedItemCard, useFeed } from "@/features/feed";
 import type { Post, Profile } from "@/lib/api/schemas";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
+import { sq } from "@/lib/square-path";
 
 /** The design shows ten before the pill takes over (ogazboiz, 2026-09-12). */
 const SHOWN = 10;
@@ -59,7 +60,7 @@ export function PostForYou({
         <SectionHeading
           id="post-for-you"
           lead="Post For You"
-          action={{ label: "View more", href: "/feed" }}
+          action={{ label: "View more", href: sq("/feed") }}
         />
       </div>
 

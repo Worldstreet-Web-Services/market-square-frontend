@@ -13,6 +13,7 @@ import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { cn } from "@/lib/cn";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE HOUSES DIRECTORY — node 1368:2270 (SQUARE 2.0, file 4tFF5q0CzOSrADkpCOAE03),
@@ -178,7 +179,7 @@ export function HousesScreen() {
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element -- the node's own export
                       <img
-                        src="/gist-rooms/card-default-cover.svg"
+                        src={asset("/gist-rooms/card-default-cover.svg")}
                         alt=""
                         aria-hidden
                         className="h-6 w-[32.78px]"

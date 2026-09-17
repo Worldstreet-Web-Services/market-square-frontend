@@ -25,6 +25,7 @@
  */
 
 import type { ShareTarget } from "./share-targets.ts";
+import { stripSquare } from "./square-path.ts";
 
 export const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"] as const;
 export type UtmKey = (typeof UTM_KEYS)[number];
@@ -58,7 +59,9 @@ export function channelMedium(channel: ShareChannel): "social" | "share" {
 }
 
 /** The campaign a landing path implies, or null for a path nothing is shared as. */
-export function campaignForPath(pathname: string): ShareCampaign | null {
+export function campaignForPath(rawPathname: string): ShareCampaign | null {
+  // Logical route: a landing URL carries /square since the move.
+  const pathname = stripSquare(rawPathname);
   if (pathname.startsWith("/p/")) return "post_share";
   if (pathname.startsWith("/u/")) return "profile_share";
   if (pathname.startsWith("/join/")) return "house_invite";

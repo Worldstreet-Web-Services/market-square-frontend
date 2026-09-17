@@ -15,6 +15,7 @@ import type { Profile } from "@/lib/api/schemas";
 import { REPORT_REASONS, type ReportReason } from "@/features/profile/lib/api";
 import { useFollow, useProfileSafety } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
+import { sq } from "@/lib/square-path";
 
 /**
  * Block and report, from anywhere a PERSON is rendered.
@@ -258,7 +259,7 @@ export function PersonMoreMenu({
           title="Share profile"
           payload={{
             text: `${profile.displayName || profile.username} on Square`,
-            url: `${window.location.origin}/u/${profile.username}`,
+            url: `${window.location.origin}${sq(`/u/${profile.username}`)}`,
           }}
         />
       )}

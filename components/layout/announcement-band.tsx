@@ -5,6 +5,7 @@ import { IconX } from "@/components/ui/icons";
 import { useAnnouncements, useDismissAnnouncement } from "@/hooks/use-announcements";
 import { useAuth } from "@/hooks/use-auth";
 import { isHttpUrl } from "@/lib/http-url";
+import { sq } from "@/lib/square-path";
 
 /**
  * WHAT THE PLATFORM IS SAYING, ABOVE EVERYTHING ELSE.
@@ -72,7 +73,7 @@ export function AnnouncementBand() {
             {/* The post it names beats an external link: a reader would rather
                 land on the thing itself. */}
             {item.post ? (
-              <Link href={`/p/${item.post.id}`} className="ws-press flex min-w-0 flex-1 items-center">
+              <Link href={sq(`/p/${item.post.id}`)} className="ws-press flex min-w-0 flex-1 items-center">
                 {body}
               </Link>
             ) : isHttpUrl(item.linkUrl) ? (

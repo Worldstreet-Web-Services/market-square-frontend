@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { msApi } from "@/lib/api/service";
 import { urlBase64ToUint8Array } from "@/lib/push";
+import { asset } from "./square-path.ts";
 
 /**
  * This browser's side of web push: the service worker (`public/sw.js`), the
@@ -47,7 +48,7 @@ export async function subscribeThisBrowser(publicKey: string): Promise<boolean> 
   if (!pushSupported()) return false;
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return false;
-  const registration = await navigator.serviceWorker.register("/sw.js");
+  const registration = await navigator.serviceWorker.register(asset("/sw.js"));
   await navigator.serviceWorker.ready;
   const subscription =
     (await registration.pushManager.getSubscription()) ??

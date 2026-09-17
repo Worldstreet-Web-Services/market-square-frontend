@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useAcceptInvite, useInvitePreview } from "@/features/messages/hooks/use-messages";
 import { inviteState } from "@/features/messages/lib/invites";
+import { sq } from "@/lib/square-path";
 
 const BUTTON =
   "ws-press inline-flex h-10 items-center justify-center rounded-full bg-accent px-6 text-[15px] font-bold text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40";
@@ -79,7 +80,7 @@ export function JoinPage({ token }: { token: string }) {
 
         <div className="mt-3">
           {state === "member" && (
-            <Link href={`/messages?c=${house.id}`} className={BUTTON}>
+            <Link href={sq(`/messages?c=${house.id}`)} className={BUTTON}>
               Open chat
             </Link>
           )}
@@ -88,7 +89,7 @@ export function JoinPage({ token }: { token: string }) {
               type="button"
               disabled={accept.isPending}
               onClick={() =>
-                accept.mutate(token, { onSuccess: (joined) => router.push(`/messages?c=${joined.id}`) })
+                accept.mutate(token, { onSuccess: (joined) => router.push(sq(`/messages?c=${joined.id}`)) })
               }
               className={BUTTON}
             >

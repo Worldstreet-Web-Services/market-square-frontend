@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { FALLBACK_OG_IMAGE, SITE_DESCRIPTION, SITE_NAME, siteOrigin } from "@/lib/og-metadata";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import { SignInOverlay } from "@/components/layout/sign-in-overlay";
+import { asset } from "@/lib/square-path";
 import { WelcomeGate } from "@/components/layout/welcome/welcome-gate";
 import "./globals.css";
 
@@ -76,6 +77,15 @@ const manrope = Manrope({
 */
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin(process.env)),
+  /*
+    Declared, not the `app/icon.svg` file convention: that convention writes a
+    root `/icon.svg` link, which inside Ark (www.tsionark.com/square) would load
+    WSWS's icon. Same two files, same sizes and types, through `asset()`.
+  */
+  icons: {
+    icon: [{ url: asset("/icon.svg"), sizes: "any", type: "image/svg+xml" }],
+    apple: [{ url: asset("/apple-icon.png"), sizes: "180x180", type: "image/png" }],
+  },
   title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
   description: SITE_DESCRIPTION,
   openGraph: {

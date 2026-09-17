@@ -1,3 +1,4 @@
+import { asset } from "./square-path.ts";
 // Deterministic seeding for the no-upload avatar placeholder.
 //
 // The invariant: one person renders the SAME placeholder on every surface, in
@@ -60,15 +61,15 @@ export function hashSeed(input: string): number {
  * entry re-rolls the avatar of every existing user — same contract as the hash.
  */
 export const AVATAR_ARTWORK: readonly string[] = [
-  "/avatar/avatar-01.jpg",
-  "/avatar/avatar-02.jpg",
-  "/avatar/avatar-03.jpg",
-  "/avatar/avatar-04.jpg",
-  "/avatar/avatar-05.jpg",
-  "/avatar/avatar-06.jpg",
-  "/avatar/avatar-07.jpg",
-  "/avatar/avatar-08.jpg",
-  "/avatar/avatar-09.jpg",
+  asset("/avatar/avatar-01.jpg"),
+  asset("/avatar/avatar-02.jpg"),
+  asset("/avatar/avatar-03.jpg"),
+  asset("/avatar/avatar-04.jpg"),
+  asset("/avatar/avatar-05.jpg"),
+  asset("/avatar/avatar-06.jpg"),
+  asset("/avatar/avatar-07.jpg"),
+  asset("/avatar/avatar-08.jpg"),
+  asset("/avatar/avatar-09.jpg"),
 ];
 
 /**

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/ui/states";
 import { useApplyCreator, useCreatorApplication } from "@/features/profile/hooks/use-profile";
 import type { ProfileRole } from "@/lib/api/schemas";
+import { sq } from "@/lib/square-path";
 
 // Own-profile card: citizens and ambassadors apply to become creators;
 // creators see the chip and a way into the Studio. Anchored (#creator) so the
@@ -28,7 +29,7 @@ export function CreatorCard({ role }: { role: ProfileRole }) {
           <p className="text-sm text-grey-400">You can host streams and schedule sessions.</p>
         </div>
         <Link
-          href="/studio"
+          href={sq("/studio")}
           className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-white"
         >
           Open Studio

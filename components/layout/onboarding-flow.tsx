@@ -11,6 +11,7 @@ import { useMe } from "@/hooks/use-me";
 import { usePeople } from "@/features/discovery";
 import { PersonQuickActions, useUpdateMe } from "@/features/profile";
 import { hasSeenWelcome } from "@/components/layout/welcome/welcome-flow";
+import { asset } from "@/lib/square-path";
 
 /**
  * ONBOARDING — nodes 107:1821, 122:2906, 125:3616 and 126:3769.
@@ -169,7 +170,7 @@ export function OnboardingFlow() {
         <div className="flex min-h-full flex-col items-center px-4 py-10">
           {/* The lockup sits above the card on all three carded steps. */}
           <Image
-            src="/onboarding/logo-lockup.png"
+            src={asset("/onboarding/logo-lockup.png")}
             alt="Square"
             width={210}
             height={154}
@@ -278,7 +279,7 @@ function Welcome({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="relative flex min-h-full items-center justify-center overflow-hidden px-4 py-10">
       <Image
-        src="/onboarding/rings.svg"
+        src={asset("/onboarding/rings.svg")}
         alt=""
         aria-hidden
         width={1836}
@@ -290,7 +291,7 @@ function Welcome({ onContinue }: { onContinue: () => void }) {
       <div className="relative flex w-full max-w-[627px] flex-col items-center gap-[71px]">
         <div className="flex flex-col items-center gap-9">
           <Image
-            src="/onboarding/logo-3d.png"
+            src={asset("/onboarding/logo-3d.png")}
             alt=""
             aria-hidden
             width={413}
@@ -522,7 +523,7 @@ function PermissionsStep({ onDone }: { onDone: () => void }) {
 
       <div className="flex flex-col gap-3">
         <PermissionRow
-          art="/onboarding/perm-mic.png"
+          art={asset("/onboarding/perm-mic.png")}
           title="Microphone"
           body="Enable this to turn on your microphone"
           state={mic}
@@ -548,14 +549,14 @@ function PermissionsStep({ onDone }: { onDone: () => void }) {
           route — the wiring is a two-line `askNotify` away.
         */}
         <PermissionRow
-          art="/onboarding/perm-bell.png"
+          art={asset("/onboarding/perm-bell.png")}
           title="Notifications"
           body="Allow notifications so you know when someone winked at you"
           state={notify}
           disabledReason="Push notifications aren't wired up yet — we'll ask when they can actually reach you."
         />
         <PermissionRow
-          art="/onboarding/perm-contact.png"
+          art={asset("/onboarding/perm-contact.png")}
           title="Contact"
           body="See which friends are already here"
           state="idle"

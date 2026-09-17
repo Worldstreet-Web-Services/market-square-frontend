@@ -1,4 +1,5 @@
 import { x, y } from "@/components/layout/welcome/welcome-art";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE PALS CAROUSEL — the five cards of `Desktop - 33`, circulating along the
@@ -107,7 +108,7 @@ export function PalsArc() {
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size */}
             <img
-              src={`/onboarding/welcome/${card.src}.webp`}
+              src={asset(`/onboarding/welcome/${card.src}.webp`)}
               alt=""
               className="absolute left-0 w-full"
               // The featured card is 20px taller than the rest. It keeps its own

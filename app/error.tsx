@@ -1,5 +1,6 @@
 "use client";
 
+import { sq } from "@/lib/square-path";
 import { useEffect } from "react";
 import Link from "next/link";
 import { reportClientError } from "@/lib/report-error";
@@ -51,7 +52,7 @@ export default function RouteError({
             root-layout case is `global-error.tsx`, which cannot rely on that
             and does not. */}
         <Link
-          href="/"
+          href={sq("/")}
           className="ws-press rounded-full border border-white/20 px-5 py-2 text-[13px] font-bold text-body transition-colors hover:bg-white/10"
         >
           Go home

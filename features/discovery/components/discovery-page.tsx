@@ -40,6 +40,7 @@ import {
   exploreTabIsRowList,
   type ExploreTab,
 } from "@/lib/explore-tabs";
+import { sq } from "@/lib/square-path";
 
 const ROW = "ws-row flex items-start gap-3 px-4 py-3";
 
@@ -111,7 +112,7 @@ function ResultRow({
     return (
       // A post result opens the POST, never its author — and never falls back
       // to the home timeline when the payload carries no author.
-      <Link href={`/p/${post.id}`} className={ROW}>
+      <Link href={sq(`/p/${post.id}`)} className={ROW}>
         {identity}
       </Link>
     );
@@ -120,7 +121,7 @@ function ResultRow({
   if (result.kind === "stream") {
     const stream = result.stream;
     return (
-      <Link href={`/live/${stream.id}`} className={ROW}>
+      <Link href={sq(`/live/${stream.id}`)} className={ROW}>
         <GradientThumb seed={stream.id} className="h-11 w-16 shrink-0 rounded-lg" />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
@@ -138,7 +139,7 @@ function ResultRow({
 
   const product = result.product;
   return (
-    <Link href={`/store/${product.slug}`} className={ROW}>
+    <Link href={sq(`/store/${product.slug}`)} className={ROW}>
       <GradientThumb seed={product.id} className="h-11 w-11 shrink-0 rounded-lg" />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">

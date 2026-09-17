@@ -4,6 +4,7 @@ import { HouseCard } from "@/components/layout/house-card";
 import { useJoinGroup, useProfileHouses } from "@/features/messages";
 import { useAuth } from "@/hooks/use-auth";
 import { useGate } from "@/hooks/use-gate";
+import { sq } from "@/lib/square-path";
 
 /**
  * THE HOUSES SOMEBODY ELSE BELONGS TO — node 545:47653 on a stranger's
@@ -54,7 +55,7 @@ export function ProfileHousesOf({ username }: { username: string }) {
             memberCount={house.memberCount}
             action={
               house.viewerIsMember === true
-                ? { label: "View House", href: `/messages?conversation=${house.id}` }
+                ? { label: "View House", href: sq(`/messages?conversation=${house.id}`) }
                 : {
                     label: "Join House",
                     title: authenticated ? undefined : "Sign in to join",

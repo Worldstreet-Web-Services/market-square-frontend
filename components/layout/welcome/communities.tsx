@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 import { x, y } from "@/components/layout/welcome/welcome-art";
+import { asset } from "@/lib/square-path";
 
 /**
  * SCREEN 3'S CONSTELLATION — the tiles of `Desktop - 36`.
@@ -77,7 +78,7 @@ export function Communities() {
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size */}
           <img
-            src={`/onboarding/welcome/${t.src}.webp`}
+            src={asset(`/onboarding/welcome/${t.src}.webp`)}
             alt=""
             className="absolute"
             style={{ left: x(t.left), top: y(t.top), width: x(t.width) }}
@@ -87,7 +88,7 @@ export function Communities() {
 
       {/* eslint-disable-next-line @next/next/no-img-element -- static art, intrinsic size */}
       <img
-        src={`/onboarding/welcome/${HERO.src}.webp`}
+        src={asset(`/onboarding/welcome/${HERO.src}.webp`)}
         alt=""
         className={cn("ws-hub absolute")}
         style={{ left: x(HERO.left), top: y(HERO.top), width: x(HERO.width) }}

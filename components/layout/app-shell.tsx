@@ -68,6 +68,7 @@ import {
   IconStore,
   IconUser,
 } from "@/components/ui/icons";
+import { sq, stripSquare } from "@/lib/square-path";
 
 interface NavItem {
   href: string;
@@ -364,7 +365,7 @@ function OnAirPill({
 }) {
   return (
     <Link
-      href="/studio"
+      href={sq("/studio")}
       aria-label="You're live — back to the studio"
       title="You're live — back to the studio"
       className={cn(
@@ -400,7 +401,7 @@ function NavLink({
   const Icon = item.icon;
   return (
     <Link
-      href={item.href}
+      href={sq(item.href)}
       {...(item.external
         ? { target: "_blank", rel: "noopener noreferrer" }
         : {})}
@@ -635,7 +636,7 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
           items.map((item) => (
             <Link
               key={item.href}
-              href={item.href}
+              href={sq(item.href)}
               {...(item.external
                 ? { target: "_blank", rel: "noopener noreferrer" }
                 : {})}
@@ -758,7 +759,9 @@ export function AccountMenuItems({
     on ? <span aria-hidden className="block h-2 w-2 rounded-full bg-create" /> : undefined;
   const go = (href: string) => {
     close();
-    router.push(href);
+    // `sq` is idempotent: a helper-built href (profileHref) is already under
+    // /square, and a logical one ("/auth") gains the prefix here, once.
+    router.push(sq(href));
   };
 
   /*
@@ -1021,7 +1024,7 @@ export function Sidebar({
         breadcrumb.
       */}
       <Link
-        href="/"
+        href={sq("/")}
         aria-label="Square home"
         title="Square"
         className="ws-press mb-4 flex h-[var(--ws-crumb-h)] shrink-0 items-center justify-center border-b border-white/10"
@@ -1107,7 +1110,7 @@ export function Sidebar({
       */}
       <div className="mt-4 flex shrink-0 flex-col items-center gap-4 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:px-3">
         <Link
-          href="/gist-rooms?open=1"
+          href={sq("/gist-rooms?open=1")}
           /* 90deg, not `ws-btn-create`'s 155: node 496:13280's handles run
              (0,0.5) to (1,0.5), which is straight across. Same two stops —
              --color-create into --color-create-deep — so this is the ramp the
@@ -1232,7 +1235,7 @@ function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
       >
         {showBrand && (
           <Link
-            href="/"
+            href={sq("/")}
             aria-label="Square home"
             title="Square"
             className="ws-press flex h-[76px] shrink-0 items-center"
@@ -1322,7 +1325,7 @@ function TopBarActions() {
         the exported vuesax bell at the file's #DCDCDC.
       */}
       <Link
-        href="/notifications"
+        href={sq("/notifications")}
         aria-label={
           notifications > 0
             ? `Notifications, ${notifications} unread`
@@ -1543,7 +1546,7 @@ function MobileMenu({
           ) : (
             <div className="ws-hair flex items-center gap-2 border-t pt-3">
               <Link
-                href={me.data ? profileHref(me.data) : "/auth"}
+                href={me.data ? profileHref(me.data) : sq("/auth")}
                 onClick={onClose}
                 className="ws-press flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-white/[0.06]"
               >
@@ -1674,7 +1677,7 @@ export function MobileBar({
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={sq(item.href)}
               aria-current={active ? "page" : undefined}
               aria-label={
                 badge > 0 ? `${item.label}, ${badge} unread` : item.label
@@ -1729,7 +1732,9 @@ export function MobileBar({
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  // Nav `href`s are LOGICAL keys (isActive, BADGE_FOR, the WIDE list), so the
+  // pathname is compared without the /square prefix and prefixed only where rendered.
+  const pathname = stripSquare(usePathname());
   // A chat thread being typed into — the dock stays out of its way.
   const chatOpen = useChatOpen();
   // The reader tucked the desktop rail away and uses the dock instead.
@@ -1978,7 +1983,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 the file's #9F5AFF inside a #0D0D0F ring. Past nine it reads
                 "9+" and grows sideways rather than shrinking the type. */}
             <Link
-              href="/notifications"
+              href={sq("/notifications")}
               aria-label={
                 (unread.data?.notifications ?? 0) > 0
                   ? `Notifications, ${unread.data?.notifications} unread`

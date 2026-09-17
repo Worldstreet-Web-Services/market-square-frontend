@@ -7,6 +7,7 @@ import { useIsFollowing } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { useMe } from "@/hooks/use-me";
 import type { Profile } from "@/lib/api/schemas";
+import { asset } from "@/lib/square-path";
 
 /**
  * Joins the notifications and profile slices, which never import each other.
@@ -52,7 +53,7 @@ function WinkBack({ profile }: { profile: Profile }) {
       className={PILL}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/notifications/notif-btn-wink.svg" alt="" aria-hidden className="h-3.5 w-3.5" />
+      <img src={asset("/notifications/notif-btn-wink.svg")} alt="" aria-hidden className="h-3.5 w-3.5" />
       {wink.winked ? "Winked" : "Wink back"}
     </button>
   );
@@ -85,7 +86,7 @@ function FollowBack({ profile }: { profile: Profile }) {
       className={PILL}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/notifications/notif-btn-follow.svg" alt="" aria-hidden className="h-3.5 w-3.5" />
+      <img src={asset("/notifications/notif-btn-follow.svg")} alt="" aria-hidden className="h-3.5 w-3.5" />
       Follow back
     </button>
   );
