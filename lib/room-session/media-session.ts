@@ -38,3 +38,18 @@ export function mediaSessionMetadata(room: MediaSessionRoom): MediaSessionText {
   if (!knownPublic) return { ...PRIVATE_ROOM_METADATA };
   return { title: room.title.trim() || "Gist room", artist: room.owner?.displayName ?? "Gist room" };
 }
+
+/**
+ * MAY THE OS HANG-UP END THIS READER'S SESSION?
+ *
+ * Chrome's media hub, Picture-in-Picture and a headset's button all send
+ * `hangup` with no confirmation of their own. For a listener that is the
+ * mini-player's one-tap Leave. For anybody else it is not: the in-app red
+ * button asks a seated speaker before giving up their seat, and sends a host
+ * to "Close the gist room?" — a bare leave from the lock screen disconnected
+ * the host and left their room live with nobody running it. So only a
+ * listener gets the action; a host or speaker closes or leaves in the app.
+ */
+export function osHangUpAllowed(presence: "host" | "speaker" | "listener" | null): boolean {
+  return presence === "listener";
+}

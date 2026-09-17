@@ -1257,3 +1257,43 @@ describe("Backstage asks before it goes live over a held room", () => {
     assert.equal(h.session.getState().status, "idle");
   });
 });
+
+describe("a host never walks out of their own room live (every exit, not only a switch)", async () => {
+  const { osHangUpAllowed } = await import("./room-session/media-session.ts");
+
+  it("the OS / headset hang-up is offered to a listener only", () => {
+    assert.equal(osHangUpAllowed("listener"), true);
+    assert.equal(osHangUpAllowed("host"), false, "a lock-screen hang-up leaves the host's room live with nobody in it");
+    assert.equal(osHangUpAllowed("speaker"), false, "a lock-screen hang-up gives a seat up without asking");
+    assert.equal(osHangUpAllowed(null), false);
+  });
+
+  it("an explicit sign-out closes a host's room before letting go of it", async () => {
+    const h = harness();
+    await h.session.enter("A", "host");
+    await h.session.signOut();
+    assert.deepEqual(h.closed, ["A"]);
+    assert.ok(h.log.indexOf("close:A") < h.log.indexOf("disconnect:A-1"), h.log.join(" "));
+    assert.equal(h.session.getState().status, "idle");
+    assert.equal(h.registry.size, 0);
+  });
+
+  it("…and still signs out when the close fails", async () => {
+    const h = harness();
+    h.deps.closeRoom = async () => {
+      throw new Error("503");
+    };
+    await h.session.enter("A", "host");
+    await h.session.signOut();
+    assert.equal(h.session.getState().status, "idle", "a failed close kept a signed-out browser in the room");
+    assert.equal(h.rooms[0]!.disconnects, 1);
+  });
+
+  it("a listener's sign-out closes nothing", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    await h.session.signOut();
+    assert.deepEqual(h.closed, []);
+    assert.equal(h.session.getState().status, "idle");
+  });
+});

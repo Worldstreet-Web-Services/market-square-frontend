@@ -16,6 +16,7 @@ export function StreamRoomScreen({ streamId }: { streamId: string }) {
       title="Leave the gist room to watch?"
       consequence="Watching this stream will leave it."
       confirmLabel="Leave and watch"
+      hostConfirmLabel="Close and watch"
     >
       <StreamRoom streamId={streamId} followSlot={(owner) => <FollowPill profile={owner} />} />
     </GistRoomGuard>

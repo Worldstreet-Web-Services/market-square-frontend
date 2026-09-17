@@ -16,13 +16,17 @@ import { sq } from "@/lib/square-path";
  * gist room the reader is still in would talk over the first from the shell
  * and be broadcast into the second, with their voice going to both. So the
  * surface does not mount until they choose. Staying takes them back to the
- * room they are in; leaving is a proper Leave (the seat comes down).
+ * room they are in; leaving is a proper Leave (the seat comes down) — and for
+ * the room's HOST it is a Close: `vacate` ends the room for everyone before
+ * letting go of it, because a host who walks out leaves listeners in a room
+ * with nobody running it. If that close fails, the host stays.
  */
 export function GistRoomGuard({
   streamId,
   title,
   consequence,
   confirmLabel,
+  hostConfirmLabel,
   children,
 }: {
   /** The stream this surface is for. Being in THAT room is not a conflict. */
@@ -31,6 +35,8 @@ export function GistRoomGuard({
   /** "Watching this stream will leave it." */
   consequence: string;
   confirmLabel: string;
+  /** The same button for the room's host, whose leaving closes the room: "Close and watch". */
+  hostConfirmLabel: string;
   children: React.ReactNode;
 }) {
   const session = useRoomSession();
@@ -50,6 +56,8 @@ export function GistRoomGuard({
   if (door === "return-to-room") return null;
 
   const current = session.state.target?.streamId;
+  const hosting = session.state.target?.role === "host";
+  const said = hosting ? `${consequence} It will close for everyone.` : consequence;
   return (
     <div className="flex min-h-dvh items-center justify-center bg-ground px-4">
       <div className="ws-card w-full max-w-[400px] p-6" role="dialog" aria-modal="true" aria-labelledby="leave-gist-title">
@@ -58,8 +66,8 @@ export function GistRoomGuard({
         </h1>
         <p className="mt-2 text-[13px] leading-5 text-body">
           {session.stream
-            ? `You're in "${houseTopic(session.stream)}". ${consequence}`
-            : `You're in a gist room. ${consequence}`}
+            ? `You're in "${houseTopic(session.stream)}". ${said}`
+            : `You're in a gist room. ${said}`}
         </p>
         <div className="mt-5 flex gap-2">
           <Button variant="ghost" className="flex-1" onClick={() => current && router.push(sq(`/gist-rooms/${current}`))}>
@@ -70,10 +78,11 @@ export function GistRoomGuard({
             loading={leaving}
             onClick={() => {
               setLeaving(true);
-              void session.leave().finally(() => setLeaving(false));
+              // A failed close was toasted by the end-stream hook; the host stays.
+              void session.vacate().catch(() => undefined).finally(() => setLeaving(false));
             }}
           >
-            {confirmLabel}
+            {hosting ? hostConfirmLabel : confirmLabel}
           </Button>
         </div>
       </div>

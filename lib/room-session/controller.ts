@@ -279,8 +279,31 @@ export class RoomSessionController<R> {
     return this.stop();
   }
 
+  /**
+   * A sign-out nobody pressed (the token is already gone): the connection
+   * comes down and nothing else is attempted — a close call would be refused.
+   */
   logout(): Promise<void> {
     return this.stop();
+  }
+
+  /**
+   * The reader's own sign-out, while the session still authorises calls. A
+   * HOST's room is closed for everyone first — a host who signs out can never
+   * come back to it, so leaving it open leaves listeners in a room with nobody
+   * running it. Unlike a switch, a close that fails does not keep them in:
+   * the sign-out still happens.
+   */
+  async signOut(): Promise<void> {
+    const target = this.state.target;
+    if (target?.role === "host" && isHolding(this.state.connection) && this.closingForSwitch === null) {
+      try {
+        await this.closeHostRoom(target.streamId);
+      } catch {
+        // The end-stream hook has said why; the sign-out goes ahead.
+      }
+    }
+    await this.stop();
   }
 
   /** Clear a finished session (ended / duplicate / failed) off the screen. */

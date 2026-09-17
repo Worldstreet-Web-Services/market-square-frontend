@@ -17,6 +17,7 @@ export function StudioRoomScreen({ streamId }: { streamId: string }) {
       title="Leave the gist room to go live?"
       consequence="Going live here will leave it."
       confirmLabel="Leave and go live"
+      hostConfirmLabel="Close and go live"
     >
       <StudioStreamScreen streamId={streamId} />
     </GistRoomGuard>

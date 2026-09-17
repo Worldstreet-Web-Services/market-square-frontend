@@ -24,7 +24,7 @@ import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 import { classifyCaptureError } from "@/lib/media-errors";
 import { asRoomFailure, type RoomFailure } from "@/lib/room-connection-copy";
 import { RoomSessionController, type SessionToken } from "@/lib/room-session/controller";
-import { PRIVATE_ROOM_METADATA, mediaSessionMetadata } from "@/lib/room-session/media-session";
+import { PRIVATE_ROOM_METADATA, mediaSessionMetadata, osHangUpAllowed } from "@/lib/room-session/media-session";
 import { stagePresence } from "@/lib/room-session/presence";
 import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
 import { REJOIN_KEY, parseRejoin, rejoinOfferFor, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
@@ -493,24 +493,41 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     } catch {
       // A browser without MediaMetadata is not worth failing over.
     }
-    try {
-      session.setActionHandler("hangup" as MediaSessionAction, () => void leave());
-    } catch {
-      // An action this browser does not know is not worth failing over.
-    }
     return () => {
       try {
         session.metadata = null;
       } catch {
         // As above.
       }
+    };
+  }, [holding, metaTitle, metaArtist]);
+
+  /*
+    THE OS HANG-UP IS A LISTENER'S LEAVE, AND NOBODY ELSE'S. It carries no
+    confirmation, so a host pressing it in Chrome's media hub or on a headset
+    was disconnected with their room left live for everyone, and a speaker
+    gave up their seat on one tap. Those two close or leave in the app, where
+    the mini-player asks first (lib/room-session/media-session.ts).
+  */
+  const hangUpAllowed = osHangUpAllowed(presence);
+  useEffect(() => {
+    if (!holding || typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const session = navigator.mediaSession;
+    if (hangUpAllowed) {
+      try {
+        session.setActionHandler("hangup" as MediaSessionAction, () => void leave());
+      } catch {
+        // An action this browser does not know is not worth failing over.
+      }
+    }
+    return () => {
       try {
         session.setActionHandler("hangup" as MediaSessionAction, null);
       } catch {
         // As above.
       }
     };
-  }, [holding, metaTitle, metaArtist, leave]);
+  }, [holding, hangUpAllowed, leave]);
 
   /*
     THE LOCK SCREEN'S PAUSE NEVER LEAVES A MIC OPEN. Without a handler the
@@ -568,12 +585,12 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
         writeRejoin(null);
         return controller.end();
       },
-      // Sign-out: a host's connection comes down (closing the room stays an
-      // explicit act); anyone else leaves properly, freeing a held seat while
-      // the session that authorises that call still exists.
+      // Sign-out, while the session that authorises calls still exists: a
+      // host's room is closed for everyone (they can never come back to it),
+      // anyone else leaves properly, freeing a held seat.
       logout: () => {
         writeRejoin(null);
-        return isHost ? controller.logout() : leave();
+        return isHost ? controller.signOut() : leave();
       },
       confirmConflict,
       switching,

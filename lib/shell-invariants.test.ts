@@ -3597,3 +3597,35 @@ describe("the mini-player fits every frame it is drawn in", () => {
     assert.match(room, /onClick=\{session\.startAudio\}/);
   });
 });
+
+describe("a host never walks out of their own room live", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the Stream/Studio door closes a host's room (vacate), never a bare leave", () => {
+    const guard = code("components/layout/gist-room-guard.tsx");
+    assert.doesNotMatch(guard, /session\.leave\(\)/, "the guard disconnects a host and leaves their room live");
+    assert.match(guard, /session\.vacate\(\)/);
+    assert.match(guard, /hosting \? hostConfirmLabel : confirmLabel/);
+    for (const screen of ["components/layout/stream-room-screen.tsx", "components/layout/studio-room-screen.tsx"]) {
+      assert.match(code(screen), /hostConfirmLabel="Close and /, screen);
+    }
+  });
+
+  it("the Ark exit sheet's Leave and go closes a host's room, and goes only once it has", () => {
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.doesNotMatch(guard, /session\.leave\(\)/);
+    assert.match(guard, /void session\.vacate\(\)\.then\(\s*\(\) => target\.go\(\),/);
+    assert.match(guard, /\{hosting \? "Close room and go" : "Leave and go"\}/);
+  });
+
+  it("the OS media hang-up is registered for a listener only", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /const hangUpAllowed = osHangUpAllowed\(presence\);/);
+    assert.match(provider, /if \(hangUpAllowed\) \{\s*try \{\s*session\.setActionHandler\("hangup" as MediaSessionAction, \(\) => void leave\(\)\);/);
+  });
+
+  it("an explicit sign-out closes a host's room first", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /return isHost \? controller\.signOut\(\) : leave\(\);/);
+  });
+});

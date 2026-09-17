@@ -47,7 +47,7 @@ export interface RoomSessionView {
   leave: () => Promise<void>;
   /** The host's Close, after the room has been closed for everyone. */
   end: () => Promise<void>;
-  /** Sign-out: the host's connection comes down the same way a listener's does. */
+  /** Sign-out: a host's room is closed for everyone first; anyone else leaves, freeing a seat. */
   logout: () => Promise<void>;
   /**
    * "Leave and join": frees the seat or hand in the room being left, then

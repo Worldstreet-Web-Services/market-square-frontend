@@ -63,13 +63,14 @@ export function ZoneExitGuard() {
   }, [speaking]);
 
   const title = session.stream ? houseTopic(session.stream) : "your gist room";
+  const hosting = session.presence === "host";
   const close = () => setExit(null);
 
   return (
     <Sheet open={exit !== null && speaking} onClose={close} title={`Opening Ark ends your spot in ${title}`}>
       <p className="text-[13px] leading-5 text-body">
-        {session.presence === "host"
-          ? "You're hosting. Open it in a new tab to keep the room going here."
+        {hosting
+          ? "You're hosting. Leaving closes the room for everyone. Open it in a new tab to keep the room going here."
           : "You're on the stage. Open it in a new tab to keep your seat."}
       </p>
       <div className="mt-5 flex flex-col gap-2">
@@ -89,10 +90,15 @@ export function ZoneExitGuard() {
             const target = exit;
             close();
             if (!target) return;
-            void session.leave().finally(() => target.go());
+            // A host's room is CLOSED first (vacate). If that fails the host
+            // stays in their room, which is still open, and nothing navigates.
+            void session.vacate().then(
+              () => target.go(),
+              () => undefined
+            );
           }}
         >
-          Leave and go
+          {hosting ? "Close room and go" : "Leave and go"}
         </Button>
       </div>
     </Sheet>
