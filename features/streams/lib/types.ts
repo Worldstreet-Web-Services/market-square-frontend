@@ -221,36 +221,13 @@ export const StreamEventsSchema = z.object({
 });
 
 /**
- * `SpeakerRequest` in the served spec.
- *
- * Three fields were wrong at once and each broke something different:
- * `requestedAt` does not exist (it is `createdAt`), so every request-to-join
- * threw; the status enum was missing `denied`/`withdrawn` with no `.catch()`,
- * so those two states threw as well; and the hydrated profile arrives as
- * `profile`, not `user`, so the host's queue rendered "Viewer" for everyone.
- *
- * `joinUrl` / `joinToken` / `expiresAt` ARE in the spec, but only while the
- * request is approved — the service omits them in every other state, which is
- * what makes the publish gate in guest-speaker-control safe. They stay
- * optional here for exactly that reason, not because they are absent.
- * `POST /streams/:id/speaker-token` re-mints the pair when it expires;
- * `playback-token` is subscribe-only and cannot be used to broadcast.
+ * `SpeakerRequest` in the served spec. The schema lives in lib/api/schemas.ts
+ * beside `StreamSchema` — pure, so `node --test` parses real payloads against
+ * it (lib/api/schemas.test.ts) — and is re-exported here, where the slice has
+ * always imported it.
  */
-export const SpeakerRequestSchema = z.object({
-  id: z.string(),
-  streamId: z.string().optional().default(""),
-  userId: z.string(),
-  // The list endpoint hydrates this as `profile` on top of the base schema.
-  profile: ProfileSchema.nullable().optional().default(null),
-  status: z
-    .enum(["pending", "approved", "denied", "withdrawn", "removed"])
-    .catch("pending"),
-  createdAt: z.string().optional().default(""),
-  resolvedAt: z.string().nullable().optional().default(null),
-  resolvedBy: z.string().nullable().optional().default(null),
-  joinUrl: z.string().nullable().optional().default(null),
-  joinToken: z.string().nullable().optional().default(null),
-});
+import { SpeakerRequestSchema } from "@/lib/api/schemas";
+export { SpeakerRequestSchema };
 
 export const SpeakerRequestListSchema = z.object({
   items: z.array(SpeakerRequestSchema),
