@@ -11,6 +11,8 @@ import { cn } from "@/lib/cn";
 import { captureVisitUtm } from "@/lib/analytics";
 import { refreshPushSubscription } from "@/lib/push-client";
 import { MenuRow } from "@/components/ui/menu-row";
+import { ArkChevron, ArkWordmark, BackToArk, goBackToArk } from "@/components/layout/ark-nav";
+import { ARK_DESTINATIONS, SHOWS_ARK_NAV } from "@/lib/ark-links";
 import { IconFilterChevronRight, IconFilterFriends, IconFilterGender, IconFilterLocation } from "@/components/ui/home-icons";
 import { useUpdateMe } from "@/features/profile";
 import { useTrackNavHistory } from "@/lib/nav-history";
@@ -514,9 +516,11 @@ export function RailMenu({
   children: (close: () => void) => React.ReactNode;
   /**
    * "right" clears the collapsed rail; "above" stacks over the account chip;
-   * "below" hangs from the top bar's avatar, its right edge on the trigger's.
+   * "below" hangs from the top bar's avatar, its right edge on the trigger's;
+   * "below-start" hangs the same way from a trigger at the bar's LEFT, its left
+   * edge on the trigger's.
    */
-  align?: "right" | "above" | "below";
+  align?: "right" | "above" | "below" | "below-start";
   /**
    * `gist` is node 747:14001 ("gist dm"), the account dropdown — the same menu
    * the friends filter draws (651:18441). The file has it at 74.46% scale
@@ -548,10 +552,11 @@ export function RailMenu({
           : align === "below"
             ? Math.min(rect.right - width, window.innerWidth - width - 8)
             : Math.min(rect.left, window.innerWidth - width - 8);
+      const hangs = align === "below" || align === "below-start";
       // "below" hangs from the trigger's foot. The rail menus grow upward from
       // its top, with 8px of breathing room so a short viewport clamps rather
       // than opening a menu whose first item is off-screen.
-      const top = align === "below" ? rect.bottom + 8 : Math.max(8, rect.top - 8);
+      const top = hangs ? rect.bottom + 8 : Math.max(8, rect.top - 8);
       setAt({ left: Math.max(8, left), top });
     };
     place();
@@ -585,7 +590,7 @@ export function RailMenu({
                 left: at.left,
                 // The rail menus live at the rail's foot and grow upward from
                 // the trigger; the top bar's hangs down from the avatar.
-                ...(align === "below"
+                ...(align === "below" || align === "below-start"
                   ? { top: at.top }
                   : { bottom: Math.max(8, window.innerHeight - at.top) }),
                 width: panel === "gist" ? 264 : panel === "explore" ? 347 : 224,
@@ -1218,6 +1223,67 @@ export function Sidebar({
  * either edge the line reaches both; the shell wrapper clips horizontal
  * overflow so that width never turns into a scrollbar.
  */
+/**
+ * DESKTOP'S WAY BACK TO ARK — only in the build Ark mounts (`SHOWS_ARK_NAV`).
+ *
+ * A phone gets the mobile app's single "Back to Ark" pill, because a thumb and
+ * a 390 bar have room for one control. A desktop has room for the whole of
+ * Ark, and a reader there is as likely to be heading for Meme or Arkade as back
+ * to where they were, so the same "‹ ARK" pill opens Ark instead: "Back to
+ * Ark" first (the mobile rule — the page they came from, else Market), then
+ * Ark's own sections. It lives in the top bar rather than the rail because the
+ * rail is a flag and can be off; the bar is always there from md up.
+ *
+ * Every row is a full page load: those pages belong to the other zone. It sits
+ * at the bar's left, where "back" is read, 38 tall to match the bell.
+ */
+function ArkMenu() {
+  return (
+    <RailMenu
+      label="Ark"
+      align="below-start"
+      panel="gist"
+      trigger={({ open, toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label="Ark menu"
+          className="ws-press flex h-[38px] shrink-0 items-center gap-2 rounded-full border border-white/15 px-3.5 text-white transition-colors hover:bg-white/5"
+        >
+          <ArkChevron className="h-2.5 w-2.5" />
+          <ArkWordmark className="h-2 w-10" />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          <MenuRow
+            icon={<ArkChevron className="h-2.5 w-2.5 text-white" />}
+            label="Back to Ark"
+            onClick={() => {
+              close();
+              goBackToArk();
+            }}
+          />
+          <span aria-hidden className="my-0.5 block h-px bg-white/10" />
+          {ARK_DESTINATIONS.map((destination) => (
+            <MenuRow
+              key={destination.href}
+              label={destination.label}
+              onClick={() => {
+                close();
+                window.location.assign(destination.href);
+              }}
+            />
+          ))}
+        </>
+      )}
+    </RailMenu>
+  );
+}
+
 function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
   return (
     <div
@@ -1233,6 +1299,11 @@ function TopBar({ showBrand, wide }: { showBrand: boolean; wide: boolean }) {
           showBrand && !wide && "mx-auto max-w-[600px] lg:max-w-[971px] lg:pr-6"
         )}
       >
+        {SHOWS_ARK_NAV && (
+          <div className="mr-5 flex h-[76px] shrink-0 items-center">
+            <ArkMenu />
+          </div>
+        )}
         {showBrand && (
           <Link
             href={sq("/")}
@@ -1972,7 +2043,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             the box and the render disagree the PNG wins, and the PNG is one
             line.
           */}
-          <span className="flex h-10 shrink-0 items-center">
+          <span className="flex h-10 shrink-0 items-center gap-3">
+            {/* The mobile app's "Back to Ark", only in the build Ark mounts. */}
+            {SHOWS_ARK_NAV && <BackToArk />}
             <BrandLockup markHeight={24} label="Square" className="flex" />
           </span>
 
