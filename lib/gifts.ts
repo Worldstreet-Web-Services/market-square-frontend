@@ -1,4 +1,5 @@
 import { MARKET_FLAGS } from "./market-config.ts";
+import { asset } from "./square-path.ts";
 /**
  * The gift catalogue — one list, used by both places KASH changes hands.
  *
@@ -48,20 +49,20 @@ export interface LiveGift {
  */
 export const LIVE_GIFTS: LiveGift[] = [
   // Dollar figures are at the engine's kashPriceUsd of $7 — see the note above.
-  { id: "rose", name: "Rose", art: "/gifts/gift-13.png", priceKash: "0.01" }, //  $0.07
-  { id: "heart", name: "Heart", art: "/gifts/gift-06.png", priceKash: "0.02" }, // $0.14
-  { id: "book", name: "Book", art: "/gifts/gift-03.png", priceKash: "0.05" }, //  $0.35
-  { id: "dove", name: "Dove", art: "/gifts/gift-02.png", priceKash: "0.1" }, //   $0.70
-  { id: "boots", name: "Boots", art: "/gifts/gift-10.png", priceKash: "0.15" }, // $1.05
-  { id: "jacket", name: "Jacket", art: "/gifts/gift-08.png", priceKash: "0.2" }, // $1.40
-  { id: "phone", name: "Phone", art: "/gifts/gift-09.png", priceKash: "0.25" }, // $1.75
-  { id: "router", name: "Router", art: "/gifts/gift-05.png", priceKash: "0.5" }, // $3.50
-  { id: "lion", name: "Lion", art: "/gifts/gift-01.png", priceKash: "1" }, //      $7
-  { id: "bull", name: "Bull", art: "/gifts/gift-12.png", priceKash: "2" }, //     $14
-  { id: "bank", name: "Bank", art: "/gifts/gift-11.png", priceKash: "5" }, //     $35
-  { id: "phoenix", name: "Phoenix", art: "/gifts/gift-04.png", priceKash: "10" }, // $70
-  { id: "car", name: "Car", art: "/gifts/gift-07.png", priceKash: "25" }, //     $175
-  { id: "kash", name: "KASH coin", art: "/gifts/gift-14.png", priceKash: "50" }, // $350
+  { id: "rose", name: "Rose", art: asset("/gifts/gift-13.png"), priceKash: "0.01" }, //  $0.07
+  { id: "heart", name: "Heart", art: asset("/gifts/gift-06.png"), priceKash: "0.02" }, // $0.14
+  { id: "book", name: "Book", art: asset("/gifts/gift-03.png"), priceKash: "0.05" }, //  $0.35
+  { id: "dove", name: "Dove", art: asset("/gifts/gift-02.png"), priceKash: "0.1" }, //   $0.70
+  { id: "boots", name: "Boots", art: asset("/gifts/gift-10.png"), priceKash: "0.15" }, // $1.05
+  { id: "jacket", name: "Jacket", art: asset("/gifts/gift-08.png"), priceKash: "0.2" }, // $1.40
+  { id: "phone", name: "Phone", art: asset("/gifts/gift-09.png"), priceKash: "0.25" }, // $1.75
+  { id: "router", name: "Router", art: asset("/gifts/gift-05.png"), priceKash: "0.5" }, // $3.50
+  { id: "lion", name: "Lion", art: asset("/gifts/gift-01.png"), priceKash: "1" }, //      $7
+  { id: "bull", name: "Bull", art: asset("/gifts/gift-12.png"), priceKash: "2" }, //     $14
+  { id: "bank", name: "Bank", art: asset("/gifts/gift-11.png"), priceKash: "5" }, //     $35
+  { id: "phoenix", name: "Phoenix", art: asset("/gifts/gift-04.png"), priceKash: "10" }, // $70
+  { id: "car", name: "Car", art: asset("/gifts/gift-07.png"), priceKash: "25" }, //     $175
+  { id: "kash", name: "KASH coin", art: asset("/gifts/gift-14.png"), priceKash: "50" }, // $350
 ];
 
 /**

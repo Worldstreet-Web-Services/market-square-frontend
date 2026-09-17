@@ -9,6 +9,7 @@ import {
   useProfilePhotos,
   useRemoveProfilePhoto,
 } from "@/features/profile/hooks/use-profile";
+import { asset } from "@/lib/square-path";
 
 /** The service's own cap (`POST /me/photos` answers 409 past it). */
 const MAX_PHOTOS = 12;
@@ -83,7 +84,7 @@ export function ProfilePhotos({ username, isMe }: { username: string; isMe: bool
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 shadow-[0_4px_25px_0_rgba(107,107,107,0.25)]">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10">
                   {/* eslint-disable-next-line @next/next/no-img-element -- the node's own glyph */}
-                  <img src="/profile/gallery-add.svg" alt="" aria-hidden className="h-3 w-3" />
+                  <img src={asset("/profile/gallery-add.svg")} alt="" aria-hidden className="h-3 w-3" />
                 </span>
               </span>
               <span className="text-[12px] font-normal leading-[16.5px] text-white/50">

@@ -980,7 +980,7 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
 
   it("draws the art from the file's own exports", () => {
     for (const asset of ["house-arc-top.svg", "house-arc-bottom.svg", "house-chat-cube.svg", "gist-arc-short.svg", "gist-arc-loop.svg", "gist-faces.png", "explore-arc.svg", "explore-clouds.svg", "explore-paper.svg", "explore-people.png"]) {
-      assert.match(banner, new RegExp(`/home/slides/${asset.replace(".", "\\.")}`));
+      assert.match(banner, new RegExp(`asset\\("/home/slides/${asset.replace(".", "\\.")}"\\)`));
       assert.ok(existsSync(resolve(`public/home/slides/${asset}`)), `${asset} is missing`);
     }
     // A blend inside an <img> blends against nothing: the element carries it.
@@ -1051,7 +1051,7 @@ describe("Home's Top GistRooms section is 647:16288's first block", () => {
     const api = stripComments(read("features/streams/lib/api.ts"));
     // A deployment without the busiest-first order must fall back, not empty the shelf.
     assert.match(api, /if \(!refusedListenerSort\(error\)\) throw error;/);
-    assert.match(rail, /action=\{\{ label: "View more", href: "\/gist-rooms" \}\}/);
+    assert.match(rail, /action=\{\{ label: "View more", href: sq\("\/gist-rooms"\) \}\}/);
     // The gradient half, the pill and the file's own arrow live in the one
     // heading component now — four copies of this markup is how one section
     // ends up a different size from its neighbours.
@@ -1490,7 +1490,7 @@ describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () =>
   const inbox = stripComments(read("features/messages/components/messages-page.tsx"));
 
   it("puts View All opposite Houses, opening the inbox on Houses", () => {
-    assert.match(houses, /href="\/messages\?tab=houses"[^>]*>\s*View All/);
+    assert.match(houses, /href=\{sq\("\/messages\?tab=houses"\)\}[^>]*>\s*View All/);
     assert.match(inbox, /useState<InboxTab>\(tabParam === "houses" \? "houses" : "all"\)/);
   });
 
@@ -1593,11 +1593,11 @@ describe("Tapping a post's words opens the post", () => {
     assert.match(card, /onClick=\{full \? undefined : openPost\}/);
     assert.match(card, /target\.closest\("a, button, input, textarea, \[role='button'\]"\)\) return;/);
     assert.match(card, /if \(window\.getSelection\(\)\?\.toString\(\)\) return;/);
-    assert.match(card, /router\.push\(`\/p\/\$\{post\.id\}`\);/);
+    assert.match(card, /router\.push\(sq\(`\/p\/\$\{post\.id\}`\)\);/);
   });
 
   it("makes the timestamp the post's link everywhere but the post's own page", () => {
-    assert.match(card, /<Link href=\{`\/p\/\$\{post\.id\}`\} className="hover:text-white\/80 hover:underline">/);
+    assert.match(card, /<Link href=\{sq\(`\/p\/\$\{post\.id\}`\)\} className="hover:text-white\/80 hover:underline">/);
   });
 });
 
@@ -1606,7 +1606,7 @@ describe("Settings are the reader's own, and show real houses", () => {
   const view = stripComments(read("components/layout/notifications-view.tsx"));
 
   it("sends /u/<someone-else>/settings to the reader's own settings and asks a signed-out visitor to sign in", () => {
-    assert.match(screen, /router\.replace\(`\/u\/\$\{me\.data\.username\}\/settings`\);/);
+    assert.match(screen, /router\.replace\(sq\(`\/u\/\$\{me\.data\.username\}\/settings`\)\);/);
     assert.match(screen, /if \(ready && !authenticated\) \{/);
   });
 
@@ -1734,7 +1734,7 @@ describe("Contact us opens a chat with support", () => {
     // only the id is what sent a new support chat to the inbox instead of the
     // thread. See
     // lib/open-conversation.
-    assert.match(screen, /openChat\.mutate\(support\.data, \{\s*onSuccess: \(conversation\) => router\.push\(`\/messages\?c=\$\{conversation\.id\}`\),/);
+    assert.match(screen, /openChat\.mutate\(support\.data, \{\s*onSuccess: \(conversation\) => router\.push\(sq\(`\/messages\?c=\$\{conversation\.id\}`\)\),/);
     assert.doesNotMatch(screen, /did:privy:/, "the support account's id is hard-coded; it differs per environment");
     // The email is the one the support account publishes in its own bio.
     assert.match(read("lib/support.ts"), /export const SUPPORT_EMAIL = "support@tsionark\.com";/);
@@ -1751,9 +1751,14 @@ describe("Contact us opens a chat with support", () => {
 
 describe("Square has a favicon and tagged share links", () => {
   it("serves the brand mark as the tab icon and a home-screen icon", () => {
-    const icon = read("app/icon.svg");
+    const icon = read("public/icon.svg");
     assert.match(icon, /viewBox="0 0 60 60"/);
-    assert.ok(read("app/apple-icon.png").length > 0);
+    assert.ok(read("public/apple-icon.png").length > 0);
+    // Through asset(), so inside Ark the tab icon is Square's, not WSWS's.
+    const layout = stripComments(read("app/layout.tsx"));
+    assert.match(layout, /icon: \[\{ url: asset\("\/icon\.svg"\), sizes: "any", type: "image\/svg\+xml" \}\]/);
+    assert.match(layout, /apple: \[\{ url: asset\("\/apple-icon\.png"\), sizes: "180x180", type: "image\/png" \}\]/);
+    assert.ok(!existsSync(resolve("app/icon.svg")), "the file convention is back and writes an unprefixed icon link");
   });
 
   it("tags every link the share sheet hands out with one short channel code", () => {
@@ -1778,7 +1783,7 @@ describe("Square has a favicon and tagged share links", () => {
   it("shares a post by its short id", () => {
     assert.match(
       stripComments(read("features/feed/components/post-card.tsx")),
-      /url: `\$\{window\.location\.origin\}\/p\/\$\{sharePostId\(post\.id\)\}`/
+      /url: `\$\{window\.location\.origin\}\$\{sq\(`\/p\/\$\{sharePostId\(post\.id\)\}`\)\}`/
     );
   });
 
@@ -1793,11 +1798,31 @@ describe("Square has a favicon and tagged share links", () => {
   });
 });
 
+describe("One app, two addresses: square.tsionark.com untouched, Ark mounts it at /square", () => {
+  const config = stripComments(read("next.config.ts"));
+
+  it("keeps every route and file where the standalone site has them", () => {
+    assert.ok(!existsSync(resolve("app/square")), "routes moved under app/square again, which changes the standalone site");
+    assert.ok(!existsSync(resolve("public/square")), "files moved under public/square again");
+    assert.ok(!existsSync(resolve("lib/legacy-routes.ts")), "redirects are back; the standalone site has nothing to redirect");
+    assert.doesNotMatch(config, /redirects\(\)/);
+  });
+
+  it("rewrites /square onto the real routes only when the base is set", () => {
+    assert.match(config, /const base = parseBase\(process\.env\.NEXT_PUBLIC_SQUARE_BASE_PATH\);\s*if \(base === ""\) return \[\];/);
+    assert.match(config, /beforeFiles: \[\s*\{ source: base, destination: "\/" \},\s*\{ source: `\$\{base\}\/:path\*`, destination: "\/:path\*" \},/);
+    assert.match(config, /process\.env\.SQUARE_MICROFRONTENDS === "1" \? withMicrofrontends\(nextConfig\) : nextConfig/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");
     assert.match(sw, /addEventListener\("push"/);
-    assert.match(sw, /icon: "\/apple-icon\.png"/);
+    assert.match(sw, /icon: SQUARE \+ "\/apple-icon\.png"/);
+    // The prefix is the worker's own scope: "" standalone, "/square" inside Ark.
+    assert.match(sw, /const SQUARE = new URL\(self\.registration\.scope\)\.pathname\.replace\(\/\\\/\$\/, ""\);/);
+    assert.doesNotMatch(stripComments(sw), /"\/square/, "a /square path is hard-coded in the worker again");
     assert.match(sw, /if \(target\.origin !== self\.location\.origin\)/);
   });
 
@@ -1885,7 +1910,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     const screen = stripComments(read("components/layout/houses-screen.tsx"));
     const row = stripComments(read("components/layout/home-top-row.tsx"));
     // The link, the route, the FULL frame.
-    assert.match(stripComments(read("components/layout/popular-houses.tsx")), /action=\{\{ label: "View more", href: "\/houses" \}\}/);
+    assert.match(stripComments(read("components/layout/popular-houses.tsx")), /action=\{\{ label: "View more", href: sq\("\/houses"\) \}\}/);
     assert.match(read("app/houses/page.tsx"), /<HousesScreen \/>/);
     assert.match(stripComments(read("components/layout/app-shell.tsx")), /\/\^\\\/houses\$\/,/, "/houses is not a FULL-frame route");
     // The artboard's insets; the row ends in the FILTER pill (1368:2275), a
@@ -1919,7 +1944,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // (ogazboiz, 2026-09-12).
     assert.match(screen, /left-\[1\.23px\] top-\[3\.08px\] h-\[48\.05px\] w-\[48\.05px\] object-cover/, "the picture no longer sits square on its plate");
     assert.match(screen, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
-    assert.match(screen, /src="\/gist-rooms\/card-default-cover\.svg"[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
+    assert.match(screen, /src=\{asset\("\/gist-rooms\/card-default-cover\.svg"\)\}[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
     assert.doesNotMatch(screen, /default-picture|<Avatar[\s\S]{0,120}src=\{house\.imageUrl\}/, "a house picture is being invented again");
     assert.ok(!existsSync(resolve("public/houses")), "the node's sample photo is back as a default");
     // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
@@ -2187,7 +2212,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(stripComments(read("components/layout/home-screen.tsx")), /mode="home"/);
     assert.match(stripComments(read("components/layout/home-screen.tsx")), /postsSlot=\{<PostForYou/);
     // View more opens the page that actually scrolls.
-    assert.match(stripComments(read("components/layout/post-for-you.tsx")), /href: "\/feed"/);
+    assert.match(stripComments(read("components/layout/post-for-you.tsx")), /href: sq\("\/feed"\)/);
     // ONE component, so the composer and the viewer are never a second copy.
     const screen = stripComments(read("components/layout/feed-screen.tsx"));
     assert.match(screen, /<FeedPage\n\s*mode="feed"/);
@@ -2221,7 +2246,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
       PAGES: these surfaces are never on screen together and each keeps its
       own query.
     */
-    assert.doesNotMatch(row, /href="\/discover"/, "the row can still throw a reader into Explore");
+    assert.doesNotMatch(row, /href=(\{sq\()?"\/discover"/, "the row can still throw a reader into Explore");
     assert.match(row, /<input/);
     assert.doesNotMatch(row, /<form/, "a form submits and navigates; this field answers in place");
     for (const screen of [
@@ -2594,7 +2619,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // A spoken code names exactly one room, so it is OFFERED first and never
     // followed automatically — a well-formed typo would move the reader.
     assert.match(search, /looksLikeRoomCode\(trimmed\)/);
-    assert.match(search, /href=\{`\/code\/\$\{code\}`\}/);
+    assert.match(search, /href=\{sq\(`\/code\/\$\{code\}`\)\}/);
     // A person is the same row here as everywhere else, never a second style.
     assert.match(search, /<PersonRow key=\{item\.id\} profile=\{item\.profile\} \/>/);
   });
@@ -2687,7 +2712,7 @@ describe("a profile's counts open X-style follow lists", () => {
   });
 
   it("switches tabs in place, so Back leaves the page in one step", () => {
-    assert.match(list, /router\.replace\(`\/u\/\$\{handle\}\/\$\{next\}`/);
+    assert.match(list, /router\.replace\(sq\(`\/u\/\$\{handle\}\/\$\{next\}`\)/);
     assert.doesNotMatch(list, /router\.push\(/);
   });
 
@@ -2737,7 +2762,7 @@ describe("link previews publish only what they should, where they should", () =>
       assert.equal(existsSync(new URL(`../${file}`, import.meta.url)), false, file);
     }
     assert.match(stripComments(read("app/share-card/route.tsx")), /export const dynamic = "force-static";/);
-    assert.match(stripComments(read("lib/og-metadata.ts")), /url: "\/share-card",/);
+    assert.match(stripComments(read("lib/og-metadata.ts")), /url: sq\("\/share-card"\),/);
   });
 
   it("keeps Next's own preview-bot list and adds to it, rather than replacing it", () => {
@@ -2853,7 +2878,7 @@ describe("QA round, 2026-09-15", () => {
     assert.match(shell, /<CreateChoiceSheet\n\s*open=\{choosingCreate\}/);
     assert.match(choice, /onPost\(\);/);
     // The same address the sidebar's Start Gistroom uses.
-    assert.match(choice, /router\.push\("\/gist-rooms\?open=1"\)/);
+    assert.match(choice, /router\.push\(sq\("\/gist-rooms\?open=1"\)\)/);
   });
 
   it("9 · spotlight is a window dropdown that names the window the data actually is", () => {
@@ -2950,7 +2975,7 @@ describe("links to a person go by id, not by a username they can change (QA)", (
       // short username on purpose and start with the page origin).
       for (const match of code.matchAll(/`\/u\/\$\{[^}`]*\.username\}/g)) {
         const before = code.slice(Math.max(0, (match.index ?? 0) - 40), match.index);
-        if (!/window\.location\.origin\}$/.test(before)) offenders.push(file);
+        if (!/window\.location\.origin\}(\$\{sq\()?$/.test(before)) offenders.push(file);
       }
     }
     assert.deepEqual([...new Set(offenders)], []);

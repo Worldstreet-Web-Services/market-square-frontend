@@ -21,6 +21,7 @@ import {
   type StreamCategory,
 } from "@/features/streams/lib/types";
 import { MARKET_FLAGS } from "@/lib/market-config";
+import { sq } from "@/lib/square-path";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-grey-600";
@@ -46,7 +47,7 @@ function StreamInfoCard({
   const [vip, setVip] = useState(stream.vipPriceKash ?? "");
   const [cover, setCover] = useState<string | null>(stream.thumbnailUrl);
 
-  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/live/${stream.id}` : `/live/${stream.id}`;
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}${sq(`/live/${stream.id}`)}` : sq(`/live/${stream.id}`);
 
   return (
     <div className="ws-card space-y-4 p-4">

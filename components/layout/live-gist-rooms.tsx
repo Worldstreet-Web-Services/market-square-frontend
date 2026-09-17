@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
 import { useStreamList } from "@/features/streams";
 import { SectionHeading } from "@/components/layout/section-heading";
+import { sq } from "@/lib/square-path";
 
 /**
  * THE ROOMS OPEN RIGHT NOW — node 1305:149177, the second section of the
@@ -61,7 +62,7 @@ export function LiveGistRooms() {
           id="top-gist-rooms"
           lead="Top"
           accent="GistRooms"
-          action={{ label: "View more", href: "/gist-rooms" }}
+          action={{ label: "View more", href: sq("/gist-rooms") }}
         />
       </div>
 

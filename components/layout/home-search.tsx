@@ -8,6 +8,7 @@ import { useDiscovery } from "@/features/discovery";
 import { PersonRow } from "@/features/profile";
 import { housePath } from "@/features/houses";
 import { groupRoomCode, looksLikeRoomCode } from "@/lib/room-code";
+import { sq } from "@/lib/square-path";
 
 /**
  * WHAT HOME'S FIELD ANSWERS — on Home, not somewhere else.
@@ -52,7 +53,7 @@ export function HomeSearch({ query }: { query: string }) {
       {/* The one result that names exactly one room. */}
       {code && (
         <Link
-          href={`/code/${code}`}
+          href={sq(`/code/${code}`)}
           className="ws-card ws-press flex items-center gap-3 p-4"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(90deg,#9F65FD_0%,#5B05E6_100%)] text-[15px] font-bold text-white">
@@ -126,7 +127,7 @@ export function HomeSearch({ query }: { query: string }) {
           {posts.map((item) => (
             <Link
               key={item.id}
-              href={`/p/${item.post.id}`}
+              href={sq(`/p/${item.post.id}`)}
               className="ws-row ws-press block px-1 py-3"
             >
               <span className="block text-[13px] text-meta">
@@ -147,7 +148,7 @@ export function HomeSearch({ query }: { query: string }) {
           {products.map((item) => (
             <Link
               key={item.id}
-              href={`/store/${item.product.slug}`}
+              href={sq(`/store/${item.product.slug}`)}
               className="ws-row ws-press flex items-center gap-3 px-1 py-3"
             >
               <Avatar

@@ -6,6 +6,7 @@ import { useQueryParam } from "@/hooks/use-query-param";
 import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { ColumnHeader } from "@/components/layout/column-header";
 import { unsubscribeEmailDigest } from "@/features/settings/lib/api";
+import { sq } from "@/lib/square-path";
 
 const BUTTON =
   "ws-press inline-flex h-10 items-center justify-center rounded-full bg-accent px-6 text-[15px] font-bold text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40";
@@ -33,7 +34,7 @@ export function UnsubscribePage() {
     body =
       "You won't get Square's daily email summary any more. You can turn it back on in Settings → Notifications.";
     action = (
-      <Link href="/" className={BUTTON}>
+      <Link href={sq("/")} className={BUTTON}>
         Back to Square
       </Link>
     );
@@ -41,7 +42,7 @@ export function UnsubscribePage() {
     title = "This link isn't valid";
     body = "Open Square and go to Settings → Notifications to turn email summaries off.";
     action = (
-      <Link href="/" className={BUTTON}>
+      <Link href={sq("/")} className={BUTTON}>
         Open Square
       </Link>
     );
@@ -49,7 +50,7 @@ export function UnsubscribePage() {
     title = "Email summaries aren't set up here";
     body = "There is nothing to turn off.";
     action = (
-      <Link href="/" className={BUTTON}>
+      <Link href={sq("/")} className={BUTTON}>
         Back to Square
       </Link>
     );

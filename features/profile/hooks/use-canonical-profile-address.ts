@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/api/schemas";
+import { sq } from "@/lib/square-path";
 
 /**
  * ONCE THE PERSON IS KNOWN, THE ADDRESS BAR SAYS WHO THEY ARE NOW.
@@ -31,6 +32,6 @@ export function useCanonicalProfileAddress(requested: string, profile: Profile |
     if (!current || current === requested) return;
     queryClient.setQueryData(["ms", "profile", current], profile);
     const hash = typeof window === "undefined" ? "" : window.location.hash;
-    router.replace(`/u/${current}${subpage ? `/${subpage}` : ""}${hash}`, { scroll: false });
+    router.replace(sq(`/u/${current}${subpage ? `/${subpage}` : ""}${hash}`), { scroll: false });
   }, [profile, requested, subpage, router, queryClient]);
 }

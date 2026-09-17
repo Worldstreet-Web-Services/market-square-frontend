@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { setBroadcastLive, useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { unsubscribeThisBrowser } from "@/lib/push-client";
+import { sq } from "@/lib/square-path";
 
 // One logout flow for every surface: confirm if a broadcast is on air, then
 // Privy logout, drop every cached query (identity, tickets, feeds), clear the
@@ -25,6 +26,6 @@ export function useLogout(): () => Promise<void> {
     setBroadcastLive(null);
     queryClient.clear();
     await Promise.resolve(logout()).catch(() => {});
-    router.push("/auth");
+    router.push(sq("/auth"));
   };
 }

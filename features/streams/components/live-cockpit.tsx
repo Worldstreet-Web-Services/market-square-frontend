@@ -32,6 +32,7 @@ import {
 } from "@/features/streams/hooks/use-streams";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { SpeakerRequestQueue } from "@/features/streams/components/guest-speaker-control";
+import { sq } from "@/lib/square-path";
 import {
   GuestRequestsButton,
   GuestRequestsSheet,
@@ -317,7 +318,7 @@ export function LiveCockpit({
     (publisher.quality === "poor" || publisher.state === "reconnecting" || publisher.state === "failed");
 
   const share = () => {
-    const url = `${window.location.origin}/live/${stream.id}`;
+    const url = `${window.location.origin}${sq(`/live/${stream.id}`)}`;
     if (navigator.share) void navigator.share({ title: stream.title, url }).catch(() => {});
     else void navigator.clipboard.writeText(url).then(() => toast.success("Link copied"));
   };

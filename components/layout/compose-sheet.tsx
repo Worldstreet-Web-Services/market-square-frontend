@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Composer } from "@/features/feed";
 import { Sheet } from "@/components/ui/sheet";
 import type { Post } from "@/features/feed";
+import { sq } from "@/lib/square-path";
 
 /**
  * The shell's global composer.
@@ -28,7 +29,7 @@ export function ComposeSheet({ open, onClose }: { open: boolean; onClose: () => 
     toast.success("Post published", {
       action: {
         label: "View post",
-        onClick: () => router.push(`/p/${created.id}`),
+        onClick: () => router.push(sq(`/p/${created.id}`)),
       },
     });
   };

@@ -10,6 +10,7 @@ import { IconPlay } from "@/components/ui/icons";
 import { useStreamStats } from "@/features/streams/hooks/use-streams";
 import { CreateStreamSheet, type StreamDraft } from "@/features/streams/components/create-stream-sheet";
 import { BROADCAST_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -102,7 +103,7 @@ export function PostLive({ stream }: { stream: Stream }) {
       ) : (
         stream.replayUrl && (
           <Link
-            href={`/live/${stream.id}`}
+            href={sq(`/live/${stream.id}`)}
             className="ws-card ws-press flex items-center gap-3 p-4 transition-colors hover:bg-white/8"
           >
             <span className="ws-glass flex h-10 w-10 items-center justify-center rounded-full">
@@ -121,7 +122,7 @@ export function PostLive({ stream }: { stream: Stream }) {
           Go live again
         </Button>
         <Link
-          href="/studio"
+          href={sq("/studio")}
           className="ws-press inline-flex h-12 items-center rounded-full border border-white/15 px-7 text-base font-semibold text-grey-200 transition-colors hover:bg-white/10"
         >
           Back to Studio

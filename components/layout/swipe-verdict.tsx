@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { asset } from "@/lib/square-path";
 
 /**
  * THE SWIPE VERDICT STAMPS — nodes 856:23668 (left) and 856:23693 (right),
@@ -140,7 +141,7 @@ export function SwipeVerdict({
             `public/pals/` exactly as the gift art does. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={right ? "/pals/green-flag.svg" : "/pals/red-flag.svg"}
+          src={right ? asset("/pals/green-flag.svg") : asset("/pals/red-flag.svg")}
           alt=""
           style={{ width: s.glyph, height: s.glyph }}
         />

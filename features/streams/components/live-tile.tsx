@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { GradientThumb } from "@/components/ui/gradient-thumb";
 import { IconBroadcast } from "@/features/streams/components/live-icons";
 import type { Stream } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 /**
  * One live room in the grid, drawn to the design's measurements.
@@ -26,7 +27,7 @@ export function LiveTile({ stream, className }: { stream: Stream; className?: st
 
   return (
     <Link
-      href={`/live/${stream.id}`}
+      href={sq(`/live/${stream.id}`)}
       className={cn("ws-press group block min-w-0", className)}
       style={{ viewTransitionName: `stream-${stream.id}` }}
     >

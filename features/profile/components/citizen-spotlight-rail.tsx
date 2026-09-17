@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IconChevronRight, IconSpark } from "@/components/ui/icons";
 import { useFollow, useSpotlight } from "@/features/profile/hooks/use-profile";
 import { useIsFollowing } from "@/features/profile/lib/follow-state";
+import { sq } from "@/lib/square-path";
 
 function SpotlightFollow({ profile }: { profile: Profile }) {
   const follow = useFollow(profile);
@@ -70,7 +71,7 @@ export function CitizenSpotlightRail() {
     // Insets are the design's own: 13px from the left edge, 11px from the
     // right for the rows, 10px down to the heading.
     <section className="ws-spotlight py-[10px] pl-[13px] pr-[11px]">
-      <Link href="/spotlight" className="flex h-5 items-center gap-2 pr-[29px]">
+      <Link href={sq("/spotlight")} className="flex h-5 items-center gap-2 pr-[29px]">
         <IconSpark className="h-4 w-4 text-white" />
         <h2 className="text-[13.5px] font-bold leading-5 text-white hover:underline">
           Citizen Spotlight
@@ -109,7 +110,7 @@ export function CitizenSpotlightRail() {
       </ul>
 
       <Link
-        href="/spotlight"
+        href={sq("/spotlight")}
         className="mt-3 flex items-center gap-1 text-[11px] font-bold text-spotlight-chip-ink hover:underline"
       >
         See the full ranking <IconChevronRight className="h-2.5 w-2.5" />

@@ -23,6 +23,7 @@ import {
   type MarketNotification,
   type NotificationGroup,
 } from "@/features/notifications/lib/types";
+import { asset } from "@/lib/square-path";
 
 /**
  * ONE GLYPH PER KIND, AND EVERY ONE IS THE FILE'S OWN — node 742:15341.
@@ -59,32 +60,32 @@ import {
 const SOURCE_ICON = { room: IconMic, stream: IconLive, post: IconQuote } as const;
 
 const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
-  post_announced: "/notifications/notif-mention.svg",
-  wink: "/notifications/notif-wink.svg",
-  follow: "/notifications/notif-follow.svg",
-  stream_live: "/notifications/notif-trending.svg",
-  comment: "/notifications/notif-mention.svg",
+  post_announced: asset("/notifications/notif-mention.svg"),
+  wink: asset("/notifications/notif-wink.svg"),
+  follow: asset("/notifications/notif-follow.svg"),
+  stream_live: asset("/notifications/notif-trending.svg"),
+  comment: asset("/notifications/notif-mention.svg"),
   // A reply to your comment is the same conversation mark as a comment.
-  comment_reply: "/notifications/notif-mention.svg",
+  comment_reply: asset("/notifications/notif-mention.svg"),
   // The file's own "Mentioned in…" mark, on the event it was drawn for.
-  mention: "/notifications/notif-mention.svg",
-  like: "/notifications/notif-post.svg",
+  mention: asset("/notifications/notif-mention.svg"),
+  like: asset("/notifications/notif-post.svg"),
   // The same mark the post like row carries — a like is one identity.
-  comment_like: "/notifications/notif-post.svg",
-  repost: "/notifications/notif-post.svg",
-  bookmark: "/notifications/notif-post.svg",
-  tip_received: "/gifts/coin-stack.svg",
-  ticket_purchased: "/gifts/coin-stack.svg",
+  comment_like: asset("/notifications/notif-post.svg"),
+  repost: asset("/notifications/notif-post.svg"),
+  bookmark: asset("/notifications/notif-post.svg"),
+  tip_received: asset("/gifts/coin-stack.svg"),
+  ticket_purchased: asset("/gifts/coin-stack.svg"),
   // Chat-shaped events take the file's mention mark, which is the glyph it
   // draws on "Mentioned in Gistroom chat".
-  message: "/notifications/notif-mention.svg",
-  chat_request: "/notifications/notif-mention.svg",
+  message: asset("/notifications/notif-mention.svg"),
+  chat_request: asset("/notifications/notif-mention.svg"),
   // Being added to a house is a fact about people, not about a post.
-  group_added: "/notifications/notif-follow.svg",
+  group_added: asset("/notifications/notif-follow.svg"),
   // A raised hand belongs to a live room, so it takes the trending mark.
-  speaker_request: "/notifications/notif-trending.svg",
+  speaker_request: asset("/notifications/notif-trending.svg"),
   // A room opening in a house is a live room, like a raised hand.
-  house_room: "/notifications/notif-trending.svg",
+  house_room: asset("/notifications/notif-trending.svg"),
 };
 
 /**
@@ -480,7 +481,7 @@ export function NotificationsPage({
           </select>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/notifications/notif-chevron.svg"
+            src={asset("/notifications/notif-chevron.svg")}
             alt=""
             aria-hidden
             className="pointer-events-none h-[3.5px] w-[7px] shrink-0"

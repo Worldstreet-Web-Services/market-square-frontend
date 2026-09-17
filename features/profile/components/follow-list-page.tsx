@@ -15,6 +15,7 @@ import {
 import { PersonRow } from "@/features/profile/components/person-row";
 import { useCanonicalProfileAddress } from "@/features/profile/hooks/use-canonical-profile-address";
 import type { Profile } from "@/lib/api/schemas";
+import { sq } from "@/lib/square-path";
 
 export type FollowListTab = "followers" | "following";
 
@@ -82,7 +83,7 @@ export function FollowListPage({ username, tab }: { username: string; tab: Follo
       title={profile.data?.displayName ?? "Profile"}
       subtitle={atHandle(profile.data?.username) ?? undefined}
       back
-      backFallback={`/u/${handle}`}
+      backFallback={sq(`/u/${handle}`)}
     >
       <ColumnTabs
         tabs={[
@@ -90,7 +91,7 @@ export function FollowListPage({ username, tab }: { username: string; tab: Follo
           ...(isMe ? [{ value: "following" as FollowListTab, label: "Following" }] : []),
         ]}
         value={tab}
-        onChange={(next) => router.replace(`/u/${handle}/${next}`, { scroll: false })}
+        onChange={(next) => router.replace(sq(`/u/${handle}/${next}`), { scroll: false })}
       />
     </ColumnHeader>
   );

@@ -1,3 +1,4 @@
+import { sq } from "./square-path.ts";
 // Resolves a backend deep link { kind, ref } to a destination. Internal kinds
 // route inside this app; Ark platform kinds route to the main Ark app.
 
@@ -182,11 +183,11 @@ export function resolveDeepLink(link: DeepLink, source?: string): ResolvedLink {
   });
   switch (link.kind) {
     case "stream":
-      return internal(`/live/${link.ref}`, "Watch");
+      return internal(sq(`/live/${link.ref}`), "Watch");
     case "store_item":
-      return internal(`/store/${link.ref}`, "Open");
+      return internal(sq(`/store/${link.ref}`), "Open");
     case "profile":
-      return internal(`/u/${link.ref}`, "View profile");
+      return internal(sq(`/u/${link.ref}`), "View profile");
     // Ark serves these at /earn/listing/<slug> and /prediction/<id>. They used
     // to point at /listings/ and /markets/, which Ark has never had, so every
     // one of these links 404'd the moment an origin was configured.

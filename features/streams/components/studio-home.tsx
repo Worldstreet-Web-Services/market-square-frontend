@@ -15,6 +15,7 @@ import { useMyStreams } from "@/features/streams/hooks/use-streams";
 import { streamPriceLabel } from "@/features/streams/components/stream-card";
 import { CreateStreamSheet } from "@/features/streams/components/create-stream-sheet";
 import type { Stream } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 function StreamRow({ stream }: { stream: Stream }) {
   const state =
@@ -22,7 +23,7 @@ function StreamRow({ stream }: { stream: Stream }) {
   return (
     <li>
       <Link
-        href={`/studio/${stream.id}`}
+        href={sq(`/studio/${stream.id}`)}
         className="ws-row flex items-center gap-4 px-4 py-3 lg:px-6"
       >
         <div className="min-w-0 flex-1">

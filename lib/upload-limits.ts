@@ -24,9 +24,10 @@
  */
 
 import { FALLBACK_LIMITS, setUploadLimits, type UploadLimits } from "./upload-rules.ts";
+import { api } from "./square-path.ts";
 
 /** The BFF path. Same-origin, so no base URL and no credentials handling. */
-export const UPLOAD_LIMITS_PATH = "/api/market-square/uploads/limits";
+export const UPLOAD_LIMITS_PATH = api("/api/market-square/uploads/limits");
 
 type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 

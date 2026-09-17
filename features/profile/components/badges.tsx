@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { IconBadgeInfo, IconBadgeLock } from "@/components/ui/profile-icons";
 import type { Badge } from "@/features/profile/lib/types";
+import { asset } from "@/lib/square-path";
 
 /**
  * BADGES — two surfaces, one tile.
@@ -32,9 +33,9 @@ import type { Badge } from "@/features/profile/lib/types";
 
 /** Which file the artwork lives in, by the service's key. Unknown → none. */
 const ARTWORK: Record<string, { src: string; kind: "plaque" | "mascot" }> = {
-  "rising-star": { src: "/badges/rising-star.svg", kind: "plaque" },
-  rookie: { src: "/badges/rookie.png", kind: "mascot" },
-  king: { src: "/badges/king.svg", kind: "plaque" },
+  "rising-star": { src: asset("/badges/rising-star.svg"), kind: "plaque" },
+  rookie: { src: asset("/badges/rookie.png"), kind: "mascot" },
+  king: { src: asset("/badges/king.svg"), kind: "plaque" },
 };
 
 export function BadgeTile({ badge }: { badge: Badge }) {

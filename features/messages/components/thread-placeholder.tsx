@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { asset } from "@/lib/square-path";
 
 /**
  * What the thread pane shows before a conversation is opened.
@@ -26,7 +27,7 @@ export function ThreadPlaceholder() {
     <div className="flex h-full min-h-[60vh] flex-col items-center justify-center px-6">
       <div className="flex w-[352px] max-w-full flex-col items-center gap-10">
         <Image
-          src="/messages/empty-illustration.svg"
+          src={asset("/messages/empty-illustration.svg")}
           alt=""
           width={200}
           height={200}

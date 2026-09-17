@@ -1,3 +1,4 @@
+import { api } from "./square-path.ts";
 /**
  * CLIENT ERROR REPORTING — the thing this app had none of.
  *
@@ -35,7 +36,7 @@ export function reportClientError(error: unknown, extra?: { digest?: string }): 
       digest: extra?.digest,
       url: window.location.pathname + window.location.search,
     };
-    void fetch("/api/client-errors", {
+    void fetch(api("/api/client-errors"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

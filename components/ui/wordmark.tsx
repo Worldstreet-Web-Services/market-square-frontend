@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { asset, sq } from "@/lib/square-path";
 
 /**
  * The Market Square identity, in one place.
@@ -17,9 +18,9 @@ import { cn } from "@/lib/cn";
  */
 // The lockup carries its own purple (the spotlight stop) and white type, so it
 // needs a dark ground — every surface using it has one.
-const WORDMARK_SRC: string | null = "/logo.svg";
+const WORDMARK_SRC: string | null = asset("/logo.svg");
 // The mark alone, cut from the same file rather than drawn twice.
-const MARK_SRC: string | null = "/logo-mark.svg";
+const MARK_SRC: string | null = asset("/logo-mark.svg");
 // Intrinsic ratios, so a caller can size either by height alone.
 const MARK_RATIO = 60 / 45;
 
@@ -72,7 +73,7 @@ export function Wordmark({ height = 18, className }: { height?: number; classNam
 /** Home link wearing the mark, the wordmark, or both. */
 export function BrandLink({
   variant = "lockup",
-  href = "/",
+  href = sq("/"),
   className,
   markSize,
   wordmarkHeight,

@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/ui/states";
 import { usePurchaseTicket, useTicketQuote } from "@/features/streams/hooks/use-streams";
 import type { Stream, Ticket, TicketTier } from "@/features/streams/lib/types";
+import { sq } from "@/lib/square-path";
 
 function calendarUrl(stream: Stream) {
   const start = new Date(stream.scheduledAt ?? stream.startedAt ?? Date.now());
@@ -78,7 +79,7 @@ export function TicketSheet({ stream, open, onClose }: { stream: Stream; open: b
             <a href={calendarUrl(stream)} target="_blank" rel="noreferrer" className="ws-press inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/15 text-sm font-semibold text-white hover:bg-white/10">
               <IconCalendar className="h-4 w-4" /> Add to calendar
             </a>
-            <Link href={`/live/${stream.id}`} onClick={close} className="ws-press inline-flex h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-ink">
+            <Link href={sq(`/live/${stream.id}`)} onClick={close} className="ws-press inline-flex h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-ink">
               {stream.status === "live" ? "Watch now" : "View event"}
             </Link>
           </div>

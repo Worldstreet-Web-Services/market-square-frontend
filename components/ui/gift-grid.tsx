@@ -4,6 +4,7 @@ import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { formatKash } from "@/lib/format";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
+import { asset } from "@/lib/square-path";
 
 /**
  * The designed gift grid: three columns of rendered objects, each with the
@@ -84,7 +85,7 @@ export function GiftGrid({
             </span>
             {showPrices ? (
               <span className="mt-1 flex items-center gap-1">
-                <Image src="/gifts/coin.svg" alt="" width={9} height={9} aria-hidden />
+                <Image src={asset("/gifts/coin.svg")} alt="" width={9} height={9} aria-hidden />
                 <span className="tnum text-[11px] font-bold leading-4 text-white">
                   {gift.priceKash}
                 </span>

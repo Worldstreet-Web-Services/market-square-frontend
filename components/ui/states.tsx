@@ -7,6 +7,7 @@ import { errorCode, errorMessage } from "@/lib/api/envelope";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useCircuit } from "@/lib/api/circuit-store";
+import { sq } from "@/lib/square-path";
 
 /**
  * Designed empty state: a mark in a soft disc, a line of copy, an optional way
@@ -191,7 +192,7 @@ export function SignInPrompt({
           Sign in
         </button>
         <Link
-          href={`/auth?returnTo=${encodeURIComponent(pathname)}`}
+          href={sq(`/auth?returnTo=${encodeURIComponent(pathname)}`)}
           className="ws-press rounded-full border border-white/20 px-4 py-2 text-[13px] font-bold text-body transition-colors hover:bg-white/10"
         >
           More options

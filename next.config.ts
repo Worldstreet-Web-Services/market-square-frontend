@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots";
+import { withMicrofrontends } from "@vercel/microfrontends/next/config";
+import { parseBase } from "./lib/square-path";
 
 /**
  * SECURITY HEADERS.
@@ -89,6 +91,33 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
+  /*
+    THE BUILD ARK MOUNTS answers under /square (see lib/square-path). The routes
+    and public files stay where they are; `/square/…` is rewritten onto them
+    BEFORE the filesystem is checked, so pages, route handlers and public files
+    all resolve. The standalone build (no base) gets no rewrites at all and is
+    exactly what it was.
+  */
+  async rewrites() {
+    const base = parseBase(process.env.NEXT_PUBLIC_SQUARE_BASE_PATH);
+    if (base === "") return [];
+    return {
+      beforeFiles: [
+        { source: base, destination: "/" },
+        { source: `${base}/:path*`, destination: "/:path*" },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
 };
 
-export default nextConfig;
+/*
+  THE BUILD ARK MOUNTS runs as a Vercel microfrontend at www.tsionark.com/square,
+  beside WSWS (microfrontends.json lives in wsws-frontend). `withMicrofrontends`
+  adds the asset prefix and reads the group's routing config, and it THROWS
+  when that config is absent ("Missing MFE_CONFIG"). So it is on only where
+  SQUARE_MICROFRONTENDS=1 — the Vercel project in the group — and never on the
+  standalone square.tsionark.com build.
+*/
+export default process.env.SQUARE_MICROFRONTENDS === "1" ? withMicrofrontends(nextConfig) : nextConfig;

@@ -22,6 +22,7 @@ import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useMe } from "@/hooks/use-me";
 import { useNewPosts } from "@/features/feed/hooks/use-new-posts";
 import { NewPostsPill } from "@/features/feed/components/new-posts-pill";
+import { sq } from "@/lib/square-path";
 
 /** How many posts stand between the top of the feed and "Join a community". */
 const BEFORE_COMMUNITY = 2;
@@ -75,12 +76,12 @@ const EMPTY_COPY: Record<Lane, LaneEmpty> = {
   "for-you": {
     title: "The square is quiet",
     body: "Nothing has been posted yet. Be the first, or go and find people worth following.",
-    cta: { label: "Find creators", href: "/spotlight" },
+    cta: { label: "Find creators", href: sq("/spotlight") },
   },
   following: {
     title: "You're not following anyone yet",
     body: "This lane shows posts from people you follow. Follow a few and it fills up.",
-    cta: { label: "Find people to follow", href: "/spotlight" },
+    cta: { label: "Find people to follow", href: sq("/spotlight") },
   },
   /*
     A PAL IS A MUTUAL FOLLOW, so this lane is empty until somebody follows
@@ -95,22 +96,22 @@ const EMPTY_COPY: Record<Lane, LaneEmpty> = {
   pals: {
     title: "No pals yet",
     body: "A pal is someone you follow who follows you back. Their posts land here once they do.",
-    cta: { label: "Meet people", href: "/" },
+    cta: { label: "Meet people", href: sq("/") },
   },
   live: {
     title: "Nobody's live right now",
     body: "Live streams and scheduled sessions appear here the moment they start.",
-    cta: { label: "Go live", href: "/studio", authed: true },
+    cta: { label: "Go live", href: sq("/studio"), authed: true },
   },
   reels: {
     title: "No clips yet",
     body: "Reels are posts with video. Publish one and it lands here.",
-    cta: { label: "Create a post", href: "/?compose=1", authed: true },
+    cta: { label: "Create a post", href: sq("/?compose=1"), authed: true },
   },
   trending: {
     title: "Nothing trending yet",
     body: "Once posts start collecting likes and replies, the busiest land here.",
-    cta: { label: "Browse the feed", href: "/" },
+    cta: { label: "Browse the feed", href: sq("/") },
   },
   platform: {
     title: "No platform news",
@@ -118,7 +119,7 @@ const EMPTY_COPY: Record<Lane, LaneEmpty> = {
     // Sending readers to the Store from a news lane was always a non-sequitur;
     // with `storeNav` off it would also be the one place still promoting it.
     ...(MARKET_FLAGS.storeNav
-      ? { cta: { label: "Browse the ARK Store", href: "/store" } }
+      ? { cta: { label: "Browse the ARK Store", href: sq("/store") } }
       : {}),
   },
 };

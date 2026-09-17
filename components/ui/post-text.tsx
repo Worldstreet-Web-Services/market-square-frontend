@@ -10,6 +10,7 @@ import { parsePostText, type Segment } from "@/lib/post-segments";
 import { formatPostText, type Block, type Inline } from "@/lib/post-format";
 import { useTradeableSymbols } from "@/hooks/use-tradeable-symbols";
 import type { Mention } from "@/lib/api/schemas";
+import { sq } from "@/lib/square-path";
 
 /**
  * Post text, with the parts worth tapping made tappable.
@@ -202,7 +203,7 @@ function SegmentView({ segment, link }: { segment: Segment; link: string }) {
       // then just looks broken.
       return (
         <Link
-          href={segment.id ? profileHref({ id: segment.id, username: segment.handle }) : `/u/${segment.handle}`}
+          href={segment.id ? profileHref({ id: segment.id, username: segment.handle }) : sq(`/u/${segment.handle}`)}
           className={link}
         >
           {segment.value}
@@ -211,7 +212,7 @@ function SegmentView({ segment, link }: { segment: Segment; link: string }) {
 
     case "hashtag":
       return (
-        <Link href={`/t/${segment.tag}`} className={link}>
+        <Link href={sq(`/t/${segment.tag}`)} className={link}>
           {segment.value}
         </Link>
       );

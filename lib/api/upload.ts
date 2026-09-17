@@ -15,6 +15,7 @@ import {
   type UploadResult,
 } from "@/lib/upload-rules";
 import { ensureUploadLimits } from "@/lib/upload-limits";
+import { api } from "../square-path.ts";
 
 /**
  * Warm the limits as soon as anything upload-related is loaded, so the first
@@ -80,7 +81,7 @@ async function authHeader(): Promise<Record<string, string>> {
 }
 
 async function callApi<T>(path: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
-  const response = await fetch(`/api/market-square${path}`, {
+  const response = await fetch(api(`/api/market-square${path}`), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(await authHeader()) },
     body: JSON.stringify(body),
@@ -206,7 +207,7 @@ function uploadProxied(file: File, onProgress?: (fraction: number) => void): Pro
   return new Promise((resolve, reject) => {
     void (async () => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/market-square/uploads");
+      xhr.open("POST", api("/api/market-square/uploads"));
       for (const [key, value] of Object.entries(await authHeader())) {
         xhr.setRequestHeader(key, value);
       }

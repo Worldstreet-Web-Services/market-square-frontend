@@ -10,6 +10,7 @@ import { Button, Spinner } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
 import { Wordmark } from "@/components/ui/wordmark";
 import { SignInCard } from "./sign-in-card";
+import { sq } from "@/lib/square-path";
 
 export function AuthPage() {
   const { ready, authenticated, logout } = useAuth();
@@ -64,7 +65,7 @@ export function AuthPage() {
               )}
             </p>
             <div className="flex flex-col gap-2">
-              <Button className="w-full" onClick={() => router.push(returnTo ?? "/")}>
+              <Button className="w-full" onClick={() => router.push(returnTo ?? sq("/"))}>
                 {returnTo ? "Continue where you left off" : "Go to the square"}
               </Button>
               {profile && (

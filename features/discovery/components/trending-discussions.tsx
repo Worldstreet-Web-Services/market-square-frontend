@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { formatCount } from "@/lib/format";
 import { fetchTrendingDiscussions } from "@/features/discovery/lib/discussions";
+import { sq } from "@/lib/square-path";
 
 /**
  * The discussions worth joining right now.
@@ -41,7 +42,7 @@ export function TrendingDiscussions({ limit = 6 }: { limit?: number }) {
         {items.map((item) => (
           <li key={item.tag}>
             <Link
-              href={`/t/${item.tag}`}
+              href={sq(`/t/${item.tag}`)}
               className="ws-press flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/[0.06]"
             >
               <span className="min-w-0">

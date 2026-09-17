@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { createQueryClient } from "@/lib/query-client";
 import { DEMO_AUTH } from "@/lib/auth-mode";
+import { asset } from "@/lib/square-path";
 
 // Well-formed placeholder lets the app build before env vars are set; in demo
 // mode Privy is mounted but never used (useAuth short-circuits).
@@ -55,7 +56,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
           theme: "#0c0c0e",
           accentColor: "#d4d4d8",
           // One brand asset everywhere, including the Privy dialog.
-          logo: "/logo.svg",
+          logo: asset("/logo.svg"),
         },
       }}
     >

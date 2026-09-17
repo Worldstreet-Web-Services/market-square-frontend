@@ -52,6 +52,7 @@ import { ShareSheet } from "@/components/ui/share-sheet";
 import { sharePostId } from "@/lib/short-id";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
+import { sq } from "@/lib/square-path";
 
 // Labels map onto the backend's fixed reason enum.
 const REPORT_REASONS: Array<{ reason: ReportReason; label: string }> = [
@@ -312,7 +313,7 @@ function QuotedPost({ quoted }: { quoted: NonNullable<Post["quotedPost"]> }) {
   const author = quoted.author;
   return (
     <Link
-      href={`/p/${quoted.id}`}
+      href={sq(`/p/${quoted.id}`)}
       className="ws-inset mt-3 block px-3 py-2.5 transition-colors hover:bg-white/[0.04]"
     >
       <span className="flex items-center gap-2">
@@ -654,7 +655,7 @@ export function PostCard({
     const target = event.target as HTMLElement;
     if (target.closest("a, button, input, textarea, [role='button']")) return;
     if (window.getSelection()?.toString()) return;
-    router.push(`/p/${post.id}`);
+    router.push(sq(`/p/${post.id}`));
   };
   const bookmark = useBookmarkPost();
   const gate = useGate();
@@ -814,7 +815,7 @@ export function PostCard({
             {full ? (
               relativeTime(post.createdAt)
             ) : (
-              <Link href={`/p/${post.id}`} className="hover:text-white/80 hover:underline">
+              <Link href={sq(`/p/${post.id}`)} className="hover:text-white/80 hover:underline">
                 {relativeTime(post.createdAt)}
               </Link>
             )}
@@ -1173,7 +1174,7 @@ export function PostCard({
             text: post.text,
             // Shared as the 22-character short id; `/p/[id]` resolves it back to
             // the UUID, and a link already shared with the UUID keeps working.
-            url: `${window.location.origin}/p/${sharePostId(post.id)}`,
+            url: `${window.location.origin}${sq(`/p/${sharePostId(post.id)}`)}`,
           }}
         />
       )}

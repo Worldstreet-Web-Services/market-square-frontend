@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { cn } from "@/lib/cn";
 import type { InboxTab } from "@/features/messages/lib/filter";
+import { asset } from "@/lib/square-path";
 
 /**
  * The inbox's search field and its All/Unread filter.
@@ -38,7 +39,7 @@ export function InboxSearch({
   return (
     <div className="ws-field flex h-[38px] items-center gap-2 rounded-full border-[0.68px] border-white/40 bg-transparent px-2 shadow-[0px_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0px_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)]">
       <Image
-        src="/messages/search.svg"
+        src={asset("/messages/search.svg")}
         alt=""
         width={16}
         height={16}

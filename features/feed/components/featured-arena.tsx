@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IconMsPlay } from "@/components/ui/design-icons";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import type { FeedItem } from "@/features/feed/lib/types";
+import { sq } from "@/lib/square-path";
 
 interface Slide {
   key: string;
@@ -33,7 +34,7 @@ function toSlide(item: FeedItem): Slide | null {
       eyebrow: "Native Live & Arcade Arena",
       reference: stream.owner ? `Hosted by ${stream.owner.displayName}` : "",
       title: stream.title,
-      href: `/live/${stream.id}?source=home:featured`,
+      href: sq(`/live/${stream.id}?source=home:featured`),
       action: stream.status === "live" ? "Join Live Arena" : "View session",
       price: stream.ticketPriceKash ? formatKash(stream.ticketPriceKash) : null,
       // The feed payload carries PEAK viewers, not the live count — labelling
@@ -49,7 +50,7 @@ function toSlide(item: FeedItem): Slide | null {
       eyebrow: "Native Live & Arcade Arena",
       reference: activity.owner ? `Hosted by ${activity.owner.displayName}` : "",
       title: activity.title,
-      href: "/schedule",
+      href: sq("/schedule"),
       action: "Reserve a seat",
       price: null,
       meta: formatDateTime(activity.startsAt),

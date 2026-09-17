@@ -8,6 +8,7 @@ import { DEMO_AUTH } from "@/lib/auth-mode";
 import { onSessionExpired, setAuthSnapshot } from "@/lib/session";
 import { useAuth } from "@/hooks/use-auth";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
+import { sq, stripSquare } from "@/lib/square-path";
 
 // Owns the "session expired" UX. Two triggers, one flow:
 // - reactive: the api client discovered a missing session mid-request;
@@ -49,8 +50,9 @@ export function SessionGuard() {
       handled.current = true;
       queryClient.removeQueries({ queryKey: ["ms", "me"] });
       toast.error("Session expired — sign in again.");
-      if (pathname !== "/auth") {
-        router.push(`/auth?returnTo=${encodeURIComponent(pathname)}`);
+      // Logical route: usePathname() answers /square/auth since the move.
+      if (stripSquare(pathname) !== "/auth") {
+        router.push(sq(`/auth?returnTo=${encodeURIComponent(pathname)}`));
       }
     };
 

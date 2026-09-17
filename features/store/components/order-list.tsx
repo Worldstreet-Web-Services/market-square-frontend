@@ -8,6 +8,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useMyOrders } from "@/features/store/hooks/use-store";
 import { IconStore } from "@/components/ui/icons";
 import { CATEGORY_GLYPH } from "@/features/store/lib/types";
+import { sq } from "@/lib/square-path";
 
 // The store-purchase half of /tickets; the route composes it with the ticket
 // wallet from the streams slice.
@@ -33,7 +34,7 @@ export function OrderList() {
             title="No purchases yet"
             body="Anything you get from the ARK Store shows up here."
             action={
-              <Link href="/store" className="text-sm font-semibold text-accent hover:underline">
+              <Link href={sq("/store")} className="text-sm font-semibold text-accent hover:underline">
                 Browse the Store →
               </Link>
             }
@@ -58,7 +59,7 @@ export function OrderList() {
             </div>
             {order.item && (
               <Link
-                href={`/store/${order.item.slug}`}
+                href={sq(`/store/${order.item.slug}`)}
                 className="ws-press shrink-0 rounded-full border border-white/20 px-4 py-1.5 text-sm font-bold text-body transition-colors hover:bg-white/10"
               >
                 Open
