@@ -3794,7 +3794,8 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
   const tools = code("features/houses/hooks/use-host-stage-tools.ts");
 
   it("the minimised room carries the invitation from ONE placement, off the room's own page", () => {
-    assert.match(player, /\{placement === "phone" && <SessionInvite \/>\}/);
+    const shell = code("components/layout/app-shell.tsx");
+    assert.equal((shell.match(/<RoomInviteBanner \/>/g) ?? []).length, 1);
     assert.match(player, /inviteBannerVisible\(\{ pathname, streamId, hasInvite: invite !== null \}\)/);
     assert.match(room, /\{here && !isHost && session\.invite && \(/);
   });
@@ -3914,20 +3915,11 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     }
   });
 
-  it("the banner keeps focus in reach: busy is aria-disabled, focus is handed on, only the name truncates", () => {
+  it("the banner keeps focus in reach: busy is aria-disabled, focus is handed on to the page", () => {
     assert.doesNotMatch(banner, /(?<!aria-)disabled=\{busy\}/, "a disabled button drops its focus");
     assert.equal((banner.match(/aria-disabled=\{busy\}/g) ?? []).length, 2);
-    assert.match(banner, /window\.setTimeout\(\(\) => returnFocus\(landing\), 0\)/);
-    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[mic, main\]\)/);
-    assert.match(banner, /<span className="min-w-0 truncate">\{host\.name\}<\/span>/);
-    assert.match(banner, /<span className="shrink-0 whitespace-pre"> invited you to speak<\/span>/);
-    for (const mic of [
-      "features/houses/components/room-dock.tsx",
-      "features/houses/components/room-phone-bar.tsx",
-      "components/layout/room-mini-player.tsx",
-    ]) {
-      assert.match(code(mic), /data-room-mic/, `${mic} lost the mic an accepted invitation focuses`);
-    }
+    assert.match(banner, /window\.setTimeout\(returnFocus, 0\)/);
+    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[main\]\)/);
   });
 
   it("someone the host blocked is never offered Invite to speak: hidden up front, not refused after a tap", () => {
@@ -3962,7 +3954,7 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
   it("the tray's mute is named, touch-sized, and says why it is off in words, not a tooltip", () => {
     assert.match(tray, /aria-label=\{`Mute \$\{mute\.name\} for everyone`\}/);
     assert.doesNotMatch(tray, /title=\{mute\.control/);
-    assert.match(tray, /\{mute\.control\.kind === "mute" && mute\.control\.disabled && \(\s*<span className="block text-\[11px\] leading-4 text-grey-300">\{mute\.control\.reason\}<\/span>/);
+    assert.match(tray, /\{mute\.control\.kind === "mute" && mute\.control\.disabled && \(\s*<span id=\{`mute-reason-\$\{item\.id\}`\} className="block text-\[11px\] leading-4 text-grey-300">\{mute\.control\.reason\}<\/span>/);
     assert.ok((tray.match(/pointer-coarse:h-11 pointer-coarse:min-w-11/g) ?? []).length >= 2, "Mute and Move down are not 44px on touch");
   });
 
@@ -3977,9 +3969,12 @@ describe("invite to speak and the soft mute, after review", () => {
   const room = code("features/houses/components/house-room.tsx");
   const player = code("components/layout/room-mini-player.tsx");
   const banner = code("features/houses/components/invite-banner.tsx");
+  const sheet = code("features/houses/components/person-sheet.tsx");
+  const tray = code("features/houses/components/hand-tray.tsx");
   const tools = code("features/houses/hooks/use-host-stage-tools.ts");
   const session = code("components/layout/room-session.tsx");
   const hooks = code("features/streams/hooks/use-streams.ts");
+  const shell = code("components/layout/app-shell.tsx");
 
   it("every deadline the server writes is read on the server's clock, which the one transport records", () => {
     assert.match(code("lib/api/client.ts"), /recordServerDate\(response\.headers\.get\("date"\)\);/);
@@ -4026,5 +4021,35 @@ describe("invite to speak and the soft mute, after review", () => {
     assert.match(gate, /if \(!profile\.data \|\| profile\.data\.isBlocked\) return null;/);
     assert.match(room, /present: presentIds\.has\(base\)/);
     assert.match(tools, /present: person\.present,/);
+  });
+
+  it("the banner puts the question on its own line and the answers on theirs, and focus never lands on the mic", () => {
+    assert.match(banner, /<p className="line-clamp-2 text-\[13px\] leading-5 text-heading">\s*<span className="font-bold">\{host\.name\}<\/span> invited you to speak\s*<\/p>/);
+    assert.match(banner, /className="flex w-full items-center justify-end gap-2"/);
+    assert.doesNotMatch(banner, /whitespace-pre|max-\[359px\]/);
+    assert.doesNotMatch(banner, /data-room-mic/, "a held Enter on Join would open the mic");
+    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[main\]\)/);
+  });
+
+  it("the shell's invitation comes before <main> in reading order, above every sheet", () => {
+    assert.match(shell, /<TopBar showBrand=\{!railOn\} wide=\{wide\} \/>\s*(\{\}\s*)?<RoomInviteBanner \/>/);
+    assert.doesNotMatch(player, /placement === "phone" && <SessionInvite \/>/);
+    for (const surface of [player, room]) assert.match(surface, /className="fixed left-3 z-\[65\] md:left-auto md:w-\[400px\]"/);
+    assert.match(code("components/ui/sheet.tsx"), /fixed inset-0 z-50 /);
+  });
+
+  it("the invite hint is live only for the change it announces, never a ticking countdown", () => {
+    assert.match(sheet, /live=\{hostActions\.invite\.kind === "invited"\}/);
+    assert.doesNotMatch(sheet, /^\s*live\s*$/m);
+  });
+
+  it("the tray's disabled mute is described by its reason, host rows are 44px, and the seat chip is readable", () => {
+    assert.match(tray, /aria-describedby=\{mute\.control\.kind === "mute" && mute\.control\.disabled \? `mute-reason-\$\{item\.id\}` : undefined\}/);
+    assert.match(tray, /<span id=\{`mute-reason-\$\{item\.id\}`\} className="block text-\[11px\] leading-4 text-grey-300">/);
+    const row = sheet.slice(sheet.indexOf("function HostRow"));
+    assert.match(row, /min-h-11 flex-col justify-center/);
+    const people = code("features/houses/components/room-people.tsx");
+    assert.doesNotMatch(people, /text-\[9px\]/);
+    assert.match(people, /text-\[11px\] font-bold leading-4/);
   });
 });

@@ -84,15 +84,7 @@ function keepFocus() {
 }
 
 export function RoomMiniPlayer({ placement }: { placement: Placement }) {
-  // The invitation rides on the ONE instance the shell always mounts (the
-  // phone placement is mounted at every width and only CSS-hidden above md),
-  // so three placements never draw three banners.
-  return (
-    <>
-      {placement === "phone" && <SessionInvite />}
-      <MiniPlayer placement={placement} />
-    </>
-  );
+  return <MiniPlayer placement={placement} />;
 }
 
 /**
@@ -105,8 +97,15 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
  * where neither the dock, this bar nor a thread's composer can cover it.
  * Answering does not navigate: "Join as speaker" seats them over the call they
  * already have, mic off, and the bar below grows its mic.
+ *
+ * The shell mounts ONE, straight after the top bar and BEFORE <main>: it is
+ * drawn at the top of the page, so it is read and tabbed to there too. Mounted
+ * with the bottom bar it sat after every post of a long feed in reading order,
+ * well past the invitation's 60 seconds for a keyboard user. z-[65] keeps it
+ * over an open sheet's scrim (z-50) and the shell's popovers (z-60/61), under
+ * full-screen takeovers (z-70 and up).
  */
-function SessionInvite() {
+export function RoomInviteBanner() {
   const session = useRoomSession();
   const pathname = stripSquare(usePathname());
   const streamId = session.state.target?.streamId ?? null;
@@ -121,7 +120,7 @@ function SessionInvite() {
       {visible && invite && (
         <div
           // A full-width card on a phone; 400 at the top-right from md.
-          className="fixed left-3 z-50 md:left-auto md:w-[400px]"
+          className="fixed left-3 z-[65] md:left-auto md:w-[400px]"
           style={{
             top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + 12px)",
             right: "max(12px, env(safe-area-inset-right, 0px))",

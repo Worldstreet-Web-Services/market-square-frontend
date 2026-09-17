@@ -26,6 +26,7 @@ import {
   settleInvites,
   trackInvite,
   cancelFailedForReal,
+  inviteSentMessage,
   liveInviteRow,
   type InviteTarget,
 } from "./speaker-invite.ts";
@@ -210,8 +211,8 @@ describe("the host's invite control", () => {
 
 describe("the host is never told 'declined'", () => {
   it("says one neutral sentence for every way an invitation ends unanswered", () => {
-    assert.equal(hostOutcomeLabel("Ada"), "Ada isn't available to speak right now");
-    assert.equal(hostOutcomeLabel(null), "They aren't available to speak right now");
+    assert.equal(hostOutcomeLabel("Ada"), "Ada isn't available to speak right now.");
+    assert.equal(hostOutcomeLabel(null), "They aren't available to speak right now.");
     assert.doesNotMatch(hostOutcomeLabel("Ada"), /declin|reject|refus/i);
   });
 
@@ -390,6 +391,11 @@ describe("error answers", () => {
     assert.equal(answerErrorMessage({ code: "AWAITING_INVITEE" }, "reject"), null);
     assert.equal(answerErrorMessage({ code: "INVITE_NOT_OPEN" }, "accept"), "That invitation has ended.");
     assert.equal(answerErrorMessage({ code: "STREAM_NOT_LIVE" }, "reject"), "The gist room isn't live any more.");
+  });
+
+  it("the host's invite toasts are whole sentences, like every other line in the flow", () => {
+    assert.equal(inviteSentMessage("approved", "Ada"), "Ada already asked, so they're joining the stage.");
+    assert.equal(inviteSentMessage("invited", "Ada"), "Invited Ada to speak.");
   });
 });
 

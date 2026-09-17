@@ -63,20 +63,20 @@ export function InviteBanner({
     FOCUS NEVER FALLS TO <body>. Answering unmounts the banner (and at zero it
     draws nothing), and a focused element that disappears drops a keyboard or
     screen-reader user at the top of the document, outside the room. So while
-    focus is inside, its leaving hands focus on: after Join, to the mic they
-    were just told to tap; otherwise to the page's main region.
+    focus is inside, its leaving hands focus on to the page's main region.
+    NEVER to the mic, even after Join: an Enter held on Join auto-repeats,
+    and its next keydown would click a mic that had just taken focus — the
+    mic opened without the separate tap the product promises.
     Busy is `aria-disabled`, not `disabled`, for the same reason — a button
     that disables drops its focus in Chromium and WebKit.
   */
   const focusInside = useRef(false);
-  const answer = useRef<"accept" | "reject" | null>(null);
   useEffect(() => {
     if (!open) return;
     return () => {
       if (!focusInside.current) return;
       focusInside.current = false;
-      const landing = answer.current === "accept" ? "mic" : "main";
-      window.setTimeout(() => returnFocus(landing), 0);
+      window.setTimeout(returnFocus, 0);
     };
   }, [open]);
 
@@ -102,10 +102,11 @@ export function InviteBanner({
     >
       <Avatar name={host.name} seed={host.id ?? host.name} src={host.avatarUrl ?? null} size={36} />
       <div className="min-w-0 flex-1">
-        {/* Only the NAME shortens: the question itself is never cut off. */}
-        <p className="flex min-w-0 text-[13px] font-bold leading-5 text-heading">
-          <span className="min-w-0 truncate">{host.name}</span>
-          <span className="shrink-0 whitespace-pre"> invited you to speak</span>
+        {/* The name and the question wrap together, two lines at most. Kept
+            on one line beside the buttons, a phone's text column was ~60px:
+            the name drew at zero width and the question ran under Not now. */}
+        <p className="line-clamp-2 text-[13px] leading-5 text-heading">
+          <span className="font-bold">{host.name}</span> invited you to speak
         </p>
         <p className="text-[11px] leading-4 text-grey-300">
           Your mic stays off until you tap it
@@ -117,17 +118,18 @@ export function InviteBanner({
           )}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2 max-[359px]:w-full max-[359px]:justify-end">
+      {/* The answers on their own row at every width: even the 400px desktop
+          banner leaves the question ~120px beside them. */}
+      <div className="flex w-full items-center justify-end gap-2">
         <Button
           size="sm"
           variant="ghost"
           aria-disabled={busy}
           onClick={() => {
             if (busy) return;
-            answer.current = "reject";
             onReject();
           }}
-          className={cn("pointer-coarse:h-11", busy && "cursor-not-allowed opacity-50")}
+          className={cn("pointer-coarse:h-11 max-md:flex-1", busy && "cursor-not-allowed opacity-50")}
         >
           Not now
         </Button>
@@ -137,10 +139,9 @@ export function InviteBanner({
           aria-disabled={busy}
           onClick={() => {
             if (busy) return;
-            answer.current = "accept";
             onAccept();
           }}
-          className={cn("pointer-coarse:h-11", busy && "cursor-not-allowed opacity-50")}
+          className={cn("pointer-coarse:h-11 max-md:flex-1", busy && "cursor-not-allowed opacity-50")}
         >
           Join as speaker
         </Button>
@@ -149,17 +150,10 @@ export function InviteBanner({
   );
 }
 
-/** Visible and focusable: CSS-hidden placements (one per breakpoint) are skipped. */
-function visible(element: HTMLElement): boolean {
-  return element.getClientRects().length > 0 && !(element as HTMLButtonElement).disabled;
-}
-
 /** Where focus goes when the banner it was in goes away — only if it has nowhere better already. */
-function returnFocus(landing: "mic" | "main") {
+function returnFocus() {
   if (!focusLost(document.activeElement as HTMLElement | null, document.body)) return;
-  const mic =
-    landing === "mic" ? Array.from(document.querySelectorAll<HTMLElement>("[data-room-mic]")).find(visible) : undefined;
   const main = document.querySelector<HTMLElement>("main");
   if (main && !main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
-  handFocusOn(document.activeElement as HTMLElement | null, document.body, [mic, main]);
+  handFocusOn(document.activeElement as HTMLElement | null, document.body, [main]);
 }

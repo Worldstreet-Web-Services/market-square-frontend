@@ -21,6 +21,7 @@ import {
   INVITE_ACCEPTED_HINT,
   answerErrorMessage,
   inviteErrorOutcome,
+  inviteSentMessage,
   quietResolveError,
   routeMissing,
   trackInvite,
@@ -845,7 +846,7 @@ export function useInviteToSpeak(streamId: string) {
         );
       }
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
-      toast(row.status === "approved" ? `${name} already asked, so they're joining the stage` : `Invited ${name} to speak`);
+      toast(inviteSentMessage(row.status, name));
     },
     onError: (error, { userId, name }) => {
       const outcome = inviteErrorOutcome(error as ApiErrorLike, name);

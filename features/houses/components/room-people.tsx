@@ -188,7 +188,7 @@ function PersonCard({ person }: { person: RoomPerson }) {
         {/* One word over the plate, never a colour alone: a slashed mic says
             the mic is off, this says who turned it off. */}
         {(person.mutedByHost || person.invited) && (
-          <span className="absolute left-1/2 top-1.5 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/75 px-1.5 py-0.5 text-[9px] font-bold leading-3 text-white">
+          <span className="absolute left-1/2 top-1.5 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/75 px-1.5 py-0.5 text-[11px] font-bold leading-4 text-white">
             {person.mutedByHost ? "Muted by host" : "Invited"}
           </span>
         )}

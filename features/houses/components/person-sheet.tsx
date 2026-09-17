@@ -100,7 +100,9 @@ export function PersonSheet({
               ? hostActions.invite.reason
               : "They'll be asked first. Their mic stays off until they tap it."
         }
-        live
+        // Live only for the change it was added for (Invited. Waiting…): a
+        // cooldown's reason ticks every second and was read out every second.
+        live={hostActions.invite.kind === "invited"}
         disabled={(hostActions.invite.kind === "invite" && hostActions.invite.disabled) || hostActions.busy}
         onClick={() => {
           if (hostActions.invite.kind === "invited") hostActions.onCancelInvite(hostActions.invite.requestId);
@@ -257,7 +259,11 @@ function HostRow({
         // Removal blurs with no relatedTarget; the cleanup above handles that.
         if (event.relatedTarget) focused.current = false;
       }}
-      className={cn("ws-row flex w-full flex-col items-start px-1 py-3 text-left transition-colors", disabled && "cursor-not-allowed")}
+      className={cn(
+        // 44px on touch with or without a hint: a 13px label in py-3 is 43.5.
+        "ws-row flex w-full min-h-11 flex-col justify-center items-start px-1 py-3 text-left transition-colors",
+        disabled && "cursor-not-allowed"
+      )}
     >
       <span className={cn("text-[13px] font-semibold text-body", disabled && "opacity-50")}>{label}</span>
       {hint && (

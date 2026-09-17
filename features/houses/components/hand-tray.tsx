@@ -180,7 +180,7 @@ export function HandTray({
                   {/* The reason in words: a title tooltip never reaches a phone
                       or a screen reader. */}
                   {mute.control.kind === "mute" && mute.control.disabled && (
-                    <span className="block text-[11px] leading-4 text-grey-300">{mute.control.reason}</span>
+                    <span id={`mute-reason-${item.id}`} className="block text-[11px] leading-4 text-grey-300">{mute.control.reason}</span>
                   )}
                 </span>
                 {/* Soft: they can unmute. Never a lock, never a host unmute.
@@ -190,6 +190,8 @@ export function HandTray({
                     size="sm"
                     variant="ghost"
                     aria-label={`Mute ${mute.name} for everyone`}
+                    // Its reason is read with it, not only seen beside it.
+                    aria-describedby={mute.control.kind === "mute" && mute.control.disabled ? `mute-reason-${item.id}` : undefined}
                     aria-disabled={mute.control.disabled}
                     onClick={() => {
                       if (mute.control.kind === "mute" && !mute.control.disabled) mute.onMute();

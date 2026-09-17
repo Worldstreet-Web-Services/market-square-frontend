@@ -1589,7 +1589,8 @@ function LiveHouse({
           session's poll of the reader's own row, never from a push. */}
       {here && !isHost && session.invite && (
         <div
-          className="fixed left-3 z-50 md:left-auto md:w-[400px]"
+          // Over an open sheet's scrim: an invitation behind one ran out unseen.
+          className="fixed left-3 z-[65] md:left-auto md:w-[400px]"
           style={{
             top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + var(--ws-house-head-h) + 12px)",
             right: "max(12px, env(safe-area-inset-right, 0px))",

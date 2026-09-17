@@ -313,7 +313,12 @@ export function invitesByUser<T extends { userId: string; status: string }>(rows
 /** One and the same sentence for a refusal and a lapse. Never "declined". */
 export function hostOutcomeLabel(name: string | null | undefined): string {
   const who = name?.trim();
-  return who ? `${who} isn't available to speak right now` : "They aren't available to speak right now";
+  return who ? `${who} isn't available to speak right now.` : "They aren't available to speak right now.";
+}
+
+/** What the host is told when the invite went through: an invitation, or a raised hand seated. */
+export function inviteSentMessage(status: string, name: string): string {
+  return status === "approved" ? `${name} already asked, so they're joining the stage.` : `Invited ${name} to speak.`;
 }
 
 export interface TrackedInvite {
