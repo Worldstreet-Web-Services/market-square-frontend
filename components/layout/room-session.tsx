@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Room } from "livekit-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { HouseAudioSinks, connectRoom, houseTopic } from "@/features/houses";
 import {
   fetchPlaybackToken,
@@ -15,6 +17,7 @@ import {
   stopPublishing,
   subscribeRoom,
   unregisterRoom,
+  useAnswerInvite,
   useMySpeakerRequest,
   useResolveSpeakerRequest,
   useEndStream,
@@ -32,6 +35,11 @@ import { IDLE_SESSION, isHolding } from "@/lib/room-session/reducer";
 import { REJOIN_KEY, parseRejoin, rejoinOfferFor, serializeRejoin, type RejoinRecord } from "@/lib/room-session/rejoin";
 import { useMe } from "@/hooks/use-me";
 import { publishRoomSession, type RoomSessionView } from "@/lib/room-session-store";
+import { MARKET_FLAGS } from "@/lib/market-config";
+import { releaseActionFor } from "@/lib/speaker-invite";
+import { HOST_MUTE_TOAST, INITIAL_HOST_MUTE_TOAST, hostMuteOf, stepHostMuteToast } from "@/lib/host-mute";
+import { speakerSignalOf, userTopic } from "@/lib/ws-gateway";
+import { sharedGateway } from "@/lib/ws-gateway-shared";
 
 /**
  * ONE ROOM PER TAB, OWNED BY THE SHELL.
@@ -272,6 +280,31 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   const resolve = useResolveSpeakerRequest(streamId);
   const approved = mine.data?.status === "approved";
 
+  /*
+    A HOST'S INVITATION TO SPEAK, read off the same 8 s poll as everything
+    else about the reader's own row — so it reaches them on any page, with
+    the room minimised. The banner (room view, mini-player) renders from THIS,
+    never from the push that may have prompted the read. Accepting seats them
+    through `approved` above, with the mic off: `useStage` below is given no
+    intent, so nothing opens it until they tap.
+  */
+  const answer = useAnswerInvite(streamId);
+  const answerInviteMutate = answer.mutate;
+  const invitedRow = !isHost && mine.data?.status === "invited" ? mine.data : null;
+  const inviteId = invitedRow?.id ?? null;
+  const inviteExpiresAt = invitedRow?.expiresAt ?? null;
+  const invite = useMemo(
+    () => (inviteId ? { requestId: inviteId, expiresAt: inviteExpiresAt } : null),
+    [inviteId, inviteExpiresAt]
+  );
+  const answerInvite = useCallback(
+    (action: "accept" | "reject") => {
+      if (!inviteId) return;
+      answerInviteMutate({ requestId: inviteId, action });
+    },
+    [answerInviteMutate, inviteId]
+  );
+
   // The room ended while the reader was somewhere else. ROOM_DELETED says the
   // same thing from the SDK; whichever arrives first ends the session.
   const status = stream.data?.status;
@@ -388,16 +421,98 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   }, [state.connection]);
   const dismissRejoin = useCallback(() => writeRejoin(null), []);
 
+  /* ---- the speaker signals on the reader's own topic -------------------- */
+
+  /*
+    `user:<did>` on the ws-gateway says "your row, or your mic, just changed".
+    It is a REFETCH SIGNAL (lib/ws-gateway.ts `speakerSignalOf` keeps only the
+    stream id): the 8 s poll stays the floor, and a frame about another room,
+    a forged one or a malformed one does nothing a read would not. Off unless
+    the gateway is configured, and a refused socket is invisible.
+  */
+  const queryClient = useQueryClient();
+  const myTopic = userTopic(meId);
+  const muteSignal = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!holding || !streamId || !myTopic || !MARKET_FLAGS.wsGatewayUrl) return;
+    return sharedGateway().subscribe(myTopic, (frame) => {
+      const signal = speakerSignalOf(frame);
+      if (!signal || signal.streamId !== streamId) return;
+      if (signal.kind === "mute") {
+        muteSignal.current();
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+      void queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+    });
+  }, [holding, streamId, myTopic, queryClient]);
+
+  /*
+    "THE HOST MUTED YOUR MIC." Said once per mute, on whatever page the reader
+    is on, from the room's own truth: the `hostMuted` attribute on our
+    participant and our microphone publication (lib/host-mute.ts). The push
+    only asks to look. A connect or a reconnect starts the reading over, so
+    its replay of the attribute is never news. Nobody mutes the host.
+  */
+  useEffect(() => {
+    if (!room || isHost) return;
+    let cancelled = false;
+    let off: (() => void) | undefined;
+    let toastState = INITIAL_HOST_MUTE_TOAST;
+    const check = (signalled: boolean) => {
+      const local = room.localParticipant;
+      const step = stepHostMuteToast(toastState, {
+        current: hostMuteOf(local.attributes),
+        micOn: local.isMicrophoneEnabled,
+        signalled,
+        now: Date.now(),
+      });
+      toastState = step.state;
+      if (step.toast) toast(HOST_MUTE_TOAST);
+    };
+    void import("livekit-client").then(({ RoomEvent }) => {
+      if (cancelled) return;
+      // Both events hand the participant LAST: (changed, participant) and
+      // (publication, participant). Only our own changes are ours to announce.
+      const onChange = (...args: unknown[]) => {
+        const who = args[args.length - 1] as { isLocal?: boolean } | undefined;
+        if (who?.isLocal !== true) return;
+        check(false);
+      };
+      const onReconnected = () => {
+        toastState = INITIAL_HOST_MUTE_TOAST;
+        check(false);
+      };
+      room.on(RoomEvent.ParticipantAttributesChanged, onChange);
+      room.on(RoomEvent.TrackMuted, onChange);
+      room.on(RoomEvent.Reconnected, onReconnected);
+      muteSignal.current = () => check(true);
+      off = () => {
+        room.off(RoomEvent.ParticipantAttributesChanged, onChange);
+        room.off(RoomEvent.TrackMuted, onChange);
+        room.off(RoomEvent.Reconnected, onReconnected);
+      };
+      check(false);
+    });
+    return () => {
+      cancelled = true;
+      muteSignal.current = () => {};
+      off?.();
+    };
+  }, [room, isHost]);
+
   /* ---- verbs ----------------------------------------------------------- */
 
-  const requestId = mine.data && (mine.data.status === "approved" || mine.data.status === "pending") ? mine.data.id : null;
+  // A seat or a hand comes down; an unanswered invitation is answered (lib/speaker-invite.ts).
+  const releaseAction = releaseActionFor(mine.data?.status);
+  const requestId = mine.data && releaseAction ? mine.data.id : null;
   const leave = useCallback(async () => {
     // A seated person frees their seat on the way out, and a raised hand comes
     // down, so the host's tray never holds somebody who has gone.
-    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    if (requestId && releaseAction) resolve.mutate({ requestId, action: releaseAction });
     writeRejoin(null);
     await controller.leave();
-  }, [controller, requestId, resolve]);
+  }, [controller, requestId, releaseAction, resolve]);
 
   /*
     "Leave and join" is a LEAVE of the room being left, and does what every
@@ -412,7 +527,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   */
   const confirmConflict = useCallback(async () => {
     if (!state.pending) return;
-    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    if (requestId && releaseAction) resolve.mutate({ requestId, action: releaseAction });
     const previous = readRejoin();
     writeRejoin(null);
     setSwitching(true);
@@ -424,7 +539,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     } finally {
       setSwitching(false);
     }
-  }, [controller, requestId, resolve, state.pending]);
+  }, [controller, requestId, releaseAction, resolve, state.pending]);
 
   /*
     Making way for a room the reader opens themselves (Backstage). The same
@@ -432,7 +547,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     host's room is closed for everyone first. Rejects when that close fails.
   */
   const vacate = useCallback(async () => {
-    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    if (requestId && releaseAction) resolve.mutate({ requestId, action: releaseAction });
     const previous = readRejoin();
     writeRejoin(null);
     try {
@@ -441,7 +556,7 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       writeRejoin(previous);
       throw error;
     }
-  }, [controller, requestId, resolve]);
+  }, [controller, requestId, releaseAction, resolve]);
 
   // Stable: the room view clears its own question in an effect cleanup, and a
   // new function per render would run that cleanup — and dismiss the question
@@ -667,6 +782,9 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       retry: () => void controller.retry(),
       rejoinOffer,
       dismissRejoin,
+      invite,
+      answerInvite,
+      answeringInvite: answer.isPending,
     }),
     [
       state,
@@ -692,6 +810,9 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       rejoinOffer,
       dismissRejoin,
       isHost,
+      invite,
+      answerInvite,
+      answer.isPending,
     ]
   );
 

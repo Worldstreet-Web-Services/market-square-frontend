@@ -72,6 +72,20 @@ export function inviteView(row: InviteRow | null | undefined, now: number): Invi
   return { state: "open", requestId: row.id, secondsLeft: left };
 }
 
+/**
+ * What leaving the room does to the reader's own row.
+ *
+ * A seat or a raised hand comes down with `leave`, as it always has. An
+ * invitation still waiting on an answer is answered `reject` — walking out is
+ * an answer, and the host is told the same neutral line as any other. Anything
+ * else has nothing to release.
+ */
+export function releaseActionFor(status: string | null | undefined): "leave" | "reject" | null {
+  if (status === "approved" || status === "pending") return "leave";
+  if (status === "invited") return "reject";
+  return null;
+}
+
 /* ------------------------------------------------------------------ *
  * The host's control
  * ------------------------------------------------------------------ */

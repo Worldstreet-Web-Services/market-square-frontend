@@ -10,6 +10,7 @@ import {
   inviteErrorOutcome,
   inviteView,
   isAnonymousIdentity,
+  releaseActionFor,
   routeMissing,
   settleInvites,
   type InviteTarget,
@@ -58,6 +59,17 @@ describe("the invitee's banner reads the server's clock", () => {
     assert.equal(formatCountdown(65), "1:05");
     assert.equal(formatCountdown(0.2), "0:01");
     assert.equal(formatCountdown(-3), "0:00");
+  });
+});
+
+describe("leaving the room answers what the reader's row is waiting on", () => {
+  it("brings a seat or a hand down, and answers an open invitation", () => {
+    assert.equal(releaseActionFor("approved"), "leave");
+    assert.equal(releaseActionFor("pending"), "leave");
+    assert.equal(releaseActionFor("invited"), "reject");
+    for (const status of ["denied", "withdrawn", "removed", null, undefined]) {
+      assert.equal(releaseActionFor(status), null, String(status));
+    }
   });
 });
 

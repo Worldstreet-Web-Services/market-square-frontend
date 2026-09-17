@@ -3189,7 +3189,7 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
     const provider = code("components/layout/room-session.tsx");
     const confirm = block(provider, "const confirmConflict = useCallback(", "]);");
     assert.ok(
-      confirm.indexOf('resolve.mutate({ requestId, action: "leave" })') < confirm.indexOf("controller.confirmConflict()") &&
+      confirm.indexOf("resolve.mutate({ requestId, action: releaseAction })") < confirm.indexOf("controller.confirmConflict()") &&
         confirm.includes("writeRejoin(null)"),
       "confirmConflict skips the seat release"
     );

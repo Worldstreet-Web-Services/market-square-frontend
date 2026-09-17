@@ -70,6 +70,15 @@ export interface RoomSessionView {
   /** The room a reload interrupted, offered back as "Rejoin" (lib/room-session/rejoin.ts). */
   rejoinOffer: RejoinRecord | null;
   dismissRejoin: () => void;
+  /**
+   * The host's invitation to speak, waiting on the reader's answer — read from
+   * their own speaker-request row, never from a push. The countdown is
+   * `expiresAt`'s (lib/speaker-invite.ts `inviteView`).
+   */
+  invite: { requestId: string; expiresAt: string | null } | null;
+  /** Join as speaker (seated, mic OFF) or Not now. */
+  answerInvite: (action: "accept" | "reject") => void;
+  answeringInvite: boolean;
 }
 
 const noop = () => {};
@@ -100,6 +109,9 @@ export const IDLE_VIEW: RoomSessionView = {
   retry: noop,
   rejoinOffer: null,
   dismissRejoin: noop,
+  invite: null,
+  answerInvite: noop,
+  answeringInvite: false,
 };
 
 let view: RoomSessionView = IDLE_VIEW;
