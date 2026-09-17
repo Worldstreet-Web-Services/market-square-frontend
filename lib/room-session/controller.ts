@@ -10,6 +10,10 @@
  *   · `enter(sameId)` IS A NO-OP — Strict Mode, Back/Forward, a remount.
  *   · `enter(otherId)` ASKS FIRST (`conflict`); confirming disconnects and
  *     unregisters the first room BEFORE the second one connects.
+ *   · A HOST NEVER LEAVES THEIR OWN ROOM LIVE BEHIND THEM. Switching away
+ *     (`confirmConflict`) or making way for another room (`vacate`) CLOSES the
+ *     host's room first, through the injected `closeRoom`; if that fails, the
+ *     host stays where they are.
  *   · DUPLICATE_IDENTITY IS TERMINAL. No reconnect is ever scheduled.
  *   · A TOKEN IS FOR JOINING, NOT FOR STAYING. A LiveKit connection keeps
  *     itself authorised once it is up, so nothing here refreshes a token on
@@ -84,6 +88,12 @@ export interface RoomSessionDeps<R> {
   createRoom(target: SessionTarget, options: { preferredMic?: string }): SessionRoom<R> | Promise<SessionRoom<R>>;
   fetchToken(target: SessionTarget): Promise<SessionToken>;
   sendHeartbeat(streamId: string, sessionId: string | null): Promise<{ sessionId: string }>;
+  /**
+   * Close a room for everyone (the end-stream call). Only a host's room is
+   * ever closed here — on a switch away from it. A rejection refuses the
+   * switch: the host stays connected to a room that is still open.
+   */
+  closeRoom(streamId: string): Promise<void>;
   /** Tab close / leave: tell the service now rather than waiting for heartbeats to lapse. */
   sendLeaveBeacon(streamId: string, sessionId: string | null): void;
   clock: SessionClock;
@@ -122,6 +132,8 @@ export class RoomSessionController<R> {
   private preferredMic: string | undefined;
   private retryTimer: unknown = null;
   private retryAttempt = 0;
+  /** The host's room being closed for a switch: its own ending is expected, not news. */
+  private closingForSwitch: string | null = null;
 
   constructor(deps: RoomSessionDeps<R>) {
     this.deps = deps;
@@ -174,10 +186,28 @@ export class RoomSessionController<R> {
     return this.connect({ streamId, role }, { token: options?.token, resumed: !options?.fresh });
   }
 
-  /** "Leave A and join B?" — yes. A is disconnected and unregistered before B connects. */
+  /**
+   * "Leave A and join B?" — yes. A is disconnected and unregistered before B
+   * connects. When the reader is A's HOST, A is closed for everyone first:
+   * a host who walks out of a live room leaves a room with nobody running it.
+   * A close that fails throws, and nothing moves — the question stays open.
+   */
   async confirmConflict(): Promise<void> {
     const pending = this.state.pending;
-    if (!pending) return;
+    if (!pending || this.closingForSwitch !== null) return;
+    const from = this.state.target;
+    if (from?.role === "host") {
+      const closed = await this.closeHostRoom(from.streamId);
+      if (!closed) return;
+      // Answered or overtaken while the room was closing (Stay there, a
+      // Leave, a logout): nothing more to switch to, and the room A view is
+      // told it is over — its own ending was ignored while it closed.
+      const still = this.state.pending;
+      if (!still || still.streamId !== pending.streamId || still.role !== pending.role) {
+        if (this.state.target?.streamId === from.streamId) this.onRoomEnded();
+        return;
+      }
+    }
     const options = this.pendingOptions;
     this.pendingOptions = undefined;
     const disconnected = this.teardown();
@@ -202,6 +232,39 @@ export class RoomSessionController<R> {
     if (streamId !== undefined && pending.streamId !== streamId) return;
     this.pendingOptions = undefined;
     this.dispatch({ type: "conflict-dismissed" });
+  }
+
+  /**
+   * Make way for a room that is not entered through `enter` — the host's own
+   * Backstage, which must not go live on B while the tab still holds A.
+   * A HOST's held room is closed for everyone first (a rejection throws, and
+   * the host stays in it); anybody else simply leaves.
+   */
+  async vacate(): Promise<void> {
+    const target = this.state.target;
+    if (!target) return;
+    if (target.role === "host" && isHolding(this.state.connection)) {
+      if (this.closingForSwitch !== null) return;
+      const closed = await this.closeHostRoom(target.streamId);
+      if (!closed) return;
+    }
+    await this.stop();
+  }
+
+  /**
+   * The end-stream call for a switch. True when the room is closed and the
+   * session still stands where it did; false when a Leave, a logout or
+   * another switch overtook it (nothing more to do). Throws when the close
+   * itself failed.
+   */
+  private async closeHostRoom(streamId: string): Promise<boolean> {
+    this.closingForSwitch = streamId;
+    try {
+      await this.deps.closeRoom(streamId);
+    } finally {
+      this.closingForSwitch = null;
+    }
+    return this.state.target?.streamId === streamId && isHolding(this.state.connection);
   }
 
   /* ---- leaving --------------------------------------------------------- */
@@ -263,6 +326,8 @@ export class RoomSessionController<R> {
 
   onDisconnected(kind: DisconnectKind) {
     if (!this.current) return;
+    // The host's own room closing under a switch: the switch tears it down.
+    if (kind === "room-deleted" && this.closingForSwitch === this.state.target?.streamId) return;
     switch (kind) {
       case "duplicate-identity":
         this.teardown();
@@ -285,6 +350,7 @@ export class RoomSessionController<R> {
   /** The stream poll says the room is over — the same end as ROOM_DELETED, from the other source. */
   onRoomEnded() {
     if (!this.state.target || isTerminal(this.state.connection)) return;
+    if (this.closingForSwitch === this.state.target.streamId) return;
     this.teardown();
     this.dispatch({ type: "ended", reason: "room-ended" });
   }

@@ -49,8 +49,19 @@ export interface RoomSessionView {
   end: () => Promise<void>;
   /** Sign-out: the host's connection comes down the same way a listener's does. */
   logout: () => Promise<void>;
-  /** "Leave and join": frees the seat or hand in the room being left, then switches. */
+  /**
+   * "Leave and join": frees the seat or hand in the room being left, then
+   * switches. A HOST's room is closed for everyone first; if that fails the
+   * switch does not happen.
+   */
   confirmConflict: () => Promise<void>;
+  /** A host's "Leave and join" is closing their room. */
+  switching: boolean;
+  /**
+   * Leave whatever room the tab holds, to open another one (Backstage). A
+   * host's room is closed for everyone first; rejects when that close fails.
+   */
+  vacate: () => Promise<void>;
   /** Given a room id, clears only a question about that room. */
   dismissConflict: (streamId?: string) => void;
   /** Clear a finished session (ended, another tab, failed) off the screen. */
@@ -82,6 +93,8 @@ export const IDLE_VIEW: RoomSessionView = {
   end: resolved,
   logout: resolved,
   confirmConflict: resolved,
+  switching: false,
+  vacate: resolved,
   dismissConflict: noop,
   dismiss: noop,
   retry: noop,

@@ -641,6 +641,8 @@ function LiveHouse({
   const here = session.state.target?.streamId === stream.id;
   /** Somebody asked to come in here while the session holds another room. */
   const askingToSwitch = session.state.status === "conflict" && session.state.pending?.streamId === stream.id;
+  /** …and the room being left is the reader's OWN: switching closes it. */
+  const hostingOther = askingToSwitch && session.state.target?.role === "host";
   const connection = here ? session.state.connection : "idle";
 
   /*
@@ -1996,17 +1998,24 @@ function LiveHouse({
           session.dismissConflict();
           if (current) router.push(sq(`/gist-rooms/${current}`));
         }}
-        title="Leave your gist room?"
+        title={hostingOther ? "Close your gist room?" : "Leave your gist room?"}
       >
+        {/* A HOST who switches does not just leave: their room would go on
+            with nobody running it, so joining CLOSES it, and says so. */}
         <p className="text-[13px] leading-5 text-body">
-          {session.stream
-            ? `You're in "${houseTopic(session.stream)}". Joining this room will leave it.`
-            : "You're in another gist room. Joining this room will leave it."}
+          {hostingOther
+            ? session.stream
+              ? `You're hosting "${houseTopic(session.stream)}". Joining this room will close it for everyone.`
+              : "You're hosting another gist room. Joining this room will close it for everyone."
+            : session.stream
+              ? `You're in "${houseTopic(session.stream)}". Joining this room will leave it.`
+              : "You're in another gist room. Joining this room will leave it."}
         </p>
         <div className="mt-5 flex gap-2">
           <Button
             variant="ghost"
             className="flex-1"
+            disabled={session.switching}
             onClick={() => {
               const current = session.state.target?.streamId;
               session.dismissConflict();
@@ -2015,8 +2024,8 @@ function LiveHouse({
           >
             Stay there
           </Button>
-          <Button className="flex-1" onClick={() => void session.confirmConflict()}>
-            Leave and join
+          <Button className="flex-1" loading={session.switching} onClick={() => void session.confirmConflict()}>
+            {hostingOther ? "Close and join" : "Leave and join"}
           </Button>
         </div>
       </Sheet>

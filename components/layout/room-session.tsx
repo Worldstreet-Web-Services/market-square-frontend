@@ -15,6 +15,7 @@ import {
   unregisterRoom,
   useMySpeakerRequest,
   useResolveSpeakerRequest,
+  useEndStream,
   useStage,
   useStream,
 } from "@/features/streams";
@@ -129,6 +130,14 @@ function playbackToken(grant: Awaited<ReturnType<typeof fetchPlaybackToken>>): S
   singleton there would be shared between requests.
 */
 const publishOutcome: { current: (failure: RoomFailure | null) => void } = { current: () => {} };
+/*
+  The end-stream call a host's switch runs before it lets go of their room.
+  The mounted provider points it at `useEndStream` (the toast, the cache).
+  Until then it refuses: a switch that cannot close the room must not happen.
+*/
+const closeRoomCall: { current: (streamId: string) => Promise<void> } = {
+  current: () => Promise.reject(new Error("The gist room could not be closed.")),
+};
 let sharedController: RoomSessionController<Room> | null = null;
 
 function sessionController(): RoomSessionController<Room> {
@@ -156,6 +165,7 @@ function createController(): RoomSessionController<Room> {
       return playbackToken(await fetchPlaybackToken(target.streamId));
     },
     sendHeartbeat: (streamId, sessionId) => sendHeartbeat(streamId, sessionId, "live"),
+    closeRoom: (streamId) => closeRoomCall.current(streamId),
     // BACKEND B3: there is no `/leave` route yet, so a closed tab lapses
     // out of the count on the missed heartbeats. The call site is kept so
     // the beacon is one line when the route ships.
@@ -199,6 +209,16 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     publishOutcome.current = setPublishFailure;
   }, []);
+
+  const endRoom = useEndStream({ successMessage: "Gist room closed" });
+  const endRoomAsync = endRoom.mutateAsync;
+  useEffect(() => {
+    closeRoomCall.current = async (id) => {
+      await endRoomAsync(id);
+    };
+  }, [endRoomAsync]);
+  /** A host's switch is closing their room: the sheet's button waits on it. */
+  const [switching, setSwitching] = useState(false);
 
   /* ---- the polls ------------------------------------------------------ */
 
@@ -349,12 +369,43 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
     rejoin record stops pointing at it. After the switch the streamId is the
     new room's, so this is the last moment the old request can be reached.
   */
+  /*
+    A HOST'S "Leave and join" CLOSES THEIR ROOM (the controller runs the
+    end-stream call first). If the close fails, nothing moves: the toast says
+    so, and the rejoin record goes back to the room they are still in.
+  */
   const confirmConflict = useCallback(async () => {
     if (!state.pending) return;
     if (requestId) resolve.mutate({ requestId, action: "leave" });
+    const previous = readRejoin();
     writeRejoin(null);
-    await controller.confirmConflict();
+    setSwitching(true);
+    try {
+      await controller.confirmConflict();
+    } catch {
+      // useEndStream has already said why.
+      writeRejoin(previous);
+    } finally {
+      setSwitching(false);
+    }
   }, [controller, requestId, resolve, state.pending]);
+
+  /*
+    Making way for a room the reader opens themselves (Backstage). The same
+    leave as every other: a seat comes down, the rejoin record goes — and a
+    host's room is closed for everyone first. Rejects when that close fails.
+  */
+  const vacate = useCallback(async () => {
+    if (requestId) resolve.mutate({ requestId, action: "leave" });
+    const previous = readRejoin();
+    writeRejoin(null);
+    try {
+      await controller.vacate();
+    } catch (error) {
+      writeRejoin(previous);
+      throw error;
+    }
+  }, [controller, requestId, resolve]);
 
   // Stable: the room view clears its own question in an effect cleanup, and a
   // new function per render would run that cleanup — and dismiss the question
@@ -525,6 +576,8 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
         return isHost ? controller.logout() : leave();
       },
       confirmConflict,
+      switching,
+      vacate,
       dismissConflict,
       dismiss: () => {
         writeRejoin(null);
@@ -552,6 +605,8 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       enter,
       leave,
       confirmConflict,
+      switching,
+      vacate,
       dismissConflict,
       rejoinOffer,
       dismissRejoin,

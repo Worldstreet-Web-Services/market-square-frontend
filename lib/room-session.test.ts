@@ -12,6 +12,7 @@ import { classifyDisconnect, type DisconnectKind, type SessionTarget } from "./r
 import { isZoneExit, miniPlayerChrome, miniPlayerVisible, roomChipVisible } from "./room-session/visibility.ts";
 import { mediaSessionMetadata } from "./room-session/media-session.ts";
 import { roomEntryReady } from "./room-session/entry.ts";
+import { backstageOpenStep } from "./room-session/backstage.ts";
 import { IDLE_SESSION, sessionReducer, type SessionState } from "./room-session/reducer.ts";
 import { ARK_BACK_FALLBACK, ARK_DESTINATIONS } from "./ark-links.ts";
 import { squarePaths } from "./square-path.ts";
@@ -120,6 +121,7 @@ function harness(overrides: Partial<RoomSessionDeps<FakeRoom>> = {}) {
   const clock = new FakeClock();
   const heartbeats: Array<{ streamId: string; sessionId: string | null }> = [];
   const beacons: string[] = [];
+  const closed: string[] = [];
   const tokens: SessionTarget[] = [];
   let sessionSeq = 0;
   let tokenSeq = 0;
@@ -141,6 +143,10 @@ function harness(overrides: Partial<RoomSessionDeps<FakeRoom>> = {}) {
       return { sessionId: sessionId ?? `s${++sessionSeq}` };
     },
     sendLeaveBeacon: (streamId) => beacons.push(streamId),
+    closeRoom: async (streamId) => {
+      closed.push(streamId);
+      log.push(`close:${streamId}`);
+    },
     clock,
     register: (streamId, handle) => {
       const existing = registry.get(streamId);
@@ -155,7 +161,7 @@ function harness(overrides: Partial<RoomSessionDeps<FakeRoom>> = {}) {
     ...overrides,
   };
   const session = new RoomSessionController(deps);
-  return { session, log, rooms, registry, clock, heartbeats, beacons, tokens, deps };
+  return { session, log, rooms, registry, clock, heartbeats, beacons, closed, tokens, deps };
 }
 
 const disconnect = (room: FakeRoom, reason: string) => room.emit("Disconnected", reason);
@@ -1094,5 +1100,160 @@ describe("the mini-player says 'You're live' in its state line, not as a control
   it("a muted publisher or a listener has no badge", () => {
     assert.equal(miniPlayerChrome({ state: live(), presence: "host", micOn: false, canPlayAudio: true }).liveBadge, false);
     assert.equal(miniPlayerChrome({ state: live(), presence: "listener", micOn: true, canPlayAudio: true }).liveBadge, false);
+  });
+});
+
+/*
+  A HOST NEVER LEAVES THEIR OWN ROOM LIVE BEHIND THEM.
+
+  "Leave and join" used to be a plain disconnect for everybody. For a host it
+  walked out of a live room and left it running with nobody in charge; and
+  Backstage went live on the new room before anything asked, so "Stay there"
+  left THAT room live with no host.
+*/
+describe("a host's switch closes the room they are leaving", () => {
+  it("confirming closes A (end-stream) before A is dropped and before B connects", async () => {
+    const h = harness();
+    await h.session.enter("A", "host", { token: { url: "wss://lk", token: "ingest" }, fresh: true });
+    await h.session.enter("B", "listener");
+    assert.equal(h.session.getState().status, "conflict");
+    assert.deepEqual(h.closed, [], "A was closed before the host chose");
+
+    await h.session.confirmConflict();
+    assert.deepEqual(h.closed, ["A"], "the host's room was left live");
+    const at = (entry: string) => h.log.indexOf(entry);
+    assert.ok(at("close:A") < at("disconnect:A-1"), h.log.join(" "));
+    assert.ok(at("disconnect:A-1") < at("connect:B-2"), h.log.join(" "));
+    assert.equal(h.session.getState().target?.streamId, "B");
+    assert.equal(h.session.getState().connection, "live");
+  });
+
+  it("a listener's switch closes nothing", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    await h.session.enter("B", "listener");
+    await h.session.confirmConflict();
+    assert.deepEqual(h.closed, []);
+    assert.equal(h.session.getState().target?.streamId, "B");
+  });
+
+  it("a close that fails refuses the switch: the host stays connected and the question stays open", async () => {
+    const h = harness();
+    h.deps.closeRoom = async () => {
+      throw new Error("503");
+    };
+    await h.session.enter("A", "host");
+    await h.session.enter("B", "listener");
+    await assert.rejects(h.session.confirmConflict(), /503/);
+    const state = h.session.getState();
+    assert.equal(state.target?.streamId, "A");
+    assert.equal(state.connection, "live");
+    assert.equal(state.pending?.streamId, "B");
+    assert.equal(h.rooms.length, 1, "B connected although A could not be closed");
+    assert.equal(h.rooms[0]!.disconnects, 0, "A's host was disconnected from a room that is still open");
+  });
+
+  it("the room's own ending, arriving mid-close, does not swallow the switch", async () => {
+    const h = harness();
+    await h.session.enter("A", "host");
+    h.deps.closeRoom = async (streamId) => {
+      h.log.push(`close:${streamId}`);
+      // The SDK and the poll both report the close before the call returns.
+      disconnect(h.rooms[0]!, "ROOM_DELETED");
+      h.session.onRoomEnded();
+    };
+    await h.session.enter("B", "listener");
+    await h.session.confirmConflict();
+    assert.equal(h.session.getState().target?.streamId, "B");
+    assert.equal(h.session.getState().connection, "live");
+    assert.equal(h.registry.size, 1);
+  });
+
+  it("'Stay there' while the close is in flight: A is over, not left looking live", async () => {
+    const h = harness();
+    await h.session.enter("A", "host");
+    let release: () => void = () => {};
+    h.deps.closeRoom = () => new Promise<void>((resolve) => (release = resolve));
+    await h.session.enter("B", "listener");
+    const switching = h.session.confirmConflict();
+    await flush();
+    h.session.dismissConflict();
+    release();
+    await switching;
+    assert.equal(h.session.getState().connection, "ended");
+    assert.equal(h.rooms.length, 1, "B joined although the reader stayed");
+    assert.equal(h.registry.size, 0, "a closed room is still held");
+  });
+
+  it("a second confirm while the close is in flight closes once", async () => {
+    const h = harness();
+    await h.session.enter("A", "host");
+    let release: () => void = () => {};
+    let calls = 0;
+    h.deps.closeRoom = () => {
+      calls += 1;
+      return new Promise<void>((resolve) => (release = resolve));
+    };
+    await h.session.enter("B", "listener");
+    const first = h.session.confirmConflict();
+    await h.session.confirmConflict();
+    release();
+    await first;
+    assert.equal(calls, 1);
+    assert.equal(h.rooms.length, 2);
+  });
+});
+
+describe("Backstage asks before it goes live over a held room", () => {
+  const live = (streamId: string, role: SessionTarget["role"]): SessionState => ({
+    ...IDLE_SESSION,
+    status: "live",
+    connection: "live",
+    target: { streamId, role },
+  });
+
+  it("asks while the tab holds ANOTHER room, in every held state", () => {
+    assert.equal(backstageOpenStep(live("A", "host"), "B"), "ask");
+    assert.equal(backstageOpenStep(live("A", "listener"), "B"), "ask");
+    for (const connection of ["connecting", "reconnecting", "failed"] as const) {
+      assert.equal(backstageOpenStep({ ...live("A", "listener"), status: connection, connection }, "B"), "ask", connection);
+    }
+  });
+
+  it("goes live at once with nothing held, a finished session, or this same room", () => {
+    assert.equal(backstageOpenStep(IDLE_SESSION, "B"), "go-live");
+    for (const connection of ["ended", "duplicate"] as const) {
+      assert.equal(backstageOpenStep({ ...live("A", "host"), status: connection, connection }, "B"), "go-live", connection);
+    }
+    assert.equal(backstageOpenStep(live("B", "host"), "B"), "go-live");
+  });
+
+  it("vacate() closes a host's room before letting go of it", async () => {
+    const h = harness();
+    await h.session.enter("A", "host");
+    await h.session.vacate();
+    assert.deepEqual(h.closed, ["A"]);
+    assert.ok(h.log.indexOf("close:A") < h.log.indexOf("disconnect:A-1"), h.log.join(" "));
+    assert.equal(h.session.getState().status, "idle");
+    assert.equal(h.registry.size, 0);
+  });
+
+  it("vacate() refuses when the close fails: the host stays in their open room", async () => {
+    const h = harness();
+    h.deps.closeRoom = async () => {
+      throw new Error("503");
+    };
+    await h.session.enter("A", "host");
+    await assert.rejects(h.session.vacate(), /503/);
+    assert.equal(h.session.getState().connection, "live");
+    assert.equal(h.rooms[0]!.disconnects, 0);
+  });
+
+  it("vacate() only leaves a listener's room", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    await h.session.vacate();
+    assert.deepEqual(h.closed, []);
+    assert.equal(h.session.getState().status, "idle");
   });
 });

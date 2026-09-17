@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
 import { ChecklistRow, MicMeter } from "@/components/ui/mic-meter";
 import { CopyRow } from "@/features/houses/components/copy-row";
 import { useDeviceCheck } from "@/features/streams/hooks/use-device-check";
@@ -17,6 +19,9 @@ import {
   isValidTopic,
 } from "@/features/houses/lib/house";
 import { cn } from "@/lib/cn";
+import { useRoomSession } from "@/lib/room-session-store";
+import { backstageOpenStep } from "@/lib/room-session/backstage";
+import { sq } from "@/lib/square-path";
 
 const inputClass =
   "ws-inset w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-grey-600";
@@ -47,13 +52,19 @@ export function Backstage({
   const devices = useDeviceCheck(null, { audioOnly: true });
   const goLive = useGoLive();
   const update = useUpdateStream(stream.id);
+  const router = useRouter();
+  const session = useRoomSession();
+  /** The tab still holds another room: asked BEFORE this one goes live. */
+  const [askSwitch, setAskSwitch] = useState(false);
+  const [vacating, setVacating] = useState(false);
+  const hostingOther = session.state.target?.role === "host";
 
   const micReady = devices.status === "ready";
   const topicOk = isValidTopic(topic);
   const shareUrl =
     typeof window === "undefined" ? "" : houseShareUrl(window.location.origin, stream.id);
 
-  const open = () => {
+  const openNow = () => {
     const trimmed = topic.trim();
     // Save the topic first when it changed: the room is ABOUT something, and
     // opening with a stale title is opening the wrong house.
@@ -74,6 +85,35 @@ export function Backstage({
         onOpened(result.ingest, micId);
       },
     });
+  };
+
+  /*
+    GO-LIVE WAITS FOR THE ANSWER. It used to run first and let the session ask
+    "leave your other room?" afterwards — by which point this room was already
+    live, and "Stay there" left it live with no host (lib/room-session/backstage.ts).
+  */
+  const open = () => {
+    if (backstageOpenStep(session.state, stream.id) === "ask") {
+      setAskSwitch(true);
+      return;
+    }
+    openNow();
+  };
+
+  /** Leave (or, for its host, CLOSE) the room the tab holds — then open this one. */
+  const leaveAndOpen = async () => {
+    setVacating(true);
+    try {
+      await session.vacate();
+    } catch {
+      // The close failed and was toasted; the host is still in their room,
+      // and this one has not gone live.
+      setVacating(false);
+      return;
+    }
+    setVacating(false);
+    setAskSwitch(false);
+    openNow();
   };
 
   return (
@@ -180,6 +220,39 @@ export function Backstage({
         <span className="font-semibold text-body">No camera, ever.</span> Houses are voice only —
         for you and for everyone who joins.
       </p>
+
+      {/* One room per tab. Nothing has gone live yet: staying leaves this room
+          exactly as it was. */}
+      <Sheet
+        open={askSwitch}
+        onClose={() => {
+          if (!vacating) setAskSwitch(false);
+        }}
+        title={hostingOther ? "Close your gist room?" : "Leave your gist room?"}
+      >
+        <p className="text-[13px] leading-5 text-body">
+          {hostingOther
+            ? "You're hosting another gist room. Opening this one will close it for everyone."
+            : "You're in another gist room. Opening this one will leave it."}
+        </p>
+        <div className="mt-5 flex gap-2">
+          <Button
+            variant="ghost"
+            className="flex-1"
+            disabled={vacating}
+            onClick={() => {
+              const current = session.state.target?.streamId;
+              setAskSwitch(false);
+              if (current) router.push(sq(`/gist-rooms/${current}`));
+            }}
+          >
+            Stay there
+          </Button>
+          <Button className="flex-1" loading={vacating} onClick={() => void leaveAndOpen()}>
+            {hostingOther ? "Close and open" : "Leave and open"}
+          </Button>
+        </div>
+      </Sheet>
     </div>
   );
 }
