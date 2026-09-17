@@ -3339,3 +3339,36 @@ describe("one live microphone per tab, and no stale question", () => {
     assert.match(guard, /if \(!speaking && href !== null\) setHref\(null\);/);
   });
 });
+
+describe("the room session's second review round", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("a remounted provider adopts the page's one controller instead of starting idle beside a live Room", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /let sharedController: RoomSessionController<Room> \| null = null;/);
+    assert.match(provider, /if \(typeof window === "undefined"\) return createController\(\);/);
+    assert.match(provider, /const \[controller\] = useState\(sessionController\);/);
+    assert.doesNotMatch(provider, /useState\(\s*\(\) =>\s*new RoomSessionController/);
+  });
+
+  it("the polls stop once the automatic retries have given up", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /const polling = holding && !state\.retriesExhausted;/);
+    assert.match(provider, /useStream\(streamId, 10_000, Boolean\(streamId\) && polling\)/);
+    assert.match(provider, /useMySpeakerRequest\(streamId, polling && !isHost\)/);
+  });
+
+  it("captions come from the live room only, and a new URL starts a new transcript", () => {
+    assert.match(code("components/layout/room-session.tsx"), /captionUrl: controller\.captionUrl,/);
+    assert.match(
+      code("features/houses/components/house-room.tsx"),
+      /<CaptionRail key=\{here \? \(session\.captionUrl \?\? "none"\) : "none"\} captionUrl=\{here \? session\.captionUrl : null\} \/>/
+    );
+  });
+
+  it("a room page whose switch question vanished unanswered offers Join instead of Connecting forever", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /if \(askingToSwitch && !wasAsked\) setWasAsked\(true\);/);
+    assert.match(room, /const gone = \(wasHere \|\| wasAsked\) && !here && !askingToSwitch;/);
+  });
+});

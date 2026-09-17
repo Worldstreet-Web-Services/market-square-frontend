@@ -647,7 +647,16 @@ function LiveHouse({
   */
   const [wasHere, setWasHere] = useState(false);
   if (here && !wasHere) setWasHere(true);
-  const gone = wasHere && !here && !askingToSwitch;
+  /*
+    …and nor is a "Leave your gist room?" question that went away unanswered.
+    The other room can be hung up from the mini-player on THIS page, end, or
+    be taken by another tab while the sheet is open; the question is cleared
+    with it, the session is free, and this view — which only enters on mount —
+    sat on "Connecting…" with nothing to press. It offers Join instead.
+  */
+  const [wasAsked, setWasAsked] = useState(false);
+  if (askingToSwitch && !wasAsked) setWasAsked(true);
+  const gone = (wasHere || wasAsked) && !here && !askingToSwitch;
 
   /*
     AN UNANSWERED QUESTION GOES WITH THE VIEW THAT ASKED IT. Pressing Back on
@@ -1496,7 +1505,7 @@ function LiveHouse({
             className="mt-2"
             onClick={() => enterRoom(stream.id, role)}
           >
-            Join again
+            {wasHere ? "Join again" : "Join"}
           </Button>
         </div>
       )}
@@ -1574,7 +1583,8 @@ function LiveHouse({
         </div>
       )}
 
-      <CaptionRail captionUrl={here ? session.captionUrl : null} />
+      {/* Keyed on the URL: a transcript never carries over into another stream. */}
+      <CaptionRail key={here ? (session.captionUrl ?? "none") : "none"} captionUrl={here ? session.captionUrl : null} />
 
       {/* Everything above scrolls; the bar below is pinned to the column's
           bottom edge. `mt-auto` rather than `sticky`, because the column is

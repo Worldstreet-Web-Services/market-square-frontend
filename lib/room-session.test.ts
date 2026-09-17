@@ -787,3 +787,100 @@ describe("who may enter a room", () => {
     assert.equal(roomEntryReady({ authReady: true, authenticated: true, meLoaded: false, meFailed: true }), true);
   });
 });
+
+describe("the controller's second review round", () => {
+  function slowDisconnects(h: ReturnType<typeof harness>) {
+    const releases: Array<() => void> = [];
+    const create = h.deps.createRoom;
+    h.deps.createRoom = async (target, options) => {
+      const room = await create(target, options);
+      return {
+        ...room,
+        listen: room.listen.bind(room),
+        connect: room.connect.bind(room),
+        disconnect: async () => {
+          await room.disconnect();
+          await new Promise<void>((resolve) => releases.push(resolve));
+        },
+      };
+    };
+    return releases;
+  }
+
+  it("'Leave and join' stays gone when a logout lands during the old room's disconnect", async () => {
+    const h = harness();
+    const releases = slowDisconnects(h);
+    await h.session.enter("A", "listener");
+    await h.session.enter("B", "listener");
+    const switching = h.session.confirmConflict();
+    await flush();
+    await h.session.logout();
+    for (const release of releases) release();
+    await switching;
+    await flush();
+    assert.equal(h.rooms.length, 1, "confirmConflict joined B for a signed-out browser");
+    assert.equal(h.session.getState().status, "idle");
+    assert.equal(h.registry.size, 0);
+  });
+
+  it("Retry on a failed room keeps an open 'join another room?' question", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+    await h.session.enter("B", "listener");
+    assert.equal(h.session.getState().status, "conflict");
+    await h.session.retry();
+    const state = h.session.getState();
+    assert.equal(state.connection, "live");
+    assert.equal(state.pending?.streamId, "B", "Retry silently cancelled the question");
+    assert.equal(state.status, "conflict");
+    // …and answering it still switches.
+    await h.session.confirmConflict();
+    assert.equal(h.session.getState().target?.streamId, "B");
+  });
+
+  it("says when the automatic retries have run out, and starts over on the network coming back", async () => {
+    const h = harness();
+    await h.session.enter("A", "listener");
+    const fetchToken = h.deps.fetchToken;
+    h.deps.fetchToken = async () => {
+      throw new Error("forbidden");
+    };
+    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+    assert.equal(h.session.getState().retriesExhausted, false);
+    const total = RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
+    await h.clock.advance(total + 60_000);
+    await flush();
+    assert.equal(h.session.getState().connection, "failed");
+    assert.equal(h.session.getState().retriesExhausted, true, "the polls cannot tell the controller gave up");
+    h.deps.fetchToken = fetchToken;
+    await h.session.onNetworkBack();
+    assert.equal(h.session.getState().connection, "live");
+    assert.equal(h.session.getState().retriesExhausted, false);
+  });
+
+  it("never hands out the previous room's caption URL while the next one connects or fails", async () => {
+    const h = harness();
+    let n = 0;
+    const releases: Array<() => void> = [];
+    h.deps.fetchToken = async (target) => {
+      n += 1;
+      if (n === 1) return { url: "wss://lk", token: "a", captionUrl: `https://captions/${target.streamId}` };
+      await new Promise<void>((resolve) => releases.push(resolve));
+      throw new Error("no token");
+    };
+    await h.session.enter("A", "listener");
+    assert.equal(h.session.captionUrl, "https://captions/A");
+    await h.session.enter("B", "listener");
+    const switching = h.session.confirmConflict();
+    await flush();
+    await flush();
+    assert.equal(h.session.getState().target?.streamId, "B");
+    assert.equal(h.session.captionUrl, null, "room B's page is handed room A's captions while connecting");
+    for (const release of releases) release();
+    await switching;
+    assert.equal(h.session.getState().connection, "failed");
+    assert.equal(h.session.captionUrl, null, "room B's page is handed room A's captions after failing");
+    assert.equal(h.session.token, null);
+  });
+});

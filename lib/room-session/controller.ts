@@ -181,8 +181,12 @@ export class RoomSessionController<R> {
     const options = this.pendingOptions;
     this.pendingOptions = undefined;
     const disconnected = this.teardown();
+    const tornDown = this.generation;
     this.dispatch({ type: "reset" });
     await disconnected;
+    // A logout, a Leave or another switch while the old room was disconnecting
+    // wins: joining now would put a signed-out browser in the new room.
+    if (tornDown !== this.generation) return;
     this.preferredMic = options?.preferredMic;
     await this.connect(pending, { token: options?.token, resumed: !options?.fresh });
   }
@@ -242,10 +246,12 @@ export class RoomSessionController<R> {
 
   private async stop(): Promise<void> {
     const target = this.state.target;
-    if (!target) return;
-    if (isHolding(this.state.connection)) {
+    if (target && isHolding(this.state.connection)) {
       this.deps.sendLeaveBeacon(target.streamId, this.sessionId);
     }
+    // Even with nothing held: a connect waiting on an await (a "Leave and
+    // join" mid-disconnect) compares the generation, and this bump is what
+    // tells it the reader has since left or signed out.
     // Idle at once, so nothing reads a session that is on its way out; the
     // disconnect is still awaited for the callers that navigate after it.
     const disconnected = this.teardown();
@@ -283,12 +289,16 @@ export class RoomSessionController<R> {
     this.dispatch({ type: "ended", reason: "room-ended" });
   }
 
-  /** The reader's Retry on a failed room: a fresh token, a new Room. */
+  /**
+   * The reader's Retry on a failed room: a fresh token, a new Room. An open
+   * "join another room?" question stays open — the Retry is about the room
+   * the reader is in, not an answer to the question about the other one.
+   */
   retry(): Promise<void> {
     const { target, connection } = this.state;
     if (!target || connection !== "failed") return Promise.resolve();
     this.retryAttempt = 0;
-    return this.connect(target, { resumed: true });
+    return this.connect(target, { resumed: true, keepPending: true });
   }
 
   /**
@@ -331,13 +341,16 @@ export class RoomSessionController<R> {
     await this.connect(target, { token: options?.token, resumed: !options?.fresh });
   }
 
-  private async connect(target: SessionTarget, options: { token?: SessionToken; resumed: boolean }) {
+  private async connect(
+    target: SessionTarget,
+    options: { token?: SessionToken; resumed: boolean; keepPending?: boolean }
+  ) {
     // One Room at a time, even against a connect still in flight: its Room is
     // dropped here rather than left connected and audible behind this one.
     if (this.current) void this.teardown();
     this.cancelRetry();
     const generation = ++this.generation;
-    this.dispatch({ type: "connect", target });
+    this.dispatch({ type: "connect", target, keepPending: options.keepPending });
 
     let token = options.token;
     if (!token) {
@@ -413,7 +426,10 @@ export class RoomSessionController<R> {
   private scheduleRetry() {
     this.cancelRetry();
     const delay = RETRY_DELAYS_MS[this.retryAttempt];
-    if (delay === undefined) return;
+    if (delay === undefined) {
+      this.dispatch({ type: "retries-exhausted" });
+      return;
+    }
     this.retryTimer = this.deps.clock.setTimeout(() => {
       this.retryTimer = null;
       if (this.state.connection !== "failed") return;
@@ -471,6 +487,9 @@ export class RoomSessionController<R> {
     const room = this.current;
     const target = this.state.target;
     this.current = null;
+    // The token belonged to the Room being dropped. Kept, its caption URL was
+    // handed to the next room's page while that one connected or failed.
+    this.latestToken = null;
     this.unlisten?.();
     this.unlisten = null;
     if (!room) return Promise.resolve();
@@ -478,9 +497,15 @@ export class RoomSessionController<R> {
     return room.disconnect().catch(() => undefined);
   }
 
-  /** The token the held room connected with — the provider reads its caption URL. */
+  /** The token the held room is connecting or connected with, or null. */
   get token(): SessionToken | null {
     return this.latestToken;
+  }
+
+  /** The held room's caption stream — only while that room is actually live. */
+  get captionUrl(): string | null {
+    if (this.state.connection !== "live") return null;
+    return this.latestToken?.captionUrl ?? null;
   }
 }
 

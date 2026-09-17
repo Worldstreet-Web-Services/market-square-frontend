@@ -108,55 +108,72 @@ function playbackToken(grant: Awaited<ReturnType<typeof fetchPlaybackToken>>): S
   return { url: grant.url, token: grant.token, captionUrl: grant.captionUrl };
 }
 
-export function RoomSessionProvider({ children }: { children: React.ReactNode }) {
-  /*
-    The host's publish outcome reaches React through this ref: the controller
-    outlives renders and its deps are fixed at construction.
-  */
-  const onPublishRef = useRef<(failure: RoomFailure | null) => void>(() => {});
+/*
+  ONE CONTROLLER PER PAGE, NOT PER MOUNT.
 
-  const [controller] = useState(
-    () =>
-      new RoomSessionController<Room>({
-        // The host's speech profile is the streams slice's; the houses slice
-        // builds the Room. Composed here, where both may be imported.
-        createRoom: (target, options) => connectRoom(target, { ...options, hostRoomOptions: publisherRoomOptions }),
-        fetchToken: async (target) => {
-          if (target.role === "host") {
-            // go-live is idempotent by design: a host who reloads a live room
-            // gets a fresh publisher token for the room they never left.
-            const result = await goLive(target.streamId);
-            if (!result.ingest?.url || !result.ingest.roomToken) {
-              throw new Error("The gist room has no audio connection yet.");
-            }
-            return { url: result.ingest.url, token: result.ingest.roomToken };
-          }
-          return playbackToken(await fetchPlaybackToken(target.streamId));
-        },
-        sendHeartbeat: (streamId, sessionId) => sendHeartbeat(streamId, sessionId, "live"),
-        // BACKEND B3: there is no `/leave` route yet, so a closed tab lapses
-        // out of the count on the missed heartbeats. The call site is kept so
-        // the beacon is one line when the route ships.
-        sendLeaveBeacon: () => {},
-        clock: {
-          setInterval: (callback, ms) => window.setInterval(callback, ms),
-          clearInterval: (handle) => window.clearInterval(handle as number),
-          setTimeout: (callback, ms) => window.setTimeout(callback, ms),
-          clearTimeout: (handle) => window.clearTimeout(handle as number),
-        },
-        register: registerRoom,
-        unregister: unregisterRoom,
-        afterConnect: async (room, target, { resumed }) => {
-          if (target.role !== "host") return;
-          try {
-            await startPublishing(room.handle, { micOn: !resumed });
-            onPublishRef.current(null);
-          } catch (error) {
-            onPublishRef.current(asRoomFailure(classifyCaptureError(error)));
-          }
-        },
-      })
-  );
+  The provider is mounted once, but "once" is not "forever": a render error
+  that reaches app/global-error.tsx replaces the root layout, and a hot reload
+  of the shell remounts it. A controller held in component state died with
+  that mount while its Room, its heartbeat and its registry entry lived on —
+  an open mic with no mini-player, and the room reporting "open somewhere
+  else" in the very tab that held it. Held here, a remounted provider adopts
+  the live session instead. The server builds a throwaway per render: a module
+  singleton there would be shared between requests.
+*/
+const publishOutcome: { current: (failure: RoomFailure | null) => void } = { current: () => {} };
+let sharedController: RoomSessionController<Room> | null = null;
+
+function sessionController(): RoomSessionController<Room> {
+  if (typeof window === "undefined") return createController();
+  sharedController ??= createController();
+  return sharedController;
+}
+
+function createController(): RoomSessionController<Room> {
+  const onPublishRef = publishOutcome;
+  return new RoomSessionController<Room>({
+    // The host's speech profile is the streams slice's; the houses slice
+    // builds the Room. Composed here, where both may be imported.
+    createRoom: (target, options) => connectRoom(target, { ...options, hostRoomOptions: publisherRoomOptions }),
+    fetchToken: async (target) => {
+      if (target.role === "host") {
+        // go-live is idempotent by design: a host who reloads a live room
+        // gets a fresh publisher token for the room they never left.
+        const result = await goLive(target.streamId);
+        if (!result.ingest?.url || !result.ingest.roomToken) {
+          throw new Error("The gist room has no audio connection yet.");
+        }
+        return { url: result.ingest.url, token: result.ingest.roomToken };
+      }
+      return playbackToken(await fetchPlaybackToken(target.streamId));
+    },
+    sendHeartbeat: (streamId, sessionId) => sendHeartbeat(streamId, sessionId, "live"),
+    // BACKEND B3: there is no `/leave` route yet, so a closed tab lapses
+    // out of the count on the missed heartbeats. The call site is kept so
+    // the beacon is one line when the route ships.
+    sendLeaveBeacon: () => {},
+    clock: {
+      setInterval: (callback, ms) => window.setInterval(callback, ms),
+      clearInterval: (handle) => window.clearInterval(handle as number),
+      setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+      clearTimeout: (handle) => window.clearTimeout(handle as number),
+    },
+    register: registerRoom,
+    unregister: unregisterRoom,
+    afterConnect: async (room, target, { resumed }) => {
+      if (target.role !== "host") return;
+      try {
+        await startPublishing(room.handle, { micOn: !resumed });
+        onPublishRef.current(null);
+      } catch (error) {
+        onPublishRef.current(asRoomFailure(classifyCaptureError(error)));
+      }
+    },
+  });
+}
+
+export function RoomSessionProvider({ children }: { children: React.ReactNode }) {
+  const [controller] = useState(sessionController);
 
   const state = useSyncExternalStore(controller.subscribe, controller.getState, () => IDLE_SESSION);
   const target = state.target;
@@ -172,13 +189,18 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
 
   const [publishFailure, setPublishFailure] = useState<RoomFailure | null>(null);
   useEffect(() => {
-    onPublishRef.current = setPublishFailure;
+    publishOutcome.current = setPublishFailure;
   }, []);
 
   /* ---- the polls ------------------------------------------------------ */
 
-  const stream = useStream(streamId, 10_000, Boolean(streamId) && holding);
-  const mine = useMySpeakerRequest(streamId, holding && !isHost);
+  // Not once the automatic retries have given up: nothing is connected, and a
+  // request that fails for a reason no retry fixes (a private room's 403) must
+  // not go on polling from every page of the tab. A Retry, the network or the
+  // tab coming back starts them again with the connect.
+  const polling = holding && !state.retriesExhausted;
+  const stream = useStream(streamId, 10_000, Boolean(streamId) && polling);
+  const mine = useMySpeakerRequest(streamId, polling && !isHost);
   const resolve = useResolveSpeakerRequest(streamId);
   const approved = mine.data?.status === "approved";
 
@@ -444,7 +466,8 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
       toggleMic: stage.toggleMic,
       micFailure,
       stage: { state: stage.state, error: stage.error, retry: stage.retry, rejoin: () => void controller.reconnect() },
-      captionUrl: controller.token?.captionUrl ?? null,
+      // The live room's own captions, never the previous room's while the next connects.
+      captionUrl: controller.captionUrl,
       canPlayAudio,
       startAudio,
       enter,

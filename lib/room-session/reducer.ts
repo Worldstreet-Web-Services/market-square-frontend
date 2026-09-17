@@ -68,6 +68,12 @@ export interface SessionState {
   pending: SessionTarget | null;
   endReason: EndReason | null;
   error: string | null;
+  /**
+   * FAILED, and the automatic retries have run out. Nothing more will happen
+   * by itself, so the shell's polls stop too; the reader's Retry, the network
+   * coming back or the tab returning to view starts over.
+   */
+  retriesExhausted: boolean;
 }
 
 export const IDLE_SESSION: SessionState = {
@@ -77,16 +83,19 @@ export const IDLE_SESSION: SessionState = {
   pending: null,
   endReason: null,
   error: null,
+  retriesExhausted: false,
 };
 
 export type SessionAction =
-  | { type: "connect"; target: SessionTarget }
+  /** `keepPending`: a Retry of the held room must not answer an open question for the reader. */
+  | { type: "connect"; target: SessionTarget; keepPending?: boolean }
   | { type: "conflict"; pending: SessionTarget }
   | { type: "conflict-dismissed" }
   | { type: "connected" }
   | { type: "reconnecting" }
   | { type: "reconnected" }
   | { type: "failed"; error: string | null }
+  | { type: "retries-exhausted" }
   | { type: "duplicate" }
   | { type: "ended"; reason: EndReason }
   | { type: "reset" };
@@ -101,9 +110,10 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return settle({
         connection: "connecting",
         target: action.target,
-        pending: null,
+        pending: action.keepPending ? state.pending : null,
         endReason: null,
         error: null,
+        retriesExhausted: false,
       });
     case "conflict":
       // Only meaningful while a room is actually held.
@@ -121,6 +131,9 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "failed":
       if (!state.target || isTerminal(state.connection)) return state;
       return settle({ ...state, connection: "failed", error: action.error });
+    case "retries-exhausted":
+      if (state.connection !== "failed" || state.retriesExhausted) return state;
+      return settle({ ...state, retriesExhausted: true });
     case "duplicate":
       if (!state.target) return state;
       return settle({ ...state, connection: "duplicate", pending: null });
