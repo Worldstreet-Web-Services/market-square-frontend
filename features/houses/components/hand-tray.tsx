@@ -13,6 +13,8 @@ import {
 import type { SpeakerRequest, Stream } from "@/features/streams/lib/types";
 import { RequestRow } from "@/features/houses/components/request-row";
 import { SEAT_COUNT } from "@/features/houses/lib/seating";
+import { InvitedGroup, type InvitedList } from "@/features/houses/components/invited-group";
+import type { HostMuteControl } from "@/lib/host-mute";
 
 /**
  * The host's triage sheet.
@@ -46,6 +48,8 @@ export function HandTray({
   seatsFull,
   requestsOpen,
   onRequestsOpenChange,
+  invited,
+  muteFor,
 }: {
   stream: Stream;
   open: boolean;
@@ -54,6 +58,10 @@ export function HandTray({
   seatsFull: boolean;
   requestsOpen: boolean;
   onRequestsOpenChange: (next: boolean) => void;
+  /** The host's open invitations, with Cancel. Empty until invite ships. */
+  invited: InvitedList;
+  /** The host's soft mute over one seated person, by user id. */
+  muteFor: (userId: string) => { control: HostMuteControl; onMute: () => void };
 }) {
   // The SAME key the control bar's counter reads: one cache, one poll.
   const requests = useSpeakerRequests(stream.id, stream.status === "live");
@@ -150,10 +158,14 @@ export function HandTray({
           )}
         </section>
 
+        <InvitedGroup invited={invited} />
+
         {seated.length > 0 && (
           <section className="space-y-2">
             <p className="ws-meta">Seated</p>
-            {seated.map((item) => (
+            {seated.map((item) => {
+              const mute = muteFor(item.userId);
+              return (
               <div key={item.id} className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
                 <Avatar
                   name={item.profile?.displayName ?? "Speaker"}
@@ -164,6 +176,18 @@ export function HandTray({
                 <span className="min-w-0 flex-1 truncate text-[13px] text-grey-300">
                   {item.profile?.displayName ?? "Speaker"}
                 </span>
+                {/* Soft: they can unmute. Never a lock, never a host unmute. */}
+                {mute.control.kind === "mute" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={mute.control.disabled}
+                    title={mute.control.disabled ? mute.control.reason : undefined}
+                    onClick={mute.onMute}
+                  >
+                    {mute.control.label}
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -173,7 +197,8 @@ export function HandTray({
                   Move down
                 </Button>
               </div>
-            ))}
+              );
+            })}
             {/* Survives verbatim from the stream tray, and it is still the
                 honest sentence: `approved` is a decision the host made, not
                 proof the guest's browser acquired a microphone. */}

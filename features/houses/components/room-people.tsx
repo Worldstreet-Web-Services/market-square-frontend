@@ -77,6 +77,13 @@ export interface RoomPerson {
    * the portrait, slashed and dimmed when they are muted.
    */
   mic?: "on" | "muted";
+  /**
+   * The host muted them and their mic is still off (lib/host-mute.ts
+   * `mutedByHost`). Everyone sees it; it goes the moment they unmute.
+   */
+  mutedByHost?: boolean;
+  /** The host has invited them up and they have not answered. Drawn on the host's screen only. */
+  invited?: boolean;
   /** Opens their person sheet. Absent for somebody with nothing to show. */
   onOpen?: () => void;
   /**
@@ -116,7 +123,8 @@ function PersonCard({ person }: { person: RoomPerson }) {
         <div
           className={cn(
             "relative flex h-[103px] w-[103px] items-center justify-center overflow-hidden rounded-[24.92px] bg-white/10 transition-shadow md:h-[113px] md:w-[104px] md:rounded-[32px]",
-            person.speaking && "ring-2 ring-create"
+            person.speaking && "ring-2 ring-create",
+            !person.speaking && person.invited && "ring-2 ring-white/60"
           )}
         >
           {/*
@@ -176,6 +184,14 @@ function PersonCard({ person }: { person: RoomPerson }) {
             </span>
           )}
         </div>
+
+        {/* One word over the plate, never a colour alone: a slashed mic says
+            the mic is off, this says who turned it off. */}
+        {(person.mutedByHost || person.invited) && (
+          <span className="absolute left-1/2 top-1.5 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/75 px-1.5 py-0.5 text-[9px] font-bold leading-3 text-white">
+            {person.mutedByHost ? "Muted by host" : "Invited"}
+          </span>
+        )}
 
         {/*
           THE BADGE IS TWO BUTTONS, not a status chip: the file draws a wink

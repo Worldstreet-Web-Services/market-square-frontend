@@ -85,7 +85,7 @@ export function PersonSafetyRows({
       {mute && (
         <Row
           icon={<IconVolume className="h-4 w-4" muted={!mute.muted} />}
-          label={mute.muted ? "Unmute for me" : "Mute for me"}
+          label={mute.muted ? "Unmute for me" : "Mute for me only"}
           hint="Only you stop hearing them. Nobody is told."
           onClick={mute.onToggle}
         />

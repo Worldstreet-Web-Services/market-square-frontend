@@ -8,6 +8,8 @@ import { IconChevronRight } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/sheet";
 import type { ParticipantMeta } from "@/features/houses/lib/participant-meta";
 import { sq } from "@/lib/square-path";
+import type { InviteControl } from "@/lib/speaker-invite";
+import type { HostMuteControl } from "@/lib/host-mute";
 
 /**
  * A profile, OVER the room.
@@ -30,6 +32,20 @@ export interface PersonTarget {
   seated: boolean;
   /** Present when this person is in the audience with a hand up. */
   pendingRequestId: string | null;
+  /** Their microphone is muted or not published (seated people only). */
+  micMuted: boolean;
+  /** This seat is the room's host — whom nobody mutes. */
+  isRoomHost: boolean;
+}
+
+/** The host's rows over one person, decided in lib/ (speaker-invite, host-mute) and only drawn here. */
+export interface PersonHostActions {
+  invite: InviteControl;
+  onInvite: () => void;
+  onCancelInvite: (requestId: string) => void;
+  mute: HostMuteControl;
+  onMute: () => void;
+  busy: boolean;
 }
 
 export function PersonSheet({
@@ -40,6 +56,7 @@ export function PersonSheet({
   hostBusy,
   onMoveDown,
   onSeat,
+  hostActions,
   mute,
   followSlot,
   safetySlot,
@@ -51,6 +68,7 @@ export function PersonSheet({
   hostBusy: boolean;
   onMoveDown: (person: PersonTarget) => void;
   onSeat: (person: PersonTarget) => void;
+  hostActions: PersonHostActions | null;
   mute: { muted: boolean; onToggle: () => void } | null;
   followSlot: (username: string) => React.ReactNode;
   safetySlot: (
@@ -104,25 +122,43 @@ export function PersonSheet({
       <div className="ws-hair mt-4 border-t pt-2">
         {/* Host actions first: they are the ones with a decision to make, and
             they are the ones this sheet was opened FOR mid-conversation. */}
-        {isHost && person.seated && (
-          <button
-            type="button"
-            disabled={hostBusy}
-            onClick={() => onMoveDown(person)}
-            className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body transition-colors disabled:opacity-50"
-          >
-            Move down to audience
-          </button>
+        {/* Soft only: the speaker may unmute themselves. There is no lock and
+            no host unmute; the escalation is "Move down to audience". */}
+        {isHost && hostActions && hostActions.mute.kind === "mute" && (
+          <HostRow
+            label={hostActions.mute.label}
+            hint={hostActions.mute.disabled ? hostActions.mute.reason : "They can unmute when it's their turn."}
+            disabled={hostActions.mute.disabled || hostActions.busy}
+            onClick={hostActions.onMute}
+          />
         )}
-        {isHost && !person.seated && person.pendingRequestId && (
-          <button
-            type="button"
-            disabled={hostBusy}
-            onClick={() => onSeat(person)}
-            className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body transition-colors disabled:opacity-50"
-          >
-            Seat them
-          </button>
+        {isHost && person.seated && (
+          <HostRow label="Move down to audience" disabled={hostBusy} onClick={() => onMoveDown(person)} />
+        )}
+        {isHost && !person.seated && hostActions?.invite.kind === "seat" && (
+          <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
+        )}
+        {/* Without the invite routes (not deployed) a raised hand still seats. */}
+        {isHost && !person.seated && !hostActions && person.pendingRequestId && (
+          <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
+        )}
+        {isHost && hostActions?.invite.kind === "invite" && (
+          <HostRow
+            label="Invite to speak"
+            hint={hostActions.invite.disabled ? hostActions.invite.reason : "They'll be asked first. Their mic stays off until they tap it."}
+            disabled={hostActions.invite.disabled || hostActions.busy}
+            onClick={hostActions.onInvite}
+          />
+        )}
+        {isHost && hostActions?.invite.kind === "invited" && (
+          <HostRow
+            label="Cancel invitation"
+            hint="Invited. Waiting for them to answer."
+            disabled={hostActions.busy}
+            onClick={() => {
+              if (hostActions.invite.kind === "invited") hostActions.onCancelInvite(hostActions.invite.requestId);
+            }}
+          />
         )}
 
         {username && (
@@ -147,10 +183,34 @@ export function PersonSheet({
                 onClick={mute.onToggle}
                 className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body"
               >
-                {mute.muted ? "Unmute for me" : "Mute for me"}
+                {mute.muted ? "Unmute for me" : "Mute for me only"}
               </button>
             )}
       </div>
     </Sheet>
+  );
+}
+
+function HostRow({
+  label,
+  hint,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  hint?: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="ws-row flex w-full flex-col items-start px-1 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="text-[13px] font-semibold text-body">{label}</span>
+      {hint && <span className="mt-0.5 text-[11px] leading-4 text-meta">{hint}</span>}
+    </button>
   );
 }

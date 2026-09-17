@@ -51,6 +51,8 @@ import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PersonSheet, type PersonTarget } from "@/features/houses/components/person-sheet";
+import { InviteBanner } from "@/features/houses/components/invite-banner";
+import { useHostStageTools } from "@/features/houses/hooks/use-host-stage-tools";
 import { useAudience, type AudienceMember } from "@/features/houses/hooks/use-audience";
 import { useHouseAnnouncer } from "@/features/houses/hooks/use-house-announcer";
 import { useHouseAudio } from "@/features/houses/hooks/use-house-audio";
@@ -76,6 +78,7 @@ import { roomFailureCopy } from "@/lib/room-connection-copy";
 import { roomEntryReady } from "@/lib/room-session/entry";
 import { roomStagePanel } from "@/lib/room-session/presence";
 import type { StageAction } from "@/lib/stage-recovery";
+import { inviteAnnouncement } from "@/lib/speaker-invite";
 
 /**
  * A house: eight seats round a table, an audience below, and no camera
@@ -888,7 +891,7 @@ function LiveHouse({
   // own remedies — "Ask to speak" to somebody the host already said yes to
   // reads as the approval having been lost.
   const myRequestStatus = mine.data?.status ?? null;
-  const canAsk = !isHost && !onStage && myRequestStatus !== "approved";
+  const canAsk = !isHost && !onStage && myRequestStatus !== "approved" && myRequestStatus !== "invited";
 
   /*
     AN APPROVED SPEAKER WHO IS NOT SIMPLY SEATED is told why and given the
@@ -1015,6 +1018,13 @@ function LiveHouse({
     }
     wasOnStage.current = onStage;
   }, [onStage, announce]);
+
+  // An invitation to speak: said once, when it arrives.
+  const ownerName = stream.owner?.displayName || stream.owner?.username || null;
+  const myInviteId = here && !isHost ? (session.invite?.requestId ?? null) : null;
+  useEffect(() => {
+    if (myInviteId) announce(inviteAnnouncement(ownerName));
+  }, [myInviteId, ownerName, announce]);
 
   // Your own hand.
   const handWas = useRef<string | null>(null);
@@ -1147,6 +1157,8 @@ function LiveHouse({
         meta,
         seated: true,
         pendingRequestId: null,
+        micMuted: slot.isMuted,
+        isRoomHost: slot.role === "host",
       });
     },
     []
@@ -1163,10 +1175,36 @@ function LiveHouse({
         meta: member.meta,
         seated: false,
         pendingRequestId: waiting?.id ?? null,
+        micMuted: true,
+        isRoomHost: false,
       });
     },
     [handsUp]
   );
+
+  /*
+    THE HOST'S STAGE TOOLS — invite to speak and the soft mute
+    (features/houses/hooks/use-host-stage-tools.ts). Seated means on a seat
+    or approved for one, so an accepted invitation is never reported as
+    "isn't available".
+  */
+  const seatedUserIds = useMemo(() => {
+    const ids = new Set(speakerIds);
+    for (const item of hostRequests.data?.items ?? []) {
+      if (item.status === "approved") ids.add(baseIdentity(item.userId));
+    }
+    return ids;
+  }, [speakerIds, hostRequests.data]);
+  const hostTools = useHostStageTools({
+    stream,
+    isHost,
+    myId,
+    slots,
+    seatedUserIds,
+    stageFull: full,
+    sheetOpen: person !== null,
+  });
+  const openInvites = hostTools.openInvites;
 
   /*
     THE FILE'S THREE LISTS, from the state the room already had.
@@ -1235,6 +1273,9 @@ function LiveHouse({
             // and falls back to muted when this viewer has silenced them — a
             // person you cannot hear must not be drawn as talking.
             mic: slot.isMuted || mutedForMe.has(slot.identity) ? "muted" : "on",
+            // The host's soft mute, for everyone to see — only while the mic
+            // really is still off (lib/host-mute.ts).
+            mutedByHost: slot.mutedByHost,
             // No wink-and-follow aimed at yourself.
             actions:
               owner && owner.id !== myId
@@ -1267,10 +1308,12 @@ function LiveHouse({
               isMe || !member.meta?.username
                 ? undefined
                 : personActionsSlot?.(member.meta.username),
+            // The host's own screen only: nobody else reads the invitations.
+            invited: openInvites.has(member.userId),
             onOpen: () => openMember(member),
           };
         }),
-    [audience, houseMemberIds, openMember, personActionsSlot, myId, myName, myAvatar]
+    [audience, houseMemberIds, openMember, personActionsSlot, myId, myName, myAvatar, openInvites]
   );
 
   /* ---- keyboard --------------------------------------------------------- */
@@ -1487,6 +1530,30 @@ function LiveHouse({
       {/* The phone's 342 column at x=24 (px-6), Speakers 24 under the header
           (1285:92941 at y=307.37 against the head ending at 283.37) — the
           header's own bottom padding is that 24, so no top padding here. */}
+      {/* THE HOST'S INVITATION, asked on the room's own page (the shell's copy
+          stays away from here). Pinned under the header where the reader is
+          looking, non-modal: the room keeps talking behind it. Read from the
+          session's poll of the reader's own row, never from a push. */}
+      {here && !isHost && session.invite && (
+        <div
+          className="fixed left-3 z-50 md:left-auto md:w-[400px]"
+          style={{
+            top: "calc(var(--ws-topbar-h) + var(--ws-crumb-h) + var(--ws-house-head-h) + 12px)",
+            right: "max(12px, env(safe-area-inset-right, 0px))",
+          }}
+        >
+          <InviteBanner
+            key={session.invite.requestId}
+            requestId={session.invite.requestId}
+            expiresAt={session.invite.expiresAt}
+            host={{ id: stream.owner?.id ?? stream.ownerId, name: ownerName ?? "The host", avatarUrl: stream.owner?.avatarUrl }}
+            busy={session.answeringInvite}
+            onAccept={() => session.answerInvite("accept")}
+            onReject={() => session.answerInvite("reject")}
+          />
+        </div>
+      )}
+
       <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-10 xl:px-[30px]", state === "failed" && "opacity-40")}>
         <RoomPeopleSection
           title="Speakers"
@@ -1749,6 +1816,7 @@ function LiveHouse({
             stream={stream}
             seatsFull={full}
             onManage={() => setTray(true)}
+            invited={hostTools.invited}
           />
         )}
 
@@ -1892,6 +1960,8 @@ function LiveHouse({
           seatsFull={full}
           requestsOpen={requestsOpen}
           onRequestsOpenChange={setRequestsOpen}
+          invited={hostTools.invited}
+          muteFor={hostTools.muteFor}
         />
       )}
 
@@ -1922,6 +1992,7 @@ function LiveHouse({
           resolve.mutate({ requestId: target.pendingRequestId, action: "approve" });
           setPerson(null);
         }}
+        hostActions={hostTools.actionsFor(person)}
         mute={
           // Only a person with a seat is publishing, so only they have audio to
           // silence. Offering the row over an audience member would be a

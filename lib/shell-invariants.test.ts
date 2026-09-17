@@ -3455,10 +3455,10 @@ describe("a speaker's stage has a way back, and a mic banner that tells the trut
     assert.match(room, /if \(action === "retry"\) return session\.stage\.retry\(\);/);
   });
 
-  it("never offers Ask to speak to somebody already approved", () => {
+  it("never offers Ask to speak to somebody already approved, or already invited", () => {
     assert.match(
       code("features/houses/components/house-room.tsx"),
-      /const canAsk = !isHost && !onStage && myRequestStatus !== "approved";/
+      /const canAsk = !isHost && !onStage && myRequestStatus !== "approved" && myRequestStatus !== "invited";/
     );
   });
 
@@ -3781,5 +3781,49 @@ describe("the desktop mini-player card takes its own room", () => {
     const frame = block(player, "function Frame(", "\n}\n");
     assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) - var\(--ws-mini-card-h, 0px\) \+ 8px\)"/);
     assert.match(frame, /bottom: "calc\(var\(--ws-nav-h\) \+ 96px\)"/);
+  });
+});
+
+describe("invite to speak and the host's soft mute, wired where no pure half exists", () => {
+  const code = (path: string) => stripComments(read(path));
+  const room = code("features/houses/components/house-room.tsx");
+  const player = code("components/layout/room-mini-player.tsx");
+  const banner = code("features/houses/components/invite-banner.tsx");
+  const sheet = code("features/houses/components/person-sheet.tsx");
+  const tray = code("features/houses/components/hand-tray.tsx");
+  const tools = code("features/houses/hooks/use-host-stage-tools.ts");
+
+  it("the minimised room carries the invitation from ONE placement, off the room's own page", () => {
+    assert.match(player, /\{placement === "phone" && <SessionInvite \/>\}/);
+    assert.match(player, /inviteBannerVisible\(\{ pathname, streamId, hasInvite: invite !== null \}\)/);
+    assert.match(room, /\{here && !isHost && session\.invite && \(/);
+  });
+
+  it("both banners answer through the session and never touch a microphone", () => {
+    for (const surface of [player, room]) {
+      assert.match(surface, /onAccept=\{\(\) => session\.answerInvite\("accept"\)\}/);
+      assert.match(surface, /onReject=\{\(\) => session\.answerInvite\("reject"\)\}/);
+    }
+    assert.doesNotMatch(banner, /getUserMedia|setMicrophoneEnabled|toggleMic/);
+    assert.match(banner, /inviteView\(/, "the countdown reads the server's expiresAt");
+  });
+
+  it("the host's rows are decided in lib/, and there is no lock and no host unmute", () => {
+    assert.match(tools, /inviteControl\(\{/);
+    assert.match(tools, /hostMuteControl\(\{/);
+    assert.match(tools, /toast\(hostOutcomeLabel\(gone\.name\)\)/);
+    for (const surface of [sheet, tray, room, tools]) {
+      assert.doesNotMatch(surface, /Mute and lock|Unlock mic|Ask to unmute|muteHard|unmuteSpeaker/);
+    }
+  });
+
+  it("the listener's own tool says it is theirs alone", () => {
+    assert.match(sheet, /"Mute for me only"/);
+    assert.match(code("features/profile/components/person-safety-rows.tsx"), /"Mute for me only"/);
+  });
+
+  it("everyone sees who turned a mic off, straight from the seat", () => {
+    assert.match(room, /mutedByHost: slot\.mutedByHost,/);
+    assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);
   });
 });
