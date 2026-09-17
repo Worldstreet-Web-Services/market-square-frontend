@@ -54,7 +54,6 @@ const PUBLIC: string[][] = [
   ["profiles", "adeey", "streams"],
   ["profiles", "adeey", "activities"],
   ["profiles", "u_1", "followers"],
-  ["profiles", "u_1", "following"],
   ["spotlight"],
   ["store", "items"],
   ["store", "items", "remit"],
@@ -88,6 +87,8 @@ const PUBLIC: string[][] = [
 const SECURED: string[][] = [
   ["admin", "role-applications"],
   ["conversations", "cv_1", "messages"],
+  // Who somebody follows is private to its owner (2026-09-17).
+  ["profiles", "u_1", "following"],
   ["me"],
   ["me", "bookmarks"],
   ["me", "conversations"],
