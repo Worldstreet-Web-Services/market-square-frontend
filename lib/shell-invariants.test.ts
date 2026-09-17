@@ -1843,6 +1843,14 @@ describe("Inside Ark the Square leads back to Ark: a pill on phones, Ark's secti
   });
 });
 
+describe("The mini-player's Close it cannot drop its teardown", () => {
+  it("awaits the end through mutateAsync, not a per-call onSuccess that dies with the unmounting chip", () => {
+    const player = stripComments(read("components/layout/room-mini-player.tsx"));
+    assert.doesNotMatch(player, /endRoom\.mutate\(streamId, \{/, "a per-call onSuccess is back on the host's close");
+    assert.match(player, /endRoom\s*\.mutateAsync\(streamId\)\s*\.then\(\(\) => \{/);
+  });
+});
+
 describe("Web push", () => {
   it("shows a push with Square's icon and only ever opens a page on Square", () => {
     const sw = read("public/sw.js");

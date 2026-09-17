@@ -465,13 +465,22 @@ function HangUp({ session, streamId }: { session: RoomSessionView; streamId: str
         confirmLabel="Close it"
         loading={endRoom.isPending}
         onConfirm={() =>
-          endRoom.mutate(streamId, {
-            onSuccess: () => {
+          /*
+            The promise, not a per-call `onSuccess`: closing flips the room to
+            ended, which unmounts this chip, and a `mutate` callback dies with
+            its observer — the room would close upstream while this tab stayed
+            connected. Backstage had the same bug and the same fix.
+          */
+          endRoom
+            .mutateAsync(streamId)
+            .then(() => {
               setConfirmClose(false);
               keepFocus();
               void session.end();
-            },
-          })
+            })
+            .catch(() => {
+              // useEndStream toasts the failure; the sheet stays open to retry.
+            })
         }
       />
 
