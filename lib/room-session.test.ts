@@ -1328,3 +1328,48 @@ describe("a tapped push never navigates twice, or past a broadcast", async () =>
     assert.equal(inAppLeaveGuard(), null);
   });
 });
+
+describe("a host's opening publish that outlives its Room", () => {
+  it("afterConnect is told when its Room is no longer the session's", async () => {
+    let release: () => void = () => {};
+    const seen: boolean[] = [];
+    let check: () => boolean = () => true;
+    const h = harness({
+      afterConnect: async (_room, _target, context) => {
+        check = context.isCurrent;
+        seen.push(context.isCurrent());
+        // The browser's mic permission prompt is still up.
+        await new Promise<void>((resolve) => (release = resolve));
+        seen.push(context.isCurrent());
+      },
+    });
+    const entering = h.session.enter("A", "host", { fresh: true, token: { url: "u", token: "ingest" } });
+    await flush();
+    await flush();
+    assert.deepEqual(seen, [true]);
+    // The connection drops and the controller replaces the Room while the prompt is up.
+    disconnect(h.rooms[0]!, "SIGNAL_CLOSE");
+    release();
+    await entering;
+    assert.deepEqual(seen, [true, false], "a stale publish would report onto the room that replaced it");
+    assert.equal(check(), false);
+  });
+
+  it("a Leave during the prompt makes the publish stale too", async () => {
+    let release: () => void = () => {};
+    let current: boolean | null = null;
+    const h = harness({
+      afterConnect: async (_room, _target, context) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        current = context.isCurrent();
+      },
+    });
+    const entering = h.session.enter("A", "host", { fresh: true, token: { url: "u", token: "ingest" } });
+    await flush();
+    await flush();
+    await h.session.leave();
+    release();
+    await entering;
+    assert.equal(current, false);
+  });
+});

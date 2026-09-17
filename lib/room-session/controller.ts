@@ -104,8 +104,18 @@ export interface RoomSessionDeps<R> {
    * After a connect settles — the host publishes here. `resumed` is true for
    * every connect that is not the reader's own fresh open (reload, retry,
    * upgrade), and the host's mic must then stay OFF.
+   *
+   * `isCurrent()` says whether this Room is still the session's. A publish
+   * can outlive it — the mic permission prompt stays up while the connection
+   * drops and is replaced, or while the reader leaves — and its outcome must
+   * then be dropped (and any capture it opened turned off), never reported
+   * onto the room that replaced it.
    */
-  afterConnect?(room: SessionRoom<R>, target: SessionTarget, context: { resumed: boolean }): Promise<void>;
+  afterConnect?(
+    room: SessionRoom<R>,
+    target: SessionTarget,
+    context: { resumed: boolean; isCurrent: () => boolean }
+  ): Promise<void>;
 }
 
 export interface EnterOptions {
@@ -498,7 +508,10 @@ export class RoomSessionController<R> {
     this.startHeartbeat(target.streamId, generation);
     if (this.deps.afterConnect) {
       try {
-        await this.deps.afterConnect(room, target, { resumed: options.resumed });
+        await this.deps.afterConnect(room, target, {
+          resumed: options.resumed,
+          isCurrent: () => generation === this.generation,
+        });
       } catch {
         // A publish that fails is the publisher's own state to report; the
         // connection itself is up and stays up.

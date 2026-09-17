@@ -3658,3 +3658,29 @@ describe("a host's fresh open reaches the session whichever branch renders next"
     assert.ok(enter < openNow.indexOf("onOpened("), "the session hears of the open after the view that may already be gone");
   });
 });
+
+describe("a publish never outlives the Room or the provider it belongs to", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("the host's opening publish drops a stale outcome and turns a stale capture off", () => {
+    const provider = code("components/layout/room-session.tsx");
+    const after = block(provider, "afterConnect: async (room, target, { resumed, isCurrent }) => {", "\n    },\n");
+    assert.match(after, /if \(!isCurrent\(\)\) \{\s*await releaseCapture\(room\.handle\);\s*return;\s*\}/);
+    assert.ok(after.indexOf("isCurrent()") < after.indexOf("onPublishRef.current(null)"));
+    const failure = after.slice(after.indexOf("catch (error)"));
+    assert.match(failure, /if \(!isCurrent\(\)\) \{\s*await releaseCapture\(room\.handle\);\s*return;\s*\}/, "a stale failure raises the banner on the current room");
+    // …and a banner never follows the reader into another room.
+    assert.match(provider, /if \(publishFailureFor !== streamId\) \{\s*setPublishFailureFor\(streamId\);\s*setPublishFailure\(null\);/);
+  });
+
+  it("the stage's Try again turns the mic back off when its Room has gone", () => {
+    const stage = code("features/streams/hooks/use-stage.ts");
+    const retry = block(stage, "const retry = useCallback(() => {", "}, [room, cameraAllowed, streamId]);");
+    assert.match(retry, /if \(getRoom\(streamId\) !== room\) \{\s*await releaseCapture\(room\);\s*return;\s*\}/);
+  });
+
+  it("a provider that unmounts (global-error) mutes the mic it can no longer show", () => {
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /useEffect\(\s*\(\) => \(\) => \{\s*const held = controller\.room;\s*if \(held\) void stopPublishing\(held\);\s*\},\s*\[controller\]\s*\);/);
+  });
+});

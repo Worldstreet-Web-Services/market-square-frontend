@@ -9,8 +9,10 @@ import {
   goLive,
   publisherRoomOptions,
   registerRoom,
+  releaseCapture,
   sendHeartbeat,
   startPublishing,
+  stopPublishing,
   subscribeRoom,
   unregisterRoom,
   useMySpeakerRequest,
@@ -178,12 +180,27 @@ function createController(): RoomSessionController<Room> {
     },
     register: registerRoom,
     unregister: unregisterRoom,
-    afterConnect: async (room, target, { resumed }) => {
+    afterConnect: async (room, target, { resumed, isCurrent }) => {
       if (target.role !== "host") return;
+      /*
+        A PUBLISH THAT OUTLIVED ITS ROOM SAYS NOTHING. The permission prompt
+        can stay up while the connection drops and is replaced, or while the
+        host closes or signs out. Its outcome belonged to a Room that is gone:
+        a failure must not raise "mic couldn't open" over the room that works,
+        and a capture that did open is turned off.
+      */
       try {
         await startPublishing(room.handle, { micOn: !resumed });
+        if (!isCurrent()) {
+          await releaseCapture(room.handle);
+          return;
+        }
         onPublishRef.current(null);
       } catch (error) {
+        if (!isCurrent()) {
+          await releaseCapture(room.handle);
+          return;
+        }
         onPublishRef.current(asRoomFailure(classifyCaptureError(error)));
       }
     },
@@ -209,6 +226,29 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     publishOutcome.current = setPublishFailure;
   }, []);
+  // A mic banner belongs to its room: it never follows the host into another
+  // one. Adjusted during render, React's pattern for state that follows a value.
+  const [publishFailureFor, setPublishFailureFor] = useState(streamId);
+  if (publishFailureFor !== streamId) {
+    setPublishFailureFor(streamId);
+    setPublishFailure(null);
+  }
+
+  /*
+    A PROVIDER THAT UNMOUNTS LEAVES NO OPEN MIC BEHIND IT. The controller
+    outlives this mount on purpose (a render error reaching global-error, a
+    hot reload), and so does its Room — but the mute control, the lock-screen
+    pause and the mini-player go with the mount. The mic is muted, not the
+    connection dropped: a remounted provider adopts the session with the mic
+    OFF, which is the tap-to-talk rule.
+  */
+  useEffect(
+    () => () => {
+      const held = controller.room;
+      if (held) void stopPublishing(held);
+    },
+    [controller]
+  );
 
   const endRoom = useEndStream({ successMessage: "Gist room closed" });
   const endRoomAsync = endRoom.mutateAsync;

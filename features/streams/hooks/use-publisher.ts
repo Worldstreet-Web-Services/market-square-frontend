@@ -91,6 +91,23 @@ export async function stopPublishing(room: Room): Promise<void> {
 }
 
 /**
+ * A CAPTURE THAT OUTLIVED ITS ROOM, turned off.
+ *
+ * A mic publish waits on the browser's permission prompt (or a slow
+ * getUserMedia on iOS). If the reader closes, leaves or the connection is
+ * replaced while it waits, the capture can resolve against a Room that is no
+ * longer anybody's — and the OS mic indicator stays on after the UI says they
+ * left. Muted through the SDK, then every local audio track is stopped
+ * directly in case the SDK no longer tracks it on a closed engine.
+ */
+export async function releaseCapture(room: Room): Promise<void> {
+  await room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+  for (const publication of room.localParticipant.audioTrackPublications.values()) {
+    publication.track?.stop();
+  }
+}
+
+/**
  * A WebRTC connect that has not settled in this long is not going to. Without
  * it the guest panel sat on "Connecting you to the stage…" forever, with no
  * failure and no way out.

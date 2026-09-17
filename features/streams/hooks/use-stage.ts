@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useQueryClient } from "@tanstack/react-query";
 import { captureErrorMessage, classifyCaptureError } from "@/lib/media-errors";
 import { getRoom, subscribeRoom } from "@/features/streams/lib/live-room";
+import { releaseCapture } from "@/features/streams/hooks/use-publisher";
 import { stageSources } from "@/features/streams/lib/capture-plan";
 import { STAGE_STALL_MS, type StageState } from "@/lib/stage-recovery";
 import { deriveMicOn, micControl, shouldAutoEnableMic, type HostMute } from "@/lib/mic-consent";
@@ -456,7 +457,14 @@ export function useStage({
     void (async () => {
       try {
         await enableOnce(() => room.localParticipant.setMicrophoneEnabled(true));
+        // The prompt outlived this Room (a leave, a close, a replaced
+        // connection): the capture belongs to nobody and comes straight down.
+        if (getRoom(streamId) !== room) {
+          await releaseCapture(room);
+          return;
+        }
       } catch (micError) {
+        if (getRoom(streamId) !== room) return;
         if (isPermissionRefusal(micError)) {
           setPhase("not-permitted");
           setError("The host hasn't finished bringing you on stage yet.");
@@ -478,7 +486,7 @@ export function useStage({
       }
       setPhase("live");
     })();
-  }, [room, cameraAllowed]);
+  }, [room, cameraAllowed, streamId]);
 
   /**
    * Reconnect on a fresh token.
