@@ -3,7 +3,8 @@
  *
  * The Square is its own site at `square.tsionark.com`, and that site does not
  * change. The same Square is ALSO shown inside Ark at `www.tsionark.com/square`,
- * as a Vercel microfrontend beside WSWS, which owns the rest of that domain.
+ * as a Next.js Multi-Zone: WSWS owns that domain and rewrites `/square/…` to a
+ * second deployment of this repo.
  *
  * Those are two builds of this one repo, told apart by ONE build-time variable:
  *
@@ -15,10 +16,10 @@
  *     `/square/…` back onto the real routes, so the routes and files stay where
  *     they are in `app/` and `public/`.
  *
- * Why not Next's `basePath`: Vercel microfrontends do not support it (their
- * quickstart says so outright). A rewrite plus these helpers is the supported
- * shape, and keeping the prefix a variable is what leaves the standalone site
- * untouched.
+ * Why not Next's `basePath`: it is fixed per build config and would need the
+ * routes to agree with it everywhere; a variable-driven rewrite plus these
+ * helpers keeps ONE set of routes for both builds and leaves the standalone
+ * site untouched.
  *
  * ─── THREE KINDS OF PATH, NEVER CONFUSED ─────────────────────────────────────
  *  · `sq`    — a ROUTE the reader navigates to: `/feed` → `/square/feed`.
