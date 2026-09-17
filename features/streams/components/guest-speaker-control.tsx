@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { IconCamera, IconDots, IconUser, IconVolume } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
 import { useStage } from "@/features/streams/hooks/use-stage";
+import { useInAppLeaveGuard } from "@/features/streams/hooks/use-in-app-leave-confirm";
 import { guestStagePanel, type SpeakerRequestStatus } from "@/lib/stage-recovery";
 import {
   useMySpeakerRequest,
@@ -56,6 +57,8 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
    * stage they were never on. See lib/stage-recovery.ts.
    */
   const onStage = approved && publisher.state === "live";
+  // The stage lives in this page: a tapped push that navigates in-app asks first.
+  useInAppLeaveGuard(onStage, "You're on stage — leaving takes you off it.");
 
   const status: SpeakerRequestStatus | null =
     (mine.data?.status as SpeakerRequestStatus | undefined) ?? null;

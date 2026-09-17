@@ -14,13 +14,29 @@
  */
 export const PUSH_NAVIGATE = "ms:navigate";
 
+/**
+ * How close to the worker's deadline an answer is no longer trusted to arrive
+ * in time. Past it the worker may already be reloading the tab, and a
+ * router.push on top of that is the double navigation.
+ */
+export const PUSH_ACK_MARGIN_MS = 250;
+
+/*
+  THE DEADLINE. The worker waits a bounded time for the tab's "ok" and then
+  navigates the hard way. A tab whose JS was busy used to follow the message
+  late as well — two navigations. The worker now sends the time its fallback
+  fires (`deadline`, epoch ms on the same machine); a message read at or near
+  it is ignored and left to the fallback. A message with no deadline (an
+  older worker) is followed as before.
+*/
 export function pushNavigatePath(
   data: unknown,
-  { origin, base }: { origin: string; base: "" | "/square" }
+  { origin, base, now }: { origin: string; base: "" | "/square"; now?: number }
 ): string | null {
   if (!data || typeof data !== "object") return null;
-  const { type, url } = data as Record<string, unknown>;
+  const { type, url, deadline } = data as Record<string, unknown>;
   if (type !== PUSH_NAVIGATE || typeof url !== "string") return null;
+  if (typeof deadline === "number" && now !== undefined && now >= deadline - PUSH_ACK_MARGIN_MS) return null;
   let parsed: URL;
   try {
     parsed = new URL(url, origin);

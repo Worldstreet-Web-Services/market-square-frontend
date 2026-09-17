@@ -3460,7 +3460,7 @@ describe("nothing inside the Square reloads the tab under a gist room", () => {
 
   it("a tapped push asks the open Square tab to navigate itself, and reloads only without an answer", () => {
     const sw = code("public/sw.js");
-    assert.match(sw, /client\.postMessage\(\{ type: "ms:navigate", url: target\.href \}, \[channel\.port2\]\)/);
+    assert.match(sw, /client\.postMessage\(\{ type: "ms:navigate", url: target\.href, deadline \}, \[channel\.port2\]\)/);
     const click = block(sw, 'self.addEventListener("notificationclick"', "\n});");
     assert.ok(click.indexOf("postMessage") < click.indexOf("client.navigate("), "navigate() is not the fallback");
     assert.match(click, /if \(!acknowledged && "navigate" in client\) await client\.navigate\(target\.href\);/);
@@ -3468,6 +3468,18 @@ describe("nothing inside the Square reloads the tab under a gist room", () => {
     assert.match(listener, /navigator\.serviceWorker\.addEventListener\("message", onMessage\);/);
     assert.match(listener, /router\.push\(path\);/);
     assert.match(listener, /event\.ports\[0\]\?\.postMessage\("ok"\);/);
+    // Answered BEFORE anything that can block (a confirm), or the worker's
+    // timer runs out and reloads the tab under the question.
+    assert.ok(listener.indexOf('postMessage("ok")') < listener.indexOf("window.confirm("));
+    assert.ok(listener.indexOf("window.confirm(") < listener.indexOf("router.push(path)"));
+    assert.match(listener, /const guard = inAppLeaveGuard\(\);\s*if \(guard && !window\.confirm\(guard\)\) return;/);
+    assert.match(listener, /now: Date\.now\(\)/);
+    // A visible, focused tab gets time to answer; the deadline travels with the message.
+    assert.match(sw, /const wait = client\.visibilityState === "visible" \? NAVIGATE_ACK_VISIBLE_MS : NAVIGATE_ACK_MS;/);
+    assert.match(sw, /const deadline = Date\.now\(\) \+ wait;/);
+    // The in-page broadcasts raise the guard.
+    assert.match(code("features/streams/hooks/use-in-app-leave-confirm.ts"), /setInAppLeaveGuard\(message\)/);
+    assert.match(code("features/streams/components/guest-speaker-control.tsx"), /useInAppLeaveGuard\(onStage, /);
     assert.match(code("components/layout/app-shell.tsx"), /<PushNavigation \/>/);
   });
 

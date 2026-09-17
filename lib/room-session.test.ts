@@ -1297,3 +1297,34 @@ describe("a host never walks out of their own room live (every exit, not only a 
     assert.equal(h.session.getState().status, "idle");
   });
 });
+
+describe("a tapped push never navigates twice, or past a broadcast", async () => {
+  const { pushNavigatePath, PUSH_NAVIGATE, PUSH_ACK_MARGIN_MS } = await import("./push-navigate.ts");
+  const { inAppLeaveGuard, setInAppLeaveGuard } = await import("./in-app-leave.ts");
+  const origin = "https://square.tsionark.com";
+
+  it("ignores a message whose worker has already fallen back to a full load", () => {
+    const message = { type: PUSH_NAVIGATE, url: `${origin}/messages`, deadline: 10_000 };
+    assert.equal(pushNavigatePath(message, { origin, base: "", now: 5_000 }), "/messages");
+    assert.equal(pushNavigatePath(message, { origin, base: "", now: 10_000 }), null, "a late router.push on top of the worker's navigate");
+    assert.equal(pushNavigatePath(message, { origin, base: "", now: 10_000 - PUSH_ACK_MARGIN_MS }), null, "an ack racing the fallback");
+    assert.equal(pushNavigatePath(message, { origin, base: "", now: 10_000 - PUSH_ACK_MARGIN_MS - 1 }), "/messages");
+  });
+
+  it("a page broadcast from the Studio or a guest's stage is known to the shell while it is on air", () => {
+    assert.equal(inAppLeaveGuard(), null);
+    const off = setInAppLeaveGuard("You're live — leaving stops your broadcast.");
+    assert.equal(inAppLeaveGuard(), "You're live — leaving stops your broadcast.");
+    off();
+    assert.equal(inAppLeaveGuard(), null);
+  });
+
+  it("a guard released out of order never clears the one still standing", () => {
+    const first = setInAppLeaveGuard("first");
+    const second = setInAppLeaveGuard("second");
+    first();
+    assert.equal(inAppLeaveGuard(), "second");
+    second();
+    assert.equal(inAppLeaveGuard(), null);
+  });
+});

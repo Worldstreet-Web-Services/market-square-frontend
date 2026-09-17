@@ -41,20 +41,35 @@ function isSquarePage(href) {
   return path === SQUARE || path.startsWith(SQUARE + "/");
 }
 
-/** How long an open tab has to say it followed the push itself. */
+/** How long a tab that is not visible has to say it followed the push itself. */
 const NAVIGATE_ACK_MS = 1500;
+/*
+  …and a tab that focus() has just brought into view. Its timers and message
+  loop are no longer throttled, but a phone can still be busy for a moment
+  after waking; timing out there reloads the tab and tears the room down,
+  which is the thing this exchange exists to avoid.
+*/
+const NAVIGATE_ACK_VISIBLE_MS = 8000;
 
-/** Ask a Square tab to navigate in-app. Resolves true once it confirms. */
+/*
+  Ask a Square tab to navigate in-app. Resolves true once it confirms. The
+  message carries the moment the fallback fires (`deadline`), and the page
+  ignores a message that reaches it at or past that moment
+  (lib/push-navigate.ts) — so a late answer never adds a second navigation
+  on top of the worker's.
+*/
 function askToNavigate(client, target) {
   return new Promise((resolve) => {
     const channel = new MessageChannel();
-    const timer = setTimeout(() => resolve(false), NAVIGATE_ACK_MS);
+    const wait = client.visibilityState === "visible" ? NAVIGATE_ACK_VISIBLE_MS : NAVIGATE_ACK_MS;
+    const deadline = Date.now() + wait;
+    const timer = setTimeout(() => resolve(false), wait);
     channel.port1.onmessage = (event) => {
       clearTimeout(timer);
       resolve(event.data === "ok");
     };
     try {
-      client.postMessage({ type: "ms:navigate", url: target.href }, [channel.port2]);
+      client.postMessage({ type: "ms:navigate", url: target.href, deadline }, [channel.port2]);
     } catch {
       clearTimeout(timer);
       resolve(false);
@@ -109,13 +124,14 @@ self.addEventListener("notificationclick", (event) => {
         // www.tsionark.com, and navigating one of those away would hijack somebody's
         // portfolio tab to open a notification.
         if (new URL(client.url).origin === self.location.origin && isSquarePage(client.url) && "focus" in client) {
-          await client.focus();
+          // focus() resolves to the client as it is now — visible.
+          const focused = (await client.focus()) || client;
           // NOT navigate() first: that is a full page load, and a full load
           // tears down the tab's gist room — a host goes silent because
           // somebody winked back. The tab navigates itself in-app
           // (components/layout/push-navigation.tsx) and says so; only a tab
           // that does not answer is navigated the hard way.
-          const acknowledged = await askToNavigate(client, target);
+          const acknowledged = await askToNavigate(focused, target);
           if (!acknowledged && "navigate" in client) await client.navigate(target.href);
           return;
         }
