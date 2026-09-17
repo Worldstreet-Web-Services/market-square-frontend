@@ -72,8 +72,13 @@ export interface MiniPlayerChrome {
   line: string | null;
   /** The reader holds a publishing seat: the mic control is drawn. */
   publishing: boolean;
-  /** Publishing AND the mic is open — the "You're live" badge. */
+  /** Publishing AND the mic is open. */
   hotMic: boolean;
+  /**
+   * The state line IS "You're live": drawn as a badge beside the room count,
+   * never as a pill in the control row, which it pushed off narrow frames.
+   */
+  liveBadge: boolean;
   /** Ended or evicted: Dismiss instead of Leave. */
   finished: boolean;
   /** The pulsing dot. */
@@ -98,6 +103,7 @@ export function miniPlayerChrome({ state, presence, micOn, canPlayAudio }: MiniP
   const publishing =
     (presence === "host" || presence === "speaker") && (connection === "live" || connection === "reconnecting");
   const finished = connection === "ended" || connection === "duplicate";
+  const hotMic = publishing && micOn;
   const line =
     connection === "connecting"
       ? "Connecting…"
@@ -111,17 +117,19 @@ export function miniPlayerChrome({ state, presence, micOn, canPlayAudio }: MiniP
               : "Room ended"
             : connection === "duplicate"
               ? "Playing in another tab"
-              : asking
+              : hotMic
+                ? "You're live"
+                : asking
                 ? "Still playing"
                 : !canPlayAudio
                   ? "Tap to listen"
                   : null;
-  const hotMic = publishing && micOn;
   const mic = publishing ? (micOn ? "Your mic is live" : "Mic off") : null;
   return {
     line,
     publishing,
     hotMic,
+    liveBadge: hotMic && line === "You're live",
     finished,
     live: connection === "live",
     retry: connection === "failed",

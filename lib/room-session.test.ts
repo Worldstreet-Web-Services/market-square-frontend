@@ -1070,3 +1070,29 @@ describe("tap to rejoin belongs to the account that was in the room", async () =
     assert.equal(rejoinOfferFor({ record: null, authReady: true, authenticated: true, meId: "u1" }), null);
   });
 });
+
+describe("the mini-player says 'You're live' in its state line, not as a control", () => {
+  const live = (): SessionState =>
+    sessionReducer(sessionReducer(IDLE_SESSION, { type: "connect", target: { streamId: "A", role: "host" } }), {
+      type: "connected",
+    });
+
+  it("a hot mic is the state line, with the live badge beside the room count", () => {
+    const chrome = miniPlayerChrome({ state: live(), presence: "host", micOn: true, canPlayAudio: true });
+    assert.equal(chrome.line, "You're live");
+    assert.equal(chrome.liveBadge, true);
+  });
+
+  it("anything more urgent about the connection still wins the line", () => {
+    const reconnecting = sessionReducer(live(), { type: "reconnecting" });
+    const chrome = miniPlayerChrome({ state: reconnecting, presence: "host", micOn: true, canPlayAudio: true });
+    assert.equal(chrome.line, "Reconnecting…");
+    assert.equal(chrome.liveBadge, false);
+    assert.equal(chrome.hotMic, true, "the mic is still open and still drawn as open");
+  });
+
+  it("a muted publisher or a listener has no badge", () => {
+    assert.equal(miniPlayerChrome({ state: live(), presence: "host", micOn: false, canPlayAudio: true }).liveBadge, false);
+    assert.equal(miniPlayerChrome({ state: live(), presence: "listener", micOn: true, canPlayAudio: true }).liveBadge, false);
+  });
+});

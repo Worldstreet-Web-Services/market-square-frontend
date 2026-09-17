@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Sheet } from "@/components/ui/sheet";
+import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
 import { IconArrowLeft, IconChevronDown } from "@/components/ui/icons";
 // The file's own glyphs, exported from it. See components/ui/room-icons.tsx.
 import { IconHouseGroup, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
@@ -363,32 +362,17 @@ export function HouseHeader({
       reader user on the destructive button is the same mis-tap with a keyboard.
     */}
     {onLeave && (
-      <Sheet open={confirming} onClose={closeConfirm} title="Leave this gist room?">
-        <p className="text-[13px] leading-5 text-body">
-          You will drop out of the conversation straight away.
-        </p>
-        <div className="mt-5 flex gap-2">
-          <Button variant="ghost" className="flex-1" autoFocus onClick={closeConfirm}>
-            Stay
-          </Button>
-          {/*
-            `--color-danger`, the slice's one destructive red, filled rather
-            than washed so the committing button is the loudest thing in the
-            dialog. Not `Button`'s own `danger` variant: that paints
-            `--color-down`, which means a value going down on a price, and
-            `features/houses` is asserted never to borrow it.
-          */}
-          <Button
-            className="flex-1 bg-danger text-white hover:bg-danger/90 active:bg-danger/80"
-            onClick={() => {
-              setConfirming(false);
-              onLeave();
-            }}
-          >
-            Leave Room
-          </Button>
-        </div>
-      </Sheet>
+      <DestructiveConfirmSheet
+        open={confirming}
+        onClose={closeConfirm}
+        title="Leave this gist room?"
+        body="You will drop out of the conversation straight away."
+        confirmLabel="Leave Room"
+        onConfirm={() => {
+          setConfirming(false);
+          onLeave();
+        }}
+      />
     )}
     </>
   );

@@ -3269,9 +3269,9 @@ describe("the mini-player's reach, contrast and announcements", () => {
 
   it("gives every round control a 44px target on touch, and Listen/Retry a 44px height", () => {
     const button = block(player, "function RoundButton(", "\n}\n");
-    assert.match(button, /grid h-11 w-11 shrink-0 place-items-center[^"]*md:h-9 md:w-9/);
+    assert.match(button, /grid h-11 w-11 shrink-0 place-items-center[^"]*pointer-fine:h-9 pointer-fine:w-9/);
     assert.match(button, /"grid h-9 w-9 place-items-center rounded-full/);
-    assert.equal((player.match(/size="sm" variant="secondary"[^>]*max-md:h-11/g) ?? []).length, 2);
+    assert.equal((player.match(/size="sm" variant="secondary"[^>]*pointer-coarse:h-11/g) ?? []).length, 2);
   });
 
   it("sets state copy in grey-400, never text-meta, which fails AA at 11px on the glass", () => {
@@ -3298,8 +3298,8 @@ describe("the mini-player's reach, contrast and announcements", () => {
 
   it("moves the desktop card off the thread's composer while a chat is open", () => {
     const frame = block(player, "function Frame(", "\n}\n");
-    assert.match(frame, /chatOpen \? "right-6" : "left-6"/);
-    assert.match(frame, /\{ top: "calc\(var\(--ws-crumb-h\) \+ 92px\)" \}/);
+    assert.match(frame, /\{ top: "calc\(var\(--ws-crumb-h\) \+ 92px\)", right: "max\(24px, env\(safe-area-inset-right, 0px\)\)" \}/);
+    assert.match(frame, /\{ bottom: "calc\(var\(--ws-nav-h\) \+ 8px\)", left: "max\(24px, env\(safe-area-inset-left, 0px\)\)" \}/);
   });
 
   it("puts the phone bar before the dock in the document, and focus somewhere stable on leave", () => {
@@ -3472,5 +3472,85 @@ describe("a private room's name stays off lock screens and other accounts' scree
     assert.match(provider, /const rejoinOffer = rejoinOfferFor\(\{/);
     const backstop = block(provider, "const wasAuthenticated = useRef(false);", "}, [auth.ready, auth.authenticated, controller]);");
     assert.match(backstop, /if \(!auth\.authenticated\) writeRejoin\(null\);/);
+  });
+});
+
+describe("the mini-player fits every frame it is drawn in", () => {
+  const code = (path: string) => stripComments(read(path));
+  const player = code("components/layout/room-mini-player.tsx");
+
+  it("the labelled rail stacks the title over a wrapping control row, so hang-up is never clipped", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.doesNotMatch(frame, /rail=full\]\/rail:flex-row/, "the rail placement is one overflowing row again");
+    const controls = block(player, "function Controls(", "\n}\n");
+    assert.match(controls, /group-data-\[rail=full\]\/rail:flex-wrap/);
+    assert.match(controls, /group-data-\[rail=full\]\/rail:justify-end/);
+  });
+
+  it("'You're live' is a badge in the state line, never a pill in the control row", () => {
+    assert.match(player, /chrome\.liveBadge/);
+    assert.doesNotMatch(player, /\{chrome\.hotMic && \(\s*<span/);
+  });
+
+  it("a phone and the icon rail get the icon form of Listen and Retry", () => {
+    const body = block(player, "function PlayerBody(", "\n}\n");
+    assert.match(body, /placement === "phone"/);
+    assert.equal((player.match(/size="sm" variant="secondary"[^>]*pointer-coarse:h-11/g) ?? []).length, 2);
+  });
+
+  it("the icon rail frame fits its 48px column: no border, no side padding", () => {
+    const frame = block(player, "function Frame(", "\n}\n");
+    assert.match(frame, /group-data-\[rail=icon\]\/rail:border-0 group-data-\[rail=icon\]\/rail:px-0/);
+    const offer = block(player, "if (offering && offer) {", "\n  }\n");
+    assert.doesNotMatch(offer, /label="Dismiss"[^>]*rail=icon\]\/rail:hidden/, "the rejoin offer hides Dismiss in the icon rail again");
+    assert.match(player, /title=\{line \? `Return to \$\{title\}, \$\{line\}` : `Return to \$\{title\}`\}/);
+  });
+
+  it("the phone chip sits under the other room's measured header, and names the room it leaves", () => {
+    const chip = block(player, "function RoomChip(", "\n}\n");
+    assert.match(chip, /calc\(var\(--ws-topbar-h\) \+ var\(--ws-house-head-h\) \+ 8px\)/);
+    const hangUp = block(player, "function HangUp(", "\n}\n");
+    assert.match(hangUp, /`Leave \$\{title\}`/);
+    assert.match(hangUp, /`Close \$\{title\}`/);
+  });
+
+  it("destructive confirmations share one sheet: Stay focused, the act in danger red", () => {
+    const sheet = code("components/ui/destructive-confirm-sheet.tsx");
+    assert.match(sheet, /<Button variant="ghost" className="flex-1" autoFocus onClick=\{onClose\}>/);
+    assert.match(sheet, /bg-danger text-white/);
+    for (const path of [
+      "components/layout/room-mini-player.tsx",
+      "features/houses/components/house-header.tsx",
+      "features/houses/components/house-room.tsx",
+    ]) {
+      assert.match(code(path), /<DestructiveConfirmSheet\b/, path);
+    }
+    assert.equal((player.match(/<DestructiveConfirmSheet\b/g) ?? []).length, 2);
+    assert.match(player, /useEndStream\(\{ successMessage: "Gist room closed" \}\)/);
+    assert.match(code("features/streams/hooks/use-streams.ts"), /toast\.success\(options\?\.successMessage \?\? "Stream ended"\)/);
+  });
+
+  it("touch keeps 44px targets at every width; only a fine pointer shrinks them", () => {
+    const button = block(player, "function RoundButton(", "\n}\n");
+    assert.match(button, /h-11 w-11[^"]*pointer-fine:h-9 pointer-fine:w-9/);
+    assert.doesNotMatch(player, /md:h-9|md:w-9|md:min-h-9/);
+  });
+
+  it("floating placements respect the horizontal safe-area insets", () => {
+    assert.match(player, /max\(24px, env\(safe-area-inset-left, 0px\)\)/);
+    assert.match(player, /max\(24px, env\(safe-area-inset-right, 0px\)\)/);
+    assert.match(player, /max\(12px, env\(safe-area-inset-right, 0px\)\)/);
+    assert.match(player, /max\(12px, env\(safe-area-inset-left, 0px\)\)/);
+  });
+
+  it("the rejoin offer does not pulse like a live connection", () => {
+    const offer = block(player, "if (offering && offer) {", "\n  }\n");
+    assert.doesNotMatch(offer, /ws-live-dot/);
+  });
+
+  it("the room page offers Tap to listen when the browser refused autoplay", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /here && connection === "live" && !session\.canPlayAudio/);
+    assert.match(room, /onClick=\{session\.startAudio\}/);
   });
 });

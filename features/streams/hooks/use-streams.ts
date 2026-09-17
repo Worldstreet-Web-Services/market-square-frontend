@@ -470,7 +470,10 @@ export function useGoLive() {
   });
 }
 
-export function useEndStream() {
+export function useEndStream(options?: {
+  /** What the surface calls the thing it ended — a gist room is not a "stream". */
+  successMessage?: string;
+}) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: endStream,
@@ -480,7 +483,7 @@ export function useEndStream() {
       // once the broadcast stops.
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", stream.id] });
       invalidateStreamSurfaces(queryClient);
-      toast.success("Stream ended");
+      toast.success(options?.successMessage ?? "Stream ended");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't end the stream.")),
   });

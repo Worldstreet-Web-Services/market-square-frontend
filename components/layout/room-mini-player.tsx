@@ -7,9 +7,9 @@ import { houseTopic, parseParticipantMeta, participantName } from "@/features/ho
 import { useEndStream, useStageSlots } from "@/features/streams";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
 import { IconChevronUp, IconLock, IconRefresh, IconVolume, IconX } from "@/components/ui/icons";
 import { IconRoomLeave, IconRoomMic, IconRoomMicOff } from "@/components/ui/room-icons";
-import { Sheet } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/cn";
 import { useChatOpen } from "@/lib/chat-open-store";
@@ -46,12 +46,19 @@ import { sq, stripSquare } from "@/lib/square-path";
  * What is drawn reads the CONNECTION (lib/room-session/visibility.ts
  * `miniPlayerChrome`), never the open "join another room?" question — which
  * used to hide the mic, the live badge and Retry for as long as it stood.
- * A publisher gets the mic toggle and, while it is open, a pulsing
- * "You're live" — a hot mic somewhere the reader cannot see is the one thing
- * this bar must never let them forget.
+ * A publisher gets the mic toggle and, while it is open, "You're live" in the
+ * state line — a hot mic somewhere the reader cannot see is the one thing
+ * this bar must never let them forget. It is a badge beside the title, not a
+ * pill among the controls: there it pushed the title to nothing and the
+ * hang-up off the rail.
  *
- * Every control is a 44px target on touch (the visual circle stays 36), and
- * one always-mounted live region announces the state and the mic.
+ * FITTING THE FRAME. The labelled rail stacks the title over a control row
+ * that wraps; a phone draws Listen and Retry as icons and never more than
+ * three trailing controls; the icon rail's frame drops its border and side
+ * padding so 44px targets fit its 48px column. Every control is a 44px target
+ * under a coarse pointer at any width (a tablet is touch too) and shrinks to
+ * its 36px circle only under a fine one; one always-mounted live region
+ * announces the state and the mic.
  *
  * After a reload there is no session (nobody's call resumes without them), so
  * the same placement offers "Tap to rejoin <room>" instead.
@@ -109,12 +116,14 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
           href={sq(`/gist-rooms/${offer.streamId}`)}
           onClick={() => session.dismissRejoin()}
           aria-label={label}
+          title={label}
           className={cn(
-            "ws-press flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-full px-1 text-left md:min-h-9",
+            "ws-press flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-full px-1 text-left pointer-fine:min-h-9",
             RAIL_ICON_LINK
           )}
         >
-          <span className="ws-live-dot h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden />
+          {/* Static, not the live pulse: nothing has checked the room is still open. */}
+          <span className="h-2 w-2 shrink-0 rounded-full bg-grey-400" aria-hidden />
           <span className="min-w-0 flex-1 group-data-[rail=icon]/rail:hidden">
             <span className="block text-[11px] font-semibold uppercase leading-4 tracking-[0.04em] text-grey-400">
               Tap to rejoin
@@ -124,21 +133,22 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
             </span>
           </span>
         </Link>
-        <RoundButton
-          label="Dismiss"
-          onClick={() => {
-            keepFocus();
-            session.dismissRejoin();
-          }}
-          className="group-data-[rail=icon]/rail:hidden"
-        >
-          <IconX className="h-3.5 w-3.5" />
-        </RoundButton>
+        <Controls>
+          <RoundButton
+            label="Dismiss"
+            onClick={() => {
+              keepFocus();
+              session.dismissRejoin();
+            }}
+          >
+            <IconX className="h-3.5 w-3.5" />
+          </RoundButton>
+        </Controls>
       </Frame>
     );
   }
 
-  if (chip && streamId) return <RoomChip session={session} streamId={streamId} />;
+  if (chip && streamId) return <RoomChip session={session} streamId={streamId} chatOpen={chatOpen} />;
   if (!visible || !streamId) return null;
   return <PlayerBody placement={placement} session={session} streamId={streamId} chatOpen={chatOpen} />;
 }
@@ -177,7 +187,11 @@ function PlayerBody({
       <Link
         href={roomHref}
         aria-label={line ? `Return to ${title}, ${line}` : `Return to ${title}`}
-        className={cn("ws-press flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-full text-left md:min-h-9", RAIL_ICON_LINK)}
+        title={line ? `Return to ${title}, ${line}` : `Return to ${title}`}
+        className={cn(
+          "ws-press flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-full text-left pointer-fine:min-h-9",
+          RAIL_ICON_LINK
+        )}
       >
         <span
           className={cn(
@@ -188,7 +202,7 @@ function PlayerBody({
         />
         <span className="min-w-0 flex-1 group-data-[rail=icon]/rail:hidden">
           <span className="block truncate text-[13px] font-bold leading-5 text-heading">{title}</span>
-          {line ? (
+          {line && !chrome.liveBadge ? (
             <span
               className={cn(
                 "block truncate text-[11px] font-semibold leading-4",
@@ -198,7 +212,13 @@ function PlayerBody({
               {line}
             </span>
           ) : (
-            <span className="flex items-center gap-1.5">
+            <span className="flex min-w-0 items-center gap-1.5">
+              {chrome.liveBadge && (
+                <span className="flex h-4 shrink-0 items-center gap-1 rounded-full bg-white px-1.5 text-[10px] font-bold leading-none text-ink">
+                  <span className="ws-live-dot h-1.5 w-1.5 rounded-full bg-ink" aria-hidden />
+                  You&apos;re live
+                </span>
+              )}
               {faces.length > 0 && (
                 <span className="flex -space-x-1.5" aria-hidden>
                   {faces.map((slot) => {
@@ -231,56 +251,66 @@ function PlayerBody({
         </span>
       </Link>
 
-      {/* "Tap to listen": the browser refused to autoplay, and this tap is the gesture it wants.
-          In the icon rail it is a glyph rather than gone. */}
-      {chrome.listen && (
-        <>
-          <Button size="sm" variant="secondary" onClick={session.startAudio} className="shrink-0 max-md:h-11 group-data-[rail=icon]/rail:hidden">
-            Listen
-          </Button>
-          <RoundButton label="Tap to listen" onClick={session.startAudio} className="hidden group-data-[rail=icon]/rail:grid">
-            <IconVolume className="h-4 w-4" />
-          </RoundButton>
-        </>
-      )}
+      <Controls>
+        {/* "Tap to listen": the browser refused to autoplay, and this tap is the
+            gesture it wants. A glyph on a phone and in the icon rail, where a
+            text button squeezed the title to nothing. */}
+        {chrome.listen &&
+          (placement === "phone" ? (
+            <RoundButton label="Tap to listen" onClick={session.startAudio}>
+              <IconVolume className="h-4 w-4" />
+            </RoundButton>
+          ) : (
+            <>
+              <Button size="sm" variant="secondary" onClick={session.startAudio} className="shrink-0 pointer-coarse:h-11 group-data-[rail=icon]/rail:hidden">
+                Listen
+              </Button>
+              {placement === "rail" && (
+                <RoundButton label="Tap to listen" onClick={session.startAudio} className="hidden group-data-[rail=icon]/rail:grid">
+                  <IconVolume className="h-4 w-4" />
+                </RoundButton>
+              )}
+            </>
+          ))}
 
-      {chrome.retry && (
-        <>
-          <Button size="sm" variant="secondary" onClick={session.retry} className="shrink-0 max-md:h-11 group-data-[rail=icon]/rail:hidden">
-            Retry
-          </Button>
-          <RoundButton label="Retry the connection" onClick={session.retry} className="hidden group-data-[rail=icon]/rail:grid">
-            <IconRefresh className="h-4 w-4" />
-          </RoundButton>
-        </>
-      )}
+        {chrome.retry &&
+          (placement === "phone" ? (
+            <RoundButton label="Retry the connection" onClick={session.retry}>
+              <IconRefresh className="h-4 w-4" />
+            </RoundButton>
+          ) : (
+            <>
+              <Button size="sm" variant="secondary" onClick={session.retry} className="shrink-0 pointer-coarse:h-11 group-data-[rail=icon]/rail:hidden">
+                Retry
+              </Button>
+              {placement === "rail" && (
+                <RoundButton label="Retry the connection" onClick={session.retry} className="hidden group-data-[rail=icon]/rail:grid">
+                  <IconRefresh className="h-4 w-4" />
+                </RoundButton>
+              )}
+            </>
+          ))}
 
-      {chrome.hotMic && (
-        <span
-          className="flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-white px-2.5 text-[11px] font-bold leading-none text-ink group-data-[rail=icon]/rail:hidden"
-          aria-hidden
-        >
-          <span className="ws-live-dot h-1.5 w-1.5 rounded-full bg-ink" />
-          You&apos;re live
-        </span>
-      )}
+        {publishing && <MicButton session={session} />}
 
-      {publishing && <MicButton session={session} />}
-
-      {finished ? (
-        <DismissButton session={session} />
-      ) : (
-        <>
-          <RoundButton
-            label="Return to room"
-            onClick={() => router.push(roomHref)}
-            className="max-md:hidden group-data-[rail=icon]/rail:hidden"
-          >
-            <IconChevronUp className="h-4 w-4" />
-          </RoundButton>
-          <HangUp session={session} streamId={streamId} />
-        </>
-      )}
+        {finished ? (
+          <DismissButton session={session} />
+        ) : (
+          <>
+            {/* The phone's whole bar is the way back; three trailing controls at most. */}
+            {placement !== "phone" && (
+              <RoundButton
+                label="Return to room"
+                onClick={() => router.push(roomHref)}
+                className="group-data-[rail=icon]/rail:hidden"
+              >
+                <IconChevronUp className="h-4 w-4" />
+              </RoundButton>
+            )}
+            <HangUp session={session} streamId={streamId} />
+          </>
+        )}
+      </Controls>
     </Frame>
   );
 }
@@ -293,7 +323,15 @@ function PlayerBody({
  * able to hang up, and a failed or finished room to be retried or dismissed,
  * from inside a DM as much as a publisher must reach an open mic.
  */
-function RoomChip({ session, streamId }: { session: RoomSessionView; streamId: string }) {
+function RoomChip({
+  session,
+  streamId,
+  chatOpen,
+}: {
+  session: RoomSessionView;
+  streamId: string;
+  chatOpen: boolean;
+}) {
   const title = session.stream ? houseTopic(session.stream) : "your gist room";
   const chrome = miniPlayerChrome({
     state: session.state,
@@ -306,8 +344,17 @@ function RoomChip({ session, streamId }: { session: RoomSessionView; streamId: s
     <div
       role="region"
       aria-label="Gist room"
-      className="ws-glass fixed right-3 z-40 flex max-w-[calc(100vw-24px)] items-center gap-1 rounded-full border border-white/10 bg-chrome/90 py-0.5 pl-1 pr-0.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] md:hidden"
-      style={{ top: "calc(var(--ws-topbar-h) + 88px)" }}
+      className="ws-glass fixed z-40 flex max-w-[calc(100vw-24px)] items-center gap-1 rounded-full border border-white/10 bg-chrome/90 py-0.5 pl-1 pr-0.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] md:hidden"
+      style={{
+        right: "max(12px, env(safe-area-inset-right, 0px))",
+        // Under what it shares the screen with, never over it: a thread's
+        // 80px header, or ANOTHER ROOM's sticky header, which publishes its
+        // measured height — a fixed 88 sat on that room's title and beside its
+        // own red Leave.
+        top: chatOpen
+          ? "calc(var(--ws-topbar-h) + 88px)"
+          : "calc(var(--ws-topbar-h) + var(--ws-house-head-h) + 8px)",
+      }}
     >
       <p role="status" aria-live="polite" className="sr-only">
         {chrome.announcement}
@@ -365,8 +412,10 @@ function DismissButton({ session }: { session: RoomSessionView }) {
 function HangUp({ session, streamId }: { session: RoomSessionView; streamId: string }) {
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmLeaveStage, setConfirmLeaveStage] = useState(false);
-  const endRoom = useEndStream();
+  const endRoom = useEndStream({ successMessage: "Gist room closed" });
   const { presence } = session;
+  // Named, so this red button cannot be mistaken for the one on another room's page.
+  const title = session.stream ? houseTopic(session.stream) : "the gist room";
 
   const leave = () => {
     keepFocus();
@@ -376,7 +425,7 @@ function HangUp({ session, streamId }: { session: RoomSessionView; streamId: str
   return (
     <>
       <RoundButton
-        label={presence === "host" ? "Close the gist room" : "Leave the gist room"}
+        label={presence === "host" ? `Close ${title}` : `Leave ${title}`}
         onClick={() =>
           presence === "host"
             ? setConfirmClose(true)
@@ -389,47 +438,35 @@ function HangUp({ session, streamId }: { session: RoomSessionView; streamId: str
         <IconRoomLeave className="h-4 w-4" />
       </RoundButton>
 
-      <Sheet open={confirmClose} onClose={() => setConfirmClose(false)} title="Close the gist room?">
-        <p className="text-[13px] leading-5 text-body">Everyone will be sent out and the gist room will be closed.</p>
-        <div className="mt-5 flex gap-2">
-          <Button variant="ghost" className="flex-1" onClick={() => setConfirmClose(false)}>
-            Stay
-          </Button>
-          <Button
-            className="flex-1"
-            loading={endRoom.isPending}
-            onClick={() =>
-              endRoom.mutate(streamId, {
-                onSuccess: () => {
-                  setConfirmClose(false);
-                  keepFocus();
-                  void session.end();
-                },
-              })
-            }
-          >
-            Close it
-          </Button>
-        </div>
-      </Sheet>
+      <DestructiveConfirmSheet
+        open={confirmClose}
+        onClose={() => setConfirmClose(false)}
+        title="Close the gist room?"
+        body="Everyone will be sent out and the gist room will be closed."
+        confirmLabel="Close it"
+        loading={endRoom.isPending}
+        onConfirm={() =>
+          endRoom.mutate(streamId, {
+            onSuccess: () => {
+              setConfirmClose(false);
+              keepFocus();
+              void session.end();
+            },
+          })
+        }
+      />
 
-      <Sheet open={confirmLeaveStage} onClose={() => setConfirmLeaveStage(false)} title="Leave the stage?">
-        <p className="text-[13px] leading-5 text-body">You&apos;ll lose your seat. Coming back, you&apos;ll need to ask to speak again.</p>
-        <div className="mt-5 flex gap-2">
-          <Button variant="ghost" className="flex-1" onClick={() => setConfirmLeaveStage(false)}>
-            Stay
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={() => {
-              setConfirmLeaveStage(false);
-              leave();
-            }}
-          >
-            Leave
-          </Button>
-        </div>
-      </Sheet>
+      <DestructiveConfirmSheet
+        open={confirmLeaveStage}
+        onClose={() => setConfirmLeaveStage(false)}
+        title="Leave the stage?"
+        body="You'll lose your seat. Coming back, you'll need to ask to speak again."
+        confirmLabel="Leave"
+        onConfirm={() => {
+          setConfirmLeaveStage(false);
+          leave();
+        }}
+      />
     </>
   );
 }
@@ -463,8 +500,9 @@ function MicButton({ session }: { session: RoomSessionView }) {
 
 /**
  * A 36px circle in a 44px target on touch (Apple's 44pt, the rule the stage
- * tiles already follow); the target shrinks to the circle from `md`, where a
- * pointer is precise.
+ * tiles already follow). The target shrinks to the circle only under a FINE
+ * pointer — never by width: 768–1023px is an iPad, and a missed tap on the mic
+ * there landed on the red button 8px away.
  */
 function RoundButton({
   label,
@@ -489,7 +527,7 @@ function RoundButton({
       aria-label={label}
       title={label}
       className={cn(
-        "ws-press group/round grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9",
+        "ws-press group/round grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-40 pointer-fine:h-9 pointer-fine:w-9",
         className
       )}
     >
@@ -506,6 +544,19 @@ function RoundButton({
         {children}
       </span>
     </button>
+  );
+}
+
+/**
+ * The trailing controls. Inline on the phone bar and the card; in the
+ * labelled rail a row of its own under the title that wraps rather than
+ * pushing the hang-up past the aside's clipped edge; a column in the icon rail.
+ */
+function Controls({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 max-md:gap-3 group-data-[rail=icon]/rail:flex-col group-data-[rail=full]/rail:w-full group-data-[rail=full]/rail:flex-wrap group-data-[rail=full]/rail:justify-end">
+      {children}
+    </div>
   );
 }
 
@@ -531,9 +582,13 @@ function Frame({
   if (placement === "phone") {
     return (
       <div
-        className="fixed inset-x-3 z-40 md:hidden"
-        // Above the dock: its 72 plus its 24 inset, plus 8 of air, over the home indicator.
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 104px)" }}
+        className="fixed z-40 md:hidden"
+        style={{
+          // Above the dock: its 72 plus its 24 inset, plus 8 of air, over the home indicator.
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 104px)",
+          left: "max(12px, env(safe-area-inset-left, 0px))",
+          right: "max(12px, env(safe-area-inset-right, 0px))",
+        }}
       >
         <div
           role="region"
@@ -552,16 +607,16 @@ function Frame({
         role="region"
         aria-label="Gist room"
         className={cn(
-          "ws-glass fixed z-40 hidden w-[320px] items-center gap-2 rounded-2xl border border-white/10 bg-chrome/90 p-3 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] md:flex",
-          chatOpen ? "right-6" : "left-6"
+          "ws-glass fixed z-40 hidden w-[320px] max-w-[calc(100vw-48px)] items-center gap-2 rounded-2xl border border-white/10 bg-chrome/90 p-3 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.95)] md:flex"
         )}
         style={
           chatOpen
             ? // No dock over an open thread, and its composer owns the foot:
               // the top-right of the thread, under the top bar and its header.
-              { top: "calc(var(--ws-crumb-h) + 92px)" }
-            : // Clear of the centred dock, which on a narrow desktop reaches this corner.
-              { bottom: "calc(var(--ws-nav-h) + 8px)" }
+              { top: "calc(var(--ws-crumb-h) + 92px)", right: "max(24px, env(safe-area-inset-right, 0px))" }
+            : // Clear of the centred dock, which on a narrow desktop reaches this
+              // corner, and of a landscape phone's sensor housing.
+              { bottom: "calc(var(--ws-nav-h) + 8px)", left: "max(24px, env(safe-area-inset-left, 0px))" }
         }
       >
         {live}
@@ -573,7 +628,7 @@ function Frame({
     <div
       role="region"
       aria-label="Gist room"
-      className="mb-3 flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2 group-data-[rail=full]/rail:flex-row group-data-[rail=full]/rail:p-3"
+      className="mb-3 flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2 group-data-[rail=icon]/rail:border-0 group-data-[rail=icon]/rail:px-0 group-data-[rail=full]/rail:items-stretch group-data-[rail=full]/rail:p-3"
     >
       {live}
       {children}

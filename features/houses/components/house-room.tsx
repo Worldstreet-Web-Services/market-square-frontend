@@ -10,6 +10,7 @@ import type { Room } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
 import { Sheet } from "@/components/ui/sheet";
+import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
 import { IconLink, IconX } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { useGate } from "@/hooks/use-gate";
@@ -1123,7 +1124,7 @@ function LiveHouse({
   */
   const leave = useCallback(() => setConfirmLeave(true), []);
 
-  const endHouse = useEndStream();
+  const endHouse = useEndStream({ successMessage: "Gist room closed" });
 
   /* ---- sheets ---------------------------------------------------------- */
 
@@ -1509,6 +1510,18 @@ function LiveHouse({
           <p className="text-[13px] leading-5 text-body">{roomFailureCopy(session.micFailure)}</p>
           <Button size="sm" variant="secondary" className="mt-2" onClick={() => session.stage.retry()}>
             Try again
+          </Button>
+        </div>
+      )}
+
+      {/* The browser refused to play the room without a gesture — a reload or a
+          shared link opened in a fresh tab. The mini-player's Listen is hidden
+          on this page, so the page offers its own. */}
+      {here && connection === "live" && !session.canPlayAudio && (
+        <div className="ws-inset mx-4 mb-4 flex items-center gap-3 px-4 py-3">
+          <p className="min-w-0 flex-1 text-[13px] leading-5 text-body">Your browser paused the room&apos;s sound.</p>
+          <Button size="sm" className="shrink-0 pointer-coarse:h-11" onClick={session.startAudio}>
+            Tap to listen
           </Button>
         </div>
       )}
@@ -2008,39 +2021,25 @@ function LiveHouse({
         </div>
       </Sheet>
 
-      <Sheet
+      <DestructiveConfirmSheet
         open={confirmLeave}
         onClose={() => setConfirmLeave(false)}
         title={isHost ? "Close the gist room?" : "Leave quietly?"}
-      >
-        <p className="text-[13px] leading-5 text-body">
-          {isHost
-            ? "Everyone will be sent out and the gist room will be closed."
-            : "Nobody is told you left."}
-        </p>
-        <div className="mt-5 flex gap-2">
-          <Button variant="ghost" className="flex-1" onClick={() => setConfirmLeave(false)}>
-            Stay
-          </Button>
-          <Button
-            className="flex-1"
-            loading={endHouse.isPending}
-            onClick={() => {
-              if (isHost) {
-                endHouse.mutate(stream.id, {
-                  onSuccess: () => {
-                    void session.end().then(() => router.push(sq("/gist-rooms")));
-                  },
-                });
-                return;
-              }
-              void leaveNow();
-            }}
-          >
-            {isHost ? "Close it" : "Leave"}
-          </Button>
-        </div>
-      </Sheet>
+        body={isHost ? "Everyone will be sent out and the gist room will be closed." : "Nobody is told you left."}
+        confirmLabel={isHost ? "Close it" : "Leave"}
+        loading={endHouse.isPending}
+        onConfirm={() => {
+          if (isHost) {
+            endHouse.mutate(stream.id, {
+              onSuccess: () => {
+                void session.end().then(() => router.push(sq("/gist-rooms")));
+              },
+            });
+            return;
+          }
+          void leaveNow();
+        }}
+      />
     </main>
   );
 }
