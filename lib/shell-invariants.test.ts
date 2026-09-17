@@ -1809,9 +1809,14 @@ describe("One app, two addresses: square.tsionark.com untouched, Ark mounts it a
   });
 
   it("rewrites /square onto the real routes only when the base is set", () => {
-    assert.match(config, /const base = parseBase\(process\.env\.NEXT_PUBLIC_SQUARE_BASE_PATH\);\s*if \(base === ""\) return \[\];/);
+    assert.match(config, /const base = parseBase\(process\.env\.NEXT_PUBLIC_SQUARE_BASE_PATH\);/);
+    assert.match(config, /if \(base === ""\) return \[\];/);
     assert.match(config, /beforeFiles: \[\s*\{ source: base, destination: "\/" \},\s*\{ source: `\$\{base\}\/:path\*`, destination: "\/:path\*" \},/);
-    assert.match(config, /process\.env\.SQUARE_MICROFRONTENDS === "1" \? withMicrofrontends\(nextConfig\) : nextConfig/);
+    // Multi-Zones: WSWS rewrites /square/:path* here, so scripts, styles, fonts
+    // and optimised images must all be requested under /square too.
+    assert.match(config, /\.\.\.\(base \? \{ assetPrefix: base \} : \{\}\)/);
+    assert.match(config, /\.\.\.\(base \? \{ images: \{ path: `\$\{base\}\/_next\/image` \} \} : \{\}\)/);
+    assert.doesNotMatch(config, /withMicrofrontends/);
   });
 });
 
