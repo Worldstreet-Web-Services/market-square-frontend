@@ -222,16 +222,22 @@ describe("SpeakerRequestSchema accepts the invite-to-speak fields before the bac
     assert.equal(parsed.muteHard, false);
   });
 
-  it("parses a host invitation with its expiry", () => {
+  it("parses a host invitation with its expiry, which is inviteExpiresAt and never expiresAt", () => {
+    // The service's field (wsws-monorepo market-square SpeakerRequest):
+    // `expiresAt` on /me is the approved speaker's JOIN TOKEN expiry, so the
+    // invitation's own clock has a name of its own.
     const parsed = SpeakerRequestSchema.parse({
       ...legacy,
       status: "invited",
       initiatedBy: "host",
-      expiresAt: "2026-09-17T10:01:00.000Z",
+      inviteExpiresAt: "2026-09-17T10:01:00.000Z",
+      expiresAt: "2026-09-17T11:00:00.000Z",
     });
     assert.equal(parsed.status, "invited");
     assert.equal(parsed.initiatedBy, "host");
-    assert.equal(parsed.expiresAt, "2026-09-17T10:01:00.000Z");
+    assert.equal(parsed.inviteExpiresAt, "2026-09-17T10:01:00.000Z");
+    assert.equal(parsed.expiresAt, "2026-09-17T11:00:00.000Z");
+    assert.equal(SpeakerRequestSchema.parse(legacy).inviteExpiresAt, null);
   });
 
   it("carries the host's mute flags through", () => {

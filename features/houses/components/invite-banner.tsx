@@ -16,14 +16,14 @@ import { formatCountdown, inviteView } from "@/lib/speaker-invite";
  * two apart) — so both read the reader's own speaker-request row, never a
  * push frame.
  *
- * The countdown is the SERVER's `expiresAt`, re-read every second; at zero the
+ * The countdown is the SERVER's `inviteExpiresAt`, re-read every second; at zero the
  * banner draws nothing rather than hanging on at 0:00 until the next poll.
  * "Join as speaker" seats them with the mic OFF — nothing downstream opens it
  * until they tap (lib/mic-consent.ts).
  */
 export function InviteBanner({
   requestId,
-  expiresAt,
+  inviteExpiresAt,
   host,
   busy,
   onAccept,
@@ -31,7 +31,7 @@ export function InviteBanner({
   className,
 }: {
   requestId: string;
-  expiresAt: string | null;
+  inviteExpiresAt: string | null;
   host: { id?: string | null; name: string; avatarUrl?: string | null };
   busy: boolean;
   onAccept: () => void;
@@ -40,12 +40,12 @@ export function InviteBanner({
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!expiresAt) return;
+    if (!inviteExpiresAt) return;
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
-  }, [expiresAt]);
+  }, [inviteExpiresAt]);
 
-  const view = inviteView({ id: requestId, status: "invited", expiresAt }, now);
+  const view = inviteView({ id: requestId, status: "invited", inviteExpiresAt }, now);
   if (view.state !== "open") return null;
 
   return (

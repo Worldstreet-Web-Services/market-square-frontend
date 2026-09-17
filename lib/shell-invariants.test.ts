@@ -3817,6 +3817,16 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     }
   });
 
+  it("the countdown is the invitation's own clock, never the join token's expiresAt", () => {
+    assert.match(code("components/layout/room-session.tsx"), /const inviteExpiresAt = invitedRow\?\.inviteExpiresAt \?\? null;/);
+    for (const surface of [player, room, banner]) assert.doesNotMatch(surface, /[^e]expiresAt[=}]/);
+  });
+
+  it("asking to speak when the host already invited you says nothing about a request", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    assert.match(hooks, /if \(request\.status === "invited"\) return;\s*toast\.success\("Request sent to the host"\);/);
+  });
+
   it("the listener's own tool says it is theirs alone", () => {
     assert.match(sheet, /"Mute for me only"/);
     assert.match(code("features/profile/components/person-safety-rows.tsx"), /"Mute for me only"/);

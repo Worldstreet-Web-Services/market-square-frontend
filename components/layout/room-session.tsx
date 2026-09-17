@@ -292,9 +292,10 @@ export function RoomSessionProvider({ children }: { children: React.ReactNode })
   const answerInviteMutate = answer.mutate;
   const invitedRow = !isHost && mine.data?.status === "invited" ? mine.data : null;
   const inviteId = invitedRow?.id ?? null;
-  const inviteExpiresAt = invitedRow?.expiresAt ?? null;
+  // `inviteExpiresAt`, never `expiresAt`: on this row that is the join token's.
+  const inviteExpiresAt = invitedRow?.inviteExpiresAt ?? null;
   const invite = useMemo(
-    () => (inviteId ? { requestId: inviteId, expiresAt: inviteExpiresAt } : null),
+    () => (inviteId ? { requestId: inviteId, inviteExpiresAt } : null),
     [inviteId, inviteExpiresAt]
   );
   const answerInvite = useCallback(

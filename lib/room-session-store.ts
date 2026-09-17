@@ -73,9 +73,9 @@ export interface RoomSessionView {
   /**
    * The host's invitation to speak, waiting on the reader's answer — read from
    * their own speaker-request row, never from a push. The countdown is
-   * `expiresAt`'s (lib/speaker-invite.ts `inviteView`).
+   * `inviteExpiresAt`'s (lib/speaker-invite.ts `inviteView`).
    */
-  invite: { requestId: string; expiresAt: string | null } | null;
+  invite: { requestId: string; inviteExpiresAt: string | null } | null;
   /** Join as speaker (seated, mic OFF) or Not now. */
   answerInvite: (action: "accept" | "reject") => void;
   answeringInvite: boolean;

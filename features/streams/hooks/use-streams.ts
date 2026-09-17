@@ -666,6 +666,10 @@ export function useRequestToSpeak(streamId: string) {
       // The host's queue is a different query; without this the request only
       // appeared on their next 3 s poll.
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+      // The host had already invited them: the service hands back that open
+      // invitation (200) rather than a new request, and the banner asks the
+      // question. "Request sent" would be a claim about a request that is not there.
+      if (request.status === "invited") return;
       toast.success("Request sent to the host");
     },
     onError: (error) => toast.error(errorMessage(error, "Couldn't request to speak.")),

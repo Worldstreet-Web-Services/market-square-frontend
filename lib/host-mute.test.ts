@@ -155,5 +155,8 @@ describe("mute errors", () => {
     assert.equal(muteErrorMessage({ code: "NOT_A_SPEAKER" }, "Ada"), "Ada is not on the stage any more.");
     assert.equal(muteErrorMessage({ code: "BAD_RESPONSE" }, "Ada"), "Couldn't mute Ada.");
     assert.equal(muteErrorMessage(null), "Couldn't mute them.");
+    for (const code of ["TOO_MANY_REQUESTS", "RATE_LIMITED"]) {
+      assert.equal(muteErrorMessage({ code }), "Too many mutes at once. Try again in a moment.", code);
+    }
   });
 });

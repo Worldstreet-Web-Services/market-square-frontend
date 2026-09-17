@@ -136,6 +136,7 @@ export function muteErrorMessage(error: { code?: string | null } | null | undefi
     case "NOT_FOUND":
     case "NOT_A_SPEAKER":
       return `${who === "them" ? "They're" : `${who} is`} not on the stage any more.`;
+    case "TOO_MANY_REQUESTS":
     case "RATE_LIMITED":
       return "Too many mutes at once. Try again in a moment.";
     default:

@@ -26,17 +26,17 @@ describe("the invitee's banner reads the server's clock", () => {
   it("draws nothing for anything but an invitation", () => {
     assert.deepEqual(inviteView(null, NOW), { state: "none" });
     for (const status of ["pending", "approved", "denied", "withdrawn", "removed"]) {
-      assert.deepEqual(inviteView({ id: "r1", status, expiresAt: at(30_000) }, NOW), { state: "none" }, status);
+      assert.deepEqual(inviteView({ id: "r1", status, inviteExpiresAt: at(30_000) }, NOW), { state: "none" }, status);
     }
   });
 
   it("counts down from expiresAt in whole seconds", () => {
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", expiresAt: at(60_000) }, NOW), {
+    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(60_000) }, NOW), {
       state: "open",
       requestId: "r1",
       secondsLeft: 60,
     });
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", expiresAt: at(1_200) }, NOW), {
+    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(1_200) }, NOW), {
       state: "open",
       requestId: "r1",
       secondsLeft: 2,
@@ -44,17 +44,17 @@ describe("the invitee's banner reads the server's clock", () => {
   });
 
   it("is expired AT expiresAt, not a tick later", () => {
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", expiresAt: at(0) }, NOW), { state: "expired", requestId: "r1" });
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", expiresAt: at(-5_000) }, NOW), { state: "expired", requestId: "r1" });
+    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(0) }, NOW), { state: "expired", requestId: "r1" });
+    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: at(-5_000) }, NOW), { state: "expired", requestId: "r1" });
   });
 
   it("keeps an invitation with no readable expiry open, without a countdown", () => {
-    assert.deepEqual(inviteView({ id: "r1", status: "invited", expiresAt: null }, NOW), {
+    assert.deepEqual(inviteView({ id: "r1", status: "invited", inviteExpiresAt: null }, NOW), {
       state: "open",
       requestId: "r1",
       secondsLeft: null,
     });
-    assert.equal(inviteView({ id: "r1", status: "invited", expiresAt: "soon" }, NOW).state, "open");
+    assert.equal(inviteView({ id: "r1", status: "invited", inviteExpiresAt: "soon" }, NOW).state, "open");
   });
 
   it("formats a countdown as m:ss and never negative", () => {
@@ -218,7 +218,7 @@ describe("error answers", () => {
     assert.equal(inviteErrorOutcome({ code: "SPEAKER_BANNED" }, "Ada").kind, "refused");
     assert.equal(inviteErrorOutcome({ code: "BLOCKED" }, "Ada").kind, "refused");
     assert.doesNotMatch(JSON.stringify(inviteErrorOutcome({ code: "BLOCKED" }, "Ada")), /block/i);
-    for (const code of ["STREAM_NOT_LIVE", "CANNOT_INVITE_SELF", "NOT_IN_ROOM", "ALREADY_SPEAKER", "STAGE_FULL", "RATE_LIMITED"]) {
+    for (const code of ["STREAM_NOT_LIVE", "CANNOT_INVITE_SELF", "NOT_IN_ROOM", "ALREADY_SPEAKER", "STAGE_FULL", "RATE_LIMITED", "TOO_MANY_REQUESTS"]) {
       assert.equal(inviteErrorOutcome({ code }, "Ada").kind, "message", code);
     }
     assert.equal(inviteErrorOutcome({ code: "NOT_FOUND", details: { resource: "profile" } }, "Ada").kind, "message");
@@ -231,6 +231,18 @@ describe("error answers", () => {
       message: "You can invite Ada again in 0:42.",
     });
     assert.equal(inviteErrorOutcome({ code: "INVITE_COOLDOWN" }).kind, "cooldown");
+  });
+
+  it("the host's invite rate limit is TOO_MANY_REQUESTS, with the service's retry time", () => {
+    // The service throws TooManyRequestsError (code TOO_MANY_REQUESTS); a
+    // bodyless 429 reaches us as RATE_LIMITED (lib/api/envelope.ts). One answer.
+    for (const code of ["TOO_MANY_REQUESTS", "RATE_LIMITED"]) {
+      assert.deepEqual(inviteErrorOutcome({ code, details: { retryAfterSeconds: 42 } }, "Ada"), {
+        kind: "message",
+        message: "Too many invitations. Try again in 0:42.",
+      });
+    }
+    assert.notEqual(inviteErrorOutcome({ code: "TOO_MANY_REQUESTS" }).kind, "cooldown");
   });
 
   it("tells the invitee plainly why an answer did not land", () => {
@@ -262,8 +274,8 @@ describe("where the invitee's banner is drawn", () => {
 describe("the host's open invitations, keyed on the person", () => {
   it("keys on the bare user id and ignores anything that is not an invitation", () => {
     const map = invitesByUser([
-      { id: "r1", userId: "did:privy:ada#speaker", status: "invited", expiresAt: "x" },
-      { id: "r2", userId: "did:privy:tobi", status: "pending", expiresAt: null },
+      { id: "r1", userId: "did:privy:ada#speaker", status: "invited", inviteExpiresAt: "x" },
+      { id: "r2", userId: "did:privy:tobi", status: "pending", inviteExpiresAt: null },
     ]);
     assert.deepEqual([...map.keys()], ["did:privy:ada"]);
     assert.equal(map.get("did:privy:ada")?.id, "r1");

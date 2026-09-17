@@ -15,8 +15,9 @@
  *     never auto-enables on `inviteAccept`).
  *  2. THE HOST IS NEVER TOLD "DECLINED". A refusal and an invitation that ran
  *     out read the same: "<name> isn't available to speak right now".
- *  3. THE CLOCK IS THE SERVER'S. The countdown is read from `expiresAt`; the
- *     client never starts its own 60 seconds.
+ *  3. THE CLOCK IS THE SERVER'S. The countdown is read from `inviteExpiresAt`
+ *     (never `expiresAt`, which on the same row is the join token's expiry);
+ *     the client never starts its own 60 seconds.
  */
 
 import { squarePaths } from "./square-path.ts";
@@ -43,7 +44,7 @@ export function formatCountdown(seconds: number): string {
 export interface InviteRow {
   id: string;
   status: string;
-  expiresAt: string | null;
+  inviteExpiresAt: string | null;
 }
 
 export type InviteView =
@@ -67,7 +68,7 @@ export type InviteView =
  */
 export function inviteView(row: InviteRow | null | undefined, now: number): InviteView {
   if (!row || row.status !== "invited") return { state: "none" };
-  const expires = row.expiresAt ? Date.parse(row.expiresAt) : Number.NaN;
+  const expires = row.inviteExpiresAt ? Date.parse(row.inviteExpiresAt) : Number.NaN;
   if (!Number.isFinite(expires)) return { state: "open", requestId: row.id, secondsLeft: null };
   const left = Math.ceil((expires - now) / 1000);
   if (left <= 0) return { state: "expired", requestId: row.id };
@@ -341,6 +342,8 @@ export function inviteErrorOutcome(error: ApiErrorLike | null | undefined, name?
         message: `You can invite ${who === "They" ? "them" : who} again in ${formatCountdown(seconds)}.`,
       };
     }
+    // The service's code is TOO_MANY_REQUESTS; a bodyless 429 arrives as RATE_LIMITED.
+    case "TOO_MANY_REQUESTS":
     case "RATE_LIMITED": {
       const seconds = retryAfter(error.details);
       return {

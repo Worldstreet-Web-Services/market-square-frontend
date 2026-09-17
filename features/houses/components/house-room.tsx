@@ -1545,7 +1545,7 @@ function LiveHouse({
           <InviteBanner
             key={session.invite.requestId}
             requestId={session.invite.requestId}
-            expiresAt={session.invite.expiresAt}
+            inviteExpiresAt={session.invite.inviteExpiresAt}
             host={{ id: stream.owner?.id ?? stream.ownerId, name: ownerName ?? "The host", avatarUrl: stream.owner?.avatarUrl }}
             busy={session.answeringInvite}
             onAccept={() => session.answerInvite("accept")}

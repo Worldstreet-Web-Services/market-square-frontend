@@ -470,7 +470,14 @@ export const SpeakerRequestSchema = z.object({
     .catch("pending"),
   /* Who opened the row. Absent on every payload today, which is a listener's ask. */
   initiatedBy: z.enum(["listener", "host"]).catch("listener").optional().default("listener"),
-  /* When an invitation lapses. Null for a listener's request. */
+  /*
+    When an invitation lapses. Null for a listener's request. The service
+    names it `inviteExpiresAt` because `expiresAt` on the same row is already
+    the approved speaker's JOIN TOKEN expiry — reading that one as the
+    invitation's clock draws a countdown to the wrong moment.
+  */
+  inviteExpiresAt: z.string().nullable().optional().default(null),
+  /* The approved speaker's join-token expiry (see the note above the schema). */
   expiresAt: z.string().nullable().optional().default(null),
   /* The host's mute on this speaker — soft (they may unmute) or hard (locked). Not emitted yet. */
   hostMuted: z.boolean().optional().default(false),

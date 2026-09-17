@@ -11,7 +11,7 @@ import { formatCountdown, inviteView } from "@/lib/speaker-invite";
  *
  * One list for the tray and the Speaker Request band, read from the host's
  * invited rows (`useSpeakerInvites`), so both show the same people with the
- * same clock. The countdown is each row's own `expiresAt`; a row that has run
+ * same clock. The countdown is each row's own `inviteExpiresAt`; a row that has run
  * out drops off here at zero rather than waiting for the next poll, and what
  * the host is told about it ("isn't available to speak right now") is said
  * once, by the room, never "declined".
