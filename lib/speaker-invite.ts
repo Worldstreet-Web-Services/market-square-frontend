@@ -443,3 +443,21 @@ export function answerErrorMessage(error: ApiErrorLike | null | undefined): stri
       return routeMissing(error) ? null : "Couldn't answer the invitation.";
   }
 }
+
+/**
+ * A resolve that failed only because the invitation had already ended.
+ *
+ * The host's Cancel racing the invitee's Join, and a Not now sent on the way
+ * out of the room seconds after the server lapsed the invitation, both answer
+ * INVITE_NOT_OPEN. A `leave` or `reject` on a row that is still an open
+ * invitation answers AWAITING_INVITEE. Either way the thing the person asked
+ * for (the invitation is not open) is already true, so it is not an error
+ * toast, least of all to somebody who has just left the room. The lists are
+ * read again all the same.
+ */
+export function quietResolveError(error: ApiErrorLike | null | undefined, action: string): boolean {
+  const code = error?.code;
+  if (action === "cancel" || action === "reject") return code === "INVITE_NOT_OPEN" || code === "AWAITING_INVITEE";
+  if (action === "leave") return code === "AWAITING_INVITEE";
+  return false;
+}

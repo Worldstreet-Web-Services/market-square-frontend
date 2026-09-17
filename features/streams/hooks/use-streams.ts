@@ -17,7 +17,14 @@ import { useEvmSend } from "@/hooks/use-evm-send";
 import { useKashStatus } from "@/hooks/use-kash-status";
 import { isHouse } from "@/features/houses/lib/house";
 import { mergeStreamDetail } from "@/lib/stream-detail-merge";
-import { INVITE_ACCEPTED_HINT, answerErrorMessage, inviteErrorOutcome, routeMissing, type ApiErrorLike } from "@/lib/speaker-invite";
+import {
+  INVITE_ACCEPTED_HINT,
+  answerErrorMessage,
+  inviteErrorOutcome,
+  quietResolveError,
+  routeMissing,
+  type ApiErrorLike,
+} from "@/lib/speaker-invite";
 import { muteErrorMessage } from "@/lib/host-mute";
 import {
   banFromChat,
@@ -733,7 +740,16 @@ export function useResolveSpeakerRequest(streamId: string) {
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
     },
-    onError: (error) => toast.error(errorMessage(error, "Couldn't update the speaker.")),
+    onError: (error, { action }) => {
+      // The invitation had already ended (lib/speaker-invite.ts): true
+      // already, so re-read the lists rather than raise an error.
+      if (quietResolveError(error as ApiErrorLike, action)) {
+        queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "speaker-request", "me"] });
+        return;
+      }
+      toast.error(errorMessage(error, "Couldn't update the speaker."));
+    },
   });
 }
 
@@ -844,6 +860,10 @@ export function useAnswerInvite(streamId: string) {
     mutationFn: ({ requestId, action }: { requestId: string; action: "accept" | "reject" }) =>
       resolveSpeakerRequest(streamId, requestId, action),
     onSuccess: (row, { action }) => {
+      // The answered row goes straight into the cache, as asking to speak's
+      // does: the banner goes at once (no second tap on a live button while a
+      // slow refetch is out), and `approved` seats them without waiting a poll.
+      queryClient.setQueryData(["ms", "stream", streamId, "speaker-request", "me"], row);
       // The one-time hint: seated, and the mic is still theirs to open.
       if (action === "accept" && row.status === "approved") toast(INVITE_ACCEPTED_HINT);
     },

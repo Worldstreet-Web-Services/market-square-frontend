@@ -14,6 +14,7 @@ import {
   inviteDeadline,
   inviteView,
   invitesByUser,
+  quietResolveError,
   visibleInvites,
   isAnonymousIdentity,
   releaseActionFor,
@@ -320,6 +321,23 @@ describe("error answers", () => {
     assert.match(answerErrorMessage({ code: "STAGE_FULL" }) ?? "", /filled up/);
     assert.equal(answerErrorMessage({ code: "NOT_FOUND", message: "Route not found" }), null);
     assert.equal(answerErrorMessage({ code: "NOT_FOUND", message: "Speaker request not found" }), "Couldn't answer the invitation.");
+  });
+});
+
+describe("an invitation that already ended is not an error to the person closing it", () => {
+  it("a Cancel or a leave-time Not now that lost the race to the invitee or the clock says nothing", () => {
+    for (const action of ["cancel", "reject"]) {
+      assert.equal(quietResolveError({ code: "INVITE_NOT_OPEN" }, action), true, action);
+      assert.equal(quietResolveError({ code: "AWAITING_INVITEE" }, action), true, action);
+    }
+    assert.equal(quietResolveError({ code: "AWAITING_INVITEE" }, "leave"), true);
+  });
+
+  it("everything else is still said", () => {
+    assert.equal(quietResolveError({ code: "INVITE_NOT_OPEN" }, "approve"), false);
+    assert.equal(quietResolveError({ code: "STAGE_FULL" }, "cancel"), false);
+    assert.equal(quietResolveError({ code: "FORBIDDEN" }, "reject"), false);
+    assert.equal(quietResolveError(null, "cancel"), false);
   });
 });
 

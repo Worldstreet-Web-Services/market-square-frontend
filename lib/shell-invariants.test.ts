@@ -3841,6 +3841,14 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     assert.match(code("features/streams/lib/api.ts"), /\{ status: "approved" \}/);
   });
 
+  it("an answer lands in the cache at once, and a closed invitation is not an error toast", () => {
+    const hooks = code("features/streams/hooks/use-streams.ts");
+    const answer = hooks.slice(hooks.indexOf("export function useAnswerInvite"), hooks.indexOf("export function useMuteSpeaker"));
+    assert.match(answer, /onSuccess: \(row, \{ action \}\) => \{\s*queryClient\.setQueryData\(\["ms", "stream", streamId, "speaker-request", "me"\], row\);/);
+    const resolve = hooks.slice(hooks.indexOf("export function useResolveSpeakerRequest"));
+    assert.match(resolve, /if \(quietResolveError\(error as ApiErrorLike, action\)\) \{/);
+  });
+
   it("the listener's own tool says it is theirs alone", () => {
     assert.match(sheet, /"Mute for me only"/);
     assert.match(code("features/profile/components/person-safety-rows.tsx"), /"Mute for me only"/);
