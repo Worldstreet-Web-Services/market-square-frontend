@@ -154,11 +154,13 @@ export function RoomMiniPlayer({ placement }: { placement: Placement }) {
 }
 
 /**
- * The icon rail is 72px: the return link collapses to a 40px round target
- * (the status dot inside it), never to the bare 8px dot.
+ * The icon rail is 72px: the return link collapses to a round target (the
+ * status dot inside it), never to the bare 8px dot. 44px under a coarse
+ * pointer, like every other control here (the frame's 48px column fits it);
+ * 40px only under a fine one.
  */
 const RAIL_ICON_LINK =
-  "group-data-[rail=icon]/rail:h-10 group-data-[rail=icon]/rail:w-10 group-data-[rail=icon]/rail:min-h-0 group-data-[rail=icon]/rail:flex-none group-data-[rail=icon]/rail:justify-center group-data-[rail=icon]/rail:bg-white/[0.06] group-data-[rail=icon]/rail:px-0";
+  "group-data-[rail=icon]/rail:h-11 group-data-[rail=icon]/rail:w-11 group-data-[rail=icon]/rail:pointer-fine:h-10 group-data-[rail=icon]/rail:pointer-fine:w-10 group-data-[rail=icon]/rail:min-h-0 group-data-[rail=icon]/rail:flex-none group-data-[rail=icon]/rail:justify-center group-data-[rail=icon]/rail:bg-white/[0.06] group-data-[rail=icon]/rail:px-0";
 
 function PlayerBody({
   placement,

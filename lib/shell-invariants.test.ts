@@ -3145,6 +3145,30 @@ describe("the room session's review fixes, pinned where no pure half exists", ()
     assert.match(provider, /const dismissConflict = useCallback\(\(id\?: string\) => controller\.dismissConflict\(id\), \[controller\]\);/);
   });
 
+  it("a host's 'Leave and join' says it CLOSES their room, and the end-stream call is wired", () => {
+    const room = code("features/houses/components/house-room.tsx");
+    assert.match(room, /const hostingOther = askingToSwitch && session\.state\.target\?\.role === "host";/);
+    assert.match(room, /Joining this room will close it for everyone\./);
+    assert.match(room, /\{hostingOther \? "Close and join" : "Leave and join"\}/);
+    const provider = code("components/layout/room-session.tsx");
+    assert.match(provider, /closeRoom: \(streamId\) => closeRoomCall\.current\(streamId\),/);
+    assert.match(provider, /await endRoomAsync\(id\);/);
+  });
+
+  it("Backstage asks about a held room BEFORE go-live, never after", () => {
+    const backstage = code("features/houses/components/backstage.tsx");
+    const open = block(backstage, "const open = () => {", "\n  };\n");
+    assert.ok(
+      open.indexOf("backstageOpenStep(session.state, stream.id)") >= 0 &&
+        open.indexOf("backstageOpenStep(session.state, stream.id)") < open.indexOf("openNow()"),
+      "Backstage goes live before checking for a held room"
+    );
+    assert.doesNotMatch(open, /goLive\.mutate/);
+    assert.equal((backstage.match(/goLive\.mutate\(/g) ?? []).length, 1);
+    const leaveAndOpen = block(backstage, "const leaveAndOpen = async () => {", "\n  };\n");
+    assert.ok(leaveAndOpen.indexOf("await session.vacate()") < leaveAndOpen.indexOf("openNow()"));
+  });
+
   it("a signed-out reader is never entered into a room", () => {
     const room = code("features/houses/components/house-room.tsx");
     assert.match(room, /const identityKnown = roomEntryReady\(\{/);
@@ -3286,7 +3310,26 @@ describe("the mini-player's reach, contrast and announcements", () => {
   it("keeps Listen and Retry reachable in the icon rail, and the return link a real target", () => {
     assert.match(player, /label="Tap to listen"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
     assert.match(player, /label="Retry the connection"[^>]*className="hidden group-data-\[rail=icon\]\/rail:grid"/);
-    assert.match(player, /group-data-\[rail=icon\]\/rail:h-10 group-data-\[rail=icon\]\/rail:w-10/);
+    assert.match(
+      player,
+      /group-data-\[rail=icon\]\/rail:h-11 group-data-\[rail=icon\]\/rail:w-11 group-data-\[rail=icon\]\/rail:pointer-fine:h-10 group-data-\[rail=icon\]\/rail:pointer-fine:w-10/,
+      "the icon rail's return link is under 44px on touch"
+    );
+    assert.doesNotMatch(player, /group-data-\[rail=icon\]\/rail:h-10 group-data-\[rail=icon\]\/rail:w-10/);
+    // Hidden in the icon rail only as TEXT buttons; each has its icon twin there.
+    const body = block(player, "function PlayerBody(", "\n}\n");
+    for (const verb of ["startAudio", "retry"]) {
+      assert.match(
+        body,
+        new RegExp(`onClick=\\{session\\.${verb}\\} className="shrink-0 pointer-coarse:h-11 group-data-\\[rail=icon\\]\\/rail:hidden"`),
+        `${verb}: the text button is no longer the one hidden in the icon rail`
+      );
+      assert.match(
+        body,
+        new RegExp(`placement === "rail" && \\(\\s*<RoundButton label="[^"]+" onClick=\\{session\\.${verb}\\} className="hidden group-data-\\[rail=icon\\]\\/rail:grid"`),
+        `${verb}: no icon control reaches it in the icon rail`
+      );
+    }
   });
 
   it("announces through one always-mounted live region, and the link carries the state", () => {
