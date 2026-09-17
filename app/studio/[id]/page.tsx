@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { StudioStreamScreen } from "@/features/streams";
+import { StudioRoomScreen } from "@/components/layout/studio-room-screen";
 
 export const metadata: Metadata = { title: "Studio" };
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <StudioStreamScreen streamId={id} />;
+  return <StudioRoomScreen streamId={id} />;
 }

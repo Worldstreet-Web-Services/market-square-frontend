@@ -3248,3 +3248,33 @@ describe("the mini-player's reach, contrast and announcements", () => {
     assert.match(player, /keepFocus\(\);\s*session\.dismiss\(\);/);
   });
 });
+
+describe("one live microphone per tab, and no stale question", () => {
+  const code = (path: string) => stripComments(read(path));
+
+  it("recording a voice note mutes an open gist-room mic first", () => {
+    const recorder = code("features/messages/hooks/use-voice-recorder.ts");
+    const mute = recorder.indexOf("if (room.micOn)");
+    assert.notEqual(mute, -1, "the recorder no longer checks the room's mic");
+    assert.match(recorder, /const room = getRoomSession\(\);\s*if \(room\.micOn\) \{\s*await room\.toggleMic\(\);/);
+    assert.ok(mute < recorder.indexOf("getUserMedia({ audio: true })"), "the room mic is muted after the second capture opens");
+  });
+
+  it("the Studio asks before it broadcasts over a gist room", () => {
+    const page = code("app/studio/[id]/page.tsx");
+    assert.match(page, /<StudioRoomScreen streamId=\{id\} \/>/);
+    const screen = code("components/layout/studio-room-screen.tsx");
+    assert.match(screen, /<GistRoomGuard/);
+    assert.match(screen, /Leave the gist room to go live\?/);
+    assert.match(screen, /<StudioStreamScreen streamId=\{streamId\} \/>/);
+    // The same one guard the stream room uses.
+    assert.match(code("components/layout/stream-room-screen.tsx"), /<GistRoomGuard/);
+    const guard = code("components/layout/gist-room-guard.tsx");
+    assert.match(guard, /isHolding\(session\.state\.connection\) && session\.state\.target !== null && session\.state\.target\.streamId !== streamId/);
+  });
+
+  it("the zone-exit sheet forgets its link when the reader stops speaking", () => {
+    const guard = code("components/layout/zone-exit-guard.tsx");
+    assert.match(guard, /if \(!speaking && href !== null\) setHref\(null\);/);
+  });
+});

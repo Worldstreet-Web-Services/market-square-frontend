@@ -27,6 +27,9 @@ export function ZoneExitGuard() {
   const session = useRoomSession();
   const [href, setHref] = useState<string | null>(null);
   const speaking = session.presence === "host" || session.presence === "speaker";
+  // Moved back to the audience while the sheet was up: the question is void.
+  // Kept, it reappeared with the old link the next time they took the stage.
+  if (!speaking && href !== null) setHref(null);
 
   useEffect(() => {
     if (!speaking) return;

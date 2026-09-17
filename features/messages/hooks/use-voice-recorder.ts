@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { toast } from "sonner";
 import { ensureUploadLimits, getUploadLimits } from "@/lib/api/upload";
 import {
   pickRecordingType,
   recordingFileName,
 } from "@/features/messages/lib/voice-recorder";
+import { getRoomSession } from "@/lib/room-session-store";
 import { pushLevel, rmsLevel } from "@/lib/voice-levels";
 
 /**
@@ -97,6 +99,16 @@ export function useVoiceRecorder() {
     if (!mimeType) {
       setError("This browser can't record a format we can send.");
       return false;
+    }
+
+    // ONE LIVE MICROPHONE. A gist room keeps playing behind a DM, and an open
+    // mic there would carry this voice note to the whole room while it is
+    // recorded (and on iOS a second capture can kill the room's track). The
+    // room's mic is muted first — never reopened for them afterwards.
+    const room = getRoomSession();
+    if (room.micOn) {
+      await room.toggleMic();
+      toast("Your gist room mic is muted while you record.");
     }
 
     try {
