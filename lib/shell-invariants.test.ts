@@ -3884,6 +3884,22 @@ describe("invite to speak and the host's soft mute, wired where no pure half exi
     }
   });
 
+  it("the banner keeps focus in reach: busy is aria-disabled, focus is handed on, only the name truncates", () => {
+    assert.doesNotMatch(banner, /(?<!aria-)disabled=\{busy\}/, "a disabled button drops its focus");
+    assert.equal((banner.match(/aria-disabled=\{busy\}/g) ?? []).length, 2);
+    assert.match(banner, /window\.setTimeout\(\(\) => returnFocus\(landing\), 0\)/);
+    assert.match(banner, /handFocusOn\(document\.activeElement as HTMLElement \| null, document\.body, \[mic, main\]\)/);
+    assert.match(banner, /<span className="min-w-0 truncate">\{host\.name\}<\/span>/);
+    assert.match(banner, /<span className="shrink-0 whitespace-pre"> invited you to speak<\/span>/);
+    for (const mic of [
+      "features/houses/components/room-dock.tsx",
+      "features/houses/components/room-phone-bar.tsx",
+      "components/layout/room-mini-player.tsx",
+    ]) {
+      assert.match(code(mic), /data-room-mic/, `${mic} lost the mic an accepted invitation focuses`);
+    }
+  });
+
   it("everyone sees who turned a mic off, straight from the seat", () => {
     assert.match(room, /mutedByHost: slot\.mutedByHost,/);
     assert.match(code("features/houses/components/room-people.tsx"), /person\.mutedByHost \? "Muted by host" : "Invited"/);

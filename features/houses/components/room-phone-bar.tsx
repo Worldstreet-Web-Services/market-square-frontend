@@ -116,6 +116,7 @@ export function RoomPhoneBar({
             type="button"
             onClick={mic.toggle}
             disabled={mic.disabled}
+            data-room-mic=""
             aria-label={mic.on ? "Mute your microphone" : "Unmute your microphone"}
             className={cn(
               DISC,

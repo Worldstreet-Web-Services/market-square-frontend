@@ -574,6 +574,7 @@ function MicButton({ session }: { session: RoomSessionView }) {
       label={control.label}
       onClick={() => void session.toggleMic()}
       disabled={control.disabled}
+      data-room-mic
       tone={session.micOn ? "on" : "default"}
     >
       {control.icon === "lock" ? (
@@ -600,7 +601,10 @@ function RoundButton({
   disabled = false,
   tone = "default",
   className,
+  "data-room-mic": roomMic,
 }: {
+  /** Marks the mic control, where an accepted invitation hands focus. */
+  "data-room-mic"?: boolean;
   label: string;
   onClick: () => void;
   children: React.ReactNode;
@@ -613,6 +617,7 @@ function RoundButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-room-mic={roomMic ? "" : undefined}
       aria-label={label}
       title={label}
       className={cn(
