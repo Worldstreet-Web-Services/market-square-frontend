@@ -59,6 +59,34 @@ describe("The inbox says what arrived and whether it has been opened", () => {
     assert.equal(status?.state, "delivered");
   });
 
+  it("prefers the service's per-message stamp over the thread watermark", () => {
+    // The watermark says the reader has been into the thread; the stamp says
+    // they opened THIS message. They disagree when a thread is opened without
+    // reaching the newest message, and the stamp wins.
+    const stamped = snapStatus({
+      last: { ...photo, openedByMe: false },
+      meId: ME,
+      unreadCount: 0,
+    });
+    assert.equal(stamped?.state, "new");
+
+    const mine = { ...photo, senderId: ME };
+    const peerOpened = snapStatus({
+      last: { ...mine, openedByPeer: true, readByAll: false },
+      meId: ME,
+      unreadCount: 0,
+    });
+    assert.equal(peerOpened?.label, "Opened");
+  });
+
+  it("reads a missing stamp as 'no stamp', never as 'not opened'", () => {
+    // A service that has not shipped the stamps still draws a correct row.
+    const read = snapStatus({ last: { ...photo, openedByMe: null }, meId: ME, unreadCount: 0 });
+    assert.equal(read?.state, "opened");
+    const unread = snapStatus({ last: { ...photo, openedByMe: null }, meId: ME, unreadCount: 3 });
+    assert.equal(unread?.state, "new");
+  });
+
   it("says nothing at all about an empty thread or a removed message", () => {
     assert.equal(snapStatus({ last: null, meId: ME, unreadCount: 0 }), null);
     assert.equal(snapStatus({ last: { ...photo, status: "removed" }, meId: ME, unreadCount: 1 }), null);

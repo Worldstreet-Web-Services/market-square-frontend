@@ -28,14 +28,18 @@
  * No streaks. The rule for those is not defined yet, and counting days is the
  * service's job, not a thing to infer from one conversation row.
  *
- * ─── AND ONE APPROXIMATION, STATED RATHER THAN HIDDEN ────────────────────────
- * "Opened" here means the reader has been into the thread since the message
- * arrived — `unreadCount`, which the service counts per THREAD. Snapchat
- * stamps each message as opened individually. The difference shows in one
- * case: open a thread, do not scroll to the newest message, and this reads as
- * opened when strictly it was not. Closing that needs a per-viewer `openedAt`
- * on the message, which is a migration on the service and not a field rename.
- * Until then the row is honest about the thread, not about the message.
+ * ─── THE STAMP, AND THE WATERMARK UNDER IT ───────────────────────────────────
+ * The service stamps each message per person: `openedByMe`, and in a direct
+ * conversation `openedByPeer`. Those are the truth and they are used wherever
+ * they arrive.
+ *
+ * Where they do NOT arrive — a service that has not shipped them yet, an older
+ * cached payload — the row falls back to the thread's read watermark
+ * (`unreadCount`, `readByAll`), which answers a slightly different question:
+ * has the reader been into this thread since the message arrived. That is an
+ * approximation, and it is why the stamps outrank it rather than merely
+ * agreeing with it. A missing stamp is never read as "not opened": it is read
+ * as "no stamp here", and the watermark answers instead.
  *
  * Pure, so `lib/messages-snap-status.test.ts` pins it.
  */
@@ -73,6 +77,9 @@ export interface SnapStatusInput {
     senderId?: string | null;
     /** The service's own answer to "has everyone else read this". */
     readByAll?: boolean;
+    /** Per-message stamps. Null means the payload carries none, not "no". */
+    openedByMe?: boolean | null;
+    openedByPeer?: boolean | null;
   } | null;
   /** The reader, so the row knows which end of the conversation it is on. */
   meId?: string | null;
@@ -104,10 +111,11 @@ export function snapStatus(input: SnapStatusInput): SnapStatus | null {
   const mine = Boolean(input.meId && last.senderId === input.meId);
 
   if (mine) {
-    // The sender's half. `readByAll` is the SERVICE's answer, and an absent one
-    // is read as "not yet" rather than as "opened" — telling somebody their
-    // message was opened when we do not know is the lie that matters here.
-    const opened = last.readByAll === true;
+    // The sender's half. The per-message stamp first; the thread watermark only
+    // where there is no stamp. Neither absent value is read as "opened" —
+    // telling somebody their message was opened when we do not know is the lie
+    // that matters here.
+    const opened = last.openedByPeer ?? last.readByAll === true;
     return {
       kind,
       state: opened ? "opened" : "delivered",
@@ -116,9 +124,12 @@ export function snapStatus(input: SnapStatusInput): SnapStatus | null {
     };
   }
 
-  // The reader's half. The inbox's own unread count is the truth about whether
-  // they have been into this thread since it arrived.
-  const unopened = input.unreadCount > 0;
+  // The reader's half. Their own stamp where the service sends one, otherwise
+  // the inbox's unread count, which says whether they have been into the
+  // thread since this arrived.
+  const unopened = last.openedByMe === null || last.openedByMe === undefined
+    ? input.unreadCount > 0
+    : !last.openedByMe;
   return {
     kind,
     state: unopened ? "new" : "opened",

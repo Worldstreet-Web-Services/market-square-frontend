@@ -83,6 +83,21 @@ export const MessageSchema = z.object({
   // without also knowing the roster size at the moment of sending.
   readBy: z.number().optional().default(0),
   readByAll: z.boolean().optional().default(false),
+  /**
+   * OPENED, per message and per person — stricter than `readByAll`.
+   *
+   * `readByAll` is the thread's read watermark: it says the other side has
+   * been into the conversation, not that they looked at THIS message.
+   * `openedByMe` and `openedByPeer` (direct conversations only) are the
+   * service's per-message stamps, and they are what a view-once snap turns on.
+   *
+   * Both are optional and BOTH DEFAULT TO FALSE ONLY AS A SHAPE, never as an
+   * answer: `snapStatus` prefers them when the payload carries them and falls
+   * back to the watermark when it does not, so a service that has not shipped
+   * them yet still draws a correct row.
+   */
+  openedByMe: z.boolean().nullable().optional().default(null),
+  openedByPeer: z.boolean().nullable().optional().default(null),
   // The spec's enum. `catch` keeps an unknown future state from blanking the
   // thread; a removed message keeps its row but not its body.
   status: z.enum(["active", "removed"]).optional().default("active").catch("active"),
