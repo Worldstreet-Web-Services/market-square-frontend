@@ -21,6 +21,9 @@ import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
 import { DECK_NODE, HOME_DECK_NODE, PALS_PAGE, deckLayout, type DeckLayout, type DeckNode } from "@/lib/deck-layout";
 import type { Profile } from "@/lib/api/schemas";
+import { deckCandidates } from "@/lib/deck-candidates";
+import { lastWinkAt } from "@/lib/winks";
+import { useSentWinks } from "@/features/profile/lib/wink-store";
 
 /**
  * "MAKE SOME FRIENDS" — node 844:18440's deck, on Home and on `/pals`.
@@ -137,9 +140,16 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     `isFollowing` is only trusted when the payload carries it — undefined is
     "this payload has no follow edge", never "not followed".
   */
-  const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
-    (profile) => profile.id !== me.data?.id && !(filter.newOnly && profile.isFollowing === true)
-  );
+  const winkedHere = useSentWinks(me.data?.id ?? null);
+  const items = deckCandidates(people.data?.pages.flatMap((page) => page.items) ?? [], {
+    viewerId: me.data?.id ?? null,
+    hideFollowed: filter.newOnly,
+    // A wink sent from this browser is an ANSWER, so the card goes whether or
+    // not its per-person cooldown has run out — unlike the wink CONTROL, which
+    // re-enables when the cooldown does. Reading a record rather than a clock
+    // also keeps this render pure.
+    winkedHere: (id) => lastWinkAt(winkedHere, id) !== null,
+  });
   const filtering = isFriendsFilterActive(filter);
 
   const filterPill = (

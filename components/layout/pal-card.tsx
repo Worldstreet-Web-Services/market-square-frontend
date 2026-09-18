@@ -394,7 +394,11 @@ export function PalCard({
               onWinked?.();
             })
           }
-          aria-label={`Wink at ${name}`}
+          /* The control says its own state: a disabled button whose name is
+             still "Wink at …" reads as broken to a screen reader, which QA
+             asked for directly (2026-09-18: "disable wink icon if ive already
+             winked or matched with someone"). */
+          aria-label={wink.winked ? `Already winked at ${name}` : `Wink at ${name}`}
           className={cn(
             "ws-press shrink-0 transition-opacity hover:opacity-90 disabled:opacity-60",
             node ? "relative flex items-center justify-center overflow-hidden rounded-full" : "-translate-y-[3px]"

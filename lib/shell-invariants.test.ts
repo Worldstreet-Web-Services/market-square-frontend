@@ -1911,8 +1911,18 @@ describe("The friends deck asks about people the reader has not answered for", (
     assert.match(filter, /\.\.\.\(filter\.newOnly \? \{ excludeFollowing: true \} : \{\}\)/);
   });
 
-  it("drops anyone followed during the session, without trusting a missing edge", () => {
-    assert.match(deck, /!\(filter\.newOnly && profile\.isFollowing === true\)/);
+  it("drops anyone followed or winked, without trusting a missing edge", () => {
+    assert.match(deck, /const items = deckCandidates\(people\.data\?\.pages\.flatMap\(\(page\) => page\.items\) \?\? \[\], \{/);
+    assert.match(deck, /hideFollowed: filter\.newOnly,/);
+    assert.match(deck, /winkedHere: \(id\) => lastWinkAt\(winkedHere, id\) !== null,/);
+  });
+
+  it("names the wink control's own state once it has been used", () => {
+    const card = stripComments(read("components/layout/pal-card.tsx"));
+    assert.match(card, /aria-label=\{wink\.winked \? `Already winked at \$\{name\}` : `Wink at \$\{name\}`\}/);
+    // Disabled by the hook's refusal, which covers the per-person cooldown a
+    // wink and a match both sit inside.
+    assert.match(card, /!interactive \|\| wink\.isPending \|\| wink\.unavailable \|\| wink\.refusal !== null/);
   });
 
   it("carries the file's verdict stamps on Home as well as /pals", () => {
