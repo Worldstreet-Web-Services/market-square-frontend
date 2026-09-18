@@ -5,9 +5,8 @@ import { inboxTime } from "@/lib/inbox-time";
 import { Avatar } from "@/components/ui/avatar";
 import { IconPeople } from "@/components/ui/icons";
 import { isGroupThread, threadTitle } from "@/features/messages/lib/thread-identity";
-import Image from "next/image";
 import type { Conversation } from "@/features/messages/lib/types";
-import { asset } from "@/lib/square-path";
+import { snapStatus, type SnapKind, type SnapStatus } from "@/features/messages/lib/snap-status";
 
 /**
  * One conversation in the inbox — a 62px card, not a list row.
@@ -126,15 +125,32 @@ function Preview({ conversation, meId }: { conversation: Conversation; meId?: st
   const mine = Boolean(meId && last.senderId === meId);
   const body = last.text?.trim();
 
-  if (!body) {
+  /*
+    AN ATTACHMENT GETS A STATUS, NOT A PAPERCLIP.
+
+    "Shared attachment" was the same eleven characters for a photo, a clip, a
+    voice note and a PDF, and it never said whether the reader had already
+    seen it. The status does both, in Snapchat's grammar (ogazboiz, with a
+    screenshot): the colour and the noun say WHAT, and a solid glyph says it
+    is still waiting to be opened.
+
+    TEXT PREVIEWS ARE UNTOUCHED, deliberately. Snapchat hides message text in
+    its list; we show it, people rely on it, and the ask was about "upload and
+    camera media". Ours is the narrower change — say so rather than quietly
+    widening it.
+  */
+  const snap = snapStatus({
+    last: { ...last, senderId: last.senderId },
+    meId,
+    unreadCount: conversation.unreadCount,
+  });
+  if (!body && snap) {
     return (
       <>
-        {/* The file's own 16px document glyph, exported rather than
-            approximated — the house set has no attachment icon. */}
-        <Image src={asset("/messages/attachment.svg")} alt="" width={16} height={16} className="shrink-0" />
+        <SnapGlyph status={snap} />
         <span className="truncate">
           {mine ? "You: " : ""}
-          Shared attachment
+          {snap.label}
         </span>
       </>
     );
@@ -156,5 +172,46 @@ function Preview({ conversation, meId }: { conversation: Conversation; meId?: st
       {sender && <span className="text-white/70">{sender}: </span>}
       {body}
     </span>
+  );
+}
+
+/**
+ * The status mark: a 10px rounded square, SOLID while unopened and outlined
+ * once it has been.
+ *
+ * One shape rather than four, and the words beside it carry the kind. A set of
+ * invented icons would be four more things to get wrong at 10px, and the
+ * colour already separates a photo from a clip at a glance. Decorative, so it
+ * is hidden from screen readers — the label says everything it says.
+ */
+const SNAP_TONE: Record<SnapKind, string> = {
+  // Square's own palette, mapped onto Snapchat's meanings. `live` is reserved
+  // for rooms that are actually live, so a photo takes the softer red.
+  photo: "text-like",
+  video: "text-spotlight",
+  voice: "text-create",
+  file: "text-white/60",
+  chat: "text-reply",
+};
+
+function SnapGlyph({ status }: { status: SnapStatus }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 12 12"
+      className={cn("h-2.5 w-2.5 shrink-0", SNAP_TONE[status.kind])}
+      fill="none"
+    >
+      <rect
+        x={status.filled ? 0.5 : 1.25}
+        y={status.filled ? 0.5 : 1.25}
+        width={status.filled ? 11 : 9.5}
+        height={status.filled ? 11 : 9.5}
+        rx={status.filled ? 3 : 2.5}
+        fill={status.filled ? "currentColor" : "none"}
+        stroke={status.filled ? "none" : "currentColor"}
+        strokeWidth={1.5}
+      />
+    </svg>
   );
 }
