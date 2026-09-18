@@ -2998,6 +2998,10 @@ describe("recording a voice note: stop to listen, send in one tap", () => {
     assert.match(thread, /if \(current\) URL\.revokeObjectURL\(current\.previewUrl\);/);
     // Freed on send as well as on remove, or a sent photo leaks for the life of the tab.
     assert.match(thread, /dropAttachment\(\);\n\s*onCancelReply\(\);/);
+    // And NOTHING draws the stored object: for a private key that URL is not
+    // just unreachable, it addresses an object storage refuses anonymously.
+    assert.doesNotMatch(thread, /src=\{attachment\.result\.url\}/);
+    assert.doesNotMatch(thread, /url=\{attachment\.result\.url\}/);
   });
 });
 
