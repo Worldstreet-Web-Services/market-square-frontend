@@ -73,6 +73,7 @@ export function friendsFilterFacets(filter: FriendsFilter): {
   city?: string;
   gender?: string;
   excludeFollowing?: boolean;
+  excludeWinked?: boolean;
 } {
   const city = filter.city.trim();
   const gender = filter.gender.trim();
@@ -80,5 +81,13 @@ export function friendsFilterFacets(filter: FriendsFilter): {
     ...(city ? { city } : {}),
     ...(gender ? { gender } : {}),
     ...(filter.newOnly ? { excludeFollowing: true } : {}),
+    /*
+      A WINK IS AN ANSWER, whichever way the deck is filtered — so this is not
+      part of `newOnly`. The service drops anybody the reader has a standing
+      wink at, which is what keeps the cursor exact and what carries the rule
+      across devices; the client filter (lib/deck-candidates.ts) still covers
+      the moment between a wink and the next read.
+    */
+    excludeWinked: true,
   };
 }
