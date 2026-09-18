@@ -60,6 +60,10 @@ export function conversationFromRef(ref: ConversationRef, peer: Profile): Conver
     lastActiveAt: null,
     requestedBy: null,
     unreadCount: 0,
+    // A thread opened this second has no history, so it has no streak. The
+    // service's own row replaces this the moment the inbox refetches.
+    snapStreak: 0,
+    snapStreakExpiresAt: null,
   };
 }
 

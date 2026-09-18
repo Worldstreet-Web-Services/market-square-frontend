@@ -28,6 +28,7 @@ import {
   setMemberRole,
   transferOwnership,
   sendMessage,
+  openSnap,
   fetchHouseNotificationSettings,
   updateHouseNotificationSettings,
 } from "@/features/messages/lib/api";
@@ -108,6 +109,30 @@ export function useSendMessage(conversationId: string) {
       refreshUnread();
     },
     onError: (error, body) => toast.error(sendErrorCopy(error, body)),
+  });
+}
+
+/**
+ * OPENS A SNAP, which SPENDS it.
+ *
+ * The response is the only copy of that file this reader will ever be handed,
+ * so it is returned to the caller and deliberately NOT written into the
+ * message cache: a cache is read back on a remount, and a snap that came back
+ * when the thread re-rendered would not be view-once at all.
+ *
+ * The thread and the inbox are invalidated instead, so the bubble and the row
+ * re-read the service's own `destroyedAt` and settle on "Opened" — the state
+ * outlives this tab, which is the half that matters.
+ */
+export function useOpenSnap(conversationId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) => openSnap(conversationId, messageId),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["ms", "messages", conversationId] });
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't open that.")),
   });
 }
 

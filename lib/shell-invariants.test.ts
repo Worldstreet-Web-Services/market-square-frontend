@@ -1902,6 +1902,41 @@ describe("The phone's chat button says when somebody has spoken", () => {
   });
 });
 
+describe("A snap is seen once, and nothing in the client keeps a copy", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+  const row = stripComments(read("features/messages/components/conversation-row.tsx"));
+
+  it("draws a snap through its own bubble, before any branch that needs a url", () => {
+    // A snap carries a media kind and NO url, so every other branch would read
+    // it as a message with no attachment and draw an empty text bubble.
+    assert.match(thread, /const snap = snapView\(message, \{ mine \}\);/);
+    assert.match(thread, /snap && !removed \? \(\n\s*<SnapBubble/);
+  });
+
+  it("holds the opened url in the component and never in the cache", () => {
+    assert.match(thread, /const \[showing, setShowing\] = useState<\{ url: string; kind: "image" \| "video" \} \| null>\(null\);/);
+    // The hook invalidates; it must not write the response into a query.
+    const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
+    assert.match(hooks, /export function useOpenSnap\(conversationId: string\)/);
+    assert.doesNotMatch(hooks, /setQueryData\(\["ms", "messages"/);
+  });
+
+  it("offers no download for something that is about to be destroyed", () => {
+    assert.match(thread, /downloadUrl=\{null\}/);
+  });
+
+  it("only offers View once where the service would accept it", () => {
+    assert.match(thread, /const snapOffered = canSendSnap\(\{/);
+    assert.match(thread, /\.\.\.\(attachment && snapOffered && asSnap \? \{ viewOnce: true \} : \{\}\)/);
+    // Cleared with the attachment: view-once is chosen per photo, never a mode.
+    assert.match(thread, /const dropAttachment = useCallback\(\(\) => \{\n\s*setAsSnap\(false\);/);
+  });
+
+  it("shows a streak only once it is one", () => {
+    assert.match(row, /conversation\.snapStreak > 1 && \(/);
+  });
+});
+
 describe("The inbox says what arrived and whether it has been opened", () => {
   const row = stripComments(read("features/messages/components/conversation-row.tsx"));
 
