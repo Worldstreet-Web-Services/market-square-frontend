@@ -2918,7 +2918,9 @@ describe("chat photos and clips open full screen and can be saved, like WhatsApp
   });
 
   it("offers a real download on the bubble and in the viewer, or none at all", () => {
-    assert.match(thread, /const downloadUrl = mediaDownloadUrl\(url, `square-\$\{kind\}-\$\{message\.id\.slice\(0, 8\)\}`\);/);
+    // The service's own signed download variant where there is one, and the
+    // Cloudinary rewrite only for messages sent before signed links existed.
+    assert.match(thread, /const downloadUrl = downloadLinkFor\(message, `square-\$\{kind\}-\$\{message\.id\.slice\(0, 8\)\}`\);/);
     assert.match(thread, /\{downloadUrl && \(\n\s*<a\n\s*href=\{downloadUrl\}/);
     assert.match(viewer, /\{downloadUrl && \(\n\s*<a\n\s*href=\{downloadUrl\}/);
   });
@@ -2954,7 +2956,10 @@ describe("recording a voice note: stop to listen, send in one tap", () => {
   it("sends with ONE tap on the arrow", () => {
     assert.match(thread, /onClick=\{\(\) => void sendVoiceNow\(\)\}\n\s*aria-label="Send voice note"/);
     // Built from the upload result, not from attachment state that has not updated yet.
-    assert.match(thread, /media: \{ url: uploaded\.url, durationSeconds: result\.durationSeconds \},/);
+    assert.match(
+      thread,
+      /media: \{ key: uploaded\.key, url: uploaded\.url, durationSeconds: result\.durationSeconds \},/
+    );
     assert.match(thread, /send\.mutate\(note, \{ onSuccess: \(\) => onCancelReply\(\) \}\);/);
   });
 
@@ -2966,6 +2971,33 @@ describe("recording a voice note: stop to listen, send in one tap", () => {
   it("says so when the upload fails, instead of failing silently", () => {
     assert.match(thread, /toast\.error\("Couldn't send the voice note\."\)/);
     assert.match(thread, /toast\.error\("Couldn't attach the voice note\."\)/);
+  });
+
+  /*
+    A DM ATTACHMENT IS PRIVATE, WHICH IS A DECISION MADE AT UPLOAD TIME.
+
+    `purpose: "message"` is what puts the bytes behind a signed link; it cannot
+    be applied afterwards to an object already sitting in a public bucket. The
+    message then identifies that object by KEY, because a private object has no
+    URL the sender could hand back.
+  */
+  it("uploads a DM attachment privately and sends it by key", () => {
+    const panel = stripComments(read("features/messages/components/attachment-panel.tsx"));
+    assert.match(panel, /uploadFile\(file, setProgress, "attachment", "message"\)/);
+    assert.match(thread, /uploadFile\(result\.file, undefined, "attachment", "message"\)/);
+    assert.match(thread, /key: attachment\.result\.key,/);
+    const outgoing = stripComments(read("features/messages/lib/outgoing.ts"));
+    assert.match(outgoing, /\.\.\.\(mediaKey \? \{ key: mediaKey \} : \{ url: body\.media\.url \}\)/);
+  });
+
+  it("previews a staged attachment from the bytes in hand, and frees them", () => {
+    // The stored object is private: its URL is a signed link at best and
+    // unreachable at worst, so the row draws the picked file itself.
+    assert.match(thread, /src=\{attachment\.previewUrl\}/);
+    assert.match(thread, /url=\{attachment\.previewUrl\}/);
+    assert.match(thread, /if \(current\) URL\.revokeObjectURL\(current\.previewUrl\);/);
+    // Freed on send as well as on remove, or a sent photo leaks for the life of the tab.
+    assert.match(thread, /dropAttachment\(\);\n\s*onCancelReply\(\);/);
   });
 });
 

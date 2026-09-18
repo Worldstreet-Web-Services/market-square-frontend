@@ -96,7 +96,19 @@ export interface AttachmentPanelProps {
    * the bubble shows it and the service stores it — but it is handed back for
    * every kind so the caller is never guessing which callback shape it got.
    */
-  onAttached: (result: UploadResult, measured: Measured, fileName: string) => void;
+  /**
+   * `previewUrl` is an object URL for the bytes the reader just picked, and it
+   * is what the staged row draws. A DM attachment is stored PRIVATELY, so the
+   * upload result's own URL is a signed link at best and unreachable at worst
+   * — the file in the browser's hand is both certain and instant. The caller
+   * owns it and must revoke it.
+   */
+  onAttached: (
+    result: UploadResult,
+    measured: Measured,
+    fileName: string,
+    previewUrl: string
+  ) => void;
 }
 
 export interface Measured {
@@ -184,8 +196,11 @@ export function AttachmentPanel({ open, onClose, onAttached }: AttachmentPanelPr
       // "attachment", not the default "media": this is the one picker that
       // takes AUDIO, and the default would refuse a voice note at the last
       // gate — after the panel had already accepted it.
-      const result = await uploadFile(file, setProgress, "attachment");
-      onAttached(result, measured, file.name);
+      // "message" stores it PRIVATELY: a DM attachment is readable only
+      // through the signed links the service mints for a participant, never
+      // from a URL that outlives the conversation.
+      const result = await uploadFile(file, setProgress, "attachment", "message");
+      onAttached(result, measured, file.name, URL.createObjectURL(file));
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That upload didn't finish.");
