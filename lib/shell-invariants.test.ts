@@ -1914,7 +1914,7 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
   });
 
   it("holds the opened url in the component and never in the cache", () => {
-    assert.match(thread, /const \[showing, setShowing\] = useState<\{ url: string; kind: "image" \| "video" \} \| null>\(null\);/);
+    assert.match(thread, /const \[showing, setShowing\] = useState<\{\n\s*url: string;/);
     // The hook invalidates; it must not write the response into a query.
     const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
     assert.match(hooks, /export function useOpenSnap\(conversationId: string\)/);
@@ -1923,6 +1923,11 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
 
   it("offers no download for something that is about to be destroyed", () => {
     assert.match(thread, /downloadUrl=\{null\}/);
+  });
+
+  it("closes itself when the service deletes the file, rather than showing a dead picture", () => {
+    assert.match(thread, /const timer = setTimeout\(\(\) => setShowing\(null\), left\);/);
+    assert.match(thread, /const left = snapTimeLeft\(expiresAt, Date\.now\(\)\);/);
   });
 
   it("only offers View once where the service would accept it", () => {

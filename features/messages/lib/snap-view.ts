@@ -122,11 +122,20 @@ export function canSendSnap(input: {
 }
 
 /**
- * How long the reader has before the file is destroyed, in milliseconds.
+ * How long is left before the file is DELETED, in milliseconds.
  *
- * The service holds it for `SNAP_MEDIA_HOLD_SECONDS` (300) after opening so a
- * reopen inside the same view still loads, and the url expires no later. The
- * client does not enforce this — it is here so the viewer can stop offering a
- * retry it knows will fail.
+ * The open response carries `mediaExpiresAt` — the exact instant, which the
+ * service alone knows (`SNAP_MEDIA_HOLD_SECONDS`, five minutes today). At zero
+ * there is nothing behind the url and no retry that could work, so the viewer
+ * closes rather than sitting on a picture that has stopped loading.
+ *
+ * Null means "no deadline given": a second open, or a payload from a service
+ * that does not send one. The viewer then stays until the reader closes it,
+ * which is the old behaviour and better than closing on a guessed clock.
  */
-export const SNAP_HOLD_MS = 5 * 60 * 1000;
+export function snapTimeLeft(mediaExpiresAt: string | null | undefined, now: number): number | null {
+  if (!mediaExpiresAt) return null;
+  const deadline = Date.parse(mediaExpiresAt);
+  if (Number.isNaN(deadline)) return null;
+  return Math.max(0, deadline - now);
+}

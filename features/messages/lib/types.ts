@@ -364,6 +364,15 @@ export type InvitePreview = z.infer<typeof InvitePreviewSchema>;
 export const SnapOpenSchema = z.object({
   openedAt: z.string().nullable().optional().default(null),
   destroyed: z.boolean().optional().default(true),
+  /**
+   * The instant the file is DELETED — `openedAt` plus the service's hold, five
+   * minutes today. Not a link expiry: there is nothing behind it afterwards,
+   * which is why the viewer closes at zero rather than offering a retry.
+   *
+   * Null on a second open, and null on an ordinary message, whose attachment
+   * is not being deleted at all.
+   */
+  mediaExpiresAt: z.string().nullable().optional().default(null),
   media: z
     .object({
       url: z.string(),

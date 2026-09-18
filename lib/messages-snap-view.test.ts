@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { canSendSnap, isSnap, snapView } from "../features/messages/lib/snap-view.ts";
+import { canSendSnap, isSnap, snapTimeLeft, snapView } from "../features/messages/lib/snap-view.ts";
 
 const ME = "did:privy:me";
 const THEM = "did:privy:them";
@@ -74,5 +74,24 @@ describe("What may be sent as a snap", () => {
     assert.equal(canSendSnap({ conversationKind: "direct", mediaKind: "audio" }), false);
     assert.equal(canSendSnap({ conversationKind: "direct", mediaKind: "file" }), false);
     assert.equal(canSendSnap({ conversationKind: "direct", mediaKind: null }), false);
+  });
+});
+
+describe("How long is left before the file is deleted", () => {
+  const NOW = Date.parse("2026-09-19T12:00:00.000Z");
+
+  it("counts down to the instant the service names", () => {
+    assert.equal(snapTimeLeft("2026-09-19T12:05:00.000Z", NOW), 300_000);
+  });
+
+  it("is zero, never negative, once it has passed", () => {
+    assert.equal(snapTimeLeft("2026-09-19T11:59:00.000Z", NOW), 0);
+  });
+
+  it("is null when no deadline was given, so the viewer is not closed on a guess", () => {
+    // A second open, or a service that does not send one.
+    assert.equal(snapTimeLeft(null, NOW), null);
+    assert.equal(snapTimeLeft(undefined, NOW), null);
+    assert.equal(snapTimeLeft("shortly", NOW), null);
   });
 });

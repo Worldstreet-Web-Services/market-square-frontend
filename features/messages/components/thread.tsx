@@ -20,7 +20,7 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaViewer } from "@/components/ui/media-viewer";
 import { downloadLinkFor, mediaLinkExpired } from "@/lib/message-media-link";
-import { canSendSnap, snapView } from "@/features/messages/lib/snap-view";
+import { canSendSnap, snapTimeLeft, snapView } from "@/features/messages/lib/snap-view";
 import { useQueryClient } from "@tanstack/react-query";
 import { isHttpUrl } from "@/lib/http-url";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -1508,10 +1508,17 @@ function SnapBubble({
   tail: boolean;
   view: NonNullable<ReturnType<typeof snapView>>;
   /** Spends the snap and hands back the one url that will exist. */
-  onOpen: (messageId: string) => Promise<{ media: { url: string; kind: string | null } | null }>;
+  onOpen: (messageId: string) => Promise<{
+    media: { url: string; kind: string | null } | null;
+    mediaExpiresAt?: string | null;
+  }>;
   busy: boolean;
 }) {
-  const [showing, setShowing] = useState<{ url: string; kind: "image" | "video" } | null>(null);
+  const [showing, setShowing] = useState<{
+    url: string;
+    kind: "image" | "video";
+    expiresAt: string | null;
+  } | null>(null);
 
   const open = async () => {
     if (!view.openable || busy) return;
@@ -1520,8 +1527,31 @@ function SnapBubble({
     // A second open answers `{media: null}` rather than an error — the snap was
     // already spent, and the bubble simply settles on Opened.
     if (!media?.url) return;
-    setShowing({ url: media.url, kind: media.kind === "video" ? "video" : "image" });
+    setShowing({
+      url: media.url,
+      kind: media.kind === "video" ? "video" : "image",
+      expiresAt: result.mediaExpiresAt ?? null,
+    });
   };
+
+  /*
+    CLOSES ITSELF WHEN THE FILE IS DELETED.
+
+    `mediaExpiresAt` is the instant the service deletes the bytes, not a link
+    expiry — there is nothing behind the url afterwards and no retry that could
+    work. Leaving the viewer open past it would show a picture that has quietly
+    stopped loading, which reads as a bug rather than as the promise being
+    kept. With no deadline given the viewer stays until it is closed, which is
+    better than closing on a clock we invented.
+  */
+  const expiresAt = showing?.expiresAt ?? null;
+  useEffect(() => {
+    if (!expiresAt) return;
+    const left = snapTimeLeft(expiresAt, Date.now());
+    if (left === null) return;
+    const timer = setTimeout(() => setShowing(null), left);
+    return () => clearTimeout(timer);
+  }, [expiresAt]);
 
   const body = (
     <span className="flex items-center gap-2">
