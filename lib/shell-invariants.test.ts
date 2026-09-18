@@ -413,25 +413,23 @@ describe("the friends deck is node 844:18440's, on Home and on /pals", () => {
     assert.doesNotMatch(deck, /\/ 917|\/ 543/, "a file span is divided inline in the deck");
   });
 
-  it("BROWSES on Home and DECIDES on /pals — never the other way round", () => {
+  it("DECIDES on both decks, and never follows without the gate", () => {
     /*
-      This used to read "SWIPES TO BROWSE and never to act", full stop, and it
-      was right for the surface it was written against. `/pals` changed the
-      rule rather than broke it: on a page whose whole job is one person at a
-      time, right FOLLOWS and left SKIPS, and the file's verdict stamps
-      (856:23668 / 856:23693) announce which before the finger lifts.
+      This read "BROWSES on Home and DECIDES on /pals" until 2026-09-18. The
+      reason for the split was that a gesture which quietly followed somebody
+      while a reader scrolled past Home would be an act nobody asked for.
 
-      What has NOT changed, and is the half worth keeping: on HOME the deck is
-      one block inside a timeline, and a gesture that quietly followed somebody
-      while a reader scrolled past would be an act nobody asked for. So the
-      browse branch is still asserted, and it is still the default.
+      What changed: Home's card already carries the file's own ✕ and wink
+      buttons, so it was ALREADY a deciding surface — the swipe was the only
+      part of it that was not, and the verdict stamps (856:23668 / 856:23693)
+      never appeared there. ogazboiz asked for them ("please show it in that
+      red flag and green flag ... in that wink card in home"), so both decks
+      now decide.
+
+      The guard that mattered stays and is asserted below: a swipe can follow
+      but can NEVER unfollow, and never without `useGate`.
     */
-    assert.match(deck, /decide=\{heading === "pals"\}/, "every deck now shares one gesture — Home can act again, or /pals cannot");
-    assert.match(
-      deck,
-      /if \(!decide\) \{\s*onStep\(decision === "follow" \? -1 : 1\);/,
-      "Home's swipe no longer maps to steps"
-    );
+    assert.match(deck, /decide\n/, "Home's card browses again, so its gesture draws no verdict");
     assert.match(deck, /canCommit:/, "a swipe past either end flies out instead of springing back");
   });
 
@@ -1901,6 +1899,45 @@ describe("The phone's chat button says when somebody has spoken", () => {
     const bar = stripComments(read("features/houses/components/room-phone-bar.tsx"));
     assert.match(bar, /aria-label=\{roomChatLabel\(unreadChat\)\}/);
     assert.match(bar, /\{roomChatBadge\(unreadChat\) && \(/);
+  });
+});
+
+describe("The friends deck asks about people the reader has not answered for", () => {
+  const deck = stripComments(read("components/layout/friends-deck.tsx"));
+  const filter = stripComments(read("lib/friends-filter.ts"));
+
+  it("rests on people the reader does not follow, narrowed by the service", () => {
+    assert.match(filter, /export const EMPTY_FRIENDS_FILTER: FriendsFilter = \{ city: "", gender: "", newOnly: true \};/);
+    assert.match(filter, /\.\.\.\(filter\.newOnly \? \{ excludeFollowing: true \} : \{\}\)/);
+  });
+
+  it("drops anyone followed or winked, without trusting a missing edge", () => {
+    assert.match(deck, /const items = deckCandidates\(people\.data\?\.pages\.flatMap\(\(page\) => page\.items\) \?\? \[\], \{/);
+    assert.match(deck, /hideFollowed: filter\.newOnly,/);
+    // The wink hides the card for the cooldown the wink itself lasts — the day
+    // the service's `excludeWinked` covers — read against state, never a clock
+    // call in the render body.
+    assert.match(deck, /winkedHere: \(id\) => hasWinked\(winkedHere, id, now\),/);
+    assert.match(deck, /const \[now, setNow\] = useState\(\(\) => Date\.now\(\)\);/);
+  });
+
+  it("names the wink control's own state once it has been used", () => {
+    const card = stripComments(read("components/layout/pal-card.tsx"));
+    assert.match(card, /aria-label=\{wink\.winked \? `Already winked at \$\{name\}` : `Wink at \$\{name\}`\}/);
+    // Disabled by the hook's refusal, which covers the per-person cooldown a
+    // wink and a match both sit inside.
+    assert.match(card, /!interactive \|\| wink\.isPending \|\| wink\.unavailable \|\| wink\.refusal !== null/);
+  });
+
+  it("carries the file's verdict stamps on Home as well as /pals", () => {
+    assert.doesNotMatch(deck, /decide=\{heading === "pals"\}/, "Home's card browses again, with no green or red flag");
+    assert.match(deck, /<SwipeVerdict progress=\{swipe\.progress\} verdict=\{swipe\.verdict\} k=\{1\} \/>/);
+    assert.match(stripComments(read("components/layout/swipe-verdict.tsx")), /pals\/green-flag\.svg.*pals\/red-flag\.svg/s);
+  });
+
+  it("does not reserve a second row for a single community", () => {
+    const community = stripComments(read("components/layout/join-a-community.tsx"));
+    assert.match(community, /items\.length > 1 \? "grid-rows-2" : "grid-rows-1"/);
   });
 });
 

@@ -62,9 +62,12 @@ export function JoinACommunity() {
       {/* Two rows deep and scrolling sideways, which is what the file draws —
           `grid-flow-col` with two rows is the only layout that fills down THEN
           across, so a short list makes one full column rather than a lonely
-          top row. */}
+          top row. With ONE house there is no second row to fill, and asking
+          for two left 113px of empty card-shaped space under it on a phone
+          (ogazboiz, 2026-09-18: "the card was too long"), so a single house
+          gets a single row. */}
       <div className="ws-bleed-right-only -mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="grid grid-flow-col grid-rows-2 gap-[14.14px]">
+        <div className={`grid grid-flow-col gap-[14.14px] ${items.length > 1 ? "grid-rows-2" : "grid-rows-1"}`}>
           {items.map((house) => (
             <article
               key={house.id}

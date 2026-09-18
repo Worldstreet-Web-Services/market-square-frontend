@@ -103,6 +103,15 @@ export async function fetchPeople(
      * which would read the string "false" as true.
      */
     excludeFollowing?: boolean;
+    /**
+     * Drop the people the viewer has a standing wink at — `?excludeWinked=true`.
+     *
+     * A wink is the friends deck's positive answer, so the person it went to
+     * is no longer a suggestion. The service excludes them with a WHERE
+     * clause, so a page of 30 is 30 rows AFTER the exclusion; filtering the
+     * loaded page instead leaves holes no cursor can top up.
+     */
+    excludeWinked?: boolean;
   } = {}
 ) {
   const query = params.query?.trim() ?? "";
@@ -120,6 +129,7 @@ export async function fetchPeople(
       // Sent only when asked for: the default is "do not filter", and an
       // explicit `excludeFollowing=false` is a different request to make.
       ...(params.excludeFollowing ? { excludeFollowing: "true" } : {}),
+      ...(params.excludeWinked ? { excludeWinked: "true" } : {}),
       sort: parsePeopleSort(params.sort),
       limit: 30,
       cursor: params.cursor,
