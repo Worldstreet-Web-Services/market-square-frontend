@@ -127,8 +127,18 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
   const layout = deckLayout({ room: room || FALLBACK_ROOM, arrows: true, node });
 
 
+  /*
+    NOBODY THE READER HAS ALREADY ANSWERED FOR.
+
+    The service leaves out people they follow (`excludeFollowing`), which is
+    what keeps the CURSOR honest. This is the second half: a page fetched
+    before the reader followed somebody still carries them, and after the
+    follow that card is a question with an answer on it (ogazboiz, 2026-09-18).
+    `isFollowing` is only trusted when the payload carries it — undefined is
+    "this payload has no follow edge", never "not followed".
+  */
   const items = (people.data?.pages.flatMap((page) => page.items) ?? []).filter(
-    (profile) => profile.id !== me.data?.id
+    (profile) => profile.id !== me.data?.id && !(filter.newOnly && profile.isFollowing === true)
   );
   const filtering = isFriendsFilterActive(filter);
 
@@ -302,8 +312,15 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
             layout={layout}
             node={node}
             card={card}
-            /* `/pals` DECIDES; Home BROWSES — see the note in DeckCard. */
-            decide={heading === "pals"}
+            /*
+              BOTH DECKS DECIDE. Home's card is the same question `/pals` asks
+              — wink or pass — so it carries the file's own verdict stamps,
+              the green flag and the red one, as the gesture crosses
+              (ogazboiz, 2026-09-18: "you know that red flag and green flag
+              please show it in that wink card in home"). Browsing is still
+              the `<` `>` discs, which move without deciding anything.
+            */
+            decide
             canStep={canStep}
             onStep={step}
             onNeedMore={() => {

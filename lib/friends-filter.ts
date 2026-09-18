@@ -17,20 +17,32 @@ export interface FriendsFilter {
   city: string;
   /** "male" or "female" (`lib/gender.ts`). Empty means "anyone". */
   gender: string;
-  /** Only people the viewer does not follow yet. */
+  /**
+   * Only people the viewer does not follow yet — the deck's DEFAULT.
+   *
+   * A deck for making friends that deals people you already follow is asking
+   * a question you have answered (ogazboiz, 2026-09-18: "once they have
+   * follow someone why am i still seeing them in that wink card"). The
+   * service does the narrowing (`GET /profiles?excludeFollowing=1`), so the
+   * cursor pages a list that never contained them rather than a page with
+   * holes cut in it. "Everyone" in the menu turns it off, and THAT is the
+   * deliberate choice the pill then names.
+   */
   newOnly: boolean;
 }
 
-export const EMPTY_FRIENDS_FILTER: FriendsFilter = { city: "", gender: "", newOnly: false };
+export const EMPTY_FRIENDS_FILTER: FriendsFilter = { city: "", gender: "", newOnly: true };
 
 /** Is anything narrowed at all? Decides whether an empty deck is "nobody" or "nobody matching". */
 export function isFriendsFilterActive(filter: FriendsFilter): boolean {
-  return filter.city.trim() !== "" || filter.gender.trim() !== "" || filter.newOnly;
+  // `newOnly` is the resting state, so it narrows nothing; choosing "Everyone"
+  // WIDENS the deck, which is the deliberate choice worth naming.
+  return filter.city.trim() !== "" || filter.gender.trim() !== "" || !filter.newOnly;
 }
 
 /** How many clauses are on. */
 export function friendsFilterCount(filter: FriendsFilter): number {
-  return (filter.city.trim() ? 1 : 0) + (filter.gender.trim() ? 1 : 0) + (filter.newOnly ? 1 : 0);
+  return (filter.city.trim() ? 1 : 0) + (filter.gender.trim() ? 1 : 0) + (filter.newOnly ? 0 : 1);
 }
 
 /**
@@ -51,7 +63,9 @@ export function friendsFilterLabel(filter: FriendsFilter): string {
     const gender = filter.gender.trim();
     return gender.charAt(0).toUpperCase() + gender.slice(1);
   }
-  return "New people";
+  // The only single clause left that is not a value: the reader widened the
+  // deck back to everyone, including the people they already follow.
+  return "Everyone";
 }
 
 /** The query facets `usePeople` sends — trimmed, and only the clauses that are on. */
