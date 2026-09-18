@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IconDeckArrow } from "@/components/ui/home-icons";
 import { DeckDots } from "@/components/ui/deck-dots";
 import { PalCard, DECK_CARD, HOME_DECK_CARD, type PalCardNodeGeometry } from "@/components/layout/pal-card";
@@ -22,7 +22,7 @@ import { cn } from "@/lib/cn";
 import { DECK_NODE, HOME_DECK_NODE, PALS_PAGE, deckLayout, type DeckLayout, type DeckNode } from "@/lib/deck-layout";
 import type { Profile } from "@/lib/api/schemas";
 import { deckCandidates } from "@/lib/deck-candidates";
-import { lastWinkAt } from "@/lib/winks";
+import { hasWinked } from "@/lib/winks";
 import { useSentWinks } from "@/features/profile/lib/wink-store";
 
 /**
@@ -141,14 +141,26 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     "this payload has no follow edge", never "not followed".
   */
   const winkedHere = useSentWinks(me.data?.id ?? null);
+  /*
+    THE CLOCK A LAPSED WINK IS READ AGAINST. Seeded once and nudged on a coarse
+    tick: the boundary it decides moves once a DAY, so a minute of staleness
+    costs nothing, while `Date.now()` in the render body is both impure and
+    something the React Compiler refuses outright.
+  */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), WINK_LAPSE_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
   const items = deckCandidates(people.data?.pages.flatMap((page) => page.items) ?? [], {
     viewerId: me.data?.id ?? null,
     hideFollowed: filter.newOnly,
-    // A wink sent from this browser is an ANSWER, so the card goes whether or
-    // not its per-person cooldown has run out — unlike the wink CONTROL, which
-    // re-enables when the cooldown does. Reading a record rather than a clock
-    // also keeps this render pure.
-    winkedHere: (id) => lastWinkAt(winkedHere, id) !== null,
+    // A wink hides the card for as long as the wink itself stands — the same
+    // `WINK_COOLDOWN_MS` day the wink CONTROL is disabled for, and the same day
+    // the service's own `excludeWinked` leaves them out (ogazboiz, 2026-09-18).
+    // Past that the wink has lapsed, and an unanswered question is a question
+    // again. `now` is state, not a call to the clock during render.
+    winkedHere: (id) => hasWinked(winkedHere, id, now),
   });
   const filtering = isFriendsFilterActive(filter);
 
@@ -446,6 +458,9 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
 
 /** Before the first measurement: Home's desktop column. Replaced before paint by the callback ref. */
 const FALLBACK_ROOM = 552;
+
+/** How often the deck re-reads the clock, to notice a wink that has lapsed in a tab left open. */
+const WINK_LAPSE_TICK_MS = 5 * 60 * 1000;
 
 /** Home's pill row, 647:16296: its centre 5.61 right of the front card's, and its drawn width (one 36.29 pill, four 13.79, four 3.63 gaps). */
 const HOME_DOTS = { dx: 5.61, width: 36.29 + 4 * 13.79 + 4 * 3.63 };

@@ -10,6 +10,12 @@
  *     2026-09-18: "after I wink positively dont show me the same account
  *     again".
  *
+ * "Again" lasts as long as the wink does — `WINK_COOLDOWN_MS`, the day the
+ * wink control stays disabled for and the day the service's own
+ * `excludeWinked` leaves them out (ogazboiz chose the lapse over a permanent
+ * hide, 2026-09-18). A wink that went unanswered for a day is a question
+ * again, and a deck that never re-asks runs out of people.
+ *
  * ─── WHAT COUNTS AS "ALREADY WINKED" ─────────────────────────────────────────
  * `winkedByMe` is the service's own answer and outranks everything: it
  * survives a new browser, where this tab's memory does not. It is optional and

@@ -1914,7 +1914,11 @@ describe("The friends deck asks about people the reader has not answered for", (
   it("drops anyone followed or winked, without trusting a missing edge", () => {
     assert.match(deck, /const items = deckCandidates\(people\.data\?\.pages\.flatMap\(\(page\) => page\.items\) \?\? \[\], \{/);
     assert.match(deck, /hideFollowed: filter\.newOnly,/);
-    assert.match(deck, /winkedHere: \(id\) => lastWinkAt\(winkedHere, id\) !== null,/);
+    // The wink hides the card for the cooldown the wink itself lasts — the day
+    // the service's `excludeWinked` covers — read against state, never a clock
+    // call in the render body.
+    assert.match(deck, /winkedHere: \(id\) => hasWinked\(winkedHere, id, now\),/);
+    assert.match(deck, /const \[now, setNow\] = useState\(\(\) => Date\.now\(\)\);/);
   });
 
   it("names the wink control's own state once it has been used", () => {
