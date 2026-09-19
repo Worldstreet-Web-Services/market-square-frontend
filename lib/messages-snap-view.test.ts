@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { canSendSnap, isSnap, snapTimeLeft, snapView } from "../features/messages/lib/snap-view.ts";
+import { flattenMessageMedia } from "../features/messages/lib/message-media.ts";
 
 const ME = "did:privy:me";
 const THEM = "did:privy:them";
@@ -93,5 +94,19 @@ describe("How long is left before the file is deleted", () => {
     assert.equal(snapTimeLeft(null, NOW), null);
     assert.equal(snapTimeLeft(undefined, NOW), null);
     assert.equal(snapTimeLeft("shortly", NOW), null);
+  });
+});
+
+describe("A snap's media flattens, though it carries no url", () => {
+  it("accepts the media object the service actually sends for an unopened snap", () => {
+    // THIS SHIPPED BROKEN ONCE. `media.url` was required in MessageSchema, so
+    // the first snap sent made the send response fail to parse: the service
+    // created the message and answered 201, and the composer still said
+    // "Couldn't send that message". The url is withheld on purpose and only
+    // ever arrives from the open route. The schema itself is pinned in
+    // lib/shell-invariants.test.ts, which can read files this cannot import.
+    const flat = flattenMessageMedia({ kind: "image", width: 1080, height: 1920, sizeBytes: 857000 });
+    assert.equal(flat.mediaUrl, null);
+    assert.equal(flat.mediaKind, "image");
   });
 });
