@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { profileHref } from "@/lib/profile-href";
 import { toast } from "sonner";
 import { atHandle } from "@/lib/handle";
@@ -19,7 +19,8 @@ import { Spinner } from "@/components/ui/button";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaViewer } from "@/components/ui/media-viewer";
-import { mediaDownloadUrl } from "@/lib/media-download";
+import { downloadLinkFor, mediaLinkExpired } from "@/lib/message-media-link";
+import { useQueryClient } from "@tanstack/react-query";
 import { isHttpUrl } from "@/lib/http-url";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { Sheet } from "@/components/ui/sheet";
@@ -1129,6 +1130,37 @@ function FileBubble({
   );
 }
 
+/**
+ * ASKS FOR A FRESH LINK WHEN ONE DIES UNDER THE READER.
+ *
+ * An open thread polls every few seconds, so its links are re-minted long
+ * before the service's fifteen minutes are up — this is not that case. It is
+ * the tab left in the background, where the poll is suspended and the photo
+ * that was on screen an hour ago is now pointing at a link the service will
+ * refuse. The <img> errors, and this asks the thread for the message again,
+ * which arrives with a link minted this second.
+ *
+ * TWO GUARDS, because a refetch that draws the same broken URL would loop:
+ *   · ONCE per bubble, held in a ref, so a photo that is genuinely missing
+ *     costs exactly one request rather than one per failed decode;
+ *   · ONLY when this message's link is at or past its deadline. A message with
+ *     no deadline is an old storage URL, and an image that fails on one of
+ *     those has a different problem that a refetch cannot fix.
+ *
+ * `Date.now()` is read in the error handler — an event, not a render — so this
+ * stays a pure component.
+ */
+function useExpiredLinkRefresh(urlExpiresAt: string | null | undefined) {
+  const client = useQueryClient();
+  const asked = useRef(false);
+  return useCallback(() => {
+    if (asked.current) return;
+    if (!mediaLinkExpired(urlExpiresAt, Date.now())) return;
+    asked.current = true;
+    void client.refetchQueries({ queryKey: ["ms", "messages"] });
+  }, [client, urlExpiresAt]);
+}
+
 function MediaBubble({
   message,
   mine,
@@ -1151,7 +1183,8 @@ function MediaBubble({
   const [viewing, setViewing] = useState(false);
   // A real save of the ORIGINAL file, or null when this is not a file the
   // service issued — see lib/media-download.ts. Null draws no control at all.
-  const downloadUrl = mediaDownloadUrl(url, `square-${kind}-${message.id.slice(0, 8)}`);
+  const downloadUrl = downloadLinkFor(message, `square-${kind}-${message.id.slice(0, 8)}`);
+  const refreshLink = useExpiredLinkRefresh(message.mediaUrlExpiresAt);
   const noun = kind === "video" ? "video" : "photo";
 
   return (
@@ -1207,6 +1240,7 @@ function MediaBubble({
               alt={caption || "Attachment"}
               loading="lazy"
               decoding="async"
+              onError={refreshLink}
               className="absolute inset-0 h-full w-full object-contain"
             />
           </MediaFrame>
@@ -1762,8 +1796,25 @@ function Composer({
   // time it lands here — the panel finishes the upload before it closes — so
   // this holds a URL the service will accept, not a File still to be pushed.
   const [attachment, setAttachment] = useState<
-    { result: UploadResult; measured: Measured; fileName: string } | null
+    { result: UploadResult; measured: Measured; fileName: string; previewUrl: string } | null
   >(null);
+  /*
+    THE STAGED ROW DRAWS THE BYTES IN HAND, not the stored object.
+
+    A DM attachment is uploaded PRIVATELY: what comes back is a key, and any
+    URL beside it is a signed link that expires — neither is a thing to point
+    an <img> at while the reader decides whether to send. `previewUrl` is an
+    object URL for the file they picked, so the preview is instant and cannot
+    404. It is ours to free: an object URL holds the blob alive until it is
+    revoked, and a reader who picks five photos and sends none would otherwise
+    keep all five in memory for the life of the tab.
+  */
+  const dropAttachment = useCallback(() => {
+    setAttachment((current) => {
+      if (current) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  }, []);
   const voice = useVoiceRecorder();
   const [voiceBusy, setVoiceBusy] = useState(false);
   const body = text.trim();
@@ -1784,6 +1835,10 @@ function Composer({
     ...(attachment
       ? {
           media: {
+            // The key identifies a PRIVATELY stored object, whose URL is a
+            // signed link rather than an address the service would accept
+            // back. `buildMessagePayload` sends one or the other.
+            key: attachment.result.key,
             url: attachment.result.url,
             width: attachment.measured.width ?? null,
             height: attachment.measured.height ?? null,
@@ -1815,9 +1870,10 @@ function Composer({
       // "attachment" is what admits audio at all — see the note in
       // AttachmentPanel. Without it a recorded voice note is rejected by our
       // own uploader before it reaches the service.
-      const uploaded = await uploadFile(result.file, undefined, "attachment");
+      const uploaded = await uploadFile(result.file, undefined, "attachment", "message");
       setAttachment({
         result: uploaded,
+        previewUrl: URL.createObjectURL(result.file),
         measured: { durationSeconds: result.durationSeconds },
         // A recording has no name the reader chose. It is carried for the type
         // only — `fileName` is sent for documents alone, so this never reaches
@@ -1851,10 +1907,10 @@ function Composer({
     if (!result) return;
     setVoiceBusy(true);
     try {
-      const uploaded = await uploadFile(result.file, undefined, "attachment");
+      const uploaded = await uploadFile(result.file, undefined, "attachment", "message");
       const note: OutgoingMessage = {
         ...(replyTo ? { replyToId: replyTo.id } : {}),
-        media: { url: uploaded.url, durationSeconds: result.durationSeconds },
+        media: { key: uploaded.key, url: uploaded.url, durationSeconds: result.durationSeconds },
       };
       send.mutate(note, { onSuccess: () => onCancelReply() });
     } catch {
@@ -1869,7 +1925,9 @@ function Composer({
     send.mutate(outgoing, {
       onSuccess: () => {
         typing.reset();
-        setAttachment(null);
+        // Frees the object URL as well as clearing the row — the sent message
+        // is drawn from the service's own payload from here on.
+        dropAttachment();
         onCancelReply();
       },
     });
@@ -1950,13 +2008,13 @@ function Composer({
           {attachment.result.kind === "image" ? (
             /* eslint-disable-next-line @next/next/no-img-element -- attachment hosts are unknown at build time */
             <img
-              src={attachment.result.url}
+              src={attachment.previewUrl}
               alt=""
               className="h-10 w-10 shrink-0 rounded-lg object-cover"
             />
           ) : attachment.result.kind === "audio" ? (
             <StagedVoicePreview
-              url={attachment.result.url}
+              url={attachment.previewUrl}
               durationSeconds={attachment.measured.durationSeconds ?? null}
             />
           ) : (
@@ -1981,7 +2039,7 @@ function Composer({
           </p>
           <button
             type="button"
-            onClick={() => setAttachment(null)}
+            onClick={dropAttachment}
             aria-label="Remove attachment"
             className="ws-press shrink-0 rounded-full p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
@@ -2227,8 +2285,8 @@ function Composer({
         <AttachmentPanel
           open
           onClose={() => setPicking(false)}
-          onAttached={(result, measured, fileName) =>
-            setAttachment({ result, measured, fileName })
+          onAttached={(result, measured, fileName, previewUrl) =>
+            setAttachment({ result, measured, fileName, previewUrl })
           }
         />
       )}

@@ -20,6 +20,16 @@
  */
 
 export interface OutgoingMedia {
+  /**
+   * The stored object's key, for an attachment the service keeps PRIVATE.
+   *
+   * A private object has no URL the sender could hand back — the service mints
+   * a signed link per read instead — so the key is what identifies it. Empty
+   * or absent means an upload from before private storage, which still
+   * identifies itself by `url`; the service accepts exactly one of the two and
+   * prefers the key.
+   */
+  key?: string;
   url: string;
   width?: number | null;
   height?: number | null;
@@ -64,7 +74,8 @@ export interface OutgoingMessage {
 export interface MessagePayload {
   text?: string;
   media?: {
-    url: string;
+    key?: string;
+    url?: string;
     width?: number;
     height?: number;
     durationSeconds?: number;
@@ -86,7 +97,8 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
   const text = body.text?.trim();
   if (text) payload.text = text;
 
-  if (body.media?.url) {
+  const mediaKey = body.media?.key?.trim();
+  if (body.media && (mediaKey || body.media.url)) {
     const width = measurement(body.media.width);
     const height = measurement(body.media.height);
     // A sub-second clip still has a duration; the service's floor is 1.
@@ -98,7 +110,11 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
     const fileName = body.media.fileName?.trim();
     const sizeBytes = measurement(body.media.sizeBytes);
     payload.media = {
-      url: body.media.url,
+      // EXACTLY ONE of the two, never both: the service takes the key when it
+      // is sent, and sending a stale URL beside it would only be a second
+      // claim about the same object. The URL remains the whole story for an
+      // upload the service answered without a key.
+      ...(mediaKey ? { key: mediaKey } : { url: body.media.url }),
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
       ...(duration ? { durationSeconds: duration } : {}),

@@ -34,6 +34,16 @@ export const MessageSchema = z.object({
   media: z
     .object({
       url: z.string(),
+      /**
+       * The signed `download` variant, and when both links stop working.
+       *
+       * Optional because they are ABSENT on the service as deployed today —
+       * this client ships before the service that mints them, deliberately, so
+       * that the Save control never disappears in the window between the two
+       * deploys. `lib/message-media-link.ts` holds the rule for both shapes.
+       */
+      downloadUrl: z.string().nullable().optional().default(null),
+      urlExpiresAt: z.string().nullable().optional().default(null),
       // `catch` rather than a hard enum: a future fourth kind must degrade to
       // "media we cannot type" (the URL sniff then decides) instead of
       // throwing the message away.
@@ -83,6 +93,21 @@ export const MessageSchema = z.object({
   // without also knowing the roster size at the moment of sending.
   readBy: z.number().optional().default(0),
   readByAll: z.boolean().optional().default(false),
+  /**
+   * OPENED, per message and per person — stricter than `readByAll`.
+   *
+   * `readByAll` is the thread's read watermark: it says the other side has
+   * been into the conversation, not that they looked at THIS message.
+   * `openedByMe` and `openedByPeer` (direct conversations only) are the
+   * service's per-message stamps, and they are what a view-once snap turns on.
+   *
+   * Both are optional and BOTH DEFAULT TO FALSE ONLY AS A SHAPE, never as an
+   * answer: `snapStatus` prefers them when the payload carries them and falls
+   * back to the watermark when it does not, so a service that has not shipped
+   * them yet still draws a correct row.
+   */
+  openedByMe: z.boolean().nullable().optional().default(null),
+  openedByPeer: z.boolean().nullable().optional().default(null),
   // The spec's enum. `catch` keeps an unknown future state from blanking the
   // thread; a removed message keeps its row but not its body.
   status: z.enum(["active", "removed"]).optional().default("active").catch("active"),
