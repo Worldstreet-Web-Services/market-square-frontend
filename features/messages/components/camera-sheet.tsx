@@ -8,6 +8,7 @@ import {
   CAMERA_HOLD_MS,
   CAMERA_MAX_CLIP_MS,
   cameraErrorCopy,
+  captureContentType,
   captureFileName,
   flipFacing,
   pickClipType,
@@ -157,7 +158,12 @@ export function CameraSheet({
       setRecording(false);
       setElapsed(0);
       if (blob.size === 0) return;
-      const file = new File([blob], captureFileName("video", Date.now()), { type: blob.type });
+      // WITHOUT THE CODECS. `video/webm;codecs=vp9,opus` is not a type the
+      // service recognises, and what it does not recognise it stores as a
+      // generic file — which is how a recorded clip arrived in the thread as
+      // a .txt row.
+      const type = captureContentType(node.mimeType);
+      const file = new File([blob], captureFileName("video", Date.now(), type), { type });
       onCaptured(file, URL.createObjectURL(file));
       onClose();
     };

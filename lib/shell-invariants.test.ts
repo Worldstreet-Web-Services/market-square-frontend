@@ -1925,6 +1925,13 @@ describe("The camera is the second door, and it behaves differently", () => {
     assert.match(camera, /if \(cancelled\) \{\n\s*opened\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\);/);
   });
 
+  it("uploads a clip as a type the service knows, codecs stripped", () => {
+    // `video/webm;codecs=vp9,opus` is stored as a generic file, and the clip
+    // arrives in the thread as a .txt row. It shipped exactly once.
+    assert.match(camera, /const type = captureContentType\(node\.mimeType\);/);
+    assert.match(camera, /captureFileName\("video", Date\.now\(\), type\)/);
+  });
+
   it("refuses to record a clip the service would not accept, before recording it", () => {
     assert.match(camera, /if \(!type\) \{/);
     assert.match(camera, /getUploadLimits\(\)\.videoContentTypes/);
