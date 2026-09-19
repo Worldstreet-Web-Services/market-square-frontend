@@ -1902,6 +1902,19 @@ describe("The phone's chat button says when somebody has spoken", () => {
   });
 });
 
+describe("An open thread keeps acknowledging what lands in it", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+
+  it("re-marks read when a new message arrives, not only on open", () => {
+    // Fired once per thread once, so three snaps that landed while the reader
+    // was sitting in the conversation stayed unread for ever.
+    assert.match(thread, /const seenThrough = `\$\{conversation\.id\}:\$\{conversation\.lastMessageAt \?\? ""\}`;/);
+    assert.match(thread, /if \(acknowledged\.current === seenThrough\) return;/);
+    // The same pair is acknowledged once, so mark-read cannot loop on itself.
+    assert.match(thread, /acknowledged\.current = seenThrough;/);
+  });
+});
+
 describe("The camera is the second door, and it behaves differently", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
   const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
