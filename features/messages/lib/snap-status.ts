@@ -82,6 +82,8 @@ export interface SnapStatusInput {
     openedByPeer?: boolean | null;
     /** A view-once snap, which the row names as one. */
     viewOnce?: boolean;
+    /** Set once a snap has been opened and its file destroyed. */
+    destroyedAt?: string | null;
   } | null;
   /** The reader, so the row knows which end of the conversation it is on. */
   meId?: string | null;
@@ -129,12 +131,20 @@ export function snapStatus(input: SnapStatusInput): SnapStatus | null {
     };
   }
 
-  // The reader's half. Their own stamp where the service sends one, otherwise
-  // the inbox's unread count, which says whether they have been into the
-  // thread since this arrived.
-  const unopened = last.openedByMe === null || last.openedByMe === undefined
-    ? input.unreadCount > 0
-    : !last.openedByMe;
+  /*
+    The reader's half, in order of how much each source actually knows:
+
+      · DESTROYED outranks everything. A spent snap is spent for both ends, and
+        the row must not offer "New Snap" for a file that no longer exists.
+      · their own per-message stamp, where the service sends one;
+      · otherwise the inbox's unread count, which answers the looser question
+        of whether they have been into the thread since this arrived.
+  */
+  const unopened = last.destroyedAt
+    ? false
+    : last.openedByMe === null || last.openedByMe === undefined
+      ? input.unreadCount > 0
+      : !last.openedByMe;
   return {
     kind,
     state: unopened ? "new" : "opened",
