@@ -1559,6 +1559,19 @@ function SnapBubble({
     <span className="flex items-center gap-2">
       <SnapMark state={view.state} />
       <span className="text-[13px] leading-[19px]">{busy ? "Opening…" : view.label}</span>
+      {/* WHICH DOOR IT CAME THROUGH. Drawn only where the payload says — a
+          message from before the field carries no claim, and inventing one
+          would be a claim about the sender. */}
+      {view.sourceLabel && (
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-[14px]",
+            mine ? "bg-black/10 text-ink/60" : "bg-white/15 text-white/70"
+          )}
+        >
+          {view.sourceLabel}
+        </span>
+      )}
     </span>
   );
 
@@ -2025,6 +2038,7 @@ function Composer({
             // signed link rather than an address the service would accept
             // back. `buildMessagePayload` sends one or the other.
             key: attachment.result.key,
+            source: attachment.source,
             url: attachment.result.url,
             width: attachment.measured.width ?? null,
             height: attachment.measured.height ?? null,

@@ -1950,6 +1950,11 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
     assert.doesNotMatch(hooks, /setQueryData\(\["ms", "messages"/);
   });
 
+  it("says which door a snap came through, and only where it was told", () => {
+    assert.match(thread, /\{view\.sourceLabel && \(/);
+    assert.match(thread, /source: attachment\.source,/);
+  });
+
   it("offers no download for something that is about to be destroyed", () => {
     assert.match(thread, /downloadUrl=\{null\}/);
   });
