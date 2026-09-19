@@ -33,7 +33,17 @@ export const MessageSchema = z.object({
    */
   media: z
     .object({
-      url: z.string(),
+      /**
+       * NULL FOR A SNAP, and that is the contract rather than a broken row.
+       *
+       * The service withholds the url for an unopened view-once message
+       * everywhere it is read — a link on a read would be a way to see a snap
+       * without spending it. This field was `z.string()` and required, so the
+       * first snap sent made `MessageSchema.parse` throw: the service created
+       * the message, answered 201, and the composer still said "Couldn't send
+       * that message". The url only ever arrives from the open route.
+       */
+      url: z.string().nullable().optional().default(null),
       /**
        * The signed `download` variant, and when both links stop working.
        *

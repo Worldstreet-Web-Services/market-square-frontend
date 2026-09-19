@@ -1925,6 +1925,13 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
     assert.match(thread, /downloadUrl=\{null\}/);
   });
 
+  it("parses a message whose media has no url, which is what a snap is", () => {
+    // Required `url` made the send response throw on the first snap ever sent:
+    // 201 from the service, "Couldn't send that message" in the composer.
+    const types = stripComments(read("features/messages/lib/types.ts"));
+    assert.match(types, /url: z\.string\(\)\.nullable\(\)\.optional\(\)\.default\(null\),/);
+  });
+
   it("closes itself when the service deletes the file, rather than showing a dead picture", () => {
     assert.match(thread, /const timer = setTimeout\(\(\) => setShowing\(null\), left\);/);
     assert.match(thread, /const left = snapTimeLeft\(expiresAt, Date\.now\(\)\);/);

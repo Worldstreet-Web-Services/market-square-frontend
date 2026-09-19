@@ -144,7 +144,8 @@ export function mediaRatio(
  * the render shape unable to drift apart silently again.
  */
 export interface WireMessageMedia {
-  url: string;
+  /** Null for an unopened snap — the service withholds it on every read. */
+  url?: string | null;
   /**
    * The service's `download` variant of the same object — signed for saving,
    * and the ONLY way to save a private attachment, since editing a signed URL
