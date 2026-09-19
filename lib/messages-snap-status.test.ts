@@ -87,6 +87,18 @@ describe("The inbox says what arrived and whether it has been opened", () => {
     assert.equal(unread?.state, "new");
   });
 
+  it("names a snap a snap, with no url to go on", () => {
+    // The service sends a snap's kind and withholds its url on purpose. Without
+    // reading the typed kind the row would call a photo "New Chat".
+    const snap = snapStatus({
+      last: { viewOnce: true, mediaKind: "image", senderId: THEM },
+      meId: ME,
+      unreadCount: 1,
+    });
+    assert.equal(snap?.kind, "photo");
+    assert.equal(snap?.label, "New Snap");
+  });
+
   it("says nothing at all about an empty thread or a removed message", () => {
     assert.equal(snapStatus({ last: null, meId: ME, unreadCount: 0 }), null);
     assert.equal(snapStatus({ last: { ...photo, status: "removed" }, meId: ME, unreadCount: 1 }), null);

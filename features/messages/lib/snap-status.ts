@@ -80,6 +80,8 @@ export interface SnapStatusInput {
     /** Per-message stamps. Null means the payload carries none, not "no". */
     openedByMe?: boolean | null;
     openedByPeer?: boolean | null;
+    /** A view-once snap, which the row names as one. */
+    viewOnce?: boolean;
   } | null;
   /** The reader, so the row knows which end of the conversation it is on. */
   meId?: string | null;
@@ -109,6 +111,9 @@ export function snapStatus(input: SnapStatusInput): SnapStatus | null {
 
   const kind = kindOf(last);
   const mine = Boolean(input.meId && last.senderId === input.meId);
+  // Snapchat's own word, and the right one: a snap is not "a photo" in the
+  // inbox, it is a thing that will be gone once looked at.
+  const noun = last.viewOnce === true ? "Snap" : NOUN[kind];
 
   if (mine) {
     // The sender's half. The per-message stamp first; the thread watermark only
@@ -133,7 +138,7 @@ export function snapStatus(input: SnapStatusInput): SnapStatus | null {
   return {
     kind,
     state: unopened ? "new" : "opened",
-    label: unopened ? `New ${NOUN[kind]}` : "Opened",
+    label: unopened ? `New ${noun}` : "Opened",
     filled: unopened,
   };
 }
@@ -150,5 +155,17 @@ function kindOf(last: NonNullable<SnapStatusInput["last"]>): SnapKind {
   if (media === "video") return "video";
   if (media === "audio") return "voice";
   if (media === "file") return "file";
+  /*
+    A SNAP HAS A KIND AND NO URL, and that is deliberate on the service's part
+    — a link on a read would be a way to see it without spending it. The
+    ordinary picker needs a url before it will call something media, so
+    without this a snap falls through to "chat" and the row says "New Chat"
+    about a photo.
+  */
+  const typed = last.mediaKind?.trim().toLowerCase();
+  if (typed?.startsWith("image")) return "photo";
+  if (typed?.startsWith("video")) return "video";
+  if (typed?.startsWith("audio")) return "voice";
+  if (typed?.startsWith("file")) return "file";
   return "chat";
 }
