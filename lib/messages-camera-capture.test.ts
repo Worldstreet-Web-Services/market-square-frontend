@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   CAMERA_HOLD_MS,
   cameraErrorCopy,
+  captureContentType,
   captureFileName,
   defaultViewOnce,
   flipFacing,
@@ -43,10 +44,23 @@ describe("The shutter reads the press as the gesture it turned out to be", () =>
 });
 
 describe("The small decisions around a capture", () => {
-  it("names the file something a disk can live with", () => {
+  it("names the file something a disk can live with, matching the bytes", () => {
     const at = Date.parse("2026-09-19T04:21:07.456Z");
     assert.equal(captureFileName("photo", at), "square-photo-2026-09-19T04-21-07.jpg");
-    assert.equal(captureFileName("video", at), "square-clip-2026-09-19T04-21-07.webm");
+    assert.equal(captureFileName("video", at, "video/webm"), "square-clip-2026-09-19T04-21-07.webm");
+    assert.equal(captureFileName("video", at, "video/mp4"), "square-clip-2026-09-19T04-21-07.mp4");
+  });
+
+  it("uploads a clip WITHOUT the codec parameter", () => {
+    // THIS SHIPPED. MediaRecorder hands back `video/webm;codecs=vp9,opus`; the
+    // service does not recognise that, stores it as a generic file, and a clip
+    // recorded on the camera arrived in the thread as a .txt attachment.
+    assert.equal(captureContentType("video/webm;codecs=vp9,opus"), "video/webm");
+    assert.equal(captureContentType("video/mp4;codecs=avc1.42E01E"), "video/mp4");
+    assert.equal(captureContentType("video/webm"), "video/webm");
+    // Anything else a browser invents falls to the type we asked it to record.
+    assert.equal(captureContentType("video/x-matroska;codecs=avc1"), "video/webm");
+    assert.equal(captureContentType(""), "video/webm");
   });
 
   it("flips between the two cameras a phone actually has", () => {

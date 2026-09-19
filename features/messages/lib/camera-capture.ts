@@ -76,15 +76,35 @@ export function pickClipType(
 }
 
 /**
+ * THE TYPE A CAPTURE IS UPLOADED AS, with the codecs stripped off.
+ *
+ * `MediaRecorder` hands back `video/webm;codecs=vp9,opus`, and that parameter
+ * is not a detail: the service matches the content type against an allowlist,
+ * a type it does not recognise is stored as a generic file, and a clip that
+ * was recorded on the camera arrives in the thread as a `.txt` attachment.
+ * That shipped — ogazboiz recorded a video on 2026-09-19 and got a TXT row.
+ *
+ * The same `normalizeType` the voice note and `validateUpload` use, so the
+ * three cannot drift about what a recorded file's type IS.
+ */
+export function captureContentType(recorded: string): string {
+  const base = normalizeType(recorded);
+  return base === "video/mp4" ? "video/mp4" : "video/webm";
+}
+
+/**
  * The file name a capture is given.
  *
  * It never reaches the service for a photo or a clip — `fileName` is sent for
- * documents alone — but it is what a download would be called, and "blob"
- * is not a name anybody wants on their disk.
+ * documents alone — but it is what a DOWNLOAD would be called, and an
+ * extension that disagrees with the bytes is how a clip ends up saved as
+ * something no player will open.
  */
-export function captureFileName(kind: "photo" | "video", at: number): string {
+export function captureFileName(kind: "photo" | "video", at: number, contentType?: string): string {
   const stamp = new Date(at).toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  return kind === "photo" ? `square-photo-${stamp}.jpg` : `square-clip-${stamp}.webm`;
+  if (kind === "photo") return `square-photo-${stamp}.jpg`;
+  const ext = normalizeType(contentType ?? "") === "video/mp4" ? "mp4" : "webm";
+  return `square-clip-${stamp}.${ext}`;
 }
 
 /**
