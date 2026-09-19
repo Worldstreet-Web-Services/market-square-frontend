@@ -7,9 +7,20 @@ import { useIdentityToken, usePrivy } from "@privy-io/react-auth";
 import { Button, Spinner } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
-import type { LinkOutcome } from "@/lib/migration-link";
+import { squareSettled, type LinkOutcome, type SquareRekey } from "@/lib/migration-link";
 import { sq } from "@/lib/square-path";
-import { linkLegacyAccount } from "../lib/api";
+import { fetchSquareRekey, linkLegacyAccount } from "../lib/api";
+
+/**
+ * How long to wait for Square to finish moving the profile before saying so
+ * plainly. The synchronous re-key answers inside the link itself, so reaching
+ * this ceiling means the move is going through the queue and the worker is
+ * behind — which the reader should be told, not shown as a spinner that never
+ * ends. That exact spinner-versus-outage ambiguity is what made a broken
+ * migration invisible for days.
+ */
+const SQUARE_WAIT_MS = 30_000;
+const SQUARE_POLL_MS = 2_500;
 import { LegacyPrivyProvider } from "./legacy-privy-provider";
 
 /**
@@ -25,9 +36,13 @@ import { LegacyPrivyProvider } from "./legacy-privy-provider";
  * profile. Reopening this page re-sends it, which is how a link that met a
  * transient outage gets finished (the call is idempotent by contract).
  *
- * What this page will not do is watch for the move to finish: Square does not
- * report it (llms-link.txt §3), so a recorded link is the end of the story here
- * and the profile simply is there afterwards.
+ * This page DOES watch for the move to finish. It used not to — Square did not
+ * report the re-key, so a recorded link was the end of the story here and the
+ * profile was assumed to be there afterwards. Square now answers with
+ * `rekey.square`, so the three cases that used to look identical are told
+ * apart: done, still going, and refused because this account already has a
+ * profile. Announcing success over that last one is how somebody loses their
+ * followers quietly.
  */
 export function MoveAccountPage() {
   const { ready, authenticated, login } = useAuth();
@@ -72,6 +87,11 @@ function LinkFlow() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const [outcome, setOutcome] = useState<LinkOutcome | null>(null);
+  // Where Square says the profile move itself got to, separately from whether
+  // the pairing was recorded. `waiting` is true only while it is `pending` and
+  // we are still inside the ceiling.
+  const [square, setSquare] = useState<SquareRekey>("unknown");
+  const [waiting, setWaiting] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
@@ -84,18 +104,55 @@ function LinkFlow() {
         return;
       }
       const result = await linkLegacyAccount({ accessToken, idToken: identityToken });
-      setOutcome(result);
-      if (result.kind === "linked") {
-        // The profile moves asynchronously; the next /me read picks it up.
-        void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
+      setOutcome(result.outcome);
+      setSquare(result.square);
+      if (result.outcome.kind === "linked") {
+        // Wait for the move rather than announcing success over it: sending
+        // the reader on during `pending` lands them on a profile that does not
+        // have their posts yet, which reads as data loss.
+        if (result.square === "pending") setWaiting(true);
+        else void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
       }
-      if (result.kind !== "reauth") {
+      if (result.outcome.kind !== "reauth") {
         // The old session has done its one job. Leaving it signed in would
         // keep a second identity alive in this browser for no reason.
         await privy.logout().catch(() => {});
       }
     })();
   }, [privy, identityToken, queryClient]);
+
+  // Poll only while the move is in flight. Every exit clears the timer, and a
+  // poll that cannot answer reads as `unknown`, which ends the wait — a
+  // spinner that outlives the thing it is waiting for is the failure mode this
+  // whole screen exists to avoid.
+  useEffect(() => {
+    if (!waiting) return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const startedAt = Date.now();
+    const tick = async () => {
+      const state = await fetchSquareRekey();
+      if (!live) return;
+      if (squareSettled(state)) {
+        setSquare(state);
+        setWaiting(false);
+        if (state !== "failed") void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
+        return;
+      }
+      if (Date.now() - startedAt >= SQUARE_WAIT_MS) {
+        // Still pending, and we stop asking. The copy below says so rather
+        // than claiming it finished.
+        setWaiting(false);
+        return;
+      }
+      timer = setTimeout(() => void tick(), SQUARE_POLL_MS);
+    };
+    timer = setTimeout(() => void tick(), SQUARE_POLL_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [waiting, queryClient]);
 
   const signInAgain = () => {
     started.current = false;
@@ -135,11 +192,50 @@ function LinkFlow() {
 
   switch (outcome.kind) {
     case "linked":
+      // The pairing is recorded. What happened to the PROFILE is a separate
+      // question, and the three answers need opposite words.
+      if (waiting) {
+        return (
+          <Frame title="Bringing your profile across">
+            <p>Your handle, followers and posts are moving onto this account now.</p>
+            <Spinner className="mx-auto h-6 w-6 text-grey-500" />
+          </Frame>
+        );
+      }
+      if (square === "failed") {
+        // Square refused the move: the new id already owns a real profile, so
+        // the person is split. Calling this "all set" is how somebody loses
+        // their followers quietly.
+        return (
+          <Frame title="Your accounts need a hand">
+            <p>
+              Your accounts are linked, but your old profile could not move across because this
+              account already has one. Contact support and we&apos;ll join them up — nothing is
+              lost.
+            </p>
+            <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
+              Done
+            </Button>
+          </Frame>
+        );
+      }
+      if (square === "pending") {
+        return (
+          <Frame title="Still finishing">
+            <p>
+              Your old account is linked and your profile is on its way, but it is taking longer
+              than usual. It will appear on its own — check back shortly.
+            </p>
+            <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
+              Done
+            </Button>
+          </Frame>
+        );
+      }
       return (
         <Frame title="You're all set">
           <p>
-            Your old account is linked. Your profile, followers and posts move across in the
-            background — it can take a minute to show.
+            Your old account is linked. Your handle, followers and posts are on this account now.
           </p>
           <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
             Done

@@ -8,9 +8,9 @@
  * of statuses that LOOK alike and need opposite handling, so the reading lives
  * here, pure, pinned by `lib/migration-link.test.ts`:
  *
- *   · 200                          → linked. The strongest signal there is:
- *                                    Square never appears in `rekey`, so
- *                                    nothing may wait on `rekey["market-square"]`.
+ *   · 200                          → linked. Square DOES now report itself, as
+ *                                    `rekey.square` (not `market-square`); read
+ *                                    it with `readSquareRekey` below.
  *   · 409 SAME_WALLET              → linked. Both sessions are one account;
  *                                    a no-op, not a failure to report.
  *   · 409 LEGACY_ALREADY_LINKED    → stop. A person problem: one side is
@@ -35,6 +35,51 @@ export type LinkOutcome =
   | { kind: "reauth" }
   | { kind: "retry-later" }
   | { kind: "unavailable" };
+
+/**
+ * WHAT SQUARE SAYS ABOUT THE MOVE ITSELF — `rekey.square` on the link and the
+ * status response.
+ *
+ * This did not used to exist. The link recorded the pairing and Square moved
+ * the profile on a queue without reporting, so this page could only say "it
+ * moves in the background" and hope. Square now answers for itself:
+ *
+ *   · done     the profile is at the new id. Their data is there NOW.
+ *   · none     nothing to move — a Decane-native account. Also a finished
+ *              answer, not a gap.
+ *   · pending  the move is still in flight. The one state worth waiting on.
+ *   · failed   Square refused: the new id already owns a real profile, so the
+ *              person is split and a human has to decide. Reporting this as
+ *              success is how somebody loses their followers quietly.
+ *   · unknown  the field is absent — an older service, or a 409 SAME_WALLET
+ *              that carries no rekey map. Treated as finished, because waiting
+ *              on a service that will never answer is worse than not waiting.
+ *
+ * `ledger` is `square`, NOT `market-square`.
+ */
+export type SquareRekey = "done" | "none" | "pending" | "failed" | "unknown";
+
+/** True once there is nothing left to wait for, whatever the answer was. */
+export function squareSettled(state: SquareRekey): boolean {
+  return state !== "pending";
+}
+
+/**
+ * Reads `data.rekey.square` out of a link or status body. Total: any shape
+ * that is not one of the five known words reads as `unknown`, so a service
+ * that grows a new status can never strand the reader on a spinner.
+ */
+export function readSquareRekey(body: unknown): SquareRekey {
+  if (!body || typeof body !== "object") return "unknown";
+  const data = (body as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return "unknown";
+  const rekey = (data as { rekey?: unknown }).rekey;
+  if (!rekey || typeof rekey !== "object") return "unknown";
+  const square = (rekey as Record<string, unknown>).square;
+  return square === "done" || square === "none" || square === "pending" || square === "failed"
+    ? square
+    : "unknown";
+}
 
 export function classifyLinkResponse(
   status: number,

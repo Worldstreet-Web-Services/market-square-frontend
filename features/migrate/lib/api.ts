@@ -1,8 +1,25 @@
 "use client";
 
 import { apiFetch } from "@/lib/api/client";
-import { applyRetryMarker, classifyLinkResponse, type LinkOutcome } from "@/lib/migration-link";
+import {
+  applyRetryMarker,
+  classifyLinkResponse,
+  readSquareRekey,
+  type LinkOutcome,
+  type SquareRekey,
+} from "@/lib/migration-link";
 import { api } from "@/lib/square-path";
+
+/**
+ * What a link attempt produced: how it went, and — when Square answered —
+ * where the profile move itself got to. The two are separate questions: the
+ * pairing can be recorded (`linked`) while the move is still `pending`, or
+ * even `failed`.
+ */
+export interface LinkResult {
+  outcome: LinkOutcome;
+  square: SquareRekey;
+}
 
 /**
  * Links the old Privy account to the signed-in Decane one.
@@ -16,13 +33,14 @@ import { api } from "@/lib/square-path";
 export async function linkLegacyAccount(legacy: {
   accessToken: string;
   idToken: string | null;
-}): Promise<LinkOutcome> {
+}): Promise<LinkResult> {
   const headers: Record<string, string> = {
     "x-legacy-authorization": `Bearer ${legacy.accessToken}`,
   };
   if (legacy.idToken) headers["privy-id-token"] = legacy.idToken;
 
   let outcome: LinkOutcome;
+  let square: SquareRekey = "unknown";
   try {
     const res = await apiFetch(
       api("/api/migration/link"),
@@ -34,9 +52,32 @@ export async function linkLegacyAccount(legacy: {
       error?: { code?: string; message?: string };
     } | null;
     outcome = classifyLinkResponse(res.status, body?.error);
+    square = readSquareRekey(body);
   } catch {
     outcome = { kind: "retry-later" };
   }
   applyRetryMarker(outcome);
-  return outcome;
+  return { outcome, square };
+}
+
+/**
+ * Where the move stands now. Used only to wait out a `pending` — the link
+ * already reported once, and this asks the same question again without
+ * re-announcing the mapping to every ledger.
+ *
+ * Never throws: a failed poll reads as `unknown`, which ends the wait rather
+ * than spinning forever on a service that is not answering.
+ */
+export async function fetchSquareRekey(): Promise<SquareRekey> {
+  try {
+    const res = await apiFetch(
+      api("/api/migration/status"),
+      { method: "GET" },
+      { requireAuth: true, breaker: false }
+    );
+    if (!res.ok) return "unknown";
+    return readSquareRekey(await res.json().catch(() => null));
+  } catch {
+    return "unknown";
+  }
 }
