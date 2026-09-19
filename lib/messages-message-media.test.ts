@@ -102,8 +102,6 @@ test("a nested attachment flattens onto the message", () => {
       // The signed save link and its deadline travel with the URL, because
       // every reader of a private attachment needs all three together.
       mediaDownloadUrl: "https://api.test/media/messages/m1?variant=download&exp=1&sig=a",
-      // Which door it came through, carried like the rest of the wire shape.
-      mediaSource: null,
       mediaUrlExpiresAt: "2026-09-18T12:15:00.000Z",
       mediaKind: "image",
       mediaWidth: 1200,
@@ -119,7 +117,6 @@ test("no attachment is every field null, never a partially-filled shape", () => 
   const empty = {
     mediaUrl: null,
     mediaDownloadUrl: null,
-    mediaSource: null,
     mediaUrlExpiresAt: null,
     mediaKind: null,
     mediaWidth: null,

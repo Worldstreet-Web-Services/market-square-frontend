@@ -86,10 +86,10 @@ export interface OutgoingMessage {
 
 export interface MessagePayload {
   viewOnce?: boolean;
+  mediaSource?: "camera" | "upload";
   text?: string;
   media?: {
     key?: string;
-    source?: "camera" | "upload";
     url?: string;
     width?: number;
     height?: number;
@@ -130,9 +130,6 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
       // claim about the same object. The URL remains the whole story for an
       // upload the service answered without a key.
       ...(mediaKey ? { key: mediaKey } : { url: body.media.url }),
-      // Omitted for a picked file: absent already means "upload" on the
-      // service, and a field that says the default says nothing.
-      ...(body.media.source === "camera" ? { source: "camera" as const } : {}),
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
       ...(duration ? { durationSeconds: duration } : {}),
@@ -140,6 +137,11 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
       ...(sizeBytes ? { sizeBytes } : {}),
     };
   }
+
+  // TOP LEVEL, beside viewOnce rather than inside media: the service stores it
+  // on the message so it outlives a destroyed snap. Omitted for a picked file,
+  // since absent already means "upload" there and is stored as such.
+  if (body.media?.source === "camera" && payload.media) payload.mediaSource = "camera";
 
   // OMITTED unless true. `viewOnce: false` says nothing an absent field does
   // not, and it must never travel on a message with no media: a view-once line

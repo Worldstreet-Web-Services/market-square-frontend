@@ -153,8 +153,6 @@ export interface WireMessageMedia {
    * service sends today; `lib/message-media-link.ts` falls back for those.
    */
   downloadUrl?: string | null;
-  /** "camera" or "upload" — a label the sender claimed, never a permission. */
-  source?: "camera" | "upload" | null;
   /** When `url` and `downloadUrl` stop working. Absent for a storage URL, which never does. */
   urlExpiresAt?: string | null;
   kind?: "image" | "video" | "audio" | "file" | null;
@@ -170,7 +168,6 @@ export interface WireMessageMedia {
 export interface FlatMessageMedia {
   mediaUrl: string | null;
   mediaDownloadUrl: string | null;
-  mediaSource: "camera" | "upload" | null;
   mediaUrlExpiresAt: string | null;
   mediaKind: "image" | "video" | "audio" | "file" | null;
   mediaWidth: number | null;
@@ -186,7 +183,6 @@ export function flattenMessageMedia(
   return {
     mediaUrl: media?.url ?? null,
     mediaDownloadUrl: media?.downloadUrl ?? null,
-    mediaSource: media?.source ?? null,
     mediaUrlExpiresAt: media?.urlExpiresAt ?? null,
     mediaKind: media?.kind ?? null,
     mediaWidth: media?.width ?? null,

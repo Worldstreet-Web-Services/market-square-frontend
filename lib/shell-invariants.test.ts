@@ -1953,6 +1953,12 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
   it("says which door a snap came through, and only where it was told", () => {
     assert.match(thread, /\{view\.sourceLabel && \(/);
     assert.match(thread, /source: attachment\.source,/);
+    // TOP LEVEL on the message, because `media` is null once a snap is spent
+    // and a field inside it could not outlive the thing it describes.
+    const outgoing = stripComments(read("features/messages/lib/outgoing.ts"));
+    assert.match(outgoing, /payload\.mediaSource = "camera";/);
+    const types = stripComments(read("features/messages/lib/types.ts"));
+    assert.match(types, /mediaSource: z\.enum\(\["camera", "upload"\]\)/);
   });
 
   it("offers no download for something that is about to be destroyed", () => {
