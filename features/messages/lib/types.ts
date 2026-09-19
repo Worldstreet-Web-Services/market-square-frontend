@@ -34,6 +34,16 @@ export const MessageSchema = z.object({
   media: z
     .object({
       url: z.string(),
+      /**
+       * The signed `download` variant, and when both links stop working.
+       *
+       * Optional because they are ABSENT on the service as deployed today —
+       * this client ships before the service that mints them, deliberately, so
+       * that the Save control never disappears in the window between the two
+       * deploys. `lib/message-media-link.ts` holds the rule for both shapes.
+       */
+      downloadUrl: z.string().nullable().optional().default(null),
+      urlExpiresAt: z.string().nullable().optional().default(null),
       // `catch` rather than a hard enum: a future fourth kind must degrade to
       // "media we cannot type" (the URL sniff then decides) instead of
       // throwing the message away.
