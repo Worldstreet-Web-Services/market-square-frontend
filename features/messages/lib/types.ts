@@ -53,6 +53,13 @@ export const MessageSchema = z.object({
        * deploys. `lib/message-media-link.ts` holds the rule for both shapes.
        */
       downloadUrl: z.string().nullable().optional().default(null),
+      /**
+       * Where it came from, and it OUTLIVES the file: everything else about a
+       * snap's media is cleared when it is destroyed, but "this was taken on
+       * the camera" is a fact about the message, and the opened bubble keeps
+       * saying it. Null where the service does not send one.
+       */
+      source: z.enum(["camera", "upload"]).nullable().optional().default(null).catch(null),
       urlExpiresAt: z.string().nullable().optional().default(null),
       // `catch` rather than a hard enum: a future fourth kind must degrade to
       // "media we cannot type" (the URL sniff then decides) instead of

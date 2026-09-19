@@ -30,6 +30,12 @@ export interface OutgoingMedia {
    * prefers the key.
    */
   key?: string;
+  /**
+   * Which door this came through — the live camera, or a file the sender
+   * already had. A LABEL, never a permission: it is a client claim the service
+   * cannot verify, so nothing is ever gated on it.
+   */
+  source?: "camera" | "upload";
   url: string;
   width?: number | null;
   height?: number | null;
@@ -83,6 +89,7 @@ export interface MessagePayload {
   text?: string;
   media?: {
     key?: string;
+    source?: "camera" | "upload";
     url?: string;
     width?: number;
     height?: number;
@@ -123,6 +130,9 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
       // claim about the same object. The URL remains the whole story for an
       // upload the service answered without a key.
       ...(mediaKey ? { key: mediaKey } : { url: body.media.url }),
+      // Omitted for a picked file: absent already means "upload" on the
+      // service, and a field that says the default says nothing.
+      ...(body.media.source === "camera" ? { source: "camera" as const } : {}),
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
       ...(duration ? { durationSeconds: duration } : {}),

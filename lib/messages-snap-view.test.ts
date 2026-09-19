@@ -110,3 +110,23 @@ describe("A snap's media flattens, though it carries no url", () => {
     assert.equal(flat.mediaKind, "image");
   });
 });
+
+describe("The reader can tell a live capture from something out of a gallery", () => {
+  it("names the door the sender used", () => {
+    assert.equal(snapView({ ...theirs, mediaSource: "camera" }, { meId: ME })?.sourceLabel, "Camera");
+    assert.equal(snapView({ ...theirs, mediaSource: "upload" }, { meId: ME })?.sourceLabel, "From gallery");
+  });
+
+  it("says nothing rather than guessing, when the payload does not say", () => {
+    // Every message sent before the field existed. "We were not told" is an
+    // honest answer; "upload" would be a claim about the sender.
+    assert.equal(snapView(theirs, { meId: ME })?.sourceLabel, null);
+    assert.equal(snapView({ ...theirs, mediaSource: null }, { meId: ME })?.source, null);
+  });
+
+  it("keeps saying it after the snap is spent, because it describes the message", () => {
+    const spent = snapView({ ...theirs, mediaSource: "camera", destroyedAt: "2026-09-19T04:00:00Z" }, { meId: ME });
+    assert.equal(spent?.state, "spent");
+    assert.equal(spent?.sourceLabel, "Camera");
+  });
+});
