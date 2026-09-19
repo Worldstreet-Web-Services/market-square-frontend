@@ -103,14 +103,17 @@ export function ConversationRow({
         {/*
           THE SNAP STREAK — days in a row that BOTH of them sent one.
 
-          Drawn only from two upwards. A streak of one is not a streak, it is
-          a day, and a "1" against every thread somebody snapped yesterday
-          would be noise standing where the unread count goes.
+          FROM ONE, not from two. It was drawn from two on the argument that a
+          "1" is noise; testing settled that against it (ogazboiz, 2026-09-19).
+          A mutual day is genuinely a streak of one, and hiding it means the
+          first day of every streak — the day the habit either forms or does
+          not — shows the reader nothing at all. The service is strict about
+          what earns it: both sides, same UTC day, view-once only.
         */}
-        {conversation.snapStreak > 1 && (
+        {conversation.snapStreak > 0 && (
           <span
             className="flex items-center gap-0.5 text-[10px] font-semibold leading-[15px] text-coin"
-            title={`${conversation.snapStreak} days in a row`}
+            title={`${conversation.snapStreak} day${conversation.snapStreak === 1 ? "" : "s"} in a row`}
           >
             <SnapFlame />
             <span className="tnum">{conversation.snapStreak}</span>

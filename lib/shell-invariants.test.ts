@@ -1944,8 +1944,9 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
     assert.match(thread, /const dropAttachment = useCallback\(\(\) => \{\n\s*setAsSnap\(false\);/);
   });
 
-  it("shows a streak only once it is one", () => {
-    assert.match(row, /conversation\.snapStreak > 1 && \(/);
+  it("shows a streak from the first mutual day", () => {
+    // Drawn from two once, which meant the day a habit forms showed nothing.
+    assert.match(row, /conversation\.snapStreak > 0 && \(/);
   });
 });
 
