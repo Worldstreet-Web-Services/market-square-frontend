@@ -2703,14 +2703,26 @@ export function Thread({
     username: profile.username,
   }));
 
-  // Opening the thread is the acknowledgement — once per thread, not on every
-  // poll tick.
+  /*
+    READING THE THREAD IS THE ACKNOWLEDGEMENT — and it keeps being one.
+
+    This used to fire once per thread and never again, so a message that
+    arrived while the reader was SITTING IN the conversation was counted as
+    unread for ever: ogazboiz watched three snaps land in an open thread,
+    opened every one of them, and the inbox still said 3 (2026-09-19).
+
+    Keyed on the conversation AND its newest message, which is exactly the pair
+    that means "something has arrived since we last said we had seen it". The
+    same pair is acknowledged only once, so the mark-read → refetch → render
+    cycle cannot drive a request loop.
+  */
   const acknowledged = useRef<string | null>(null);
+  const seenThrough = `${conversation.id}:${conversation.lastMessageAt ?? ""}`;
   useEffect(() => {
-    if (acknowledged.current === conversation.id) return;
-    acknowledged.current = conversation.id;
+    if (acknowledged.current === seenThrough) return;
+    acknowledged.current = seenThrough;
     if (conversation.unreadCount > 0) markRead.mutate(conversation.id);
-  }, [conversation.id, conversation.unreadCount, markRead]);
+  }, [seenThrough, conversation.id, conversation.unreadCount, markRead]);
 
   // The service returns newest-first; a thread reads oldest-first.
   const items = [...(messages.data?.items ?? [])].reverse();
