@@ -20,6 +20,9 @@ import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaViewer } from "@/components/ui/media-viewer";
 import { downloadLinkFor, mediaLinkExpired } from "@/lib/message-media-link";
+import { canSendSnap, snapTimeLeft, snapView } from "@/features/messages/lib/snap-view";
+import { defaultViewOnce, type MediaSource } from "@/features/messages/lib/camera-capture";
+import { CameraSheet } from "@/features/messages/components/camera-sheet";
 import { useQueryClient } from "@tanstack/react-query";
 import { isHttpUrl } from "@/lib/http-url";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -53,6 +56,7 @@ import {
   useMessages,
   useRenameGroup,
   useSendMessage,
+  useOpenSnap,
   useCreateInvite,
   useRemoveGroupMember,
   useSetMemberRole,
@@ -1477,6 +1481,154 @@ function VoiceBubble({
 }
 
 /**
+ * A SNAP — the bubble for something that is seen once and then destroyed.
+ *
+ * There is no picture here and there never was one: a read does not carry a
+ * url for a snap (see features/messages/lib/snap-view.ts), so the bubble draws
+ * a state and a tap. The tap is the whole interaction, and it is deliberate —
+ * nothing opens because it scrolled into view, because opening destroys the
+ * file and a snap spent by a scroll is a snap the reader never saw.
+ *
+ * THE URL LIVES IN THIS COMPONENT AND NOWHERE ELSE. What the open route
+ * returns is held in local state for as long as the viewer is on screen, and
+ * is gone on close. It is never written to the query cache: a cache is read
+ * back on a remount, and a picture that came back when the thread re-rendered
+ * would not be view-once at all.
+ */
+function SnapBubble({
+  message,
+  mine,
+  group,
+  tail,
+  view,
+  onOpen,
+  busy,
+}: {
+  message: Message;
+  mine: boolean;
+  group: boolean;
+  tail: boolean;
+  view: NonNullable<ReturnType<typeof snapView>>;
+  /** Spends the snap and hands back the one url that will exist. */
+  onOpen: (messageId: string) => Promise<{
+    media: { url: string; kind: string | null } | null;
+    mediaExpiresAt?: string | null;
+  }>;
+  busy: boolean;
+}) {
+  const [showing, setShowing] = useState<{
+    url: string;
+    kind: "image" | "video";
+    expiresAt: string | null;
+  } | null>(null);
+
+  const open = async () => {
+    if (!view.openable || busy) return;
+    const result = await onOpen(message.id);
+    const media = result.media;
+    // A second open answers `{media: null}` rather than an error — the snap was
+    // already spent, and the bubble simply settles on Opened.
+    if (!media?.url) return;
+    setShowing({
+      url: media.url,
+      kind: media.kind === "video" ? "video" : "image",
+      expiresAt: result.mediaExpiresAt ?? null,
+    });
+  };
+
+  /*
+    CLOSES ITSELF WHEN THE FILE IS DELETED.
+
+    `mediaExpiresAt` is the instant the service deletes the bytes, not a link
+    expiry — there is nothing behind the url afterwards and no retry that could
+    work. Leaving the viewer open past it would show a picture that has quietly
+    stopped loading, which reads as a bug rather than as the promise being
+    kept. With no deadline given the viewer stays until it is closed, which is
+    better than closing on a clock we invented.
+  */
+  const expiresAt = showing?.expiresAt ?? null;
+  useEffect(() => {
+    if (!expiresAt) return;
+    const left = snapTimeLeft(expiresAt, Date.now());
+    if (left === null) return;
+    const timer = setTimeout(() => setShowing(null), left);
+    return () => clearTimeout(timer);
+  }, [expiresAt]);
+
+  const body = (
+    <span className="flex items-center gap-2">
+      <SnapMark state={view.state} />
+      <span className="text-[13px] leading-[19px]">{busy ? "Opening…" : view.label}</span>
+      {/* WHICH DOOR IT CAME THROUGH. Drawn only where the payload says — a
+          message from before the field carries no claim, and inventing one
+          would be a claim about the sender. */}
+      {view.sourceLabel && (
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-[14px]",
+            mine ? "bg-black/10 text-ink/60" : "bg-white/15 text-white/70"
+          )}
+        >
+          {view.sourceLabel}
+        </span>
+      )}
+    </span>
+  );
+
+  return (
+    <div className={cn("max-w-[min(85%,480px)] px-3 py-2.5", bubbleShell(mine, tail))}>
+      {view.openable ? (
+        <button
+          type="button"
+          onClick={() => void open()}
+          disabled={busy}
+          aria-label={`${view.label} from this chat`}
+          className="ws-press flex w-full items-center text-left text-white disabled:opacity-60"
+        >
+          {body}
+        </button>
+      ) : (
+        /* Not a control: there is nothing left to open, and a button that
+           does nothing is worse than a line of text that says why. */
+        <span className={cn("flex items-center", mine ? "text-ink" : "text-white")}>{body}</span>
+      )}
+      <BubbleMeta message={message} mine={mine} group={group} />
+      {showing && (
+        <MediaViewer
+          kind={showing.kind}
+          src={showing.url}
+          alt="Snap"
+          /* NO download. The file is destroyed minutes from now, and offering
+             a Save would be offering a copy of the thing whose whole promise
+             is that no copy is kept. */
+          downloadUrl={null}
+          onClose={() => setShowing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The snap's own mark: solid while it is still there to open, hollow once spent. */
+function SnapMark({ state }: { state: "unopened" | "spent" | "delivered" | "seen" }) {
+  const solid = state === "unopened" || state === "delivered";
+  return (
+    <svg aria-hidden viewBox="0 0 14 14" className="h-3.5 w-3.5 shrink-0" fill="none">
+      <rect
+        x={solid ? 1 : 1.6}
+        y={solid ? 1 : 1.6}
+        width={solid ? 12 : 10.8}
+        height={solid ? 12 : 10.8}
+        rx={solid ? 3.5 : 3}
+        fill={solid ? "currentColor" : "none"}
+        stroke={solid ? "none" : "currentColor"}
+        strokeWidth={1.4}
+      />
+    </svg>
+  );
+}
+
+/**
  * One row of the river: the bubble, and in a group the 24px sender avatar
  * beside an incoming one.
  *
@@ -1500,11 +1652,17 @@ function MessageRow({
   onJump,
   nameOf,
   flash,
+  onOpenSnap,
+  openingSnap,
 }: {
   message: Message;
   mine: boolean;
   group: boolean;
   sender: Profile | null;
+  /** Spends a snap. Given by the thread, which owns the mutation. */
+  onOpenSnap: (messageId: string) => Promise<{ media: { url: string; kind: string | null } | null }>;
+  /** True while THIS message's open is in flight. */
+  openingSnap: boolean;
   roomCardSlot?: (streamId: string) => React.ReactNode;
   /** Make this message the composer's reply target. */
   onReply: (message: Message) => void;
@@ -1637,8 +1795,22 @@ function MessageRow({
   // one thing that still worked.
   const invite = !removed && message.deepLink?.kind === "stream";
 
+  const snap = snapView(message, { mine });
   const content =
-    invite ? (
+    /* A SNAP FIRST. It carries a media kind but no url, so every branch below
+       would read it as a message with no attachment and draw the empty text
+       bubble — which is how a snap would silently vanish from the thread. */
+    snap && !removed ? (
+      <SnapBubble
+        message={message}
+        mine={mine}
+        group={group}
+        tail={tail}
+        view={snap}
+        onOpen={onOpenSnap}
+        busy={openingSnap}
+      />
+    ) : invite ? (
       <RoomInviteBubble
         message={message}
         mine={mine}
@@ -1763,8 +1935,11 @@ function Composer({
   replyName,
   members,
   meId,
+  conversationKind,
 }: {
   conversationId: string;
+  /** Direct or group — a snap is only offered in a one-to-one. */
+  conversationKind: string;
   /** The message being answered, chosen from a bubble; null for a plain send. */
   replyTo: Message | null;
   onCancelReply: () => void;
@@ -1796,8 +1971,17 @@ function Composer({
   // time it lands here — the panel finishes the upload before it closes — so
   // this holds a URL the service will accept, not a File still to be pushed.
   const [attachment, setAttachment] = useState<
-    { result: UploadResult; measured: Measured; fileName: string; previewUrl: string } | null
+    {
+      result: UploadResult;
+      measured: Measured;
+      fileName: string;
+      previewUrl: string;
+      /** Taken here, or chosen from the device. It decides the View once default. */
+      source: MediaSource;
+    } | null
   >(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState(false);
   /*
     THE STAGED ROW DRAWS THE BYTES IN HAND, not the stored object.
 
@@ -1809,7 +1993,15 @@ function Composer({
     revoked, and a reader who picks five photos and sends none would otherwise
     keep all five in memory for the life of the tab.
   */
+  /*
+    SEND THIS ONE AS A SNAP. Off by default, always: view-once is a promise
+    about a picture that cannot be taken back once made, so it is a thing the
+    sender chooses each time rather than a mode they might forget they are in.
+    It is cleared with the attachment, for the same reason.
+  */
+  const [asSnap, setAsSnap] = useState(false);
   const dropAttachment = useCallback(() => {
+    setAsSnap(false);
     setAttachment((current) => {
       if (current) URL.revokeObjectURL(current.previewUrl);
       return null;
@@ -1817,6 +2009,12 @@ function Composer({
   }, []);
   const voice = useVoiceRecorder();
   const [voiceBusy, setVoiceBusy] = useState(false);
+  /* The service's own two rules, restated so the control is ABSENT rather than
+     offered and then refused: one-to-one only, photo or clip only. */
+  const snapOffered = canSendSnap({
+    conversationKind,
+    mediaKind: attachment?.result.kind ?? null,
+  });
   const body = text.trim();
   // A tap on Reply is a tap that wants to type.
   useEffect(() => {
@@ -1832,6 +2030,7 @@ function Composer({
     ...(body ? { text: body } : {}),
     ...(replyTo ? { replyToId: replyTo.id } : {}),
     ...(body ? { mentions: typing.mentionsFor(body) } : {}),
+    ...(attachment && snapOffered && asSnap ? { viewOnce: true } : {}),
     ...(attachment
       ? {
           media: {
@@ -1839,6 +2038,7 @@ function Composer({
             // signed link rather than an address the service would accept
             // back. `buildMessagePayload` sends one or the other.
             key: attachment.result.key,
+            source: attachment.source,
             url: attachment.result.url,
             width: attachment.measured.width ?? null,
             height: attachment.measured.height ?? null,
@@ -1862,6 +2062,37 @@ function Composer({
    * back or change your mind, and the duration measured here rides along so
    * nothing has to demux the file to draw the waveform's length.
    */
+  /*
+    A CAPTURE GOES UP THE SAME PIPE AS A PICKED FILE, and arrives marked
+    `camera`. That mark is the only difference, and it is what arms View once:
+    a photo taken inside a chat is of the moment, a photo out of a gallery was
+    kept for a reason and is not ours to destroy on the sender's behalf.
+  */
+  const takeCapture = async (file: File, previewUrl: string) => {
+    setCameraBusy(true);
+    try {
+      const uploaded = await uploadFile(file, undefined, "attachment", "message");
+      setAsSnap(
+        defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind })
+      );
+      setAttachment((current) => {
+        if (current) URL.revokeObjectURL(current.previewUrl);
+        return {
+          result: uploaded,
+          measured: {},
+          fileName: file.name,
+          previewUrl,
+          source: "camera",
+        };
+      });
+    } catch (cause) {
+      URL.revokeObjectURL(previewUrl);
+      toast.error(cause instanceof Error ? cause.message : "That capture didn't upload.");
+    } finally {
+      setCameraBusy(false);
+    }
+  };
+
   const finishVoice = async () => {
     const result = await voice.stop();
     if (!result) return;
@@ -1873,6 +2104,7 @@ function Composer({
       const uploaded = await uploadFile(result.file, undefined, "attachment", "message");
       setAttachment({
         result: uploaded,
+        source: "upload",
         previewUrl: URL.createObjectURL(result.file),
         measured: { durationSeconds: result.durationSeconds },
         // A recording has no name the reader chose. It is carried for the type
@@ -2028,6 +2260,9 @@ function Composer({
             </span>
           )}
           <p className="min-w-0 flex-1 truncate text-[12px] text-white/70">
+            {/* WHERE IT CAME FROM, because the two doors behave differently and
+                the sender should be able to see which one they used. */}
+            {attachment.source === "camera" ? "Camera " : ""}
             {attachment.result.kind === "image"
               ? "Photo"
               : attachment.result.kind === "video"
@@ -2037,6 +2272,26 @@ function Composer({
                   : attachment.fileName || "Attachment"}{" "}
             <span className="text-white/40">{formatBytes(attachment.result.bytes)}</span>
           </p>
+          {snapOffered && (
+            /*
+              VIEW ONCE, as a switch on the staged row rather than a second
+              send button. The sender has already chosen the file; this is one
+              more fact about it, and putting it on a separate control would
+              make "send" mean two different things depending on which was hit.
+            */
+            <button
+              type="button"
+              role="switch"
+              aria-checked={asSnap}
+              onClick={() => setAsSnap((on) => !on)}
+              className={cn(
+                "ws-press shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
+                asSnap ? "bg-spotlight text-white" : "bg-white/10 text-white/60 hover:text-white"
+              )}
+            >
+              View once
+            </button>
+          )}
           <button
             type="button"
             onClick={dropAttachment}
@@ -2177,6 +2432,23 @@ function Composer({
           onClick={() => setPicking(true)}
           icon={<Image src={asset("/messages/attach.svg")} alt="" width={24} height={24} />}
         />
+        {/* THE SECOND DOOR. The paperclip is for something kept; this is for the
+            moment in front of you, and what comes out of it is view-once by
+            default. Only in a one-to-one, where a snap means anything. */}
+        {conversationKind === "direct" && (
+          <CircleButton
+            label="Take a photo or video"
+            size={24}
+            disabled={cameraBusy}
+            onClick={() => setCameraOpen(true)}
+            icon={
+              <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.7l1-1.8a1 1 0 0 1 .9-.5h5.8a1 1 0 0 1 .9.5l1 1.8h1.7A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z" />
+                <circle cx="12" cy="12.2" r="3.4" />
+              </svg>
+            }
+          />
+        )}
         <CircleButton
           label={voice.recording ? "Stop recording and listen" : "Record a voice note"}
           size={24}
@@ -2281,12 +2553,18 @@ function Composer({
 
       {/* Mounted only while open, so each opening starts from clean state —
           see the note in the panel. */}
+      <CameraSheet
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCaptured={(file, previewUrl) => void takeCapture(file, previewUrl)}
+      />
+
       {picking && (
         <AttachmentPanel
           open
           onClose={() => setPicking(false)}
           onAttached={(result, measured, fileName, previewUrl) =>
-            setAttachment({ result, measured, fileName, previewUrl })
+            setAttachment({ result, measured, fileName, previewUrl, source: "upload" })
           }
         />
       )}
@@ -2339,6 +2617,27 @@ export function Thread({
   const replyTo = replyState?.conversationId === conversation.id ? replyState.message : null;
   const setReplyTo = (message: Message | null) =>
     setReplyState(message ? { conversationId: conversation.id, message } : null);
+  /*
+    OPENING A SNAP, which is the one action in this pane that DESTROYS
+    something. The mutation lives here rather than in the bubble so the thread
+    and the inbox are invalidated once, and so the id being opened is known to
+    the row that must show it as busy — two bubbles can never be opening at the
+    same time, which matters when the thing being spent is unrecoverable.
+  */
+  const openSnapMutation = useOpenSnap(conversation.id);
+  const [openingSnapId, setOpeningSnapId] = useState<string | null>(null);
+  const openSnapMutate = openSnapMutation.mutateAsync;
+  const openSnap = useCallback(
+    async (messageId: string) => {
+      setOpeningSnapId(messageId);
+      try {
+        return await openSnapMutate(messageId);
+      } finally {
+        setOpeningSnapId(null);
+      }
+    },
+    [openSnapMutate]
+  );
   /* The row a quote tap just landed on, washed for a moment. */
   const [flashId, setFlashId] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2404,14 +2703,26 @@ export function Thread({
     username: profile.username,
   }));
 
-  // Opening the thread is the acknowledgement — once per thread, not on every
-  // poll tick.
+  /*
+    READING THE THREAD IS THE ACKNOWLEDGEMENT — and it keeps being one.
+
+    This used to fire once per thread and never again, so a message that
+    arrived while the reader was SITTING IN the conversation was counted as
+    unread for ever: ogazboiz watched three snaps land in an open thread,
+    opened every one of them, and the inbox still said 3 (2026-09-19).
+
+    Keyed on the conversation AND its newest message, which is exactly the pair
+    that means "something has arrived since we last said we had seen it". The
+    same pair is acknowledged only once, so the mark-read → refetch → render
+    cycle cannot drive a request loop.
+  */
   const acknowledged = useRef<string | null>(null);
+  const seenThrough = `${conversation.id}:${conversation.lastMessageAt ?? ""}`;
   useEffect(() => {
-    if (acknowledged.current === conversation.id) return;
-    acknowledged.current = conversation.id;
+    if (acknowledged.current === seenThrough) return;
+    acknowledged.current = seenThrough;
     if (conversation.unreadCount > 0) markRead.mutate(conversation.id);
-  }, [conversation.id, conversation.unreadCount, markRead]);
+  }, [seenThrough, conversation.id, conversation.unreadCount, markRead]);
 
   // The service returns newest-first; a thread reads oldest-first.
   const items = [...(messages.data?.items ?? [])].reverse();
@@ -2567,6 +2878,8 @@ export function Thread({
                     onJump={jumpTo}
                     nameOf={nameOf}
                     flash={flashId === message.id}
+                    onOpenSnap={openSnap}
+                    openingSnap={openingSnapId === message.id}
                   />
                 ))}
               </div>
@@ -2582,6 +2895,7 @@ export function Thread({
         replyName={replyTo ? nameOf(replyTo.senderId) : ""}
         members={mentionable}
         meId={me.data?.id}
+        conversationKind={conversation.kind}
       />
 
       {group && (

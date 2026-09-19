@@ -7,6 +7,7 @@ import {
   MessagePageSchema,
   MessageSchema,
   ReadResultSchema,
+  SnapOpenSchema,
   InvitePreviewSchema,
   InviteSchema,
   HouseNotificationSettingsSchema,
@@ -82,6 +83,25 @@ export async function fetchMessages(conversationId: string, cursor?: string) {
 export async function sendMessage(conversationId: string, body: OutgoingMessage) {
   return MessageSchema.parse(
     await msApi.post(`/conversations/${conversationId}/messages`, buildMessagePayload(body))
+  );
+}
+
+/**
+ * OPENS A SNAP — the one request in this slice that DESTROYS something.
+ *
+ * It is not idempotent in effect and deliberately is in shape: the first call
+ * hands back the only url that will ever exist for this file, and every call
+ * after it answers `{destroyed: true, media: null}` rather than an error, so a
+ * retry after a dropped connection is safe and says the truth.
+ *
+ * The url it returns is a DIRECT storage link, not a `/media/messages/...`
+ * one: the message no longer holds the file. Render from this response and
+ * hold it in memory — it must never reach the query cache, which is read back
+ * on a remount and would resurrect a snap that has been spent.
+ */
+export async function openSnap(conversationId: string, messageId: string) {
+  return SnapOpenSchema.parse(
+    await msApi.post(`/conversations/${conversationId}/messages/${messageId}/open`, {})
   );
 }
 

@@ -100,6 +100,25 @@ export function ConversationRow({
             {stamp}
           </span>
         )}
+        {/*
+          THE SNAP STREAK — days in a row that BOTH of them sent one.
+
+          FROM ONE, not from two. It was drawn from two on the argument that a
+          "1" is noise; testing settled that against it (ogazboiz, 2026-09-19).
+          A mutual day is genuinely a streak of one, and hiding it means the
+          first day of every streak — the day the habit either forms or does
+          not — shows the reader nothing at all. The service is strict about
+          what earns it: both sides, same UTC day, view-once only.
+        */}
+        {conversation.snapStreak > 0 && (
+          <span
+            className="flex items-center gap-0.5 text-[10px] font-semibold leading-[15px] text-coin"
+            title={`${conversation.snapStreak} day${conversation.snapStreak === 1 ? "" : "s"} in a row`}
+          >
+            <SnapFlame />
+            <span className="tnum">{conversation.snapStreak}</span>
+          </span>
+        )}
         {unread > 0 && (
           <span className="tnum flex min-w-4 items-center justify-center rounded-[30px] bg-[#3F1881] px-1 py-1 text-[10px] leading-none text-white">
             {unread > 99 ? "99+" : unread}
@@ -212,6 +231,15 @@ function SnapGlyph({ status }: { status: SnapStatus }) {
         stroke={status.filled ? "none" : "currentColor"}
         strokeWidth={1.5}
       />
+    </svg>
+  );
+}
+
+/** The streak's mark, drawn rather than borrowed: a small flame at 10px. */
+function SnapFlame() {
+  return (
+    <svg aria-hidden viewBox="0 0 10 12" className="h-2.5 w-2.5 shrink-0" fill="currentColor">
+      <path d="M5 0c.4 1.9-.5 3-1.5 3.9C2.2 5 .8 6.1.8 8a4.2 4.2 0 0 0 8.4 0c0-1.5-.7-2.6-1.6-3.6-.3.6-.8 1-1.3 1.1.4-1.8-.2-3.7-1.3-5.5Z" />
     </svg>
   );
 }
