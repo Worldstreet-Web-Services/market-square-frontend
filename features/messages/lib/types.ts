@@ -131,6 +131,23 @@ export const MessageSchema = z.object({
    * `destroyedAt` is set after it has been opened, and the bubble becomes a
    * line of text rather than a picture.
    */
+  /**
+   * WHICH DOOR THE ATTACHMENT CAME THROUGH — the live camera, or a file the
+   * sender already had.
+   *
+   * TOP LEVEL, not inside `media`, and that is load-bearing: `media` becomes
+   * null the moment a snap is destroyed, so a field inside it could not
+   * survive the thing it describes. This is a fact about the MESSAGE.
+   *
+   * A CLAIM, never a proof. The bytes of a photograph do not say which button
+   * was pressed, so the service cannot verify it and neither can we. It labels
+   * a bubble; nothing is gated on it.
+   *
+   * Null only for a message that never had an attachment — and for every
+   * message sent before the field existed, which is why the mark is drawn only
+   * where the payload carries one.
+   */
+  mediaSource: z.enum(["camera", "upload"]).nullable().optional().default(null).catch(null),
   viewOnce: z.boolean().optional().default(false),
   destroyedAt: z.string().nullable().optional().default(null),
   // The spec's enum. `catch` keeps an unknown future state from blanking the

@@ -1902,6 +1902,35 @@ describe("The phone's chat button says when somebody has spoken", () => {
   });
 });
 
+describe("The camera is the second door, and it behaves differently", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+  const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
+
+  it("is offered only in a one-to-one, where a snap means something", () => {
+    assert.match(thread, /conversationKind === "direct" && \(\n\s*<CircleButton\n\s*label="Take a photo or video"/);
+  });
+
+  it("marks what it produces as a capture, and arms View once from that", () => {
+    assert.match(thread, /defaultViewOnce\(\{ source: "camera", conversationKind, mediaKind: uploaded\.kind \}\)/);
+    assert.match(thread, /source: "camera",/);
+    // A picked file is NOT armed: it was kept for a reason.
+    assert.match(thread, /setAttachment\(\{ result, measured, fileName, previewUrl, source: "upload" \}\)/);
+  });
+
+  it("always puts the camera light out", () => {
+    // Closed sheet, flipped camera, unmount — every path runs release().
+    assert.match(camera, /stream\.current\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\);/);
+    assert.match(camera, /return \(\) => \{\n\s*cancelled = true;\n\s*release\(\);/);
+    // And a stream that arrived after the sheet closed is stopped too.
+    assert.match(camera, /if \(cancelled\) \{\n\s*opened\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\);/);
+  });
+
+  it("refuses to record a clip the service would not accept, before recording it", () => {
+    assert.match(camera, /if \(!type\) \{/);
+    assert.match(camera, /getUploadLimits\(\)\.videoContentTypes/);
+  });
+});
+
 describe("A snap is seen once, and nothing in the client keeps a copy", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
   const row = stripComments(read("features/messages/components/conversation-row.tsx"));
@@ -1919,6 +1948,17 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
     const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
     assert.match(hooks, /export function useOpenSnap\(conversationId: string\)/);
     assert.doesNotMatch(hooks, /setQueryData\(\["ms", "messages"/);
+  });
+
+  it("says which door a snap came through, and only where it was told", () => {
+    assert.match(thread, /\{view\.sourceLabel && \(/);
+    assert.match(thread, /source: attachment\.source,/);
+    // TOP LEVEL on the message, because `media` is null once a snap is spent
+    // and a field inside it could not outlive the thing it describes.
+    const outgoing = stripComments(read("features/messages/lib/outgoing.ts"));
+    assert.match(outgoing, /payload\.mediaSource = "camera";/);
+    const types = stripComments(read("features/messages/lib/types.ts"));
+    assert.match(types, /mediaSource: z\.enum\(\["camera", "upload"\]\)/);
   });
 
   it("offers no download for something that is about to be destroyed", () => {
@@ -1944,8 +1984,9 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
     assert.match(thread, /const dropAttachment = useCallback\(\(\) => \{\n\s*setAsSnap\(false\);/);
   });
 
-  it("shows a streak only once it is one", () => {
-    assert.match(row, /conversation\.snapStreak > 1 && \(/);
+  it("shows a streak from the first mutual day", () => {
+    // Drawn from two once, which meant the day a habit forms showed nothing.
+    assert.match(row, /conversation\.snapStreak > 0 && \(/);
   });
 });
 

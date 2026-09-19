@@ -46,6 +46,22 @@ export interface SnapView {
   label: string;
   /** True only where a tap would open it: theirs, unopened. */
   openable: boolean;
+  /**
+   * WHICH DOOR IT CAME THROUGH, for the reader who is about to spend it.
+   *
+   * ogazboiz, 2026-09-19: "if it is from media the snap you will know it is
+   * from media, if it is from like live camera you will know the snap". A
+   * photo taken in the moment and a photo chosen from a gallery ask to be read
+   * differently, and only the sender's client knew which — so the service now
+   * carries it.
+   *
+   * Null where the payload says nothing, which is every message sent before
+   * the field existed. Null draws NO mark rather than guessing "upload": the
+   * honest answer to "which door" is sometimes "we were not told".
+   */
+  source: "camera" | "upload" | null;
+  /** The words for that mark, or null when there is no mark to draw. */
+  sourceLabel: string | null;
 }
 
 /** The reader, as whichever of the two facts the caller already holds. */
@@ -53,6 +69,7 @@ export type SnapViewer = { mine: boolean } | { meId: string | null | undefined }
 
 export interface SnapMessageFields {
   viewOnce?: boolean;
+  mediaSource?: "camera" | "upload" | null;
   mediaKind?: string | null;
   senderId?: string | null;
   openedByMe?: boolean | null;
@@ -76,6 +93,8 @@ export function snapView(message: SnapMessageFields, viewer: SnapViewer): SnapVi
 
   const kind = message.mediaKind === "video" ? "video" : "photo";
   const noun = kind === "video" ? "Video" : "Photo";
+  const source = message.mediaSource ?? null;
+  const sourceLabel = source === "camera" ? "Camera" : source === "upload" ? "From gallery" : null;
   // Whichever the caller has to hand: the thread already knows `mine`, the
   // inbox row only has the reader's id. Neither is inferred from the other.
   const mine =
@@ -90,6 +109,8 @@ export function snapView(message: SnapMessageFields, viewer: SnapViewer): SnapVi
       kind,
       label: seen ? "Opened" : "Delivered",
       openable: false,
+      source,
+      sourceLabel,
     };
   }
 
@@ -99,6 +120,8 @@ export function snapView(message: SnapMessageFields, viewer: SnapViewer): SnapVi
     kind,
     label: spent ? "Opened" : `Tap to view ${noun.toLowerCase()}`,
     openable: !spent,
+    source,
+    sourceLabel,
   };
 }
 

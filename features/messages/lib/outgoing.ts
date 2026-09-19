@@ -30,6 +30,12 @@ export interface OutgoingMedia {
    * prefers the key.
    */
   key?: string;
+  /**
+   * Which door this came through — the live camera, or a file the sender
+   * already had. A LABEL, never a permission: it is a client claim the service
+   * cannot verify, so nothing is ever gated on it.
+   */
+  source?: "camera" | "upload";
   url: string;
   width?: number | null;
   height?: number | null;
@@ -80,6 +86,7 @@ export interface OutgoingMessage {
 
 export interface MessagePayload {
   viewOnce?: boolean;
+  mediaSource?: "camera" | "upload";
   text?: string;
   media?: {
     key?: string;
@@ -130,6 +137,11 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
       ...(sizeBytes ? { sizeBytes } : {}),
     };
   }
+
+  // TOP LEVEL, beside viewOnce rather than inside media: the service stores it
+  // on the message so it outlives a destroyed snap. Omitted for a picked file,
+  // since absent already means "upload" there and is stored as such.
+  if (body.media?.source === "camera" && payload.media) payload.mediaSource = "camera";
 
   // OMITTED unless true. `viewOnce: false` says nothing an absent field does
   // not, and it must never travel on a message with no media: a view-once line
