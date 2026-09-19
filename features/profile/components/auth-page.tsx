@@ -6,6 +6,7 @@ import { atHandle } from "@/lib/handle";
 import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
 import { linkRetryPending } from "@/lib/migration-link";
 import { useAuth } from "@/hooks/use-auth";
+import { useLogout } from "@/hooks/use-logout";
 import { useMe } from "@/hooks/use-me";
 import { Button, Spinner } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
@@ -14,7 +15,10 @@ import { SignInCard } from "./sign-in-card";
 import { sq } from "@/lib/square-path";
 
 export function AuthPage() {
-  const { ready, authenticated, logout } = useAuth();
+  const { ready, authenticated } = useAuth();
+  // The app's one sign-out: it brings a gist room down (freeing a held seat)
+  // before the account goes, which Privy's own logout knows nothing about.
+  const logout = useLogout();
   const me = useMe();
   const router = useRouter();
   const searchParams = useSearchParams();

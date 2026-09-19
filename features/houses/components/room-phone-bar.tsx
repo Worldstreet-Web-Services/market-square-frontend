@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/cn";
 import { setRoomBar } from "@/lib/room-bar-store";
 import { useReactionGutter } from "@/features/houses/components/house-controls";
+import { roomChatBadge, roomChatLabel } from "@/lib/room-chat-unread";
 
 /**
  * THE PHONE'S BOTTOM BAR — node 1285:93076 (`Chat Top Nav Alt`) in the phone
@@ -65,6 +66,7 @@ export function RoomPhoneBar({
   onReact,
   incoming,
   onChat,
+  unreadChat = 0,
 }: {
   /** Present only when this viewer is publishing — host or seated guest. */
   mic: { on: boolean; toggle: () => void; disabled: boolean } | null;
@@ -84,6 +86,8 @@ export function RoomPhoneBar({
   /** Hearts SOMEBODY ELSE sent — see HouseControls for why it is a count. */
   incoming: number;
   onChat: () => void;
+  /** Messages that have arrived since the reader last had the chat open. */
+  unreadChat?: number;
 }) {
   // The doorbell: the shell's dock is gone while this is mounted, and back
   // the moment it is not — a closed or unopened room keeps its dock.
@@ -116,7 +120,7 @@ export function RoomPhoneBar({
             type="button"
             onClick={mic.toggle}
             disabled={mic.disabled}
-            aria-pressed={!mic.on}
+            data-room-mic=""
             aria-label={mic.on ? "Mute your microphone" : "Unmute your microphone"}
             className={cn(
               DISC,
@@ -178,11 +182,22 @@ export function RoomPhoneBar({
         <button
           type="button"
           onClick={onChat}
-          aria-label="Open the gistroom chat"
+          aria-label={roomChatLabel(unreadChat)}
           aria-haspopup="dialog"
-          className={cn(DISC, "ws-glass-pill text-white")}
+          className={cn(DISC, "ws-glass-pill relative text-white")}
         >
           <IconRoomChat className="h-5 w-5" />
+          {/* The count the room's chat sheet hides while it is closed. Same
+              badge the bell draws: 14px with 9px semibold type is the smallest
+              that stays readable on a phone, and past nine it reads "9+". */}
+          {roomChatBadge(unreadChat) && (
+            <span
+              aria-hidden
+              className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-spotlight px-[3px] text-[9px] font-semibold leading-none text-white ring-2 ring-chrome"
+            >
+              {roomChatBadge(unreadChat)}
+            </span>
+          )}
         </button>
 
         {tray && (

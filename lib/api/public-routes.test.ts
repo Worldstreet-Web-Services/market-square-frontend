@@ -54,7 +54,6 @@ const PUBLIC: string[][] = [
   ["profiles", "adeey", "streams"],
   ["profiles", "adeey", "activities"],
   ["profiles", "u_1", "followers"],
-  ["profiles", "u_1", "following"],
   ["spotlight"],
   ["store", "items"],
   ["store", "items", "remit"],
@@ -88,6 +87,8 @@ const PUBLIC: string[][] = [
 const SECURED: string[][] = [
   ["admin", "role-applications"],
   ["conversations", "cv_1", "messages"],
+  // Who somebody follows is private to its owner (2026-09-17).
+  ["profiles", "u_1", "following"],
   ["me"],
   ["me", "bookmarks"],
   ["me", "conversations"],
@@ -102,6 +103,10 @@ const SECURED: string[][] = [
   ["me", "tips", "received"],
   ["streams", "st_1", "events"],
   ["streams", "st_1", "stats"],
+  // Speaker requests are a statement about the caller: their own row, or the
+  // host's queue (including open invitations, `?status=invited`).
+  ["streams", "st_1", "speaker-requests"],
+  ["streams", "st_1", "speaker-requests", "me"],
 ];
 
 /**
@@ -346,6 +351,13 @@ describe("isPublicPost", () => {
       ["streams", "s1", "heartbeat"],
       ["streams", "s1", "preview-token", "x"],
       ["streams", "..", "preview-token"],
+      // Invite to speak, its answers and the host's mute are all signed-in,
+      // owner- or invitee-only writes — never opened to a signed-out caller.
+      ["streams", "s1", "speaker-invites"],
+      ["streams", "s1", "speaker-requests", "r1", "accept"],
+      ["streams", "s1", "speaker-requests", "r1", "reject"],
+      ["streams", "s1", "speaker-requests", "r1", "cancel"],
+      ["streams", "s1", "speakers", "did:privy:abc", "mute"],
     ]) {
       assert.equal(isPublicPost(path), false, path.join("/"));
     }

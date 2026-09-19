@@ -354,6 +354,15 @@ export function acceptFor(accept: UploadAccept, limits: UploadLimits = getUpload
  * something specific and wrong. Unknown stays unknown, and callers decide.
  */
 export const UploadResultSchema = z.object({
+  /**
+   * The stored object's KEY, which is what a private attachment is sent as.
+   *
+   * A DM's media lives behind a signed link, so its `url` is not a storage URL
+   * the sender could hand back — the message carries `media.key` and the
+   * service mints the links. Optional: the deployed service does not echo a
+   * key yet, and an empty one simply means "send the URL, the old way".
+   */
+  key: z.string().optional().default(""),
   url: z.string(),
   kind: z.enum(["image", "video", "audio", "file"]).nullable().catch(null),
   contentType: z.string().optional().default(""),

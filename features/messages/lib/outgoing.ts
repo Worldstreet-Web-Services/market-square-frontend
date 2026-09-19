@@ -20,6 +20,22 @@
  */
 
 export interface OutgoingMedia {
+  /**
+   * The stored object's key, for an attachment the service keeps PRIVATE.
+   *
+   * A private object has no URL the sender could hand back — the service mints
+   * a signed link per read instead — so the key is what identifies it. Empty
+   * or absent means an upload from before private storage, which still
+   * identifies itself by `url`; the service accepts exactly one of the two and
+   * prefers the key.
+   */
+  key?: string;
+  /**
+   * Which door this came through — the live camera, or a file the sender
+   * already had. A LABEL, never a permission: it is a client claim the service
+   * cannot verify, so nothing is ever gated on it.
+   */
+  source?: "camera" | "upload";
   url: string;
   width?: number | null;
   height?: number | null;
@@ -53,6 +69,13 @@ export interface OutgoingMention {
 export const MENTIONS_MAX = 25;
 
 export interface OutgoingMessage {
+  /**
+   * Send this attachment as a SNAP: seen once, then destroyed.
+   *
+   * Only ever true for a photo or a clip in a one-to-one — `canSendSnap` holds
+   * that rule, and the service refuses anything else with a 400.
+   */
+  viewOnce?: boolean;
   text?: string;
   media?: OutgoingMedia;
   /** The message being answered — an id in the SAME conversation, one level. */
@@ -62,9 +85,12 @@ export interface OutgoingMessage {
 }
 
 export interface MessagePayload {
+  viewOnce?: boolean;
+  mediaSource?: "camera" | "upload";
   text?: string;
   media?: {
-    url: string;
+    key?: string;
+    url?: string;
     width?: number;
     height?: number;
     durationSeconds?: number;
@@ -86,7 +112,8 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
   const text = body.text?.trim();
   if (text) payload.text = text;
 
-  if (body.media?.url) {
+  const mediaKey = body.media?.key?.trim();
+  if (body.media && (mediaKey || body.media.url)) {
     const width = measurement(body.media.width);
     const height = measurement(body.media.height);
     // A sub-second clip still has a duration; the service's floor is 1.
@@ -98,7 +125,11 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
     const fileName = body.media.fileName?.trim();
     const sizeBytes = measurement(body.media.sizeBytes);
     payload.media = {
-      url: body.media.url,
+      // EXACTLY ONE of the two, never both: the service takes the key when it
+      // is sent, and sending a stale URL beside it would only be a second
+      // claim about the same object. The URL remains the whole story for an
+      // upload the service answered without a key.
+      ...(mediaKey ? { key: mediaKey } : { url: body.media.url }),
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
       ...(duration ? { durationSeconds: duration } : {}),
@@ -106,6 +137,16 @@ export function buildMessagePayload(body: OutgoingMessage): MessagePayload {
       ...(sizeBytes ? { sizeBytes } : {}),
     };
   }
+
+  // TOP LEVEL, beside viewOnce rather than inside media: the service stores it
+  // on the message so it outlives a destroyed snap. Omitted for a picked file,
+  // since absent already means "upload" there and is stored as such.
+  if (body.media?.source === "camera" && payload.media) payload.mediaSource = "camera";
+
+  // OMITTED unless true. `viewOnce: false` says nothing an absent field does
+  // not, and it must never travel on a message with no media: a view-once line
+  // of text is not a thing, and the service would refuse the message outright.
+  if (body.viewOnce && payload.media) payload.viewOnce = true;
 
   // Both are OMITTED rather than sent empty: `replyToId: null` and
   // `mentions: []` say nothing the absent field does not, and an id that is

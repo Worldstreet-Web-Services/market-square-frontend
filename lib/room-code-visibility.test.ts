@@ -18,3 +18,10 @@ describe("who sees a gist room's code", () => {
     assert.equal(roomCodeVisible({ roomCode: "", audience: "public" }, true), false);
   });
 });
+
+describe("roomCodeVisible fails closed on an audience it does not know", () => {
+  it("keeps the code with the host", () => {
+    assert.equal(roomCodeVisible({ roomCode: "bcdfghjkm", audience: "unknown" }, false), false);
+    assert.equal(roomCodeVisible({ roomCode: "bcdfghjkm", audience: "unknown" }, true), true);
+  });
+});

@@ -33,7 +33,27 @@ export const MessageSchema = z.object({
    */
   media: z
     .object({
-      url: z.string(),
+      /**
+       * NULL FOR A SNAP, and that is the contract rather than a broken row.
+       *
+       * The service withholds the url for an unopened view-once message
+       * everywhere it is read — a link on a read would be a way to see a snap
+       * without spending it. This field was `z.string()` and required, so the
+       * first snap sent made `MessageSchema.parse` throw: the service created
+       * the message, answered 201, and the composer still said "Couldn't send
+       * that message". The url only ever arrives from the open route.
+       */
+      url: z.string().nullable().optional().default(null),
+      /**
+       * The signed `download` variant, and when both links stop working.
+       *
+       * Optional because they are ABSENT on the service as deployed today —
+       * this client ships before the service that mints them, deliberately, so
+       * that the Save control never disappears in the window between the two
+       * deploys. `lib/message-media-link.ts` holds the rule for both shapes.
+       */
+      downloadUrl: z.string().nullable().optional().default(null),
+      urlExpiresAt: z.string().nullable().optional().default(null),
       // `catch` rather than a hard enum: a future fourth kind must degrade to
       // "media we cannot type" (the URL sniff then decides) instead of
       // throwing the message away.
@@ -83,6 +103,53 @@ export const MessageSchema = z.object({
   // without also knowing the roster size at the moment of sending.
   readBy: z.number().optional().default(0),
   readByAll: z.boolean().optional().default(false),
+  /**
+   * OPENED, per message and per person — stricter than `readByAll`.
+   *
+   * `readByAll` is the thread's read watermark: it says the other side has
+   * been into the conversation, not that they looked at THIS message.
+   * `openedByMe` and `openedByPeer` (direct conversations only) are the
+   * service's per-message stamps, and they are what a view-once snap turns on.
+   *
+   * Both are optional and BOTH DEFAULT TO FALSE ONLY AS A SHAPE, never as an
+   * answer: `snapStatus` prefers them when the payload carries them and falls
+   * back to the watermark when it does not, so a service that has not shipped
+   * them yet still draws a correct row.
+   */
+  openedByMe: z.boolean().nullable().optional().default(null),
+  openedByPeer: z.boolean().nullable().optional().default(null),
+  /**
+   * A SNAP: sent to be seen once, then destroyed.
+   *
+   * A read NEVER carries a way to see one — the media object arrives with its
+   * kind and its dimensions but NO url, on the thread, in the inbox preview
+   * and in the sender's own send response. That is the service being careful
+   * rather than the payload being broken: a link on a read would be a way to
+   * see a snap without spending it. The one url that exists comes back from
+   * the open route, once.
+   *
+   * `destroyedAt` is set after it has been opened, and the bubble becomes a
+   * line of text rather than a picture.
+   */
+  /**
+   * WHICH DOOR THE ATTACHMENT CAME THROUGH — the live camera, or a file the
+   * sender already had.
+   *
+   * TOP LEVEL, not inside `media`, and that is load-bearing: `media` becomes
+   * null the moment a snap is destroyed, so a field inside it could not
+   * survive the thing it describes. This is a fact about the MESSAGE.
+   *
+   * A CLAIM, never a proof. The bytes of a photograph do not say which button
+   * was pressed, so the service cannot verify it and neither can we. It labels
+   * a bubble; nothing is gated on it.
+   *
+   * Null only for a message that never had an attachment — and for every
+   * message sent before the field existed, which is why the mark is drawn only
+   * where the payload carries one.
+   */
+  mediaSource: z.enum(["camera", "upload"]).nullable().optional().default(null).catch(null),
+  viewOnce: z.boolean().optional().default(false),
+  destroyedAt: z.string().nullable().optional().default(null),
   // The spec's enum. `catch` keeps an unknown future state from blanking the
   // thread; a removed message keeps its row but not its body.
   status: z.enum(["active", "removed"]).optional().default("active").catch("active"),
@@ -193,6 +260,17 @@ export const ConversationSchema = z.object({
   lastSender: ProfileSchema.nullable().optional().default(null),
   lastMessage: MessageSchema.nullable().optional().default(null),
   lastMessageAt: z.string().nullable().optional().default(null),
+  /**
+   * The snap streak with this person: consecutive days on which BOTH of them
+   * sent a photo or clip marked view-once. Zero on a group, zero once it has
+   * lapsed, and never counted from ordinary gallery photos.
+   *
+   * `snapStreakExpiresAt` is the deadline, and it is NOT today's end: a streak
+   * survives a day nobody has snapped in yet, and only breaks once a whole day
+   * has passed without both sides.
+   */
+  snapStreak: z.number().optional().default(0),
+  snapStreakExpiresAt: z.string().nullable().optional().default(null),
   /** Group presence, the counterpart of a profile's `lastSeenAt`. */
   lastActiveAt: z.string().nullable().optional().default(null),
   // DELIBERATELY NOT DEFAULTED, for the reason `isFollowing` is not:
@@ -301,6 +379,40 @@ export const InvitePreviewSchema = z.object({
 });
 
 export type InvitePreview = z.infer<typeof InvitePreviewSchema>;
+
+/**
+ * WHAT OPENING A SNAP ANSWERS — the only place a snap's url ever exists.
+ *
+ * `media` is null on every call after the first, which is how a retry says
+ * "already spent" without being an error. `url` here is a DIRECT storage link
+ * with minutes on it, not a `/media/messages/...` one: the message has let go
+ * of the file, and the service deletes it a few minutes later.
+ */
+export const SnapOpenSchema = z.object({
+  openedAt: z.string().nullable().optional().default(null),
+  destroyed: z.boolean().optional().default(true),
+  /**
+   * The instant the file is DELETED — `openedAt` plus the service's hold, five
+   * minutes today. Not a link expiry: there is nothing behind it afterwards,
+   * which is why the viewer closes at zero rather than offering a retry.
+   *
+   * Null on a second open, and null on an ordinary message, whose attachment
+   * is not being deleted at all.
+   */
+  mediaExpiresAt: z.string().nullable().optional().default(null),
+  media: z
+    .object({
+      url: z.string(),
+      kind: z.enum(["image", "video"]).nullable().optional().default(null).catch(null),
+      width: z.number().nullable().optional().default(null),
+      height: z.number().nullable().optional().default(null),
+    })
+    .nullable()
+    .optional()
+    .default(null),
+});
+
+export type SnapOpen = z.infer<typeof SnapOpenSchema>;
 
 export const GroupRefSchema = z.object({
   id: z.string(),

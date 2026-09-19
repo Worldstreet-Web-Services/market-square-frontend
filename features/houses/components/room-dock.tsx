@@ -128,7 +128,7 @@ export function RoomDock({
             type="button"
             onClick={mic.toggle}
             disabled={mic.disabled}
-            aria-pressed={!mic.on}
+            data-room-mic=""
             aria-label={mic.on ? "Mute your microphone" : "Unmute your microphone"}
             className={cn(
               "ws-press flex h-10 w-10 items-center justify-center rounded-full transition-colors disabled:opacity-40",

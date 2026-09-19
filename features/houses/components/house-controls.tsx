@@ -117,7 +117,6 @@ export function HouseControls({
               onClick={mic.toggle}
               disabled={mic.disabled}
               aria-label={mic.on ? "Mute your microphone" : "Unmute your microphone"}
-              aria-pressed={!mic.on}
               className={cn(
                 ROUND,
                 mic.on ? "bg-white/8 text-heading" : "bg-accent text-ink",

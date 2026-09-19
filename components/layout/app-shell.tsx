@@ -27,7 +27,7 @@ import { allowsCompose, allowsRailCompose } from "@/lib/compose-surfaces";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { toast } from "sonner";
 import { useChatOpen } from "@/lib/chat-open-store";
-import { useRoomBar } from "@/lib/room-bar-store";
+import { useMiniCard, useMiniPlayer, useRoomBar } from "@/lib/room-bar-store";
 import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { setSidebarHidden, useSidebarHidden } from "@/lib/sidebar-pref-store";
 import { useAuth } from "@/hooks/use-auth";
@@ -58,6 +58,11 @@ import { ComposeSheet } from "@/components/layout/compose-sheet";
 import { TickerSheet } from "@/components/layout/ticker-sheet";
 import { ConnectionBanner } from "@/components/layout/connection-banner";
 import { AnnouncementBand } from "@/components/layout/announcement-band";
+import { RoomSessionProvider } from "@/components/layout/room-session";
+import { RoomInviteBanner, RoomMiniPlayer } from "@/components/layout/room-mini-player";
+import { ZoneExitGuard } from "@/components/layout/zone-exit-guard";
+import { PushNavigation } from "@/components/layout/push-navigation";
+import { leaveSquare, requestZoneExit } from "@/lib/zone-exit";
 import {
   IconBell,
   IconDots,
@@ -1181,6 +1186,7 @@ export function Sidebar({
             <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-grey-400 transition-[left] duration-150 motion-reduce:transition-none" />
           </button>
         </div>
+        <RoomMiniPlayer placement="rail" />
         {broadcast.live && (
           <div className="mb-2 flex justify-center group-data-[rail=full]/rail:justify-start group-data-[rail=full]/rail:pl-2">
             <OnAirPill streamId={broadcast.streamId} compact />
@@ -1274,7 +1280,7 @@ function ArkMenu() {
               label={destination.label}
               onClick={() => {
                 close();
-                window.location.assign(destination.href);
+                requestZoneExit({ href: destination.href, go: () => leaveSquare(destination.href) });
               }}
             />
           ))}
@@ -1803,6 +1809,24 @@ export function MobileBar({
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  /*
+    THE ROOM SESSION WRAPS BOTH SHELLS — the framed one and the bare
+    `/live/:id` one below. Mounted anywhere inside either branch, switching
+    between them would unmount it and hang up the gist room the reader is in.
+    Exactly one mount, here (lib/shell-invariants.test.ts).
+  */
+  return (
+    <RoomSessionProvider>
+      <ShellFrame>{children}</ShellFrame>
+      {/* Speakers and hosts are asked before a link leaves the Square zone. */}
+      <ZoneExitGuard />
+      {/* A tapped push navigates this tab in-app rather than reloading it. */}
+      <PushNavigation />
+    </RoomSessionProvider>
+  );
+}
+
+function ShellFrame({ children }: { children: React.ReactNode }) {
   // Nav `href`s are LOGICAL keys (isActive, BADGE_FOR, the WIDE list), so the
   // pathname is compared without the /square prefix and prefixed only where rendered.
   const pathname = stripSquare(usePathname());
@@ -1844,6 +1868,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // A live gist room's OWN bottom bar is up, standing where the phone's dock
   // would (1285:93076). Phones only; see lib/room-bar-store.ts.
   const roomBar = useRoomBar();
+  const miniPlayer = useMiniPlayer();
+  const miniCard = useMiniCard();
 
   /*
     ONE SOURCE OF VIEWPORT TRUTH, published for the whole shell.
@@ -1958,6 +1984,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
          `--ws-nav-h` under md while a room's own bar has taken the dock's
          place, so nothing pads its foot for a dock that is not drawn. */
       data-dock={roomBar ? "room-bar" : "on"}
+      /* And the minimised room's phone bar above the dock: the stylesheet adds
+         its height to `--ws-nav-h` and the floating `+` offsets. */
+      data-mini-player={miniPlayer ? "on" : "off"}
+      /* …and the desktop card: its height reserved at the page's foot, or at
+         the top of an open thread (globals.css). */
+      data-mini-card={miniCard}
     >
       <div className="mx-auto flex w-full max-w-[var(--ws-shell-max)]">
         {/*
@@ -2170,6 +2202,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       */}
         <div className="flex min-w-0 flex-1 flex-col bg-chrome">
           <TopBar showBrand={!railOn} wide={wide} />
+          {/* The invitation to speak, while the room is minimised: before
+              <main>, where it is drawn (room-mini-player.tsx). */}
+          <RoomInviteBanner />
           {/* justify-START, not center. Centering the column+rail group inside
             the leftover width of the 1600px shell split that slack in two and
             left a dead band between the sidebar and the column — the column
@@ -2265,6 +2300,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             across the thread's foot on desktop. `MessagesPage` reports the
             open thread through `lib/chat-open-store`, and the dock returns
             the moment the thread closes. */}
+        {/* THE MINIMISED ROOM. The shell draws it, never a route: on a phone
+            the bar above the dock, on desktop a card at the bottom-left while
+            the rail is off (guests included). With the rail on it sits at the
+            rail's foot, inside `Sidebar`. The phone bar comes BEFORE the dock
+            in the document because it is drawn above it: keyboard and
+            screen-reader order follow what the eye meets first. */}
+        <RoomMiniPlayer placement="phone" />
         {!chatOpen && (
         <BottomDock
           guest={guest}
@@ -2302,6 +2344,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           }
         />
         )}
+
+        {!railOn && <RoomMiniPlayer placement="card" />}
 
         <ComposeSheet
           open={composeOpen}

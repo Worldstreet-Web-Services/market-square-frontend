@@ -77,12 +77,41 @@ export function MediaViewer({
           controls
           autoPlay
           playsInline
+          /*
+            THE BROWSER'S OWN MENU MUST NOT OFFER WHAT WE WITHHOLD.
+
+            Chrome's video control menu carries Download and Picture in
+            Picture. On a SNAP that is the feature undoing itself: we draw no
+            Save deliberately, and the browser was quietly offering one three
+            pixels away (ogazboiz found it, 2026-09-19).
+
+            Keyed on `downloadUrl` rather than on a snap flag, because the rule
+            is the general one: wherever THIS app has decided there is no
+            download to give, the player does not get to disagree. Where a
+            download IS offered the menu keeps it, and the two agree.
+
+            It is not a lock. A screen recording still works, and nothing in a
+            browser can stop that — the point is not to leave a one-tap Save on
+            a picture that is about to be destroyed.
+          */
+          {...(downloadUrl
+            ? {}
+            : {
+                controlsList: "nodownload noplaybackrate",
+                disablePictureInPicture: true,
+                onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
+              })}
           onClick={(event) => event.stopPropagation()}
           className="max-h-[90dvh] max-w-full rounded-[20px] bg-black"
         />
       ) : (
         /* eslint-disable-next-line @next/next/no-img-element -- service-issued media URL */
-        <img src={src} alt={alt} className="max-h-[90dvh] max-w-full rounded-[20px] object-contain" />
+        <img
+          src={src}
+          alt={alt}
+          onContextMenu={downloadUrl ? undefined : (event) => event.preventDefault()}
+          className="max-h-[90dvh] max-w-full rounded-[20px] object-contain"
+        />
       )}
 
       <div className="absolute right-4 top-4 flex items-center gap-2">

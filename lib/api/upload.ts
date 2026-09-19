@@ -58,6 +58,14 @@ export type { UploadLimits, UploadAccept, UploadResult } from "@/lib/upload-rule
 export { UploadResultSchema };
 export { ensureUploadLimits } from "@/lib/upload-limits";
 
+/**
+ * What an upload is for, where that decides its storage.
+ *
+ * Deliberately not an open string: `message` is the only value the service
+ * accepts, and anything else is a 400 rather than a quietly public upload.
+ */
+export type UploadPurpose = "message";
+
 // ---------------------------------------------------------------- presign
 
 // POST /uploads/presign → where to put the bytes. `fields` is set for POST
@@ -174,12 +182,18 @@ async function uploadDirect(
   file: File,
   onProgress?: (fraction: number) => void,
   /** Fired once the bytes have landed in storage — after that, no path may re-send them. */
-  onBytesSent?: () => void
+  onBytesSent?: () => void,
+  purpose?: UploadPurpose
 ): Promise<UploadResult> {
   const request = {
     contentType: file.type,
     sizeBytes: file.size,
     kind: uploadKind(file),
+    // A DM attachment is stored PRIVATELY, under a key the service will only
+    // ever serve through a signed link. That decision is made here, at
+    // presign time, because it decides where the bytes land — it cannot be
+    // applied afterwards to an object already sitting in a public bucket.
+    ...(purpose ? { purpose } : {}),
   };
 
   let presign = await callApi("/uploads/presign", request, PresignSchema);
@@ -203,7 +217,11 @@ async function uploadDirect(
 // ------------------------------------------------------------ proxied path
 
 /** Small files still go through the BFF: one request, and it works offline. */
-function uploadProxied(file: File, onProgress?: (fraction: number) => void): Promise<UploadResult> {
+function uploadProxied(
+  file: File,
+  onProgress?: (fraction: number) => void,
+  purpose?: UploadPurpose
+): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
     void (async () => {
       const xhr = new XMLHttpRequest();
@@ -251,6 +269,9 @@ function uploadProxied(file: File, onProgress?: (fraction: number) => void): Pro
       };
       const form = new FormData();
       form.append("file", file);
+      // Same decision as the presigned path, carried as a form field: the
+      // service reads it before it chooses a bucket and a key.
+      if (purpose) form.append("purpose", purpose);
       xhr.send(form);
     })();
   });
@@ -274,7 +295,15 @@ export async function uploadFile(
   // and covers take. A CHAT attachment must pass "attachment" — audio is a
   // message but never a post, so widening the default would quietly let a
   // voice note be uploaded as somebody's avatar.
-  accept: UploadAccept = "media"
+  accept: UploadAccept = "media",
+  /**
+   * What the file is FOR, when that changes where it is stored. Only DM
+   * attachments pass one: `"message"` stores the object privately, reachable
+   * solely through the signed links the service mints on a participant-gated
+   * read. Everything else — posts, avatars, covers — is public by design and
+   * passes nothing.
+   */
+  purpose?: UploadPurpose
 ): Promise<UploadResult> {
   // Belt and braces: call sites validate at PICK time (that is where the user
   // gets an instant error), but this is the only door every upload goes
@@ -283,7 +312,7 @@ export async function uploadFile(
   const invalid = validateUpload(file, accept);
   if (invalid) throw apiError("VALIDATION", invalid, 422);
 
-  if (!shouldUploadDirect(file)) return uploadProxied(file, onProgress);
+  if (!shouldUploadDirect(file)) return uploadProxied(file, onProgress, purpose);
 
   // ONE UPLOAD PER FILE. The proxy is a fallback for a service with no presign
   // route, and that can only be known BEFORE the bytes move: once they have
@@ -292,15 +321,20 @@ export async function uploadFile(
   // proxy — which would store it twice and bill it twice.
   let bytesSent = false;
   try {
-    return await uploadDirect(file, onProgress, () => {
-      bytesSent = true;
-    });
+    return await uploadDirect(
+      file,
+      onProgress,
+      () => {
+        bytesSent = true;
+      },
+      purpose
+    );
   } catch (error) {
     // Presign has not shipped everywhere yet, and fixture mode has no storage
     // at all. Where it is absent, fall back to the proxy — which genuinely
     // works for any size locally, and tells the truth when the platform limit
     // bites in production.
     if (bytesSent || errorCode(error) !== "NOT_FOUND") throw error;
-    return uploadProxied(file, onProgress);
+    return uploadProxied(file, onProgress, purpose);
   }
 }

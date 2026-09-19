@@ -14,6 +14,7 @@ import {
   recordCircuitFailure,
   recordCircuitSuccess,
 } from "@/lib/api/circuit-store";
+import { recordServerDate } from "@/lib/server-clock";
 
 // Fetch wrapper for our BFF routes. Attaches the Decane access token so the
 // server can verify the caller and forward it upstream. In demo mode there is
@@ -49,7 +50,11 @@ export async function apiFetch(
     breaker?: boolean;
   } = {}
 ): Promise<Response> {
-  if (DEMO_AUTH) return fetch(path, init);
+  if (DEMO_AUTH) {
+    const demo = await fetch(path, init);
+    recordServerDate(demo.headers.get("date"));
+    return demo;
+  }
 
   let accessToken = currentAccessToken();
   if (opts.requireAuth && !accessToken) {
@@ -113,6 +118,8 @@ export async function apiFetch(
   let response: Response;
   try {
     response = await fetch(path, { ...init, headers });
+    // The server's clock, for deadlines it writes (lib/server-clock.ts).
+    recordServerDate(response.headers.get("date"));
   } catch (error) {
     // Transport failure: no status, nothing to read. This is the clearest
     // signal the breaker gets, so it must not be swallowed.

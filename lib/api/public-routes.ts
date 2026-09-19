@@ -81,12 +81,13 @@ export function isPublicGet(path: string[]): boolean {
   if (head === "activities") return true;
   // The category index feeds the right rail, which renders signed out.
   if (head === "categories") return true;
-  // Every GET under /profiles is public: the DIRECTORY collection itself, one
-  // profile, its posts, streams and activities, and both follow lists. The
-  // collection matters — Explore's People tab is a discovery surface and has
-  // to list for signed-out visitors, with the sign-in invitation only on the
-  // Follow action.
-  if (head === "profiles") return true;
+  // Every GET under /profiles is public — the DIRECTORY collection itself, one
+  // profile, its posts, streams, activities and FOLLOWERS — except who a
+  // person FOLLOWS, which is private to its owner (owner-only on the service,
+  // bearer-only in the spec since 2026-09-17). The collection matters —
+  // Explore's People tab is a discovery surface and has to list for
+  // signed-out visitors, with the sign-in invitation only on the Follow action.
+  if (head === "profiles") return !(path.length === 3 && third === "following");
   // /store/items and /store/items/{slug}.
   if (head === "store") return true;
   if (head === "health" || head === "openapi.json") return true;

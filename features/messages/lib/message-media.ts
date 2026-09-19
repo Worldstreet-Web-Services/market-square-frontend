@@ -144,7 +144,17 @@ export function mediaRatio(
  * the render shape unable to drift apart silently again.
  */
 export interface WireMessageMedia {
-  url: string;
+  /** Null for an unopened snap — the service withholds it on every read. */
+  url?: string | null;
+  /**
+   * The service's `download` variant of the same object — signed for saving,
+   * and the ONLY way to save a private attachment, since editing a signed URL
+   * is what the signature forbids. Absent on every message the deployed
+   * service sends today; `lib/message-media-link.ts` falls back for those.
+   */
+  downloadUrl?: string | null;
+  /** When `url` and `downloadUrl` stop working. Absent for a storage URL, which never does. */
+  urlExpiresAt?: string | null;
   kind?: "image" | "video" | "audio" | "file" | null;
   width?: number | null;
   height?: number | null;
@@ -157,6 +167,8 @@ export interface WireMessageMedia {
 
 export interface FlatMessageMedia {
   mediaUrl: string | null;
+  mediaDownloadUrl: string | null;
+  mediaUrlExpiresAt: string | null;
   mediaKind: "image" | "video" | "audio" | "file" | null;
   mediaWidth: number | null;
   mediaHeight: number | null;
@@ -170,6 +182,8 @@ export function flattenMessageMedia(
 ): FlatMessageMedia {
   return {
     mediaUrl: media?.url ?? null,
+    mediaDownloadUrl: media?.downloadUrl ?? null,
+    mediaUrlExpiresAt: media?.urlExpiresAt ?? null,
     mediaKind: media?.kind ?? null,
     mediaWidth: media?.width ?? null,
     mediaHeight: media?.height ?? null,

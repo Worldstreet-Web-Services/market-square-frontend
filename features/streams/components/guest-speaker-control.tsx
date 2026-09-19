@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { IconCamera, IconDots, IconUser, IconVolume } from "@/components/ui/icons";
 import { useGate } from "@/hooks/use-gate";
 import { useStage } from "@/features/streams/hooks/use-stage";
+import { useInAppLeaveGuard } from "@/features/streams/hooks/use-in-app-leave-confirm";
 import { guestStagePanel, type SpeakerRequestStatus } from "@/lib/stage-recovery";
 import {
   useMySpeakerRequest,
@@ -31,7 +32,19 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
   // connecting with it evicts the viewer and starts the reconnect loop that
   // killed the page on mobile. The playback token the player already refetches
   // is what carries the publish grant.
-  const publisher = useStage({ streamId: stream.id, approved, previewRef });
+  /*
+    THE GUEST'S OWN ASK, recorded where they make it and consumed once. A
+    stream guest who asks and is approved while watching goes on with mic and
+    camera, as before; one who arrives already approved — a reload, a remount
+    — does not have their devices opened for them (lib/mic-consent.ts).
+  */
+  const asked = useRef(false);
+  const consumeIntent = useCallback(() => {
+    const intent = asked.current;
+    asked.current = false;
+    return intent;
+  }, []);
+  const publisher = useStage({ streamId: stream.id, approved, previewRef, consumeIntent });
 
   /**
    * On stage means PUBLISHING, not "the host said yes".
@@ -44,6 +57,8 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
    * stage they were never on. See lib/stage-recovery.ts.
    */
   const onStage = approved && publisher.state === "live";
+  // The stage lives in this page: a tapped push that navigates in-app asks first.
+  useInAppLeaveGuard(onStage, "You're on stage — leaving takes you off it.");
 
   const status: SpeakerRequestStatus | null =
     (mine.data?.status as SpeakerRequestStatus | undefined) ?? null;
@@ -67,7 +82,12 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
     if (!requestId) return;
     resolve.mutate(
       { requestId, action: "leave" },
-      { onSuccess: () => request.mutate() }
+      {
+        onSuccess: () => {
+          asked.current = true;
+          request.mutate();
+        },
+      }
     );
   }, [requestId, resolve, request]);
 
@@ -80,7 +100,6 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
           <button
             onClick={() => void publisher.toggleMic()}
             aria-label={publisher.micOn ? "Mute your microphone" : "Unmute your microphone"}
-            aria-pressed={!publisher.micOn}
             className={cn(
               "ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full transition-colors",
               publisher.micOn ? "bg-black/50 text-heading" : "bg-down/80 text-ink"
@@ -94,7 +113,6 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
           <button
             onClick={() => void publisher.toggleCam()}
             aria-label={publisher.camOn ? "Turn your camera off" : "Turn your camera on"}
-            aria-pressed={!publisher.camOn}
             className={cn(
               "ws-press flex h-11 w-11 flex-col items-center justify-center rounded-full transition-colors",
               publisher.camOn ? "bg-black/50 text-heading" : "bg-down/80 text-ink"
@@ -148,7 +166,10 @@ export function GuestSpeakerControl({ stream }: { stream: Stream }) {
               <p className="text-sm font-semibold text-heading">Ask to speak with the host</p>
               <p className="mt-1 text-xs leading-5 text-grey-400">{panel.message}</p>
             </div>
-            <Button className="w-full" loading={request.isPending} onClick={() => request.mutate()}>
+            <Button className="w-full" loading={request.isPending} onClick={() => {
+                asked.current = true;
+                request.mutate();
+              }}>
               Request to join
             </Button>
           </div>

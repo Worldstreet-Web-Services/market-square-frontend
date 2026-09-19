@@ -59,7 +59,8 @@ export function groupRoomCode(code: string): string {
  * room made before codes shipped.
  */
 export function roomCodeVisible(
-  room: { roomCode: string | null; audience: "public" | "private" },
+  /** Anything but "public" — "unknown" included — keeps the code with the host. */
+  room: { roomCode: string | null; audience: "public" | "private" | "unknown" },
   isHost: boolean
 ): boolean {
   if (!room.roomCode) return false;

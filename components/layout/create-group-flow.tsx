@@ -221,6 +221,9 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
             lastActiveAt: null,
             requestedBy: null,
             unreadCount: 0,
+            // Streaks are a 1:1 thing; a group's is always zero.
+            snapStreak: 0,
+            snapStreakExpiresAt: null,
           });
           close();
         },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AudioCaptureOptions, LocalAudioTrack, LocalTrack, Room } from "livekit-client";
+import type { AudioCaptureOptions, LocalAudioTrack, LocalTrack, Room, RoomOptions } from "livekit-client";
 import { setBroadcastLive } from "@/hooks/use-broadcast-status";
 // The taxonomy is pure and lives in lib/ so it can be pinned by tests —
 // lib/media-errors.test.ts owns the name → class table.
@@ -34,6 +34,78 @@ const SPEECH_CAPTURE: AudioCaptureOptions = {
   voiceIsolation: true,
   channelCount: 1,
 };
+
+/**
+ * The Room a talking publisher opens — one definition for the Studio cockpit
+ * (`usePublisher` below) and the gist-room session the shell owns
+ * (components/layout/room-session.tsx), so a host's audio is processed the
+ * same way whichever of them opened the connection.
+ */
+export function publisherRoomOptions(
+  livekit: Pick<typeof import("livekit-client"), "AudioPresets">,
+  preferredMic?: string
+): RoomOptions {
+  const audioCapture: AudioCaptureOptions = preferredMic
+    ? { ...SPEECH_CAPTURE, deviceId: preferredMic }
+    : SPEECH_CAPTURE;
+  return {
+    // Mirrors the initial capture so a mic toggle (which re-creates the
+    // track through the SDK) republishes with the same processing and
+    // the same device instead of falling back to the system default.
+    audioCaptureDefaults: audioCapture,
+    publishDefaults: {
+      // 48 kbps mono Opus. Stated rather than inherited, and *not*
+      // dropped to AudioPresets.speech (24 kbps): the reported symptom
+      // is quality, not bandwidth, and RED already doubles the effective
+      // audio rate — ~96 kbps total is still ~5% of the 1.7 Mbps the
+      // 720p video track budgets, so there is nothing to buy by
+      // squeezing speech further.
+      audioPreset: livekit.AudioPresets.music,
+      // Explicit because the SDK only defaults these on for tracks it
+      // considers mono; pinning them means a mic that misreports its
+      // channel count cannot quietly turn off loss concealment.
+      red: true,
+      dtx: true,
+      forceStereo: false,
+    },
+  };
+}
+
+/**
+ * IMPERATIVE START — for the session the shell owns, which has no component
+ * lifetime to hang an effect on.
+ *
+ * `micOn: false` is how a host comes back after a reload, a retry or a
+ * reconnect: on the stage, mic MUTED, nothing captured until they tap. Only
+ * the host's own fresh open (they just checked their mic in Backstage and
+ * pressed Open) publishes an open mic.
+ */
+export async function startPublishing(room: Room, { micOn }: { micOn: boolean }): Promise<void> {
+  if (!micOn) return;
+  await room.localParticipant.setMicrophoneEnabled(true);
+}
+
+/** IMPERATIVE STOP — the mic comes down; the connection is the session's to end. */
+export async function stopPublishing(room: Room): Promise<void> {
+  await room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+}
+
+/**
+ * A CAPTURE THAT OUTLIVED ITS ROOM, turned off.
+ *
+ * A mic publish waits on the browser's permission prompt (or a slow
+ * getUserMedia on iOS). If the reader closes, leaves or the connection is
+ * replaced while it waits, the capture can resolve against a Room that is no
+ * longer anybody's — and the OS mic indicator stays on after the UI says they
+ * left. Muted through the SDK, then every local audio track is stopped
+ * directly in case the SDK no longer tracks it on a closed engine.
+ */
+export async function releaseCapture(room: Room): Promise<void> {
+  await room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+  for (const publication of room.localParticipant.audioTrackPublications.values()) {
+    publication.track?.stop();
+  }
+}
 
 /**
  * A WebRTC connect that has not settled in this long is not going to. Without
@@ -105,8 +177,9 @@ export interface PublisherControls {
 
 // Everything the browser-publish path needs, shared by the cockpit layouts:
 // LiveKit connect + camera/mic publish, local preview, toggles, device
-// switching, connection quality, the shell's live indicator, and the two
-// leave-guards (beforeunload + in-app link confirm). The SDK owns reconnects.
+// switching, connection quality, the shell's live indicator, and the
+// beforeunload leave-guard (the Studio adds its own in-app link confirm).
+// The SDK owns reconnects.
 export function usePublisher({
   ingest,
   enabled,
@@ -168,12 +241,23 @@ export function usePublisher({
 
     // The spin-forever guard. Cleared the moment the attempt settles either
     // way; if it fires first, the panel gets a real failure and a Retry.
-    const timer = setTimeout(() => {
-      if (cancelled || settled) return;
-      settled = true;
-      setState("timeout");
-      void room?.disconnect();
-    }, CONNECT_TIMEOUT_MS);
+    //
+    // ARMED ONLY FOR THE NETWORK CONNECT. It used to start with the effect, so
+    // its 15 s also covered loading livekit-client and the browser's
+    // "Allow microphone?" prompt — both of which take as long as the network
+    // or the PERSON takes. On a slow connection, or a host who read the prompt
+    // before answering, a healthy room "timed out" and dropped (ogazboiz,
+    // 2026-09-17). Device capture has its own failure states; only the
+    // connect can hang silently, so only the connect is timed.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const armTimeout = () => {
+      timer = setTimeout(() => {
+        if (cancelled || settled) return;
+        settled = true;
+        setState("timeout");
+        void room?.disconnect();
+      }, CONNECT_TIMEOUT_MS);
+    };
     const settle = (next: PublisherState, message: string | null = null) => {
       if (cancelled || settled) return;
       settled = true;
@@ -198,27 +282,7 @@ export function usePublisher({
         const audioCapture: AudioCaptureOptions = preferredMic
           ? { ...SPEECH_CAPTURE, deviceId: preferredMic }
           : SPEECH_CAPTURE;
-        const instance = new Room({
-          // Mirrors the initial capture so a mic toggle (which re-creates the
-          // track through the SDK) republishes with the same processing and
-          // the same device instead of falling back to the system default.
-          audioCaptureDefaults: audioCapture,
-          publishDefaults: {
-            // 48 kbps mono Opus. Stated rather than inherited, and *not*
-            // dropped to AudioPresets.speech (24 kbps): the reported symptom
-            // is quality, not bandwidth, and RED already doubles the effective
-            // audio rate — ~96 kbps total is still ~5% of the 1.7 Mbps the
-            // 720p video track budgets, so there is nothing to buy by
-            // squeezing speech further.
-            audioPreset: AudioPresets.music,
-            // Explicit because the SDK only defaults these on for tracks it
-            // considers mono; pinning them means a mic that misreports its
-            // channel count cannot quietly turn off loss concealment.
-            red: true,
-            dtx: true,
-            forceStereo: false,
-          },
-        });
+        const instance = new Room(publisherRoomOptions({ AudioPresets }, preferredMic));
         room = instance;
         roomRef.current = instance;
         // The host cockpit is the only other thing that opens a Room. Claiming
@@ -338,6 +402,7 @@ export function usePublisher({
         }
 
         try {
+          armTimeout();
           await instance.connect(url, token);
           for (const track of tracks) {
             await instance.localParticipant.publishTrack(track);
@@ -372,8 +437,14 @@ export function usePublisher({
     };
   }, [active, url, token, streamId, audioOnlyMode, preferredCamera, preferredMic, previewRef, attempt]);
 
-  // Leave-guards while on air: tab close/reload asks first; in-app link
-  // clicks (except new-tab links) require an explicit confirm.
+  // Leave-guard while on air: tab close/reload asks first.
+  //
+  // The IN-APP link confirm that used to sit here is gone from the shared
+  // hook. A gist room no longer ends when its page unmounts — the shell owns
+  // that session and only a Square-leaving link needs asking about
+  // (components/layout/zone-exit-guard.tsx). The Studio cockpit, whose
+  // broadcast still lives in its page, keeps its confirm through
+  // `useInAppLeaveConfirm` (features/streams/hooks/use-in-app-leave-confirm.ts).
   useEffect(() => {
     if (state !== "publishing") return;
     const message = "You're live — leaving stops your broadcast.";
@@ -381,21 +452,9 @@ export function usePublisher({
       event.preventDefault();
       event.returnValue = message;
     };
-    const onClickCapture = (event: MouseEvent) => {
-      const anchor = (event.target as HTMLElement | null)?.closest?.("a[href]");
-      if (!anchor) return;
-      const href = anchor.getAttribute("href") ?? "";
-      if (anchor.getAttribute("target") === "_blank" || !href.startsWith("/")) return;
-      if (!window.confirm(message)) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
     window.addEventListener("beforeunload", onBeforeUnload);
-    document.addEventListener("click", onClickCapture, true);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
-      document.removeEventListener("click", onClickCapture, true);
     };
   }, [state]);
 
