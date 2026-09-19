@@ -1902,6 +1902,28 @@ describe("The phone's chat button says when somebody has spoken", () => {
   });
 });
 
+describe("The inbox says what arrived and whether it has been opened", () => {
+  const row = stripComments(read("features/messages/components/conversation-row.tsx"));
+
+  it("gives an attachment a status instead of one paperclip for everything", () => {
+    assert.match(row, /const snap = snapStatus\(\{/);
+    assert.match(row, /<SnapGlyph status=\{snap\} \/>/);
+    assert.doesNotMatch(row, /Shared attachment/, "the same eleven characters for a photo, a clip and a PDF");
+  });
+
+  it("keeps text previews, which is the narrower change that was asked for", () => {
+    // Snapchat hides message text in its list; people here rely on reading it,
+    // and the ask was about uploaded and camera media.
+    assert.match(row, /if \(!body && snap\) \{/);
+  });
+
+  it("marks it solid until it is opened, and hides the glyph from screen readers", () => {
+    assert.match(row, /fill=\{status\.filled \? "currentColor" : "none"\}/);
+    assert.match(row, /stroke=\{status\.filled \? "none" : "currentColor"\}/);
+    assert.match(row, /aria-hidden/);
+  });
+});
+
 describe("The friends deck asks about people the reader has not answered for", () => {
   const deck = stripComments(read("components/layout/friends-deck.tsx"));
   const filter = stripComments(read("lib/friends-filter.ts"));
