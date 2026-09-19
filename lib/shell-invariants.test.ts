@@ -1970,6 +1970,12 @@ describe("A snap is seen once, and nothing in the client keeps a copy", () => {
 
   it("offers no download for something that is about to be destroyed", () => {
     assert.match(thread, /downloadUrl=\{null\}/);
+    // And the PLAYER does not offer one either: Chrome's own control menu
+    // carries Download and Picture in Picture, three pixels from the Save we
+    // deliberately withheld.
+    const viewer = stripComments(read("components/ui/media-viewer.tsx"));
+    assert.match(viewer, /controlsList: "nodownload noplaybackrate"/);
+    assert.match(viewer, /disablePictureInPicture: true/);
   });
 
   it("parses a message whose media has no url, which is what a snap is", () => {
