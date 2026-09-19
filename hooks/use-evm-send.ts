@@ -1,15 +1,10 @@
 "use client";
 
 import { useCallback } from "react";
-import {
-  getAccessToken,
-  useSendTransaction,
-  useSign7702Authorization,
-  useWallets,
-} from "@privy-io/react-auth";
-import type { EIP1193Provider } from "viem";
+import { useSocialWallet } from "decane-connect-kit";
+import type { EIP1193Provider, SignedAuthorization } from "viem";
 import { DEMO_AUTH } from "@/lib/auth-mode";
-import { sendSponsoredEvmCalls } from "@/lib/trade/sponsor";
+import { sendSponsoredEvmCalls, type SignAuthorization } from "@/lib/trade/sponsor";
 import { getSponsoredEvmChainById } from "@/lib/trade/sponsored-evm";
 import { isReceiptChain, publicClientForChain } from "@/lib/trade/receipt";
 import { receiptOutcome, type TxOutcome } from "@/lib/tx-receipt";
@@ -36,7 +31,7 @@ import { receiptOutcome, type TxOutcome } from "@/lib/tx-receipt";
  * separate smart-wallet address. The balance the reader can see is the balance
  * that pays.
  *
- * Both apps share one Privy app id, so a reader's embedded wallet is the same
+ * Both apps share one Decane identity, so a reader's embedded wallet is the same
  * wallet in both — and now it is gas-sponsored in both, on the same policy.
  */
 export interface EvmSendInput {
@@ -61,7 +56,7 @@ export interface EvmSend {
    *
    * The read goes through a client PINNED TO THE TRANSACTION'S CHAIN
    * (`lib/trade/receipt.ts`), never the embedded wallet's ambient provider:
-   * Privy can leave that provider pointed at a different chain, so the receipt
+   * the wallet can leave that provider pointed at a different chain, so the receipt
    * would be polled where the transaction never happened and never found.
    *
    * Answers `pending` on a timeout rather than throwing: the transaction is not
@@ -72,34 +67,57 @@ export interface EvmSend {
   signTypedData: (owner: string, typedData: Record<string, unknown>) => Promise<string>;
 }
 
-function usePrivyEvmSend(): EvmSend {
-  const { sendTransaction } = useSendTransaction();
-  const { signAuthorization } = useSign7702Authorization();
-  const { wallets } = useWallets();
+type SocialWallet = ReturnType<typeof useSocialWallet>;
 
-  /** The embedded wallet, which is the only one this app ever sends from. */
-  const embedded = useCallback(
-    () => wallets.find((wallet) => wallet.walletClientType === "privy") ?? null,
-    [wallets]
-  );
+/**
+ * Bridges Decane's 7702 authorization signer to the shape `sponsor.ts` expects.
+ * Decane needs the nonce and chain id it signs for; the sponsor flow always
+ * supplies them, so their absence is a programming error, not a state.
+ */
+function toSignAuthorization(wallet: SocialWallet): SignAuthorization {
+  return async ({ contractAddress, chainId, nonce }) => {
+    if (chainId === undefined || nonce === undefined) {
+      throw new Error("7702 authorization needs an explicit chainId and nonce.");
+    }
+    const signed = await wallet.signAuthorization({ contractAddress, chainId, nonce });
+    return signed as SignedAuthorization<number>;
+  };
+}
+
+/**
+ * Decane signs inside a TEE session that expires. An expired one prompts the
+ * reader to unlock (passkey, PIN or unlock password) instead of failing the
+ * payment; when even that cannot work the kit throws a sign-in-again error,
+ * which surfaces as-is.
+ */
+async function ensureUnlocked(wallet: SocialWallet): Promise<void> {
+  if (wallet.isUnlocked) return;
+  await wallet.unlock();
+}
+
+function useDecaneEvmSend(): EvmSend {
+  const wallet = useSocialWallet();
 
   const send = useCallback(
     async ({ to, data, value, chainId }: EvmSendInput): Promise<`0x${string}`> => {
-      const wallet = embedded();
-      if (!wallet) throw new Error("No wallet is connected.");
+      // A Decane session has exactly one EVM wallet, the only one this app
+      // ever sends from.
+      const address = wallet.addresses?.evm as `0x${string}` | undefined;
+      if (!address) throw new Error("No wallet is connected.");
+      await ensureUnlocked(wallet);
 
       const sponsored = getSponsoredEvmChainById(chainId);
       if (sponsored) {
-        const accessToken = await getAccessToken();
+        const accessToken = wallet.getAccessToken();
         // The bundler proxy is session-gated, because it spends the platform's
         // paid Alchemy key and its gas policy.
         if (!accessToken) throw new Error("Your session expired. Sign in again.");
-        const provider = (await wallet.getEthereumProvider()) as unknown as EIP1193Provider;
+        const provider = wallet.getEthereumProvider({ chainId }) as unknown as EIP1193Provider;
         return sendSponsoredEvmCalls({
           chainId,
-          address: wallet.address as `0x${string}`,
+          address,
           provider,
-          signAuthorization,
+          signAuthorization: toSignAuthorization(wallet),
           accessToken,
           calls: [{ to, data, value }],
         });
@@ -109,13 +127,10 @@ function usePrivyEvmSend(): EvmSend {
       // their own gas. Nothing in Market Square routes here today — every
       // payment is USDC on Base — but a chain leaving the registry must fail
       // by charging gas rather than by silently not sending.
-      const { hash } = await sendTransaction(
-        { to, data, value, chainId },
-        { address: wallet.address }
-      );
-      return hash;
+      const hash = await wallet.sendTransaction({ chain: `evm:${chainId}`, to, data, value });
+      return hash as `0x${string}`;
     },
-    [embedded, sendTransaction, signAuthorization]
+    [wallet]
   );
 
   const waitForReceipt = useCallback(
@@ -144,22 +159,25 @@ function usePrivyEvmSend(): EvmSend {
       // Through the wallet's own provider, as wsws's desk signer does: the
       // payload arrives complete from the backend and is signed verbatim, so
       // nothing here can get the permit-domain subtleties wrong.
-      const wallet = wallets.find((w) => w.address.toLowerCase() === owner.toLowerCase());
-      if (!wallet) throw new Error("Signing wallet is not connected.");
-      const provider = (await wallet.getEthereumProvider()) as unknown as EIP1193Provider;
+      const address = wallet.addresses?.evm;
+      if (!address || address.toLowerCase() !== owner.toLowerCase()) {
+        throw new Error("Signing wallet is not connected.");
+      }
+      await ensureUnlocked(wallet);
+      const provider = wallet.getEthereumProvider() as unknown as EIP1193Provider;
       return (await provider.request({
         method: "eth_signTypedData_v4",
         params: [owner as `0x${string}`, JSON.stringify(typedData)],
       })) as string;
     },
-    [wallets]
+    [wallet]
   );
 
   return { send, waitForReceipt, signTypedData };
 }
 
 /**
- * Demo mode mounts no Privy provider, so the hooks above would throw on render
+ * Demo mode mounts no Decane provider, so the hooks above would throw on render
  * rather than return nothing. Branching at MODULE level is the same shape
  * `useAuth` and `useEmbeddedWallet` use, and for the same reason: a conditional
  * hook call is a hooks-order violation, not a fallback.
@@ -177,4 +195,4 @@ function useDemoEvmSend(): EvmSend {
   return { send: refuse, waitForReceipt: pending, signTypedData: refuse };
 }
 
-export const useEvmSend: () => EvmSend = DEMO_AUTH ? useDemoEvmSend : usePrivyEvmSend;
+export const useEvmSend: () => EvmSend = DEMO_AUTH ? useDemoEvmSend : useDecaneEvmSend;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { describe, it } from "node:test";
-import { forwardToUpstream, multipartBoundary } from "./proxy.ts";
+import { forwardToUpstream, isDecaneBearer, multipartBoundary } from "./proxy.ts";
 
 /**
  * REGRESSION: the BFF forwarded multipart bodies as a stream
@@ -417,6 +417,35 @@ describe("the Privy identity token", () => {
       fetchImpl: capturing(calls),
     });
     assert.equal(calls[0]!.headers["privy-id-token"], "from-cookie");
+  });
+
+  const jwt = (claims: Record<string, unknown>) =>
+    `h.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.s`;
+
+  it("is NOT forwarded beside a Decane session", async () => {
+    // A browser can hold a new Decane session AND the old account's identity
+    // cookie. Sending both would hand the service the old account's wallet
+    // for the new identity.
+    const calls: { headers: Record<string, string> }[] = [];
+    await forwardToUpstream({
+      req: new Request("http://localhost/api/market-square/me", {
+        headers: {
+          authorization: `Bearer ${jwt({ uid: "u-1", project_id: "proj" })}`,
+          cookie: "privy-id-token=old-account",
+        },
+      }),
+      url: "http://upstream/me",
+      method: "GET",
+      fetchImpl: capturing(calls),
+    });
+    assert.equal("privy-id-token" in calls[0]!.headers, false);
+  });
+
+  it("tells a Decane bearer from a Privy one without verifying either", () => {
+    assert.equal(isDecaneBearer(`Bearer ${jwt({ uid: "u", project_id: "p" })}`), true);
+    assert.equal(isDecaneBearer(`Bearer ${jwt({ iss: "privy.io", sid: "s" })}`), false);
+    assert.equal(isDecaneBearer("Bearer not-a-jwt"), false);
+    assert.equal(isDecaneBearer(null), false);
   });
 
   it("is absent when there is nothing to send", async () => {

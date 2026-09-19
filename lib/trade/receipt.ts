@@ -4,7 +4,7 @@ import { api } from "../square-path.ts";
 
 // Read client per chain for confirming transactions. Reads must go through a
 // client pinned to the transaction's chain, never the embedded wallet's ambient
-// provider: Privy can leave that provider pointed at a different chain, so a
+// provider: the wallet can leave that provider pointed at a different chain, so a
 // receipt would be polled on the wrong chain and never found, timing the flow
 // out even though the transaction landed.
 //
@@ -44,8 +44,8 @@ const FALLBACK_RPCS: Record<number, string> = {
 // moment the primary errors, so a proxy outage degrades to a slower public node
 // instead of stalling the flow.
 //
-// The proxy is same-origin, so the privy-token cookie authenticates it with no
-// header plumbing. Browser-only by construction: every caller runs in a hook or
+// The proxy is same-origin, so the decane-token cookie (written by
+// DecaneTokenBridge) authenticates it with no header plumbing. Browser-only by construction: every caller runs in a hook or
 // an event handler.
 export function publicClientForChain(chainId: number) {
   const entry = READ_CHAINS[chainId];

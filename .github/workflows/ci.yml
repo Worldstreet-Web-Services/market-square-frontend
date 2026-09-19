@@ -48,7 +48,7 @@ jobs:
           # The build must not need real secrets. These are placeholders that
           # let Next prerender; anything that genuinely requires a live service
           # belongs behind a runtime read, not a build-time one.
-          NEXT_PUBLIC_PRIVY_APP_ID: ci-placeholder
+          NEXT_PUBLIC_DECANE_APP_ID: ci-placeholder
           WSAPI_BASE_URL: http://localhost:8080
 
   # `check:public-routes` is deliberately NOT here: it needs a live backend, and

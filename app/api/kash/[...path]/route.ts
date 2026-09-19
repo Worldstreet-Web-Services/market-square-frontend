@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getRequestUser, verifyRequest } from "@/lib/server/auth";
+import { getRequestWallet, verifyRequest } from "@/lib/server/auth";
 import { isSafePath } from "@/lib/api/public-routes";
-import { embeddedEvmWallet, isOwnWallet } from "@/lib/wallet";
+import { isOwnWallet } from "@/lib/wallet";
 
 /**
  * BFF proxy for the KASH engine.
@@ -25,7 +25,7 @@ import { embeddedEvmWallet, isOwnWallet } from "@/lib/wallet";
  * So every non-public path answers two questions: is there a verified session,
  * and is the wallet this request names the session's OWN embedded wallet
  * (`lib/wallet.ts`, pinned by `lib/wallet.test.ts`)? The wallet comes from
- * Privy server-side — never from the browser, which would make the whole thing
+ * the session's issuer server-side — never from the browser, which would make the whole thing
  * decorative — and a path outside the recognised set is refused rather than
  * blind-forwarded, because a proxy that forwards what it does not understand is
  * an open relay into a money service.
@@ -126,7 +126,7 @@ function walletOfGet(path: string[]): string | null {
 /**
  * Null when the caller may proceed; a response when they may not.
  *
- * The wallet is resolved from PRIVY, server-side, and compared to the one the
+ * The wallet is resolved from the session's ISSUER, server-side, and compared to the one the
  * request named. Both halves matter: a missing session is a 401 the client can
  * act on by signing in, and a wallet mismatch is a 403 that never explains
  * whose wallet it was.
@@ -135,7 +135,7 @@ async function walletGate(req: NextRequest, claimed: string | null): Promise<Nex
   const claims = await verifyRequest(req);
   if (!claims) return unauthorized();
   if (!claimed) return forbidden();
-  const owned = embeddedEvmWallet(await getRequestUser(req, claims).then((u) => u?.linked_accounts));
+  const owned = await getRequestWallet(req, claims);
   return isOwnWallet(claimed, owned) ? null : forbidden();
 }
 

@@ -13,6 +13,8 @@ describe("the @handle shown beside a name", () => {
     assert.equal(atHandle("did:privy:cmtzq9iox006g0clc4n96gt4t"), null);
     // Any DID method, not just Privy's — the prefix is the family.
     assert.equal(atHandle("did:key:z6Mk"), null);
+    // Nor a Decane user id, since the move off Privy.
+    assert.equal(atHandle("3f0c9a1e-6b2d-4c1a-9e7f-0a1b2c3d4e5f"), null);
   });
 
   it("shows nothing when there is nothing", () => {

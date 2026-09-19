@@ -28,6 +28,7 @@
 
 import { z } from "zod";
 import { ProfileSchema } from "./api/schemas.ts";
+import { isAccountId } from "./account-id.ts";
 import { atHandle } from "./handle.ts";
 import type { OgFetchResult } from "./server/og-fetch.ts";
 import { sq } from "./square-path.ts";
@@ -236,7 +237,7 @@ export interface OgPost {
 /** A name to print, or null. An id is never a name. */
 function printableName(name: string | null | undefined): string | null {
   const trimmed = collapseWhitespace(name ?? "");
-  if (!trimmed || trimmed.startsWith("did:")) return null;
+  if (!trimmed || isAccountId(trimmed)) return null;
   return trimmed;
 }
 

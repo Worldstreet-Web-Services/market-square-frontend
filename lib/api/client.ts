@@ -1,7 +1,7 @@
 "use client";
 
-import { getAccessToken } from "@privy-io/react-auth";
 import { DEMO_AUTH } from "@/lib/auth-mode";
+import { currentAccessToken } from "@/lib/auth-token";
 import { apiError } from "@/lib/api/envelope";
 import {
   getAuthSnapshot,
@@ -15,15 +15,15 @@ import {
   recordCircuitSuccess,
 } from "@/lib/api/circuit-store";
 
-// Fetch wrapper for our BFF routes. Attaches the Privy access token so the
+// Fetch wrapper for our BFF routes. Attaches the Decane access token so the
 // server can verify the caller and forward it upstream. In demo mode there is
-// no Privy session; the fixture BFF treats a tokenless request as the demo
+// no session; the fixture BFF treats a tokenless request as the demo
 // user, so requests go out bare.
 //
 // Two very different "no token" cases:
-// - Privy still initializing: wait quietly for readiness, then retry the
+// - the session still hydrating: wait quietly for readiness, then retry the
 //   token. Never surfaces to the user.
-// - Privy ready but the session is gone (expired): signal the SessionGuard
+// - ready but the session is gone (expired): signal the SessionGuard
 //   (which toasts once, clears cached identity and routes to /auth) and throw
 //   a typed SESSION_EXPIRED so callers render a real message, not plumbing.
 export async function apiFetch(
@@ -51,11 +51,11 @@ export async function apiFetch(
 ): Promise<Response> {
   if (DEMO_AUTH) return fetch(path, init);
 
-  let accessToken = await getAccessToken().catch(() => null);
+  let accessToken = currentAccessToken();
   if (opts.requireAuth && !accessToken) {
-    // Give Privy a chance to finish warming up before judging the session.
+    // Give the session a chance to finish hydrating before judging it.
     await waitForAuthReady();
-    accessToken = await getAccessToken().catch(() => null);
+    accessToken = currentAccessToken();
     if (!accessToken) {
       const { ready, authenticated } = getAuthSnapshot();
       if (ready && !authenticated) {

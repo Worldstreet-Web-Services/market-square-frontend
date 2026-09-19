@@ -1,3 +1,5 @@
+import { isAccountId } from "./account-id.ts";
+
 /**
  * THE @HANDLE TO SHOW, OR NOTHING.
  *
@@ -31,8 +33,7 @@
  */
 export function atHandle(username: string | null | undefined): string | null {
   if (!username) return null;
-  // Every Privy id is `did:privy:…`; the `did:` prefix is the whole method
-  // family, so this holds if the issuer ever changes.
-  if (username.startsWith("did:")) return null;
+  // A Privy DID or a Decane UUID — see `lib/account-id.ts`.
+  if (isAccountId(username)) return null;
   return `@${username}`;
 }

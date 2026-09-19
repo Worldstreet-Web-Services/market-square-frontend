@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
-import { DEMO_AUTH } from "@/lib/auth-mode";
+import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
+import { linkRetryPending } from "@/lib/migration-link";
 import { useAuth } from "@/hooks/use-auth";
 import { useMe } from "@/hooks/use-me";
 import { Button, Spinner } from "@/components/ui/button";
@@ -71,6 +72,18 @@ export function AuthPage() {
               {profile && (
                 <Button variant="secondary" className="w-full" onClick={() => router.push(profileHref(profile))}>
                   My profile
+                </Button>
+              )}
+              {/* Accounts from before the move to Decane: sign into the old one
+                  once and its profile comes across. Louder while a link that
+                  met an outage still needs finishing. */}
+              {!DEMO_AUTH && LEGACY_PRIVY_APP_ID && (
+                <Button
+                  variant={linkRetryPending() ? "primary" : "secondary"}
+                  className="w-full"
+                  onClick={() => router.push(sq("/move-account"))}
+                >
+                  {linkRetryPending() ? "Finish bringing your old account" : "Bring your old account"}
                 </Button>
               )}
               {!DEMO_AUTH && (

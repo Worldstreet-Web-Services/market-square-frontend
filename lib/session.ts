@@ -1,9 +1,9 @@
 "use client";
 
 // Client-side session signal shared between the api client (not a hook) and
-// the shell's SessionGuard (a component). The guard mirrors Privy's
-// ready/authenticated pair in here; the api client uses it to tell "Privy is
-// still warming up" (wait quietly) apart from "the session is gone" (log the
+// the shell's SessionGuard (a component). The guard mirrors the session's
+// ready/authenticated pair in here; the api client uses it to tell "the session
+// is still hydrating" (wait quietly) apart from "the session is gone" (log the
 // user out properly, once).
 
 interface AuthSnapshot {
@@ -49,7 +49,7 @@ export function hasHeldSession(): boolean {
   return everAuthenticated;
 }
 
-// Resolves when Privy reports ready (or after the timeout, so a broken
+// Resolves when the session reports ready (or after the timeout, so a broken
 // provider can never hang a request forever).
 export function waitForAuthReady(timeoutMs = 8000): Promise<void> {
   if (snapshot.ready) return Promise.resolve();

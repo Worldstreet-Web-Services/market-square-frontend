@@ -7,13 +7,14 @@ import { marketSquareBase } from "@/lib/server/upstream-base";
 import { cacheControlFor } from "@/lib/server/cache-policy";
 import { FALLBACK_LIMITS } from "@/lib/upload-rules";
 
-// BFF proxy for Market Square. Verifies the Privy session server-side and
+// BFF proxy for Market Square. Verifies the session (Decane, or a legacy Privy
+// one still ageing out) server-side and
 // forwards the caller's Authorization to `${WSAPI_BASE_URL}/v1/market-square/*`.
 // Public GET paths pass through unauthenticated so signed-out browsing works.
 //
 // Fixture mode: when WSAPI_BASE_URL is unset every request is served from
 // lib/fixtures instead, so `pnpm dev` demos the full app standalone. When
-// Privy is also unconfigured the fixture treats every caller as the demo user.
+// auth is also unconfigured the fixture treats every caller as the demo user.
 
 /**
  * A ceiling on how long one invocation may live.
@@ -30,8 +31,9 @@ export const maxDuration = 30;
 // Shared with the share-preview reads, so the two can never disagree about
 // where the service is.
 const BASE = marketSquareBase();
-const PRIVY_CONFIGURED = Boolean(
-  process.env.NEXT_PUBLIC_PRIVY_APP_ID && process.env.PRIVY_APP_SECRET
+const AUTH_CONFIGURED = Boolean(
+  process.env.NEXT_PUBLIC_DECANE_APP_ID ||
+    (process.env.NEXT_PUBLIC_PRIVY_APP_ID && process.env.PRIVY_APP_SECRET)
 );
 
 
@@ -61,7 +63,7 @@ function authUnavailable() {
 }
 
 async function callerUserId(req: NextRequest): Promise<string | null> {
-  if (!PRIVY_CONFIGURED) return FIXTURE_ME_ID;
+  if (!AUTH_CONFIGURED) return FIXTURE_ME_ID;
   const claims = await verifyRequest(req);
   return claims?.userId ?? null;
 }
@@ -234,7 +236,7 @@ const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 async function forward(req: NextRequest, path: string[], method: string) {
   const joined = path.join("/");
 
-  // Authed paths need a verified Privy session before anything is forwarded.
+  // Authed paths need a verified session before anything is forwarded.
   // Reads: public per `isPublicGet`. Writes: a session, except the one public
   // POST (`isPublicPost` — the email unsubscribe link).
   const needsAuth = method === "GET" ? !isPublicGet(path) : !(method === "POST" && isPublicPost(path));

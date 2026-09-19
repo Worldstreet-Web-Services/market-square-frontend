@@ -12,7 +12,7 @@ import { sq, stripSquare } from "@/lib/square-path";
 
 // Owns the "session expired" UX. Two triggers, one flow:
 // - reactive: the api client discovered a missing session mid-request;
-// - proactive: Privy reports ready && !authenticated while we still hold
+// - proactive: the session reports ready && !authenticated while we still hold
 //   cached identity (the UI would otherwise keep rendering "logged in").
 // The flow runs once per expiry: toast, drop cached identity, route to /auth
 // with returnTo. An active broadcast is never silently killed — the redirect
@@ -25,7 +25,7 @@ export function SessionGuard() {
   const broadcast = useBroadcastStatus();
   const handled = useRef(false);
 
-  // Mirror Privy state for the non-hook api client.
+  // Mirror session state for the non-hook api client.
   useEffect(() => {
     setAuthSnapshot({ ready, authenticated });
   }, [ready, authenticated]);
@@ -59,7 +59,7 @@ export function SessionGuard() {
     // Reactive: fired by apiFetch.
     const unsubscribe = onSessionExpired(expire);
 
-    // Proactive: Privy settled as logged-out while we still show a profile.
+    // Proactive: the session settled as logged-out while we still show a profile.
     if (ready && !authenticated && queryClient.getQueryData(["ms", "me"])) {
       expire();
     }

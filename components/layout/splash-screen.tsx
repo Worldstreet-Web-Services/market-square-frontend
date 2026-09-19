@@ -31,7 +31,7 @@ import { cn } from "@/lib/cn";
  *   · it leaves the moment auth resolves, and
  *   · it leaves at `MAX_MS` regardless, even if nothing ever resolves.
  *
- * The second is the important one. If Privy hangs, or the network is gone, the
+ * The second is the important one. If the auth SDK hangs, or the network is gone, the
  * reader gets the app and its own error states rather than a beautiful purple
  * rectangle forever.
  *

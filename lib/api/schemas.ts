@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { accountIdTail } from "../account-id.ts";
 
 // Shapes shared across slices, mirroring the backend contract
 // (GET /v1/market-square/openapi.json). A profile appears as a post author, a
@@ -204,10 +205,10 @@ const RawProfileSchema = z.object({
     .optional(),
 });
 
-// "Member ·A1B2" beats "Someone": derived from the tail of the Privy DID so
-// two unnamed members are still distinguishable.
+// "Member ·A1B2" beats "Someone": derived from the tail of the account id (a
+// Privy DID or a Decane UUID) so two unnamed members are still distinguishable.
 function placeholderName(id: string): string {
-  const tail = id.replace(/^did:privy:/, "").slice(-4).toUpperCase();
+  const tail = accountIdTail(id);
   return tail ? `Member ·${tail}` : "New member";
 }
 

@@ -42,7 +42,7 @@ const TABS: Array<{ value: Tab; label: string }> = [
 /**
  * The operator console.
  *
- * Authenticates as an ADMIN USER with a normal Privy token — the gateway
+ * Authenticates as an ADMIN USER with a normal session token — the gateway
  * strips `x-internal-admin-key`, and an admin key must never reach a browser.
  * `me.isAdmin` only decides what is rendered; every route is enforced by the
  * service, so a non-admin who guesses the URL gets a clean refusal here and a
