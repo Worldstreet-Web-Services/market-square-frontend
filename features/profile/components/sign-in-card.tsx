@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSocialAuth } from "decane-connect-kit";
 import { Spinner } from "@/components/ui/button";
 import { SquareLockup } from "@/components/ui/square-mark";
-import { DEMO_AUTH } from "@/lib/auth-mode";
+import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
 import { cn } from "@/lib/cn";
+import { sq } from "@/lib/square-path";
 
 /**
  * THE SIGN-IN CARD — Desktop 40, the end of the welcome sequence.
@@ -349,11 +351,33 @@ export function SignInCard({ onSkip }: { onSkip?: () => void }) {
       {/* Not in the file — see the note in welcome-gate.tsx. Without it the
           sequence ends on a card offering two ways in and no way past, and
           signed-out browsing is a supported thing in this app. */}
+      {/*
+        THE WAY BACK IN FOR SOMEBODY WHO WAS ALREADY HERE.
+
+        Square accounts used to live on a different provider, and a profile —
+        handle, followers, posts — is still keyed to that old account. Signing
+        in here makes a NEW one, so without this door a returning reader lands
+        as a stranger and never finds out their followers still exist. They
+        were not going to go looking for a page called /move-account.
+
+        It names no vendor, for the same reason the buttons above do not: who
+        we use for auth is not a thing the reader has or wants. "Before" is
+        the only word that matters to them.
+      */}
+      {!DEMO_AUTH && LEGACY_PRIVY_APP_ID && (
+        <Link
+          href={sq("/move-account")}
+          className="mt-6 text-[14px] font-medium text-[#999999] underline-offset-4 transition-colors hover:text-white hover:underline"
+        >
+          I had a Square account before
+        </Link>
+      )}
+
       {onSkip && (
         <button
           type="button"
           onClick={onSkip}
-          className="mt-6 text-[14px] text-[#999999] transition-colors hover:text-white"
+          className="mt-4 text-[14px] text-[#999999] transition-colors hover:text-white"
         >
           Look around first
         </button>

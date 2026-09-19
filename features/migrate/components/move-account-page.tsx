@@ -31,10 +31,22 @@ import { LegacyPrivyProvider } from "./legacy-privy-provider";
  * Decane sign-in is a new id, so without a link the reader arrives as a
  * stranger while their followers sit on an account they cannot sign into.
  *
- * The whole flow is: be signed in here, sign into the old account once. The
- * link then fires ON ITS OWN — there is no button for it — and Square moves the
- * profile. Reopening this page re-sends it, which is how a link that met a
- * transient outage gets finished (the call is idempotent by contract).
+ * THE ORDER IS THE OLD ACCOUNT FIRST, and that is the whole design. A
+ * returning reader arrives wanting to sign in as themselves; asking them to
+ * create a new account before proving who they are reads as being told their
+ * account is gone. So: sign in to the old one, hear once that Square has moved,
+ * set up the new sign-in, and the link fires ON ITS OWN — there is no button
+ * for it.
+ *
+ * Doing it this way also closes a window. Signing in with the new account makes
+ * an empty profile under the new id, which Square absorbs when the link
+ * arrives — but only while nobody has touched it. Linking immediately after
+ * that sign-in means nobody can. The other order left the reader loose in the
+ * app with an empty account and a handle to invent, and inventing one refuses
+ * the move for good.
+ *
+ * Reopening this page re-sends the link, which is how one that met a transient
+ * outage gets finished (the call is idempotent by contract).
  *
  * This page DOES watch for the move to finish. It used not to — Square did not
  * report the re-key, so a recorded link was the end of the story here and the
@@ -45,8 +57,6 @@ import { LegacyPrivyProvider } from "./legacy-privy-provider";
  * followers quietly.
  */
 export function MoveAccountPage() {
-  const { ready, authenticated, login } = useAuth();
-
   if (DEMO_AUTH || !LEGACY_PRIVY_APP_ID) {
     return (
       <Frame title="Bring your old account">
@@ -55,25 +65,9 @@ export function MoveAccountPage() {
     );
   }
 
-  if (!ready) {
-    return (
-      <Frame title="Bring your old account">
-        <Spinner className="mx-auto h-6 w-6 text-grey-500" />
-      </Frame>
-    );
-  }
-
-  if (!authenticated) {
-    return (
-      <Frame title="Bring your old account">
-        <p>Sign in to Square first. Your old profile moves onto the account you sign in with.</p>
-        <Button className="w-full" onClick={login}>
-          Sign in
-        </Button>
-      </Frame>
-    );
-  }
-
+  // The provider wraps the WHOLE flow now, not just its second half: the old
+  // account is the first thing asked for, so Privy has to be mounted before
+  // anything is drawn. It still wraps this one route and nothing else.
   return (
     <LegacyPrivyProvider>
       <LinkFlow />
@@ -84,6 +78,7 @@ export function MoveAccountPage() {
 function LinkFlow() {
   const privy = usePrivy();
   const { identityToken } = useIdentityToken();
+  const decane = useAuth();
   const queryClient = useQueryClient();
   const router = useRouter();
   const [outcome, setOutcome] = useState<LinkOutcome | null>(null);
@@ -95,7 +90,12 @@ function LinkFlow() {
   const started = useRef(false);
 
   useEffect(() => {
-    if (!privy.ready || !privy.authenticated || started.current) return;
+    // BOTH sides, and the new one last. The link needs the old account's token
+    // and the new account's bearer together, and asking for the old one first
+    // is what lets this fire the moment the new account exists — before the
+    // reader can do anything to the empty profile Square just made for them,
+    // which is what would refuse the move for good.
+    if (!privy.ready || !privy.authenticated || !decane.authenticated || started.current) return;
     started.current = true;
     void (async () => {
       const accessToken = await privy.getAccessToken().catch(() => null);
@@ -119,7 +119,7 @@ function LinkFlow() {
         await privy.logout().catch(() => {});
       }
     })();
-  }, [privy, identityToken, queryClient]);
+  }, [privy, decane.authenticated, identityToken, queryClient]);
 
   // Poll only while the move is in flight. Every exit clears the timer, and a
   // poll that cannot answer reads as `unknown`, which ends the wait — a
@@ -160,7 +160,7 @@ function LinkFlow() {
     void privy.logout().then(() => privy.login());
   };
 
-  if (!privy.ready) {
+  if (!privy.ready || !decane.ready) {
     return (
       <Frame title="Bring your old account">
         <Spinner className="mx-auto h-6 w-6 text-grey-500" />
@@ -168,15 +168,35 @@ function LinkFlow() {
     );
   }
 
+  // FIRST: the account they already have. A returning reader came here to sign
+  // in as themselves, and asking them to make a new account before proving who
+  // they are reads as being told their account is gone.
   if (!privy.authenticated && !outcome) {
     return (
-      <Frame title="Bring your old account">
+      <Frame title="Sign in to your old account">
         <p>
-          Had a Square account before? Sign in to it once, the same way you used to, and your
-          handle, followers and posts come across to this account.
+          Sign in the same way you used to. Your handle, followers and posts come across in a
+          moment.
         </p>
         <Button className="w-full" onClick={() => privy.login()}>
           Sign in to my old account
+        </Button>
+      </Frame>
+    );
+  }
+
+  // THEN: what is actually happening, said once, before a second sign-in they
+  // did not ask for arrives unexplained.
+  if (!decane.authenticated && !outcome) {
+    return (
+      <Frame title="Welcome back — Square has moved">
+        <p>
+          Square accounts have moved to Market 2.0. Set up your new sign-in and everything you
+          have — your handle, followers, posts and tips — comes with you. It takes a moment and
+          you only do it once.
+        </p>
+        <Button className="w-full" onClick={decane.login}>
+          Continue
         </Button>
       </Frame>
     );
