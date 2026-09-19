@@ -21,6 +21,8 @@ import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaViewer } from "@/components/ui/media-viewer";
 import { downloadLinkFor, mediaLinkExpired } from "@/lib/message-media-link";
 import { canSendSnap, snapTimeLeft, snapView } from "@/features/messages/lib/snap-view";
+import { defaultViewOnce, type MediaSource } from "@/features/messages/lib/camera-capture";
+import { CameraSheet } from "@/features/messages/components/camera-sheet";
 import { useQueryClient } from "@tanstack/react-query";
 import { isHttpUrl } from "@/lib/http-url";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -1956,8 +1958,17 @@ function Composer({
   // time it lands here — the panel finishes the upload before it closes — so
   // this holds a URL the service will accept, not a File still to be pushed.
   const [attachment, setAttachment] = useState<
-    { result: UploadResult; measured: Measured; fileName: string; previewUrl: string } | null
+    {
+      result: UploadResult;
+      measured: Measured;
+      fileName: string;
+      previewUrl: string;
+      /** Taken here, or chosen from the device. It decides the View once default. */
+      source: MediaSource;
+    } | null
   >(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState(false);
   /*
     THE STAGED ROW DRAWS THE BYTES IN HAND, not the stored object.
 
@@ -2037,6 +2048,37 @@ function Composer({
    * back or change your mind, and the duration measured here rides along so
    * nothing has to demux the file to draw the waveform's length.
    */
+  /*
+    A CAPTURE GOES UP THE SAME PIPE AS A PICKED FILE, and arrives marked
+    `camera`. That mark is the only difference, and it is what arms View once:
+    a photo taken inside a chat is of the moment, a photo out of a gallery was
+    kept for a reason and is not ours to destroy on the sender's behalf.
+  */
+  const takeCapture = async (file: File, previewUrl: string) => {
+    setCameraBusy(true);
+    try {
+      const uploaded = await uploadFile(file, undefined, "attachment", "message");
+      setAsSnap(
+        defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind })
+      );
+      setAttachment((current) => {
+        if (current) URL.revokeObjectURL(current.previewUrl);
+        return {
+          result: uploaded,
+          measured: {},
+          fileName: file.name,
+          previewUrl,
+          source: "camera",
+        };
+      });
+    } catch (cause) {
+      URL.revokeObjectURL(previewUrl);
+      toast.error(cause instanceof Error ? cause.message : "That capture didn't upload.");
+    } finally {
+      setCameraBusy(false);
+    }
+  };
+
   const finishVoice = async () => {
     const result = await voice.stop();
     if (!result) return;
@@ -2048,6 +2090,7 @@ function Composer({
       const uploaded = await uploadFile(result.file, undefined, "attachment", "message");
       setAttachment({
         result: uploaded,
+        source: "upload",
         previewUrl: URL.createObjectURL(result.file),
         measured: { durationSeconds: result.durationSeconds },
         // A recording has no name the reader chose. It is carried for the type
@@ -2203,6 +2246,9 @@ function Composer({
             </span>
           )}
           <p className="min-w-0 flex-1 truncate text-[12px] text-white/70">
+            {/* WHERE IT CAME FROM, because the two doors behave differently and
+                the sender should be able to see which one they used. */}
+            {attachment.source === "camera" ? "Camera " : ""}
             {attachment.result.kind === "image"
               ? "Photo"
               : attachment.result.kind === "video"
@@ -2372,6 +2418,23 @@ function Composer({
           onClick={() => setPicking(true)}
           icon={<Image src={asset("/messages/attach.svg")} alt="" width={24} height={24} />}
         />
+        {/* THE SECOND DOOR. The paperclip is for something kept; this is for the
+            moment in front of you, and what comes out of it is view-once by
+            default. Only in a one-to-one, where a snap means anything. */}
+        {conversationKind === "direct" && (
+          <CircleButton
+            label="Take a photo or video"
+            size={24}
+            disabled={cameraBusy}
+            onClick={() => setCameraOpen(true)}
+            icon={
+              <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.7l1-1.8a1 1 0 0 1 .9-.5h5.8a1 1 0 0 1 .9.5l1 1.8h1.7A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z" />
+                <circle cx="12" cy="12.2" r="3.4" />
+              </svg>
+            }
+          />
+        )}
         <CircleButton
           label={voice.recording ? "Stop recording and listen" : "Record a voice note"}
           size={24}
@@ -2476,12 +2539,18 @@ function Composer({
 
       {/* Mounted only while open, so each opening starts from clean state —
           see the note in the panel. */}
+      <CameraSheet
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCaptured={(file, previewUrl) => void takeCapture(file, previewUrl)}
+      />
+
       {picking && (
         <AttachmentPanel
           open
           onClose={() => setPicking(false)}
           onAttached={(result, measured, fileName, previewUrl) =>
-            setAttachment({ result, measured, fileName, previewUrl })
+            setAttachment({ result, measured, fileName, previewUrl, source: "upload" })
           }
         />
       )}
