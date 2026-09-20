@@ -30,10 +30,21 @@ export interface MoveOfferInput {
   legacyAvailable: boolean;
   /** They already said "I'm new here" on this browser. */
   dismissed: boolean;
+  /**
+   * The account is already joined to an old one, so there is nothing to offer.
+   *
+   * Only a definite `true` suppresses the offer. While the answer is unknown —
+   * loading, linking switched off, the service quiet — the offer still shows:
+   * asking somebody who has already moved costs them a tap, and not asking
+   * somebody who has not costs them their account.
+   */
+  alreadyLinked: boolean;
 }
 
 export function shouldOfferLegacyMove(input: MoveOfferInput): boolean {
-  return input.mustClaim && input.legacyAvailable && !input.dismissed;
+  return (
+    input.mustClaim && input.legacyAvailable && !input.dismissed && !input.alreadyLinked
+  );
 }
 
 /**

@@ -7,6 +7,11 @@ import { useIdentityToken, usePrivy } from "@privy-io/react-auth";
 import { Button, Spinner } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
+import {
+  clearLegacySignIn,
+  legacySignInIntended,
+  markLegacySignIn,
+} from "@/lib/legacy-signin-intent";
 import { squareSettled, type LinkOutcome, type SquareRekey } from "@/lib/migration-link";
 import { sq } from "@/lib/square-path";
 import { fetchSquareRekey, linkLegacyAccount } from "../lib/api";
@@ -88,6 +93,27 @@ function LinkFlow() {
   const [square, setSquare] = useState<SquareRekey>("unknown");
   const [waiting, setWaiting] = useState(false);
   const started = useRef(false);
+  /*
+    LEFT-OVER SESSIONS ARE DISCARDED, NOT SPENT.
+
+    Privy keeps its session in the browser and restores it on load, so
+    `authenticated` can be true for somebody who never signed in here — a
+    session left by the old app, or by whoever used this machine before. Those
+    keys belong to the BROWSER, not the person, and linking is permanent.
+
+    A session is only ours if this tab asked for one. Google and X sign-in
+    leave the page and come back to the same URL, where the result is
+    indistinguishable from a leftover — so intent is recorded before leaving
+    (see lib/legacy-signin-intent) and read on the way back. Anything else is
+    signed out before it can be read.
+  */
+  const purged = useRef(false);
+
+  useEffect(() => {
+    if (!privy.ready || purged.current) return;
+    purged.current = true;
+    if (privy.authenticated && !legacySignInIntended()) void privy.logout().catch(() => {});
+  }, [privy]);
 
   useEffect(() => {
     // BOTH sides, and the new one last. The link needs the old account's token
@@ -95,7 +121,10 @@ function LinkFlow() {
     // is what lets this fire the moment the new account exists — before the
     // reader can do anything to the empty profile Square just made for them,
     // which is what would refuse the move for good.
+    // Only a session this tab asked for. A leftover is being signed out by the
+    // effect above and never reaches here.
     if (!privy.ready || !privy.authenticated || !decane.authenticated || started.current) return;
+    if (!legacySignInIntended()) return;
     started.current = true;
     void (async () => {
       const accessToken = await privy.getAccessToken().catch(() => null);
@@ -113,6 +142,8 @@ function LinkFlow() {
         if (result.square === "pending") setWaiting(true);
         else void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
       }
+      // The intent has been spent, whatever the answer was.
+      clearLegacySignIn();
       if (result.outcome.kind !== "reauth") {
         // The old session has done its one job. Leaving it signed in would
         // keep a second identity alive in this browser for no reason.
@@ -157,6 +188,7 @@ function LinkFlow() {
   const signInAgain = () => {
     started.current = false;
     setOutcome(null);
+    markLegacySignIn();
     void privy.logout().then(() => privy.login());
   };
 
@@ -171,22 +203,26 @@ function LinkFlow() {
   // FIRST: the account they already have. A returning reader came here to sign
   // in as themselves, and asking them to make a new account before proving who
   // they are reads as being told their account is gone.
-  if (!privy.authenticated && !outcome) {
+  if ((!privy.authenticated || !legacySignInIntended()) && !outcome) {
     return (
       <Frame title="Sign in to your old account">
         <p>
           Sign in the same way you used to. Your handle, followers and posts come across in a
           moment.
         </p>
-        <Button className="w-full" onClick={() => privy.login()}>
+        <Button
+          className="w-full"
+          onClick={() => {
+            markLegacySignIn();
+            privy.login();
+          }}
+        >
           Sign in to my old account
         </Button>
       </Frame>
     );
   }
 
-  // THEN: what is actually happening, said once, before a second sign-in they
-  // did not ask for arrives unexplained.
   if (!decane.authenticated && !outcome) {
     return (
       <Frame title="Welcome back — Square has moved">

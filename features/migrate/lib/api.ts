@@ -81,3 +81,30 @@ export async function fetchSquareRekey(): Promise<SquareRekey> {
     return "unknown";
   }
 }
+
+/**
+ * Has this account already been joined to an old one?
+ *
+ * `true` means the move is done and there is nothing to offer; `false` means
+ * it has not happened, which is when the offer is worth making. `null` means
+ * we could not tell — linking is off in this deployment, the reader has no
+ * session yet, or the service did not answer.
+ *
+ * Callers treat `null` as "offer anyway": offering the move to somebody who
+ * does not need it costs them a tap, and withholding it from somebody who does
+ * costs them their account.
+ */
+export async function fetchMigrationLinked(): Promise<boolean | null> {
+  try {
+    const res = await apiFetch(
+      api("/api/migration/status"),
+      { method: "GET" },
+      { requireAuth: true, breaker: false }
+    );
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as { data?: { linked?: unknown } } | null;
+    return typeof body?.data?.linked === "boolean" ? body.data.linked : null;
+  } catch {
+    return null;
+  }
+}

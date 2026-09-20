@@ -10,6 +10,7 @@ import { errorCode } from "@/lib/api/envelope";
 import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/use-me";
 import { usePeople } from "@/features/discovery";
+import { useMigrationLinked } from "@/features/migrate";
 import { PersonQuickActions, useUpdateMe } from "@/features/profile";
 import { hasSeenWelcome } from "@/components/layout/welcome/welcome-flow";
 import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
@@ -130,6 +131,9 @@ export function OnboardingFlow() {
   const [offerDeclined, setOfferDeclined] = useState(() =>
     typeof window === "undefined" ? false : moveOfferDismissed()
   );
+  // Whether this account has already been joined to an old one. Null while it
+  // is loading or cannot be told, which still offers — see the hook.
+  const alreadyLinked = useMigrationLinked();
 
   const profile = me.data ?? null;
   if (!profile) return null;
@@ -180,6 +184,7 @@ export function OnboardingFlow() {
     mustClaim,
     legacyAvailable: !DEMO_AUTH && Boolean(LEGACY_PRIVY_APP_ID),
     dismissed: offerDeclined,
+    alreadyLinked: alreadyLinked === true,
   });
 
   return (
