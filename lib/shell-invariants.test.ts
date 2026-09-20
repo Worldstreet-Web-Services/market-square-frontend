@@ -2053,8 +2053,15 @@ describe("The friends deck asks about people the reader has not answered for", (
     // The wink hides the card for the cooldown the wink itself lasts — the day
     // the service's `excludeWinked` covers — read against state, never a clock
     // call in the render body.
-    assert.match(deck, /winkedHere: \(id\) => hasWinked\(winkedHere, id, now\),/);
+    assert.match(deck, /winkedHere: \(id\) => answered\.has\(id\) \|\| hasWinked\(winkedHere, id, now\),/);
     assert.match(deck, /const \[now, setNow\] = useState\(\(\) => Date\.now\(\)\);/);
+    // EVERY answer closes the card, including the pass the service knows
+    // nothing about — and it stays closed rather than lapsing with a cooldown.
+    assert.match(deck, /const answered = decidedIds\(useDeckDecisions\(me\.data\?\.id \?\? null\)\);/);
+    assert.match(deck, /remember\(decision === "follow" \? "followed" : "passed"\);/);
+    assert.match(deck, /remember\("passed"\);/);
+    assert.match(deck, /remember\("winked"\);/);
+    assert.match(deck, /remember\("followed"\);/);
   });
 
   it("names the wink control's own state once it has been used", () => {

@@ -24,6 +24,11 @@ import type { Profile } from "@/lib/api/schemas";
 import { deckCandidates } from "@/lib/deck-candidates";
 import { hasWinked } from "@/lib/winks";
 import { useSentWinks } from "@/features/profile/lib/wink-store";
+import {
+  rememberDecision,
+  useDeckDecisions,
+} from "@/features/profile/lib/deck-decision-store";
+import { decidedIds } from "@/lib/deck-decisions";
 
 /**
  * "MAKE SOME FRIENDS" — node 844:18440's deck, on Home and on `/pals`.
@@ -142,6 +147,20 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
   */
   const winkedHere = useSentWinks(me.data?.id ?? null);
   /*
+    EVERY CARD THIS READER HAS ANSWERED, whichever way they answered it.
+
+    The service remembers a follow and a wink; it has no idea about a PASS,
+    which is the commonest answer of the three, and its memory of a wink lapses
+    with the cooldown — so a face came back a day after being winked at, and a
+    face that had been dismissed came back immediately. Both are the same
+    complaint: the deck kept re-asking a question the reader had answered.
+
+    This closes the card the instant it is answered and keeps it closed. The
+    service's own exclusions still do the real work across devices; a pass is
+    asked for and will join them.
+  */
+  const answered = decidedIds(useDeckDecisions(me.data?.id ?? null));
+  /*
     THE CLOCK A LAPSED WINK IS READ AGAINST. Seeded once and nudged on a coarse
     tick: the boundary it decides moves once a DAY, so a minute of staleness
     costs nothing, while `Date.now()` in the render body is both impure and
@@ -160,7 +179,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     // the service's own `excludeWinked` leaves them out (ogazboiz, 2026-09-18).
     // Past that the wink has lapsed, and an unanswered question is a question
     // again. `now` is state, not a call to the clock during render.
-    winkedHere: (id) => hasWinked(winkedHere, id, now),
+    winkedHere: (id) => answered.has(id) || hasWinked(winkedHere, id, now),
   });
   const filtering = isFriendsFilterActive(filter);
 
@@ -581,6 +600,16 @@ function DeckCard({
   const follow = useFollow(profile);
   const isFollowing = useIsFollowing(profile);
   const gate = useGate();
+  /*
+    THE ANSWER IS RECORDED WHERE IT IS GIVEN, on the tap rather than on the
+    response. A pass has no response to wait for at all, and a follow that only
+    closed the card once the service replied would leave it under the reader's
+    thumb through the whole round trip — which is precisely when the next swipe
+    lands on it.
+  */
+  const viewer = useMe();
+  const remember = (decision: "passed" | "winked" | "followed") =>
+    rememberDecision(viewer.data?.id ?? null, profile.id, decision);
 
   const swipe = useSwipeCard({
     width: node.card.width * k,
@@ -602,6 +631,8 @@ function DeckCard({
         return;
       }
       if (decision === "follow" && !isFollowing) gate(() => follow.mutate(true));
+      // A left swipe is a real answer even though it sends nothing.
+      remember(decision === "follow" ? "followed" : "passed");
       onStep(1);
     },
   });
@@ -639,9 +670,18 @@ function DeckCard({
         profile={profile}
         geometry={card}
         interactive={front}
-        onPass={() => onStep(1)}
-        onWinked={() => onStep(1)}
-        onFollowed={() => onStep(1)}
+        onPass={() => {
+          remember("passed");
+          onStep(1);
+        }}
+        onWinked={() => {
+          remember("winked");
+          onStep(1);
+        }}
+        onFollowed={() => {
+          remember("followed");
+          onStep(1);
+        }}
       />
       {/* Only the front card, and only where the gesture decides — a stamp on
           a card you are merely paging past would promise an act that is not
