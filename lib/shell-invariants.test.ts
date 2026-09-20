@@ -2077,6 +2077,15 @@ describe("The friends deck asks about people the reader has not answered for", (
     assert.match(deck, /remember\("followed"\);/);
   });
 
+  it("says why the strongest card is at the front", () => {
+    // The service leads with people who winked the reader; unsaid, that card
+    // looks like every other one and the reader answers a question they did
+    // not know they had been asked.
+    const card = stripComments(read("components/layout/pal-card.tsx"));
+    assert.match(card, /\{profile\.winkedMe && \(/);
+    assert.match(card, /Winked you/);
+  });
+
   it("names the wink control's own state once it has been used", () => {
     const card = stripComments(read("components/layout/pal-card.tsx"));
     assert.match(card, /aria-label=\{wink\.winked \? `Already winked at \$\{name\}` : `Wink at \$\{name\}`\}/);
