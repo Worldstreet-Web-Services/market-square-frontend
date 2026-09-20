@@ -212,13 +212,20 @@ export type PeopleSort = (typeof PEOPLE_SORTS)[number];
 /**
  * What the deck asks for, kept in ONE place so it can be switched in one line.
  *
- * It is still `followers` today: an unknown sort is a 400, so the client
- * cannot send `foryou` until the service accepts the value. The service has
- * been asked to accept it first — behaving exactly like `followers` — and to
- * improve the ordering behind it afterwards, so every improvement lands
- * without another frontend release.
+ * STILL `followers` UNTIL THE SERVICE THAT ACCEPTS `foryou` IS DEPLOYED.
+ * Verified against production on 2026-09-20: `?sort=foryou` answers 400
+ * VALIDATION_ERROR, "expected one of followers|recent".
+ *
+ * The asymmetry is the whole point. An unknown PARAMETER is ignored, which is
+ * what makes `excludePassed` and `excludeWinkedEver` safe to send before the
+ * service has them. An unknown SORT VALUE is a refusal, and a refused query is
+ * an empty deck on Home and on /pals — so this one cannot go early.
+ *
+ * It flips in one line the day wsws-monorepo #267 deploys. Every ranking
+ * change BEHIND the value still lands with no frontend release; only the
+ * switch to it has to wait for the service.
  */
-export const DECK_SORT: PeopleSort = "foryou";
+export const DECK_SORT: PeopleSort = "followers";
 
 export function parsePeopleSort(raw: string | null | undefined): PeopleSort {
   return (PEOPLE_SORTS as readonly string[]).includes(raw ?? "")
