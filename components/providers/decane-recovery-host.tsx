@@ -170,10 +170,16 @@ const MIN_UNLOCK_PASSWORD_LENGTH = 8;
 /**
  * The PIN that wraps the device share when this device has no usable passkey.
  *
- * On setup it is asked for twice. The PIN is never sent anywhere and cannot be
- * reset: a typo here would wrap the share with a value the user does not know,
- * which is a locked wallet rather than an inconvenience. On unlock, once is
- * enough — a wrong entry simply fails and can be retried.
+ * ─── WHAT IT IS CALLED, AND WHY ─────────────────────────────────────────────
+ * It is a way back into Square on this device, and that is how it is named.
+ * The wrapping is real and it is ours to worry about: somebody who came here
+ * to post does not have a wallet in mind, and "a PIN protects your wallet"
+ * reads as a chore attached to something they never asked for. A passkey is
+ * offered separately, in the same words, on the sign-in surface.
+ *
+ * What cannot be softened is that it cannot be reset. A typo here wraps the
+ * share with a value nobody knows, which is why it is asked for twice on setup
+ * and said plainly. On unlock once is enough: a wrong entry simply fails.
  */
 function PinDialog({ request }: { request: Extract<RecoveryRequest, { kind: "pin" }> }) {
   const [pin, setPin] = useState("");
@@ -193,10 +199,10 @@ function PinDialog({ request }: { request: Extract<RecoveryRequest, { kind: "pin
     <div className="flex flex-col gap-4">
       <div>
         <div className="text-[19px] font-bold text-white">
-          {request.setup ? "Choose a PIN for this device" : "Enter your PIN"}
+          {request.setup ? "Set a PIN for this device" : "Enter your PIN"}
         </div>
         <p className="mt-1.5 text-[13.5px] font-normal text-white/55">
-          {request.setup ? "This device can't use a passkey right now, so a PIN protects your wallet here. 4–8 digits. It is never sent anywhere and cannot be reset, so pick one you'll remember." : "This device unlocks your wallet with the PIN you chose here."}
+          {request.setup ? "This device can't use a passkey right now, so a PIN gets you back in here instead. 4–8 digits, kept on this device and never sent anywhere. It can't be reset, so pick one you'll remember." : "The PIN you set on this device."}
         </p>
       </div>
 
@@ -279,10 +285,10 @@ function UnlockPasswordDialog({
     <div className="flex flex-col gap-4">
       <div>
         <div className="text-[19px] font-bold text-white">
-          {request.setup ? "Set an unlock password" : "Unlock your wallet"}
+          {request.setup ? "Set a password for this device" : "Enter your device password"}
         </div>
         <p className="mt-1.5 text-[13.5px] font-normal text-white/55">
-          {request.setup ? "Then you can unlock this device with just this password — no signing in. Use at least 8 characters, and not only digits. It can't be reset, so store it in your password manager." : "Enter the unlock password for this device."}
+          {request.setup ? "Then you get back in here with just this password, no signing in again. At least 8 characters, and not only digits. It can't be reset, so save it in your password manager." : "The password you set on this device."}
         </p>
       </div>
 

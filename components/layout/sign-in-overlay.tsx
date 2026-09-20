@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignInCard } from "@/features/profile";
+import { PasskeyStep } from "@/components/layout/passkey-step";
+import { useDevicePasskey } from "@/hooks/use-device-passkey";
+import { passkeyNudgeDue } from "@/lib/passkey-nudge";
 import { useAuth } from "@/hooks/use-auth";
 import {
   closeSignIn,
@@ -35,6 +38,22 @@ import {
 export function SignInOverlay() {
   const open = useSyncExternalStore(subscribeSignIn, getSignInOpen, getSignInOpenServer);
   const { authenticated } = useAuth();
+  /*
+    ONE SCREEN BEFORE IT CLOSES.
+
+    A device that could hold a passkey but is on a PIN is offered one, here,
+    because this is the only surface every sign-in passes through and the
+    payoff lands on the very next one. `canAdd` is null until the check
+    resolves, and the overlay waits on it rather than closing and reopening.
+
+    Offered after the sign-in has already succeeded, so a dismissed
+    authenticator sheet can never cost somebody their session.
+  */
+  const { canAdd, needsReauth } = useDevicePasskey();
+  const [stepDone, setStepDone] = useState(false);
+  const offerPasskey =
+    authenticated && !stepDone && canAdd === true && !needsReauth && passkeyNudgeDue();
+  const holdOpen = authenticated && !stepDone && canAdd === null;
 
   /*
     Signing in closes it. Not a `setState` in an effect — this writes to the
@@ -43,10 +62,23 @@ export function SignInOverlay() {
     straight back into a card they never asked for.
   */
   useEffect(() => {
-    if (authenticated) closeSignIn();
-  }, [authenticated]);
+    if (authenticated && !offerPasskey && !holdOpen) closeSignIn();
+  }, [authenticated, offerPasskey, holdOpen]);
 
-  if (!open || authenticated) return null;
+  if (!open) return null;
+  if (offerPasskey) {
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add a passkey"
+        className="fixed inset-0 z-[80] overflow-y-auto overscroll-contain bg-[#0F0F0F]"
+      >
+        <PasskeyStep onDone={() => setStepDone(true)} />
+      </div>
+    );
+  }
+  if (authenticated) return null;
 
   return (
     <div
