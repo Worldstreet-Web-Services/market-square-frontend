@@ -2058,6 +2058,11 @@ describe("The friends deck asks about people the reader has not answered for", (
     // EVERY answer closes the card, including the pass the service knows
     // nothing about — and it stays closed rather than lapsing with a cooldown.
     assert.match(deck, /const answered = decidedIds\(useDeckDecisions\(me\.data\?\.id \?\? null\)\);/);
+    // The deck's ordering is named once, so switching to the service's ranked
+    // `foryou` is one line rather than a hunt through call sites.
+    assert.match(deck, /usePeople\("", DECK_SORT, true, friendsFilterFacets\(filter\)\)/);
+    const filters = stripComments(read("lib/people-filters.ts"));
+    assert.match(filters, /export const PEOPLE_SORTS = \["followers", "recent", "foryou"\] as const;/);
     assert.match(deck, /remember\(decision === "follow" \? "followed" : "passed"\);/);
     assert.match(deck, /remember\("passed"\);/);
     assert.match(deck, /remember\("winked"\);/);

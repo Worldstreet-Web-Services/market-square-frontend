@@ -194,9 +194,31 @@ export function filterScopeNotes(filter: PeopleFilter): string[] {
     : [];
 }
 
-/** The two orderings `GET /profiles` documents. Never a client-side re-sort. */
-export const PEOPLE_SORTS = ["followers", "recent"] as const;
+/**
+ * The orderings `GET /profiles` documents. Never a client-side re-sort.
+ *
+ * `foryou` is the DECK's ordering and nothing else's. A directory search is
+ * fairly answered by popularity; a deck is not — sorted by follower count,
+ * every reader in a city opens Square and meets the same twenty accounts in
+ * the same order, those twenty are buried in winks and nobody else is ever
+ * seen. It is the failure mode every dating app designed its way out of, and
+ * ranking is the service's job: reciprocity first (people who winked you),
+ * then people who know your people, then place, then freshness, shuffled
+ * within each band by a seed that is stable for one reader for one day.
+ */
+export const PEOPLE_SORTS = ["followers", "recent", "foryou"] as const;
 export type PeopleSort = (typeof PEOPLE_SORTS)[number];
+
+/**
+ * What the deck asks for, kept in ONE place so it can be switched in one line.
+ *
+ * It is still `followers` today: an unknown sort is a 400, so the client
+ * cannot send `foryou` until the service accepts the value. The service has
+ * been asked to accept it first — behaving exactly like `followers` — and to
+ * improve the ordering behind it afterwards, so every improvement lands
+ * without another frontend release.
+ */
+export const DECK_SORT: PeopleSort = "followers";
 
 export function parsePeopleSort(raw: string | null | undefined): PeopleSort {
   return (PEOPLE_SORTS as readonly string[]).includes(raw ?? "")

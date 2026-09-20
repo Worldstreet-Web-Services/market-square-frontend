@@ -6,6 +6,7 @@ import { DeckDots } from "@/components/ui/deck-dots";
 import { PalCard, DECK_CARD, HOME_DECK_CARD, type PalCardNodeGeometry } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
 import { SectionHeading } from "@/components/layout/section-heading";
+import { DECK_SORT } from "@/lib/people-filters";
 import {
   EMPTY_FRIENDS_FILTER,
   friendsFilterFacets,
@@ -88,7 +89,9 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     a list that no longer exists means nothing.
   */
   const [filter, setFilter] = useState<FriendsFilterState>(EMPTY_FRIENDS_FILTER);
-  const people = usePeople("", "followers", true, friendsFilterFacets(filter));
+  // THE DECK'S OWN ORDERING, named once in lib/people-filters.ts so switching
+  // it to the service's ranked `foryou` is one line rather than a hunt.
+  const people = usePeople("", DECK_SORT, true, friendsFilterFacets(filter));
   const [index, setIndex] = useState(0);
   const changeFilter = (next: FriendsFilterState) => {
     setFilter(next);
