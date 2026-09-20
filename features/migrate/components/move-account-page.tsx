@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidateIdentitySurfaces } from "@/lib/api/invalidate";
 import { useIdentityToken, usePrivy } from "@privy-io/react-auth";
 import { Button, Spinner } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -26,6 +27,14 @@ import { fetchSquareRekey, linkLegacyAccount } from "../lib/api";
  */
 const SQUARE_WAIT_MS = 30_000;
 const SQUARE_POLL_MS = 2_500;
+/*
+  Each poll is bounded well inside the ceiling. Without this the BFF's own 15s
+  upstream timeout plus overhead pushed the real wait past 45s, and a request
+  that never settled meant the deadline was never evaluated at all: no further
+  tick was scheduled and the spinner ran forever — the exact outage-versus-slow
+  ambiguity this screen exists to end.
+*/
+const SQUARE_POLL_TIMEOUT_MS = 6_000;
 import { LegacyPrivyProvider } from "./legacy-privy-provider";
 
 /**
@@ -80,6 +89,25 @@ export function MoveAccountPage() {
   );
 }
 
+/**
+ * A finished move changes the profile's ID, so every cached surface keyed to
+ * the old one is stale — the profile, their posts, the feed, bookmarks,
+ * stories, spotlight, conversations, discovery.
+ *
+ * Invalidating only `["ms","me"]` left all of those showing the old identity
+ * until each happened to refetch. `lib/api/invalidate` exists for exactly this
+ * and is what the admin console and the profile slice call after far smaller
+ * identity changes; a re-key is the largest one there is.
+ *
+ * The linked flag goes too: it is read by the offer in onboarding, and its own
+ * stale time would keep asking somebody who has just finished.
+ */
+function settleMovedProfile(queryClient: ReturnType<typeof useQueryClient>): void {
+  void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
+  void queryClient.invalidateQueries({ queryKey: ["ms", "migration", "linked"] });
+  invalidateIdentitySurfaces(queryClient);
+}
+
 function LinkFlow() {
   const privy = usePrivy();
   const { identityToken } = useIdentityToken();
@@ -126,13 +154,19 @@ function LinkFlow() {
     if (!privy.ready || !privy.authenticated || !decane.authenticated || started.current) return;
     if (!legacySignInIntended()) return;
     started.current = true;
+    let live = true;
     void (async () => {
       const accessToken = await privy.getAccessToken().catch(() => null);
       if (!accessToken) {
+        // Spent, whatever came of it: leaving the intent set would let the next
+        // restored session in this tab be treated as one the reader asked for.
+        clearLegacySignIn();
+        if (!live) return;
         setOutcome({ kind: "reauth" });
         return;
       }
       const result = await linkLegacyAccount({ accessToken, idToken: identityToken });
+      if (!live) return;
       setOutcome(result.outcome);
       setSquare(result.square);
       if (result.outcome.kind === "linked") {
@@ -140,7 +174,7 @@ function LinkFlow() {
         // the reader on during `pending` lands them on a profile that does not
         // have their posts yet, which reads as data loss.
         if (result.square === "pending") setWaiting(true);
-        else void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
+        else if (result.square === "done") settleMovedProfile(queryClient);
       }
       // The intent has been spent, whatever the answer was.
       clearLegacySignIn();
@@ -150,6 +184,9 @@ function LinkFlow() {
         await privy.logout().catch(() => {});
       }
     })();
+    return () => {
+      live = false;
+    };
   }, [privy, decane.authenticated, identityToken, queryClient]);
 
   // Poll only while the move is in flight. Every exit clears the timer, and a
@@ -162,12 +199,19 @@ function LinkFlow() {
     let timer: ReturnType<typeof setTimeout>;
     const startedAt = Date.now();
     const tick = async () => {
-      const state = await fetchSquareRekey();
+      const state = await fetchSquareRekey(SQUARE_POLL_TIMEOUT_MS);
       if (!live) return;
-      if (squareSettled(state)) {
+      /*
+        `null` is the poll failing, not Square answering. It used to read as
+        `unknown`, `unknown` counted as settled, and settled fell through to
+        "your posts are on this account now" — telling somebody their move had
+        finished because one request 500'd. A silent poll changes nothing; the
+        wait simply continues until the ceiling.
+      */
+      if (state !== null && squareSettled(state)) {
         setSquare(state);
         setWaiting(false);
-        if (state !== "failed") void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
+        if (state === "done") settleMovedProfile(queryClient);
         return;
       }
       if (Date.now() - startedAt >= SQUARE_WAIT_MS) {
@@ -189,7 +233,13 @@ function LinkFlow() {
     started.current = false;
     setOutcome(null);
     markLegacySignIn();
-    void privy.logout().then(() => privy.login());
+    // The login must happen whether or not the logout does. Chained without a
+    // catch, a rejected logout skipped it and left the reader on the bare
+    // spinner below — no text, no button, and an unhandled rejection.
+    void privy
+      .logout()
+      .catch(() => {})
+      .finally(() => void privy.login());
   };
 
   if (!privy.ready || !decane.ready) {
@@ -288,10 +338,41 @@ function LinkFlow() {
           </Frame>
         );
       }
+      if (square === "none") {
+        // Nothing was there to move. Claiming their posts arrived invents an
+        // old account they never had.
+        return (
+          <Frame title="Your accounts are linked">
+            <p>
+              There was no old profile to bring across, so nothing has changed here. Anything else
+              on your old account is linked to this one.
+            </p>
+            <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
+              Done
+            </Button>
+          </Frame>
+        );
+      }
+      if (square === "done") {
+        return (
+          <Frame title="You're all set">
+            <p>
+              Your old account is linked. Your handle, followers and posts are on this account now.
+            </p>
+            <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
+              Done
+            </Button>
+          </Frame>
+        );
+      }
+      // `unknown`: the pairing is recorded, and Square did not say what became
+      // of the profile — an older service, or a conflict that carries no rekey
+      // map. Promising it arrived is the one thing that must not be said.
       return (
-        <Frame title="You're all set">
+        <Frame title="Your accounts are linked">
           <p>
-            Your old account is linked. Your handle, followers and posts are on this account now.
+            Your old account is linked. If your handle, followers and posts are not here yet, they
+            will appear shortly.
           </p>
           <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
             Done
@@ -305,6 +386,9 @@ function LinkFlow() {
             One of these accounts is already linked to a different account, so we can&apos;t link
             them here. Contact support and we&apos;ll sort it out.
           </p>
+          <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
+            Back to Square
+          </Button>
         </Frame>
       );
     case "reauth":
@@ -323,12 +407,18 @@ function LinkFlow() {
             We couldn&apos;t reach the service that links accounts. Nothing was changed. Come back
             to this page in a little while to finish.
           </p>
+          <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
+            Back to Square
+          </Button>
         </Frame>
       );
     case "unavailable":
       return (
         <Frame title="Not available right now">
           <p>Moving an old account isn&apos;t available right now.</p>
+          <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
+            Back to Square
+          </Button>
         </Frame>
       );
   }

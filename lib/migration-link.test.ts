@@ -35,6 +35,31 @@ describe("reading a link response (llms-link.txt §5)", () => {
     assert.equal(nextRetryMarker(outcome), "set");
   });
 
+  /*
+    The BFF answers 502 when the migration service is unreachable or its 15s
+    timeout fires. That used to read as "not available here", which cleared the
+    pending-link marker and abandoned a link that was never recorded — the exact
+    case the header says must not be swallowed.
+  */
+  it("retries a 502 from our own BFF, and keeps the marker", () => {
+    const outcome = classifyLinkResponse(502, {
+      code: "UPSTREAM_ERROR",
+      message: "The account link service is unreachable.",
+    });
+    assert.deepEqual(outcome, { kind: "retry-later" });
+    assert.equal(nextRetryMarker(outcome), "set");
+  });
+
+  /*
+    §5 is explicit that a 503 matching neither message is permanent, so the
+    502 above is narrow on purpose: it is OUR status, not the service's.
+  */
+  it("still treats a service 502 that is not ours as permanent", () => {
+    assert.deepEqual(classifyLinkResponse(502, { code: "SERVER_ERROR" }), {
+      kind: "unavailable",
+    });
+  });
+
   it("swallows the permanent AUTH_PROVIDERS 503", () => {
     const outcome = classifyLinkResponse(503, {
       code: "SERVICE_UNAVAILABLE",

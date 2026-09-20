@@ -21,10 +21,20 @@
  *   · 503 "retry shortly"          → retry LATER. Nothing was recorded; if
  *                                    this were swallowed the reader would keep
  *                                    an empty profile in silence.
+ *   · 502 UPSTREAM_ERROR            → retry LATER. OURS, not the service's:
+ *                                    the BFF mints it when the service is
+ *                                    unreachable or its 15s timeout fires.
+ *                                    The contract says nothing about it
+ *                                    because it never reaches the contract,
+ *                                    and a gateway blip read as "not deployed
+ *                                    here" wipes the pending-link marker and
+ *                                    abandons a link that never happened.
  *   · 503 "AUTH_PROVIDERS", a 503
  *     matching neither, our own
  *     NOT_CONFIGURED, anything else → quiet. Linking is not deployed here and
- *                                    asking again never helps.
+ *                                    asking again never helps. §5 is explicit
+ *                                    that a 503 matching neither message is
+ *                                    permanent, so it stays permanent.
  *
  * Dependency-free and alias-free so `node --test` runs it.
  */
@@ -98,6 +108,10 @@ export function classifyLinkResponse(
   if (status === 503 && /retry shortly/iu.test(message) && !/AUTH_PROVIDERS/u.test(message)) {
     return { kind: "retry-later" };
   }
+  // Our own BFF's "I could not reach the service", which the service contract
+  // never sees and therefore never ruled on. Nothing was recorded, so it is
+  // the same kind of answer as the transient 503 above.
+  if (status === 502 && code === "UPSTREAM_ERROR") return { kind: "retry-later" };
   return { kind: "unavailable" };
 }
 

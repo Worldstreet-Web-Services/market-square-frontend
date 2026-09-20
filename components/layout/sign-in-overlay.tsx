@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
 import { SignInCard } from "@/features/profile";
 import { PasskeyStep } from "@/components/layout/passkey-step";
 import { useDevicePasskey } from "@/hooks/use-device-passkey";
 import { passkeyNudgeDue } from "@/lib/passkey-nudge";
 import { useAuth } from "@/hooks/use-auth";
+import { stripSquare } from "@/lib/square-path";
 import {
   closeSignIn,
   getSignInOpen,
@@ -51,9 +53,21 @@ export function SignInOverlay() {
   */
   const { canAdd, needsReauth } = useDevicePasskey();
   const [stepDone, setStepDone] = useState(false);
+  /*
+    Never over the account move. Signing in from /move-account completes the
+    link moments later, and a full-screen sheet at z-80 would sit on top of its
+    outcome — including the "your accounts need a hand" frame, which is the one
+    a reader most needs to see. The offer keeps until their next sign-in.
+  */
+  const onMoveAccount = stripSquare(usePathname()) === "/move-account";
   const offerPasskey =
-    authenticated && !stepDone && canAdd === true && !needsReauth && passkeyNudgeDue();
-  const holdOpen = authenticated && !stepDone && canAdd === null;
+    authenticated &&
+    !stepDone &&
+    !onMoveAccount &&
+    canAdd === true &&
+    !needsReauth &&
+    passkeyNudgeDue();
+  const holdOpen = authenticated && !stepDone && !onMoveAccount && canAdd === null;
 
   /*
     Signing in closes it. Not a `setState` in an effect — this writes to the

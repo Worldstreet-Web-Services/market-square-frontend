@@ -15,7 +15,13 @@ import { asset } from "@/lib/square-path";
  * sign-in and strip its credentials from the address bar.
  *
  * All three historical login methods stay on so every old account can get in.
- * No wallets are created: an account that never had one has nothing to bring.
+ *
+ * `createOnLogin: "off"`, per chain, is the part that matters. `showWalletUIs` only hides
+ * the vendor's own dialogs; whether a wallet is MADE is this setting, and left
+ * unset it falls back to whatever the old Privy app's dashboard says. Signing
+ * in to READ an old account must never write to it, least of all by minting a
+ * wallet on the account we are in the middle of migrating.
+ *
  * This file goes away when the link window closes.
  */
 export function LegacyPrivyProvider({ children }: { children: React.ReactNode }) {
@@ -24,7 +30,11 @@ export function LegacyPrivyProvider({ children }: { children: React.ReactNode })
       appId={LEGACY_PRIVY_APP_ID}
       config={{
         loginMethods: ["google", "twitter", "email"],
-        embeddedWallets: { showWalletUIs: false },
+        embeddedWallets: {
+          ethereum: { createOnLogin: "off" },
+          solana: { createOnLogin: "off" },
+          showWalletUIs: false,
+        },
         appearance: { theme: "#0c0c0e", accentColor: "#d4d4d8", logo: asset("/logo.svg") },
       }}
     >

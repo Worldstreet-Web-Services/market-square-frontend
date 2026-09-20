@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
 import { useAuth } from "@/hooks/use-auth";
 import { fetchMigrationLinked } from "../lib/api";
 
@@ -18,7 +19,10 @@ export function useMigrationLinked(): boolean | null {
   const { ready, authenticated } = useAuth();
   const query = useQuery<boolean | null>({
     queryKey: ["ms", "migration", "linked"],
-    enabled: ready && authenticated,
+    // Not asked where linking does not exist. Without this every new user's
+    // onboarding paid a round trip that 503s, on the critical path, for an
+    // answer the caller then ignores.
+    enabled: ready && authenticated && !DEMO_AUTH && Boolean(LEGACY_PRIVY_APP_ID),
     queryFn: fetchMigrationLinked,
     staleTime: 10 * 60 * 1000,
     retry: false,

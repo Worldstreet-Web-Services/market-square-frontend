@@ -1,6 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/lib/api/client";
+import { errorCode } from "@/lib/api/envelope";
 import {
   applyRetryMarker,
   classifyLinkResponse,
@@ -53,8 +54,19 @@ export async function linkLegacyAccount(legacy: {
     } | null;
     outcome = classifyLinkResponse(res.status, body?.error);
     square = readSquareRekey(body);
-  } catch {
-    outcome = { kind: "retry-later" };
+  } catch (error) {
+    /*
+      apiFetch THROWS before anything leaves when the bearer is missing or
+      dead, so these never reached the service and are not outages. Telling
+      somebody whose session expired to "come back later" sends them away to
+      retry a thing that will fail identically, and sets a marker advertising
+      it.
+    */
+    const code = errorCode(error);
+    outcome =
+      code === "SESSION_EXPIRED" || code === "UNAUTHORIZED"
+        ? { kind: "reauth" }
+        : { kind: "retry-later" };
   }
   applyRetryMarker(outcome);
   return { outcome, square };
@@ -65,20 +77,26 @@ export async function linkLegacyAccount(legacy: {
  * already reported once, and this asks the same question again without
  * re-announcing the mapping to every ledger.
  *
- * Never throws: a failed poll reads as `unknown`, which ends the wait rather
- * than spinning forever on a service that is not answering.
+ * `null` means THE POLL COULD NOT ASK, and it is not the same fact as the
+ * service answering `unknown`. Collapsing the two told people their posts had
+ * arrived because one request 500'd: `unknown` counts as settled, and settled
+ * fell through to the success screen. Once the server has said `pending`, only
+ * the server may say otherwise.
+ *
+ * Never throws; the caller decides what a silent poll means.
  */
-export async function fetchSquareRekey(): Promise<SquareRekey> {
+export async function fetchSquareRekey(timeoutMs = 6_000): Promise<SquareRekey | null> {
   try {
     const res = await apiFetch(
       api("/api/migration/status"),
-      { method: "GET" },
+      { method: "GET", signal: AbortSignal.timeout(timeoutMs) },
       { requireAuth: true, breaker: false }
     );
-    if (!res.ok) return "unknown";
-    return readSquareRekey(await res.json().catch(() => null));
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    return body === null ? null : readSquareRekey(body);
   } catch {
-    return "unknown";
+    return null;
   }
 }
 
