@@ -2063,6 +2063,14 @@ describe("The friends deck asks about people the reader has not answered for", (
     assert.match(deck, /usePeople\("", DECK_SORT, true, friendsFilterFacets\(filter\)\)/);
     const filters = stripComments(read("lib/people-filters.ts"));
     assert.match(filters, /export const PEOPLE_SORTS = \["followers", "recent", "foryou"\] as const;/);
+    assert.match(filters, /export const DECK_SORT: PeopleSort = "foryou";/);
+    // A pass reaches the SERVICE, or it is only true in this browser.
+    assert.match(deck, /pass\.mutate\(\{ profileId: profile\.id, passed: true \}\)/);
+    // And every answer is asked of the service, in the query rather than after
+    // paging — `excludeWinkedEver`, not the cooldown's `excludeWinked` alone.
+    const friends = stripComments(read("lib/friends-filter.ts"));
+    assert.match(friends, /excludeWinkedEver: true,/);
+    assert.match(friends, /excludePassed: true,/);
     assert.match(deck, /remember\(decision === "follow" \? "followed" : "passed"\);/);
     assert.match(deck, /remember\("passed"\);/);
     assert.match(deck, /remember\("winked"\);/);

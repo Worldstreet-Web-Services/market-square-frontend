@@ -17,7 +17,7 @@ import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import { SwipeVerdict } from "@/components/layout/swipe-verdict";
-import { useFollow, useIsFollowing } from "@/features/profile";
+import { useFollow, useIsFollowing, usePassProfile } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
 import { DECK_NODE, HOME_DECK_NODE, PALS_PAGE, deckLayout, type DeckLayout, type DeckNode } from "@/lib/deck-layout";
@@ -611,8 +611,14 @@ function DeckCard({
     lands on it.
   */
   const viewer = useMe();
-  const remember = (decision: "passed" | "winked" | "followed") =>
+  const pass = usePassProfile();
+  const remember = (decision: "passed" | "winked" | "followed") => {
     rememberDecision(viewer.data?.id ?? null, profile.id, decision);
+    // The local record closes the card; this is what makes it stay closed on
+    // the reader's other devices. A follow and a wink already tell the service
+    // themselves — a pass had nothing to tell until now.
+    if (decision === "passed") pass.mutate({ profileId: profile.id, passed: true });
+  };
 
   const swipe = useSwipeCard({
     width: node.card.width * k,

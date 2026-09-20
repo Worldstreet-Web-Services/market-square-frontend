@@ -35,6 +35,7 @@ import {
   sendWink,
   setBlocked,
   setFollow,
+  setPass,
   updateMe,
   fetchFollowers,
   fetchFollowing,
@@ -51,6 +52,30 @@ import {
   winkEligibility,
 } from "@/lib/winks";
 
+
+/**
+ * "NOT FOR ME" — recorded on the service so the deck stops asking everywhere,
+ * not only in the browser the swipe happened in.
+ *
+ * FIRE AND FORGET, deliberately. The card has already gone: the local record
+ * closed it the instant the reader answered, and the deck must not sit under
+ * their thumb waiting for a round trip. A failure here costs the cross-device
+ * half of the promise and nothing the reader is looking at, so it does not
+ * raise a toast — there is no action for them to take, and "couldn't dismiss"
+ * on a card that has visibly gone would be a puzzle rather than information.
+ *
+ * The people list is invalidated so the next page comes back without them.
+ */
+export function usePassProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ profileId, passed }: { profileId: string; passed: boolean }) =>
+      setPass(profileId, passed),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "people"] });
+    },
+  });
+}
 
 /** Who someone follows, a page at a time. Pals' "Following" tab reads the reader's own. */
 export function useFollowingList(profileId: string | undefined) {

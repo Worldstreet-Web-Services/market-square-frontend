@@ -218,7 +218,7 @@ export type PeopleSort = (typeof PEOPLE_SORTS)[number];
  * improve the ordering behind it afterwards, so every improvement lands
  * without another frontend release.
  */
-export const DECK_SORT: PeopleSort = "followers";
+export const DECK_SORT: PeopleSort = "foryou";
 
 export function parsePeopleSort(raw: string | null | undefined): PeopleSort {
   return (PEOPLE_SORTS as readonly string[]).includes(raw ?? "")
