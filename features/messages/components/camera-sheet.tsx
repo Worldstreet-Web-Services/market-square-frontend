@@ -402,10 +402,12 @@ export function CameraSheet({
                 aria-pressed={viewOnce}
                 aria-label={viewOnce ? "Seen once — tap to keep in the chat" : "Kept in the chat — tap to make it seen once"}
                 title={viewOnce ? "Seen once" : "Kept in the chat"}
-                className="ws-press flex h-10 w-10 shrink-0 items-center justify-center text-white"
+                // Icon only on a phone; on a desktop the label rides beside it in
+                // a pill so the control reads without a hover.
+                className="ws-press flex h-10 w-10 shrink-0 items-center justify-center gap-1.5 rounded-full text-white md:w-auto md:bg-white/10 md:px-3"
               >
                 {viewOnce ? (
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7">
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7 shrink-0">
                     <circle cx="12" cy="12" r="10" fill="#fff" />
                     <text
                       x="12"
@@ -420,7 +422,7 @@ export function CameraSheet({
                     </text>
                   </svg>
                 ) : (
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7" fill="none">
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7 shrink-0" fill="none">
                     <circle
                       cx="12"
                       cy="12"
@@ -443,6 +445,9 @@ export function CameraSheet({
                     </text>
                   </svg>
                 )}
+                <span className="hidden whitespace-nowrap text-[13px] font-medium md:inline">
+                  {viewOnce ? "View once" : "Keep in chat"}
+                </span>
               </button>
             </div>
             <button
