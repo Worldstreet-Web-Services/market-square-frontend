@@ -32,10 +32,19 @@ export function InlineVideo({
   className,
   fit = false,
   onFirstPlay,
+  onError,
 }: {
   src: string;
   poster?: string | null;
   className?: string;
+  /**
+   * The clip could not load at all.
+   *
+   * A DM's video is served through a signed link, and a refused link is a
+   * frame that never arrives — indistinguishable, to the reader, from a slow
+   * connection. The caller uses this to ask the service for a fresh link.
+   */
+  onError?: () => void;
   /**
    * Fired ONCE, when the clip genuinely starts playing (`playing`, not
    * `play`: the element has frames and is advancing). The card uses it to
@@ -99,6 +108,7 @@ export function InlineVideo({
 
   const video = (
     <video
+      onError={onError}
       ref={ref}
       src={src}
       poster={poster ?? undefined}

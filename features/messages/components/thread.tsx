@@ -19,7 +19,7 @@ import { Spinner } from "@/components/ui/button";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaViewer } from "@/components/ui/media-viewer";
-import { downloadLinkFor, mediaLinkExpired } from "@/lib/message-media-link";
+import { downloadLinkFor } from "@/lib/message-media-link";
 import { canSendSnap, snapTimeLeft, snapView } from "@/features/messages/lib/snap-view";
 import { defaultViewOnce, type MediaSource } from "@/features/messages/lib/camera-capture";
 import { CameraSheet } from "@/features/messages/components/camera-sheet";
@@ -1167,34 +1167,37 @@ function FileBubble({
 }
 
 /**
- * ASKS FOR A FRESH LINK WHEN ONE DIES UNDER THE READER.
+ * ASKS FOR A FRESH LINK WHEN MEDIA WILL NOT LOAD.
  *
- * An open thread polls every few seconds, so its links are re-minted long
- * before the service's fifteen minutes are up — this is not that case. It is
- * the tab left in the background, where the poll is suspended and the photo
- * that was on screen an hour ago is now pointing at a link the service will
- * refuse. The <img> errors, and this asks the thread for the message again,
- * which arrives with a link minted this second.
+ * A DM attachment is served through a signed link, and a signed link can be
+ * refused for more than one reason: it expired, or its signature no longer
+ * verifies because the service's signing secret changed under it. THE READER
+ * CANNOT TELL THOSE APART and neither can an <img> — both are simply a picture
+ * that will not draw.
  *
- * TWO GUARDS, because a refetch that draws the same broken URL would loop:
- *   · ONCE per bubble, held in a ref, so a photo that is genuinely missing
- *     costs exactly one request rather than one per failed decode;
- *   · ONLY when this message's link is at or past its deadline. A message with
- *     no deadline is an old storage URL, and an image that fails on one of
- *     those has a different problem that a refetch cannot fix.
+ * This used to fire only past `urlExpiresAt`, which meant a link refused for a
+ * BAD SIGNATURE sat there broken until the reader reloaded the page. That is
+ * not hypothetical: on 2026-09-21 a restart invalidated links minted before it
+ * and a thread full of media stayed broken on screen while the service would
+ * happily have re-minted every one of them.
  *
- * `Date.now()` is read in the error handler — an event, not a render — so this
- * stays a pure component.
+ * So the trigger is now the FAILURE, not the deadline. One refetch per bubble,
+ * held in a ref, so a photo that is genuinely gone costs exactly one request
+ * rather than one per failed decode — and a thread of twenty broken images
+ * asks once each rather than twenty times over.
+ *
+ * It cannot fix a secret that is wrong for everybody; nothing in a browser
+ * can. It means a reader stops staring at a broken box the service could have
+ * replaced.
  */
-function useExpiredLinkRefresh(urlExpiresAt: string | null | undefined) {
+function useMediaRefreshOnError() {
   const client = useQueryClient();
   const asked = useRef(false);
   return useCallback(() => {
     if (asked.current) return;
-    if (!mediaLinkExpired(urlExpiresAt, Date.now())) return;
     asked.current = true;
     void client.refetchQueries({ queryKey: ["ms", "messages"] });
-  }, [client, urlExpiresAt]);
+  }, [client]);
 }
 
 function MediaBubble({
@@ -1220,7 +1223,7 @@ function MediaBubble({
   // A real save of the ORIGINAL file, or null when this is not a file the
   // service issued — see lib/media-download.ts. Null draws no control at all.
   const downloadUrl = downloadLinkFor(message, `square-${kind}-${message.id.slice(0, 8)}`);
-  const refreshLink = useExpiredLinkRefresh(message.mediaUrlExpiresAt);
+  const refreshLink = useMediaRefreshOnError();
   const noun = kind === "video" ? "video" : "photo";
 
   return (
@@ -1243,7 +1246,7 @@ function MediaBubble({
             onClick={() => setViewing(true)}
             className="absolute inset-0 cursor-pointer overflow-hidden rounded-xl"
           >
-            <InlineVideo src={url} className="absolute inset-0 rounded-xl" />
+            <InlineVideo src={url} onError={refreshLink} className="absolute inset-0 rounded-xl" />
             <button
               type="button"
               onClick={(event) => {
@@ -1548,6 +1551,9 @@ function VoiceBubble({
   tail: boolean;
   quote?: React.ReactNode;
 }) {
+  // A voice note is served through the same signed link a photo is, and a
+  // refused link is a play button that does nothing. Same one-shot refresh.
+  const refreshLink = useMediaRefreshOnError();
   const url = message.mediaUrl as string;
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -1582,6 +1588,7 @@ function VoiceBubble({
         ref={audio}
         src={url}
         preload="metadata"
+        onError={refreshLink}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => {
