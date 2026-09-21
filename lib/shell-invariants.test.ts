@@ -1013,7 +1013,7 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
     // open instead of sitting on top of a list of results.
     assert.match(
       home,
-      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && <HomeBanner \/>\}/
+      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && \(\s*<div className="mt-4">\s*<HomeBanner \/>/
     );
     assert.match(feed, /\{headSlot && <div className="mb-10 flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
     const head = feed.indexOf("{headSlot && ");
@@ -1124,7 +1124,7 @@ describe("Home's Make some friends is 647:16288's second block", () => {
   });
 
   it("spaces it by the file: 90 to the deck, 9.38 to five pills, then the column's 64 to Coming Soon", () => {
-    assert.match(deck, /mt-\[90px\]/);
+    assert.match(deck, /md:mt-22\.5/);
     assert.match(deck, /mt-\[9\.38px\]/);
     // The rule and its 67 are gone (ogazboiz, 2026-09-12): 1305:149185 runs
     // from the pills straight on to Coming Soon on its own 64.
@@ -1148,7 +1148,7 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     assert.ok(mainBase, "could not find the column's base classes");
     assert.doesNotMatch(mainBase, /overflow-x-clip/, "the column clips again, cutting the rule at its edge");
     assert.match(shell, /min-h-dvh w-full overflow-x-clip bg-chrome/, "nothing clips at the window, so the rule scrolls the page sideways");
-    assert.match(houses, /ws-bleed-right-only -mx-4 overflow-x-auto/, "the houses rail bleeds past the column's left edge under the dock");
+    assert.match(houses, /-mr-4 overflow-x-auto/, "the houses rail scrolls within the column");
   });
 });
 
@@ -2234,7 +2234,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(screen, /Live GistRooms/);
     // 1373:3367's card: 290 x 86 at 16.86, three across, rows 16 apart, paged.
     assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,290px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
-    assert.match(screen, /h-\[86px\] w-\[290px\] overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
+    assert.match(screen, /h-\[86px\] w-\[290px\] cursor-pointer overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
     assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
     assert.match(screen, /left-\[75\.75px\] top-\[16\.25px\] flex w-\[127\.52px\] flex-col gap-\[4\.93px\]/);
     assert.match(screen, /ws-btn-welcome ws-press absolute right-4 top-\[31px\] flex h-6 w-16 items-center justify-center rounded-\[61\.6px\]/, "the Join House pill lost its ramp");
@@ -2588,7 +2588,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // The node's leading space is a gap the width of a Geist space, not a
     // character in the copy.
     assert.doesNotMatch(row, /" Search Gistrooms/);
-    assert.match(row, /flex h-12 min-w-0 flex-1 items-center gap-\[3\.78px\] rounded-full border-\[0\.68px\] border-white\/40 px-2/);
+    assert.match(row, /flex h-12 min-w-0 flex-1 items-center gap-\[3\.78px\] rounded-2xl border-\[0\.68px\] border-white\/40 px-2/);
     // The file's type scale is unchanged. What the reader TYPES is white;
     // #7A7A7A is the placeholder, which is what the node actually draws.
     assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\]/);
@@ -2804,8 +2804,8 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // 72 = 16 + the node's 40 row + 16. It was 48 with the account on the
     // LEFT and the mark floated to the middle; the node puts the lockup left
     // and the account right, so the phone finally agrees with the desktop bar.
-    assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[72px\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
-    assert.match(read("app/globals.css"), /--ws-topbar-h: 72px;/);
+    assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[var\(--ws-topbar-h\)\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
+    assert.match(read("app/globals.css"), /--ws-topbar-h: 56px;/);
     // The node's own 100 x 40 lockup box — WITHOUT the node's 0.53 hairline
     // under it (ogazboiz, 2026-09-16): on a phone it read as a stray short
     // line under the logo. The bar's full-width border-b above is the only one.
@@ -3409,7 +3409,9 @@ describe("one room per tab, owned by the shell", () => {
   it("the phone's Back minimises", () => {
     const header = code("features/houses/components/house-header.tsx");
     assert.match(header, /aria-label="Minimise room"/);
-    assert.match(header, /<IconChevronDown className="h-4 w-4 shrink-0 md:hidden" \/>/);
+    // A back control is a left chevron on the phone (a down chevron reads as
+    // "collapse"); the aria-label carries that it minimises the room.
+    assert.match(header, /<IconChevronLeft className="w-4 h-4 shrink-0 md:hidden" \/>/);
   });
 
   it("a stream asks before it plays over a gist room", () => {
