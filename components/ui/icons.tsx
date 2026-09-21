@@ -260,6 +260,27 @@ export function IconCopy({ className }: IconProps) {
   );
 }
 
+// The FILLED duotone copy — vuesax/bulk/copy, the glyph the room header draws
+// beside the code (node 1775:20271). Fill, not stroke: it is not the outline
+// `IconCopy`, so it is its own icon. The FRONT sheet (bottom-left) is full
+// `currentColor`; the BACK sheet (top-right) is the same colour at 40%, which
+// is the order the file draws — the front bright, the one behind it faint.
+export function IconCopyBulk({ className }: IconProps) {
+  return (
+    <svg className={className} width={24} height={24} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M16 12.9V17.1C16 20.6 14.6 22 11.1 22H6.9C3.4 22 2 20.6 2 17.1V12.9C2 9.4 3.4 8 6.9 8H11.1C14.6 8 16 9.4 16 12.9Z"
+        fill="currentColor"
+      />
+      <path
+        opacity="0.4"
+        d="M17.1 2H12.9C9.45 2 8.05 3.37 8.01 6.75H11.1C15.3 6.75 17.25 8.7 17.25 12.9V15.99C20.63 15.95 22 14.55 22 11.1V6.9C22 3.4 20.6 2 17.1 2Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export function IconPlay({ className }: IconProps) {
   return (
     <svg {...base(className)}>

@@ -112,17 +112,21 @@ function PersonCard({ person }: { person: RoomPerson }) {
     <Root
       {...(person.onOpen ? { type: "button" as const, onClick: person.onOpen } : {})}
       className={cn(
-        "flex w-[103px] shrink-0 flex-col gap-[15px] md:w-[104px] md:gap-2",
+        // Fluid: fills its grid cell so a row holds at least 3 and grows with
+        // the column's real width (see the @container grid below). A fixed 104
+        // left the narrowest phones room for only 2.
+        "flex w-full flex-col gap-2",
         person.onOpen && "ws-press text-left"
       )}
     >
-      {/* 125 tall: the 113 plate plus the badge's 12px of overhang, so the
-          badge does not push the name down the way a flow child would. On a
-          phone the same shape at 103 + 12 = 115. */}
-      <div className="relative h-[115px] w-[103px] md:h-[125px] md:w-[104px]">
+      {/* The plate keeps the file's 104:113 ratio at ANY width (aspect-ratio,
+          not a fixed 104). `pb-3` reserves the badge's 12px of overhang below
+          the plate — only when a badge is drawn — so it never pushes the name
+          down. */}
+      <div className={cn("relative w-full", person.actions && "pb-3")}>
         <div
           className={cn(
-            "relative flex h-[103px] w-[103px] items-center justify-center overflow-hidden rounded-[24.92px] bg-white/10 transition-shadow md:h-[113px] md:w-[104px] md:rounded-[32px]",
+            "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-3xl bg-white/10 transition-shadow md:aspect-104/113 md:rounded-4xl",
             person.speaking && "ring-2 ring-create",
             !person.speaking && person.invited && "ring-2 ring-white/60"
           )}
@@ -168,7 +172,7 @@ function PersonCard({ person }: { person: RoomPerson }) {
             >
               {person.mic === "muted" ? (
                 <>
-                  <IconPlateMicOffSm className="h-[71px] w-[71px] md:hidden" />
+                  <IconPlateMicOffSm className="h-14 w-14 md:hidden" />
                   <IconRoomMicOff className="hidden h-6 w-6 text-white/80 drop-shadow md:block" />
                 </>
               ) : (
@@ -177,7 +181,7 @@ function PersonCard({ person }: { person: RoomPerson }) {
                    the glow pads the art. Drawn at 90 so nothing is clipped.
                    The phone's is the 31.15 disc (1285:92949), padded to 71. */
                 <>
-                  <IconPlateMicSm className="h-[71px] w-[71px] md:hidden" />
+                  <IconPlateMicSm className="h-14 w-14 md:hidden" />
                   <IconPlateMic className="hidden h-[90px] w-[90px] md:block" />
                 </>
               )}
@@ -200,15 +204,19 @@ function PersonCard({ person }: { person: RoomPerson }) {
           position them without knowing what a Profile is.
         */}
         {person.actions && (
-          <span className="absolute left-1/2 top-[91px] -translate-x-1/2 md:top-[101px]">
+          /* Straddles the plate's lower edge — 24px tall, centred on the plate
+             bottom (12 above it, 12 below into the reserved `pb-3`). */
+          <span className="absolute bottom-0 left-1/2 -translate-x-1/2">
             {person.actions}
           </span>
         )}
       </div>
 
       {/* 169:13373 — `#FFFFFF` at 14/24, not the column's body grey. The
-          phone's name (1285:92958) is 12/14.06. */}
-      <span className="w-full truncate text-center text-[12px] leading-[14px] text-white md:text-[14px] md:leading-6">
+          phone's name (1285:92958) is 12/14.06. Two lines on the small mobile
+          tiles so a real name like "Uchechukwu" is not clipped to "Uchechu…";
+          the desktop keeps the file's single line. */}
+      <span className="line-clamp-2 w-full text-center text-[12px] leading-3.5 text-white md:line-clamp-1 md:text-[14px] md:leading-6">
         {person.name}
       </span>
     </Root>
@@ -280,18 +288,19 @@ export function RoomPeopleSection({
       {people.length === 0 ? (
         <p className="text-[14px] leading-6 text-meta">{empty}</p>
       ) : (
-        /* Wraps rather than scrolls: the file draws two full rows of six and a
-           room can hold more, and a horizontal scroller hides people behind a
-           gesture nobody is told about.
-
-           Rows are `items-center` because the file's are (1285:93038): the
-           View all cell is shorter than a tile and sits on the row's middle.
-           Nothing moves on desktop, where every cell is the same 157. */
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-4 md:gap-x-6">
-          {shown.map((person) => (
-            <PersonCard key={person.id} person={person} />
-          ))}
-          {onViewAll && <ViewAllTile onClick={onViewAll} />}
+        /* AT LEAST 3 across, then more as the column widens — a CONTAINER grid,
+           so it measures the people column's REAL width (not the viewport) and is
+           right whether or not the chat sits beside it. The tiles are fluid, so 3
+           fit even on the narrowest phone where the old fixed 104px left room for
+           only 2. Capped at the file's 744 (6 × 104) so a wide column still draws
+           the design's six rather than oversized tiles. */
+        <div className="@container">
+          <div className="grid grid-cols-4 gap-x-3 gap-y-4 @md:grid-cols-5 @md:gap-x-6 @xl:grid-cols-6 @xl:max-w-186">
+            {shown.map((person) => (
+              <PersonCard key={person.id} person={person} />
+            ))}
+            {onViewAll && <ViewAllTile onClick={onViewAll} />}
+          </div>
         </div>
       )}
     </section>
@@ -314,13 +323,13 @@ function ViewAllTile({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="ws-press flex h-[113px] w-[104px] shrink-0 flex-col items-center justify-center gap-2 md:h-auto md:justify-start"
+      className="ws-press flex w-full flex-col items-center justify-center gap-2 md:justify-start"
     >
-      <span className="flex h-12 w-12 items-center justify-center md:h-[125px] md:w-[104px]">
+      <span className="flex aspect-square w-full items-center justify-center md:aspect-104/113">
         {/* Node 169:13519, exported whole: the 48px disc, its `white/10` fill,
             its glow and the people glyph are one asset. Exported at 98 because
             the glow pads it — the phone's 1285:93072 is the same node. */}
-        <IconViewAll className="h-[98px] w-[98px] max-w-none shrink-0" />
+        <IconViewAll className="h-auto w-full max-w-24.5 shrink-0" />
       </span>
       <span className="w-full truncate text-center text-[14px] leading-[16.5px] text-white/50 md:leading-6">
         View all

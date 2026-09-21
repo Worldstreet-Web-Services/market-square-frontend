@@ -134,7 +134,7 @@ export function HomeTopRow({
 
   return (
     <div className="flex h-12 items-center gap-3">
-      <div className="ws-press flex h-12 min-w-0 flex-1 items-center gap-[3.78px] rounded-full border-[0.68px] border-white/40 px-2 shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors focus-within:border-white/55">
+      <div className="ws-press flex h-12 min-w-0 flex-1 items-center gap-[3.78px] rounded-2xl border-[0.68px] border-white/40 px-2 shadow-[0_5.45px_6.81px_-4.09px_rgba(0,0,0,0.1),0_13.62px_17.02px_-3.4px_rgba(0,0,0,0.1)] transition-colors focus-within:border-white/55">
           <IconTopSearch className="h-4 w-4 shrink-0 text-[#6D6D6D]" />
           <input
             type="search"

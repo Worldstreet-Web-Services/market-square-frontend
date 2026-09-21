@@ -1,6 +1,6 @@
 "use client";
 
-import { ShareSheet } from "@/components/ui/share-sheet";
+import { ProfileShareSheet } from "@/components/ui/profile-share-sheet";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
@@ -253,15 +253,7 @@ export function PersonMoreMenu({
       {open && cover && createPortal(coverPanel, document.body)}
 
       {sharing && (
-        <ShareSheet
-          open
-          onClose={() => setSharing(false)}
-          title="Share profile"
-          payload={{
-            text: `${profile.displayName || profile.username} on Square`,
-            url: `${window.location.origin}${sq(`/u/${profile.username}`)}`,
-          }}
-        />
+        <ProfileShareSheet open onClose={() => setSharing(false)} profile={profile} />
       )}
 
       {open && !cover && (

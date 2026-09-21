@@ -187,7 +187,7 @@ export function SignInPrompt({
       <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
         <button
           onClick={login}
-          className="ws-btn-silver ws-press rounded-full px-5 py-2 text-[13px] font-bold"
+          className="ws-btn-silver ws-press ws-btn-md rounded-full font-bold"
         >
           Sign in
         </button>

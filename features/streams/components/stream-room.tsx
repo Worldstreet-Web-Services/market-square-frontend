@@ -2,6 +2,7 @@
 import Image from "next/image";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
+import { DEFAULT_REACTION } from "@/lib/reactions";
 
 import { useLiveRoom } from "@/features/streams/hooks/use-live-room";
 import {
@@ -607,7 +608,8 @@ export function StreamRoom({
   const react = useCallback(
     (burst = 1) => {
       spawnReaction(burst);
-      live.react(burst);
+      // The live stream room is heart-only; the emoji set is the gist room's.
+      live.react(DEFAULT_REACTION, burst);
       recordReaction(burst);
     },
     [spawnReaction, live, recordReaction],

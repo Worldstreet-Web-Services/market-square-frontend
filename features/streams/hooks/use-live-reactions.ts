@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { RoomEvent, type Room } from "livekit-client";
+import { DEFAULT_REACTION, isReactionEmoji } from "@/lib/reactions";
 
 /**
  * Floating reactions that everybody in the room actually sees.
@@ -49,8 +50,14 @@ export interface LiveGiftPacket {
 }
 
 export interface LiveReactionsOptions {
-  /** Called for reactions from OTHER people, with how many to draw. */
-  onReceive: (burst: number) => void;
+  /**
+   * Called for reactions from OTHER people, with how many to draw, which glyph,
+   * and who sent it. `emoji` is one of the known reaction set; a legacy packet
+   * with no glyph reports the heart. `from` is the sender's display name, or ""
+   * when the packet does not name them (an older client, or a heart from the
+   * stream room, which stays anonymous).
+   */
+  onReceive: (burst: number, emoji: string, from: string) => void;
   /** Called for gifts from OTHER people. Absent on surfaces that draw none. */
   onGift?: (packet: LiveGiftPacket) => void;
 }
@@ -102,7 +109,22 @@ export function useLiveReactions(room: Room | null, { onReceive, onGift }: LiveR
         // server. Clamp rather than trust, or one participant can spray the
         // whole room's screens.
         if (!Number.isFinite(burst) || burst < 1) return;
-        receive.current(Math.min(Math.floor(burst), MAX_BURST));
+        // The glyph is checked against the known set for the same reason: an
+        // unknown value is a peer trying to fly its own text, so it falls back
+        // to the heart rather than being drawn.
+        const rawEmoji =
+          typeof parsed === "object" && parsed !== null && "emoji" in parsed
+            ? (parsed as { emoji: unknown }).emoji
+            : undefined;
+        const emoji = isReactionEmoji(rawEmoji) ? rawEmoji : DEFAULT_REACTION;
+        // The sender's name rides the packet the way a gift's does, capped the
+        // same way — a label is a name, not prose. Absent means "not named".
+        const rawFrom =
+          typeof parsed === "object" && parsed !== null && "from" in parsed
+            ? (parsed as { from: unknown }).from
+            : undefined;
+        const from = typeof rawFrom === "string" ? rawFrom.slice(0, MAX_NAME) : "";
+        receive.current(Math.min(Math.floor(burst), MAX_BURST), emoji, from);
       } catch {
         // A malformed packet is not worth surfacing to anyone.
       }
@@ -114,12 +136,19 @@ export function useLiveReactions(room: Room | null, { onReceive, onGift }: LiveR
   }, [room]);
 
   const react = useCallback(
-    (burst = 1) => {
+    (emoji: string = DEFAULT_REACTION, burst = 1, from = "") => {
       const local = room?.localParticipant;
       if (!local) return;
       const capped = Math.min(Math.max(Math.floor(burst), 1), MAX_BURST);
+      // An unrecognised glyph is never put on the wire; it degrades to the heart
+      // so a caller can never broadcast arbitrary text to the room.
+      const glyph = isReactionEmoji(emoji) ? emoji : DEFAULT_REACTION;
+      const payload: Record<string, unknown> = { burst: capped, emoji: glyph };
+      // The sender's name is optional: the stream room's hearts stay anonymous,
+      // the gist room names them so the float reads like a call reaction.
+      if (from) payload.from = from.slice(0, MAX_NAME);
       void local
-        .publishData(new TextEncoder().encode(JSON.stringify({ burst: capped })), {
+        .publishData(new TextEncoder().encode(JSON.stringify(payload)), {
           reliable: false,
           topic: TOPIC,
         })
