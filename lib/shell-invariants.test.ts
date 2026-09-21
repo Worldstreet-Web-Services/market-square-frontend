@@ -1966,6 +1966,33 @@ describe("The camera is the second door, and it behaves differently", () => {
   });
 });
 
+describe("A gist room's chat can answer a particular message", () => {
+  const panel = stripComments(read("features/streams/components/chat-panel.tsx"));
+
+  it("carries the reply target and the people named, and omits them when there are none", () => {
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    assert.match(api, /\.\.\.\(replyToId \? \{ replyToId \} : \{\}\)/);
+    assert.match(api, /\.\.\.\(mentions && mentions\.length > 0 \? \{ mentions \} : \{\}\)/);
+  });
+
+  it("draws the quote only where the service sent one", () => {
+    // A chat from before replies existed reads exactly as it did.
+    assert.match(panel, /\{message\.replyTo && \(/);
+    assert.match(panel, /Message deleted/);
+  });
+
+  it("names a handle only when it can name the person behind it", () => {
+    // Inventing an id for an unrecognised @word would notify a stranger who
+    // happens to share a spelling.
+    assert.match(panel, /mentionsPresentIn\(speakers, draft\)/);
+  });
+
+  it("keeps the reply target out of the text field, where a backspace would eat it", () => {
+    assert.match(panel, /Replying to /);
+    assert.match(panel, /aria-label="Cancel reply"/);
+  });
+});
+
 describe("A shared link posts as a post, and arrives as the thing it points at", () => {
   it("offers posting into Square beside the outward shares", () => {
     const sheet = stripComments(read("components/ui/share-sheet.tsx"));

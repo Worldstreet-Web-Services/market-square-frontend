@@ -197,8 +197,20 @@ export async function fetchChat(streamId: string, cursor?: string | null) {
   );
 }
 
-export async function sendChat(streamId: string, text: string) {
-  return ChatMessageSchema.parse(await msApi.post(`/streams/${streamId}/chat`, { text }));
+export async function sendChat(
+  streamId: string,
+  text: string,
+  { replyToId, mentions }: { replyToId?: string; mentions?: string[] } = {}
+) {
+  return ChatMessageSchema.parse(
+    await msApi.post(`/streams/${streamId}/chat`, {
+      text,
+      // OMITTED when absent rather than sent null: the service reads a missing
+      // field as "no reply" and "no mentions", and a null would be a claim.
+      ...(replyToId ? { replyToId } : {}),
+      ...(mentions && mentions.length > 0 ? { mentions } : {}),
+    })
+  );
 }
 
 export async function createStream(input: {
