@@ -2031,6 +2031,11 @@ describe("A gist room's chat can answer a particular message", () => {
     assert.match(panel, /const love = useChatReaction\(stream\.id\);/);
     assert.match(panel, /love\.mutate\(\{ messageId: target\.id, emoji: DEFAULT_REACTION, loved \}\)/);
     assert.match(panel, /aria-pressed=\{loved\}/);
+    // FILLED, not merely tinted: a coloured outline reads as a hover state
+    // rather than as an act somebody took.
+    assert.match(panel, /filled=\{loved\}/);
+    const icons = stripComments(read("components/ui/room-icons.tsx"));
+    assert.match(icons, /\{!filled && <path/);
     const api = stripComments(read("features/streams/lib/api.ts"));
     // The emoji is a path segment and an emoji is several bytes.
     assert.match(api, /encodeURIComponent\(emoji\)/);
