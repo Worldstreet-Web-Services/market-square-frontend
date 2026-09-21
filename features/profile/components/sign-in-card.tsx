@@ -129,6 +129,8 @@ function DecaneForm() {
     sendEmailCode,
     confirmEmailCode,
     emailLoading,
+    canUsePasskey,
+    signInWithPasskey,
     error: kitError,
   } = useSocialAuth();
   const [email, setEmail] = useState("");
@@ -136,6 +138,37 @@ function DecaneForm() {
   const [step, setStep] = useState<"email" | "code">("email");
   const [error, setError] = useState<string | null>(null);
   const [googleFailed, setGoogleFailed] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  /*
+    THE WAY BACK IN FOR SOMEBODY WHO HAS BEEN HERE.
+
+    Signing out clears the remembered session but deliberately leaves the
+    passkey-wrapped share on the device, so a returning reader can be signed
+    straight back in with one biometric prompt — no redirect, no emailed code.
+    `canUsePasskey` is the kit saying this device holds such a share for the
+    account that signed out; it is false on a new device and for PIN-only
+    wallets, so this never appears where it would fail.
+
+    Without it, everyone who signed out was pushed back through Google or an
+    email code even while holding a perfectly good passkey.
+  */
+  const passkey = async () => {
+    setError(null);
+    setPasskeyBusy(true);
+    try {
+      await signInWithPasskey();
+    } catch (err) {
+      // Dismissing the authenticator sheet is a decision, not a failure, and
+      // the other ways in are still on screen underneath.
+      const name = (err as { name?: string })?.name;
+      if (name !== "NotAllowedError" && name !== "UserCancelledError") {
+        setError("That didn't work. Try another way in.");
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
 
   const busy = emailLoading;
   // Not a validator — just enough to stop an obviously empty submit. The
@@ -245,8 +278,25 @@ function DecaneForm() {
         void submitEmail();
       }}
     >
+      {/* Offered first when it exists, because it is the shortest way back and
+          costs one prompt. The file's own button follows it as the way in for
+          everybody else. */}
+      {canUsePasskey && (
+        <div className="mt-[61px] flex justify-center px-6">
+          <button
+            type="button"
+            onClick={() => void passkey()}
+            disabled={passkeyBusy}
+            className="ws-press flex h-[54px] w-full max-w-[346px] items-center justify-center gap-2.5 rounded-[34px] bg-white text-[16px] font-semibold tracking-[-0.01em] text-[#0F0F0F] transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {passkeyBusy ? <Spinner className="h-5 w-5" /> : null}
+            {passkeyBusy ? "Waiting for your passkey…" : "Sign in with your passkey"}
+          </button>
+        </div>
+      )}
+
       {/* `btn-google` — 346x54, radius 34, #000 at 20% under a #000 12% hairline. */}
-      <div className="mt-[61px] flex justify-center px-6">
+      <div className={cn("flex justify-center px-6", canUsePasskey ? "mt-4" : "mt-[61px]")}>
         <button
           type="button"
           onClick={() => void google()}
