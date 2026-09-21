@@ -396,42 +396,56 @@ export function CameraSheet({
                 aria-label="Caption"
                 className="min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/60"
               />
-              {/* The view-once mark — a "1" in a dashed ring (WhatsApp's own
-                  glyph). White, and clickable: full while seen-once (default),
-                  dimmed once tapped off to keep the shot in the chat. */}
+              {/* The view-once mark, a "1" in a ring. NORMAL is the dashed
+                  outline; tapping SETS view-once and fills the ring solid white
+                  with a black 1 (the two states ogazboiz drew). */}
               <button
                 type="button"
                 onClick={() => setViewOnce((on) => !on)}
                 aria-pressed={viewOnce}
                 aria-label={viewOnce ? "Seen once — tap to keep in the chat" : "Kept in the chat — tap to make it seen once"}
                 title={viewOnce ? "Seen once" : "Kept in the chat"}
-                className={cn(
-                  "ws-press flex h-8 w-8 shrink-0 items-center justify-center transition-opacity",
-                  viewOnce ? "text-white" : "text-white/35"
-                )}
+                className="ws-press flex h-8 w-8 shrink-0 items-center justify-center text-white"
               >
-                <svg aria-hidden viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="9.2"
-                    stroke="currentColor"
-                    strokeWidth={1.6}
-                    strokeDasharray="2.1 2.5"
-                    strokeLinecap="round"
-                  />
-                  <text
-                    x="12"
-                    y="12.5"
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fontSize="10"
-                    fontWeight="700"
-                    fill="currentColor"
-                  >
-                    1
-                  </text>
-                </svg>
+                {viewOnce ? (
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-[22px] w-[22px]">
+                    <circle cx="12" cy="12" r="10" fill="#fff" />
+                    <text
+                      x="12"
+                      y="12.5"
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize="11"
+                      fontWeight="700"
+                      fill="#000"
+                    >
+                      1
+                    </text>
+                  </svg>
+                ) : (
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="9.2"
+                      stroke="currentColor"
+                      strokeWidth={1.6}
+                      strokeDasharray="2.1 2.5"
+                      strokeLinecap="round"
+                    />
+                    <text
+                      x="12"
+                      y="12.5"
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize="10"
+                      fontWeight="700"
+                      fill="currentColor"
+                    >
+                      1
+                    </text>
+                  </svg>
+                )}
               </button>
             </div>
             {/* Who it goes to, and Send. */}
