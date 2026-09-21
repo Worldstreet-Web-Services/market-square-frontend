@@ -2484,7 +2484,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // The caption under the media takes two lines; a text-only card gets ten.
     // It is clamped by class, never `clampLines` — that one brings a "Show more"
     // which expands in place, and the fixed-height card cannot grow.
-    assert.match(card, /post\.mediaUrl \? "line-clamp-2" : "line-clamp-10"/);
+    assert.match(card, /post\.mediaUrl\s*\?\s*"text-\[13\.8px\] leading-5\.75 line-clamp-2"\s*:\s*"text-\[15px\] leading-6 line-clamp-8"/);
     // A clip's URL in an <img> is a broken tile: a video shows its poster.
     assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /const video = item\.kind === "video" \|\| isVideoUrl\(item\.url\);/);
     assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /src=\{poster\}/);

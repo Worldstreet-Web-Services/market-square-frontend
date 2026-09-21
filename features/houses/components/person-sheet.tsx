@@ -132,7 +132,11 @@ export function PersonSheet({
       <div className="flex items-start gap-3">
         <Avatar
           name={person.name}
-          seed={username ?? person.identity}
+          // Seed on the IDENTITY (the account id) first, exactly as the room
+          // tiles do (`userId ?? id`) — seeding on the username instead picked a
+          // different mascot here from the one on the tile the reader tapped.
+          // For yourself, your own id, so the sheet matches your avatar too.
+          seed={(isSelf ? me.data?.id : null) ?? person.identity ?? username}
           src={avatarUrl}
           size={56}
         />

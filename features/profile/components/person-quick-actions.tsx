@@ -179,24 +179,23 @@ function Actions({
         </button>
       )}
 
-      <button
-        type="button"
-        aria-label={isFollowing ? `Unfollow ${name}` : `Follow ${name}`}
-        disabled={follow.isPending}
-        onClick={(event) => {
-          event.stopPropagation();
-          gate(() => follow.mutate(!isFollowing));
-        }}
-        className={cn(
-          "ws-press flex h-6 w-6 items-center justify-center rounded-full transition-colors disabled:opacity-40",
-          // Following drops the fill rather than the button: a person you
-          // follow is still somebody you might unfollow, and a control that
-          // vanishes on success leaves no way back.
-          isFollowing ? "bg-white/10 text-body" : "bg-spotlight text-white"
-        )}
-      >
-        <ProfileAddGlyph following={isFollowing} />
-      </button>
+      {/* The follow disc is HIDDEN once you follow (ogazboiz): a person you
+          already follow needs no follow control on their room tile — just the
+          wink stays. Unfollowing lives on their profile. */}
+      {!isFollowing && (
+        <button
+          type="button"
+          aria-label={`Follow ${name}`}
+          disabled={follow.isPending}
+          onClick={(event) => {
+            event.stopPropagation();
+            gate(() => follow.mutate(true));
+          }}
+          className="ws-press flex h-6 w-6 items-center justify-center rounded-full bg-spotlight text-white transition-colors disabled:opacity-40"
+        >
+          <ProfileAddGlyph following={false} />
+        </button>
+      )}
     </span>
   );
 }
