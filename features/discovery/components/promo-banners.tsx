@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { useFitText } from "@/hooks/use-fit-text";
 
@@ -102,7 +103,7 @@ export function MarketSquareBanner({ className }: { className?: string }) {
   const ART = "/market/square-banner";
 
   return (
-    <a
+    <Link
       href="/"
       aria-label="Explore Market Square"
       ref={ref}
@@ -158,7 +159,7 @@ export function MarketSquareBanner({ className }: { className?: string }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`${ART}/scallop-right.svg`} alt="" aria-hidden className="pointer-events-none absolute top-0 max-w-none" style={{ left: 322, width: 17.938, height: MSQ_H }} />
       </div>
-    </a>
+    </Link>
   );
 }
 
