@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
-import { ViewOnceMark, ViewOnceToggle } from "@/components/ui/view-once";
 import { getUploadLimits } from "@/lib/api/upload";
-import { IconSend } from "@/components/ui/icons";
-import { MESSAGE_MAX } from "@/features/messages/lib/types";
+import { MediaSendBar } from "@/features/messages/components/media-send-bar";
 import {
   CAMERA_HOLD_MS,
   CAMERA_MAX_CLIP_MS,
@@ -46,15 +44,11 @@ export function CameraSheet({
   open: boolean;
   onClose: () => void;
   /**
-   * Handed the file, a local preview URL the caller owns and must revoke, and
-   * the review screen's choices — the caption typed over the shot and whether
-   * it goes as a view-once snap.
+   * Handed the confirmed file, a local preview URL the caller owns and must
+   * revoke, the caption typed under the shot, and whether it goes view-once.
+   * The review IS the send screen; the caller uploads and sends.
    */
-  onCaptured: (
-    file: File,
-    previewUrl: string,
-    opts: { caption: string; viewOnce: boolean }
-  ) => void;
+  onCaptured: (file: File, previewUrl: string, caption: string, viewOnce: boolean) => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -73,15 +67,21 @@ export function CameraSheet({
 
   /*
     AFTER A CAPTURE, THE CAMERA DOES NOT CLOSE — it freezes on the shot for
-    review, Snapchat's way (ogazboiz, 2026-09-21): the picture stays on screen,
-    a caption is typed OVER it, and Send is a deliberate second tap. Retake
-    drops back to the live camera (the acquire effect re-opens the device once
-    `captured` is null again).
+    review (ogazboiz, 2026-09-21): the picture stays on screen exactly as it was
+    framed, and okay is a deliberate second tap that stages it in the composer.
+    Retake drops back to the live camera (the acquire effect re-opens the device
+    once `captured` is null again).
+
+    `mirrored` remembers the front-camera flip: the live viewfinder is mirrored
+    (that is what a mirror does while you frame), so the review must be mirrored
+    too or the shot appears to jump sideways the instant it is taken.
   */
-  const [captured, setCaptured] = useState<{ file: File; url: string; kind: "photo" | "video" } | null>(null);
+  const [captured, setCaptured] = useState<
+    { file: File; url: string; kind: "photo" | "video"; mirrored: boolean } | null
+  >(null);
   const [caption, setCaption] = useState("");
-  // This door only opens in a one-to-one, so a shot taken here is a snap by
-  // default; the reviewer can turn that off to keep it in the chat.
+  // View-once is the default for a chat shot; the (1) mark on the send screen
+  // toggles it — tap to keep the shot in the chat instead.
   const [viewOnce, setViewOnce] = useState(true);
 
   /** Stops the track AND drops the reference — the light goes out here. */
@@ -170,7 +170,7 @@ export function CameraSheet({
         if (!blob) return;
         const name = captureFileName("photo", Date.now());
         const file = new File([blob], name, { type: "image/jpeg" });
-        setCaptured({ file, url: URL.createObjectURL(file), kind: "photo" });
+        setCaptured({ file, url: URL.createObjectURL(file), kind: "photo", mirrored: facing === "user" });
       },
       "image/jpeg",
       0.92
@@ -205,7 +205,7 @@ export function CameraSheet({
       // a .txt row.
       const type = captureContentType(node.mimeType);
       const file = new File([blob], captureFileName("video", Date.now(), type), { type });
-      setCaptured({ file, url: URL.createObjectURL(file), kind: "video" });
+      setCaptured({ file, url: URL.createObjectURL(file), kind: "video", mirrored: facing === "user" });
     };
     recorder.current = node;
     node.start();
@@ -252,7 +252,7 @@ export function CameraSheet({
   };
 
   /* RETAKE — drop the shot and go back to the live camera. The preview URL is
-     ours to revoke here; once a shot is SENT it passes to the caller, which
+     ours to revoke here; once a shot is CONFIRMED it passes to the caller, which
      revokes after upload. */
   const discard = useCallback(() => {
     setCaptured((current) => {
@@ -260,15 +260,15 @@ export function CameraSheet({
       return null;
     });
     setCaption("");
+    setViewOnce(true);
   }, []);
 
-  /* Closing forgets the shot, the caption and the toggle, so the next opening
-     starts on the live camera rather than a stale preview — done here in the
-     handler (not an effect) so React is not asked to setState mid-render. Every
-     dismiss route (the X, the backdrop, Escape) is wired through it. */
+  /* Closing forgets the shot and the caption, so the next opening starts on the
+     live camera rather than a stale preview — done here in the handler (not an
+     effect) so React is not asked to setState mid-render. Every dismiss route
+     (the X, the backdrop, Escape) is wired through it. */
   const closeAndReset = useCallback(() => {
     discard();
-    setViewOnce(true);
     onClose();
   }, [discard, onClose]);
 
@@ -276,7 +276,7 @@ export function CameraSheet({
     const shot = captured;
     if (!shot) return;
     // The URL now belongs to the caller, so clear our state WITHOUT revoking it.
-    onCaptured(shot.file, shot.url, { caption: caption.trim(), viewOnce });
+    onCaptured(shot.file, shot.url, caption.trim(), viewOnce);
     setCaptured(null);
     setCaption("");
     setViewOnce(true);
@@ -297,7 +297,23 @@ export function CameraSheet({
     >
       <div className="flex h-full flex-col">
         <div className="flex shrink-0 items-center justify-between px-4 py-3">
-          <h2 className="text-[14px] font-semibold text-white">{captured ? "Preview" : "Camera"}</h2>
+          {/* Once a shot is under review the left control is a labelled RETAKE —
+              a bare chevron read as "back" and nobody found it. */}
+          {captured ? (
+            <button
+              type="button"
+              onClick={discard}
+              aria-label="Retake"
+              className="ws-press flex items-center gap-1.5 rounded-full py-1.5 pl-1.5 pr-3 text-[14px] font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 3.5 5.5 8l4.5 4.5" />
+              </svg>
+              Retake
+            </button>
+          ) : (
+            <h2 className="text-[14px] font-semibold text-white">Camera</h2>
+          )}
           <button
             type="button"
             onClick={closeAndReset}
@@ -311,9 +327,9 @@ export function CameraSheet({
         </div>
 
         {captured ? (
-          /* ─── REVIEW ─── the frozen shot, the caption over it, Send below.
-             The picture is CONTAINED so a portrait clip or a landscape photo is
-             shown whole; the shot's own black fills the rest. */
+          /* ─── REVIEW ─── the frozen shot, framed EXACTLY as the live camera
+             showed it: same box, same object-cover, same front-camera mirror,
+             so it does not jump the instant it is taken. Okay stages it. */
           <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-black sm:aspect-3/4 sm:flex-none">
             {captured.kind === "video" ? (
               <video
@@ -322,53 +338,16 @@ export function CameraSheet({
                 loop
                 muted
                 playsInline
-                className="h-full w-full object-contain"
+                className={cn("h-full w-full object-cover", captured.mirrored && "-scale-x-100")}
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- a just-captured local blob, no host
-              <img src={captured.url} alt="Your capture" className="h-full w-full object-contain" />
-            )}
-            {/* WHICH KIND OF SHOT — seen once, or kept in the chat. Shown ON
-                the image so the difference is unmistakable before Send, and
-                flipped by the toggle below.
-
-                IT DOES NOT SAY "STREAK". A streak is what happens when both
-                people keep sending these; it is a CONSEQUENCE, not the thing
-                the control does, and naming the control after it made the
-                badge read "Streak · view once" — two words for one idea
-                (ogazboiz, 2026-09-21: "it is just tautology").
-
-                AND THE FLAME WENT WITH THE WORD. A flame MEANS streak; leaving
-                it beside "View once" made the same conflation without saying
-                it out loud. The mark here is the one the RECEIVER will see on
-                the bubble — solid means not opened yet — so what you send and
-                what lands are recognisably the same thing. The flame still
-                belongs where a streak is actually counted: the inbox row and
-                the thread header. */}
-            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur">
-              {viewOnce ? (
-                <>
-                  <ViewOnceMark className="h-3 w-3" />
-                  View once
-                </>
-              ) : (
-                `${captured.kind === "video" ? "Video" : "Photo"} · saved to chat`
-              )}
-            </span>
-            {/* THE CAPTION SITS ON THE IMAGE — Snapchat's bar, over a scrim so
-                white text reads on any shot. */}
-            <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent px-4 pb-4 pt-12">
-              <input
-                type="text"
-                value={caption}
-                onChange={(event) => setCaption(event.target.value.slice(0, MESSAGE_MAX))}
-                maxLength={MESSAGE_MAX}
-                placeholder="Add a caption…"
-                aria-label="Caption"
-                autoFocus
-                className="w-full rounded-full bg-black/50 px-4 py-3 text-center text-[15px] text-white outline-none ring-1 ring-white/20 backdrop-blur placeholder:text-white/60 focus:ring-white/40"
+              <img
+                src={captured.url}
+                alt="Your capture"
+                className={cn("h-full w-full object-cover", captured.mirrored && "-scale-x-100")}
               />
-            </div>
+            )}
           </div>
         ) : (
           /* Phone: the viewfinder takes all the room between the header and the
@@ -396,29 +375,17 @@ export function CameraSheet({
         )}
 
         {captured ? (
-          <div className="flex shrink-0 items-center justify-between gap-3 px-6 py-5">
-            <button
-              type="button"
-              onClick={discard}
-              className="ws-press rounded-full px-4 py-2.5 text-[13px] font-semibold text-white/80 transition-colors hover:bg-white/10"
-            >
-              Retake
-            </button>
-            {/* STREAK vs PHOTO — a shot taken here is a streak snap by default
-                (view once, keeps the streak going); tap to keep it in the chat
-                as an ordinary photo instead. The flame is the same one the chat
-                header and inbox carry, so "streak" reads the same everywhere. */}
-            {/* THE SAME SWITCH THE COMPOSER USES — components/ui/view-once.tsx. */}
-            <ViewOnceToggle on={viewOnce} onChange={setViewOnce} />
-            <button
-              type="button"
-              onClick={send}
-              className="ws-press flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-bold text-black transition-opacity hover:opacity-90"
-            >
-              Send
-              <IconSend className="h-4 w-4" />
-            </button>
-          </div>
+          /* THE SEND SCREEN — the shared send bar (caption + view-once + send).
+             A camera shot is always an image or clip in a 1:1, so view-once
+             always applies here. */
+          <MediaSendBar
+            caption={caption}
+            onCaptionChange={setCaption}
+            viewOnce={viewOnce}
+            onToggleViewOnce={() => setViewOnce((on) => !on)}
+            showViewOnce
+            onSend={send}
+          />
         ) : (
           <div className="flex shrink-0 items-center justify-between px-6 py-5">
             <span className="w-10 text-[11px] leading-[15px] text-white/40">

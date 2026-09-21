@@ -23,13 +23,22 @@ import { cn } from "@/lib/cn";
  * what is the purpose of fire there"). The flame belongs where a streak is
  * actually counted: the inbox row and the thread header.
  *
- * ─── AND WHY THE LABELS ARE NOT THE SAME WORD TWICE ──────────────────────────
- * A switch labelled "View once" in both states says what it IS in one and what
- * it WOULD DO in the other, and the reader cannot tell which. So each state
- * names itself: "View once" when armed, "Keep in chat" when not.
+ * ─── THE SWITCH ITSELF LIVES IN THE SEND BAR ─────────────────────────────────
+ * `MediaSendBar` owns the control, because a photo and a capture now go out
+ * through the same send preview. This module owns the MARK, which both the
+ * control and the receiver's bubble draw — so what the sender armed and what
+ * lands are visibly the same thing.
  */
 
-/** Solid while it waits to be opened, hollow once it has been. */
+/**
+ * The mark: a "1" in a ring — filled once it is armed, a dashed outline while
+ * the shot would stay in the chat.
+ *
+ * THE GLYPH IS THE ONE THE COMPOSER SETTLED ON (staging, 2026-09-21), not the
+ * square this module first drew. Two designs for one idea is the thing this
+ * file exists to prevent, and between a mark the sender has been iterating on
+ * and a mark only the bubble used, the sender's wins.
+ */
 export function ViewOnceMark({
   opened = false,
   className,
@@ -37,71 +46,22 @@ export function ViewOnceMark({
   opened?: boolean;
   className?: string;
 }) {
-  const solid = !opened;
+  if (opened) {
+    return (
+      <svg aria-hidden viewBox="0 0 24 24" className={cn("h-3.5 w-3.5 shrink-0", className)} fill="none">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={2.3} strokeDasharray="2 2.4" strokeLinecap="round" />
+        <text x="12" y="12.5" textAnchor="middle" dominantBaseline="central" fontSize="12" fontWeight="800" fill="currentColor">
+          1
+        </text>
+      </svg>
+    );
+  }
   return (
-    <svg
-      aria-hidden
-      viewBox="0 0 14 14"
-      className={cn("h-3.5 w-3.5 shrink-0", className)}
-      fill="none"
-    >
-      <rect
-        x={solid ? 1 : 1.6}
-        y={solid ? 1 : 1.6}
-        width={solid ? 12 : 10.8}
-        height={solid ? 12 : 10.8}
-        rx={solid ? 3.5 : 3}
-        fill={solid ? "currentColor" : "none"}
-        stroke={solid ? "none" : "currentColor"}
-        strokeWidth={1.4}
-      />
+    <svg aria-hidden viewBox="0 0 24 24" className={cn("h-3.5 w-3.5 shrink-0", className)}>
+      <circle cx="12" cy="12" r="10" fill="currentColor" />
+      <text x="12" y="12.5" textAnchor="middle" dominantBaseline="central" fontSize="13" fontWeight="800" className="fill-ink">
+        1
+      </text>
     </svg>
-  );
-}
-
-/**
- * The switch, wherever an attachment is about to be sent.
- *
- * A `role="switch"` rather than two buttons: it is one fact about the file the
- * sender has already chosen, and a second send button would make "send" mean
- * different things depending on which one was hit.
- */
-export function ViewOnceToggle({
-  on,
-  onChange,
-  className,
-}: {
-  on: boolean;
-  onChange: (next: boolean) => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={
-        on
-          ? "Sending as view once — tap to keep it in the chat instead"
-          : "Keeping it in the chat — tap to send as view once"
-      }
-      onClick={() => onChange(!on)}
-      className={cn(
-        "ws-press flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors",
-        on
-          ? "bg-spotlight/20 text-create ring-1 ring-create/40"
-          : "text-white/60 hover:bg-white/10 hover:text-white",
-        className
-      )}
-    >
-      {on ? (
-        <>
-          <ViewOnceMark className="h-3.5 w-3.5" />
-          View once
-        </>
-      ) : (
-        "Keep in chat"
-      )}
-    </button>
   );
 }

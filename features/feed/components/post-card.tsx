@@ -911,45 +911,77 @@ export function PostCard({
         // wrong place to type a reply, and tapping the card opens the post.
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
           {post.mediaUrl ? (
-            rail.length > 1 ? (
+            rail.length === 2 ? (
+              // TWO PHOTOS — half the box each, side by side (X / Instagram).
+              <div className="flex min-h-0 flex-1 gap-1">
+                {rail.slice(0, 2).map((media, i) => (
+                  <button
+                    key={`${media.url}-${i}`}
+                    type="button"
+                    onClick={onOpenMedia ? () => onOpenMedia(post) : openPost}
+                    aria-label="View post"
+                    className="ws-press relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-xl"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+                    <img src={media.url} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : rail.length > 2 ? (
               <MediaRail items={rail} size="compact" />
             ) : isVideoPost(post) ? (
-              <InlineVideo
-                src={post.mediaUrl}
-                poster={post.thumbnailUrl}
-                className="min-h-0 flex-1"
-                onFirstPlay={() => reportView(post.id)}
-              />
+              // A CLIP — its poster fills the box with a play badge; the tap
+              // opens the post, where it plays. Autoplaying several clips across
+              // a rail fights for attention (and bandwidth), so the preview is a
+              // still frame, like every other feed's rail.
+              <button
+                type="button"
+                onClick={onOpenMedia ? () => onOpenMedia(post) : openPost}
+                aria-label="Play post"
+                className="ws-press relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-xl bg-black"
+              >
+                {post.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- service-issued poster
+                  <img src={post.thumbnailUrl} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+                ) : null}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="ws-glass flex h-11 w-11 items-center justify-center rounded-full text-white">
+                    <IconReplayPlay className="h-5 w-5" />
+                  </span>
+                </span>
+              </button>
             ) : (
               <button
                 type="button"
                 onClick={onOpenMedia ? () => onOpenMedia(post) : openPost}
                 aria-label="View post"
-                className="ws-press relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-xl bg-white/[0.04]"
+                className="ws-press relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-xl"
               >
-                {/* CONTAINED, never cropped — a portrait photo in the rail's
-                    landscape box was losing the subject's head to object-cover.
-                    The whole frame shows on a plain, quiet tile; NOT the blurred
-                    ambient copy MediaFrame paints, which does not belong here. */}
+                {/* FULL-BLEED — a single image fills the rail's whole media box
+                    (`object-cover`), the way this card was designed; the tap
+                    opens the post at the photo's true ratio. */}
                 {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
                 <img
                   src={post.mediaUrl}
                   alt=""
                   decoding="async"
-                  className="absolute inset-0 h-full w-full object-contain"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
               </button>
             )
           ) : null}
           <div data-post-body onClick={openPost} className="shrink-0 cursor-pointer overflow-hidden">
+            {/* With media the caption is a two-line strip beneath it; a
+                TEXT-ONLY card reads as a normal post — the words at the top, at
+                the timeline's own body size, up to eight lines. */}
             <PostText
               text={post.text}
               mentions={post.mentions}
               className={cn(
-                "text-[13.8px] leading-5.75 text-white/90",
-                // Two lines under the media; a text-only card gives the words
-                // the whole card.
-                post.mediaUrl ? "line-clamp-2" : "line-clamp-10"
+                "text-white/90",
+                post.mediaUrl
+                  ? "text-[13.8px] leading-5.75 line-clamp-2"
+                  : "text-[15px] leading-6 line-clamp-8"
               )}
             />
           </div>

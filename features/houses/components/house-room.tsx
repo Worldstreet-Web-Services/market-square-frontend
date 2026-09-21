@@ -2089,10 +2089,6 @@ function LiveHouse({
         open={person !== null}
         onClose={() => setPerson(null)}
         isHost={isHost}
-        /* A seat's LiveKit identity is `<did>` or `<did>#speaker`, so the bare
-           id is what a comparison can use — raw identities never matched, and
-           this codebase has fixed that once already. */
-        isMe={Boolean(myId && livePerson && baseIdentity(livePerson.identity) === myId)}
         hostBusy={resolve.isPending}
         onMoveDown={(target) => {
           // An approved speaker's LiveKit identity is `<did>#speaker`; the

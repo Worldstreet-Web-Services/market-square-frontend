@@ -2028,38 +2028,32 @@ describe("A shared link posts as a post, and arrives as the thing it points at",
 });
 
 describe("The capture control is named for what it does, and safety is about other people", () => {
-  it("says View once, not Streak — a streak is the consequence, not the control", () => {
+  it("says View once, never Streak — a streak is the consequence, not the control", () => {
+    const bar = stripComments(read("features/messages/components/media-send-bar.tsx"));
+    assert.match(bar, /View once/);
+    assert.match(bar, /Keep in chat/);
+    // A flame MEANS streak; it belongs where a streak is counted, not on the
+    // control that arms one shot.
+    assert.doesNotMatch(bar, /streak-flame/);
     const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
-    assert.doesNotMatch(camera, /Streak · view once/, "two words for one idea");
-    assert.match(camera, /View once/);
-    // And no flame either: a flame MEANS streak, so leaving it beside "View
-    // once" made the same conflation without saying it out loud. The mark is
-    // the one the receiver sees on the bubble.
     assert.doesNotMatch(camera, /streak-flame/);
-    assert.match(camera, /<ViewOnceMark className=/);
   });
 
-  it("draws the mark and the switch in ONE place, used by all three surfaces", () => {
-    // The same square was drawn three times — bubble, camera, composer — and
-    // the switch twice, with different words and different styling. Three
-    // drawings of one idea is how two of them end up different.
+  it("draws the view-once mark in ONE place, and the bubble reads it", () => {
+    // The same mark was drawn three times — bubble, camera, composer — which
+    // is how two of them end up different.
     const shared = stripComments(read("components/ui/view-once.tsx"));
     assert.match(shared, /export function ViewOnceMark\(/);
-    assert.match(shared, /export function ViewOnceToggle\(/);
     const thread = stripComments(read("features/messages/components/thread.tsx"));
-    assert.doesNotMatch(thread, /function SnapMark\(/, "the bubble reads the shared mark");
-    assert.match(thread, /<ViewOnceToggle on=\{asSnap\} onChange=\{setAsSnap\} \/>/);
-    const camera2 = stripComments(read("features/messages/components/camera-sheet.tsx"));
-    assert.match(camera2, /<ViewOnceToggle on=\{viewOnce\} onChange=\{setViewOnce\} \/>/);
+    assert.doesNotMatch(thread, /function SnapMark\(/);
+    assert.match(thread, /<ViewOnceMark opened=/);
   });
 
   it("offers nothing to block, report or mute on the reader's own seat", () => {
     // Tapping yourself in a room offered Block and Report — actions about
     // somebody else, pointed at nobody.
     const sheet = stripComments(read("features/houses/components/person-sheet.tsx"));
-    assert.match(sheet, /\{isMe \? null : username/);
-    const room = stripComments(read("features/houses/components/house-room.tsx"));
-    assert.match(room, /isMe=\{Boolean\(myId && livePerson && baseIdentity\(livePerson\.identity\) === myId\)\}/);
+    assert.match(sheet, /\{!isSelf &&/);
   });
 });
 
@@ -2612,7 +2606,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // The caption under the media takes two lines; a text-only card gets ten.
     // It is clamped by class, never `clampLines` — that one brings a "Show more"
     // which expands in place, and the fixed-height card cannot grow.
-    assert.match(card, /post\.mediaUrl \? "line-clamp-2" : "line-clamp-10"/);
+    assert.match(card, /post\.mediaUrl\s*\?\s*"text-\[13\.8px\] leading-5\.75 line-clamp-2"\s*:\s*"text-\[15px\] leading-6 line-clamp-8"/);
     // A clip's URL in an <img> is a broken tile: a video shows its poster.
     assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /const video = item\.kind === "video" \|\| isVideoUrl\(item\.url\);/);
     assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /src=\{poster\}/);
