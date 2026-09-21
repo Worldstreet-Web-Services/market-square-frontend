@@ -77,6 +77,7 @@ import {
   seatsFull,
 } from "@/features/houses/lib/seating";
 import { sq } from "@/lib/square-path";
+import { IconChevronRight } from "@/components/ui/icons";
 import { roomFailureCopy } from "@/lib/room-connection-copy";
 import { roomEntryReady } from "@/lib/room-session/entry";
 import { roomStagePanel } from "@/lib/room-session/presence";
@@ -2148,6 +2149,33 @@ function LiveHouse({
           hint="Anyone with this can walk in and listen."
           url={houseShareUrl(shareOrigin, stream.id)}
         />
+        {/*
+          POST IT TO SQUARE — the share that stays inside the product.
+
+          ogazboiz, 2026-09-21: "the share link I mean is like posting to
+          Square for gist room". A copied link is for somewhere else; this puts
+          the room in front of the people already here, and it arrives in the
+          feed as the room's OWN card — live, not open yet, or ended — rather
+          than as a line of characters nobody can read.
+
+          It reuses the composer's prefill contract, so there is one door into
+          posting rather than a second one built for rooms.
+        */}
+        <Link
+          href={sq(
+            "/?compose=1&text=" + encodeURIComponent(houseShareUrl(shareOrigin, stream.id))
+          )}
+          onClick={() => setOverflowSheet(false)}
+          className="ws-press mt-2 flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-heading">Post to Square</span>
+            <span className="ws-meta block">
+              Shares the room in the feed, with its own card. Anyone can walk in and listen.
+            </span>
+          </span>
+          <IconChevronRight className="h-4 w-4 shrink-0 text-meta" />
+        </Link>
         {isHost && (
           <CopyRow
             label="Speaker link"

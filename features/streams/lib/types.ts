@@ -157,6 +157,33 @@ export const ChatMessageSchema = z.object({
   status: z.string().optional().default("active"),
   createdAt: z.string(),
   author: ProfileSchema.nullable().optional().default(null),
+  /**
+   * THE MESSAGE THIS ONE ANSWERS — one level, no threading, the same shape a
+   * DM's reply carries so the two panes cannot disagree about what a reply IS.
+   *
+   * The service embeds the original's author and a short excerpt, so the quote
+   * draws without a second lookup. `deleted` keeps the quote when the original
+   * has gone: "Message deleted" is a truer answer than a quote that silently
+   * vanishes and leaves a reply to nothing.
+   *
+   * Optional with a null default AND `catch(null)`: a service that has not
+   * shipped it yet, or a malformed row, draws no quote rather than blanking
+   * the whole chat.
+   */
+  replyTo: z
+    .object({
+      id: z.string(),
+      authorId: z.string().optional().default(""),
+      author: ProfileSchema.nullable().optional().default(null),
+      excerpt: z.string().optional().default(""),
+      deleted: z.boolean().optional().default(false),
+    })
+    .nullable()
+    .optional()
+    .default(null)
+    .catch(null),
+  /** Profile ids named in the text, so a handle links to the person rather than to a guess. */
+  mentions: z.array(z.string()).optional().default([]).catch([]),
 });
 
 export const ChatSchema = z.object({

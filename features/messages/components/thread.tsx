@@ -23,6 +23,7 @@ import { downloadLinkFor, mediaLinkExpired } from "@/lib/message-media-link";
 import { canSendSnap, snapTimeLeft, snapView } from "@/features/messages/lib/snap-view";
 import { defaultViewOnce, type MediaSource } from "@/features/messages/lib/camera-capture";
 import { CameraSheet } from "@/features/messages/components/camera-sheet";
+import { ViewOnceMark } from "@/components/ui/view-once";
 import { MediaSendBar } from "@/features/messages/components/media-send-bar";
 import { useQueryClient } from "@tanstack/react-query";
 import { isHttpUrl } from "@/lib/http-url";
@@ -1751,7 +1752,7 @@ function SnapBubble({
 
   const body = (
     <span className="flex items-center gap-2">
-      <SnapMark state={view.state} />
+      <ViewOnceMark opened={view.state === "spent" || view.state === "seen"} />
       <span className="text-[13px] leading-[19px]">{busy ? "Opening…" : view.label}</span>
       {/* WHICH DOOR IT CAME THROUGH. Drawn only where the payload says — a
           message from before the field carries no claim, and inventing one
@@ -1814,25 +1815,6 @@ function SnapArrow({ filled }: { filled: boolean }) {
         stroke="currentColor"
         strokeWidth={1.7}
         strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** The snap's own mark: solid while it is still there to open, hollow once spent. */
-function SnapMark({ state }: { state: "unopened" | "spent" | "delivered" | "seen" }) {
-  const solid = state === "unopened" || state === "delivered";
-  return (
-    <svg aria-hidden viewBox="0 0 14 14" className="h-3.5 w-3.5 shrink-0" fill="none">
-      <rect
-        x={solid ? 1 : 1.6}
-        y={solid ? 1 : 1.6}
-        width={solid ? 12 : 10.8}
-        height={solid ? 12 : 10.8}
-        rx={solid ? 3.5 : 3}
-        fill={solid ? "currentColor" : "none"}
-        stroke={solid ? "none" : "currentColor"}
-        strokeWidth={1.4}
       />
     </svg>
   );
@@ -2564,26 +2546,11 @@ function Composer({
               : attachment.fileName || "Attachment"}{" "}
             <span className="text-white/40">{formatBytes(attachment.result.bytes)}</span>
           </p>
-          {snapOffered && (
-            /*
-              VIEW ONCE, as a switch on the staged row rather than a second
-              send button. The sender has already chosen the file; this is one
-              more fact about it, and putting it on a separate control would
-              make "send" mean two different things depending on which was hit.
-            */
-            <button
-              type="button"
-              role="switch"
-              aria-checked={asSnap}
-              onClick={() => setAsSnap((on) => !on)}
-              className={cn(
-                "ws-press shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
-                asSnap ? "bg-spotlight text-white" : "bg-white/10 text-white/60 hover:text-white"
-              )}
-            >
-              View once
-            </button>
-          )}
+          {/* NO VIEW-ONCE SWITCH HERE ANY MORE. A photo or clip now goes
+              through the full send preview (MediaSendBar), which owns that
+              choice; this row is left with documents and voice notes, which
+              cannot be view-once at all. A second switch would be a second
+              place for the two to disagree. */}
           <button
             type="button"
             onClick={dropAttachment}

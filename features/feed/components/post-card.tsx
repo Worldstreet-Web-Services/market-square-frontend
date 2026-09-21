@@ -50,6 +50,8 @@ import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
 import { MentionPicker } from "@/features/feed/components/mention-picker";
 import { ShareSheet } from "@/components/ui/share-sheet";
+import { SharedLinkCard } from "@/components/layout/shared-link-card";
+import { firstSquareLink } from "@/lib/square-link";
 import { sharePostId } from "@/lib/short-id";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
@@ -704,6 +706,8 @@ export function PostCard({
   const video = isVideoPost(post);
   // Two or more photos ride the rail (node 1029:22591); one keeps the
   // hugging frame below.
+  // The first Square link in the post's words, if there is one.
+  const shared = firstSquareLink(post.text);
   const rail = postMediaList(post);
   // SINGLE-IMAGE FRAMING, the X / Instagram rule: the photo fills the column
   // width and keeps its own aspect ratio CLAMPED to a pleasant range — 4:5 at
@@ -1109,6 +1113,10 @@ export function PostCard({
             )}
             clampLines={full ? undefined : 6}
           />
+          {/* A SQUARE LINK IN THE WORDS, drawn as the thing it points at.
+              One per post: a post with four links is a post about four things,
+              and four previews bury whatever the person actually wrote. */}
+          {shared && <SharedLinkCard reference={shared.ref} href={shared.href} />}
         </div>
       )}
       {/* The coins the post names, with today's move — the row Ark draws.

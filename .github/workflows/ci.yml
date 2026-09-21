@@ -48,7 +48,14 @@ jobs:
           # The build must not need real secrets. These are placeholders that
           # let Next prerender; anything that genuinely requires a live service
           # belongs behind a runtime read, not a build-time one.
-          NEXT_PUBLIC_PRIVY_APP_ID: ci-placeholder
+          #
+          # WELL-FORMED, not just non-secret. `ci-placeholder` read like a
+          # placeholder to us and like a broken id to PrivyProvider, which
+          # throws rather than degrades — during prerender, so it failed the
+          # whole build on every branch. `lib/privy-app-id.ts` now replaces
+          # anything malformed anyway; this stays well-formed so the workflow
+          # says what it means.
+          NEXT_PUBLIC_PRIVY_APP_ID: cl0123456789abcdefghijklm
           WSAPI_BASE_URL: http://localhost:8080
 
   # `check:public-routes` is deliberately NOT here: it needs a live backend, and

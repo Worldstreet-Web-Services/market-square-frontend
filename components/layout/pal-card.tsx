@@ -182,6 +182,28 @@ export function PalCard({
       />
 
       {/*
+        "WINKED YOU" — the reason this card is at the front.
+
+        The service's deck now leads with people who have winked the reader
+        (`sort=foryou`, band one). Without saying so, the strongest card in the
+        deck looks exactly like every other one, and the reader is answering a
+        question somebody already asked them without knowing it.
+
+        A JUDGEMENT CALL, stated: the file has no node for this. It is drawn in
+        the app's own chip style rather than invented in the card's, and it sits
+        in the photo's top-left corner — the one corner the drawing leaves
+        empty, opposite the follow control.
+      */}
+      {profile.winkedMe && (
+        <span
+          className="absolute z-10 rounded-full bg-spotlight px-2 py-[3px] text-[11px] font-semibold leading-[15px] text-white"
+          style={{ left: base.photo.left + 8, top: base.photo.top + 8 }}
+        >
+          Winked you
+        </span>
+      )}
+
+      {/*
         FOLLOW — the file's `profile-add`, a real control and not an ornament.
 
         It overlaps the photo's corner while staying inside the card, and it is

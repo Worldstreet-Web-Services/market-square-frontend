@@ -1966,6 +1966,97 @@ describe("The camera is the second door, and it behaves differently", () => {
   });
 });
 
+describe("A gist room's chat can answer a particular message", () => {
+  const panel = stripComments(read("features/streams/components/chat-panel.tsx"));
+
+  it("carries the reply target and the people named, and omits them when there are none", () => {
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    assert.match(api, /\.\.\.\(replyToId \? \{ replyToId \} : \{\}\)/);
+    assert.match(api, /\.\.\.\(mentions && mentions\.length > 0 \? \{ mentions \} : \{\}\)/);
+  });
+
+  it("draws the quote only where the service sent one", () => {
+    // A chat from before replies existed reads exactly as it did.
+    assert.match(panel, /\{message\.replyTo && \(/);
+    assert.match(panel, /Message deleted/);
+  });
+
+  it("names a handle only when it can name the person behind it", () => {
+    // Inventing an id for an unrecognised @word would notify a stranger who
+    // happens to share a spelling.
+    assert.match(panel, /mentionsPresentIn\(speakers, draft\)/);
+  });
+
+  it("keeps the reply target out of the text field, where a backspace would eat it", () => {
+    assert.match(panel, /Replying to /);
+    assert.match(panel, /aria-label="Cancel reply"/);
+  });
+});
+
+describe("A shared link posts as a post, and arrives as the thing it points at", () => {
+  it("offers posting into Square beside the outward shares", () => {
+    const sheet = stripComments(read("components/ui/share-sheet.tsx"));
+    assert.match(sheet, /Post to Square/);
+    // The composer's EXISTING prefill contract, not a second door.
+    assert.match(sheet, /"\/\?compose=1&text=" \+ encodeURIComponent\(shareIntoPostText\(payload\.url\)\)/);
+  });
+
+  it("draws one card per post, from the first Square link in its words", () => {
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /const shared = firstSquareLink\(post\.text\);/);
+    assert.match(card, /\{shared && <SharedLinkCard reference=\{shared\.ref\} href=\{shared\.href\} \/>\}/);
+  });
+
+  it("shares a gist room INTO Square, and draws it as the room's own card", () => {
+    // "the share link I mean is like posting to Square for gist room".
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /Post to Square/);
+    assert.match(room, /"\/\?compose=1&text=" \+ encodeURIComponent\(houseShareUrl\(shareOrigin, stream\.id\)\)/);
+    // The SAME card the messages pane draws, so a room shared to the feed and
+    // a room announced in a house are not two different objects — and it
+    // carries the live state, so a morning post stops offering a closed room.
+    const preview = stripComments(read("components/layout/shared-link-card.tsx"));
+    assert.match(preview, /<GistRoomCard streamId=\{reference\.id\} fluid \/>/);
+  });
+
+  it("removes the card rather than inventing one it could not load", () => {
+    const preview = stripComments(read("components/layout/shared-link-card.tsx"));
+    // Gone, private, or the request failed: the link stays a link.
+    assert.match(preview, /if \(!post\.data\) return null;/);
+    assert.match(preview, /if \(!profile\.data\) return null;/);
+  });
+});
+
+describe("The capture control is named for what it does, and safety is about other people", () => {
+  it("says View once, never Streak — a streak is the consequence, not the control", () => {
+    const bar = stripComments(read("features/messages/components/media-send-bar.tsx"));
+    assert.match(bar, /View once/);
+    assert.match(bar, /Keep in chat/);
+    // A flame MEANS streak; it belongs where a streak is counted, not on the
+    // control that arms one shot.
+    assert.doesNotMatch(bar, /streak-flame/);
+    const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
+    assert.doesNotMatch(camera, /streak-flame/);
+  });
+
+  it("draws the view-once mark in ONE place, and the bubble reads it", () => {
+    // The same mark was drawn three times — bubble, camera, composer — which
+    // is how two of them end up different.
+    const shared = stripComments(read("components/ui/view-once.tsx"));
+    assert.match(shared, /export function ViewOnceMark\(/);
+    const thread = stripComments(read("features/messages/components/thread.tsx"));
+    assert.doesNotMatch(thread, /function SnapMark\(/);
+    assert.match(thread, /<ViewOnceMark opened=/);
+  });
+
+  it("offers nothing to block, report or mute on the reader's own seat", () => {
+    // Tapping yourself in a room offered Block and Report — actions about
+    // somebody else, pointed at nobody.
+    const sheet = stripComments(read("features/houses/components/person-sheet.tsx"));
+    assert.match(sheet, /\{!isSelf &&/);
+  });
+});
+
 describe("A snap is seen once, and nothing in the client keeps a copy", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
   const row = stripComments(read("features/messages/components/conversation-row.tsx"));
@@ -2068,8 +2159,39 @@ describe("The friends deck asks about people the reader has not answered for", (
     // The wink hides the card for the cooldown the wink itself lasts — the day
     // the service's `excludeWinked` covers — read against state, never a clock
     // call in the render body.
-    assert.match(deck, /winkedHere: \(id\) => hasWinked\(winkedHere, id, now\),/);
+    assert.match(deck, /winkedHere: \(id\) => answered\.has\(id\) \|\| hasWinked\(winkedHere, id, now\),/);
     assert.match(deck, /const \[now, setNow\] = useState\(\(\) => Date\.now\(\)\);/);
+    // EVERY answer closes the card, including the pass the service knows
+    // nothing about — and it stays closed rather than lapsing with a cooldown.
+    assert.match(deck, /const answered = decidedIds\(useDeckDecisions\(me\.data\?\.id \?\? null\)\);/);
+    // The deck's ordering is named once, so switching to the service's ranked
+    // `foryou` is one line rather than a hunt through call sites.
+    assert.match(deck, /usePeople\("", DECK_SORT, true, friendsFilterFacets\(filter\)\)/);
+    const filters = stripComments(read("lib/people-filters.ts"));
+    assert.match(filters, /export const PEOPLE_SORTS = \["followers", "recent", "foryou"\] as const;/);
+    // The service's ranked ordering, live since #267 deployed: people who
+    // winked the reader first, then the ordinary order.
+    assert.match(filters, /export const DECK_SORT: PeopleSort = "foryou";/);
+    // A pass reaches the SERVICE, or it is only true in this browser.
+    assert.match(deck, /pass\.mutate\(\{ profileId: profile\.id, passed: true \}\)/);
+    // And every answer is asked of the service, in the query rather than after
+    // paging — `excludeWinkedEver`, not the cooldown's `excludeWinked` alone.
+    const friends = stripComments(read("lib/friends-filter.ts"));
+    assert.match(friends, /excludeWinkedEver: true,/);
+    assert.match(friends, /excludePassed: true,/);
+    assert.match(deck, /remember\(decision === "follow" \? "followed" : "passed"\);/);
+    assert.match(deck, /remember\("passed"\);/);
+    assert.match(deck, /remember\("winked"\);/);
+    assert.match(deck, /remember\("followed"\);/);
+  });
+
+  it("says why the strongest card is at the front", () => {
+    // The service leads with people who winked the reader; unsaid, that card
+    // looks like every other one and the reader answers a question they did
+    // not know they had been asked.
+    const card = stripComments(read("components/layout/pal-card.tsx"));
+    assert.match(card, /\{profile\.winkedMe && \(/);
+    assert.match(card, /Winked you/);
   });
 
   it("names the wink control's own state once it has been used", () => {

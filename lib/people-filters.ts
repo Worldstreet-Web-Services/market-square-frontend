@@ -194,9 +194,38 @@ export function filterScopeNotes(filter: PeopleFilter): string[] {
     : [];
 }
 
-/** The two orderings `GET /profiles` documents. Never a client-side re-sort. */
-export const PEOPLE_SORTS = ["followers", "recent"] as const;
+/**
+ * The orderings `GET /profiles` documents. Never a client-side re-sort.
+ *
+ * `foryou` is the DECK's ordering and nothing else's. A directory search is
+ * fairly answered by popularity; a deck is not — sorted by follower count,
+ * every reader in a city opens Square and meets the same twenty accounts in
+ * the same order, those twenty are buried in winks and nobody else is ever
+ * seen. It is the failure mode every dating app designed its way out of, and
+ * ranking is the service's job: reciprocity first (people who winked you),
+ * then people who know your people, then place, then freshness, shuffled
+ * within each band by a seed that is stable for one reader for one day.
+ */
+export const PEOPLE_SORTS = ["followers", "recent", "foryou"] as const;
 export type PeopleSort = (typeof PEOPLE_SORTS)[number];
+
+/**
+ * What the deck asks for, kept in ONE place so it can be switched in one line.
+ *
+ * `foryou` SINCE wsws-monorepo #267 DEPLOYED. Verified against production on
+ * 2026-09-21 rather than assumed: `?sort=foryou` answers 200, where the day
+ * before it answered 400 VALIDATION_ERROR, "expected one of followers|recent".
+ *
+ * That asymmetry is why this one line waited while `excludePassed` and
+ * `excludeWinkedEver` went early: an unknown PARAMETER is ignored, an unknown
+ * SORT VALUE is a refusal, and a refused query is an empty deck on Home and on
+ * /pals.
+ *
+ * What it returns TODAY is people who have winked the reader first, then the
+ * ordinary order. Nothing here may depend on that: the bands behind the value
+ * are the service's to change, and every change lands without a release.
+ */
+export const DECK_SORT: PeopleSort = "foryou";
 
 export function parsePeopleSort(raw: string | null | undefined): PeopleSort {
   return (PEOPLE_SORTS as readonly string[]).includes(raw ?? "")
