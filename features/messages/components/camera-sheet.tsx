@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import { getUploadLimits } from "@/lib/api/upload";
+import { IconCamera, IconSend } from "@/components/ui/icons";
+import { MESSAGE_MAX } from "@/features/messages/lib/types";
 import {
   CAMERA_HOLD_MS,
   CAMERA_MAX_CLIP_MS,
@@ -39,16 +41,19 @@ export function CameraSheet({
   open,
   onClose,
   onCaptured,
+  recipientName,
 }: {
   open: boolean;
   onClose: () => void;
   /**
-   * Handed the confirmed file and a local preview URL the caller owns and must
-   * revoke. Tapping the okay control on the review stages it as an ordinary
-   * attachment in the composer — every image or clip in a chat is a view-once
-   * streak already, so the camera needs no snap toggle of its own.
+   * Handed the confirmed file, a local preview URL the caller owns and must
+   * revoke, and the caption typed under the shot. The review IS the send
+   * screen: the shot goes straight out (every chat image or clip is a view-once
+   * streak, so there is no snap toggle here). The caller uploads and sends.
    */
-  onCaptured: (file: File, previewUrl: string) => void;
+  onCaptured: (file: File, previewUrl: string, caption: string) => void;
+  /** Who the shot goes to, named on the send row. */
+  recipientName?: string;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -79,6 +84,7 @@ export function CameraSheet({
   const [captured, setCaptured] = useState<
     { file: File; url: string; kind: "photo" | "video"; mirrored: boolean } | null
   >(null);
+  const [caption, setCaption] = useState("");
 
   /** Stops the track AND drops the reference — the light goes out here. */
   const release = useCallback(() => {
@@ -255,23 +261,25 @@ export function CameraSheet({
       if (current) URL.revokeObjectURL(current.url);
       return null;
     });
+    setCaption("");
   }, []);
 
-  /* Closing forgets the shot, so the next opening starts on the live camera
-     rather than a stale preview — done here in the handler (not an effect) so
-     React is not asked to setState mid-render. Every dismiss route (the X, the
-     backdrop, Escape) is wired through it. */
+  /* Closing forgets the shot and the caption, so the next opening starts on the
+     live camera rather than a stale preview — done here in the handler (not an
+     effect) so React is not asked to setState mid-render. Every dismiss route
+     (the X, the backdrop, Escape) is wired through it. */
   const closeAndReset = useCallback(() => {
     discard();
     onClose();
   }, [discard, onClose]);
 
-  const confirm = () => {
+  const send = () => {
     const shot = captured;
     if (!shot) return;
     // The URL now belongs to the caller, so clear our state WITHOUT revoking it.
-    onCaptured(shot.file, shot.url);
+    onCaptured(shot.file, shot.url, caption.trim());
     setCaptured(null);
+    setCaption("");
     onClose();
   };
 
@@ -289,7 +297,22 @@ export function CameraSheet({
     >
       <div className="flex h-full flex-col">
         <div className="flex shrink-0 items-center justify-between px-4 py-3">
-          <h2 className="text-[14px] font-semibold text-white">{captured ? "Preview" : "Camera"}</h2>
+          <div className="flex items-center gap-2">
+            {/* Back-to-camera (retake) once a shot is under review. */}
+            {captured && (
+              <button
+                type="button"
+                onClick={discard}
+                aria-label="Retake"
+                className="ws-press rounded-full p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 3.5 5.5 8l4.5 4.5" />
+                </svg>
+              </button>
+            )}
+            <h2 className="text-[14px] font-semibold text-white">{captured ? "Preview" : "Camera"}</h2>
+          </div>
           <button
             type="button"
             onClick={closeAndReset}
@@ -351,30 +374,49 @@ export function CameraSheet({
         )}
 
         {captured ? (
-          /* min-h matches the shutter row below so the media box above is the
-             SAME height in review as in the viewfinder — the other half of why
-             the shot does not jump when it is taken. */
-          <div className="flex min-h-[108px] shrink-0 items-center justify-between gap-3 px-6 py-5">
-            <button
-              type="button"
-              onClick={discard}
-              className="ws-press rounded-full px-4 py-2.5 text-[13px] font-semibold text-white/80 transition-colors hover:bg-white/10"
-            >
-              Retake
-            </button>
-            {/* OKAY — keep this shot. It stages in the composer, where the send
-                (and any caption) live; every chat image or clip is a view-once
-                streak already, so there is no snap toggle here. */}
-            <button
-              type="button"
-              onClick={confirm}
-              aria-label="Use this photo"
-              className="ws-btn-create ws-press flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90"
-            >
-              <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12.5l4.5 4.5L19 7" />
-              </svg>
-            </button>
+          /* THE SEND SCREEN — a caption bar with the view-once mark, then the
+             recipient and the send. min-h reserves the shutter row's height so
+             the shot above keeps the SAME box it was framed in and never jumps. */
+          <div className="flex min-h-[108px] shrink-0 flex-col justify-center gap-3 px-4 py-3">
+            {/* The caption, with a camera glyph and the view-once (1) mark — a
+                chat image or clip is always a view-once streak. */}
+            <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5">
+              <IconCamera className="h-5 w-5 shrink-0 text-white/70" />
+              <input
+                type="text"
+                value={caption}
+                onChange={(event) => setCaption(event.target.value.slice(0, MESSAGE_MAX))}
+                maxLength={MESSAGE_MAX}
+                placeholder="Add a caption..."
+                aria-label="Caption"
+                className="min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/60"
+              />
+              <span
+                aria-hidden
+                title="Seen once"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-white/60 text-[11px] font-bold text-white/80"
+              >
+                1
+              </span>
+            </div>
+            {/* Who it goes to, and Send. */}
+            <div className="flex items-center justify-between gap-3">
+              {recipientName ? (
+                <span className="min-w-0 max-w-[60%] truncate rounded-xl bg-white/10 px-4 py-2.5 text-[15px] font-medium text-white">
+                  {recipientName}
+                </span>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                onClick={send}
+                aria-label="Send"
+                className="ws-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#31c859] text-white transition-opacity hover:opacity-90"
+              >
+                <IconSend className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex shrink-0 items-center justify-between px-6 py-5">

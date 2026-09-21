@@ -2145,10 +2145,13 @@ function Composer({
   members,
   meId,
   conversationKind,
+  recipientName,
 }: {
   conversationId: string;
   /** Direct or group — a snap is only offered in a one-to-one. */
   conversationKind: string;
+  /** Who a camera shot goes to, named on the camera's send screen. */
+  recipientName?: string;
   /** The message being answered, chosen from a bubble; null for a plain send. */
   replyTo: Message | null;
   onCancelReply: () => void;
@@ -2307,29 +2310,33 @@ function Composer({
     a photo taken inside a chat is of the moment, a photo out of a gallery was
     kept for a reason and is not ours to destroy on the sender's behalf.
 
-    The reviewed shot STAGES like any other attachment (ogazboiz, 2026-09-21:
-    "when i click okay it moves to the attachment"), so the caption and the send
-    live in the composer with it — every chat image or clip is a view-once
-    streak already, so `defaultViewOnce` arms it and the composer's own toggle
-    can still turn it off.
+    The camera's own review IS the send screen (ogazboiz, 2026-09-21): the shot
+    goes straight out with the caption typed under it, view-once armed by
+    `defaultViewOnce` — no staging into a composer chip.
   */
-  const takeCapture = async (file: File, previewUrl: string) => {
+  const takeCapture = async (file: File, previewUrl: string, caption: string) => {
     setCameraBusy(true);
     try {
       const uploaded = await uploadFile(file, undefined, "attachment", "message");
-      setAsSnap(
-        defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind })
-      );
-      setAttachment((current) => {
-        if (current) URL.revokeObjectURL(current.previewUrl);
-        return {
-          result: uploaded,
-          measured: {},
-          fileName: file.name,
-          previewUrl,
+      const armed = defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind });
+      const trimmed = caption.trim();
+      const capture: OutgoingMessage = {
+        ...(trimmed ? { text: trimmed } : {}),
+        ...(replyTo ? { replyToId: replyTo.id } : {}),
+        ...(armed ? { viewOnce: true } : {}),
+        media: {
+          key: uploaded.key,
           source: "camera",
-        };
-      });
+          url: uploaded.url,
+          width: null,
+          height: null,
+          durationSeconds: null,
+          fileName: null,
+          sizeBytes: null,
+        },
+      };
+      send.mutate(capture, { onSuccess: () => onCancelReply() });
+      URL.revokeObjectURL(previewUrl);
     } catch (cause) {
       URL.revokeObjectURL(previewUrl);
       toast.error(cause instanceof Error ? cause.message : "That capture didn't upload.");
@@ -2827,7 +2834,8 @@ function Composer({
       <CameraSheet
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
-        onCaptured={(file, previewUrl) => void takeCapture(file, previewUrl)}
+        onCaptured={(file, previewUrl, caption) => void takeCapture(file, previewUrl, caption)}
+        recipientName={recipientName}
       />
 
       {picking && (
@@ -3224,6 +3232,7 @@ export function Thread({
         members={mentionable}
         meId={me.data?.id}
         conversationKind={conversation.kind}
+        recipientName={threadTitle(conversation)}
       />
 
       {group && (
