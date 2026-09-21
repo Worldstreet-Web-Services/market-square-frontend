@@ -55,7 +55,7 @@ describe("the live-room dock rule reaches the shell, the stylesheet and the room
   it("mounts the room's own bar on the phone, fixed to the bottom edge", () => {
     assert.match(room, /<RoomPhoneBar\b/, "the room draws no bottom bar of its own on a phone");
     assert.match(bar, /fixed inset-x-0 bottom-0 z-40 md:hidden/, "the bar is not pinned to the phone's bottom edge, or leaks onto desktop");
-    // The room reserves the bar's own height, since `--ws-nav-h` is 0 there.
-    assert.match(room, /pb-\[calc\(80px\+env\(safe-area-inset-bottom,0px\)\)\] md:pb-/, "the room does not reserve its bar's 80px on a phone");
+    // The room reserves the bar's height on a phone, since `--ws-nav-h` is 0 there.
+    assert.match(room, /pb-\[calc\(64px\+env\(safe-area-inset-bottom,0px\)\)\] md:pb-/, "the room does not reserve its bar's height on a phone");
   });
 });
