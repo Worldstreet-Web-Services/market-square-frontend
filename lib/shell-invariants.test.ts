@@ -2057,6 +2057,31 @@ describe("The capture control is named for what it does, and safety is about oth
   });
 });
 
+describe("Media that will not load asks for a fresh link", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+
+  it("triggers on the FAILURE, not on a deadline that has passed", () => {
+    // A signed link can be refused for expiry OR for a signature that no
+    // longer verifies, and neither the reader nor an <img> can tell those
+    // apart. Firing only past urlExpiresAt left a thread of media broken on
+    // screen after a restart rotated the secret under it (2026-09-21).
+    assert.match(thread, /function useMediaRefreshOnError\(\)/);
+    assert.doesNotMatch(thread, /mediaLinkExpired\(urlExpiresAt/);
+  });
+
+  it("asks once per bubble, so twenty broken images are twenty requests and not four hundred", () => {
+    assert.match(thread, /if \(asked\.current\) return;\n\s*asked\.current = true;/);
+  });
+
+  it("covers a voice note and a clip, not only a photo", () => {
+    // A refused link is a play button that does nothing, which reads as a
+    // broken feature rather than a broken link.
+    assert.match(thread, /onError=\{refreshLink\}/);
+    const video = stripComments(read("components/ui/inline-video.tsx"));
+    assert.match(video, /onError\?: \(\) => void;/);
+  });
+});
+
 describe("A snap is seen once, and nothing in the client keeps a copy", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
   const row = stripComments(read("features/messages/components/conversation-row.tsx"));
