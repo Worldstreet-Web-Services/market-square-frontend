@@ -23,6 +23,7 @@ import { downloadLinkFor, mediaLinkExpired } from "@/lib/message-media-link";
 import { canSendSnap, snapTimeLeft, snapView } from "@/features/messages/lib/snap-view";
 import { defaultViewOnce, type MediaSource } from "@/features/messages/lib/camera-capture";
 import { CameraSheet } from "@/features/messages/components/camera-sheet";
+import { MediaSendBar } from "@/features/messages/components/media-send-bar";
 import { useQueryClient } from "@tanstack/react-query";
 import { isHttpUrl } from "@/lib/http-url";
 import { RowSkeleton } from "@/components/ui/skeleton";
@@ -2482,19 +2483,69 @@ function Composer({
         undo. Removing it here only drops our reference; the stored object is
         the service's to reap, and re-picking is cheap.
       */}
-      {attachment && (
-        <div className="mb-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2">
-          {/* A thumbnail ONLY for something that is actually a picture. An
-              unknown kind gets the neutral chip, never an <img> pointed at a
-              file the browser cannot decode. */}
-          {attachment.result.kind === "image" ? (
-            /* eslint-disable-next-line @next/next/no-img-element -- attachment hosts are unknown at build time */
-            <img
-              src={attachment.previewUrl}
-              alt=""
-              className="h-10 w-10 shrink-0 rounded-lg object-cover"
+      {/* IMAGE / VIDEO gets the full send-preview, the same screen the camera
+          uses (large media + the shared caption/view-once/send bar) — chosen by
+          FILE TYPE. Audio and documents keep the compact chip below: a PDF has
+          no full-screen preview and view-once is image/clip only. */}
+      {attachment && (attachment.result.kind === "image" || attachment.result.kind === "video") && (
+        <Sheet
+          open
+          onClose={dropAttachment}
+          bare
+          panelClassName="h-[95dvh] max-h-[95dvh] bg-black sm:h-auto sm:max-h-[88dvh] sm:max-w-[420px] sm:rounded-2xl"
+        >
+          <div className="flex h-full flex-col">
+            <div className="flex shrink-0 items-center justify-between px-4 py-3">
+              <h2 className="text-[14px] font-semibold text-white">Preview</h2>
+              <button
+                type="button"
+                onClick={dropAttachment}
+                aria-label="Remove"
+                className="ws-press rounded-full p-1.5 text-white/60 hover:bg-white/10 hover:text-white"
+              >
+                <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+                  <path d="m3.5 3.5 9 9m0-9-9 9" />
+                </svg>
+              </button>
+            </div>
+            {/* A chosen file, so it is shown WHOLE (object-contain) — the sender
+                framed it already; we do not re-crop it. */}
+            <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-black sm:aspect-3/4 sm:flex-none">
+              {attachment.result.kind === "video" ? (
+                <video
+                  src={attachment.previewUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  controls
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- a local blob preview
+                <img src={attachment.previewUrl} alt="Attachment" className="h-full w-full object-contain" />
+              )}
+            </div>
+            <MediaSendBar
+              caption={text}
+              onCaptionChange={(value) => typing.update(value, value.length)}
+              viewOnce={asSnap}
+              onToggleViewOnce={() => setAsSnap((on) => !on)}
+              showViewOnce={snapOffered}
+              onSend={submit}
+              sending={send.isPending}
+              autoFocusCaption
             />
-          ) : attachment.result.kind === "audio" ? (
+          </div>
+        </Sheet>
+      )}
+
+      {attachment && attachment.result.kind !== "image" && attachment.result.kind !== "video" && (
+        <div className="mb-2 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2">
+          {/* Only audio and documents reach this chip — image and video get the
+              full preview above. A voice note gets its player; anything else the
+              neutral extension tile. */}
+          {attachment.result.kind === "audio" ? (
             <StagedVoicePreview
               url={attachment.previewUrl}
               durationSeconds={attachment.measured.durationSeconds ?? null}
@@ -2504,22 +2555,13 @@ function Composer({
               aria-hidden
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-semibold uppercase text-white/70"
             >
-              {attachment.result.kind === "video"
-                ? "MP4"
-                : fileExtensionLabel(attachment.fileName, attachment.result.url)}
+              {fileExtensionLabel(attachment.fileName, attachment.result.url)}
             </span>
           )}
           <p className="min-w-0 flex-1 truncate text-[12px] text-white/70">
-            {/* WHERE IT CAME FROM, because the two doors behave differently and
-                the sender should be able to see which one they used. */}
-            {attachment.source === "camera" ? "Camera " : ""}
-            {attachment.result.kind === "image"
-              ? "Photo"
-              : attachment.result.kind === "video"
-                ? "Video"
-                : attachment.result.kind === "audio"
-                  ? "Voice note"
-                  : attachment.fileName || "Attachment"}{" "}
+            {attachment.result.kind === "audio"
+              ? "Voice note"
+              : attachment.fileName || "Attachment"}{" "}
             <span className="text-white/40">{formatBytes(attachment.result.bytes)}</span>
           </p>
           {snapOffered && (

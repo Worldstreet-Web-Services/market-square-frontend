@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import { getUploadLimits } from "@/lib/api/upload";
-import { IconSend } from "@/components/ui/icons";
-import { MESSAGE_MAX } from "@/features/messages/lib/types";
+import { MediaSendBar } from "@/features/messages/components/media-send-bar";
 import {
   CAMERA_HOLD_MS,
   CAMERA_MAX_CLIP_MS,
@@ -376,89 +375,17 @@ export function CameraSheet({
         )}
 
         {captured ? (
-          /* THE SEND SCREEN — a caption bar with the view-once mark, then the
-             recipient and the send. min-h reserves the shutter row's height so
-             the shot above keeps the SAME box it was framed in and never jumps. */
-          <div className="flex min-h-[108px] shrink-0 items-center gap-3 px-4 py-3">
-            {/* One clean row: the caption with the view-once mark inside it,
-                then Send. No recipient chip (a 1:1 already names them at the
-                top) and no glyph in front of the field. */}
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white/10 px-4 py-3">
-              <input
-                type="text"
-                value={caption}
-                onChange={(event) => setCaption(event.target.value.slice(0, MESSAGE_MAX))}
-                maxLength={MESSAGE_MAX}
-                placeholder="Add a caption..."
-                aria-label="Caption"
-                className="min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/60"
-              />
-              {/* The view-once mark, a "1" in a ring. NORMAL is the dashed
-                  outline; tapping SETS view-once and fills the ring solid white
-                  with a black 1 (the two states ogazboiz drew). */}
-              <button
-                type="button"
-                onClick={() => setViewOnce((on) => !on)}
-                aria-pressed={viewOnce}
-                aria-label={viewOnce ? "Seen once — tap to keep in the chat" : "Kept in the chat — tap to make it seen once"}
-                title={viewOnce ? "Seen once" : "Kept in the chat"}
-                // Icon only on a phone; on a desktop the label rides beside it in
-                // a pill so the control reads without a hover.
-                className="ws-press flex h-10 w-10 shrink-0 items-center justify-center gap-1.5 rounded-full text-white md:w-auto md:bg-white/10 md:px-3"
-              >
-                {viewOnce ? (
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7 shrink-0">
-                    <circle cx="12" cy="12" r="10" fill="#fff" />
-                    <text
-                      x="12"
-                      y="12.5"
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fontSize="13"
-                      fontWeight="800"
-                      fill="#000"
-                    >
-                      1
-                    </text>
-                  </svg>
-                ) : (
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7 shrink-0" fill="none">
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="9"
-                      stroke="currentColor"
-                      strokeWidth={2.3}
-                      strokeDasharray="2 2.4"
-                      strokeLinecap="round"
-                    />
-                    <text
-                      x="12"
-                      y="12.5"
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fontSize="12"
-                      fontWeight="800"
-                      fill="currentColor"
-                    >
-                      1
-                    </text>
-                  </svg>
-                )}
-                <span className="hidden whitespace-nowrap text-[13px] font-medium md:inline">
-                  {viewOnce ? "View once" : "Keep in chat"}
-                </span>
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={send}
-              aria-label="Send"
-              className="ws-btn-create ws-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90"
-            >
-              <IconSend className="h-5 w-5" />
-            </button>
-          </div>
+          /* THE SEND SCREEN — the shared send bar (caption + view-once + send).
+             A camera shot is always an image or clip in a 1:1, so view-once
+             always applies here. */
+          <MediaSendBar
+            caption={caption}
+            onCaptionChange={setCaption}
+            viewOnce={viewOnce}
+            onToggleViewOnce={() => setViewOnce((on) => !on)}
+            showViewOnce
+            onSend={send}
+          />
         ) : (
           <div className="flex shrink-0 items-center justify-between px-6 py-5">
             <span className="w-10 text-[11px] leading-[15px] text-white/40">
