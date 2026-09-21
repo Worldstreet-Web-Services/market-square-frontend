@@ -2792,12 +2792,12 @@ function Composer({
               disabled={!canSend}
               aria-label="Send message"
               title="Send"
-              className="ws-press flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full bg-grey-800 transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="ws-btn-create ws-press flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               {send.isPending ? (
                 <Spinner className="h-4 w-4 text-white" />
               ) : (
-                <Image src={asset("/messages/send.svg")} alt="" width={16} height={16} />
+                <IconSend className="h-4 w-4" />
               )}
             </button>
           ) : (

@@ -71,6 +71,7 @@ describe("a house room shows who is here, not who belongs", () => {
 
   it("states the room in its header, never the house's size", () => {
     assert.doesNotMatch(room, /gist\{" "\}\s*\{house\.memberCount/, "the header quotes the house's total again");
-    assert.match(room, /\{listening\}<\/span> listening/);
+    // The room's own count (listening + speaking), not the house's size.
+    assert.match(room, /\{listening \+ speaking\}<\/span>/);
   });
 });
