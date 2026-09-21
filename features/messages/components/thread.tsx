@@ -2314,11 +2314,14 @@ function Composer({
     goes straight out with the caption typed under it, view-once armed by
     `defaultViewOnce` — no staging into a composer chip.
   */
-  const takeCapture = async (file: File, previewUrl: string, caption: string) => {
+  const takeCapture = async (file: File, previewUrl: string, caption: string, viewOnce: boolean) => {
     setCameraBusy(true);
     try {
       const uploaded = await uploadFile(file, undefined, "attachment", "message");
-      const armed = defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind });
+      // The reviewer's choice, but only where the service accepts a snap at all
+      // (`defaultViewOnce` is false in a group or on a non-photo/clip).
+      const armed =
+        viewOnce && defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind });
       const trimmed = caption.trim();
       const capture: OutgoingMessage = {
         ...(trimmed ? { text: trimmed } : {}),
@@ -2834,7 +2837,9 @@ function Composer({
       <CameraSheet
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
-        onCaptured={(file, previewUrl, caption) => void takeCapture(file, previewUrl, caption)}
+        onCaptured={(file, previewUrl, caption, viewOnce) =>
+          void takeCapture(file, previewUrl, caption, viewOnce)
+        }
         recipientName={recipientName}
       />
 

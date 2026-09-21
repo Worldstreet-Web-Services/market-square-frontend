@@ -47,11 +47,10 @@ export function CameraSheet({
   onClose: () => void;
   /**
    * Handed the confirmed file, a local preview URL the caller owns and must
-   * revoke, and the caption typed under the shot. The review IS the send
-   * screen: the shot goes straight out (every chat image or clip is a view-once
-   * streak, so there is no snap toggle here). The caller uploads and sends.
+   * revoke, the caption typed under the shot, and whether it goes view-once.
+   * The review IS the send screen; the caller uploads and sends.
    */
-  onCaptured: (file: File, previewUrl: string, caption: string) => void;
+  onCaptured: (file: File, previewUrl: string, caption: string, viewOnce: boolean) => void;
   /** Who the shot goes to, named on the send row. */
   recipientName?: string;
 }) {
@@ -85,6 +84,9 @@ export function CameraSheet({
     { file: File; url: string; kind: "photo" | "video"; mirrored: boolean } | null
   >(null);
   const [caption, setCaption] = useState("");
+  // View-once is the default for a chat shot; the (1) mark on the send screen
+  // toggles it — tap to keep the shot in the chat instead.
+  const [viewOnce, setViewOnce] = useState(true);
 
   /** Stops the track AND drops the reference — the light goes out here. */
   const release = useCallback(() => {
@@ -262,6 +264,7 @@ export function CameraSheet({
       return null;
     });
     setCaption("");
+    setViewOnce(true);
   }, []);
 
   /* Closing forgets the shot and the caption, so the next opening starts on the
@@ -277,9 +280,10 @@ export function CameraSheet({
     const shot = captured;
     if (!shot) return;
     // The URL now belongs to the caller, so clear our state WITHOUT revoking it.
-    onCaptured(shot.file, shot.url, caption.trim());
+    onCaptured(shot.file, shot.url, caption.trim(), viewOnce);
     setCaptured(null);
     setCaption("");
+    setViewOnce(true);
     onClose();
   };
 
@@ -378,8 +382,9 @@ export function CameraSheet({
              recipient and the send. min-h reserves the shutter row's height so
              the shot above keeps the SAME box it was framed in and never jumps. */
           <div className="flex min-h-[108px] shrink-0 flex-col justify-center gap-3 px-4 py-3">
-            {/* The caption, with a camera glyph and the view-once (1) mark — a
-                chat image or clip is always a view-once streak. */}
+            {/* The caption, with a camera glyph and the view-once (1) mark. The
+                mark is a TOGGLE: purple 1 = seen once (the default), a dim
+                infinity = kept in the chat. */}
             <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5">
               <IconCamera className="h-5 w-5 shrink-0 text-white/70" />
               <input
@@ -391,13 +396,19 @@ export function CameraSheet({
                 aria-label="Caption"
                 className="min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/60"
               />
-              <span
-                aria-hidden
-                title="Seen once"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-white/60 text-[11px] font-bold text-white/80"
+              <button
+                type="button"
+                onClick={() => setViewOnce((on) => !on)}
+                aria-pressed={viewOnce}
+                aria-label={viewOnce ? "Seen once — tap to keep in the chat" : "Kept in the chat — tap to make it seen once"}
+                title={viewOnce ? "Seen once" : "Kept in the chat"}
+                className={cn(
+                  "ws-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed text-[12px] font-bold transition-colors",
+                  viewOnce ? "border-create bg-create/15 text-create" : "border-white/40 text-white/60"
+                )}
               >
-                1
-              </span>
+                {viewOnce ? "1" : "∞"}
+              </button>
             </div>
             {/* Who it goes to, and Send. */}
             <div className="flex items-center justify-between gap-3">
@@ -412,7 +423,7 @@ export function CameraSheet({
                 type="button"
                 onClick={send}
                 aria-label="Send"
-                className="ws-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#31c859] text-white transition-opacity hover:opacity-90"
+                className="ws-btn-create ws-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90"
               >
                 <IconSend className="h-5 w-5" />
               </button>
