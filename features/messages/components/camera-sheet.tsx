@@ -5,7 +5,6 @@ import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import { getUploadLimits } from "@/lib/api/upload";
 import { IconSend } from "@/components/ui/icons";
-import { asset } from "@/lib/square-path";
 import { MESSAGE_MAX } from "@/features/messages/lib/types";
 import {
   CAMERA_HOLD_MS,
@@ -336,14 +335,19 @@ export function CameraSheet({
                 people keep sending these; it is a CONSEQUENCE, not the thing
                 the control does, and naming the control after it made the
                 badge read "Streak · view once" — two words for one idea
-                (ogazboiz, 2026-09-21: "it is just tautology"). The flame stays
-                because it is the streak's own mark and it is what the reader
-                recognises. */}
+                (ogazboiz, 2026-09-21: "it is just tautology").
+
+                AND THE FLAME WENT WITH THE WORD. A flame MEANS streak; leaving
+                it beside "View once" made the same conflation without saying
+                it out loud. The mark here is the one the RECEIVER will see on
+                the bubble — solid means not opened yet — so what you send and
+                what lands are recognisably the same thing. The flame still
+                belongs where a streak is actually counted: the inbox row and
+                the thread header. */}
             <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur">
               {viewOnce ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-                  <img src={asset("/messages/streak-flame.svg")} alt="" aria-hidden className="h-3.5 w-[8.4px]" />
+                  <ViewOnceMark className="h-3 w-3" />
                   View once
                 </>
               ) : (
@@ -421,8 +425,7 @@ export function CameraSheet({
             >
               {viewOnce ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-                  <img src={asset("/messages/streak-flame.svg")} alt="" aria-hidden className="h-4 w-[9.617px]" />
+                  <ViewOnceMark className="h-3.5 w-3.5" />
                   View once
                 </>
               ) : (
@@ -474,5 +477,22 @@ export function CameraSheet({
         )}
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * The view-once mark: the same solid rounded square the RECEIVER sees on the
+ * bubble before they open it.
+ *
+ * Deliberately not a flame. A flame means streak — a thing that happens when
+ * both people keep sending these — and putting it on the control conflated the
+ * two. Using the bubble's own mark instead means the sender recognises what
+ * they sent when they see it land.
+ */
+function ViewOnceMark({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 14 14" className={cn("shrink-0", className)} fill="none">
+      <rect x="1" y="1" width="12" height="12" rx="3.5" fill="currentColor" />
+    </svg>
   );
 }

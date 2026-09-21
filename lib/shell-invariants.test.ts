@@ -1971,6 +1971,11 @@ describe("The capture control is named for what it does, and safety is about oth
     const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
     assert.doesNotMatch(camera, /Streak · view once/, "two words for one idea");
     assert.match(camera, /View once/);
+    // And no flame either: a flame MEANS streak, so leaving it beside "View
+    // once" made the same conflation without saying it out loud. The mark is
+    // the one the receiver sees on the bubble.
+    assert.doesNotMatch(camera, /streak-flame/);
+    assert.match(camera, /<ViewOnceMark className=/);
   });
 
   it("offers nothing to block, report or mute on the reader's own seat", () => {
