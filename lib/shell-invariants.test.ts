@@ -1966,6 +1966,40 @@ describe("The camera is the second door, and it behaves differently", () => {
   });
 });
 
+describe("A shared link posts as a post, and arrives as the thing it points at", () => {
+  it("offers posting into Square beside the outward shares", () => {
+    const sheet = stripComments(read("components/ui/share-sheet.tsx"));
+    assert.match(sheet, /Post to Square/);
+    // The composer's EXISTING prefill contract, not a second door.
+    assert.match(sheet, /"\/\?compose=1&text=" \+ encodeURIComponent\(shareIntoPostText\(payload\.url\)\)/);
+  });
+
+  it("draws one card per post, from the first Square link in its words", () => {
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /const shared = firstSquareLink\(post\.text\);/);
+    assert.match(card, /\{shared && <SharedLinkCard reference=\{shared\.ref\} href=\{shared\.href\} \/>\}/);
+  });
+
+  it("shares a gist room INTO Square, and draws it as the room's own card", () => {
+    // "the share link I mean is like posting to Square for gist room".
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /Post to Square/);
+    assert.match(room, /"\/\?compose=1&text=" \+ encodeURIComponent\(houseShareUrl\(shareOrigin, stream\.id\)\)/);
+    // The SAME card the messages pane draws, so a room shared to the feed and
+    // a room announced in a house are not two different objects — and it
+    // carries the live state, so a morning post stops offering a closed room.
+    const preview = stripComments(read("components/layout/shared-link-card.tsx"));
+    assert.match(preview, /<GistRoomCard streamId=\{reference\.id\} fluid \/>/);
+  });
+
+  it("removes the card rather than inventing one it could not load", () => {
+    const preview = stripComments(read("components/layout/shared-link-card.tsx"));
+    // Gone, private, or the request failed: the link stays a link.
+    assert.match(preview, /if \(!post\.data\) return null;/);
+    assert.match(preview, /if \(!profile\.data\) return null;/);
+  });
+});
+
 describe("The capture control is named for what it does, and safety is about other people", () => {
   it("says View once, not Streak — a streak is the consequence, not the control", () => {
     const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));

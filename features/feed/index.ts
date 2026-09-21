@@ -9,6 +9,7 @@ export { useBookmarkPost, useBookmarks } from "./hooks/use-feed";
 export { PostCard } from "./components/post-card";
 export { FeedItemCard } from "./components/feed-cards";
 export { useFeed } from "./hooks/use-feed";
+export { usePost } from "./hooks/use-feed";
 export { FeaturedArena } from "./components/featured-arena";
 export { useLikePost } from "./hooks/use-feed";
 export { useDiscussion } from "./hooks/use-feed";

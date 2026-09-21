@@ -174,7 +174,15 @@ export function GistRoomCard({
   preview = false,
 }: {
   streamId: string;
-  conversationId: string;
+  /**
+   * The house group this room was announced in, when there is one.
+   *
+   * OPTIONAL because the same card now appears in the FEED, where a room was
+   * shared as a post and there is no conversation behind it. Absent, the two
+   * member faces are simply not drawn — everything else about the card is the
+   * room's own.
+   */
+  conversationId?: string;
   /**
    * Fill the cell instead of holding 338.
    *
@@ -199,7 +207,7 @@ export function GistRoomCard({
   */
   const stream = useStream(streamId, LIVE_POLL);
   const topics = useTopics();
-  const members = useConversationMembers(conversationId, true);
+  const members = useConversationMembers(conversationId ?? "", Boolean(conversationId));
 
   const room = stream.data;
   // A room whose lookup failed still gets its card: the deep link is the point,
