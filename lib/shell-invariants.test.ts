@@ -1993,6 +1993,16 @@ describe("A gist room's chat can answer a particular message", () => {
     assert.match(room, /members=\{chatMentionables\}/);
   });
 
+  it("closes the mention list once a name is chosen", () => {
+    // The picker renders on the ANCHOR, so clearing only the token left the
+    // list open with an empty query — which matches everybody.
+    const hook = stripComments(read("hooks/use-mention-typing.ts"));
+    assert.match(hook, /setAnchor\(found \? measureField\(\) : null\);/);
+    assert.match(hook, /setToken\(null\);\n\s*setAnchor\(null\);/);
+    // And a resize never opens one that was not showing.
+    assert.match(hook, /const remeasure = \(\) => setAnchor\(token \? measureField\(\) : null\);/);
+  });
+
   it("lets the picker win Enter while it is open", () => {
     // Choosing a name and sending the line are the same key; without this,
     // Enter sends "@pri".
@@ -2021,6 +2031,11 @@ describe("A gist room's chat can answer a particular message", () => {
     assert.match(panel, /const love = useChatReaction\(stream\.id\);/);
     assert.match(panel, /love\.mutate\(\{ messageId: target\.id, emoji: DEFAULT_REACTION, loved \}\)/);
     assert.match(panel, /aria-pressed=\{loved\}/);
+    // FILLED, not merely tinted: a coloured outline reads as a hover state
+    // rather than as an act somebody took.
+    assert.match(panel, /filled=\{loved\}/);
+    const icons = stripComments(read("components/ui/room-icons.tsx"));
+    assert.match(icons, /\{!filled && <path/);
     const api = stripComments(read("features/streams/lib/api.ts"));
     // The emoji is a path segment and an emoji is several bytes.
     assert.match(api, /encodeURIComponent\(emoji\)/);

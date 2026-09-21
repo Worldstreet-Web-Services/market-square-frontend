@@ -946,7 +946,9 @@ function RoomBubble({
         aria-label={loved ? `Remove your love from ${name}'s message` : `Love ${name}'s message`}
         className="ws-press flex shrink-0 items-center gap-0.5 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
       >
-        <IconRoomHeart className={cn("h-4 w-4", loved && "text-like")} />
+        {/* FILLED once the reader has loved it — a tinted outline reads as a
+            hover state, not as an act somebody took. */}
+        <IconRoomHeart className={cn("h-4 w-4", loved && "text-like")} filled={loved} />
         {loves > 0 && <span className="tnum text-[11px] leading-none">{loves}</span>}
       </button>
     </li>
