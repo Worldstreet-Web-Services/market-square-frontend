@@ -107,6 +107,26 @@ export async function reactToStream(streamId: string, burst: number) {
   );
 }
 
+/**
+ * LOVES A MESSAGE, or takes the love back.
+ *
+ * Idempotent in both directions: a second love answers 200 rather than an
+ * error, and removing one that was never there is an answer rather than a
+ * failure. The emoji is URL-encoded on the way out because it is a path
+ * segment and an emoji is several bytes.
+ */
+export async function setChatReaction(
+  streamId: string,
+  messageId: string,
+  emoji: string,
+  loved: boolean
+) {
+  const base = `/streams/${streamId}/chat/${messageId}/reactions`;
+  return loved
+    ? msApi.post(base, { emoji })
+    : msApi.del(`${base}/${encodeURIComponent(emoji)}`);
+}
+
 export async function quoteTicket(streamId: string, tier: TicketTier) {
   return QuoteSchema.parse(await msApi.post(`/streams/${streamId}/tickets/quote`, { tier }));
 }
