@@ -414,8 +414,8 @@ export function CameraSheet({
                       y="12.5"
                       textAnchor="middle"
                       dominantBaseline="central"
-                      fontSize="11"
-                      fontWeight="700"
+                      fontSize="13"
+                      fontWeight="800"
                       fill="#000"
                     >
                       1
@@ -426,10 +426,10 @@ export function CameraSheet({
                     <circle
                       cx="12"
                       cy="12"
-                      r="9.2"
+                      r="9"
                       stroke="currentColor"
-                      strokeWidth={1.6}
-                      strokeDasharray="2.1 2.5"
+                      strokeWidth={2.3}
+                      strokeDasharray="2 2.4"
                       strokeLinecap="round"
                     />
                     <text
@@ -437,8 +437,8 @@ export function CameraSheet({
                       y="12.5"
                       textAnchor="middle"
                       dominantBaseline="central"
-                      fontSize="10"
-                      fontWeight="700"
+                      fontSize="12"
+                      fontWeight="800"
                       fill="currentColor"
                     >
                       1
