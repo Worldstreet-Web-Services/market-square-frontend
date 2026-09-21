@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import { getUploadLimits } from "@/lib/api/upload";
-import { IconCamera, IconSend } from "@/components/ui/icons";
+import { IconSend } from "@/components/ui/icons";
 import { MESSAGE_MAX } from "@/features/messages/lib/types";
 import {
   CAMERA_HOLD_MS,
@@ -41,7 +41,6 @@ export function CameraSheet({
   open,
   onClose,
   onCaptured,
-  recipientName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -51,8 +50,6 @@ export function CameraSheet({
    * The review IS the send screen; the caller uploads and sends.
    */
   onCaptured: (file: File, previewUrl: string, caption: string, viewOnce: boolean) => void;
-  /** Who the shot goes to, named on the send row. */
-  recipientName?: string;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -381,12 +378,11 @@ export function CameraSheet({
           /* THE SEND SCREEN — a caption bar with the view-once mark, then the
              recipient and the send. min-h reserves the shutter row's height so
              the shot above keeps the SAME box it was framed in and never jumps. */
-          <div className="flex min-h-[108px] shrink-0 flex-col justify-center gap-3 px-4 py-3">
-            {/* The caption, with a camera glyph and the view-once (1) mark. The
-                mark is a TOGGLE: purple 1 = seen once (the default), a dim
-                infinity = kept in the chat. */}
-            <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5">
-              <IconCamera className="h-5 w-5 shrink-0 text-white/70" />
+          <div className="flex min-h-[108px] shrink-0 items-center gap-3 px-4 py-3">
+            {/* One clean row: the caption with the view-once mark inside it,
+                then Send. No recipient chip (a 1:1 already names them at the
+                top) and no glyph in front of the field. */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white/10 px-4 py-3">
               <input
                 type="text"
                 value={caption}
@@ -448,24 +444,14 @@ export function CameraSheet({
                 )}
               </button>
             </div>
-            {/* Who it goes to, and Send. */}
-            <div className="flex items-center justify-between gap-3">
-              {recipientName ? (
-                <span className="min-w-0 max-w-[60%] truncate rounded-xl bg-white/10 px-4 py-2.5 text-[15px] font-medium text-white">
-                  {recipientName}
-                </span>
-              ) : (
-                <span />
-              )}
-              <button
-                type="button"
-                onClick={send}
-                aria-label="Send"
-                className="ws-btn-create ws-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90"
-              >
-                <IconSend className="h-5 w-5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={send}
+              aria-label="Send"
+              className="ws-btn-create ws-press flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90"
+            >
+              <IconSend className="h-5 w-5" />
+            </button>
           </div>
         ) : (
           <div className="flex shrink-0 items-center justify-between px-6 py-5">

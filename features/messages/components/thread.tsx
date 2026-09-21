@@ -2145,13 +2145,10 @@ function Composer({
   members,
   meId,
   conversationKind,
-  recipientName,
 }: {
   conversationId: string;
   /** Direct or group — a snap is only offered in a one-to-one. */
   conversationKind: string;
-  /** Who a camera shot goes to, named on the camera's send screen. */
-  recipientName?: string;
   /** The message being answered, chosen from a bubble; null for a plain send. */
   replyTo: Message | null;
   onCancelReply: () => void;
@@ -2840,7 +2837,6 @@ function Composer({
         onCaptured={(file, previewUrl, caption, viewOnce) =>
           void takeCapture(file, previewUrl, caption, viewOnce)
         }
-        recipientName={recipientName}
       />
 
       {picking && (
@@ -3237,7 +3233,6 @@ export function Thread({
         members={mentionable}
         meId={me.data?.id}
         conversationKind={conversation.kind}
-        recipientName={threadTitle(conversation)}
       />
 
       {group && (
