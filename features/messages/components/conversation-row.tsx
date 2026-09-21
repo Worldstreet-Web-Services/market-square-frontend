@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { asset } from "@/lib/square-path";
 import { inboxTime } from "@/lib/inbox-time";
 import { Avatar } from "@/components/ui/avatar";
 import { IconPeople } from "@/components/ui/icons";
@@ -56,7 +57,10 @@ export function ConversationRow({
       onClick={onOpen}
       aria-current={selected ? "true" : undefined}
       className={cn(
-        "ws-press flex h-[62px] w-full items-center gap-2 rounded-xl border px-3 text-left transition-colors",
+        // A bordered card wants a touch more room than a flat list row: 16px
+        // inset and a 12px avatar→text gap read as a comfortable card rather
+        // than a cramped one.
+        "ws-press flex h-[62px] w-full items-center gap-3 rounded-xl border px-4 text-left transition-colors",
         // Selected is ours. The design shows an unopened inbox, but a two-pane
         // layout must say which row the pane belongs to, or the thread on the
         // right looks unattached to anything.
@@ -112,10 +116,17 @@ export function ConversationRow({
         */}
         {conversation.snapStreak > 0 && (
           <span
-            className="flex items-center gap-0.5 text-[10px] font-semibold leading-[15px] text-coin"
+            className="flex items-center gap-1 text-[10px] font-medium leading-[15px] text-[#ff9d01]"
             title={`${conversation.snapStreak} day${conversation.snapStreak === 1 ? "" : "s"} in a row`}
           >
-            <SnapFlame />
+            {/* node 1822:20589 — the file's own gradient flame, exported. */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+            <img
+              src={asset("/messages/streak-flame.svg")}
+              alt=""
+              aria-hidden
+              className="h-4 w-[9.617px] shrink-0"
+            />
             <span className="tnum">{conversation.snapStreak}</span>
           </span>
         )}
@@ -235,11 +246,3 @@ function SnapGlyph({ status }: { status: SnapStatus }) {
   );
 }
 
-/** The streak's mark, drawn rather than borrowed: a small flame at 10px. */
-function SnapFlame() {
-  return (
-    <svg aria-hidden viewBox="0 0 10 12" className="h-2.5 w-2.5 shrink-0" fill="currentColor">
-      <path d="M5 0c.4 1.9-.5 3-1.5 3.9C2.2 5 .8 6.1.8 8a4.2 4.2 0 0 0 8.4 0c0-1.5-.7-2.6-1.6-3.6-.3.6-.8 1-1.3 1.1.4-1.8-.2-3.7-1.3-5.5Z" />
-    </svg>
-  );
-}

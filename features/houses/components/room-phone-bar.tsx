@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { IconHeart } from "@/components/ui/icons";
+import { useEffect } from "react";
 import {
-  IconEmojiAdd,
   IconRoomChat,
   IconRoomHandUp,
   IconRoomMic,
@@ -11,7 +9,7 @@ import {
 } from "@/components/ui/room-icons";
 import { cn } from "@/lib/cn";
 import { setRoomBar } from "@/lib/room-bar-store";
-import { useReactionGutter } from "@/features/houses/components/house-controls";
+import { ReactionControl } from "@/features/houses/components/reaction-control";
 import { roomChatBadge, roomChatLabel } from "@/lib/room-chat-unread";
 
 /**
@@ -45,9 +43,9 @@ import { roomChatBadge, roomChatLabel } from "@/lib/room-chat-unread";
  *    the audience frame's mic is SLASHED. So for them it is the slashed glyph,
  *    genuinely `disabled`, with the reason on it — never a live-looking disc
  *    that does nothing. The way to a microphone is the raised hand beside it.
- *  - **Reaction** (`fluent:emoji-add-16-regular`, 20) — sends a heart into
- *    the room's reaction channel, and draws it in the same 44×140 gutter the
- *    floating pill used, so a reaction is seen leaving as well as arriving.
+ *  - **Reaction** (`fluent:emoji-add-16-regular`, 20) — opens the reaction
+ *    picker (node 1775:20163); a pick floats over the stage the way a call
+ *    reaction does (RoomReactions) and rides the room's reaction channel.
  *  - **Chat** (`vuesax/outline/messages-2`, 20) — opens the room's chat as a
  *    sheet. The desktop's third column does not exist on a phone; the chat is
  *    still the only way somebody without a seat can say anything, so it is
@@ -64,7 +62,6 @@ export function RoomPhoneBar({
   ask,
   tray,
   onReact,
-  incoming,
   onChat,
   unreadChat = 0,
 }: {
@@ -82,9 +79,8 @@ export function RoomPhoneBar({
   } | null;
   /** The host's counted request tray. */
   tray: { count: number; onOpen: () => void } | null;
-  onReact: () => void;
-  /** Hearts SOMEBODY ELSE sent — see HouseControls for why it is a count. */
-  incoming: number;
+  /** Fires the picked glyph — drawn over the stage and broadcast by the room. */
+  onReact: (emoji: string) => void;
   onChat: () => void;
   /** Messages that have arrived since the reader last had the chat open. */
   unreadChat?: number;
@@ -96,19 +92,11 @@ export function RoomPhoneBar({
     return () => setRoomBar(false);
   }, []);
 
-  const reactions = useReactionGutter();
-  const seen = useRef(incoming);
-  useEffect(() => {
-    const delta = Math.min(6, incoming - seen.current);
-    seen.current = incoming;
-    for (let i = 0; i < delta; i += 1) reactions.spawn();
-  }, [incoming, reactions]);
-
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 md:hidden">
       <div
         className={cn(
-          "flex h-20 items-center justify-end gap-2 border-t border-white/10 px-6",
+          "flex h-16 items-center justify-end gap-2 border-t border-white/10 px-6",
           // The file's two fills, in order: 3% white OVER the bar's own near-black.
           "bg-raised bg-[linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0.03))]",
           // The home indicator sits under the bar, not over its discs.
@@ -143,41 +131,10 @@ export function RoomPhoneBar({
           </button>
         )}
 
-        <div className="relative">
-          {/* The same 44×140 gutter the floating pill drew, above the disc
-              that sends. See HouseControls for why it is clipped here rather
-              than drifting up the whole viewport. */}
-          <div
-            className="pointer-events-none absolute bottom-full left-0 h-[140px] w-10 overflow-hidden"
-            aria-hidden
-          >
-            {reactions.hearts.map((heart) => (
-              <span
-                key={heart.id}
-                className="ws-reaction bottom-0 text-accent"
-                style={{
-                  right: `${heart.left}%`,
-                  ["--rx" as string]: `${heart.drift}px`,
-                  ["--rr" as string]: `${heart.rotate}deg`,
-                  ["--rd" as string]: `${heart.duration}s`,
-                }}
-              >
-                <IconHeart className="h-4 w-4" filled />
-              </span>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              reactions.spawn();
-              onReact();
-            }}
-            aria-label="Send a heart"
-            className={cn(DISC, "ws-glass-pill text-white")}
-          >
-            <IconEmojiAdd className="h-5 w-5" />
-          </button>
-        </div>
+        {/* The reaction disc opens the picker; a pick floats over the stage
+            (RoomReactions) and broadcasts, rather than drawing in a local
+            gutter here. */}
+        <ReactionControl onReact={onReact} triggerClassName={cn(DISC, "ws-glass-pill text-white")} />
 
         <button
           type="button"

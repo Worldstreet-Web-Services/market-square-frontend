@@ -11,6 +11,7 @@ import { useDiscoverHousesPages } from "@/features/messages/lib/discover-houses"
 import { useJoinGroup } from "@/features/messages";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
+import { HousePreviewSheet, type HousePreview } from "@/components/layout/house-preview-sheet";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { cn } from "@/lib/cn";
 import { asset } from "@/lib/square-path";
@@ -84,6 +85,8 @@ export function HousesScreen() {
   const join = useJoinGroup();
   const items = houses.data?.pages.flatMap((page) => page.items) ?? [];
   const [query, setQuery] = useState("");
+  // The house the reader is previewing before they join — node 1285:36375.
+  const [preview, setPreview] = useState<HousePreview | null>(null);
   const searching = query.trim().length > 0;
   const sentinel = useInfiniteScroll(
     () => void houses.fetchNextPage(),
@@ -146,7 +149,16 @@ export function HousesScreen() {
                 <article
                   key={house.id}
                   role="listitem"
-                  className="relative h-[86px] w-[290px] overflow-hidden rounded-[16.86px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.77px_rgba(255,255,255,0.18)] backdrop-blur-[5.37px] max-lg:h-[106px] max-lg:w-full"
+                  tabIndex={0}
+                  aria-label={`View ${house.title ?? "house"}`}
+                  onClick={() => setPreview(house)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setPreview(house);
+                    }
+                  }}
+                  className="ws-press relative h-[86px] w-[290px] cursor-pointer overflow-hidden rounded-[16.86px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.77px_rgba(255,255,255,0.18)] backdrop-blur-[5.37px] transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent max-lg:h-[106px] max-lg:w-full"
                 >
                   {/* 1373:3368 / 1381:37629 — the picture on its white plate:
                       a 48.05 SQUARE (image 66, sharp-cornered) inset 1.23 at
@@ -233,7 +245,11 @@ export function HousesScreen() {
                   <button
                     type="button"
                     disabled={join.isPending}
-                    onClick={() => join.mutate(house.id)}
+                    onClick={(event) => {
+                      // Quick-join without opening the preview.
+                      event.stopPropagation();
+                      join.mutate(house.id);
+                    }}
                     /* The file stacks `#7E3BEB` under an opaque 90deg `#9F65FD → #5B05E6`
                        ramp, so only the ramp is ever seen — `ws-btn-welcome`, the
                        existing utility for exactly that pair. (A two-layer `background`
@@ -254,6 +270,7 @@ export function HousesScreen() {
           </>
         )}
       </section>
+      {preview && <HousePreviewSheet house={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

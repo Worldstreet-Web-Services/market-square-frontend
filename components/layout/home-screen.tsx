@@ -103,7 +103,11 @@ export function HomeScreen() {
       headSlot={
         <>
           <HomeTopRow value={query} onChange={setQuery} />
-          {!searching && <HomeBanner />}
+          {!searching && (
+            <div className="mt-4">
+              <HomeBanner />
+            </div>
+          )}
         </>
       }
       searchSlot={searching ? <HomeSearch query={query} /> : undefined}

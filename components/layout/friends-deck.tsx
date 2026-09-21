@@ -123,7 +123,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     pills, 67 to the rule, 60 to the timeline — so its section carries no gap
     of its own, only the 60 under it.
   */
-  const sectionClass = cn("flex flex-col", heading === "pals" ? "w-full md:max-w-[596px]" : "mb-[64px]");
+  const sectionClass = cn("flex flex-col", heading === "pals" ? "w-full md:max-w-[596px]" : "mb-10");
   /* HOME DRAWS ITS OWN DECK (647:16300), not `/pals`' at another scale. */
   const node: DeckNode = heading === "home" ? HOME_DECK_NODE : DECK_NODE;
   const card: PalCardNodeGeometry = heading === "home" ? HOME_DECK_CARD : DECK_CARD;
@@ -249,7 +249,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         {header}
         {/* The front card's own footprint, so the column does not jump when it lands. */}
         <div
-          className={cn("ws-skeleton mx-auto", heading === "home" && "mt-[90px]")}
+          className={cn("ws-skeleton mx-auto", heading === "home" && "mt-8 md:mt-22.5")}
           style={{
             width: node.card.width * layout.k,
             height: layout.height,
@@ -323,7 +323,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         of deciding about a person.
       */}
       <div
-        className={cn("relative isolate w-full overflow-x-clip", heading === "home" && "mt-[90px]")}
+        className={cn("relative isolate w-full overflow-x-clip", heading === "home" && "mt-8 md:mt-22.5")}
         style={{ height: layout.height }}
       >
         {window.map((position) => (

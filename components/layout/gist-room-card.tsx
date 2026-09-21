@@ -84,10 +84,14 @@ const LIVE_POLL = ["while-live", 60_000] as const;
  * #F0E8FF ring, then the one to its left turned 4deg on a thinner white ring.
  * Paint order is the file's, and each ring is drawn INSIDE its tile.
  */
+// Node 1769:3695's own cluster: three 36.821 tiles at radius 12.284 — one
+// raised and centred, one below-right turned -4deg, one below-left turned +4deg
+// — each ringed white INSIDE its tile, the -4 one carrying the file's shadow.
+const TILE_RADIUS = 12.284;
 const TILES = [
-  { left: 12.31, top: 0, size: 32, rotate: 0, ring: 1.668, gradient: false },
-  { left: 38.27, top: 21.47, size: 34.15, rotate: -4, ring: 1.668, gradient: true },
-  { left: 0, top: 20.97, size: 34.15, rotate: 4, ring: 1.334, gradient: false },
+  { left: 14.17, top: 0, size: 36.821, rotate: 0, ring: 1.919, shadow: false },
+  { left: 44.04, top: 24.7, size: 36.821, rotate: -4, ring: 1.919, shadow: true },
+  { left: 0, top: 24.13, size: 36.821, rotate: 4, ring: 1.535, shadow: false },
 ] as const;
 
 /**
@@ -127,7 +131,7 @@ export function RoomCardShell({
 /** One topic chip — 225:3887 / 545:47760. See the type-size note above. */
 export function RoomTopicChip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <span className="flex h-4 items-center gap-1 rounded-full bg-white/10 px-2 text-[9px] font-bold leading-3 text-grey-100">
+    <span className="flex h-6 items-center gap-1 rounded-full bg-white/10 px-2.5 text-[11px] font-bold leading-4 text-grey-100">
       {icon}
       {label}
     </span>
@@ -289,10 +293,14 @@ export function GistRoomCard({
     <RoomCardShell
       onMouseLeave={preview ? () => setListening(false) : undefined}
       className={cn(
-        fluid ? "w-full" : "w-[338px] shrink-0",
+        // Node 1769:3670's own metrics: 342 wide, 16.862 radius, a 0.766
+        // hairline behind a 5.365 blur.
+        fluid ? "w-full" : "w-[342px] shrink-0",
+        "rounded-[16.862px] shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[5.365px]",
         // Both variants clip (`clipsContent`), and the hover face's picture
-        // runs past its tile.
-        preview && "group/room relative h-[120px] overflow-hidden"
+        // runs past its tile. Fixed to the new card's 130 so the hover overlay
+        // has a stable box.
+        preview && "group/room relative h-[130px] overflow-hidden"
       )}
     >
       {preview && !over && !pending && (
@@ -367,45 +375,33 @@ export function GistRoomCard({
           preview && !over && !pending && faces[0] && "group-hover/room:invisible group-focus-within/room:invisible"
         )}
       >
-        <div className="min-w-0 flex-1">
-          {/*
-            The title box is a FIXED TWO LINES, which is the file's 186x32 at
-            12/16. Two things follow from that and both matter:
-
-            · a LONG title WRAPS rather than truncating on one line — the box is
-              186 wide and the file sizes it that way on purpose;
-            · a SHORT one still occupies 32, so the chips and the Join pill stay
-              where the file puts them (y=56.3 and y=84.7) instead of sliding up
-              and giving every card a different rhythm.
-
-            The 186 is not hard-coded: the column is 218 after the faces take
-            their 72.4 and the gap its 16, and the disc and its 8px gap leave
-            exactly 186.
-          */}
-          <div className="flex h-8 gap-2">
-            <IconRoomBadgeMic className="h-6 w-6 shrink-0 self-center" />
+        {/* 1769:3672 — the left group: the mic badge and title, then the
+            topic chips and the Join pill, indented under the title's text. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {/* 1769:3673 — the 24px mic badge, 6 from the title at Geist SemiBold
+              12/16, wrapping to two lines. */}
+          <div className="flex items-center gap-1.5">
+            <IconRoomBadgeMic className="h-6 w-6 shrink-0" />
             <p className="line-clamp-2 min-w-0 flex-1 text-[12px] font-semibold leading-4 text-white">
               {title}
             </p>
           </div>
 
-          {/* Indented to the title's own left edge — 24 + 8, which is the
-              file's x=31.57 on both the chip row and the pill. Title ends at
-              48, chips open 8 later at 56 and stand 16 tall, and the pill sits
-              12 under them at 84 — the file's 84.32, in a 120 card. */}
-          <div className="mt-2 space-y-3 pl-8">
+          {/* Indented to the title's text edge (24 + 6). Chips 1769:3684, then
+              the Join pill 1769:3680 12 under them. */}
+          <div className="flex flex-col gap-3 pl-[30px]">
             {labelled.length > 0 && (
-              /* ONE line, 16 tall. Measured in Geist: the file's own pair
-                 ("Religion" + "Food & Lifestyle") is 170.5 wide at 9px over a
-                 10px glyph against the column's 186, and 186.3 at 10px, so 9px
-                 is the size that keeps the file's pair on one line. Longer
-                 pairs ("Trading & Finance" + "Food & Lifestyle", 213) cannot
-                 fit at any legible size, so a chip that does not fit WHOLE
-                 wraps onto a second line that `overflow-hidden` never shows —
-                 never cut in half, and the card never grows past 120. */
-              <div className="flex h-4 flex-wrap items-center gap-x-1 gap-y-4 overflow-hidden">
+              // One line; a chip that will not fit whole wraps out of the
+              // clipped card rather than being cut in half.
+              <div className="flex h-[15px] flex-wrap items-center gap-x-1 gap-y-4 overflow-hidden">
                 {labelled.map(({ key, label, Icon }) => (
-                  <RoomTopicChip key={key} icon={<Icon className="h-2.5 w-2.5" />} label={label} />
+                  <span
+                    key={key}
+                    className="flex h-[15px] items-center gap-1 rounded-full bg-white/10 px-1.5 text-[9px] font-bold leading-none text-grey-100"
+                  >
+                    <Icon className="h-2.5 w-2.5 shrink-0" />
+                    {label}
+                  </span>
                 ))}
               </div>
             )}
@@ -413,51 +409,48 @@ export function GistRoomCard({
             <Link
               href={housePath(streamId)}
               className={cn(
-                // BLOCK-level `flex w-fit`, not `inline-flex`: an inline box sits
-                // on the line's baseline and took 3.5px of strut below it, which
-                // pushed the pill to 87.5 and the card to 124.
-                "ws-press flex h-5 w-fit items-center gap-[3px] rounded-[30px] px-3 text-[11px] font-medium leading-none transition-opacity hover:opacity-90",
+                "ws-press flex h-7 w-fit items-center gap-1 rounded-full px-3 text-[10px] font-medium leading-none transition-opacity hover:opacity-90",
                 over || pending
                   ? "bg-white/10 text-white/60"
                   : "bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] text-white"
               )}
             >
               {label}
-              {!over && !pending && <IconVoiceMode className="h-[11px] w-[11px]" />}
+              {!over && !pending && <IconVoiceMode className="h-2 w-2" />}
             </Link>
           </div>
         </div>
 
         {faces.length > 0 && (
-          /* The file's cluster: one tile raised and centred, two below it and
-             outset, each overlapping its neighbour. `-space-x` would flatten
-             them into a row, so the offsets are the file's own. */
-          <div aria-hidden className="relative h-[55.62px] w-[72.43px] shrink-0">
+          /* 1769:3695 — the cluster: one tile raised and centred, two below it
+             and outset (turned ∓4deg), each overlapping its neighbour, with the
+             "+N" more-in-the-room count in the upper right. */
+          <div aria-hidden className="relative h-[62px] w-[84px] shrink-0">
             {faces.map((profile, index) => {
               const tile = TILES[index]!;
               return (
                 <span
                   key={profile.id}
-                  className="absolute rounded-[10.675px] shadow-[0_4px_15px_0_rgba(147,147,147,0.25)]"
+                  className={cn("absolute bg-white", tile.shadow && "shadow-[0_4.6px_17.26px_0_rgba(147,147,147,0.25)]")}
                   style={{
                     left: tile.left,
                     top: tile.top,
                     width: tile.size,
                     height: tile.size,
                     padding: tile.ring,
+                    borderRadius: TILE_RADIUS,
                     transform: tile.rotate ? `rotate(${tile.rotate}deg)` : undefined,
-                    background: tile.gradient ? "linear-gradient(180deg, #FFFFFF 0%, #F0E8FF 100%)" : "#FFFFFF",
                   }}
                 >
                   <span
                     className="block h-full w-full overflow-hidden bg-[#EDEDED]"
-                    style={{ borderRadius: 10.675 - tile.ring }}
+                    style={{ borderRadius: TILE_RADIUS - tile.ring }}
                   >
                     <Avatar
                       name={profile.displayName || profile.username}
                       seed={profile.id}
                       src={profile.avatarUrl}
-                      size={34}
+                      size={37}
                       sizeClassName="h-full w-full"
                       className="rounded-none border-0"
                     />
@@ -465,6 +458,13 @@ export function GistRoomCard({
                 </span>
               );
             })}
+            {/* 1769:3704 — "+N" more in the room. viewerCount is nullable and
+                never fabricated as 0 (see CLAUDE.md). */}
+            {typeof room?.viewerCount === "number" && room.viewerCount > 0 && (
+              <span className="absolute left-[55.59px] top-[9.22px] text-[9px] font-medium leading-none text-white">
+                +{room.viewerCount}
+              </span>
+            )}
           </div>
         )}
       </div>

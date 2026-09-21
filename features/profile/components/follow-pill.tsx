@@ -39,6 +39,14 @@ export function FollowPill({
   // Hooks must run before the early return, so read the state up here.
   const isFollowing = useIsFollowing(profile);
   if (me.data?.id === profile.id) return null;
+  // ALREADY FOLLOWING → NO PILL (ogazboiz: "if i am already following somebody
+  // please dont show the following tags again"). The quick-follow control is an
+  // invitation; once the edge exists it is redundant across a feed of their
+  // posts, and unfollowing lives on the profile. `useIsFollowing` only reports
+  // true when the server carries the edge or the viewer just clicked — a
+  // missing edge stays false and still shows Follow, so this never hides a
+  // person we simply don't know the state of.
+  if (isFollowing) return null;
   return (
     <button
       aria-pressed={isFollowing}

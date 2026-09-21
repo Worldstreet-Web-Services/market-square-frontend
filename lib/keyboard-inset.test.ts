@@ -99,7 +99,7 @@ describe("the thread is glued to the keyboard, not to the window", () => {
       full-height sidebar stops short — the black band under the WHOLE app.
     */
     const shell = read("components/layout/app-shell.tsx");
-    assert.match(shell, /useKeyboardInset\(\)/, "nothing publishes --ws-vvh, so everything falls back to dvh");
+    assert.match(shell, /useKeyboardInset\(/, "nothing publishes --ws-vvh, so everything falls back to dvh");
     const page = read("features/messages/components/messages-page.tsx");
     assert.doesNotMatch(page, /useKeyboardInset/, "the page publishes it a second time");
   });
@@ -149,6 +149,27 @@ describe("the thread is glued to the keyboard, not to the window", () => {
     assert.match(hook, /addEventListener\("resize"/, "the keyboard's open/close is not observed");
     assert.match(hook, /addEventListener\("scroll"/, "the visual viewport's offset is not observed");
     assert.match(hook, /visibleHeight\(vv\.height\)/, "the pane is no longer sized from the visual viewport");
+  });
+
+  it("re-pins the window while a field is focused on a scroll-locked surface", () => {
+    /*
+      A single `scrollTo(0, 0)` on focus loses the race with the keyboard: it
+      animates in over a few hundred ms and Safari re-applies its
+      caret-into-view scroll on the layout passes that follow, pushing the
+      thread header off the top of the glass. So on the chat route the window is
+      put back on every visual-viewport event for as long as the composer holds
+      focus, and the shell hands the route in as `useKeyboardInset(chatOpen)`.
+    */
+    const hook = read("hooks/use-keyboard-inset.ts");
+    assert.match(hook, /useKeyboardInset\(lockScroll = false\)/, "the hook cannot be told the page is scroll-locked");
+    assert.match(hook, /focusout/, "it never learns the field blurred, so it would pin a resting page");
+    assert.match(
+      hook,
+      /lockScroll && fieldFocused && window\.scrollY !== 0/,
+      "the window is not re-pinned while typing, so the header still drifts off the top"
+    );
+    const shell = read("components/layout/app-shell.tsx");
+    assert.match(shell, /useKeyboardInset\(chatOpen\)/, "the chat route does not opt into the continuous pin");
   });
 
   it("clears the property on unmount", () => {

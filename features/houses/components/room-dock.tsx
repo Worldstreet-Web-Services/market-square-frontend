@@ -1,12 +1,8 @@
 "use client";
 
 import { IconHand } from "@/components/ui/icons";
-import {
-  IconEmojiAdd,
-  IconRecord,
-  IconRoomMic,
-  IconRoomMicOff,
-} from "@/components/ui/room-icons";
+import { IconRecord, IconRoomMic, IconRoomMicOff } from "@/components/ui/room-icons";
+import { ReactionControl } from "@/features/houses/components/reaction-control";
 import { cn } from "@/lib/cn";
 
 /**
@@ -34,10 +30,10 @@ import { cn } from "@/lib/cn";
  *
  * THE ROUND CONTROLS, right to left:
  *
- *  - **The emoji circle** (129:12498) sends a heart into the room's reaction
- *    channel. The file's glyph is `emoji-add`, and a reaction is the one thing
- *    it can honestly mean here: the room has no emoji picker, and the data
- *    channel this fires is the same one the hearts already ride.
+ *  - **The emoji circle** (129:12498) opens the reaction picker (node
+ *    1775:20163). A pick floats up over the stage the way a call reaction does
+ *    (RoomReactions) and rides the room's reaction channel, so everyone sees
+ *    the same glyph — the heart is just its default.
  *  - **The microphone** (129:12493) mutes and unmutes the viewer's own
  *    microphone, and is present only for somebody who has one — the host or a
  *    seated guest. The audience frame draws it SLASHED, which is exactly what
@@ -72,7 +68,7 @@ export function RoomDock({
     onAsk: () => void;
     onLower: () => void;
   } | null;
-  onReact: () => void;
+  onReact: (emoji: string) => void;
   className?: string;
 }) {
   return (
@@ -139,14 +135,10 @@ export function RoomDock({
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={onReact}
-          aria-label="Send a heart"
-          className="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white"
-        >
-          <IconEmojiAdd className="h-5 w-5" />
-        </button>
+        <ReactionControl
+          onReact={onReact}
+          triggerClassName="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white"
+        />
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { HousesStreet } from "@/features/houses";
 import { GistRoomCard } from "@/components/layout/gist-room-card";
-import { UpcomingRoomCard } from "@/components/layout/upcoming-room-card";
+import { ComingSoonCard } from "@/components/layout/coming-soon-card";
 import { useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
@@ -20,15 +20,15 @@ import { SectionHeading } from "@/components/layout/section-heading";
  *    908 wide with the pill open);
  *  · THE HEADINGS are `SectionHeading`, the one object Home repeats — here
  *    without its "View more", because this is the page that pill opens;
- *  · THE ROOM CARD is `GistRoomCard` with its hover state (415:12704), placed
- *    at 1317:158083's own 0.8594 of the 338 design through `zoom`: every
- *    length inside the card, type included, is the file's at that scale
- *    (12 → 10.31, 16 → 13.75), which is what the instance measures;
- *  · THE UPCOMING CARD is `UpcomingRoomCard`, which scales itself from its
- *    cell.
+ *  · THE ROOM CARD is `GistRoomCard` (node 1769:3670) with its hover state
+ *    (415:12704), rendered FLUID at its natural size — the old `zoom` that
+ *    scaled it into a 290 cell broke the mic badge's SVG gradient on desktop,
+ *    so the card fills its grid cell instead;
+ *  · THE UPCOMING CARD is `ComingSoonCard` — the wide horizontal card
+ *    (node 1542:3294), the same one Home's Coming Soon rail draws, so the two
+ *    surfaces cannot drift. It fills its grid cell, so the grid is at most two
+ *    across (see HousesStreet).
  */
-const ROOM_CARD_SCALE = 290.47 / 338;
-
 export function GistRoomsScreen() {
   const [query, setQuery] = useState("");
   const searching = query.trim().length > 0;
@@ -59,15 +59,14 @@ export function GistRoomsScreen() {
         )
       }
       roomCardSlot={(stream) => (
-        <div style={{ zoom: ROOM_CARD_SCALE }}>
-          <GistRoomCard
-            preview
-            streamId={stream.id}
-            conversationId={stream.houseConversationId ?? ""}
-          />
-        </div>
+        <GistRoomCard
+          fluid
+          preview
+          streamId={stream.id}
+          conversationId={stream.houseConversationId ?? ""}
+        />
       )}
-      upcomingCardSlot={(stream) => <UpcomingRoomCard stream={stream} />}
+      upcomingCardSlot={(stream) => <ComingSoonCard stream={stream} />}
     />
   );
 }
