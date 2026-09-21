@@ -18,8 +18,10 @@ import {
   IconRoomSend,
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
-import { useChat, useChatHistory, useSendChat } from "@/features/streams/hooks/use-chat";
+import { useChat, useChatHistory, useChatReaction, useSendChat } from "@/features/streams/hooks/use-chat";
 import { useMentionTyping } from "@/hooks/use-mention-typing";
+import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
+import { DEFAULT_REACTION } from "@/lib/reactions";
 import { MentionPicker } from "@/components/ui/mention-picker";
 import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
 import { OLDER_THRESHOLD_PX, oldestFirst, preservedScrollTop } from "@/lib/chat-order";
@@ -166,6 +168,56 @@ export function ChatPanel({
     keeps a live column readable.
   */
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /*
+    SWIPE A MESSAGE TO ANSWER IT — the gesture the DM thread already has.
+
+    The reply control here appears on HOVER, which on a phone is no control at
+    all: ogazboiz went looking for it and found nothing (2026-09-21). The rules
+    are `lib/swipe-reply`, shared with the thread, so the two surfaces cannot
+    disagree about what counts as a swipe — claimed only once the drag is
+    clearly HORIZONTAL, because this column's main gesture is scrolling and a
+    finger travelling up always drifts sideways.
+
+    ONE row at a time, so this is a single piece of state rather than state per
+    bubble: two fingers dragging two messages is not a gesture anybody makes.
+  */
+  const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
+  const dragFrom = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+  const love = useChatReaction(stream.id);
+
+  /*
+    The gesture itself. Claimed only once it is clearly horizontal, committed
+    only on RELEASE — a reply that fired under a moving finger would be one
+    nobody chose to send — and the row springs back either way.
+  */
+  const startDrag = (message: ChatMessage, event: React.PointerEvent) => {
+    if (event.pointerType === "mouse") return;
+    dragFrom.current = { x: event.clientX, y: event.clientY };
+    dragging.current = false;
+    setDrag({ id: message.id, dx: 0 });
+  };
+  const moveDrag = (event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (!from) return;
+    const dx = event.clientX - from.x;
+    const dy = event.clientY - from.y;
+    if (!isReplySwipe(dx, dy)) return;
+    dragging.current = true;
+    setDrag((current) => (current ? { ...current, dx: swipeOffset(dx) } : current));
+  };
+  const endDrag = (message: ChatMessage, event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (from && dragging.current) {
+      const dx = event.clientX - from.x;
+      const dy = event.clientY - from.y;
+      if (swipeCommits(dx, dy)) setReplyTo(message);
+    }
+    dragFrom.current = null;
+    dragging.current = false;
+    setDrag(null);
+  };
+
   const inputRef = useRef<HTMLInputElement>(null);
   /*
     TYPING @ OFFERS THE PEOPLE IN THE ROOM.
@@ -447,6 +499,14 @@ export function ChatPanel({
                 key={message.id}
                 message={message}
                 isHost={message.authorId === stream.ownerId}
+                onReply={setReplyTo}
+                onLove={(target, loved) =>
+                  gate(() => love.mutate({ messageId: target.id, emoji: DEFAULT_REACTION, loved }))
+                }
+                dragX={drag?.id === message.id ? drag.dx : 0}
+                onDragStart={startDrag}
+                onDragMove={moveDrag}
+                onDragEnd={endDrag}
               />
             ))
           : ordered.map((message) => (
@@ -486,11 +546,11 @@ export function ChatPanel({
                     before replies existed reads exactly as it did. */}
                 {message.replyTo && (
                   <p className="mb-1 flex items-center gap-1.5 rounded-md border-l-2 border-white/25 bg-white/[0.05] px-2 py-1 text-[12px] leading-[16px] text-meta">
-                    <span className="shrink-0 font-semibold text-body">
-                      {message.replyTo.author?.displayName ?? "Someone"}
-                    </span>
+                    {/* The quote carries an authorId and no second author
+                        object — the page already holds every author, so a copy
+                        per quote would be the same profile twice. */}
                     <span className="truncate">
-                      {message.replyTo.deleted ? "Message deleted" : message.replyTo.excerpt}
+                      {message.replyTo.deleted ? "Message deleted" : message.replyTo.text}
                     </span>
                   </p>
                 )}
@@ -771,10 +831,56 @@ export function ChatPanel({
  * lie. So it is a real `disabled` button carrying the reason, per the
  * flagged-capability rule.
  */
-function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean }) {
+function RoomBubble({
+  message,
+  isHost,
+  onReply,
+  onLove,
+  dragX,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: {
+  message: ChatMessage;
+  isHost: boolean;
+  /** Make this message the composer's reply target. */
+  onReply: (message: ChatMessage) => void;
+  /** Toggle the reader's love on it. */
+  onLove: (message: ChatMessage, loved: boolean) => void;
+  /** How far this row has been dragged, or 0 when it is not the one moving. */
+  dragX: number;
+  onDragStart: (message: ChatMessage, event: React.PointerEvent) => void;
+  onDragMove: (event: React.PointerEvent) => void;
+  onDragEnd: (message: ChatMessage, event: React.PointerEvent) => void;
+}) {
   const name = message.author?.displayName ?? `Member ·${message.authorId.slice(-4)}`;
+  const heart = message.reactions.find((entry) => entry.emoji === DEFAULT_REACTION);
+  const loved = heart?.mine === true;
+  const loves = heart?.count ?? 0;
+
   return (
-    <li className="flex items-end gap-2">
+    <li
+      className="relative flex items-end gap-2 touch-pan-y"
+      style={{ transform: dragX ? `translateX(${dragX}px)` : undefined }}
+      onPointerDown={(event) => onDragStart(message, event)}
+      onPointerMove={onDragMove}
+      onPointerUp={(event) => onDragEnd(message, event)}
+      onPointerCancel={(event) => onDragEnd(message, event)}
+    >
+      {/* The mark the swipe is travelling towards, so the gesture explains
+          itself the first time rather than after somebody guesses. */}
+      {dragX > 8 && (
+        <span
+          aria-hidden
+          className="absolute -left-1 bottom-2 text-white/50"
+          style={{ opacity: Math.min(1, dragX / SWIPE_TRIGGER) }}
+        >
+          <svg viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 3 1.5 6.5 5 10" />
+            <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+          </svg>
+        </span>
+      )}
       <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
         <Avatar name={name} seed={message.authorId} src={message.author?.avatarUrl} size={24} />
       </span>
@@ -796,6 +902,14 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
               </span>
             )}
           </p>
+          {/* WHAT THIS ANSWERS, above the words that answer it. A removed
+              original keeps its quote and says so: a reply to nothing reads
+              as a non-sequitur. */}
+          {message.replyTo && (
+            <p className="min-w-0 truncate rounded-md border-l-2 border-white/40 bg-black/15 px-2 py-1 text-[12px] leading-4 text-white/70">
+              {message.replyTo.deleted ? "Message deleted" : message.replyTo.text}
+            </p>
+          )}
           <p className="break-words text-[13px] leading-5 tracking-[-0.006em] text-white">
             {message.text}
           </p>
@@ -805,14 +919,35 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
         </span>
       </div>
 
+      {/* REPLY — a real control, not a hover-only one. The swipe is the
+          gesture on a phone; this is the same act for a mouse and for anybody
+          who never discovers the gesture, which on the last surface was
+          everybody. */}
       <button
         type="button"
-        disabled
-        title="Reacting to a single message isn't available yet."
-        aria-label="React to this message"
-        className="shrink-0 self-end pb-1 text-white/40 disabled:opacity-60"
+        onClick={() => onReply(message)}
+        aria-label={"Reply to " + name}
+        title="Reply"
+        className="ws-press shrink-0 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
       >
-        <IconRoomHeart className="h-4 w-4" />
+        <svg aria-hidden viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 3 1.5 6.5 5 10" />
+          <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+        </svg>
+      </button>
+
+      {/* LOVE THIS ONE. Filled once the reader has, with the service's own
+          tally beside it — the count is everybody's, so it comes from the
+          read rather than from adding one to our own copy. */}
+      <button
+        type="button"
+        onClick={() => onLove(message, !loved)}
+        aria-pressed={loved}
+        aria-label={loved ? `Remove your love from ${name}'s message` : `Love ${name}'s message`}
+        className="ws-press flex shrink-0 items-center gap-0.5 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
+      >
+        <IconRoomHeart className={cn("h-4 w-4", loved && "text-like")} />
+        {loves > 0 && <span className="tnum text-[11px] leading-none">{loves}</span>}
       </button>
     </li>
   );

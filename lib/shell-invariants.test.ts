@@ -2000,6 +2000,36 @@ describe("A gist room's chat can answer a particular message", () => {
     assert.match(panel, /typing\.pick\(typing\.items\[0\]!\);/);
   });
 
+  it("lets a phone answer a message by swiping it, like the thread does", () => {
+    // The reply control appeared on HOVER, which on a phone is no control at
+    // all. The rules come from lib/swipe-reply, shared with the DM thread, so
+    // the two surfaces cannot disagree about what counts as a swipe.
+    assert.match(panel, /import \{ isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset \}/);
+    assert.match(panel, /if \(swipeCommits\(dx, dy\)\) setReplyTo\(message\);/);
+    // Committed on RELEASE: a reply firing under a moving finger is one
+    // nobody chose to send.
+    assert.match(panel, /const endDrag = \(message: ChatMessage, event: React\.PointerEvent\)/);
+  });
+
+  it("draws a reply control as well, for anyone who never finds the gesture", () => {
+    assert.match(panel, /onClick=\{\(\) => onReply\(message\)\}/);
+  });
+
+  it("loves a single message, with the service's own tally", () => {
+    // The count is everybody's, so it comes from the read rather than from
+    // adding one to our own copy.
+    assert.match(panel, /const love = useChatReaction\(stream\.id\);/);
+    assert.match(panel, /love\.mutate\(\{ messageId: target\.id, emoji: DEFAULT_REACTION, loved \}\)/);
+    assert.match(panel, /aria-pressed=\{loved\}/);
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    // The emoji is a path segment and an emoji is several bytes.
+    assert.match(api, /encodeURIComponent\(emoji\)/);
+  });
+
+  it("keeps the quote when the original was removed, without showing its words", () => {
+    assert.match(panel, /message\.replyTo\.deleted \? "Message deleted" : message\.replyTo\.text/);
+  });
+
   it("sends only the handles still written in the line", () => {
     // A name picked and then deleted is not a mention.
     assert.match(panel, /typing\.mentionsFor\(text\)/);

@@ -174,8 +174,12 @@ export const ChatMessageSchema = z.object({
     .object({
       id: z.string(),
       authorId: z.string().optional().default(""),
-      author: ProfileSchema.nullable().optional().default(null),
-      excerpt: z.string().optional().default(""),
+      /**
+       * The original's words, capped by the service, and NULL once it has been
+       * removed — the flag is the content in that case, because showing what a
+       * host removed would defeat removing it.
+       */
+      text: z.string().nullable().optional().default(null),
       deleted: z.boolean().optional().default(false),
     })
     .nullable()
@@ -184,6 +188,26 @@ export const ChatMessageSchema = z.object({
     .catch(null),
   /** Profile ids named in the text, so a handle links to the person rather than to a guess. */
   mentions: z.array(z.string()).optional().default([]).catch([]),
+  /**
+   * LOVES ON THIS MESSAGE — busiest first, and `mine` is about the reader.
+   *
+   * Empty rather than absent when nobody has reacted, so a row never has to
+   * distinguish "no loves" from "this service does not do loves". Stored, not
+   * ephemeral: a love sits on somebody else's message and has to survive a
+   * reload, which is why it is a route rather than more data-channel traffic.
+   */
+  reactions: z
+    .array(
+      z.object({
+        emoji: z.string(),
+        count: z.number().optional().default(0),
+        /** Always false for a signed-out reader. */
+        mine: z.boolean().optional().default(false),
+      })
+    )
+    .optional()
+    .default([])
+    .catch([]),
 });
 
 export const ChatSchema = z.object({
