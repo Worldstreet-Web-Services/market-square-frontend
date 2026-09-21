@@ -58,6 +58,7 @@ export function PersonSheet({
   open,
   onClose,
   isHost,
+  isMe,
   hostBusy,
   onMoveDown,
   onSeat,
@@ -68,6 +69,8 @@ export function PersonSheet({
   inviteGateSlot,
 }: {
   person: PersonTarget | null;
+  /** True when this seat is the reader's own. */
+  isMe: boolean;
   open: boolean;
   onClose: () => void;
   isHost: boolean;
@@ -192,8 +195,15 @@ export function PersonSheet({
 
         {/* Mute · Block · Report, in that order. Mute is first because
             blocking in a room of twelve is a public act with a social cost, so
-            people do not do it and eat the harassment instead. */}
-        {username
+            people do not do it and eat the harassment instead.
+
+            NONE OF IT ON YOUR OWN SEAT. Tapping yourself in a room offered
+            Block and Report — actions about somebody else, pointed at nobody
+            (ogazboiz, 2026-09-21). Muting yourself "for me only" is the same
+            kind of nonsense: the mic control in the bar is how you go quiet.
+            The profile link stays, because looking at your own profile from
+            your seat is a reasonable thing to want. */}
+        {isMe ? null : username
           ? safetySlot(username, mute ?? undefined)
           : mute && (
               <button

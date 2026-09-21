@@ -328,15 +328,23 @@ export function CameraSheet({
               // eslint-disable-next-line @next/next/no-img-element -- a just-captured local blob, no host
               <img src={captured.url} alt="Your capture" className="h-full w-full object-contain" />
             )}
-            {/* WHICH KIND OF SHOT — a streak snap (flame, view once) or a photo
-                kept in the chat. Shown ON the image so the difference is
-                unmistakable before Send, and flipped by the toggle below. */}
+            {/* WHICH KIND OF SHOT — seen once, or kept in the chat. Shown ON
+                the image so the difference is unmistakable before Send, and
+                flipped by the toggle below.
+
+                IT DOES NOT SAY "STREAK". A streak is what happens when both
+                people keep sending these; it is a CONSEQUENCE, not the thing
+                the control does, and naming the control after it made the
+                badge read "Streak · view once" — two words for one idea
+                (ogazboiz, 2026-09-21: "it is just tautology"). The flame stays
+                because it is the streak's own mark and it is what the reader
+                recognises. */}
             <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur">
               {viewOnce ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
                   <img src={asset("/messages/streak-flame.svg")} alt="" aria-hidden className="h-3.5 w-[8.4px]" />
-                  Streak · view once
+                  View once
                 </>
               ) : (
                 `${captured.kind === "video" ? "Video" : "Photo"} · saved to chat`
@@ -399,7 +407,11 @@ export function CameraSheet({
               type="button"
               onClick={() => setViewOnce((current) => !current)}
               aria-pressed={viewOnce}
-              aria-label={viewOnce ? "Sending as a streak (view once) — tap to keep in chat" : "Keeping in chat — tap to send as a streak"}
+              aria-label={
+                viewOnce
+                  ? "Sending as view once — tap to keep it in the chat instead"
+                  : "Keeping it in the chat — tap to send as view once"
+              }
               className={cn(
                 "ws-press flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-semibold transition-colors",
                 viewOnce
@@ -411,7 +423,7 @@ export function CameraSheet({
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
                   <img src={asset("/messages/streak-flame.svg")} alt="" aria-hidden className="h-4 w-[9.617px]" />
-                  Streak
+                  View once
                 </>
               ) : (
                 "Keep in chat"

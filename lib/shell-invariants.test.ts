@@ -1966,6 +1966,23 @@ describe("The camera is the second door, and it behaves differently", () => {
   });
 });
 
+describe("The capture control is named for what it does, and safety is about other people", () => {
+  it("says View once, not Streak — a streak is the consequence, not the control", () => {
+    const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
+    assert.doesNotMatch(camera, /Streak · view once/, "two words for one idea");
+    assert.match(camera, /View once/);
+  });
+
+  it("offers nothing to block, report or mute on the reader's own seat", () => {
+    // Tapping yourself in a room offered Block and Report — actions about
+    // somebody else, pointed at nobody.
+    const sheet = stripComments(read("features/houses/components/person-sheet.tsx"));
+    assert.match(sheet, /\{isMe \? null : username/);
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /isMe=\{Boolean\(myId && livePerson && baseIdentity\(livePerson\.identity\) === myId\)\}/);
+  });
+});
+
 describe("A snap is seen once, and nothing in the client keeps a copy", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
   const row = stripComments(read("features/messages/components/conversation-row.tsx"));
