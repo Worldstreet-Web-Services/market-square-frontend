@@ -19,7 +19,9 @@ import {
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
 import { useChat, useChatHistory, useSendChat } from "@/features/streams/hooks/use-chat";
-import { mentionsPresentIn } from "@/lib/mention-token";
+import { useMentionTyping } from "@/hooks/use-mention-typing";
+import { MentionPicker } from "@/components/ui/mention-picker";
+import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
 import { OLDER_THRESHOLD_PX, oldestFirst, preservedScrollTop } from "@/lib/chat-order";
 import type { ChatMessage, Stream } from "@/features/streams/lib/types";
 
@@ -99,8 +101,20 @@ export function ChatPanel({
   heading = false,
   moderation,
   showTopViewers = false,
+  members = [],
 }: {
   stream: Stream;
+  /**
+   * EVERYONE IN THE ROOM, for the @ picker.
+   *
+   * A gist room's chat is a conversation between people who are present, so
+   * the list to offer is the people on the stage and in the audience — not
+   * the whole directory, and not only the handful who have happened to TYPE
+   * something. Passed in because only the room knows who is in it; empty
+   * everywhere else, which simply means the picker offers whoever the
+   * service's own search finds.
+   */
+  members?: MentionableMember[];
   /**
    * "overlay": transparent column over video — masked top fade, text shadows,
    * glass input, no panel chrome.
@@ -142,47 +156,47 @@ export function ChatPanel({
   );
   const hasOlder = history.data ? history.hasNextPage : (chat.data?.nextCursor ?? null) !== null;
   const gate = useGate();
-  const [draft, setDraft] = useState("");
   /*
-    THE MESSAGE BEING ANSWERED, and the people named in the line.
+    THE MESSAGE BEING ANSWERED.
 
     A room chat moves fast and several conversations share one column, so
     "which of these were you answering?" is the question a reply exists to
     settle (ogazboiz, 2026-09-21). One level, never a thread: a reply to a
     reply points at that message, which is what the DM pane does and what
     keeps a live column readable.
+  */
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  /*
+    TYPING @ OFFERS THE PEOPLE IN THE ROOM.
 
-    The mention ids are read back out of the DRAFT on every send rather than
+    The same hook and the same picker the DM composer uses, so a mention is one
+    behaviour in this product rather than two that drift. It had none at all
+    until now — the plumbing was here, the picker was not, and typing @ simply
+    did nothing (ogazboiz, 2026-09-21: "I want to @someone in the room but it
+    is not working").
+
+    WHO IT OFFERS: everyone on the stage and in the audience, handed down by
+    the room, ahead of whatever the service's own search finds. A gist room's
+    chat is a conversation between people who are PRESENT, and the person you
+    want to name is almost always one of the faces above the column. Anyone
+    who has spoken is already among them.
+
+    The ids are read back out of the TEXT on send (`mentionsFor`), never
     accumulated as they are picked: a handle typed and then deleted is not a
     mention, and sending it would notify somebody the sender changed their mind
     about.
   */
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  /*
-    WHO A HANDLE IN THE DRAFT ACTUALLY REFERS TO.
-
-    The people whose names are known here are the ones who have SPOKEN in this
-    room — their profiles ride along on their own messages. That is a smaller
-    set than the room's roster and it is the honest one: a handle only becomes
-    a mention when we can name the person behind it, and inventing an id for an
-    unrecognised @word would notify a stranger who happens to share a spelling.
-  */
-  const speakers = useMemo(() => {
-    const seen = new Map<string, { type: "user"; id: string; handle: string }>();
-    for (const message of ordered) {
-      const author = message.author;
-      if (author?.username && author.id) {
-        seen.set(author.username.toLowerCase(), { type: "user", id: author.id, handle: author.username });
-      }
-    }
-    return [...seen.values()];
-  }, [ordered]);
-  const mentionIds = mentionsPresentIn(speakers, draft).map((mention) => mention.id);
+  const typing = useMentionTyping({
+    max: 500,
+    field: inputRef,
+    candidates: (found, query) => mentionCandidates({ found, members, query }),
+  });
+  const draft = typing.text;
   const [menuFor, setMenuFor] = useState<string | null>(null);
   // The gist room's chat composer has a full emoji picker (it is a MESSAGE
   // field, not the six-glyph reaction bar) that types the glyph into the draft.
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const emojiWrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
@@ -276,11 +290,13 @@ export function ChatPanel({
           // Only the handles STILL WRITTEN in the line: a name picked and then
           // deleted is not a mention, and sending it would notify somebody the
           // sender decided against.
-          ...(mentionIds.length > 0 ? { mentions: mentionIds } : {}),
+          ...(typing.mentionsFor(text).length > 0
+            ? { mentions: typing.mentionsFor(text).map((mention) => mention.id) }
+            : {}),
         },
         {
         onSuccess: () => {
-          setDraft("");
+          typing.reset();
           setReplyTo(null);
           // Saying something is opting back into the live edge: nobody types a
           // message and then wants to keep reading history.
@@ -296,19 +312,22 @@ export function ChatPanel({
   // the glyph. The picker stays open so several can be added in a row.
   const insertEmoji = (emoji: string) => {
     const el = inputRef.current;
-    setDraft((prev) => {
+    {
+      const prev = typing.text;
       const start = el?.selectionStart ?? prev.length;
       const end = el?.selectionEnd ?? prev.length;
       const next = (prev.slice(0, start) + emoji + prev.slice(end)).slice(0, 300);
+      const caret = Math.min(start + emoji.length, next.length);
+      // Through the hook, so an @ token already being typed is re-measured
+      // rather than left pointing at a caret that has moved.
+      typing.replace(next, caret);
       if (el) {
         requestAnimationFrame(() => {
           el.focus();
-          const caret = Math.min(start + emoji.length, next.length);
           el.setSelectionRange(caret, caret);
         });
       }
-      return next;
-    });
+    }
   };
 
   // Dismiss the picker on a click away from it or Escape.
@@ -600,6 +619,9 @@ export function ChatPanel({
                 text, and putting it in the field would make it deletable with
                 a backspace. Dismissable, because changing your mind about
                 which message you meant is the commonest correction here. */}
+            {/* The list of people, anchored to the field. Only ever open while
+                an @ token is being typed. */}
+            <MentionPicker typing={typing} heading="In this room" emptyLabel="Nobody in this room matches." />
             {replyTo && (
               <div className="flex items-center gap-2 rounded-xl border-l-2 border-create bg-white/[0.05] px-3 py-1.5">
                 <span className="min-w-0 flex-1 truncate text-[12px] leading-[16px] text-meta">
@@ -636,8 +658,25 @@ export function ChatPanel({
               <input
                 ref={inputRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submit()}
+                onChange={(e) => typing.update(e.target.value, e.target.selectionStart)}
+                onKeyDown={(e) => {
+                  // The picker owns the arrows, Enter and Escape WHILE it is
+                  // open: choosing a name and sending the line are the same
+                  // key, and the list has to win or Enter sends "@pri".
+                  if (typing.token && typing.items.length > 0) {
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      typing.pick(typing.items[0]!);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      typing.dismiss();
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter") submit();
+                }}
                 maxLength={300}
                 disabled={stream.status !== "live"}
                 placeholder={stream.status === "live" ? "Start typing" : "Chat is closed"}
@@ -683,7 +722,7 @@ export function ChatPanel({
           >
             <input
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => typing.update(e.target.value, e.target.selectionStart)}
               onKeyDown={(e) => e.key === "Enter" && submit()}
               maxLength={300}
               disabled={stream.status !== "live"}

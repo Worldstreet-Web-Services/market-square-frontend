@@ -1981,10 +1981,28 @@ describe("A gist room's chat can answer a particular message", () => {
     assert.match(panel, /Message deleted/);
   });
 
-  it("names a handle only when it can name the person behind it", () => {
-    // Inventing an id for an unrecognised @word would notify a stranger who
-    // happens to share a spelling.
-    assert.match(panel, /mentionsPresentIn\(speakers, draft\)/);
+  it("offers the people IN THE ROOM when an @ is typed", () => {
+    // The plumbing shipped without the picker, so typing @ did nothing at all.
+    // The same hook and picker the DM composer uses, so a mention is one
+    // behaviour in this product rather than two that drift.
+    assert.match(panel, /const typing = useMentionTyping\(\{/);
+    assert.match(panel, /<MentionPicker typing=\{typing\} heading="In this room"/);
+    assert.match(panel, /mentionCandidates\(\{ found, members, query \}\)/);
+    // And the room hands down who is present — stage and audience.
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /members=\{chatMentionables\}/);
+  });
+
+  it("lets the picker win Enter while it is open", () => {
+    // Choosing a name and sending the line are the same key; without this,
+    // Enter sends "@pri".
+    assert.match(panel, /if \(typing\.token && typing\.items\.length > 0\) \{/);
+    assert.match(panel, /typing\.pick\(typing\.items\[0\]!\);/);
+  });
+
+  it("sends only the handles still written in the line", () => {
+    // A name picked and then deleted is not a mention.
+    assert.match(panel, /typing\.mentionsFor\(text\)/);
   });
 
   it("keeps the reply target out of the text field, where a backspace would eat it", () => {
