@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { useMe } from "@/hooks/use-me";
 import { focusLost, handFocusOn } from "@/lib/focus-handoff";
 import { atHandle } from "@/lib/handle";
 import { Avatar } from "@/components/ui/avatar";
@@ -84,10 +85,24 @@ export function PersonSheet({
   /** Hides the invite row for someone the host blocked (the profile slice knows). */
   inviteGateSlot?: (handle: string, row: React.ReactNode) => React.ReactNode;
 }) {
+  const me = useMe();
   if (!person) return null;
   const username = person.meta?.username ?? null;
   // The username, or the account id when the room token carried none.
   const gateHandle = inviteGateHandle(username, person.identity);
+
+  /*
+    IS THIS ME? You cannot follow, block, report, mute, mute-as-host or move
+    yourself, so on your own card the sheet drops every one of those and keeps
+    only "View full profile". Matched by username first, and by the room-token
+    identity when the token carried no handle. It also lets the header draw
+    YOUR real avatar and name: the room's participant meta often lacks the
+    avatar, and the seeded fallback is "another avatar" — not the one you set.
+  */
+  const isSelf = Boolean(
+    me.data && ((username && me.data.username === username) || me.data.id === person.identity)
+  );
+  const avatarUrl = isSelf ? (me.data?.avatarUrl ?? person.meta?.avatarUrl) : person.meta?.avatarUrl;
 
   /* ONE element for Invite and Cancel: swapping two conditional rows
      unmounted the focused one and dropped focus out of the modal. */
@@ -117,8 +132,12 @@ export function PersonSheet({
       <div className="flex items-start gap-3">
         <Avatar
           name={person.name}
-          seed={username ?? person.identity}
-          src={person.meta?.avatarUrl}
+          // Seed on the IDENTITY (the account id) first, exactly as the room
+          // tiles do (`userId ?? id`) — seeding on the username instead picked a
+          // different mascot here from the one on the tile the reader tapped.
+          // For yourself, your own id, so the sheet matches your avatar too.
+          seed={(isSelf ? me.data?.id : null) ?? person.identity ?? username}
+          src={avatarUrl}
           size={56}
         />
         <div className="min-w-0 flex-1">
@@ -139,7 +158,7 @@ export function PersonSheet({
             <p className="mt-1 text-[13px] leading-5 text-body">{person.meta.bio}</p>
           )}
         </div>
-        {username && followSlot(username)}
+        {username && !isSelf && followSlot(username)}
       </div>
 
       {/* BACKEND B1. Without identity on the LiveKit token there is no handle,
@@ -157,7 +176,7 @@ export function PersonSheet({
             they are the ones this sheet was opened FOR mid-conversation. */}
         {/* Soft only: the speaker may unmute themselves. There is no lock and
             no host unmute; the escalation is "Move down to audience". */}
-        {isHost && hostActions && hostActions.mute.kind === "mute" && (
+        {!isSelf && isHost && hostActions && hostActions.mute.kind === "mute" && (
           <HostRow
             label={hostActions.mute.label}
             hint={hostActions.mute.disabled ? hostActions.mute.reason : "They can unmute when it's their turn."}
@@ -165,19 +184,19 @@ export function PersonSheet({
             onClick={hostActions.onMute}
           />
         )}
-        {isHost && person.seated && (
+        {!isSelf && isHost && person.seated && (
           <HostRow label="Move down to audience" disabled={hostBusy} onClick={() => onMoveDown(person)} />
         )}
-        {isHost && !person.seated && hostActions?.invite.kind === "seat" && (
+        {!isSelf && isHost && !person.seated && hostActions?.invite.kind === "seat" && (
           <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
         )}
         {/* Without the invite routes (not deployed) a raised hand still seats. */}
-        {isHost && !person.seated && !hostActions && person.pendingRequestId && (
+        {!isSelf && isHost && !person.seated && !hostActions && person.pendingRequestId && (
           <HostRow label="Seat them" disabled={hostBusy} onClick={() => onSeat(person)} />
         )}
         {/* Someone the host blocked gets no invite row at all: the gate
             wraps whichever state it is in, so the element stays the same. */}
-        {inviteRow && (gateHandle && inviteGateSlot ? inviteGateSlot(gateHandle, inviteRow) : inviteRow)}
+        {!isSelf && inviteRow && (gateHandle && inviteGateSlot ? inviteGateSlot(gateHandle, inviteRow) : inviteRow)}
 
         {username && (
           <Link
@@ -192,18 +211,20 @@ export function PersonSheet({
 
         {/* Mute · Block · Report, in that order. Mute is first because
             blocking in a room of twelve is a public act with a social cost, so
-            people do not do it and eat the harassment instead. */}
-        {username
-          ? safetySlot(username, mute ?? undefined)
-          : mute && (
-              <button
-                type="button"
-                onClick={mute.onToggle}
-                className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body"
-              >
-                {mute.muted ? "Unmute for me" : "Mute for me only"}
-              </button>
-            )}
+            people do not do it and eat the harassment instead. NONE of these is
+            yours to do to yourself, so they are all absent on your own card. */}
+        {!isSelf &&
+          (username
+            ? safetySlot(username, mute ?? undefined)
+            : mute && (
+                <button
+                  type="button"
+                  onClick={mute.onToggle}
+                  className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body"
+                >
+                  {mute.muted ? "Unmute for me" : "Mute for me only"}
+                </button>
+              ))}
       </div>
     </Sheet>
   );
