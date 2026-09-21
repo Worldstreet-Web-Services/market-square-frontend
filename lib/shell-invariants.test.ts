@@ -1978,6 +1978,20 @@ describe("The capture control is named for what it does, and safety is about oth
     assert.match(camera, /<ViewOnceMark className=/);
   });
 
+  it("draws the mark and the switch in ONE place, used by all three surfaces", () => {
+    // The same square was drawn three times — bubble, camera, composer — and
+    // the switch twice, with different words and different styling. Three
+    // drawings of one idea is how two of them end up different.
+    const shared = stripComments(read("components/ui/view-once.tsx"));
+    assert.match(shared, /export function ViewOnceMark\(/);
+    assert.match(shared, /export function ViewOnceToggle\(/);
+    const thread = stripComments(read("features/messages/components/thread.tsx"));
+    assert.doesNotMatch(thread, /function SnapMark\(/, "the bubble reads the shared mark");
+    assert.match(thread, /<ViewOnceToggle on=\{asSnap\} onChange=\{setAsSnap\} \/>/);
+    const camera2 = stripComments(read("features/messages/components/camera-sheet.tsx"));
+    assert.match(camera2, /<ViewOnceToggle on=\{viewOnce\} onChange=\{setViewOnce\} \/>/);
+  });
+
   it("offers nothing to block, report or mute on the reader's own seat", () => {
     // Tapping yourself in a room offered Block and Report — actions about
     // somebody else, pointed at nobody.

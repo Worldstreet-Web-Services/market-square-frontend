@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
+import { ViewOnceMark, ViewOnceToggle } from "@/components/ui/view-once";
 import { getUploadLimits } from "@/lib/api/upload";
 import { IconSend } from "@/components/ui/icons";
 import { MESSAGE_MAX } from "@/features/messages/lib/types";
@@ -407,31 +408,8 @@ export function CameraSheet({
                 (view once, keeps the streak going); tap to keep it in the chat
                 as an ordinary photo instead. The flame is the same one the chat
                 header and inbox carry, so "streak" reads the same everywhere. */}
-            <button
-              type="button"
-              onClick={() => setViewOnce((current) => !current)}
-              aria-pressed={viewOnce}
-              aria-label={
-                viewOnce
-                  ? "Sending as view once — tap to keep it in the chat instead"
-                  : "Keeping it in the chat — tap to send as view once"
-              }
-              className={cn(
-                "ws-press flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-semibold transition-colors",
-                viewOnce
-                  ? "bg-spotlight/20 text-create ring-1 ring-create/40"
-                  : "text-white/60 hover:bg-white/10"
-              )}
-            >
-              {viewOnce ? (
-                <>
-                  <ViewOnceMark className="h-3.5 w-3.5" />
-                  View once
-                </>
-              ) : (
-                "Keep in chat"
-              )}
-            </button>
+            {/* THE SAME SWITCH THE COMPOSER USES — components/ui/view-once.tsx. */}
+            <ViewOnceToggle on={viewOnce} onChange={setViewOnce} />
             <button
               type="button"
               onClick={send}
@@ -477,22 +455,5 @@ export function CameraSheet({
         )}
       </div>
     </Sheet>
-  );
-}
-
-/**
- * The view-once mark: the same solid rounded square the RECEIVER sees on the
- * bubble before they open it.
- *
- * Deliberately not a flame. A flame means streak — a thing that happens when
- * both people keep sending these — and putting it on the control conflated the
- * two. Using the bubble's own mark instead means the sender recognises what
- * they sent when they see it land.
- */
-function ViewOnceMark({ className }: { className?: string }) {
-  return (
-    <svg aria-hidden viewBox="0 0 14 14" className={cn("shrink-0", className)} fill="none">
-      <rect x="1" y="1" width="12" height="12" rx="3.5" fill="currentColor" />
-    </svg>
   );
 }
