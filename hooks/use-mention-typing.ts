@@ -95,11 +95,24 @@ export function useMentionTyping({
     setText(next);
     const found = mentionTokenAt(next, caret ?? next.length);
     setToken(found);
-    if (found) setAnchor(measureField());
+    /*
+      THE ANCHOR IS THE LIST'S VISIBILITY, so it has to be cleared as well as
+      set. `MentionPicker` renders when there is an anchor — a measured rect —
+      and every path that closes the list used to clear the TOKEN and leave the
+      rect behind. The list then stayed open with the query empty, which shows
+      everybody: ogazboiz picked a name in a gist room and the panel would not
+      go away (2026-09-21).
+    */
+    setAnchor(found ? measureField() : null);
   };
 
-  /** The window changed size: the field may have moved. Event handlers only. */
-  const remeasure = () => setAnchor(measureField());
+  /**
+   * The window changed size: the field may have moved. Event handlers only.
+   *
+   * Only while a token is OPEN — a resize with no list showing would otherwise
+   * measure the field and open one nobody asked for.
+   */
+  const remeasure = () => setAnchor(token ? measureField() : null);
 
   /** A pick from the list: write "@handle ", remember the object, land the caret. */
   const pick = (mention: Mention) => {
@@ -108,6 +121,7 @@ export function useMentionTyping({
     const out = insertMentionAt(text, token, mention.handle, max);
     setText(out.text);
     setToken(null);
+    setAnchor(null);
     requestAnimationFrame(() => {
       const node = field.current;
       if (!node) return;
@@ -117,12 +131,16 @@ export function useMentionTyping({
   };
 
   /** Escape, or a click away: close the list without touching the text. */
-  const dismiss = () => setToken(null);
+  const dismiss = () => {
+    setToken(null);
+    setAnchor(null);
+  };
 
   /** After a successful send. */
   const reset = () => {
     setText("");
     setToken(null);
+    setAnchor(null);
     setPicked([]);
   };
 
