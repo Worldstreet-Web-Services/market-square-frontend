@@ -180,7 +180,7 @@ function Inbox({
             {tab === "requests" &&
               conversation.requestState === "pending" &&
               conversation.requestedBy !== me.data?.id && (
-                <div className="flex items-center gap-2 pl-[52px]">
+                <div className="flex items-center gap-2 pl-16.5">
                   <button
                     type="button"
                     disabled={answering}
@@ -416,7 +416,7 @@ export function MessagesPage({
             action={
               <button
                 onClick={login}
-                className="ws-btn-silver ws-press rounded-full px-5 py-2 text-[13px] font-bold"
+                className="ws-btn-silver ws-press ws-btn-md rounded-full font-bold"
               >
                 Sign in
               </button>

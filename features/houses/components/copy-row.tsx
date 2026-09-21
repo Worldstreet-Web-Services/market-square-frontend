@@ -2,7 +2,7 @@
 
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
-import { IconCopy, IconLink } from "@/components/ui/icons";
+import { IconCopy, IconCopyBulk, IconLink } from "@/components/ui/icons";
 import { groupRoomCode } from "@/lib/room-code";
 
 /**
@@ -91,12 +91,18 @@ export function CopyCodeChip({ code, className }: { code: string; className?: st
       }}
       aria-label={`Copy room code ${groupRoomCode(code)}`}
       className={cn(
-        "ws-press inline-flex items-baseline gap-1 rounded-md transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        // 1775:20269 — the code text and the copy glyph on an 8px gap, the icon
+        // in the file's 24px box (a 16px glyph centred), inheriting the meta
+        // line's muted colour and brightening with the rest on hover.
+        "ws-press inline-flex items-center gap-2 rounded-md transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         className
       )}
     >
-      Code
-      <span className="tnum font-semibold tracking-[0.08em] text-white">{groupRoomCode(code)}</span>
+      <span>
+        Code{" "}
+        <span className="tnum font-semibold tracking-[0.08em] text-white">{groupRoomCode(code)}</span>
+      </span>
+      <IconCopyBulk className="h-6 w-6 shrink-0" />
     </button>
   );
 }

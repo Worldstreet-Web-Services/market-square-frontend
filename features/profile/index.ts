@@ -28,6 +28,7 @@ export {
   useUpdateMe,
   useWink,
   useFollow,
+  usePassProfile,
   // The Replays rail is composed in `components/layout` because it reads the
   // topic vocabulary from discovery; this is the read it needs from here.
   useProfileStreams,

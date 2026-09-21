@@ -48,9 +48,28 @@ import { asset, sq, stripSquare } from "@/lib/square-path";
  * a new purple.
  */
 
-/** The node at the dock's height: every length below is the file's times this. */
-const K = 72 / 113;
-const px = (value: number) => `${(value * K).toFixed(2)}px`;
+/**
+ * THE DOCK'S HEIGHT DRIVES EVERYTHING. The file draws the bar at 113; we render
+ * it at 72 on a laptop, and on a phone that 72 is a tall pill — too big — so the
+ * height drops there and the WHOLE bar scales with it: width, gaps and glyphs
+ * are all this height over the file's 113. It is published as the CSS variable
+ * `--ws-dock-h`, set responsively on the wrapper (`58px` on a phone, `72px` from
+ * md), so ONE number moves the lot rather than re-deriving each length per
+ * breakpoint — which inline pixel strings could not do. The active label and
+ * the badge are the two fixed exceptions: a label scaled to the phone would be
+ * the unreadable 6px the file itself refuses.
+ */
+const px = (value: number) => `calc(var(--ws-dock-h) * ${value} / 113)`;
+
+/**
+ * The GLYPHS and the active LABEL are drawn a step larger than the node's own
+ * scale (ogazboiz: bigger icons and text). This grows the icon RELATIVE to the
+ * bar; it is still a fraction of `--ws-dock-h`, so it shrinks with the bar on a
+ * phone rather than fighting the smaller container. The stack (icon + 5px gap +
+ * label) still clears the height at both sizes, so nothing overflows.
+ */
+const ICON_SCALE = 1.4;
+const iconPx = (value: number) => px(value * ICON_SCALE);
 
 interface DockItem {
   href: string;
@@ -136,9 +155,21 @@ export function BottomDock({
        The inset clears the home indicator on a phone and is the file's 24
        everywhere else. */
     <div
-      className={cn("pointer-events-none fixed inset-x-0 z-40 flex justify-center", className)}
+      className={cn(
+        "pointer-events-none fixed inset-x-0 z-40 flex justify-center",
+        // The whole bar is sized off `--ws-dock-h`: 58 on a phone, where 72 was
+        // too tall a pill, and the file's 72 from md up. Every length inside —
+        // width, gaps, glyphs — is a fraction of this, so the two values here
+        // are the only thing that changes between mobile and desktop.
+        "[--ws-dock-h:58px] md:[--ws-dock-h:72px]",
+        className
+      )}
       style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
     >
+      {/* The row HUGS its contents and sits centred — the floating pill, not a
+          bar spanning the screen. The nav's own `px(286)` width (below) is the
+          knob: raise it to widen the pill, but it is never stretched to fill
+          the screen. */}
       <div className="pointer-events-auto flex items-center" style={{ gap: px(13.29) }}>
         {/* 748:15722 — `#141416` at 47%, fully round, behind a heavy backdrop
             blur and the file's own deep shadow. */}
@@ -156,7 +187,12 @@ export function BottomDock({
             with -30.18 spread. Fixed 286 wide, items centred 21.6 apart. */}
         <nav
           aria-label="Primary"
-          className="flex h-[72px] items-center justify-center rounded-full bg-[rgba(20,20,22,0.47)] backdrop-blur-[29.69px] shadow-[inset_0_0_0_1.2px_rgba(255,255,255,0.12),0_21.63px_60.1px_-19.23px_rgba(0,0,0,0.95)]"
+          // The horizontal padding keeps the end items (Home's label, Chat's
+          // glyph) off the pill's rounded edges — scaled from the dock height
+          // like every other length, so it holds its proportion as the bar
+          // resizes. It lives in a class rather than the inline style so the
+          // width/gap the design pins stay exactly as they are.
+          className="flex h-(--ws-dock-h) items-center justify-around rounded-full bg-[rgba(20,20,22,0.47)] px-[calc(var(--ws-dock-h)*24/113)] backdrop-blur-[29.69px] shadow-[inset_0_0_0_1.2px_rgba(255,255,255,0.12),0_21.63px_60.1px_-19.23px_rgba(0,0,0,0.95)]"
           style={{ width: px(286), gap: px(21.6) }}
         >
           {items.map((item) => {
@@ -181,7 +217,7 @@ export function BottomDock({
                       alt=""
                       aria-hidden
                       className="block"
-                      style={{ width: px(item.size.width), height: px(item.size.height) }}
+                      style={{ width: iconPx(item.size.width), height: iconPx(item.size.height) }}
                     />
                   ) : (
                     /*
@@ -198,8 +234,8 @@ export function BottomDock({
                       aria-hidden
                       className="block bg-current"
                       style={{
-                        width: px(item.size.width),
-                        height: px(item.size.height),
+                        width: iconPx(item.size.width),
+                        height: iconPx(item.size.height),
                         maskImage: `url(${item.glyph})`,
                         WebkitMaskImage: `url(${item.glyph})`,
                         maskSize: "contain",
@@ -222,7 +258,7 @@ export function BottomDock({
                 {/* 748:15732 — only the active item is labelled. Manrope in the
                     file; Geist here, since that is the app's face. */}
                 {active ? (
-                  <span className="text-[10px] font-bold leading-none">{item.label}</span>
+                  <span className="text-[13px] font-bold leading-none">{item.label}</span>
                 ) : (
                   <span className="sr-only">{item.label}</span>
                 )}
@@ -237,7 +273,7 @@ export function BottomDock({
             onClick={onShowSidebar}
             aria-label="Show sidebar"
             title="Show sidebar"
-            className="ws-glass ws-press hidden h-[72px] w-[72px] place-items-center rounded-full text-[#9B9B9B] shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)] transition-colors hover:text-white md:grid"
+            className="ws-glass ws-press hidden h-(--ws-dock-h) w-(--ws-dock-h) place-items-center rounded-full text-[#9B9B9B] shadow-[0_22px_60px_-19px_rgba(0,0,0,0.95)] transition-colors hover:text-white md:grid"
           >
             <IconCollapseRight className="h-6 w-6" />
           </button>
@@ -252,7 +288,7 @@ export function BottomDock({
             onClick={onCompose}
             // It asks first — a post or a gist room (QA). See CreateChoiceSheet.
             aria-label="Create"
-            className="ws-press block h-[72px] w-[72px] rounded-full transition-opacity hover:opacity-90"
+            className="ws-press block h-(--ws-dock-h) w-(--ws-dock-h) rounded-full transition-opacity hover:opacity-90"
           >
             <svg viewBox="0 0 113 113" className="block h-full w-full" fill="none" aria-hidden>
               <path

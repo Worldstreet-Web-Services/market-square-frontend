@@ -1013,9 +1013,9 @@ describe("Home's banner is the three 2026-09-16 slides", () => {
     // open instead of sitting on top of a list of results.
     assert.match(
       home,
-      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && <HomeBanner \/>\}/
+      /headSlot=\{\s*<>\s*<HomeTopRow value=\{query\} onChange=\{setQuery\} \/>\s*\{!searching && \(\s*<div className="mt-4">\s*<HomeBanner \/>/
     );
-    assert.match(feed, /\{headSlot && <div className="mb-\[64px\] flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
+    assert.match(feed, /\{headSlot && <div className="mb-10 flex flex-col gap-\[11px\]">\{headSlot\}<\/div>\}/);
     const head = feed.indexOf("{headSlot && ");
     const rooms = feed.indexOf("{roomsSlot}");
     assert.ok(head > 0 && rooms > head, "the head is not above everything else");
@@ -1063,7 +1063,7 @@ describe("Home's Top GistRooms section is 647:16288's first block", () => {
   });
 
   it("spaces it by 1305:149177: 16 to the rail, cards 17 apart, 63 to what follows", () => {
-    assert.match(rail, /mb-\[64px\]/);
+    assert.match(rail, /mb-10/);
     assert.match(rail, /className="mb-4"/);
     assert.match(rail, /gap-\[17px\] overflow-x-auto/);
     // The pager dots belong to the BANNER in this design, not here.
@@ -1072,25 +1072,30 @@ describe("Home's Top GistRooms section is 647:16288's first block", () => {
     assert.doesNotMatch(feed, /\{roomsSlot && <div className="mb-6">/, "an empty rooms slot takes space again");
   });
 
-  it("keeps the card at 120 with the Join pill at the file's y", () => {
+  it("draws the card at node 1769:3670: 24 mic, 12/16 title, tiny chips, small Join", () => {
     assert.match(card, /flex items-center justify-between gap-4/);
-    assert.match(card, /flex h-4 items-center gap-1 rounded-full bg-white\/10 px-2 text-\[9px\]/);
-    // One 16-tall line: a chip that does not fit whole wraps out of sight
-    // instead of growing the card past 120 or being cut in half.
-    assert.match(card, /flex h-4 flex-wrap items-center gap-x-1 gap-y-4 overflow-hidden/);
-    // The ring is drawn INSIDE, as the file's stroke is, so it takes no width
-    // from the 306 content box.
-    assert.match(card, /shadow-\[inset_0_0_0_1px_rgba\(255,255,255,0\.18\)\]/);
-    assert.doesNotMatch(card, /border border-white\/\[0\.18\]/);
-    assert.match(card, /mt-2 space-y-3 pl-8/);
-    assert.match(card, /ws-press flex h-5 w-fit items-center gap-\[3px\] rounded-\[30px\] px-3/);
+    // The 24px mic badge and the Geist SemiBold 12/16 title.
+    assert.match(card, /<IconRoomBadgeMic className="h-6 w-6 shrink-0" \/>/);
+    assert.match(card, /line-clamp-2 min-w-0 flex-1 text-\[12px\] font-semibold leading-4 text-white/);
+    // The tiny topic chip on a single clipped line.
+    assert.match(card, /flex h-\[15px\] items-center gap-1 rounded-full bg-white\/10 px-1\.5 text-\[9px\]/);
+    assert.match(card, /flex h-\[15px\] flex-wrap items-center gap-x-1 gap-y-4 overflow-hidden/);
+    // Chips and Join indented under the title text; Join on the create ramp.
+    assert.match(card, /flex flex-col gap-3 pl-\[30px\]/);
+    assert.match(card, /ws-press flex h-7 w-fit items-center gap-1 rounded-full px-3 text-\[10px\]/);
+    // The card's own metrics: 342 wide, 16.862 radius, 0.766 hairline, 5.365 blur.
+    assert.match(card, /w-\[342px\] shrink-0/);
+    assert.match(card, /rounded-\[16\.862px\] shadow-\[inset_0_0_0_0\.766px_rgba\(255,255,255,0\.18\)\] backdrop-blur-\[5\.365px\]/);
   });
 
-  it("draws the face cluster at 496:13802's geometry", () => {
-    assert.match(card, /h-\[55\.62px\] w-\[72\.43px\]/);
-    assert.match(card, /left: 12\.31, top: 0, size: 32, rotate: 0/);
-    assert.match(card, /left: 38\.27, top: 21\.47, size: 34\.15, rotate: -4/);
-    assert.match(card, /left: 0, top: 20\.97, size: 34\.15, rotate: 4/);
+  it("draws the face cluster and +count at node 1769:3695's geometry", () => {
+    assert.match(card, /h-\[62px\] w-\[84px\]/);
+    assert.match(card, /left: 14\.17, top: 0, size: 36\.821, rotate: 0/);
+    assert.match(card, /left: 44\.04, top: 24\.7, size: 36\.821, rotate: -4/);
+    assert.match(card, /left: 0, top: 24\.13, size: 36\.821, rotate: 4/);
+    // The "+N" more-in-the-room count, nullable, never fabricated as 0.
+    assert.match(card, /room\.viewerCount > 0/);
+    assert.match(card, /\+\{room\.viewerCount\}/);
   });
 
   it("gives Religion and Food & Lifestyle the file's exported glyphs", () => {
@@ -1119,12 +1124,12 @@ describe("Home's Make some friends is 647:16288's second block", () => {
   });
 
   it("spaces it by the file: 90 to the deck, 9.38 to five pills, then the column's 64 to Coming Soon", () => {
-    assert.match(deck, /mt-\[90px\]/);
+    assert.match(deck, /md:mt-22\.5/);
     assert.match(deck, /mt-\[9\.38px\]/);
     // The rule and its 67 are gone (ogazboiz, 2026-09-12): 1305:149185 runs
     // from the pills straight on to Coming Soon on its own 64.
     assert.doesNotMatch(deck, /mt-\[67px\] h-\[0\.5px\]/);
-    assert.match(deck, /"mb-\[64px\]"/);
+    assert.match(deck, /"mb-10"/);
     assert.match(deck, /<DeckDots variant="home" count=\{5\}/);
     assert.match(dots, /w-\[36\.29px\]/);
     assert.match(dots, /h-\[5\.81px\]/);
@@ -1143,7 +1148,7 @@ describe("Home's Make some friends is 647:16288's second block", () => {
     assert.ok(mainBase, "could not find the column's base classes");
     assert.doesNotMatch(mainBase, /overflow-x-clip/, "the column clips again, cutting the rule at its edge");
     assert.match(shell, /min-h-dvh w-full overflow-x-clip bg-chrome/, "nothing clips at the window, so the rule scrolls the page sideways");
-    assert.match(houses, /ws-bleed-right-only -mx-4 overflow-x-auto/, "the houses rail bleeds past the column's left edge under the dock");
+    assert.match(houses, /-mr-4 overflow-x-auto/, "the houses rail scrolls within the column");
   });
 });
 
@@ -1308,7 +1313,10 @@ describe("The dock follows 964:24177", () => {
   });
 
   it("is the file's bar and circle at 72/113", () => {
-    assert.match(dock, /const K = 72 \/ 113;/);
+    // The height is a CSS variable — 58 on a phone, the file's 72 from md — and
+    // every length is that height over 113, so the whole bar scales as one.
+    assert.match(dock, /\[--ws-dock-h:58px\] md:\[--ws-dock-h:72px\]/);
+    assert.match(dock, /calc\(var\(--ws-dock-h\) \* \$\{value\} \/ 113\)/);
     assert.match(dock, /style=\{\{ width: px\(286\), gap: px\(21\.6\) \}\}/);
     assert.match(dock, /bg-\[rgba\(20,20,22,0\.47\)\]/);
     assert.match(dock, /inset_0_0_0_1\.2px_rgba\(255,255,255,0\.12\)/);
@@ -1501,15 +1509,19 @@ describe("The profile's Houses and tabs follow 1021:20292 and 1021:21615", () =>
 });
 
 describe("Profiles share like posts, and the posts sit off the tab strip", () => {
-  it("opens the shared ShareSheet from the profile and the more menu", () => {
+  it("opens the ProfileShareSheet card modal from the profile and the more menu", () => {
+    // The profile shares through the designed card modal (node 1624:21811) now,
+    // not the plain target list — the card IS the share, with Download/Share.
     const page = stripComments(read("features/profile/components/profile-page.tsx"));
     const menu = stripComments(read("features/profile/components/person-more-menu.tsx"));
     for (const code of [page, menu]) {
-      assert.match(code, /from "@\/components\/ui\/share-sheet"/);
-      assert.match(code, /<ShareSheet[\s\S]{0,80}title="Share profile"/);
+      assert.match(code, /from "@\/components\/ui\/profile-share-sheet"/);
+      assert.match(code, /<ProfileShareSheet open onClose=\{[^}]+\} profile=\{[^}]+\} \/>/);
       assert.doesNotMatch(code, /navigator\.share\(/, "the profile shares through the bare device sheet again");
     }
-    assert.ok(existsSync(new URL("../components/ui/share-sheet.tsx", import.meta.url)));
+    // The card is server-rendered so the preview and the saved file are one.
+    assert.ok(existsSync(new URL("../components/ui/profile-share-sheet.tsx", import.meta.url)));
+    assert.ok(existsSync(new URL("../app/api/profile-card/route.tsx", import.meta.url)));
   });
 
   it("keeps the posts 32 under the strip and 32 in, 24 apart", () => {
@@ -1920,7 +1932,10 @@ describe("The camera is the second door, and it behaves differently", () => {
   const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
 
   it("is offered only in a one-to-one, where a snap means something", () => {
-    assert.match(thread, /conversationKind === "direct" && \(\n\s*<CircleButton\n\s*label="Take a photo or video"/);
+    // The camera lives inside the composer's "+" tray now, but it is still a
+    // one-to-one-only door — a house shows the file picker alone.
+    assert.match(thread, /conversationKind === "direct" && \(\n\s*<button\n[\s\S]{0,240}?setCameraOpen\(true\)/);
+    assert.match(thread, /<IconCamera[\s\S]{0,60}?Photo or video/);
   });
 
   it("marks what it produces as a capture, and arms View once from that", () => {
@@ -1948,6 +1963,97 @@ describe("The camera is the second door, and it behaves differently", () => {
   it("refuses to record a clip the service would not accept, before recording it", () => {
     assert.match(camera, /if \(!type\) \{/);
     assert.match(camera, /getUploadLimits\(\)\.videoContentTypes/);
+  });
+});
+
+describe("A gist room's chat can answer a particular message", () => {
+  const panel = stripComments(read("features/streams/components/chat-panel.tsx"));
+
+  it("carries the reply target and the people named, and omits them when there are none", () => {
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    assert.match(api, /\.\.\.\(replyToId \? \{ replyToId \} : \{\}\)/);
+    assert.match(api, /\.\.\.\(mentions && mentions\.length > 0 \? \{ mentions \} : \{\}\)/);
+  });
+
+  it("draws the quote only where the service sent one", () => {
+    // A chat from before replies existed reads exactly as it did.
+    assert.match(panel, /\{message\.replyTo && \(/);
+    assert.match(panel, /Message deleted/);
+  });
+
+  it("names a handle only when it can name the person behind it", () => {
+    // Inventing an id for an unrecognised @word would notify a stranger who
+    // happens to share a spelling.
+    assert.match(panel, /mentionsPresentIn\(speakers, draft\)/);
+  });
+
+  it("keeps the reply target out of the text field, where a backspace would eat it", () => {
+    assert.match(panel, /Replying to /);
+    assert.match(panel, /aria-label="Cancel reply"/);
+  });
+});
+
+describe("A shared link posts as a post, and arrives as the thing it points at", () => {
+  it("offers posting into Square beside the outward shares", () => {
+    const sheet = stripComments(read("components/ui/share-sheet.tsx"));
+    assert.match(sheet, /Post to Square/);
+    // The composer's EXISTING prefill contract, not a second door.
+    assert.match(sheet, /"\/\?compose=1&text=" \+ encodeURIComponent\(shareIntoPostText\(payload\.url\)\)/);
+  });
+
+  it("draws one card per post, from the first Square link in its words", () => {
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    assert.match(card, /const shared = firstSquareLink\(post\.text\);/);
+    assert.match(card, /\{shared && <SharedLinkCard reference=\{shared\.ref\} href=\{shared\.href\} \/>\}/);
+  });
+
+  it("shares a gist room INTO Square, and draws it as the room's own card", () => {
+    // "the share link I mean is like posting to Square for gist room".
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /Post to Square/);
+    assert.match(room, /"\/\?compose=1&text=" \+ encodeURIComponent\(houseShareUrl\(shareOrigin, stream\.id\)\)/);
+    // The SAME card the messages pane draws, so a room shared to the feed and
+    // a room announced in a house are not two different objects — and it
+    // carries the live state, so a morning post stops offering a closed room.
+    const preview = stripComments(read("components/layout/shared-link-card.tsx"));
+    assert.match(preview, /<GistRoomCard streamId=\{reference\.id\} fluid \/>/);
+  });
+
+  it("removes the card rather than inventing one it could not load", () => {
+    const preview = stripComments(read("components/layout/shared-link-card.tsx"));
+    // Gone, private, or the request failed: the link stays a link.
+    assert.match(preview, /if \(!post\.data\) return null;/);
+    assert.match(preview, /if \(!profile\.data\) return null;/);
+  });
+});
+
+describe("The capture control is named for what it does, and safety is about other people", () => {
+  it("says View once, never Streak — a streak is the consequence, not the control", () => {
+    const bar = stripComments(read("features/messages/components/media-send-bar.tsx"));
+    assert.match(bar, /View once/);
+    assert.match(bar, /Keep in chat/);
+    // A flame MEANS streak; it belongs where a streak is counted, not on the
+    // control that arms one shot.
+    assert.doesNotMatch(bar, /streak-flame/);
+    const camera = stripComments(read("features/messages/components/camera-sheet.tsx"));
+    assert.doesNotMatch(camera, /streak-flame/);
+  });
+
+  it("draws the view-once mark in ONE place, and the bubble reads it", () => {
+    // The same mark was drawn three times — bubble, camera, composer — which
+    // is how two of them end up different.
+    const shared = stripComments(read("components/ui/view-once.tsx"));
+    assert.match(shared, /export function ViewOnceMark\(/);
+    const thread = stripComments(read("features/messages/components/thread.tsx"));
+    assert.doesNotMatch(thread, /function SnapMark\(/);
+    assert.match(thread, /<ViewOnceMark opened=/);
+  });
+
+  it("offers nothing to block, report or mute on the reader's own seat", () => {
+    // Tapping yourself in a room offered Block and Report — actions about
+    // somebody else, pointed at nobody.
+    const sheet = stripComments(read("features/houses/components/person-sheet.tsx"));
+    assert.match(sheet, /\{!isSelf &&/);
   });
 });
 
@@ -2053,8 +2159,39 @@ describe("The friends deck asks about people the reader has not answered for", (
     // The wink hides the card for the cooldown the wink itself lasts — the day
     // the service's `excludeWinked` covers — read against state, never a clock
     // call in the render body.
-    assert.match(deck, /winkedHere: \(id\) => hasWinked\(winkedHere, id, now\),/);
+    assert.match(deck, /winkedHere: \(id\) => answered\.has\(id\) \|\| hasWinked\(winkedHere, id, now\),/);
     assert.match(deck, /const \[now, setNow\] = useState\(\(\) => Date\.now\(\)\);/);
+    // EVERY answer closes the card, including the pass the service knows
+    // nothing about — and it stays closed rather than lapsing with a cooldown.
+    assert.match(deck, /const answered = decidedIds\(useDeckDecisions\(me\.data\?\.id \?\? null\)\);/);
+    // The deck's ordering is named once, so switching to the service's ranked
+    // `foryou` is one line rather than a hunt through call sites.
+    assert.match(deck, /usePeople\("", DECK_SORT, true, friendsFilterFacets\(filter\)\)/);
+    const filters = stripComments(read("lib/people-filters.ts"));
+    assert.match(filters, /export const PEOPLE_SORTS = \["followers", "recent", "foryou"\] as const;/);
+    // The service's ranked ordering, live since #267 deployed: people who
+    // winked the reader first, then the ordinary order.
+    assert.match(filters, /export const DECK_SORT: PeopleSort = "foryou";/);
+    // A pass reaches the SERVICE, or it is only true in this browser.
+    assert.match(deck, /pass\.mutate\(\{ profileId: profile\.id, passed: true \}\)/);
+    // And every answer is asked of the service, in the query rather than after
+    // paging — `excludeWinkedEver`, not the cooldown's `excludeWinked` alone.
+    const friends = stripComments(read("lib/friends-filter.ts"));
+    assert.match(friends, /excludeWinkedEver: true,/);
+    assert.match(friends, /excludePassed: true,/);
+    assert.match(deck, /remember\(decision === "follow" \? "followed" : "passed"\);/);
+    assert.match(deck, /remember\("passed"\);/);
+    assert.match(deck, /remember\("winked"\);/);
+    assert.match(deck, /remember\("followed"\);/);
+  });
+
+  it("says why the strongest card is at the front", () => {
+    // The service leads with people who winked the reader; unsaid, that card
+    // looks like every other one and the reader answers a question they did
+    // not know they had been asked.
+    const card = stripComments(read("components/layout/pal-card.tsx"));
+    assert.match(card, /\{profile\.winkedMe && \(/);
+    assert.match(card, /Winked you/);
   });
 
   it("names the wink control's own state once it has been used", () => {
@@ -2154,16 +2291,18 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // "Live GistRooms" and "Coming Soon" in the shared heading, WITHOUT View more.
     assert.match(screen, /<SectionHeading id="live-gistrooms" lead="Live" accent="GistRooms" \/>/);
     assert.match(screen, /<SectionHeading id="coming-soon-page" lead="Coming Soon" \/>/);
-    // The live grid: 290.47 x 103.13 cells (the 338 card at 0.8594), 16 between rows.
-    assert.match(street, /grid grid-cols-\[repeat\(auto-fill,290\.47px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
-    assert.match(street, /className="h-\[103\.13px\] w-\[290\.47px\]"/);
-    assert.match(screen, /const ROOM_CARD_SCALE = 290\.47 \/ 338;/);
-    assert.match(screen, /<div style=\{\{ zoom: ROOM_CARD_SCALE \}\}>\s*<GistRoomCard\s+preview/);
-    // Coming Soon is a GRID here (1317:158179), on the file's 12.38, 59 under the live grid.
+    // The live grid draws the card FLUID at its natural size (node 1769:3670) —
+    // the old CSS `zoom` into a 290 cell broke the mic badge's SVG gradient, so
+    // it is an at-most-two-across grid of fluid cards now.
+    assert.doesNotMatch(screen, /ROOM_CARD_SCALE|zoom:/, "the card is scaled with CSS zoom again");
+    assert.match(street, /aria-label="Gist rooms open now"[\s\S]{0,120}grid grid-cols-1 gap-4 lg:grid-cols-2/);
+    assert.match(screen, /<GistRoomCard\s+fluid\s+preview/);
+    // Coming Soon is a GRID here (1317:158179), 59 under the live grid — now at
+    // most TWO across, because the cards are the wide horizontal ComingSoonCard.
     assert.match(street, /className=\{liveHouses\.length > 0 \? "mt-\[59px\]" : "mt-9"\}/);
-    assert.match(street, /grid grid-cols-1 gap-x-\[12\.38px\] gap-y-4 md:grid-cols-2 lg:grid-cols-3/);
+    assert.match(street, /grid grid-cols-1 gap-4 lg:grid-cols-2/);
     assert.doesNotMatch(street, /overflow-x-auto|w-\[479px\]/, "upcoming rooms are a sideways rail again");
-    assert.match(screen, /upcomingCardSlot=\{\(stream\) => <UpcomingRoomCard stream=\{stream\} \/>\}/);
+    assert.match(screen, /upcomingCardSlot=\{\(stream\) => <ComingSoonCard stream=\{stream\} \/>\}/);
     // `?open=1` still opens the composer on arrival.
     assert.match(street, /if \(openParam !== "1" \|\| autoOpened\.current\) return;/);
   });
@@ -2186,7 +2325,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(screen, /Live GistRooms/);
     // 1373:3367's card: 290 x 86 at 16.86, three across, rows 16 apart, paged.
     assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,290px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
-    assert.match(screen, /h-\[86px\] w-\[290px\] overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
+    assert.match(screen, /h-\[86px\] w-\[290px\] cursor-pointer overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
     assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
     assert.match(screen, /left-\[75\.75px\] top-\[16\.25px\] flex w-\[127\.52px\] flex-col gap-\[4\.93px\]/);
     assert.match(screen, /ws-btn-welcome ws-press absolute right-4 top-\[31px\] flex h-6 w-16 items-center justify-center rounded-\[61\.6px\]/, "the Join House pill lost its ramp");
@@ -2218,7 +2357,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
 
   it("gives the room card 415:12704's hover state, only where the file wires it", () => {
     const card = stripComments(read("components/layout/gist-room-card.tsx"));
-    assert.match(card, /preview && "group\/room relative h-\[120px\] overflow-hidden"/);
+    assert.match(card, /preview && "group\/room relative h-\[130px\] overflow-hidden"/);
     assert.match(card, /hidden group-hover\/room:block group-focus-within\/room:block/);
     // The file's numbers: the 16.79/17.16 title, the one 34.5 tile, Speaking Now, unmute, Join.
     assert.match(card, /text-\[16\.79px\] font-semibold leading-\[17\.16px\]/);
@@ -2270,15 +2409,24 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // Nothing scheduled is no section — never an empty shelf or a spacer.
     assert.match(soon, /if \(items\.length === 0\) return null;/);
     assert.match(soon, /useStreamList\("scheduled"/);
-    // The same card the gist rooms page draws, at Popular Houses' rail width —
-    // 356 on a 15.7 gap — not the node's 264.35, which read as too small on
-    // the column (ogazboiz, 2026-09-12). The card scales from its width.
-    assert.match(soon, /<UpcomingRoomCard stream=\{room\} \/>/);
-    assert.match(soon, /gap-\[15\.7px\] overflow-x-auto/);
-    assert.match(soon, /w-\[356px\] shrink-0/);
-    assert.doesNotMatch(soon, /w-\[479px\]|w-\[264\.35px\]/);
-    // The card's one Regular run.
-    assert.match(stripComments(read("components/layout/upcoming-room-card.tsx")), /font-normal text-\[#D9D9D9\]/);
+    // The HORIZONTAL card ogazboiz asked back for (node 1542:3294): its own
+    // component, NOT the gist-rooms grid's vertical banner, in a sideways rail
+    // at the node's own 467 on a 16 gap.
+    assert.match(soon, /<ComingSoonCard stream=\{room\} \/>/);
+    assert.match(soon, /gap-4 overflow-x-auto/);
+    // Capped at 400 (w-100) on desktop, but never more than 95% of the column
+    // so a second card always PEEKS in at the edge — on a phone especially,
+    // where 100% would fill the column and hide the next one (ogazboiz).
+    assert.match(soon, /w-100 max-w-\[95%\] shrink-0/);
+    assert.doesNotMatch(soon, /UpcomingRoomCard/, "Home's Coming Soon fell back to the banner card");
+    const soonCard = stripComments(read("components/layout/coming-soon-card.tsx"));
+    // 136 tall, width fills its (≤467) wrapper; the text column flexes so the
+    // card fits a narrow column without overflow. Plus the marks of the design:
+    // the purple accent bar, the #3C3C3C divider, the one Regular run.
+    assert.match(soonCard, /h-\[136px\] w-full/, "the card lost its fixed height or fluid width");
+    assert.match(soonCard, /w-\[7px\] bg-spotlight/);
+    assert.match(soonCard, /w-px shrink-0 bg-\[#3C3C3C\]/);
+    assert.match(soonCard, /font-normal leading-normal text-\[#D9D9D9\]/);
   });
 
   it("does not drop a host into the soundcheck for a room scheduled for later", () => {
@@ -2318,11 +2466,11 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // reader is in, so nothing is re-sorted and no second endpoint was added.
     assert.match(houses, /useDiscoverHouses\(/);
     assert.doesNotMatch(houses, /\.sort\(/, "one loaded page is being re-sorted");
-    // 1305:149179's own scale: 356x120 at radius 22.
-    assert.match(houses, /w-\[356px\] shrink-0/);
-    assert.match(houses, /"--u": "calc\(100cqw \/ 356\)"/);
-    assert.match(houses, /height: u\(120\)/);
-    assert.match(houses, /borderRadius: u\(22\)/);
+    // Node 1302:148763: capped at 400 (w-100) so a second card peeks, max-w-95%
+    // so it fits a narrow column; 17px radius, and Join House on the create ramp.
+    assert.match(houses, /w-100 max-w-\[95%\] shrink-0/);
+    assert.match(houses, /rounded-\[17px\]/);
+    assert.match(houses, /bg-\[linear-gradient\(90deg,#9f65fd_0%,#5b05e6_100%\)\]/);
     // Empty or undeployed is ABSENT, never an empty shelf.
     assert.match(houses, /if \(houses\.unavailable \|\| items\.length === 0\) return null;/);
   });
@@ -2343,10 +2491,11 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(field, /aspect-square/);
   });
 
-  it("spaces every Home section by the column's own 64, headings flush at x=0", () => {
-    // 1305:149185's `itemSpacing` is 64.0 in the raw node (it was read as 63
-    // once), and its heading rows start at x=0. The 5px inset and the 78px
-    // margin were 647:16288's and misaligned the sections.
+  it("spaces every Home section by the shared rhythm, headings flush at x=0", () => {
+    // 1305:149185's `itemSpacing` is 64 in the raw node, deliberately tightened
+    // to 40 (mb-10) on request — the 64 gap read as too much vertical space
+    // between sections. What matters is that EVERY home section shares the ONE
+    // rhythm; their heading rows start at x=0, with no 5px inset.
     for (const file of [
       "components/layout/live-gist-rooms.tsx",
       "components/layout/coming-soon-rooms.tsx",
@@ -2354,7 +2503,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
       "components/layout/post-for-you.tsx",
     ]) {
       const section = stripComments(read(file));
-      assert.match(section, /mb-\[64px\]/, `${file} is not on the column's rhythm`);
+      assert.match(section, /mb-10/, `${file} is not on the column's rhythm`);
       assert.match(section, /className="mb-4"/, `${file} lost the 16 under its heading`);
       assert.doesNotMatch(section, /pl-\[5px\]/, `${file} still carries the old 5px inset`);
     }
@@ -2436,22 +2585,28 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // bottom still lands at 367) and the row is bottom-aligned. Ours were
     // ragged because each card sized to its own content.
     const rail = stripComments(read("components/layout/post-for-you.tsx"));
-    assert.match(rail, /h-\[367px\] w-\[467px\]/, "the cards size to their content again");
+    assert.match(rail, /h-\[367px\] w-113\.5 max-w-\[85vw\]/, "the cards size to their content again");
     const card = stripComments(read("features/feed/components/post-card.tsx"));
     assert.match(card, /compact \? "flex h-full flex-col p-3"/, "a compact card no longer fills its box");
-    // Every compact card reserves the same media strip, one photo or four.
-    assert.match(card, /compact && rail\.length > 0 \? \(/);
+    // The compact card is VERTICAL — the media FULL-WIDTH filling the box, the
+    // caption clamped under it (node 1313:149187). The old side-tile shrank the
+    // media, which is what read as "compressed on mobile".
+    assert.match(card, /\{compact \? \(/);
+    assert.match(card, /<div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">/);
+    assert.match(
+      card,
+      /className="absolute inset-0 h-full w-full object-contain"/,
+      "the compact media is contained (whole frame), not cropped"
+    );
     assert.match(card, /<MediaRail items=\{rail\} size="compact" \/>/);
     // 1313:152774's tiles, and the column's own geometry untouched beside them.
     const media = stripComments(read("lib/post-media.ts"));
     assert.match(media, /compact: \{\n\s*tile: 134\.3,\n\s*tileHeight: 188\.52,/);
     assert.match(media, /post: \{\n\s*tile: 250\.93,\n\s*tileHeight: 352\.22,/);
-    // In a fixed box the PICTURES give, never the words: the strip flexes and
-    // the caption keeps its two lines.
-    assert.match(card, /compact && "shrink-0 overflow-hidden"/, "the caption gives way instead of the pictures");
-    assert.match(card, /compact && "line-clamp-2"/);
-    // No "Show more" in the rail — it expands in place and the card cannot grow.
-    assert.match(card, /clampLines=\{full \|\| compact \? undefined : 6\}/);
+    // The caption under the media takes two lines; a text-only card gets ten.
+    // It is clamped by class, never `clampLines` — that one brings a "Show more"
+    // which expands in place, and the fixed-height card cannot grow.
+    assert.match(card, /post\.mediaUrl\s*\?\s*"text-\[13\.8px\] leading-5\.75 line-clamp-2"\s*:\s*"text-\[15px\] leading-6 line-clamp-8"/);
     // A clip's URL in an <img> is a broken tile: a video shows its poster.
     assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /const video = item\.kind === "video" \|\| isVideoUrl\(item\.url\);/);
     assert.match(stripComments(read("features/feed/components/media-rail.tsx")), /src=\{poster\}/);
@@ -2524,7 +2679,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // The node's leading space is a gap the width of a Geist space, not a
     // character in the copy.
     assert.doesNotMatch(row, /" Search Gistrooms/);
-    assert.match(row, /flex h-12 min-w-0 flex-1 items-center gap-\[3\.78px\] rounded-full border-\[0\.68px\] border-white\/40 px-2/);
+    assert.match(row, /flex h-12 min-w-0 flex-1 items-center gap-\[3\.78px\] rounded-2xl border-\[0\.68px\] border-white\/40 px-2/);
     // The file's type scale is unchanged. What the reader TYPES is white;
     // #7A7A7A is the placeholder, which is what the node actually draws.
     assert.match(row, /text-\[16px\] font-medium leading-\[22px\] tracking-\[-0\.112px\]/);
@@ -2639,32 +2794,28 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(hook, /errorCode\(error\) === "CONFLICT"/, "a room already over is not reported");
   });
 
-  it("builds the upcoming card at 1295:140164's own scale, nothing rounded up", () => {
+  it("builds the upcoming card with readable fixed type, not width-scaled to a phone", () => {
     const card = stripComments(read("components/layout/upcoming-room-card.tsx"));
-    // Every value in the node divides by its 0.80037 stroke to a round design
-    // unit, so the card is 479x147 and one unit is 1/479th of its own width.
-    assert.match(card, /max-w-\[479px\]/);
-    assert.match(card, /"--u": "calc\(100cqw \/ 479\)"/);
-    assert.match(card, /height: u\(147\)/);
-    assert.match(card, /borderRadius: u\(20\)/);
-    // Spine, artwork, the mic BESIDE it, the rule, the ramps.
-    assert.match(card, /width: u\(12\), height: u\(169\)/);
-    assert.match(card, /width: u\(97\.78\), height: u\(106\.24\)/);
-    assert.match(card, /left: u\(131\), top: u\(21\), width: u\(24\)/);
-    assert.match(card, /bg-\[#3C3C3C\]/);
-    assert.match(card, /linear-gradient\(90deg,#9F65FD 0%,#5B05E6 100%\)/);
-    assert.match(card, /rgba\(159,90,255,0\.09\)/);
-    // The file's own small type, NOT lifted to a house minimum.
-    assert.match(card, /fontSize: u\(5\.334\)/);
-    assert.match(card, /fontSize: u\(6\)/);
-    assert.match(card, /fontSize: u\(16\.677\)/);
-    // Every glyph is the file's own export, never a repo icon stand-in.
+    // It used to reproduce node 1295:140164 by scaling every size to a fraction
+    // of its own width (--u = 100cqw/479). In the 356px rail that shrank the
+    // date and countdown to ~5px. It is fixed, readable type now — NO width unit
+    // anywhere, so the type does not shrink with the column.
+    assert.doesNotMatch(card, /100cqw/);
+    assert.doesNotMatch(card, /var\(--u\)/);
+    assert.doesNotMatch(card, /max-w-\[479px\]/);
+    // Readable fixed sizes: the title (over the banner) and the clock.
+    assert.match(card, /text-\[15px\] font-semibold/);
+    assert.match(card, /text-\[20px\] leading-none font-semibold/);
+    // The title is laid over the image behind a legibility scrim.
+    assert.match(card, /bg-linear-to-t from-black/);
+    // Remind and Share ride the canonical button scale.
+    assert.match(card, /ws-btn-sm/);
+    // Every glyph is still the file's own export, never a repo icon stand-in.
     for (const glyph of ["card-mark", "card-calendar", "card-share", "card-topic-trading"]) {
       assert.match(card, new RegExp(`/gist-rooms/${glyph}\\.svg`), `${glyph} is not the exported node`);
     }
-    // The title is clamped INSIDE its 39u box, never spilling past it.
-    assert.match(card, /className="absolute flex flex-col justify-center overflow-hidden font-semibold/);
-    assert.match(card, /className="line-clamp-2"\n/);
+    // The title is clamped to two lines, never spilling.
+    assert.match(card, /line-clamp-2/);
     // It never offers to join a room that has not opened.
     assert.doesNotMatch(card, /Join/);
   });
@@ -2744,8 +2895,8 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // 72 = 16 + the node's 40 row + 16. It was 48 with the account on the
     // LEFT and the mark floated to the middle; the node puts the lockup left
     // and the account right, so the phone finally agrees with the desktop bar.
-    assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[72px\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
-    assert.match(read("app/globals.css"), /--ws-topbar-h: 72px;/);
+    assert.match(shell, /fixed inset-x-0 top-0 z-40 flex h-\[var\(--ws-topbar-h\)\] items-center justify-between border-b border-white\/10 px-6 md:hidden/);
+    assert.match(read("app/globals.css"), /--ws-topbar-h: 56px;/);
     // The node's own 100 x 40 lockup box — WITHOUT the node's 0.53 hairline
     // under it (ogazboiz, 2026-09-16): on a phone it read as a stray short
     // line under the logo. The bar's full-width border-b above is the only one.
@@ -2864,7 +3015,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.ok(soon > 0 && partners > soon && houses > partners, "the partners card moved out of place");
     // The rail already carries it from lg up; two on one screen is not a
     // placement, so the column's copy is phones only.
-    assert.match(feed, /className="mb-\[64px\] lg:hidden">\{partnersSlot\}/);
+    assert.match(feed, /className="mb-10 lg:hidden">\{partnersSlot\}/);
     assert.match(stripComments(read("components/layout/right-rail.tsx")), /<EcosystemPartnersRail \/>/);
   });
 
@@ -3079,34 +3230,40 @@ describe("chat photos and clips open full screen and can be saved, like WhatsApp
   });
 });
 
-describe("recording a voice note: stop to listen, send in one tap", () => {
+describe("recording a voice note: discard, pause/resume, stop to a player", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
 
-  it("stops and KEEPS the note on the square, instead of throwing it away", () => {
-    // The square used to be voice.cancel, so stopping to listen discarded it.
-    assert.match(thread, /onClick=\{\(\) => void finishVoice\(\)\}\n\s*aria-label="Stop recording and listen"/);
+  it("gives the recording row discard, pause/resume and stop", () => {
+    // The recorder's acts, inside the composer row (ogazboiz, 2026-09-21).
+    // Discard is its own quiet control, never the primary — the destructive one
+    // is the hardest to hit.
     assert.match(thread, /onClick=\{voice\.cancel\}\n\s*aria-label="Discard recording"/);
-    assert.doesNotMatch(thread, /aria-label="Stop and discard recording"/);
+    assert.match(thread, /onClick=\{voice\.paused \? voice\.resume : voice\.pause\}/);
+    assert.match(thread, /aria-label=\{voice\.paused \? "Resume recording" : "Pause recording"\}/);
+    // Stop opens a review; it does not fire the note.
+    assert.match(thread, /onClick=\{\(\) => void stopForReview\(\)\}/);
+    assert.doesNotMatch(thread, /const sendVoiceNow/);
   });
 
-  it("sends with ONE tap on the arrow", () => {
-    assert.match(thread, /onClick=\{\(\) => void sendVoiceNow\(\)\}\n\s*aria-label="Send voice note"/);
-    // Built from the upload result, not from attachment state that has not updated yet.
-    assert.match(
-      thread,
-      /media: \{ key: uploaded\.key, url: uploaded\.url, durationSeconds: result\.durationSeconds \},/
-    );
-    assert.match(thread, /send\.mutate\(note, \{ onSuccess: \(\) => onCancelReply\(\) \}\);/);
+  it("stops to a PLAYER that plays back before sending, not a file row", () => {
+    // ogazboiz, 2026-09-21: play the note before sending. The review is a
+    // dedicated player (VoiceReview) — play/pause, waveform, then discard,
+    // re-record and send — not the staged file chip.
+    assert.match(thread, /<VoiceReview\b/);
+    assert.match(thread, /function VoiceReview\(/);
+    assert.match(thread, /aria-label="Record again"/);
+    assert.match(thread, /onSend=\{\(\) => void sendVoicePreview\(\)\}/);
+    // The take is NOT uploaded until Send — the preview holds the file itself.
+    assert.match(thread, /voicePreviewFile\.current = result\.file;/);
   });
 
-  it("lets a kept note be played back before it is sent", () => {
+  it("keeps a staged file-audio preview playable too", () => {
     assert.match(thread, /attachment\.result\.kind === "audio" \? \(\n\s*<StagedVoicePreview/);
     assert.match(thread, /function StagedVoicePreview\(/);
   });
 
-  it("says so when the upload fails, instead of failing silently", () => {
+  it("says so when the send fails, instead of failing silently", () => {
     assert.match(thread, /toast\.error\("Couldn't send the voice note\."\)/);
-    assert.match(thread, /toast\.error\("Couldn't attach the voice note\."\)/);
   });
 
   /*
@@ -3120,7 +3277,7 @@ describe("recording a voice note: stop to listen, send in one tap", () => {
   it("uploads a DM attachment privately and sends it by key", () => {
     const panel = stripComments(read("features/messages/components/attachment-panel.tsx"));
     assert.match(panel, /uploadFile\(file, setProgress, "attachment", "message"\)/);
-    assert.match(thread, /uploadFile\(result\.file, undefined, "attachment", "message"\)/);
+    assert.match(thread, /uploadFile\(file, undefined, "attachment", "message"\)/);
     assert.match(thread, /key: attachment\.result\.key,/);
     const outgoing = stripComments(read("features/messages/lib/outgoing.ts"));
     assert.match(outgoing, /\.\.\.\(mediaKey \? \{ key: mediaKey \} : \{ url: body\.media\.url \}\)/);
@@ -3343,7 +3500,9 @@ describe("one room per tab, owned by the shell", () => {
   it("the phone's Back minimises", () => {
     const header = code("features/houses/components/house-header.tsx");
     assert.match(header, /aria-label="Minimise room"/);
-    assert.match(header, /<IconChevronDown className="h-4 w-4 shrink-0 md:hidden" \/>/);
+    // A back control is a left chevron on the phone (a down chevron reads as
+    // "collapse"); the aria-label carries that it minimises the room.
+    assert.match(header, /<IconChevronLeft className="w-4 h-4 shrink-0 md:hidden" \/>/);
   });
 
   it("a stream asks before it plays over a gist room", () => {

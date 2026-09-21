@@ -66,12 +66,14 @@ export function JoinACommunity() {
           for two left 113px of empty card-shaped space under it on a phone
           (ogazboiz, 2026-09-18: "the card was too long"), so a single house
           gets a single row. */}
-      <div className="ws-bleed-right-only -mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Scrolls sideways WITHIN the column — no `-mx` bleed, which pushed the
+          rail wider than the feed column and overflowed on a phone. */}
+      <div className="-mr-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className={`grid grid-flow-col gap-[14.14px] ${items.length > 1 ? "grid-rows-2" : "grid-rows-1"}`}>
           {items.map((house) => (
             <article
               key={house.id}
-              className="flex h-[113.36px] w-[432.18px] items-center gap-[16.19px] rounded-[20.24px] bg-[rgba(16,16,18,0.62)] px-[16.19px] py-[12.15px] shadow-[inset_0_0_0_1.01px_rgba(255,255,255,0.18)] backdrop-blur-[7.08px]"
+              className="flex h-[113.36px] w-[88vw] max-w-100 items-center gap-3 rounded-[20.24px] bg-[rgba(16,16,18,0.62)] px-4 py-[12.15px] shadow-[inset_0_0_0_1.01px_rgba(255,255,255,0.18)] backdrop-blur-[7.08px]"
             >
               <span className="flex h-[89.07px] w-[81.98px] shrink-0 items-center justify-center overflow-hidden rounded-[20.24px] bg-[#FFFFFF]">
                 <Avatar
@@ -80,13 +82,13 @@ export function JoinACommunity() {
                   src={house.imageUrl}
                   size={89}
                   sizeClassName="h-full w-full"
-                  className="rounded-none border-0"
+                  className="border-0 rounded-none"
                 />
               </span>
 
-              <div className="flex w-[209.51px] min-w-0 flex-col gap-[8.1px]">
-                <div className="flex flex-col gap-[4.05px]">
-                  <p className="truncate text-[12.15px] font-semibold leading-[14.17px] text-white">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="flex flex-col gap-1">
+                  <p className="truncate text-[15px] font-semibold leading-tight text-white">
                     {house.title ?? "Untitled house"}
                   </p>
                   <div className="flex items-center gap-[4.05px]">
@@ -106,7 +108,7 @@ export function JoinACommunity() {
                               src={member.avatarUrl}
                               size={20}
                               sizeClassName="h-full w-full"
-                              className="rounded-none border-0"
+                              className="border-0 rounded-none"
                             />
                           </span>
                         ))}
@@ -115,7 +117,7 @@ export function JoinACommunity() {
                     {/* Never "0 members": a null count means the payload does
                         not count them, which is not the same claim. */}
                     {house.memberCount !== null && (
-                      <span className="tnum text-[8.1px] font-medium leading-[10.53px] text-white">
+                      <span className="tnum text-[12px] font-medium text-white/60">
                         {house.memberCount.toLocaleString()}{" "}
                         {house.memberCount === 1 ? "member" : "members"}
                       </span>
@@ -123,7 +125,7 @@ export function JoinACommunity() {
                   </div>
                 </div>
                 {house.description && (
-                  <p className="line-clamp-2 text-[12.15px] font-normal leading-[20.24px] text-white">
+                  <p className="line-clamp-2 text-[13px] font-normal leading-snug text-white/70">
                     {house.description}
                   </p>
                 )}
@@ -133,7 +135,7 @@ export function JoinACommunity() {
                 type="button"
                 disabled={join.isPending}
                 onClick={() => join.mutate(house.id)}
-                className="ws-press flex shrink-0 items-center gap-1 rounded-[100px] bg-[#7E3BEB] bg-[linear-gradient(90deg,#9F65FD_0%,#5B05E6_100%)] px-[16.19px] py-[8.1px] text-[8.1px] font-medium leading-[10.53px] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="ws-press flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-spotlight bg-[linear-gradient(90deg,#9F65FD_0%,#5B05E6_100%)] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 Join House
               </button>

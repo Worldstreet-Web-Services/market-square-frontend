@@ -56,7 +56,7 @@ export function LiveGistRooms() {
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby="top-gist-rooms" className="mb-[64px]">
+    <section aria-labelledby="top-gist-rooms" className="mb-10">
       <div className="mb-4">
         <SectionHeading
           id="top-gist-rooms"

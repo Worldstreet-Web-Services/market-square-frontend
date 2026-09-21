@@ -1,6 +1,7 @@
 "use client";
 
 import { MenuPanel, MenuRow } from "@/components/ui/menu-row";
+import { IconMic } from "@/components/ui/icons";
 import {
   IconLeave,
   IconMuteBell,
@@ -62,6 +63,13 @@ import {
  * passing `onShareInvite` or not.
  */
 export interface ThreadMenuActions {
+  /**
+   * Opens the gist-room composer. On a phone the header's "Create Gist Room"
+   * pill collapses into this menu row to save the tight top bar; from `md` the
+   * pill carries it and this row is hidden, so the action is never in two live
+   * places at one width.
+   */
+  onCreateGistRoom?: () => void;
   onAddMembers?: () => void;
   /** Makes an invite link and opens the share sheet. Absent for a reader who may not make one. */
   onShareInvite?: () => void;
@@ -111,6 +119,18 @@ export function ThreadMenu({
 
   return (
     <MenuPanel>
+      {/* On a phone the header pill collapses into here; the pill carries it
+          from `md`, so this row is hidden there and the action never doubles. */}
+      {actions.onCreateGistRoom && (
+        <div className="md:hidden">
+          <MenuRow
+            icon={<IconMic className="h-4 w-4" />}
+            label="Create Gist Room"
+            onClick={actions.onCreateGistRoom}
+          />
+        </div>
+      )}
+
       <MenuRow
         icon={<IconProfileAdd className="h-4 w-4" />}
         // The file words it differently on the two group menus — an owner ADDS,

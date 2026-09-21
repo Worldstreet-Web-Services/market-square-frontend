@@ -74,6 +74,8 @@ export function friendsFilterFacets(filter: FriendsFilter): {
   gender?: string;
   excludeFollowing?: boolean;
   excludeWinked?: boolean;
+  excludeWinkedEver?: boolean;
+  excludePassed?: boolean;
 } {
   const city = filter.city.trim();
   const gender = filter.gender.trim();
@@ -82,12 +84,21 @@ export function friendsFilterFacets(filter: FriendsFilter): {
     ...(gender ? { gender } : {}),
     ...(filter.newOnly ? { excludeFollowing: true } : {}),
     /*
-      A WINK IS AN ANSWER, whichever way the deck is filtered — so this is not
-      part of `newOnly`. The service drops anybody the reader has a standing
-      wink at, which is what keeps the cursor exact and what carries the rule
-      across devices; the client filter (lib/deck-candidates.ts) still covers
-      the moment between a wink and the next read.
+      EVERY ANSWER THE READER HAS GIVEN, asked of the SERVICE and not filtered
+      out of a loaded page — a client-side filter leaves holes no cursor can
+      top up. None of these belong to `newOnly`: an answer is an answer
+      whichever way the deck is filtered.
+
+      `excludeWinkedEver` as well as `excludeWinked`, and the pair is the
+      point. The 24-hour cooldown answers "may I wink them again?"; a deck asks
+      "is this still a suggestion?". Tying the card to the cooldown is what
+      brought a winked face back the next day.
+
+      `excludePassed` is the answer that was recorded nowhere at all until the
+      service grew a route for it.
     */
     excludeWinked: true,
+    excludeWinkedEver: true,
+    excludePassed: true,
   };
 }

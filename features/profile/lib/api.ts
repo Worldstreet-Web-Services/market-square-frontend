@@ -90,6 +90,24 @@ export async function fetchProfileActivities(username: string) {
   return ProfileActivitiesSchema.parse(await msApi.get(`/profiles/${username}/activities`));
 }
 
+/**
+ * `POST /profiles/:id/pass` — "not for me", recorded so the deck stops asking.
+ *
+ * PRIVATE AND ONE-DIRECTIONAL, which is the whole reason it is safe to make
+ * permanent: the other person is told nothing, loses nothing, and can still
+ * find, follow, wink at and message the reader. Their own deck is unaffected.
+ * It is not a quiet block — blocking is its own act, with its own consequences
+ * and its own undo.
+ *
+ * Idempotent: a repeat answers 200 rather than an error, so a double tap on a
+ * slow connection costs nothing. `DELETE` takes it back, and `removed: false`
+ * for a pass that was not there is an answer rather than a failure.
+ */
+export async function setPass(profileId: string, passed: boolean) {
+  const path = `/profiles/${encodeURIComponent(profileId)}/pass`;
+  return passed ? await msApi.post(path) : await msApi.del(path);
+}
+
 export async function setFollow(profileId: string, follow: boolean) {
   const path = `/profiles/${profileId}/follow`;
   return FollowResultSchema.parse(follow ? await msApi.post(path) : await msApi.del(path));

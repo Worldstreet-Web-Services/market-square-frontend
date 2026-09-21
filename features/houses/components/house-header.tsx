@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
-import { IconArrowLeft, IconChevronDown } from "@/components/ui/icons";
+import { IconArrowLeft, IconChevronDown, IconChevronLeft } from "@/components/ui/icons";
 // The file's own glyphs, exported from it. See components/ui/room-icons.tsx.
 import { IconHouseGroup, IconRoomLeave, IconRoomShare } from "@/components/ui/room-icons";
 import { canGoBack } from "@/lib/nav-history";
@@ -161,7 +161,7 @@ export function HouseHeader({
         apart. Every phone value below is that node's; every `md:` value is the
         desktop file's, unchanged.
       */
-      className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-6 pb-6 pt-6 md:px-4 md:pb-6 md:pt-4 xl:px-8 xl:pt-6"
+      className="sticky top-[var(--ws-topbar-h)] z-30 bg-chrome px-6 pb-6 pt-4 md:px-4 md:pb-6 md:pt-4 xl:px-8 xl:pt-6"
     >
       {/* The file's 24px rhythm is a DESKTOP rhythm. Three rows 24 apart, on
           top of a 24px title that wrapped to three lines, was a phone whose
@@ -186,19 +186,26 @@ export function HouseHeader({
              playing in the mini-player, so the phone's glyph is the
              chevron-down every call and music app uses for exactly that. */
           aria-label="Minimise room"
-          className="ws-press flex w-fit items-center gap-2 text-[14px] leading-6 text-white transition-opacity hover:opacity-80 md:text-[16px]"
+          /* On a phone Back is an ICON-ONLY glass disc, the twin of the share
+             button on the same line: the `Back` text is hidden and the control
+             becomes the share button's 38px `ws-glass-pill` lens. From md it is
+             the file's own labelled text row again. */
+          className="ws-press flex items-center gap-2 text-[14px] leading-6 text-white transition-opacity hover:opacity-80 max-md:h-9.5 max-md:w-9.5 max-md:justify-center max-md:rounded-full max-md:text-body max-md:ws-glass-pill md:text-[16px]"
         >
-          <IconChevronDown className="h-4 w-4 shrink-0 md:hidden" />
-          <IconArrowLeft className="hidden h-5 w-5 shrink-0 md:block" />
-          Back
+          <IconChevronLeft className="w-4 h-4 shrink-0 md:hidden" />
+          <IconArrowLeft className="hidden w-5 h-5 shrink-0 md:block" />
+          <span className="hidden md:inline">Back</span>
         </button>
 
-        {/* ── row 1 ── */}
-        <div className="flex items-center gap-4">
+        {/* ── row 1 — ONLY when there is a house to name or a join to offer.
+            A street room has neither, and rendering the empty row anyway put a
+            second 24px gap under "Back" (the file draws no row here at all). ── */}
+        {(house || (join && join.state !== "seated")) && (
+          <div className="flex items-center gap-4">
           {house && (
             <p className="flex min-w-0 items-center gap-2 text-[14px] leading-6 text-white/50 md:text-[16px]">
               {/* Node 129:11891, the file's own 16px `profile-2user`, in `--color-spotlight` — which is the `#7E3BEB` it is painted with. */}
-              <IconHouseGroup className="h-4 w-4 shrink-0 text-spotlight" />
+              <IconHouseGroup className="w-4 h-4 shrink-0 text-spotlight" />
               <span className="truncate">{house}</span>
             </p>
           )}
@@ -235,7 +242,8 @@ export function HouseHeader({
               {join.state === "pending" ? "Asked to join" : "Join House"}
             </button>
           )}
-        </div>
+          </div>
+        )}
 
         {/* ── row 2 ──
             On a phone it is TWO rows (1285:92930): the title over its count,
@@ -244,7 +252,11 @@ export function HouseHeader({
             squeezing it beside two controls. From `md` the desktop's one
             row: title and count on the left, the discs at the right edge. */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {/* On a phone the meta (the face pile + count) rides BESIDE the title
+              on one row — the title left, presence to its side — instead of
+              stacking under it. From md it is the file's stacked title-over-meta
+              again. */}
+          <div className="flex min-w-0 flex-1 flex-col gap-2 max-md:flex-row max-md:items-center max-md:gap-3">
             {/*
               20/28 on a phone, the file's 24/32 from `md` up.
 
@@ -256,17 +268,21 @@ export function HouseHeader({
               changes; the desktop header is still the file's.
             */}
             {/* 1285:92932 — Bold 16/24 on a phone; the desktop's 24/32 from `md`. */}
-            <h1 className="ws-display text-[16px] leading-6 md:text-[24px] md:leading-8">{topic}</h1>
+            <h1 className="ws-display min-w-0 text-[16px] leading-6 max-md:line-clamp-2 max-md:flex-1 md:text-[24px] md:leading-8">{topic}</h1>
             {/* 129:11900 — 16/24 at `white/50`, stepped down with the title so
                 the pair keeps its proportion instead of the subtitle crowding
                 a smaller heading. */}
-            <p className="text-[14px] leading-5 text-white/50 md:text-[16px] md:leading-6">{meta}</p>
+            <p className="text-[14px] leading-5 text-white/50 max-md:shrink-0 md:text-[16px] md:leading-6">{meta}</p>
           </div>
 
           {/* 38px circles, gap 16. `ws-glass-pill` is the file's own material —
               see globals.css for why it is a recessed lens and not a ring. */}
           {/* 1285:92934 — a HUG row on a 16 gap at both widths. */}
-          <div className="flex shrink-0 items-center gap-4">
+          {/* ON A PHONE these ride the Back line: floated to the header's own
+              top-right (top-6/right-6 = the pt-6/px-6 gutter), so share and
+              Leave Room sit beside Back and the title keeps the full width. From
+              md they return to the flow — the file's row 2, at the right edge. */}
+          <div className="absolute flex items-center gap-4 right-6 top-4 shrink-0 md:static md:right-auto md:top-auto">
             {onShare && (
               <button
                 type="button"
@@ -274,7 +290,7 @@ export function HouseHeader({
                 aria-label="Share this gist room"
                 className="ws-glass-pill ws-press flex h-[38px] w-[38px] items-center justify-center rounded-full text-body"
               >
-                <IconRoomShare className="h-4 w-4" />
+                <IconRoomShare className="w-4 h-4" />
               </button>
             )}
             {onLeave && (
@@ -302,15 +318,17 @@ export function HouseHeader({
 
                 NO BORDER: the node reports a #FF0B0B stroke at weight ZERO,
                 which renders nothing — the same trap as the share disc beside
-                it. What is real is the 13% red wash.
+                it. The edge that does show is the GLASS refraction (see the
+                glassy note below), not a stroke.
 
-                ONE RED, NOT THREE. The file paints the wash #FF0B0B, the glyph
-                #FF383C and the label #FF5454. #FF383C is `--color-danger`
-                exactly; the other two have no token, and this slice is asserted
-                to hold no hex literal and never to borrow `--color-live`. So
-                all three roles render from the one token that already means
-                "this destroys something" — a wash, a glyph and a label at the
-                same hue rather than three reds a pixel apart.
+                THE WASH IS THE NODE'S OWN #FF0B0B, the glyph and label are
+                `--color-danger` (#FF383C). The file paints three reds — wash
+                #FF0B0B, glyph #FF383C, label #FF5454 — and the earlier build
+                flattened all three onto --color-danger, which tinted the wash a
+                shade oranger than the node. The wash is now the node's exact
+                rgba (carried by `ws-glass-danger`); the glyph and label stay on
+                the one destructive token, so this reads as two reds, not three
+                a pixel apart.
               */
               /*
                 NOW LABELLED AT BOTH WIDTHS. The phone frame (1285:92938) draws
@@ -325,14 +343,26 @@ export function HouseHeader({
                 The visible label IS the accessible name now — the hidden span
                 is `display: none`, so only the width's own label is read.
               */
+              /*
+                GLASSY, like the node — `ws-glass-danger`, the red sibling of
+                the share disc's `ws-glass-pill`. The node carries Figma's GLASS
+                effect over its #FF0B0B wash, and the earlier build shipped the
+                wash flat, so the pill read as a dead tint. The header is opaque
+                `bg-chrome`, so a bare backdrop blur has nothing behind it to
+                frost; the utility MATCHES the render instead — a diagonal sheen
+                and a two-sided refraction rim (faint top-left, stronger
+                bottom-right) that read as a lit lens, not the border the node
+                does not draw. See ws-glass-danger in globals.css for the
+                sampled values.
+              */
               <button
                 ref={leaveRef}
                 type="button"
                 onClick={() => (confirmBeforeLeave ? setConfirming(true) : onLeave())}
                 aria-haspopup={confirmBeforeLeave ? "dialog" : undefined}
-                className="ws-press flex h-[38px] w-[115px] shrink-0 items-center justify-center gap-2 rounded-full bg-danger/[0.13] px-2 text-[12px] leading-5 text-danger transition-colors hover:bg-danger/20 md:w-auto md:px-4 md:text-[15px] md:leading-6"
+                className="ws-press ws-glass-danger flex h-[38px] w-[115px] shrink-0 items-center justify-center gap-2 rounded-full px-2 text-[12px] leading-5 text-danger transition hover:brightness-110 md:w-auto md:px-4 md:text-[15px] md:leading-6"
               >
-                <IconRoomLeave className="h-4 w-4 shrink-0" />
+                <IconRoomLeave className="w-4 h-4 shrink-0" />
                 <span className="md:hidden">{leaveLabel}</span>
                 <span className="hidden md:inline">Leave Room</span>
               </button>

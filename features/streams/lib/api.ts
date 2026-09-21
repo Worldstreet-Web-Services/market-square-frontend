@@ -197,8 +197,20 @@ export async function fetchChat(streamId: string, cursor?: string | null) {
   );
 }
 
-export async function sendChat(streamId: string, text: string) {
-  return ChatMessageSchema.parse(await msApi.post(`/streams/${streamId}/chat`, { text }));
+export async function sendChat(
+  streamId: string,
+  text: string,
+  { replyToId, mentions }: { replyToId?: string; mentions?: string[] } = {}
+) {
+  return ChatMessageSchema.parse(
+    await msApi.post(`/streams/${streamId}/chat`, {
+      text,
+      // OMITTED when absent rather than sent null: the service reads a missing
+      // field as "no reply" and "no mentions", and a null would be a claim.
+      ...(replyToId ? { replyToId } : {}),
+      ...(mentions && mentions.length > 0 ? { mentions } : {}),
+    })
+  );
 }
 
 export async function createStream(input: {
@@ -244,8 +256,32 @@ export async function goLive(streamId: string) {
   return GoLiveSchema.parse(await msApi.post(`/streams/${streamId}/go-live`));
 }
 
+/**
+ * ENDS A ROOM, AND BELIEVES THE ROOM OVER THE RESPONSE.
+ *
+ * The end path does its work and can still throw afterwards: on 2026-09-21
+ * every close in production answered 500 INTERNAL_ERROR while the stream came
+ * back `status: "ended"` with `endedAt` set. The host was told "couldn't end
+ * the stream" about a room that was already closed, so they pressed it again,
+ * and again.
+ *
+ * So a failure is CHECKED rather than trusted. One read of the stream answers
+ * the only question that matters — is it over? — and a room that is over is a
+ * success whatever the POST said. Anything else rethrows untouched: a room
+ * that is genuinely still live must still report the failure, or this becomes
+ * a way to swallow real errors.
+ *
+ * The read is cheap, happens only on the error path, and its own failure
+ * changes nothing: the original error is what the caller hears.
+ */
 export async function endStream(streamId: string) {
-  return StreamSchema.parse(await msApi.post(`/streams/${streamId}/end`));
+  try {
+    return StreamSchema.parse(await msApi.post(`/streams/${streamId}/end`));
+  } catch (error) {
+    const settled = await fetchStream(streamId).catch(() => null);
+    if (settled && (settled.status === "ended" || settled.status === "cancelled")) return settled;
+    throw error;
+  }
 }
 
 /**

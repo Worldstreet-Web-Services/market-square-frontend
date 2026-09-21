@@ -7,10 +7,19 @@ import { Toaster } from "sonner";
 import { createQueryClient } from "@/lib/query-client";
 import { DEMO_AUTH } from "@/lib/auth-mode";
 import { asset } from "@/lib/square-path";
+import { privyAppId } from "@/lib/privy-app-id";
 
-// Well-formed placeholder lets the app build before env vars are set; in demo
-// mode Privy is mounted but never used (useAuth short-circuits).
-const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cl0123456789abcdefghijklm";
+/*
+  A WELL-FORMED ID, WHATEVER THE ENVIRONMENT SAYS.
+
+  `PrivyProvider` throws on a malformed id rather than degrading, and it wraps
+  the whole tree — so the throw lands while Next prerenders and fails the
+  BUILD. This used to fall back only on an EMPTY value, which let CI's
+  deliberate `ci-placeholder` through and broke every gates run on every
+  branch. `privyAppId` checks the shape instead. In demo mode Privy is mounted
+  but never used (useAuth short-circuits).
+*/
+const PRIVY_APP_ID = privyAppId(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
   if (DEMO_AUTH) return <>{children}</>;

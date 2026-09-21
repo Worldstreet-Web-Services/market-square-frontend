@@ -42,7 +42,17 @@ export function useChatHistory(streamId: string, after: string | null, enabled: 
 export function useSendChat(streamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (text: string) => sendChat(streamId, text),
+    mutationFn: ({
+      text,
+      replyToId,
+      mentions,
+    }: {
+      text: string;
+      /** The message being answered, when the sender picked one. */
+      replyToId?: string;
+      /** Profile ids named in the text, so the handles link to people. */
+      mentions?: string[];
+    }) => sendChat(streamId, text, { replyToId, mentions }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "chat"] });
     },

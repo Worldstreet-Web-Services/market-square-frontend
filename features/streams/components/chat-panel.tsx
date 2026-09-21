@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/ui/states";
 import { IconChevronDown, IconDots, IconEmoji, IconSend } from "@/components/ui/icons";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 // The gist room's own glyphs, exported from the file. See room-icons.tsx.
 import {
   IconEmojiAdd,
@@ -18,6 +19,7 @@ import {
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
 import { useChat, useChatHistory, useSendChat } from "@/features/streams/hooks/use-chat";
+import { mentionsPresentIn } from "@/lib/mention-token";
 import { OLDER_THRESHOLD_PX, oldestFirst, preservedScrollTop } from "@/lib/chat-order";
 import type { ChatMessage, Stream } from "@/features/streams/lib/types";
 
@@ -141,7 +143,47 @@ export function ChatPanel({
   const hasOlder = history.data ? history.hasNextPage : (chat.data?.nextCursor ?? null) !== null;
   const gate = useGate();
   const [draft, setDraft] = useState("");
+  /*
+    THE MESSAGE BEING ANSWERED, and the people named in the line.
+
+    A room chat moves fast and several conversations share one column, so
+    "which of these were you answering?" is the question a reply exists to
+    settle (ogazboiz, 2026-09-21). One level, never a thread: a reply to a
+    reply points at that message, which is what the DM pane does and what
+    keeps a live column readable.
+
+    The mention ids are read back out of the DRAFT on every send rather than
+    accumulated as they are picked: a handle typed and then deleted is not a
+    mention, and sending it would notify somebody the sender changed their mind
+    about.
+  */
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /*
+    WHO A HANDLE IN THE DRAFT ACTUALLY REFERS TO.
+
+    The people whose names are known here are the ones who have SPOKEN in this
+    room — their profiles ride along on their own messages. That is a smaller
+    set than the room's roster and it is the honest one: a handle only becomes
+    a mention when we can name the person behind it, and inventing an id for an
+    unrecognised @word would notify a stranger who happens to share a spelling.
+  */
+  const speakers = useMemo(() => {
+    const seen = new Map<string, { type: "user"; id: string; handle: string }>();
+    for (const message of ordered) {
+      const author = message.author;
+      if (author?.username && author.id) {
+        seen.set(author.username.toLowerCase(), { type: "user", id: author.id, handle: author.username });
+      }
+    }
+    return [...seen.values()];
+  }, [ordered]);
+  const mentionIds = mentionsPresentIn(speakers, draft).map((mention) => mention.id);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  // The gist room's chat composer has a full emoji picker (it is a MESSAGE
+  // field, not the six-glyph reaction bar) that types the glyph into the draft.
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const emojiWrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
   /**
@@ -227,16 +269,66 @@ export function ChatPanel({
     const text = draft.trim();
     if (!text) return;
     gate(() =>
-      send.mutate(text, {
+      send.mutate(
+        {
+          text,
+          ...(replyTo ? { replyToId: replyTo.id } : {}),
+          // Only the handles STILL WRITTEN in the line: a name picked and then
+          // deleted is not a mention, and sending it would notify somebody the
+          // sender decided against.
+          ...(mentionIds.length > 0 ? { mentions: mentionIds } : {}),
+        },
+        {
         onSuccess: () => {
           setDraft("");
+          setReplyTo(null);
           // Saying something is opting back into the live edge: nobody types a
           // message and then wants to keep reading history.
           jumpToLatest(true);
         },
-      })
+        }
+      )
     );
   };
+
+  // Insert at the caret so a picked emoji lands where the reader is typing, not
+  // always at the end; caps at the input's own 300 and restores the caret after
+  // the glyph. The picker stays open so several can be added in a row.
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    setDraft((prev) => {
+      const start = el?.selectionStart ?? prev.length;
+      const end = el?.selectionEnd ?? prev.length;
+      const next = (prev.slice(0, start) + emoji + prev.slice(end)).slice(0, 300);
+      if (el) {
+        requestAnimationFrame(() => {
+          el.focus();
+          const caret = Math.min(start + emoji.length, next.length);
+          el.setSelectionRange(caret, caret);
+        });
+      }
+      return next;
+    });
+  };
+
+  // Dismiss the picker on a click away from it or Escape.
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const onDown = (event: PointerEvent) => {
+      if (emojiWrapRef.current && !emojiWrapRef.current.contains(event.target as Node)) {
+        setEmojiOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEmojiOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [emojiOpen]);
 
   const overlay = variant === "overlay";
   const theater = variant === "theater";
@@ -342,7 +434,7 @@ export function ChatPanel({
             <li
               key={message.id}
               className={cn(
-                "group relative flex gap-2.5 rounded-xl px-2 py-1.5 transition-colors",
+                "group/chat-row group relative flex gap-2.5 rounded-xl px-2 py-1.5 transition-colors",
                 overlay ? "ws-text-shadow" : "hover:bg-white/[0.04]"
               )}
             >
@@ -370,10 +462,52 @@ export function ChatPanel({
                   ) : null}
                   {overlay && <span className="shrink-0">· {relativeTime(message.createdAt)}</span>}
                 </p>
+                {/* THE MESSAGE THIS ONE ANSWERS, above the words that answer
+                    it. Drawn only where the service sent one, so a chat from
+                    before replies existed reads exactly as it did. */}
+                {message.replyTo && (
+                  <p className="mb-1 flex items-center gap-1.5 rounded-md border-l-2 border-white/25 bg-white/[0.05] px-2 py-1 text-[12px] leading-[16px] text-meta">
+                    <span className="shrink-0 font-semibold text-body">
+                      {message.replyTo.author?.displayName ?? "Someone"}
+                    </span>
+                    <span className="truncate">
+                      {message.replyTo.deleted ? "Message deleted" : message.replyTo.excerpt}
+                    </span>
+                  </p>
+                )}
                 <p className="break-words text-[14px] font-medium leading-snug text-heading">
                   {message.text}
                 </p>
               </div>
+
+              {/* REPLY — the one action on somebody else's message here. It is
+                  drawn beside the row rather than hidden behind a long press,
+                  because a live column scrolls and a gesture nobody finds is
+                  not an affordance. */}
+              <button
+                type="button"
+                onClick={() => setReplyTo(message)}
+                aria-label={"Reply to " + (message.author?.displayName ?? "this message")}
+                title="Reply"
+                className="ws-press mt-0.5 shrink-0 self-start rounded-full p-1.5 text-meta opacity-0 transition-opacity hover:bg-white/10 hover:text-heading focus-visible:opacity-100 group-hover/chat-row:opacity-100"
+              >
+                {/* A curved arrow back — drawn inline because the house set
+                    has no reply glyph and one borrowed from elsewhere would
+                    mean something else. */}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 14 14"
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 3 1.5 6.5 5 10" />
+                  <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+                </svg>
+              </button>
 
               {moderation && message.authorId !== stream.ownerId && (
                 <div className="shrink-0">
@@ -454,15 +588,53 @@ export function ChatPanel({
             to within one value per channel — inside a 1px `#26262B`, which is
             white at 6% over that same fill, at radius 30. The emoji glyph is
             held at its right edge, then 16px of gap
-            and the 38.37px send disc. The disc is `ws-glass-pill` rather than
-            a painted `#1C1C1C` circle for the same reason every other circular
+            and the 38.37px send disc. The disc is a ws-glass-pill rather than
+            a painted #1C1C1C circle for the same reason every other circular
             control in this file is: the node reports a stroke with no weight,
             which renders nothing, and the measured disc is an opaque near-black
             lens.
           */
+          <div className="flex flex-col gap-2">
+            {/* WHAT YOU ARE ANSWERING, above the field rather than inside it:
+                the reply target is a fact about the message, not part of the
+                text, and putting it in the field would make it deletable with
+                a backspace. Dismissable, because changing your mind about
+                which message you meant is the commonest correction here. */}
+            {replyTo && (
+              <div className="flex items-center gap-2 rounded-xl border-l-2 border-create bg-white/[0.05] px-3 py-1.5">
+                <span className="min-w-0 flex-1 truncate text-[12px] leading-[16px] text-meta">
+                  <span className="font-semibold text-body">
+                    Replying to {replyTo.author?.displayName ?? "Someone"}
+                  </span>
+                  {/* Concatenated, not a template literal: lib/button-sizing
+                      scans backticks naively and one here pairs with another
+                      further down to swallow a control's class string. */}
+                  {replyTo.text ? " · " + replyTo.text : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(null)}
+                  aria-label="Cancel reply"
+                  className="ws-press shrink-0 rounded-full p-1 text-meta transition-colors hover:bg-white/10 hover:text-heading"
+                >
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 12 12"
+                    className="h-3 w-3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                  >
+                    <path d="m3 3 6 6m0-6-6 6" />
+                  </svg>
+                </button>
+              </div>
+            )}
           <div className="flex items-center gap-4">
             <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-[30px] border border-white/[0.06] bg-overlay px-4">
               <input
+                ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()}
@@ -471,13 +643,26 @@ export function ChatPanel({
                 placeholder={stream.status === "live" ? "Start typing" : "Chat is closed"}
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/50 disabled:opacity-50"
               />
-              {/* The file's `emoji-add` glyph. There is no picker behind it, so
-                  it is decoration on the field rather than a dead button — it
-                  focuses the input, which is what tapping a field's furniture
-                  should do. */}
-              <span aria-hidden className="shrink-0 text-white/50">
-                <IconEmojiAdd className="h-5 w-5" />
-              </span>
+              {/* The file's emoji-add glyph opens the full emoji picker; a pick
+                  types into the message field above. (The dock's reaction button
+                  is a different thing — it floats a reaction over the room.) */}
+              <div ref={emojiWrapRef} className="relative shrink-0">
+                {emojiOpen && <EmojiPicker onPick={insertEmoji} />}
+                <button
+                  type="button"
+                  aria-label="Add emoji"
+                  aria-haspopup="dialog"
+                  aria-expanded={emojiOpen}
+                  disabled={stream.status !== "live"}
+                  onClick={() => setEmojiOpen((value) => !value)}
+                  className={cn(
+                    "ws-press flex text-white/50 transition-colors hover:text-white/80 disabled:opacity-50",
+                    emojiOpen && "text-white"
+                  )}
+                >
+                  <IconEmojiAdd className="h-5 w-5" />
+                </button>
+              </div>
             </div>
             <button
               onClick={submit}
@@ -487,6 +672,7 @@ export function ChatPanel({
             >
               <IconRoomSend className="h-4 w-4" />
             </button>
+          </div>
           </div>
         ) : (
           <div
