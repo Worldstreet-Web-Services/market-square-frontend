@@ -2307,42 +2307,29 @@ function Composer({
     a photo taken inside a chat is of the moment, a photo out of a gallery was
     kept for a reason and is not ours to destroy on the sender's behalf.
 
-    It SENDS ITSELF, caption and all — the camera reviewed the shot before it
-    got here (see CameraSheet), so there is nothing left to stage. The caption
-    typed over the image rides as the message text, and View once is the
-    reviewer's choice, allowed only where the service allows a snap at all
-    (`defaultViewOnce` is the guard: false in a group or on a non-photo/clip).
+    The reviewed shot STAGES like any other attachment (ogazboiz, 2026-09-21:
+    "when i click okay it moves to the attachment"), so the caption and the send
+    live in the composer with it — every chat image or clip is a view-once
+    streak already, so `defaultViewOnce` arms it and the composer's own toggle
+    can still turn it off.
   */
-  const takeCapture = async (
-    file: File,
-    previewUrl: string,
-    opts: { caption: string; viewOnce: boolean }
-  ) => {
+  const takeCapture = async (file: File, previewUrl: string) => {
     setCameraBusy(true);
     try {
       const uploaded = await uploadFile(file, undefined, "attachment", "message");
-      const armed =
-        opts.viewOnce &&
-        defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind });
-      const caption = opts.caption.trim();
-      const capture: OutgoingMessage = {
-        ...(caption ? { text: caption } : {}),
-        ...(caption ? { mentions: typing.mentionsFor(caption) } : {}),
-        ...(replyTo ? { replyToId: replyTo.id } : {}),
-        ...(armed ? { viewOnce: true } : {}),
-        media: {
-          key: uploaded.key,
+      setAsSnap(
+        defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind })
+      );
+      setAttachment((current) => {
+        if (current) URL.revokeObjectURL(current.previewUrl);
+        return {
+          result: uploaded,
+          measured: {},
+          fileName: file.name,
+          previewUrl,
           source: "camera",
-          url: uploaded.url,
-          width: null,
-          height: null,
-          durationSeconds: null,
-          fileName: null,
-          sizeBytes: null,
-        },
-      };
-      send.mutate(capture, { onSuccess: () => onCancelReply() });
-      URL.revokeObjectURL(previewUrl);
+        };
+      });
     } catch (cause) {
       URL.revokeObjectURL(previewUrl);
       toast.error(cause instanceof Error ? cause.message : "That capture didn't upload.");
@@ -2840,7 +2827,7 @@ function Composer({
       <CameraSheet
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
-        onCaptured={(file, previewUrl, opts) => void takeCapture(file, previewUrl, opts)}
+        onCaptured={(file, previewUrl) => void takeCapture(file, previewUrl)}
       />
 
       {picking && (
