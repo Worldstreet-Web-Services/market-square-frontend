@@ -62,15 +62,24 @@ export function SectionHeading({
   );
 }
 
-/** The pill — a link when it goes somewhere, a button when it opens something. */
+/** The pill — a link when it goes somewhere, a button when it opens something.
+ *
+ * It wears the shared Button `secondary` skin — a white/15 hairline over a
+ * white/5 fill with a solid-white label — so it reads as a real button rather
+ * than the near-invisible tint the earlier build used. But a section-header
+ * "View more" is a COMPACT secondary action, not a 44px CTA, so it sits one
+ * step BELOW the button scale's smallest tier at a fixed 28px — deliberately
+ * under the touch floor, which is why section-heading.tsx is allowlisted in
+ * lib/button-sizing.test.ts. Every section's "View more" is still this one
+ * button at this one size. */
 function SectionAction({ label, href, onPress }: { label: string; href?: string; onPress?: () => void }) {
   const className =
-    "ws-press flex shrink-0 items-center gap-[14px] rounded-full bg-white/[0.04] py-1 pl-2.5 pr-[3px] font-[family-name:var(--font-heading)] text-[10px] font-semibold leading-6 tracking-[0.015em] text-white transition-colors hover:bg-white/[0.08]";
+    "ws-press inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 font-[family-name:var(--font-heading)] text-[11px] font-semibold tracking-[0.01em] text-white transition-colors hover:bg-white/10";
   const inner = (
     <>
       {label}
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-      <img src={asset("/home/view-more-arrow.svg")} alt="" aria-hidden className="h-4 w-4" />
+      <img src={asset("/home/view-more-arrow.svg")} alt="" aria-hidden className="h-3 w-3" />
     </>
   );
   return href ? (

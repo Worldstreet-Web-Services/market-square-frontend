@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { profileHref } from "@/lib/profile-href";
 import { toast } from "sonner";
 import { atHandle } from "@/lib/handle";
@@ -47,7 +47,8 @@ import { formatElapsed } from "@/features/messages/lib/voice-recorder";
 import { dotScale } from "@/lib/voice-levels";
 import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
 import { uploadFile } from "@/lib/api/upload";
-import { IconArrowLeft, IconDownload, IconFullscreen, IconHouses, IconMic, IconPlay, IconPause, IconQuote, IconX } from "@/components/ui/icons";
+import { IconArrowLeft, IconCamera, IconDownload, IconFullscreen, IconHouses, IconMic, IconPlay, IconPause, IconPlus, IconQuote, IconSend, IconX } from "@/components/ui/icons";
+import { IconTrash } from "@/components/ui/thread-icons";
 import {
   useConversationMembers,
   useLeaveGroup,
@@ -363,7 +364,7 @@ function ThreadHeader({
         </span>
 
         <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1.5">
             {/* QA: the person's or group's name is the page's heading, so it is set
                 like one — 16px, up from the file's 12. */}
             <h1 className="truncate text-[16px] font-bold leading-6 text-white">
@@ -376,6 +377,32 @@ function ThreadHeader({
                 title
               )}
             </h1>
+            {/* The streak, AFTER THE NAME — Snapchat's placement, so a live
+                streak sits beside the name on opening the chat, not only in the
+                notice at the foot of the river. Flame + day count, the same
+                exported glyph the inbox row and the notice carry. 1:1 only: a
+                group has no snap streak. */}
+            {!group && conversation.snapStreak > 0 && (
+              <span
+                className="flex shrink-0 items-center gap-0.5"
+                title={
+                  conversation.snapStreak === 1
+                    ? "You started a streak"
+                    : `You're on a ${conversation.snapStreak}-day streak`
+                }
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
+                <img
+                  src={asset("/messages/streak-flame.svg")}
+                  alt=""
+                  aria-hidden
+                  className="h-4 w-[9.617px] shrink-0"
+                />
+                <span className="tnum text-[13px] font-bold leading-none text-[#ff9d01]">
+                  {conversation.snapStreak}
+                </span>
+              </span>
+            )}
           </div>
 
           {/* The design puts "Typing…" on this line in the earlier frame. There
@@ -488,7 +515,10 @@ function CreateGistRoomButton({ onClick }: { onClick?: () => void }) {
           : "Gist rooms aren't wired up on this surface yet."
       }
       className={cn(
-        "ws-btn-create flex h-[38px] w-[168px] shrink-0 items-center justify-center gap-1 rounded-full text-[15px] font-medium leading-[21.75px] text-white",
+        // Hidden on a phone — the action lives in the overflow menu there (see
+        // ThreadMenu) so the tight top bar is not carrying a 168px pill. From
+        // `md` the pill is back and the menu row hides, so it is never both.
+        "ws-btn-create hidden h-[38px] w-[168px] shrink-0 items-center justify-center gap-1 rounded-full text-[15px] font-medium leading-[21.75px] text-white md:flex",
         onClick ? "ws-press transition-opacity hover:opacity-90" : "cursor-not-allowed opacity-40"
       )}
     >
@@ -1362,6 +1392,147 @@ function StagedVoicePreview({ url, durationSeconds }: { url: string; durationSec
   );
 }
 
+/**
+ * THE VOICE NOTE, REVIEWED BEFORE IT IS SENT (node from ogazboiz, 2026-09-21).
+ *
+ * When a take is stopped it does not stage as a file row and it does not send —
+ * it lands here: a player to hear it back (play/pause, a scrubbable waveform
+ * with a progress dot, the clock), and three acts beneath it — discard,
+ * re-record, send. "Play the voice note before sending it" is the whole point,
+ * so the send is a deliberate tap AFTER the listen, never the same gesture.
+ *
+ * The bars are the take's OWN measured levels, not a hash: this is the very
+ * recording, so it can show what it actually sounded like. The played portion
+ * fills to `--color-create`; the rest is quiet. Tapping the bar seeks.
+ */
+function VoiceReview({
+  url,
+  durationSeconds,
+  levels,
+  sending,
+  onDiscard,
+  onReRecord,
+  onSend,
+}: {
+  url: string;
+  durationSeconds: number;
+  levels: number[];
+  sending: boolean;
+  onDiscard: () => void;
+  onReRecord: () => void;
+  onSend: () => void;
+}) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const bars = levels.length > 0 ? levels : waveformBars(url);
+  const progress = durationSeconds > 0 ? Math.min(1, elapsed / durationSeconds) : 0;
+
+  useEffect(() => {
+    const node = audio.current;
+    return () => node?.pause();
+  }, []);
+
+  const toggle = () => {
+    const node = audio.current;
+    if (!node) return;
+    if (node.paused) void node.play().catch(() => setPlaying(false));
+    else node.pause();
+  };
+  const seek = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const node = audio.current;
+    if (!node || durationSeconds <= 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    node.currentTime = ratio * durationSeconds;
+    setElapsed(node.currentTime);
+  };
+
+  return (
+    <div className="mb-1">
+      <audio
+        ref={audio}
+        src={url}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          setElapsed(0);
+        }}
+        onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime)}
+      />
+      {/* THE PLAYER — play/pause, the take's own waveform (played portion lit),
+          then the clock, in a pill like the composer's own. */}
+      <div className="flex items-center gap-3 rounded-full border border-[#26262B] bg-[#18181C] px-3 py-2">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? "Pause voice note" : "Play voice note"}
+          aria-pressed={playing}
+          className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/10"
+        >
+          {playing ? <IconPause className="h-5 w-5" /> : <IconPlay className="h-5 w-5" />}
+        </button>
+        <button
+          type="button"
+          onClick={seek}
+          aria-label="Seek"
+          className="flex h-8 min-w-0 flex-1 items-center gap-[3px] overflow-hidden"
+        >
+          {bars.map((level, index) => (
+            <span
+              key={index}
+              className={cn(
+                "w-[2.5px] shrink-0 rounded-full transition-colors",
+                index / bars.length <= progress ? "bg-create" : "bg-white/30"
+              )}
+              style={{ height: `${Math.round(dotScale(level) * 100)}%` }}
+            />
+          ))}
+        </button>
+        <span className="tnum shrink-0 text-[13px] font-semibold text-white">
+          {formatElapsed(playing || elapsed > 0 ? elapsed : durationSeconds)}
+        </span>
+      </div>
+
+      {/* DISCARD · RE-RECORD · SEND — the three acts under the player. */}
+      <div className="mt-3 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onDiscard}
+          aria-label="Discard recording"
+          title="Discard"
+          className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <IconTrash className="h-5 w-5" />
+        </button>
+        {/* RE-RECORD — throw this take away and start again. Red, like the
+            recorder's own live ring. */}
+        <button
+          type="button"
+          onClick={onReRecord}
+          aria-label="Record again"
+          title="Record again"
+          className="ws-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-danger text-danger transition-colors hover:bg-danger/10"
+        >
+          <IconMic className="h-6 w-6" />
+        </button>
+        {/* SEND — the violet ramp, Square's primary. */}
+        <button
+          type="button"
+          onClick={onSend}
+          disabled={sending}
+          aria-label="Send voice note"
+          className="ws-btn-create ws-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {sending ? <Spinner className="h-5 w-5 text-white" /> : <IconSend className="h-5 w-5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function VoiceBubble({
   message,
   mine,
@@ -1555,6 +1726,28 @@ function SnapBubble({
     return () => clearTimeout(timer);
   }, [expiresAt]);
 
+  // ── SENT SNAP — the Snapchat-style status card. ──
+  // A dark card, a red send-arrow that is FILLED until they open it and hollow
+  // once they have, and the state in words ("Delivered" → "Opened"). NO "Hold
+  // to replay": a snap here is view-once and destroyed on opening, so there is
+  // nothing to replay — and replay would be the receiver's act, never the
+  // sender's. A dead control would be worse than its absence.
+  if (mine) {
+    return (
+      <div className="max-w-[min(85%,480px)] rounded-2xl bg-[#1c1c1e] px-4 py-3.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+        <span className="flex items-center gap-3 text-white">
+          <SnapArrow filled={view.state === "delivered"} />
+          <span className="flex min-w-0 flex-col">
+            <span className="text-[15px] leading-tight font-semibold">{view.label}</span>
+            {view.sourceLabel && (
+              <span className="mt-0.5 text-[12px] font-medium text-white/45">{view.sourceLabel}</span>
+            )}
+          </span>
+        </span>
+      </div>
+    );
+  }
+
   const body = (
     <span className="flex items-center gap-2">
       <SnapMark state={view.state} />
@@ -1606,6 +1799,22 @@ function SnapBubble({
         />
       )}
     </div>
+  );
+}
+
+/** A SENT snap's mark: a red send-arrow, filled until the other side opens it
+    (Delivered), hollow once they have (Opened). Drawn here rather than borrowed. */
+function SnapArrow({ filled }: { filled: boolean }) {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="h-6 w-6 shrink-0 text-[#f23b4b]">
+      <path
+        d="M3.4 2.8 17.2 10 3.4 17.2 7.2 10 3.4 2.8Z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -1967,6 +2176,9 @@ function Composer({
   });
   const { text } = typing;
   const [picking, setPicking] = useState(false);
+  // The "+" tray: one door to the camera and the file picker, so the row
+  // carries a single control instead of two glyphs side by side.
+  const [addOpen, setAddOpen] = useState(false);
   // The uploaded-but-not-yet-sent attachment. It is already IN storage by the
   // time it lands here — the panel finishes the upload before it closes — so
   // this holds a URL the service will accept, not a File still to be pushed.
@@ -2009,6 +2221,19 @@ function Composer({
   }, []);
   const voice = useVoiceRecorder();
   const [voiceBusy, setVoiceBusy] = useState(false);
+  /*
+    A STOPPED TAKE waits HERE to be heard back before it is sent (ogazboiz,
+    2026-09-21). It is NOT staged as a composer attachment — that drew a plain
+    file row — but held on its own with a player (VoiceReview). The file rides
+    in a ref beside it: it never needs to re-render, and the levels are the
+    take's own measured waveform, captured off the recorder before it resets.
+  */
+  const [voicePreview, setVoicePreview] = useState<{
+    url: string;
+    durationSeconds: number;
+    levels: number[];
+  } | null>(null);
+  const voicePreviewFile = useRef<File | null>(null);
   /* The service's own two rules, restated so the control is ABSENT rather than
      offered and then refused: one-to-one only, photo or clip only. */
   const snapOffered = canSendSnap({
@@ -2020,6 +2245,20 @@ function Composer({
   useEffect(() => {
     if (replyTo) field.current?.focus();
   }, [replyTo]);
+  // The pill GROWS WITH THE DRAFT — the same effect the post composer runs. The
+  // field is `rows={1}`, so without this a second line just scrolls the first
+  // out of a one-line box and you cannot see what you are typing. Height
+  // follows the CONTENT (measured, not counted from newlines: one long line
+  // wraps into rows no character count predicts), reset to `auto` first so the
+  // box can shrink back down after a send, and capped by the field's own
+  // `max-h-32` so a long draft scrolls inside the pill instead of eating the
+  // thread.
+  useEffect(() => {
+    const node = field.current;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = `${node.scrollHeight}px`;
+  }, [text]);
   // Either half is enough. A photo with no caption is a message; so is a
   // caption with no photo. Only neither is nothing to send — and that rule is
   // the payload builder's, so the button and the request cannot disagree about
@@ -2067,24 +2306,43 @@ function Composer({
     `camera`. That mark is the only difference, and it is what arms View once:
     a photo taken inside a chat is of the moment, a photo out of a gallery was
     kept for a reason and is not ours to destroy on the sender's behalf.
+
+    It SENDS ITSELF, caption and all — the camera reviewed the shot before it
+    got here (see CameraSheet), so there is nothing left to stage. The caption
+    typed over the image rides as the message text, and View once is the
+    reviewer's choice, allowed only where the service allows a snap at all
+    (`defaultViewOnce` is the guard: false in a group or on a non-photo/clip).
   */
-  const takeCapture = async (file: File, previewUrl: string) => {
+  const takeCapture = async (
+    file: File,
+    previewUrl: string,
+    opts: { caption: string; viewOnce: boolean }
+  ) => {
     setCameraBusy(true);
     try {
       const uploaded = await uploadFile(file, undefined, "attachment", "message");
-      setAsSnap(
-        defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind })
-      );
-      setAttachment((current) => {
-        if (current) URL.revokeObjectURL(current.previewUrl);
-        return {
-          result: uploaded,
-          measured: {},
-          fileName: file.name,
-          previewUrl,
+      const armed =
+        opts.viewOnce &&
+        defaultViewOnce({ source: "camera", conversationKind, mediaKind: uploaded.kind });
+      const caption = opts.caption.trim();
+      const capture: OutgoingMessage = {
+        ...(caption ? { text: caption } : {}),
+        ...(caption ? { mentions: typing.mentionsFor(caption) } : {}),
+        ...(replyTo ? { replyToId: replyTo.id } : {}),
+        ...(armed ? { viewOnce: true } : {}),
+        media: {
+          key: uploaded.key,
           source: "camera",
-        };
-      });
+          url: uploaded.url,
+          width: null,
+          height: null,
+          durationSeconds: null,
+          fileName: null,
+          sizeBytes: null,
+        },
+      };
+      send.mutate(capture, { onSuccess: () => onCancelReply() });
+      URL.revokeObjectURL(previewUrl);
     } catch (cause) {
       URL.revokeObjectURL(previewUrl);
       toast.error(cause instanceof Error ? cause.message : "That capture didn't upload.");
@@ -2093,58 +2351,56 @@ function Composer({
     }
   };
 
-  const finishVoice = async () => {
+  /*
+    STOP & REVIEW — end the take and hold it for playback, WITHOUT uploading it
+    or staging it as an attachment (which drew a plain file row). The upload
+    waits for Send, once the reader has heard it back. `voice.stop` does not
+    clear the measured levels, so they are captured here for the player to draw
+    the take's own waveform.
+  */
+  const stopForReview = async () => {
+    const capturedLevels = voice.levels;
     const result = await voice.stop();
     if (!result) return;
+    voicePreviewFile.current = result.file;
+    setVoicePreview({
+      url: URL.createObjectURL(result.file),
+      durationSeconds: result.durationSeconds,
+      levels: capturedLevels,
+    });
+  };
+
+  const discardVoicePreview = useCallback(() => {
+    voicePreviewFile.current = null;
+    setVoicePreview((current) => {
+      if (current) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  }, []);
+
+  /** Throw this take away and start a fresh one. */
+  const reRecordVoice = () => {
+    discardVoicePreview();
+    void voice.start();
+  };
+
+  /** Upload the reviewed take and send it. */
+  const sendVoicePreview = async () => {
+    const file = voicePreviewFile.current;
+    const preview = voicePreview;
+    if (!file || !preview) return;
     setVoiceBusy(true);
     try {
       // "attachment" is what admits audio at all — see the note in
       // AttachmentPanel. Without it a recorded voice note is rejected by our
       // own uploader before it reaches the service.
-      const uploaded = await uploadFile(result.file, undefined, "attachment", "message");
-      setAttachment({
-        result: uploaded,
-        source: "upload",
-        previewUrl: URL.createObjectURL(result.file),
-        measured: { durationSeconds: result.durationSeconds },
-        // A recording has no name the reader chose. It is carried for the type
-        // only — `fileName` is sent for documents alone, so this never reaches
-        // the service.
-        fileName: result.file.name,
-      });
-    } catch {
-      toast.error("Couldn't attach the voice note.");
-    } finally {
-      setVoiceBusy(false);
-    }
-  };
-
-  /**
-   * Stop, upload and SEND, in one tap — the recording strip's arrow.
-   *
-   * It used to stage the note like `finishVoice` and wait for a second press
-   * of send ("if i click that send it should send once instead"). Staging is
-   * still what STOP does, for the person who wants to hear it back; the arrow
-   * is for the person who already knows.
-   *
-   * The note goes out ON ITS OWN, answering the reply target if there is one,
-   * and anything typed in the field stays there: a voice note is its own
-   * message in WhatsApp, and a half-written line should not ride out under it
-   * as a caption nobody meant to send. The payload is built from the upload
-   * result directly — `attachment` state would not have updated yet inside
-   * this same call.
-   */
-  const sendVoiceNow = async () => {
-    const result = await voice.stop();
-    if (!result) return;
-    setVoiceBusy(true);
-    try {
-      const uploaded = await uploadFile(result.file, undefined, "attachment", "message");
+      const uploaded = await uploadFile(file, undefined, "attachment", "message");
       const note: OutgoingMessage = {
         ...(replyTo ? { replyToId: replyTo.id } : {}),
-        media: { key: uploaded.key, url: uploaded.url, durationSeconds: result.durationSeconds },
+        media: { key: uploaded.key, url: uploaded.url, durationSeconds: preview.durationSeconds },
       };
       send.mutate(note, { onSuccess: () => onCancelReply() });
+      discardVoicePreview();
     } catch {
       toast.error("Couldn't send the voice note.");
     } finally {
@@ -2313,105 +2569,98 @@ function Composer({
         </div>
       )}
 
-      {voice.recording && (
-        /*
-          WHAT THE MICROPHONE IS HEARING, WHILE YOU TALK.
-
-          This was a pulsing dot, a clock and two text buttons. All of it
-          animated exactly the same whether the microphone was picking you up
-          or muted, so the only question a person has while recording — "is
-          this getting me?" — went unanswered until playback (ogazboiz: "the ux
-          experince is bad").
-
-          The bars are MEASURED, not decorative. They share the geometry of the
-          playback bars (34, floor 0.25) so a note being recorded and the same
-          note played back read as one object — but the playback bars are
-          hashed from the message id and say so in capitals, while these come
-          from the analyser. Drawing a hashed waveform here would dance
-          identically over a muted microphone, which is worse than the dot it
-          replaces: it looks like feedback and is not.
-
-          It sits ABOVE the composer row, so the draft and any attachment stay
-          visible while you talk.
-        */
-        <div className="mb-2 flex items-center gap-3 rounded-[18px] border border-white/10 bg-white/[0.04] px-3 py-2.5">
-          {/* The playback bubble's own bars, to the pixel: h-8, 3px apart,
-              2px wide, rounded. A note being recorded and the same note played
-              back are then visibly one object. The row GROWS from the left as
-              you speak rather than sitting pre-filled — it starts when you
-              start, so the first bar appearing is itself the confirmation
-              that the microphone opened. */}
-          <span aria-hidden className="flex h-8 min-w-0 flex-1 items-center gap-[3px] overflow-hidden">
-            {voice.levels.map((level, index) => (
-              <span
-                key={index}
-                className="w-[2px] shrink-0 rounded-full bg-white/60"
-                style={{ height: `${Math.round(dotScale(level) * 100)}%` }}
-              />
-            ))}
-          </span>
-
-          {/* The clock is the accessible statement; the bars are decoration to
-              a screen reader, which cannot see them move. */}
-          <span className="tnum shrink-0 text-[12px] text-white/60" role="status">
-            {formatElapsed(voice.elapsed)}
-          </span>
-
-          {/* DISCARD, as its own quiet control. It used to BE the stop square,
-              so stopping to hear the note back threw it away ("if i click that
-              stop i should able to listen to the vn"). Never styled as the
-              primary action: the destructive one is the hardest to hit. */}
-          <button
-            type="button"
-            onClick={voice.cancel}
-            aria-label="Discard recording"
-            title="Discard"
-            className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <IconX className="h-4 w-4" />
-          </button>
-
-          {/* STOP, AND KEEP IT. The note lands in the composer with a play
-              button, to hear back and then send or remove. A square, because
-              that is what stop is everywhere else. */}
-          <button
-            type="button"
-            onClick={() => void finishVoice()}
-            aria-label="Stop recording and listen"
-            title="Stop and listen"
-            className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/15"
-          >
-            <span aria-hidden className="h-3 w-3 rounded-[2px] bg-current" />
-          </button>
-
-          {/* SEND, IN ONE TAP — stop, upload and send. The violet ramp, as
-              every other primary action on Square. */}
-          <button
-            type="button"
-            onClick={() => void sendVoiceNow()}
-            aria-label="Send voice note"
-            className="ws-btn-create ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
-          >
-            <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none">
-              <path
-                d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      )}
-
       {voice.error && (
         <p role="alert" className="mb-2 text-[12px] text-down">
           {voice.error}
         </p>
       )}
 
+      {voicePreview ? (
+        /* A stopped take, held for review — the player and its three acts stand
+           in for the composer row until it is sent or discarded. */
+        <VoiceReview
+          url={voicePreview.url}
+          durationSeconds={voicePreview.durationSeconds}
+          levels={voicePreview.levels}
+          sending={voiceBusy}
+          onDiscard={discardVoicePreview}
+          onReRecord={reRecordVoice}
+          onSend={() => void sendVoicePreview()}
+        />
+      ) : (
       <div className="flex items-center gap-4">
+        {voice.recording ? (
+          /*
+            RECORDING LIVES INSIDE THE COMPOSER ROW, NOT ABOVE IT (ogazboiz,
+            2026-09-21: "the audio wave is meant to be inside the input text
+            field"). The pill that holds the draft now holds the clock and the
+            live waveform; Discard replaces the "+" on the left, Pause and Send
+            flank it on the right — ONE row, not three stacked layers. The bars
+            drain to a quiet grey the moment the take is paused, so a frozen row
+            is unmistakably frozen.
+          */
+          <>
+            {/* DISCARD — replaces the "+", the destructive act kept quiet. */}
+            <button
+              type="button"
+              onClick={voice.cancel}
+              aria-label="Discard recording"
+              title="Discard"
+              className="ws-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <IconTrash className="h-5 w-5" />
+            </button>
+
+            {/* THE PILL, now the recorder: the clock, then the live waveform
+                filling to the right — the same bars the playback bubble draws. */}
+            <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[30px] border border-[#26262B] bg-[#18181C] px-4 py-2">
+              <span className="tnum shrink-0 text-[13px] font-semibold tracking-tight text-white" role="status">
+                {formatElapsed(voice.elapsed)}
+              </span>
+              <span aria-hidden className="flex h-6 min-w-0 flex-1 items-center justify-end gap-[3px] overflow-hidden">
+                {voice.levels.map((level, index) => (
+                  <span
+                    key={index}
+                    className={cn(
+                      "w-[2.5px] shrink-0 rounded-full transition-colors",
+                      voice.paused ? "bg-white/25" : "bg-white/70"
+                    )}
+                    style={{ height: `${Math.round(dotScale(level) * 100)}%` }}
+                  />
+                ))}
+              </span>
+            </div>
+
+            {/* PAUSE / RESUME — a red ring while live, the mic to pick it back
+                up; the take is gathered in as many breaths as it takes. */}
+            <button
+              type="button"
+              onClick={voice.paused ? voice.resume : voice.pause}
+              aria-label={voice.paused ? "Resume recording" : "Pause recording"}
+              aria-pressed={voice.paused}
+              title={voice.paused ? "Resume" : "Pause"}
+              className="ws-press flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-danger text-danger transition-colors hover:bg-danger/10"
+            >
+              {voice.paused ? <IconMic className="h-5 w-5" /> : <IconPause className="h-5 w-5" />}
+            </button>
+
+            {/* STOP & REVIEW — end the take and open the player, so it can be
+                heard back BEFORE it is sent (ogazboiz, 2026-09-21: "play the
+                voice note before sending it"). A stop square, not a send arrow:
+                the next screen is the listen, not the send. */}
+            <button
+              type="button"
+              onClick={() => void stopForReview()}
+              disabled={voiceBusy}
+              aria-label="Stop recording and listen"
+              title="Stop and listen"
+              className="ws-btn-create ws-press flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              <span aria-hidden className="h-3.5 w-3.5 rounded-[3px] bg-current" />
+            </button>
+          </>
+        ) : (
+        <>
         {/*
           ATTACHMENT IS LIVE. It was inert while `POST /conversations/:id/
           messages` took `{ text }` alone and nothing documented how a message
@@ -2426,52 +2675,64 @@ function Composer({
           encode AND the service will accept before it ever opens the
           microphone, so nobody records a message that cannot be sent.
         */}
-        <CircleButton
-          label="Attach a file"
-          size={24}
-          onClick={() => setPicking(true)}
-          icon={<Image src={asset("/messages/attach.svg")} alt="" width={24} height={24} />}
-        />
-        {/* THE SECOND DOOR. The paperclip is for something kept; this is for the
-            moment in front of you, and what comes out of it is view-once by
-            default. Only in a one-to-one, where a snap means anything. */}
-        {conversationKind === "direct" && (
+        {/*
+          ONE "+" INSTEAD OF TWO GLYPHS. The paperclip (something kept) and the
+          camera (the moment in front of you) sat side by side; a single "+"
+          now opens both from one tray, the way every messenger does it. What
+          each door does is unchanged — the file picker and the view-once
+          camera — only how they are reached.
+
+          Camera is a ONE-TO-ONE row only, where a snap means anything, so in a
+          house the tray holds the file picker alone. The backdrop is a
+          full-screen button, not a document listener: it closes on the same
+          tap that would fall through, and it is reachable by keyboard — the
+          header's overflow menu is built the same way.
+        */}
+        <div className="relative shrink-0">
           <CircleButton
-            label="Take a photo or video"
+            label="Add a photo, video or file"
             size={24}
-            disabled={cameraBusy}
-            onClick={() => setCameraOpen(true)}
-            icon={
-              <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.7l1-1.8a1 1 0 0 1 .9-.5h5.8a1 1 0 0 1 .9.5l1 1.8h1.7A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z" />
-                <circle cx="12" cy="12.2" r="3.4" />
-              </svg>
-            }
+            onClick={() => setAddOpen((open) => !open)}
+            icon={<IconPlus className="h-6 w-6 text-white" />}
           />
-        )}
-        <CircleButton
-          label={voice.recording ? "Stop recording and listen" : "Record a voice note"}
-          size={24}
-          disabled={voiceBusy}
-          onClick={() => {
-            if (voiceBusy) return;
-            if (voice.recording) void finishVoice();
-            else void voice.start();
-          }}
-          icon={
-            voiceBusy ? (
-              <Spinner className="h-5 w-5 text-white" />
-            ) : (
-              <Image
-                src={asset("/messages/voice.svg")}
-                alt=""
-                width={24}
-                height={24}
-                className={voice.recording ? "opacity-100" : undefined}
+          {addOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Close"
+                className="fixed inset-0 z-40 cursor-default"
+                onClick={() => setAddOpen(false)}
               />
-            )
-          }
-        />
+              <div className="absolute bottom-full left-0 z-50 mb-2 min-w-44 overflow-hidden rounded-2xl border border-white/10 bg-[#161619] p-1 shadow-xl">
+                {conversationKind === "direct" && (
+                  <button
+                    type="button"
+                    disabled={cameraBusy}
+                    onClick={() => {
+                      setAddOpen(false);
+                      setCameraOpen(true);
+                    }}
+                    className="ws-press flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] text-white transition-colors hover:bg-white/10 disabled:opacity-40"
+                  >
+                    <IconCamera className="h-5 w-5 text-white/80" />
+                    Photo or video
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddOpen(false);
+                    setPicking(true);
+                  }}
+                  className="ws-press flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] text-white transition-colors hover:bg-white/10"
+                >
+                  <Image src={asset("/messages/attach.svg")} alt="" width={20} height={20} />
+                  Attach a file
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         <label className="sr-only" htmlFor="message-composer">
           Write a message
@@ -2516,30 +2777,53 @@ function Composer({
             // colour is specified for something the house has no token for.
             className="max-h-32 min-w-0 flex-1 resize-none bg-transparent text-base leading-5 text-white caret-[#008CFF] outline-none placeholder:text-meta"
           />
-          {/* Decoration, not a control — there is no emoji picker on this
-              surface, and the live-stream composer draws the same glyph the
-              same way. The design's 20px export, since the house `IconEmoji`
-              is a plain smiley and this one carries a plus. */}
-          <span aria-hidden className="shrink-0">
-            <Image src={asset("/messages/emoji.svg")} alt="" width={20} height={20} />
-          </span>
+          {/* ONE ACTION, INSIDE THE FIELD — where the emoji used to sit, and
+              the only send affordance now that the standalone button is gone.
+              It is the WhatsApp swap: with something to send it is a send disc,
+              and empty it is the microphone, so the pill carries exactly one
+              act at a time. Return still sends a text draft. The mic opens the
+              level meter and the stop/keep/send controls above the composer,
+              and turns spotlight-purple while it is live. Sized to sit inside
+              the pill rather than as a full CircleButton, which would not fit. */}
+          {canSend || send.isPending ? (
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSend}
+              aria-label="Send message"
+              title="Send"
+              className="ws-press flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full bg-grey-800 transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {send.isPending ? (
+                <Spinner className="h-4 w-4 text-white" />
+              ) : (
+                <Image src={asset("/messages/send.svg")} alt="" width={16} height={16} />
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label="Record a voice note"
+              title="Record a voice note"
+              disabled={voiceBusy}
+              onClick={() => {
+                if (voiceBusy) return;
+                void voice.start();
+              }}
+              className="ws-press flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+            >
+              {voiceBusy ? (
+                <Spinner className="h-4 w-4 text-white" />
+              ) : (
+                <IconMic className="h-5 w-5" />
+              )}
+            </button>
+          )}
         </div>
-
-        <CircleButton
-          label="Send message"
-          variant="send"
-          size={16}
-          onClick={submit}
-          disabled={!canSend}
-          icon={
-            send.isPending ? (
-              <Spinner className="h-4 w-4 text-white" />
-            ) : (
-              <Image src={asset("/messages/send.svg")} alt="" width={16} height={16} />
-            )
-          }
-        />
+        </>
+        )}
       </div>
+      )}
 
       {text.length > MESSAGE_MAX - 200 && (
         <p className="tnum text-right text-[11px] text-meta">{MESSAGE_MAX - text.length} left</p>
@@ -2556,7 +2840,7 @@ function Composer({
       <CameraSheet
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
-        onCaptured={(file, previewUrl) => void takeCapture(file, previewUrl)}
+        onCaptured={(file, previewUrl, opts) => void takeCapture(file, previewUrl, opts)}
       />
 
       {picking && (
@@ -2728,6 +3012,48 @@ export function Thread({
   const items = [...(messages.data?.items ?? [])].reverse();
   const days = groupMessagesByDay(items);
 
+  /*
+    WHERE THE STREAK NOTICE SITS — anchored to the day it began, woven into the
+    river, so it stays put instead of trailing the newest message and appearing
+    to move every time a post is sent (ogazboiz, 2026-09-21).
+
+    The service gives no start timestamp, only the day COUNT and the expiry
+    DEADLINE — so the start day is DERIVED from those (expiry, less the streak's
+    length and its one-day grace) rather than the wall clock, which keeps it
+    stable across sends and never claims a precise clock time we were not told.
+    Null expiry falls back to the foot, the old live-status position.
+  */
+  const showStreak = !group && conversation.snapStreak > 0;
+  const streakStartKey = (() => {
+    if (!showStreak || !conversation.snapStreakExpiresAt) return null;
+    const expiry = Date.parse(conversation.snapStreakExpiresAt);
+    if (Number.isNaN(expiry)) return null;
+    const start = new Date(expiry - (conversation.snapStreak + 1) * 86_400_000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  })();
+  // The day section to draw the notice BEFORE; `days.length` means the foot.
+  const streakAt = !showStreak
+    ? -1
+    : streakStartKey === null
+      ? days.length
+      : (() => {
+          const index = days.findIndex((day) => day.key >= streakStartKey);
+          return index === -1 ? days.length : index;
+        })();
+  const streakNotice = showStreak ? (
+    <p className="flex items-center justify-center gap-1.5 text-center text-[13px] font-medium leading-5 text-white/60">
+      {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
+      <img
+        src={asset("/messages/streak-flame.svg")}
+        alt=""
+        aria-hidden
+        className="h-4 w-[9.617px] shrink-0"
+      />
+      You and {threadTitle(conversation)} started a streak
+    </p>
+  ) : null;
+
   // Only the messages scroll. The header and the composer are fixed rows of
   // this column, so the reader's eye keeps both while the river moves between
   // them — which is what every messaging app does and what page-level
@@ -2803,6 +3129,7 @@ export function Thread({
               !group && conversation.peer ? safetyRowsSlot?.(conversation.peer) : undefined
             }
             actions={{
+              onCreateGistRoom,
               onAddMembers,
               onViewMembers: () => setMembersOpen(true),
               onShareInvite: canShareInvite ? shareInvite : undefined,
@@ -2850,9 +3177,12 @@ export function Thread({
           <ThreadWelcome conversation={conversation} group={group} />
         )}
 
-        {days.map((day) => (
-          // 24 between the separator and the first run, and between runs.
-          <section key={day.key} className="flex flex-col gap-6">
+        {days.map((day, dayIndex) => (
+          <Fragment key={day.key}>
+            {/* The streak began around here — the notice woven at its day. */}
+            {streakAt === dayIndex && streakNotice}
+          {/* 24 between the separator and the first run, and between runs. */}
+          <section className="flex flex-col gap-6">
             {day.label && (
               <p className="text-center text-[16px] font-medium leading-6 text-white/60">
                 {day.label}
@@ -2885,7 +3215,18 @@ export function Thread({
               </div>
             ))}
           </section>
+          </Fragment>
         ))}
+
+        {/*
+          THE STREAK NOTICE is woven at its start day above (see `streakAt`), the
+          way Snapchat drops a system line into the thread at the moment it
+          happened — so it stays put instead of trailing the newest message. This
+          is only the FALLBACK foot position, for when the start day lands after
+          every loaded message (or the expiry is missing and no day can anchor
+          it). The live day count lives in the header's flame, not here.
+        */}
+        {streakAt === days.length && streakNotice}
       </div>
 
       <Composer

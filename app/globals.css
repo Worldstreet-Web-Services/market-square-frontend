@@ -222,6 +222,38 @@ body {
     inset -1px -1px 2px rgba(255, 255, 255, 0.10);
 }
 
+/* The Close Room pill's GLASS — node 1285:35056, the RED sibling of
+   ws-glass-pill. The node's own CSS is `background: rgba(255,11,11,0.13)` over a
+   zero-weight `#FF0B0B` stroke, plus Figma's GLASS effect, whose parameters the
+   API does not publish. So the wash is that exact rgba (`#FF0B0B`, NOT
+   `--color-danger`'s oranger `#FF383C` — the file paints the wash, glyph and
+   label as three separate reds), and the glass is MATCHED to the render.
+
+   Sampled at 1x over the #0F0F0F ground: a faint diagonal lift, interior
+   ~#2E0E0E rising to ~#371717 at the lower right, with a ~#443838 one-pixel
+   refraction edge strongest at that same corner. That is a lit lens, not a
+   ring — so the highlight is two offset insets (top-left faint, bottom-right
+   stronger), never a uniform `inset 0 0 0 1px`, which would read as the border
+   the node does not draw. The 135deg white sheen carries the diagonal lift.
+
+   The backdrop blur IS the GLASS effect. The room header is opaque `bg-chrome`,
+   so nothing sits behind the pill to frost there and the sheen and rim are what
+   carry the glass; the blur is kept for any surface that does overlay content. */
+@utility ws-glass-danger {
+  background-color: rgba(255, 11, 11, 0.13);
+  background-image: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.035) 60%,
+    rgba(255, 255, 255, 0.09) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.05),
+    inset -1px -1px 2px rgba(255, 255, 255, 0.12);
+}
+
 /* Glass over a PHOTOGRAPH — the profile cover's discs and pills (545:47607,
    545:47609, 435:27531, 435:27534). Their fill is white at alpha zero with a
    zero-weight stroke and Figma's GLASS effect. Sampled radially in the
@@ -948,8 +980,11 @@ body {
      Published as a variable because the fixed create button tracks the same
      edge — measured from the viewport it would sit out in the gutter. */
   --ws-shell-max: 1265px;
-  /* The phone bar is node 1285:94852: 16 + a 40 row + 16. It was 48. */
-  --ws-topbar-h: 72px;
+  /* The phone's top logo bar: an 8 + 40 row + 8 = 56 strip (tightened from the
+     node's 16/40/16 = 72, which read as too tall on a phone). The fixed strip
+     below reads this same variable, and the column pads by it, so they stay in
+     sync. */
+  --ws-topbar-h: 56px;
   /* The desktop breadcrumb bar's height — 76px in node 15:1302, and 0 on a
      phone where the bar is `hidden md:flex`.
      Published because one surface has to subtract it: Messages is the only
@@ -1173,6 +1208,79 @@ body {
 @utility ws-btn-silver {
   background: linear-gradient(155deg, #ffffff 0%, #999999 100%);
   color: #000000;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   BUTTON SIZE SCALE — the ONE source of truth for button GEOMETRY.
+
+   The ws-btn-* utilities above carry COLOUR only; these carry GEOMETRY only
+   (height, inline padding, font), so a button composes as: one colour utility +
+   one size utility + a radius class. Deliberately NO border-radius here — cn()
+   is twMerge(clsx()), and tailwind-merge cannot see inside a custom @utility, so
+   a baked radius would silently collide with a call site's own rounded-*. Radius
+   stays a normal class: rounded-full for pills, rounded-xl (12px) for squared.
+
+   MOBILE-FIRST: the base declaration is the 44px touch target (Apple HIG's 44pt,
+   the rule the room already follows), and @media (pointer: fine) shrinks to the
+   design's desktop size on a mouse — the same intent as the pointer-fine: idiom
+   in room-mini-player.tsx, moved into one place. On touch sm and md are both 44
+   and differ only by padding; a fine pointer separates them into 32/40/48.
+
+   components/ui/button.tsx consumes these, so <Button size=…> and a hand-rolled
+   button render identically. See CLAUDE.md "Buttons".
+   ─────────────────────────────────────────────────────────────────────────── */
+@utility ws-btn-sm {
+  height: 2.75rem;
+  padding-inline: 0.875rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  @media (pointer: fine) {
+    height: 2rem;
+  }
+}
+
+@utility ws-btn-md {
+  height: 2.75rem;
+  padding-inline: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  @media (pointer: fine) {
+    height: 2.5rem;
+  }
+}
+
+@utility ws-btn-lg {
+  height: 3rem;
+  padding-inline: 1.75rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+/* Icon buttons: square (width == height), same 44px touch floor and pointer-fine
+   shrink. Collapses the app's ~10 ad-hoc diameters to three. Pair with a radius
+   class (rounded-full round / rounded-xl squared) and a centring class such as
+   `grid place-items-center`. */
+@utility ws-iconbtn-sm {
+  width: 2.75rem;
+  height: 2.75rem;
+  @media (pointer: fine) {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+@utility ws-iconbtn-md {
+  width: 2.75rem;
+  height: 2.75rem;
+  @media (pointer: fine) {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+}
+
+@utility ws-iconbtn-lg {
+  width: 3rem;
+  height: 3rem;
 }
 
 /* The section switcher's outline: one long pill enclosing the tab strip and

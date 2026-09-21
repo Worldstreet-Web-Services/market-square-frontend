@@ -1886,7 +1886,10 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
     Unset (no visualViewport) everything falls back to `100dvh`, which is the
     behaviour this replaces.
   */
-  useKeyboardInset();
+  // `chatOpen` locks page scroll (below), so on iOS the window may be held at
+  // the top for the whole time the composer is focused — otherwise Safari's
+  // keyboard scroll pushes the thread header off the top of the glass.
+  useKeyboardInset(chatOpen);
 
   /*
     A CHAT THREAD CLAIMS THE VIEWPORT, so the page must not scroll behind it.
@@ -2061,7 +2064,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           under the logo, directly above the bar's own full-width bottom
           border. Only that full-width border stays.
         */}
-        <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-[72px] items-center justify-between border-b border-white/10 px-6 md:hidden">
+        <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-[var(--ws-topbar-h)] items-center justify-between border-b border-white/10 px-6 md:hidden">
           {/*
             `flex` belongs on the LOCKUP, not on this box. BrandLockup renders
             a bare span carrying `items-center` and nothing else — the caller

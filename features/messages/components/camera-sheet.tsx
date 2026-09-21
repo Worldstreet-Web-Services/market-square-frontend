@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 import { getUploadLimits } from "@/lib/api/upload";
+import { IconSend } from "@/components/ui/icons";
+import { asset } from "@/lib/square-path";
+import { MESSAGE_MAX } from "@/features/messages/lib/types";
 import {
   CAMERA_HOLD_MS,
   CAMERA_MAX_CLIP_MS,
@@ -42,8 +45,16 @@ export function CameraSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Handed the file and a local preview URL the caller owns and must revoke. */
-  onCaptured: (file: File, previewUrl: string) => void;
+  /**
+   * Handed the file, a local preview URL the caller owns and must revoke, and
+   * the review screen's choices — the caption typed over the shot and whether
+   * it goes as a view-once snap.
+   */
+  onCaptured: (
+    file: File,
+    previewUrl: string,
+    opts: { caption: string; viewOnce: boolean }
+  ) => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -60,6 +71,19 @@ export function CameraSheet({
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
+  /*
+    AFTER A CAPTURE, THE CAMERA DOES NOT CLOSE — it freezes on the shot for
+    review, Snapchat's way (ogazboiz, 2026-09-21): the picture stays on screen,
+    a caption is typed OVER it, and Send is a deliberate second tap. Retake
+    drops back to the live camera (the acquire effect re-opens the device once
+    `captured` is null again).
+  */
+  const [captured, setCaptured] = useState<{ file: File; url: string; kind: "photo" | "video" } | null>(null);
+  const [caption, setCaption] = useState("");
+  // This door only opens in a one-to-one, so a shot taken here is a snap by
+  // default; the reviewer can turn that off to keep it in the chat.
+  const [viewOnce, setViewOnce] = useState(true);
+
   /** Stops the track AND drops the reference — the light goes out here. */
   const release = useCallback(() => {
     if (recorder.current?.state === "recording") recorder.current.stop();
@@ -69,9 +93,11 @@ export function CameraSheet({
     if (video.current) video.current.srcObject = null;
   }, []);
 
-  /* Opening and closing the device, keyed on the sheet and which way it faces. */
+  /* Opening and closing the device, keyed on the sheet, which way it faces, and
+     whether a shot is under review — the live camera is stopped while the frozen
+     preview is up, and re-opened the moment Retake clears it. */
   useEffect(() => {
-    if (!open) {
+    if (!open || captured) {
       release();
       return;
     }
@@ -99,7 +125,7 @@ export function CameraSheet({
       cancelled = true;
       release();
     };
-  }, [open, facing, release]);
+  }, [open, facing, captured, release]);
 
   /* Timers are cleared on unmount, so a closed sheet cannot fire a capture. */
   useEffect(
@@ -114,22 +140,37 @@ export function CameraSheet({
   const takePhoto = () => {
     const node = video.current;
     if (!node || !node.videoWidth) return;
+    // WYSIWYG — save the crop the viewfinder is SHOWING, not the full sensor.
+    // The camera's native frame is usually landscape (e.g. 1280×720), but the
+    // viewfinder is `object-cover` in a portrait box, so on a phone you frame a
+    // portrait shot and, drawing the whole sensor, got a landscape photo back.
+    // Re-run object-cover's own maths: fit the displayed box to the sensor,
+    // centre-crop the rest, and the saved photo matches what was framed —
+    // portrait when portrait, landscape when landscape.
+    const vw = node.videoWidth;
+    const vh = node.videoHeight;
+    const dw = node.clientWidth || vw;
+    const dh = node.clientHeight || vh;
+    const cover = Math.max(dw / vw, dh / vh);
+    const cropW = Math.min(vw, Math.round(dw / cover));
+    const cropH = Math.min(vh, Math.round(dh / cover));
+    const sx = Math.max(0, Math.round((vw - cropW) / 2));
+    const sy = Math.max(0, Math.round((vh - cropH) / 2));
     const canvas = document.createElement("canvas");
-    canvas.width = node.videoWidth;
-    canvas.height = node.videoHeight;
+    canvas.width = cropW;
+    canvas.height = cropH;
     const context = canvas.getContext("2d");
     if (!context) return;
     // The FRONT camera is mirrored on screen, because that is what a mirror
     // does and what everybody expects while framing. The saved photo is not:
     // text in the picture would come out backwards.
-    context.drawImage(node, 0, 0, canvas.width, canvas.height);
+    context.drawImage(node, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
         const name = captureFileName("photo", Date.now());
         const file = new File([blob], name, { type: "image/jpeg" });
-        onCaptured(file, URL.createObjectURL(file));
-        onClose();
+        setCaptured({ file, url: URL.createObjectURL(file), kind: "photo" });
       },
       "image/jpeg",
       0.92
@@ -164,8 +205,7 @@ export function CameraSheet({
       // a .txt row.
       const type = captureContentType(node.mimeType);
       const file = new File([blob], captureFileName("video", Date.now(), type), { type });
-      onCaptured(file, URL.createObjectURL(file));
-      onClose();
+      setCaptured({ file, url: URL.createObjectURL(file), kind: "video" });
     };
     recorder.current = node;
     node.start();
@@ -211,14 +251,56 @@ export function CameraSheet({
     else takePhoto();
   };
 
+  /* RETAKE — drop the shot and go back to the live camera. The preview URL is
+     ours to revoke here; once a shot is SENT it passes to the caller, which
+     revokes after upload. */
+  const discard = useCallback(() => {
+    setCaptured((current) => {
+      if (current) URL.revokeObjectURL(current.url);
+      return null;
+    });
+    setCaption("");
+  }, []);
+
+  /* Closing forgets the shot, the caption and the toggle, so the next opening
+     starts on the live camera rather than a stale preview — done here in the
+     handler (not an effect) so React is not asked to setState mid-render. Every
+     dismiss route (the X, the backdrop, Escape) is wired through it. */
+  const closeAndReset = useCallback(() => {
+    discard();
+    setViewOnce(true);
+    onClose();
+  }, [discard, onClose]);
+
+  const send = () => {
+    const shot = captured;
+    if (!shot) return;
+    // The URL now belongs to the caller, so clear our state WITHOUT revoking it.
+    onCaptured(shot.file, shot.url, { caption: caption.trim(), viewOnce });
+    setCaptured(null);
+    setCaption("");
+    setViewOnce(true);
+    onClose();
+  };
+
   return (
-    <Sheet open={open} onClose={onClose} bare panelClassName="bg-black sm:max-w-[420px] sm:rounded-2xl">
-      <div className="flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="text-[14px] font-semibold text-white">Camera</h2>
+    <Sheet
+      open={open}
+      onClose={closeAndReset}
+      bare
+      // A camera fills the screen on a phone: a FIXED, near-full-height panel so
+      // the video can flex between a pinned header and pinned shutter, instead
+      // of a content-sized sheet that grew taller than itself and pushed the
+      // shutter out of reach. `max-h` is raised past the Sheet's default 85dvh
+      // for the same reason. Desktop keeps the content-sized 420 card.
+      panelClassName="h-[95dvh] max-h-[95dvh] bg-black sm:h-auto sm:max-h-[88dvh] sm:max-w-[420px] sm:rounded-2xl"
+    >
+      <div className="flex h-full flex-col">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3">
+          <h2 className="text-[14px] font-semibold text-white">{captured ? "Preview" : "Camera"}</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeAndReset}
             aria-label="Close camera"
             className="ws-press rounded-full p-1.5 text-white/60 hover:bg-white/10 hover:text-white"
           >
@@ -228,59 +310,156 @@ export function CameraSheet({
           </button>
         </div>
 
-        <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#111]">
-          <video
-            ref={video}
-            autoPlay
-            playsInline
-            muted
-            className={cn("h-full w-full object-cover", facing === "user" && "-scale-x-100")}
-          />
-          {recording && (
-            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-2 py-1 text-[11px] font-semibold text-white">
-              <span className="h-2 w-2 rounded-full bg-live" />
-              {elapsed}s
-            </span>
-          )}
-          {error && (
-            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-[13px] leading-[19px] text-white/80">
-              {error}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between px-6 py-5">
-          <span className="w-10 text-[11px] leading-[15px] text-white/40">
-            {recording ? "Release to send" : "Hold for video"}
-          </span>
-          {/* The shutter. One button: tap for a photo, hold for a clip. */}
-          <button
-            type="button"
-            onPointerDown={pressDown}
-            onPointerUp={pressUp}
-            onPointerLeave={() => pressedAt.current !== null && pressUp()}
-            disabled={Boolean(error)}
-            aria-label={recording ? "Stop recording" : "Take a photo, or hold to record"}
-            className={cn(
-              "ws-press flex h-[68px] w-[68px] items-center justify-center rounded-full border-[3px] transition-colors disabled:opacity-40",
-              recording ? "border-live" : "border-white"
+        {captured ? (
+          /* ─── REVIEW ─── the frozen shot, the caption over it, Send below.
+             The picture is CONTAINED so a portrait clip or a landscape photo is
+             shown whole; the shot's own black fills the rest. */
+          <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-black sm:aspect-3/4 sm:flex-none">
+            {captured.kind === "video" ? (
+              <video
+                src={captured.url}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- a just-captured local blob, no host
+              <img src={captured.url} alt="Your capture" className="h-full w-full object-contain" />
             )}
-          >
-            <span className={cn("rounded-full transition-all", recording ? "h-6 w-6 bg-live" : "h-[54px] w-[54px] bg-white")} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setFacing(flipFacing)}
-            disabled={recording}
-            aria-label="Switch camera"
-            className="ws-press w-10 rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-40"
-          >
-            <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 8a7 7 0 0 1 11.9-4.9M17 12a7 7 0 0 1-11.9 4.9" />
-              <path d="M3 3.5V8h4.5M17 16.5V12h-4.5" />
-            </svg>
-          </button>
-        </div>
+            {/* WHICH KIND OF SHOT — a streak snap (flame, view once) or a photo
+                kept in the chat. Shown ON the image so the difference is
+                unmistakable before Send, and flipped by the toggle below. */}
+            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold text-white backdrop-blur">
+              {viewOnce ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
+                  <img src={asset("/messages/streak-flame.svg")} alt="" aria-hidden className="h-3.5 w-[8.4px]" />
+                  Streak · view once
+                </>
+              ) : (
+                `${captured.kind === "video" ? "Video" : "Photo"} · saved to chat`
+              )}
+            </span>
+            {/* THE CAPTION SITS ON THE IMAGE — Snapchat's bar, over a scrim so
+                white text reads on any shot. */}
+            <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent px-4 pb-4 pt-12">
+              <input
+                type="text"
+                value={caption}
+                onChange={(event) => setCaption(event.target.value.slice(0, MESSAGE_MAX))}
+                maxLength={MESSAGE_MAX}
+                placeholder="Add a caption…"
+                aria-label="Caption"
+                autoFocus
+                className="w-full rounded-full bg-black/50 px-4 py-3 text-center text-[15px] text-white outline-none ring-1 ring-white/20 backdrop-blur placeholder:text-white/60 focus:ring-white/40"
+              />
+            </div>
+          </div>
+        ) : (
+          /* Phone: the viewfinder takes all the room between the header and the
+             shutter (`flex-1`). Desktop: the 420 card gives it a 3:4 frame. */
+          <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-[#111] sm:aspect-3/4 sm:flex-none">
+            <video
+              ref={video}
+              autoPlay
+              playsInline
+              muted
+              className={cn("h-full w-full object-cover", facing === "user" && "-scale-x-100")}
+            />
+            {recording && (
+              <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-2 py-1 text-[11px] font-semibold text-white">
+                <span className="h-2 w-2 rounded-full bg-live" />
+                {elapsed}s
+              </span>
+            )}
+            {error && (
+              <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-[13px] leading-[19px] text-white/80">
+                {error}
+              </p>
+            )}
+          </div>
+        )}
+
+        {captured ? (
+          <div className="flex shrink-0 items-center justify-between gap-3 px-6 py-5">
+            <button
+              type="button"
+              onClick={discard}
+              className="ws-press rounded-full px-4 py-2.5 text-[13px] font-semibold text-white/80 transition-colors hover:bg-white/10"
+            >
+              Retake
+            </button>
+            {/* STREAK vs PHOTO — a shot taken here is a streak snap by default
+                (view once, keeps the streak going); tap to keep it in the chat
+                as an ordinary photo instead. The flame is the same one the chat
+                header and inbox carry, so "streak" reads the same everywhere. */}
+            <button
+              type="button"
+              onClick={() => setViewOnce((current) => !current)}
+              aria-pressed={viewOnce}
+              aria-label={viewOnce ? "Sending as a streak (view once) — tap to keep in chat" : "Keeping in chat — tap to send as a streak"}
+              className={cn(
+                "ws-press flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-semibold transition-colors",
+                viewOnce
+                  ? "bg-spotlight/20 text-create ring-1 ring-create/40"
+                  : "text-white/60 hover:bg-white/10"
+              )}
+            >
+              {viewOnce ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
+                  <img src={asset("/messages/streak-flame.svg")} alt="" aria-hidden className="h-4 w-[9.617px]" />
+                  Streak
+                </>
+              ) : (
+                "Keep in chat"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={send}
+              className="ws-press flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-bold text-black transition-opacity hover:opacity-90"
+            >
+              Send
+              <IconSend className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex shrink-0 items-center justify-between px-6 py-5">
+            <span className="w-10 text-[11px] leading-[15px] text-white/40">
+              {recording ? "Release to send" : "Hold for video"}
+            </span>
+            {/* The shutter. One button: tap for a photo, hold for a clip. */}
+            <button
+              type="button"
+              onPointerDown={pressDown}
+              onPointerUp={pressUp}
+              onPointerLeave={() => pressedAt.current !== null && pressUp()}
+              disabled={Boolean(error)}
+              aria-label={recording ? "Stop recording" : "Take a photo, or hold to record"}
+              className={cn(
+                "ws-press flex h-[68px] w-[68px] items-center justify-center rounded-full border-[3px] transition-colors disabled:opacity-40",
+                recording ? "border-live" : "border-white"
+              )}
+            >
+              <span className={cn("rounded-full transition-all", recording ? "h-6 w-6 bg-live" : "h-[54px] w-[54px] bg-white")} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setFacing(flipFacing)}
+              disabled={recording}
+              aria-label="Switch camera"
+              className="ws-press w-10 rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-40"
+            >
+              <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8a7 7 0 0 1 11.9-4.9M17 12a7 7 0 0 1-11.9 4.9" />
+                <path d="M3 3.5V8h4.5M17 16.5V12h-4.5" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </Sheet>
   );

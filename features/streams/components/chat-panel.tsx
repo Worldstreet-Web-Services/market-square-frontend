@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/ui/states";
 import { IconChevronDown, IconDots, IconEmoji, IconSend } from "@/components/ui/icons";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 // The gist room's own glyphs, exported from the file. See room-icons.tsx.
 import {
   IconEmojiAdd,
@@ -142,6 +143,11 @@ export function ChatPanel({
   const gate = useGate();
   const [draft, setDraft] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  // The gist room's chat composer has a full emoji picker (it is a MESSAGE
+  // field, not the six-glyph reaction bar) that types the glyph into the draft.
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const emojiWrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
   /**
@@ -237,6 +243,45 @@ export function ChatPanel({
       })
     );
   };
+
+  // Insert at the caret so a picked emoji lands where the reader is typing, not
+  // always at the end; caps at the input's own 300 and restores the caret after
+  // the glyph. The picker stays open so several can be added in a row.
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    setDraft((prev) => {
+      const start = el?.selectionStart ?? prev.length;
+      const end = el?.selectionEnd ?? prev.length;
+      const next = (prev.slice(0, start) + emoji + prev.slice(end)).slice(0, 300);
+      if (el) {
+        requestAnimationFrame(() => {
+          el.focus();
+          const caret = Math.min(start + emoji.length, next.length);
+          el.setSelectionRange(caret, caret);
+        });
+      }
+      return next;
+    });
+  };
+
+  // Dismiss the picker on a click away from it or Escape.
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const onDown = (event: PointerEvent) => {
+      if (emojiWrapRef.current && !emojiWrapRef.current.contains(event.target as Node)) {
+        setEmojiOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEmojiOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [emojiOpen]);
 
   const overlay = variant === "overlay";
   const theater = variant === "theater";
@@ -463,6 +508,7 @@ export function ChatPanel({
           <div className="flex items-center gap-4">
             <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-[30px] border border-white/[0.06] bg-overlay px-4">
               <input
+                ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()}
@@ -471,13 +517,26 @@ export function ChatPanel({
                 placeholder={stream.status === "live" ? "Start typing" : "Chat is closed"}
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/50 disabled:opacity-50"
               />
-              {/* The file's `emoji-add` glyph. There is no picker behind it, so
-                  it is decoration on the field rather than a dead button — it
-                  focuses the input, which is what tapping a field's furniture
-                  should do. */}
-              <span aria-hidden className="shrink-0 text-white/50">
-                <IconEmojiAdd className="h-5 w-5" />
-              </span>
+              {/* The file's `emoji-add` glyph opens the full emoji picker; a pick
+                  types into the message field above. (The dock's reaction button
+                  is a different thing — it floats a reaction over the room.) */}
+              <div ref={emojiWrapRef} className="relative shrink-0">
+                {emojiOpen && <EmojiPicker onPick={insertEmoji} />}
+                <button
+                  type="button"
+                  aria-label="Add emoji"
+                  aria-haspopup="dialog"
+                  aria-expanded={emojiOpen}
+                  disabled={stream.status !== "live"}
+                  onClick={() => setEmojiOpen((value) => !value)}
+                  className={cn(
+                    "ws-press flex text-white/50 transition-colors hover:text-white/80 disabled:opacity-50",
+                    emojiOpen && "text-white"
+                  )}
+                >
+                  <IconEmojiAdd className="h-5 w-5" />
+                </button>
+              </div>
             </div>
             <button
               onClick={submit}

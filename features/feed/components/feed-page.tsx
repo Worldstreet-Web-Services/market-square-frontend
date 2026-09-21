@@ -572,7 +572,7 @@ export function FeedPage({
                 action={
                   <button
                     onClick={login}
-                    className="ws-btn-silver ws-press rounded-full px-5 py-2 text-[13px] font-bold"
+                    className="ws-btn-silver ws-press ws-btn-md rounded-full font-bold"
                   >
                     Sign in
                   </button>
@@ -605,7 +605,7 @@ export function FeedPage({
         {/* THE HEAD OF THE COLUMN — the search row (1295:142736), the banner
             11 under it (1305:149178 starts at 36487 against the row's 36476),
             then the column's own 64 to the first section. */}
-        {headSlot && <div className="mb-[64px] flex flex-col gap-[11px]">{headSlot}</div>}
+        {headSlot && <div className="mb-10 flex flex-col gap-[11px]">{headSlot}</div>}
 
         {/*
           HOME STARTS AT THE STORIES — node 225:3315.
@@ -684,7 +684,7 @@ export function FeedPage({
         {/* node 1391:38132 — under Coming Soon, phones only: the rail carries
             it from lg up and two copies on one screen is not a placement. */}
         {mode === "home" && partnersSlot && (
-          <div className="mb-[64px] lg:hidden">{partnersSlot}</div>
+          <div className="mb-10 lg:hidden">{partnersSlot}</div>
         )}
 
         {/* 1305:149179 — the houses anybody can join, closing the column's

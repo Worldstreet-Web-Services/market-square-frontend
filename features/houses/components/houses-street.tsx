@@ -137,15 +137,17 @@ export function HousesStreet({
           {liveHouses.length > 0 && (
             <section aria-labelledby="live-gistrooms" className="mt-9">
               {headingSlot?.("live")}
-              {/* 1317:158083 — three fixed cells across, spread to the frame
-                  (see the header), rows 16 apart; below lg as many as fit. */}
+              {/* The card is node 1769:3670 at its NATURAL size now (see the
+                  header): the old CSS `zoom` that fit it into a 290 cell broke
+                  the mic badge's SVG gradient, so the card is rendered fluid in
+                  an at-most-two-across grid instead. */}
               <div
                 role="list"
                 aria-label="Gist rooms open now"
-                className="mt-4 grid grid-cols-[repeat(auto-fill,290.47px)] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between"
+                className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2"
               >
                 {liveHouses.map((stream) => (
-                  <div key={stream.id} role="listitem" className="h-[103.13px] w-[290.47px]">
+                  <div key={stream.id} role="listitem" className="min-w-0">
                     {roomCardSlot?.(stream)}
                   </div>
                 ))}
@@ -158,12 +160,13 @@ export function HousesStreet({
               className={liveHouses.length > 0 ? "mt-[59px]" : "mt-9"}
             >
               {headingSlot?.("soon")}
-              {/* 1317:158179 — three across on the file's 12.38, rows 16
-                  apart; the card scales from its cell. */}
+              {/* The upcoming cards are the wide HORIZONTAL ComingSoonCard now
+                  (node 1542:3294), so the grid is at most TWO across — a
+                  three-column cell is far too narrow for a 467-wide card. */}
               <div
                 role="list"
                 aria-label="Gist rooms opening later"
-                className="mt-4 grid grid-cols-1 gap-x-[12.38px] gap-y-4 md:grid-cols-2 lg:grid-cols-3"
+                className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2"
               >
                 {scheduledHouses.map((stream) => (
                   <div key={stream.id} role="listitem" className="min-w-0">

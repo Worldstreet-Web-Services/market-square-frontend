@@ -1,6 +1,6 @@
 "use client";
 
-import { UpcomingRoomCard } from "@/components/layout/upcoming-room-card";
+import { ComingSoonCard } from "@/components/layout/coming-soon-card";
 import { useStreamList } from "@/features/streams";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { sq } from "@/lib/square-path";
@@ -19,26 +19,18 @@ import { sq } from "@/lib/square-path";
  * that an empty list renders NOTHING AT ALL — no heading, no empty shelf, no
  * spacer. A square where nobody has scheduled anything costs no height.
  *
- * ─── NODE 1305:149184, THE 2026-09-12 COLUMN'S OWN DRAWING ─────────────────
- * A 581-wide section: the heading row (32 tall — "Coming Soon" in Manrope Bold
- * 24/28.61, all white, and the "View more" pill at its right edge), 16 below
- * it the rail (1305:148882): a 606-wide horizontal row that runs PAST the
- * section's right edge and is clipped there. Every number inside a card
- * divides by its 0.5519 stroke to the 479 x 147 design of 1295:140164 — the
- * same card, placed at 0.5519 (264.35 x 81.13 on an 11.04 gap) — so the card
- * is `UpcomingRoomCard` unchanged (it scales itself from its width) and only
- * the WIDTH and the GAP are this section's. One card, two surfaces — a second
- * copy is how the two drift apart.
+ * ─── THE CARD IS NODE 1542:3294, THE WIDE HORIZONTAL ONE ───────────────────
+ * ogazboiz asked to go back to the horizontal card (2026-09-21): a purple
+ * accent bar on the left, the room's cover, its title / category / host, a
+ * divider, then the date, time, a "Starts in …" pill and Share, right-aligned.
+ * That is `ComingSoonCard` — a component of ITS OWN rather than the vertical
+ * banner `UpcomingRoomCard` the gist-rooms grid draws, because the two
+ * surfaces are two different shapes; the data wiring is shared so they cannot
+ * drift on what a room is. The rail runs sideways and is clipped at the
+ * column's edge, the cards at the node's own 467 on a 16 gap.
  *
- * THE WIDTH IS POPULAR HOUSES', NOT THE NODE'S. Built at the file's 264.35
- * the cards read as too small next to the rest of the column ("the card
- * height for those coming soon is too small"), so they take the treatment
- * Popular Houses got (1305:149179): the same 356 rail width on the same 15.7
- * gap, and the card scales up with it — 356 x 109.3, every internal length
- * still the file's proportion (ogazboiz, 2026-09-12).
- *
- * The node carries no `interactions`; "View more" going to the rooms page is
- * this product's convention, as on the other three headings.
+ * The heading is all white ("Coming Soon"); "View more" going to the rooms
+ * page is this product's convention, as on the other three headings.
  */
 export function ComingSoonRooms() {
   // The same list /gist-rooms reads for its Upcoming rail.
@@ -49,18 +41,18 @@ export function ComingSoonRooms() {
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby="coming-soon-rooms" className="mb-[64px]">
+    <section aria-labelledby="coming-soon-rooms" className="mb-10">
       <div className="mb-4">
         {/* 1305:149167 sets this heading ALL WHITE — no gradient half. */}
         <SectionHeading id="coming-soon-rooms" lead="Coming Soon" action={{ label: "View more", href: sq("/gist-rooms") }} />
       </div>
 
-      {/* 1305:148882 — the rail, clipped at the column's edge; the cards at
-          Popular Houses' 356 on its 15.7 gap (see the header). */}
-      <div className="flex items-center gap-[15.7px] overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* The rail, clipped at the column's edge; the horizontal cards at the
+          node's own 467 on a 16 gap (see the header). */}
+      <div className="flex items-stretch gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((room) => (
-          <div key={room.id} className="w-[356px] shrink-0">
-            <UpcomingRoomCard stream={room} />
+          <div key={room.id} className="w-100 max-w-[95%] shrink-0">
+            <ComingSoonCard stream={room} />
           </div>
         ))}
       </div>
