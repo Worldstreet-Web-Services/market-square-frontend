@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSocialAuth } from "decane-connect-kit";
+import { useSocialAuth, useSocialWallet } from "decane-connect-kit";
 import { Spinner } from "@/components/ui/button";
 import { SquareLockup } from "@/components/ui/square-mark";
 import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
@@ -135,10 +135,52 @@ function DecaneForm() {
   } = useSocialAuth();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [step, setStep] = useState<"email" | "code" | "password">("email");
   const [error, setError] = useState<string | null>(null);
   const [googleFailed, setGoogleFailed] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+
+  /*
+    THE OTHER WAY BACK IN.
+
+    A device can be set up to open a session from a password alone — no
+    provider, no emailed code. Whether THIS device is, is a question only the
+    kit can answer and only asynchronously, so it is asked once on mount and
+    the affordance simply is not drawn until the answer is yes.
+  */
+  const wallet = useSocialWallet();
+  const [canUsePassword, setCanUsePassword] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void wallet
+      .canUnlockWithPassword()
+      .then((can) => {
+        if (live) setCanUsePassword(can);
+      })
+      .catch(() => {
+        // Cannot tell: leave it undrawn. The ordinary ways in are all present.
+      });
+    return () => {
+      live = false;
+    };
+  }, [wallet]);
+
+  const submitPassword = async () => {
+    if (password.length === 0) return;
+    setError(null);
+    setPasswordBusy(true);
+    try {
+      await wallet.unlockWithPassword(password);
+    } catch {
+      // The kit distinguishes a wrong password from a broken one; the reader
+      // can only act on the first, and retyping is the action either way.
+      setError("That password didn't open this device. Try again.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
 
   /*
     THE WAY BACK IN FOR SOMEBODY WHO HAS BEEN HERE.
@@ -208,6 +250,53 @@ function DecaneForm() {
       setError("That code didn't match. Check it and try again.");
     }
   };
+
+  if (step === "password") {
+    return (
+      <form
+        className="contents"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submitPassword();
+        }}
+      >
+        <div className="mt-[61px] px-[27px]">
+          <p className="text-[14px] leading-[18px] text-[#999999]">
+            The password you set on this device.
+          </p>
+          <label htmlFor="ms-password" className="mt-6 block text-[14px] font-medium text-white">
+            Password
+          </label>
+          <input
+            id="ms-password"
+            autoFocus
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            className={cn(FIELD, "mt-2.5")}
+          />
+          {error && <p className="mt-3 text-[13px] text-danger">{error}</p>}
+        </div>
+        <div className="mt-auto px-[80px] pt-8">
+          <CardButton type="submit" busy={passwordBusy} disabled={password.length === 0}>
+            {passwordBusy ? "Opening…" : "Continue"}
+          </CardButton>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setPassword("");
+              setStep("email");
+            }}
+            className="mt-4 w-full text-center text-[14px] text-[#999999] transition-colors hover:text-white"
+          >
+            Use another way in
+          </button>
+        </div>
+      </form>
+    );
+  }
 
   if (step === "code") {
     return (
@@ -295,8 +384,31 @@ function DecaneForm() {
         </div>
       )}
 
+      {/* The other way back, for a device set up to open from a password
+          alone. A link rather than a second big button: it is the fallback for
+          the passkey, not a third equal option. */}
+      {canUsePassword && (
+        <div className="mt-4 flex justify-center px-6">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setStep("password");
+            }}
+            className="text-[14px] font-medium text-[#999999] underline-offset-4 transition-colors hover:text-white hover:underline"
+          >
+            Sign in with your device password
+          </button>
+        </div>
+      )}
+
       {/* `btn-google` — 346x54, radius 34, #000 at 20% under a #000 12% hairline. */}
-      <div className={cn("flex justify-center px-6", canUsePasskey ? "mt-4" : "mt-[61px]")}>
+      <div
+        className={cn(
+          "flex justify-center px-6",
+          canUsePasskey || canUsePassword ? "mt-4" : "mt-[61px]"
+        )}
+      >
         <button
           type="button"
           onClick={() => void google()}
