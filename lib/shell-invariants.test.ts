@@ -2175,9 +2175,9 @@ describe("The friends deck asks about people the reader has not answered for", (
     assert.match(deck, /usePeople\("", DECK_SORT, true, friendsFilterFacets\(filter\)\)/);
     const filters = stripComments(read("lib/people-filters.ts"));
     assert.match(filters, /export const PEOPLE_SORTS = \["followers", "recent", "foryou"\] as const;/);
-    // `followers` until the service that accepts `foryou` is deployed: an
-    // unknown sort VALUE is a 400, and a refused query is an empty deck.
-    assert.match(filters, /export const DECK_SORT: PeopleSort = "followers";/);
+    // The service's ranked ordering, live since #267 deployed: people who
+    // winked the reader first, then the ordinary order.
+    assert.match(filters, /export const DECK_SORT: PeopleSort = "foryou";/);
     // A pass reaches the SERVICE, or it is only true in this browser.
     assert.match(deck, /pass\.mutate\(\{ profileId: profile\.id, passed: true \}\)/);
     // And every answer is asked of the service, in the query rather than after
