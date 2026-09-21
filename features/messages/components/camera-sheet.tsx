@@ -298,22 +298,23 @@ export function CameraSheet({
     >
       <div className="flex h-full flex-col">
         <div className="flex shrink-0 items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            {/* Back-to-camera (retake) once a shot is under review. */}
-            {captured && (
-              <button
-                type="button"
-                onClick={discard}
-                aria-label="Retake"
-                className="ws-press rounded-full p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 3.5 5.5 8l4.5 4.5" />
-                </svg>
-              </button>
-            )}
-            <h2 className="text-[14px] font-semibold text-white">{captured ? "Preview" : "Camera"}</h2>
-          </div>
+          {/* Once a shot is under review the left control is a labelled RETAKE —
+              a bare chevron read as "back" and nobody found it. */}
+          {captured ? (
+            <button
+              type="button"
+              onClick={discard}
+              aria-label="Retake"
+              className="ws-press flex items-center gap-1.5 rounded-full py-1.5 pl-1.5 pr-3 text-[14px] font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 3.5 5.5 8l4.5 4.5" />
+              </svg>
+              Retake
+            </button>
+          ) : (
+            <h2 className="text-[14px] font-semibold text-white">Camera</h2>
+          )}
           <button
             type="button"
             onClick={closeAndReset}
@@ -401,10 +402,10 @@ export function CameraSheet({
                 aria-pressed={viewOnce}
                 aria-label={viewOnce ? "Seen once — tap to keep in the chat" : "Kept in the chat — tap to make it seen once"}
                 title={viewOnce ? "Seen once" : "Kept in the chat"}
-                className="ws-press flex h-8 w-8 shrink-0 items-center justify-center text-white"
+                className="ws-press flex h-10 w-10 shrink-0 items-center justify-center text-white"
               >
                 {viewOnce ? (
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-[22px] w-[22px]">
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7">
                     <circle cx="12" cy="12" r="10" fill="#fff" />
                     <text
                       x="12"
@@ -419,7 +420,7 @@ export function CameraSheet({
                     </text>
                   </svg>
                 ) : (
-                  <svg aria-hidden viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7" fill="none">
                     <circle
                       cx="12"
                       cy="12"
