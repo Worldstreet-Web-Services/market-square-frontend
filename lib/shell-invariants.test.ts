@@ -2120,6 +2120,45 @@ describe("The capture control is named for what it does, and safety is about oth
   });
 });
 
+describe("A DM message can be edited and removed, by its author", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+
+  it("offers the actions on the reader's OWN messages and nowhere else", () => {
+    // Editing or removing somebody else's words is moderation: it reads
+    // differently to everybody in the thread and is a separate feature.
+    assert.match(thread, /\{mine && !removed && !invite && \(\n\s*<OwnMessageActions/);
+  });
+
+  it("asks before removing, and says the removal is for everyone", () => {
+    assert.match(thread, /Remove this message for everyone in this chat\?/);
+  });
+
+  it("edits in the composer, not in the bubble", () => {
+    // A field inside the river would move the conversation under the reader
+    // while they type, and the composer already owns writing a message.
+    assert.match(thread, /const \[editing, setEditing\] = useState<Message \| null>\(null\);/);
+    assert.match(thread, /Editing your message/);
+  });
+
+  it("saves the edit with the same button that sends, and says which", () => {
+    // Two buttons that look alike would make the reader work out which one
+    // they are looking at every time.
+    assert.match(thread, /if \(editing\) \{\n\s*const next = text\.trim\(\);/);
+    assert.match(thread, /onSaveEdit\(next\);/);
+  });
+
+  it("says a message was edited, always", () => {
+    assert.match(thread, /\{message\.editedAt && \(/);
+  });
+
+  it("tells the truth when the edit window has passed", () => {
+    // "Not allowed" would suggest the message was never theirs.
+    const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
+    assert.match(hooks, /EDIT_WINDOW_PASSED/);
+    assert.match(hooks, /Too late to edit/);
+  });
+});
+
 describe("Media that will not load asks for a fresh link", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
 
