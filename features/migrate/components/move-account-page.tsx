@@ -105,6 +105,8 @@ export function MoveAccountPage() {
 function settleMovedProfile(queryClient: ReturnType<typeof useQueryClient>): void {
   void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
   void queryClient.invalidateQueries({ queryKey: ["ms", "migration", "linked"] });
+  // And the gate's answer: a `legacy` that has just been linked.
+  void queryClient.invalidateQueries({ queryKey: ["ms", "migration", "account-state"] });
   invalidateIdentitySurfaces(queryClient);
 }
 

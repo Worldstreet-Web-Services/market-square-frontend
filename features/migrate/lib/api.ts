@@ -10,6 +10,7 @@ import {
   type SquareRekey,
 } from "@/lib/migration-link";
 import { api } from "@/lib/square-path";
+import type { AccountState } from "@/lib/account-state";
 
 /**
  * What a link attempt produced: how it went, and — when Square answered —
@@ -124,5 +125,32 @@ export async function fetchMigrationLinked(): Promise<boolean | null> {
     return typeof body?.data?.linked === "boolean" ? body.data.linked : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Where this Decane sign-in stands relative to the old provider — asked by
+ * the migration gate BEFORE the app's first Square call. Every failure is
+ * `unknown`: linking off in this deployment, the service not answering, a
+ * dropped request. The gate lets `unknown` through, because an outage must
+ * not lock anybody out; the manual door stays.
+ */
+export async function fetchAccountState(email: string | null): Promise<AccountState> {
+  try {
+    const res = await apiFetch(
+      api("/api/migration/account-state"),
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+        signal: AbortSignal.timeout(8_000),
+      },
+      { requireAuth: true, breaker: false }
+    );
+    if (!res.ok) return "unknown";
+    const body = (await res.json().catch(() => null)) as { data?: { state?: unknown } } | null;
+    const state = body?.data?.state;
+    return state === "new" || state === "linked" || state === "legacy" ? state : "unknown";
+  } catch {
+    return "unknown";
   }
 }
