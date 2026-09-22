@@ -87,6 +87,40 @@ export async function sendMessage(conversationId: string, body: OutgoingMessage)
 }
 
 /**
+ * REMOVES A MESSAGE — the author's own, and nobody else's.
+ *
+ * SOFT on the service's side: the row keeps its place and comes back with
+ * `status: "removed"` and its words, media and mentions cleared. A thread
+ * that closed the gap would renumber a conversation somebody is reading, and
+ * a reply quoting it would point at nothing.
+ *
+ * The photo goes with it: a media link resolves by reading the message, so an
+ * emptied row means the link stops answering from that moment.
+ */
+export async function removeMessage(conversationId: string, messageId: string) {
+  return MessageSchema.parse(
+    await msApi.del(`/conversations/${conversationId}/messages/${messageId}`)
+  );
+}
+
+/**
+ * EDITS THE WORDS. Text only, the author's own, inside the service's window.
+ *
+ * NEVER THE ATTACHMENT. Swapping the photo under a message somebody has
+ * already replied to is a different object wearing the same id, and it is how
+ * an edit becomes a way to rewrite a conversation rather than fix a slip.
+ *
+ * A refusal past the window is its own code (`EDIT_WINDOW_PASSED`), so the
+ * reader is told "too late" rather than "not allowed" — they are different
+ * sentences and only one of them is true.
+ */
+export async function editMessage(conversationId: string, messageId: string, text: string) {
+  return MessageSchema.parse(
+    await msApi.patch(`/conversations/${conversationId}/messages/${messageId}`, { text })
+  );
+}
+
+/**
  * OPENS A SNAP — the one request in this slice that DESTROYS something.
  *
  * It is not idempotent in effect and deliberately is in shape: the first call

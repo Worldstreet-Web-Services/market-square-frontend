@@ -1330,15 +1330,20 @@ describe("The account dropdown follows 747:14001", () => {
   const shell = stripComments(read("components/layout/app-shell.tsx"));
   const items = block(shell, "function AccountMenuItems(", "\nfunction RailHandle(");
 
-  it("offers Profile, Settings, Gender and Log out", () => {
+  it("offers Profile and Settings, and every row shuts the menu", () => {
     assert.match(items, /label="Profile"/);
     // By id since QA ("users can change their username"); the settings page redirects to the current username.
     assert.match(items, /go\(me\.data \? profileHref\(me\.data, "settings"\) : "\/auth"\)/, "Settings no longer opens the person's own settings");
-    assert.match(items, /setStep\("gender"\)/);
-    assert.match(items, /GENDER_OPTIONS\.map\(\(option\) =>/);
-    assert.match(items, /update\.mutate\(\{ gender: option\.value \}/);
-    assert.doesNotMatch(items, /<input/, "the account menu asks people to type their gender again");
-    assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
+    // Removed: the Gender row, its Male/Female sub-step and the Log out row
+    // (ogazboiz, 2026-09-22). Gender is still set from Edit profile and
+    // onboarding; the phone nav drawer still carries Sign out.
+    assert.doesNotMatch(items, /"[Gg]ender"|setStep/, "the gender row or its sub-step is back in the account menu");
+    assert.doesNotMatch(items, /Log out/, "Log out is back in the account menu");
+    // A row that leaves the menu open leaves it hanging over the page it just
+    // navigated to, so every row either calls `go` (which closes) or `close`.
+    for (const row of items.split("<MenuRow").slice(1)) {
+      assert.match(row, /onClick=\{(?:\(\) => )?(?:go\(|\{\s*close\(\))/, `an account menu row does not close the menu: ${row.slice(0, 120)}`);
+    }
   });
 
   it("hangs in the 264 panel on every account menu", () => {
@@ -1370,7 +1375,8 @@ describe("The account dropdown follows 747:14001", () => {
 
 describe("Gender is one choice everywhere: Male or Female", () => {
   const places = [
-    "components/layout/app-shell.tsx",
+    // Removed: components/layout/app-shell.tsx — the account menu no longer
+    // sets gender at all (ogazboiz, 2026-09-22).
     "components/layout/onboarding-flow.tsx",
     "features/profile/components/edit-profile-sheet.tsx",
     "components/layout/friends-filter.tsx",
@@ -1650,7 +1656,9 @@ describe("Settings controls never pretend to save", () => {
     assert.equal((screen.match(/<Toggle\s+disabled=\{(personalizeDisabled|visibilityDisabled)\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
     for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
       const source = read(`components/layout/${file}.tsx`);
-      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
+      // `row.disabled` is the per-bucket push switch: off while the master
+      // switch is, and always for the bucket that cannot be declined.
+      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled|row\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
     }
   });
 
@@ -1981,10 +1989,73 @@ describe("A gist room's chat can answer a particular message", () => {
     assert.match(panel, /Message deleted/);
   });
 
-  it("names a handle only when it can name the person behind it", () => {
-    // Inventing an id for an unrecognised @word would notify a stranger who
-    // happens to share a spelling.
-    assert.match(panel, /mentionsPresentIn\(speakers, draft\)/);
+  it("offers the people IN THE ROOM when an @ is typed", () => {
+    // The plumbing shipped without the picker, so typing @ did nothing at all.
+    // The same hook and picker the DM composer uses, so a mention is one
+    // behaviour in this product rather than two that drift.
+    assert.match(panel, /const typing = useMentionTyping\(\{/);
+    assert.match(panel, /<MentionPicker typing=\{typing\} heading="In this room"/);
+    assert.match(panel, /mentionCandidates\(\{ found, members, query \}\)/);
+    // And the room hands down who is present — stage and audience.
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /members=\{chatMentionables\}/);
+  });
+
+  it("closes the mention list once a name is chosen", () => {
+    // The picker renders on the ANCHOR, so clearing only the token left the
+    // list open with an empty query — which matches everybody.
+    const hook = stripComments(read("hooks/use-mention-typing.ts"));
+    assert.match(hook, /setAnchor\(found \? measureField\(\) : null\);/);
+    assert.match(hook, /setToken\(null\);\n\s*setAnchor\(null\);/);
+    // And a resize never opens one that was not showing.
+    assert.match(hook, /const remeasure = \(\) => setAnchor\(token \? measureField\(\) : null\);/);
+  });
+
+  it("lets the picker win Enter while it is open", () => {
+    // Choosing a name and sending the line are the same key; without this,
+    // Enter sends "@pri".
+    assert.match(panel, /if \(typing\.token && typing\.items\.length > 0\) \{/);
+    assert.match(panel, /typing\.pick\(typing\.items\[0\]!\);/);
+  });
+
+  it("lets a phone answer a message by swiping it, like the thread does", () => {
+    // The reply control appeared on HOVER, which on a phone is no control at
+    // all. The rules come from lib/swipe-reply, shared with the DM thread, so
+    // the two surfaces cannot disagree about what counts as a swipe.
+    assert.match(panel, /import \{ isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset \}/);
+    assert.match(panel, /if \(swipeCommits\(dx, dy\)\) setReplyTo\(message\);/);
+    // Committed on RELEASE: a reply firing under a moving finger is one
+    // nobody chose to send.
+    assert.match(panel, /const endDrag = \(message: ChatMessage, event: React\.PointerEvent\)/);
+  });
+
+  it("draws a reply control as well, for anyone who never finds the gesture", () => {
+    assert.match(panel, /onClick=\{\(\) => onReply\(message\)\}/);
+  });
+
+  it("loves a single message, with the service's own tally", () => {
+    // The count is everybody's, so it comes from the read rather than from
+    // adding one to our own copy.
+    assert.match(panel, /const love = useChatReaction\(stream\.id\);/);
+    assert.match(panel, /love\.mutate\(\{ messageId: target\.id, emoji: DEFAULT_REACTION, loved \}\)/);
+    assert.match(panel, /aria-pressed=\{loved\}/);
+    // FILLED, not merely tinted: a coloured outline reads as a hover state
+    // rather than as an act somebody took.
+    assert.match(panel, /filled=\{loved\}/);
+    const icons = stripComments(read("components/ui/room-icons.tsx"));
+    assert.match(icons, /\{!filled && <path/);
+    const api = stripComments(read("features/streams/lib/api.ts"));
+    // The emoji is a path segment and an emoji is several bytes.
+    assert.match(api, /encodeURIComponent\(emoji\)/);
+  });
+
+  it("keeps the quote when the original was removed, without showing its words", () => {
+    assert.match(panel, /message\.replyTo\.deleted \? "Message deleted" : message\.replyTo\.text/);
+  });
+
+  it("sends only the handles still written in the line", () => {
+    // A name picked and then deleted is not a mention.
+    assert.match(panel, /typing\.mentionsFor\(text\)/);
   });
 
   it("keeps the reply target out of the text field, where a backspace would eat it", () => {
@@ -2054,6 +2125,84 @@ describe("The capture control is named for what it does, and safety is about oth
     // somebody else, pointed at nobody.
     const sheet = stripComments(read("features/houses/components/person-sheet.tsx"));
     assert.match(sheet, /\{!isSelf &&/);
+  });
+});
+
+describe("Recovery does not become the next outage", () => {
+  it("lets ONE probe through, and shuts the door behind it", () => {
+    // `onProbe` used to relabel the state and leave `retryAt` in the past, so
+    // every queued request in every tab passed the moment the cooldown lapsed
+    // — a fleet-wide burst aimed at a backend seconds into being alive.
+    const circuit = stripComments(read("lib/api/circuit.ts"));
+    assert.match(circuit, /state: "half-open", retryAt: now \+ options\.cooldownMs/);
+  });
+
+  it("decides a 429 on the service's flag, never on a list of its error codes", () => {
+    // A wink cooldown and an invite cooldown are both 429s and neither is
+    // back-pressure; a client-wide breaker on those would let winking somebody
+    // twice degrade the app. The discriminator is one field the service sets —
+    // enumerating its codes here is the version that rots silently the first
+    // time somebody adds one.
+    const circuit = stripComments(read("lib/api/circuit.ts"));
+    assert.match(circuit, /status === 429\) return scope === "budget"/);
+    assert.doesNotMatch(circuit, /WINK_COOLDOWN|INVITE_COOLDOWN/);
+  });
+
+  it("reads a body for the breaker on one status only", () => {
+    // Every other failure decides on the number alone. Parsing each one would
+    // put a JSON parse on the failing path of every request in the app.
+    const client = stripComments(read("lib/api/client.ts"));
+    assert.match(client, /if \(response\.status !== 429\) return null;/);
+    // And the caller's own body must survive it.
+    assert.match(client, /response\.clone\(\)\.json\(\)/);
+  });
+
+  it("does not refetch the whole tab when somebody presses Try now", () => {
+    // Everybody sees that banner in the same outage and presses it within
+    // seconds of each other; `states.tsx` disables thirty per-module retry
+    // buttons for exactly this reason.
+    const banner = stripComments(read("components/layout/connection-banner.tsx"));
+    assert.doesNotMatch(banner, /refetchQueries/);
+    assert.match(banner, /retryCircuitNow\(\);/);
+  });
+});
+
+describe("A DM message can be edited and removed, by its author", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+
+  it("offers the actions on the reader's OWN messages and nowhere else", () => {
+    // Editing or removing somebody else's words is moderation: it reads
+    // differently to everybody in the thread and is a separate feature.
+    assert.match(thread, /\{mine && !removed && !invite && \(\n\s*<OwnMessageActions/);
+  });
+
+  it("asks before removing, and says the removal is for everyone", () => {
+    assert.match(thread, /Remove this message for everyone in this chat\?/);
+  });
+
+  it("edits in the composer, not in the bubble", () => {
+    // A field inside the river would move the conversation under the reader
+    // while they type, and the composer already owns writing a message.
+    assert.match(thread, /const \[editing, setEditing\] = useState<Message \| null>\(null\);/);
+    assert.match(thread, /Editing your message/);
+  });
+
+  it("saves the edit with the same button that sends, and says which", () => {
+    // Two buttons that look alike would make the reader work out which one
+    // they are looking at every time.
+    assert.match(thread, /if \(editing\) \{\n\s*const next = text\.trim\(\);/);
+    assert.match(thread, /onSaveEdit\(next\);/);
+  });
+
+  it("says a message was edited, always", () => {
+    assert.match(thread, /\{message\.editedAt && \(/);
+  });
+
+  it("tells the truth when the edit window has passed", () => {
+    // "Not allowed" would suggest the message was never theirs.
+    const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
+    assert.match(hooks, /EDIT_WINDOW_PASSED/);
+    assert.match(hooks, /Too late to edit/);
   });
 });
 
@@ -4579,5 +4728,169 @@ describe("invite to speak and the soft mute, after review", () => {
     const people = code("features/houses/components/room-people.tsx");
     assert.doesNotMatch(people, /text-\[9px\]/);
     assert.match(people, /text-\[11px\] font-bold leading-4/);
+  });
+});
+
+describe("A notification can reach a phone's lock screen", () => {
+  /*
+    Web push was built end to end on both sides and could not work on an
+    iPhone, because iOS delivers a push only to a Home Screen app and a site
+    with no manifest cannot be installed as one. These pin the two halves of
+    that fix, and the reason each has to carry the build's prefix.
+  */
+  it("ships a manifest whose scope is the build's, not the origin's", () => {
+    const manifest = stripComments(read("app/manifest.webmanifest/route.ts"));
+    // Inside Ark the Square is a zone beside WSWS on one origin. A manifest
+    // claiming "/" would let the installed app swallow WSWS's pages.
+    assert.match(manifest, /scope: SQUARE_BASE === "" \? "\/" : `\$\{SQUARE_BASE\}\/`/);
+    assert.match(manifest, /start_url: sq\("\/"\)/);
+    assert.match(manifest, /id: sq\("\/"\)/);
+    // `standalone` is what makes iOS hand the tile a notification permission.
+    assert.match(manifest, /display: "standalone"/);
+  });
+
+  it("links the manifest through the prefix, not at the origin root", () => {
+    /*
+      Next's `app/manifest.ts` convention writes the link tag ITSELF, always as
+      href="/manifest.webmanifest" and always winning over `metadata.manifest`.
+      Inside Ark that is WSWS's origin root. The body was right and the link
+      pointed elsewhere — invisible in the source, visible in the built HTML.
+      A route handler serves the same URL and emits no tag.
+    */
+    assert.ok(
+      !existsSync(new URL("../app/manifest.ts", import.meta.url)),
+      "app/manifest.ts would re-add an unprefixed <link rel=manifest>"
+    );
+    assert.match(
+      stripComments(read("app/manifest.webmanifest/route.ts")),
+      /export function GET\(\): Response/
+    );
+    const layout = stripComments(read("app/layout.tsx"));
+    assert.match(layout, /manifest: asset\("\/manifest\.webmanifest"\)/);
+    assert.match(layout, /appleWebApp: \{\s*capable: true/);
+  });
+
+  it("draws the maskable icon separately from the square one", () => {
+    // Android crops a maskable icon to the launcher's shape, so a mark sized
+    // for a square tile loses its corners. One file cannot be both.
+    const manifest = stripComments(read("app/manifest.webmanifest/route.ts"));
+    assert.match(manifest, /icon-maskable-512\.png[\s\S]*purpose: "maskable"/);
+    assert.doesNotMatch(manifest, /purpose: "any maskable"/);
+  });
+
+  it("tells an iPhone in a tab the step that unlocks push", () => {
+    // Otherwise the row reads "this browser can't show push notifications",
+    // which is untrue of the phone and names no way forward.
+    const push = stripComments(read("lib/push.ts"));
+    assert.match(push, /if \(!input\.supported && input\.ios && !input\.standalone\) return "needs-install";/);
+    const hook = stripComments(read("features/settings/hooks/use-push.ts"));
+    assert.match(hook, /navigator as Navigator & \{ standalone\?: boolean \}/);
+  });
+});
+
+describe("A phone can be told what it may be woken for", () => {
+  /*
+    Fifteen kinds shared one switch, so a phone that buzzed for a comment
+    buzzed for a DM — and the way people fix that is by revoking the
+    permission in the OS, which they never grant again. These pin the shape of
+    the fix, whose whole point is that it does NOT enumerate kinds.
+  */
+  it("never re-derives which bucket a kind belongs to", () => {
+    // The service sets `group` on every row precisely so the client does not.
+    // A map here would silently drop every kind added after it shipped, which
+    // is the failure already shipped three times in the other direction.
+    const groups = stripComments(read("lib/notification-groups.ts"));
+    assert.doesNotMatch(groups, /tip_received|comment_reply|stream_live|speaker_invite/);
+    const view = stripComments(read("components/layout/notifications-view.tsx"));
+    assert.doesNotMatch(view, /tip_received|comment_reply|stream_live/);
+  });
+
+  it("keeps one list of buckets and one set of words for them", () => {
+    // Two vocabularies is how the notifications page and Settings drift into
+    // calling the same bucket different things.
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    assert.match(types, /export \{ NOTIFICATION_GROUPS, type NotificationGroup \} from "@\/lib\/notification-groups"/);
+    assert.match(types, /z\.enum\(NOTIFICATION_GROUPS\)/);
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.doesNotMatch(page, /const GROUP_LABEL/, "the label map moved to the shared module");
+    assert.match(page, /import \{ GROUP_LABEL \} from "@\/lib\/notification-groups"/);
+  });
+
+  it("treats the buckets as all-or-nothing, with no per-key default", () => {
+    /*
+      The service stores a boolean per group and always answers with all five.
+      A partial object is a contract break; `?? true` would turn it into a
+      switch reading ON while the service believed otherwise.
+    */
+    const settings = stripComments(read("features/settings/lib/types.ts"));
+    const block = settings.slice(settings.indexOf("pushGroups"));
+    assert.doesNotMatch(block.slice(0, 400), /\.optional\(\)[\s,]*\n?\s*(social|money|rooms|chat|account)/);
+    for (const group of ["social", "money", "rooms", "chat", "account"]) {
+      assert.match(block, new RegExp(`${group}: z\\.boolean\\(\\),`), `${group} must be required`);
+    }
+    const lib = stripComments(read("lib/notification-groups.ts"));
+    assert.doesNotMatch(lib, /groups\[group\] \?\? true/);
+    /*
+      LOOSE, and it has to stay loose. This object is read and written back
+      WHOLE, because the service refuses a partial one. A plain `z.object`
+      strips a bucket it has not heard of, so a sixth would be read, dropped
+      and then not sent — and every push-group save would 400 until the
+      frontend caught up, arriving as "saving my notifications is broken".
+    */
+    assert.match(block, /pushGroups: z\s*\n?\s*\.looseObject\(/);
+  });
+
+  it("saves a bucket by replacing the whole set, never one key", () => {
+    // A one-key patch would be the only partial `pushGroups` that ever
+    // existed, and the optimistic merge would have to guess the other four.
+    const hook = stripComments(read("features/settings/hooks/use-push.ts"));
+    assert.match(hook, /pushGroups: \{ \.\.\.groups, \[group\]: next \}/);
+  });
+});
+
+describe("Every notification kind has words of its own", () => {
+  /*
+    THE PROPERTY, NOT THE INSTANCE — the lesson three shipped bugs actually
+    taught, kept in the suite rather than in a comment.
+
+    `NotificationKindSchema` ends in `.catch("follow")`, so a kind this client
+    has not heard of renders as "New Follower · X started following you". That
+    is not hypothetical: `tip_received` shipped that way (a creator who had
+    been PAID was told they had a new follower), then `wink`, then four kinds
+    at once. Each was the service sending something our enum did not list.
+
+    Listing a kind fixes the parse and leaves the SECOND half of the same bug
+    open: a kind in the enum with no case in the copy falls to a default and
+    reads as somebody else's event. This walks every kind in the enum and
+    fails if either switch has nothing to say about it — so a kind added later
+    fails here, rather than in somebody's notifications.
+  */
+  const kindsInEnum = () => {
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    const start = types.indexOf(".enum([");
+    const end = types.indexOf("])", start);
+    assert.ok(start > 0 && end > start, "the kind enum moved — this test must follow it");
+    return [...types.slice(start, end).matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+  };
+
+  it("finds the kinds at all, so an empty list can never pass silently", () => {
+    // A regex that matches nothing makes every assertion below vacuous. This
+    // repo has shipped a find-and-replace that matched nothing and reported
+    // success, past typecheck, lint, tests and build.
+    const kinds = kindsInEnum();
+    assert.ok(kinds.length >= 15, `expected the full enum, found ${kinds.length}`);
+    for (const known of ["wink", "tip_received", "post_announced", "message"]) {
+      assert.ok(kinds.includes(known), `${known} missing — the enum is not being read`);
+    }
+  });
+
+  it("gives every kind a headline and a sentence", () => {
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    const headline = page.slice(page.indexOf("function headline("), page.indexOf("function describe("));
+    const describeFn = page.slice(page.indexOf("function describe("));
+    for (const kind of kindsInEnum()) {
+      assert.ok(headline.includes(`case "${kind}"`), `${kind} has no headline`);
+      assert.ok(describeFn.includes(`case "${kind}"`), `${kind} has no sentence`);
+    }
   });
 });

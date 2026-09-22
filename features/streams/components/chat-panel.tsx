@@ -18,8 +18,12 @@ import {
   IconRoomSend,
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
-import { useChat, useChatHistory, useSendChat } from "@/features/streams/hooks/use-chat";
-import { mentionsPresentIn } from "@/lib/mention-token";
+import { useChat, useChatHistory, useChatReaction, useSendChat } from "@/features/streams/hooks/use-chat";
+import { useMentionTyping } from "@/hooks/use-mention-typing";
+import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
+import { DEFAULT_REACTION } from "@/lib/reactions";
+import { MentionPicker } from "@/components/ui/mention-picker";
+import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
 import { OLDER_THRESHOLD_PX, oldestFirst, preservedScrollTop } from "@/lib/chat-order";
 import type { ChatMessage, Stream } from "@/features/streams/lib/types";
 
@@ -99,8 +103,20 @@ export function ChatPanel({
   heading = false,
   moderation,
   showTopViewers = false,
+  members = [],
 }: {
   stream: Stream;
+  /**
+   * EVERYONE IN THE ROOM, for the @ picker.
+   *
+   * A gist room's chat is a conversation between people who are present, so
+   * the list to offer is the people on the stage and in the audience — not
+   * the whole directory, and not only the handful who have happened to TYPE
+   * something. Passed in because only the room knows who is in it; empty
+   * everywhere else, which simply means the picker offers whoever the
+   * service's own search finds.
+   */
+  members?: MentionableMember[];
   /**
    * "overlay": transparent column over video — masked top fade, text shadows,
    * glass input, no panel chrome.
@@ -142,47 +158,97 @@ export function ChatPanel({
   );
   const hasOlder = history.data ? history.hasNextPage : (chat.data?.nextCursor ?? null) !== null;
   const gate = useGate();
-  const [draft, setDraft] = useState("");
   /*
-    THE MESSAGE BEING ANSWERED, and the people named in the line.
+    THE MESSAGE BEING ANSWERED.
 
     A room chat moves fast and several conversations share one column, so
     "which of these were you answering?" is the question a reply exists to
     settle (ogazboiz, 2026-09-21). One level, never a thread: a reply to a
     reply points at that message, which is what the DM pane does and what
     keeps a live column readable.
+  */
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /*
+    SWIPE A MESSAGE TO ANSWER IT — the gesture the DM thread already has.
 
-    The mention ids are read back out of the DRAFT on every send rather than
+    The reply control here appears on HOVER, which on a phone is no control at
+    all: ogazboiz went looking for it and found nothing (2026-09-21). The rules
+    are `lib/swipe-reply`, shared with the thread, so the two surfaces cannot
+    disagree about what counts as a swipe — claimed only once the drag is
+    clearly HORIZONTAL, because this column's main gesture is scrolling and a
+    finger travelling up always drifts sideways.
+
+    ONE row at a time, so this is a single piece of state rather than state per
+    bubble: two fingers dragging two messages is not a gesture anybody makes.
+  */
+  const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
+  const dragFrom = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+  const love = useChatReaction(stream.id);
+
+  /*
+    The gesture itself. Claimed only once it is clearly horizontal, committed
+    only on RELEASE — a reply that fired under a moving finger would be one
+    nobody chose to send — and the row springs back either way.
+  */
+  const startDrag = (message: ChatMessage, event: React.PointerEvent) => {
+    if (event.pointerType === "mouse") return;
+    dragFrom.current = { x: event.clientX, y: event.clientY };
+    dragging.current = false;
+    setDrag({ id: message.id, dx: 0 });
+  };
+  const moveDrag = (event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (!from) return;
+    const dx = event.clientX - from.x;
+    const dy = event.clientY - from.y;
+    if (!isReplySwipe(dx, dy)) return;
+    dragging.current = true;
+    setDrag((current) => (current ? { ...current, dx: swipeOffset(dx) } : current));
+  };
+  const endDrag = (message: ChatMessage, event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (from && dragging.current) {
+      const dx = event.clientX - from.x;
+      const dy = event.clientY - from.y;
+      if (swipeCommits(dx, dy)) setReplyTo(message);
+    }
+    dragFrom.current = null;
+    dragging.current = false;
+    setDrag(null);
+  };
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  /*
+    TYPING @ OFFERS THE PEOPLE IN THE ROOM.
+
+    The same hook and the same picker the DM composer uses, so a mention is one
+    behaviour in this product rather than two that drift. It had none at all
+    until now — the plumbing was here, the picker was not, and typing @ simply
+    did nothing (ogazboiz, 2026-09-21: "I want to @someone in the room but it
+    is not working").
+
+    WHO IT OFFERS: everyone on the stage and in the audience, handed down by
+    the room, ahead of whatever the service's own search finds. A gist room's
+    chat is a conversation between people who are PRESENT, and the person you
+    want to name is almost always one of the faces above the column. Anyone
+    who has spoken is already among them.
+
+    The ids are read back out of the TEXT on send (`mentionsFor`), never
     accumulated as they are picked: a handle typed and then deleted is not a
     mention, and sending it would notify somebody the sender changed their mind
     about.
   */
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  /*
-    WHO A HANDLE IN THE DRAFT ACTUALLY REFERS TO.
-
-    The people whose names are known here are the ones who have SPOKEN in this
-    room — their profiles ride along on their own messages. That is a smaller
-    set than the room's roster and it is the honest one: a handle only becomes
-    a mention when we can name the person behind it, and inventing an id for an
-    unrecognised @word would notify a stranger who happens to share a spelling.
-  */
-  const speakers = useMemo(() => {
-    const seen = new Map<string, { type: "user"; id: string; handle: string }>();
-    for (const message of ordered) {
-      const author = message.author;
-      if (author?.username && author.id) {
-        seen.set(author.username.toLowerCase(), { type: "user", id: author.id, handle: author.username });
-      }
-    }
-    return [...seen.values()];
-  }, [ordered]);
-  const mentionIds = mentionsPresentIn(speakers, draft).map((mention) => mention.id);
+  const typing = useMentionTyping({
+    max: 500,
+    field: inputRef,
+    candidates: (found, query) => mentionCandidates({ found, members, query }),
+  });
+  const draft = typing.text;
   const [menuFor, setMenuFor] = useState<string | null>(null);
   // The gist room's chat composer has a full emoji picker (it is a MESSAGE
   // field, not the six-glyph reaction bar) that types the glyph into the draft.
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const emojiWrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
@@ -276,11 +342,13 @@ export function ChatPanel({
           // Only the handles STILL WRITTEN in the line: a name picked and then
           // deleted is not a mention, and sending it would notify somebody the
           // sender decided against.
-          ...(mentionIds.length > 0 ? { mentions: mentionIds } : {}),
+          ...(typing.mentionsFor(text).length > 0
+            ? { mentions: typing.mentionsFor(text).map((mention) => mention.id) }
+            : {}),
         },
         {
         onSuccess: () => {
-          setDraft("");
+          typing.reset();
           setReplyTo(null);
           // Saying something is opting back into the live edge: nobody types a
           // message and then wants to keep reading history.
@@ -296,19 +364,22 @@ export function ChatPanel({
   // the glyph. The picker stays open so several can be added in a row.
   const insertEmoji = (emoji: string) => {
     const el = inputRef.current;
-    setDraft((prev) => {
+    {
+      const prev = typing.text;
       const start = el?.selectionStart ?? prev.length;
       const end = el?.selectionEnd ?? prev.length;
       const next = (prev.slice(0, start) + emoji + prev.slice(end)).slice(0, 300);
+      const caret = Math.min(start + emoji.length, next.length);
+      // Through the hook, so an @ token already being typed is re-measured
+      // rather than left pointing at a caret that has moved.
+      typing.replace(next, caret);
       if (el) {
         requestAnimationFrame(() => {
           el.focus();
-          const caret = Math.min(start + emoji.length, next.length);
           el.setSelectionRange(caret, caret);
         });
       }
-      return next;
-    });
+    }
   };
 
   // Dismiss the picker on a click away from it or Escape.
@@ -428,6 +499,14 @@ export function ChatPanel({
                 key={message.id}
                 message={message}
                 isHost={message.authorId === stream.ownerId}
+                onReply={setReplyTo}
+                onLove={(target, loved) =>
+                  gate(() => love.mutate({ messageId: target.id, emoji: DEFAULT_REACTION, loved }))
+                }
+                dragX={drag?.id === message.id ? drag.dx : 0}
+                onDragStart={startDrag}
+                onDragMove={moveDrag}
+                onDragEnd={endDrag}
               />
             ))
           : ordered.map((message) => (
@@ -467,11 +546,11 @@ export function ChatPanel({
                     before replies existed reads exactly as it did. */}
                 {message.replyTo && (
                   <p className="mb-1 flex items-center gap-1.5 rounded-md border-l-2 border-white/25 bg-white/[0.05] px-2 py-1 text-[12px] leading-[16px] text-meta">
-                    <span className="shrink-0 font-semibold text-body">
-                      {message.replyTo.author?.displayName ?? "Someone"}
-                    </span>
+                    {/* The quote carries an authorId and no second author
+                        object — the page already holds every author, so a copy
+                        per quote would be the same profile twice. */}
                     <span className="truncate">
-                      {message.replyTo.deleted ? "Message deleted" : message.replyTo.excerpt}
+                      {message.replyTo.deleted ? "Message deleted" : message.replyTo.text}
                     </span>
                   </p>
                 )}
@@ -600,6 +679,9 @@ export function ChatPanel({
                 text, and putting it in the field would make it deletable with
                 a backspace. Dismissable, because changing your mind about
                 which message you meant is the commonest correction here. */}
+            {/* The list of people, anchored to the field. Only ever open while
+                an @ token is being typed. */}
+            <MentionPicker typing={typing} heading="In this room" emptyLabel="Nobody in this room matches." />
             {replyTo && (
               <div className="flex items-center gap-2 rounded-xl border-l-2 border-create bg-white/[0.05] px-3 py-1.5">
                 <span className="min-w-0 flex-1 truncate text-[12px] leading-[16px] text-meta">
@@ -636,8 +718,25 @@ export function ChatPanel({
               <input
                 ref={inputRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submit()}
+                onChange={(e) => typing.update(e.target.value, e.target.selectionStart)}
+                onKeyDown={(e) => {
+                  // The picker owns the arrows, Enter and Escape WHILE it is
+                  // open: choosing a name and sending the line are the same
+                  // key, and the list has to win or Enter sends "@pri".
+                  if (typing.token && typing.items.length > 0) {
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      typing.pick(typing.items[0]!);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      typing.dismiss();
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter") submit();
+                }}
                 maxLength={300}
                 disabled={stream.status !== "live"}
                 placeholder={stream.status === "live" ? "Start typing" : "Chat is closed"}
@@ -683,7 +782,7 @@ export function ChatPanel({
           >
             <input
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => typing.update(e.target.value, e.target.selectionStart)}
               onKeyDown={(e) => e.key === "Enter" && submit()}
               maxLength={300}
               disabled={stream.status !== "live"}
@@ -732,10 +831,56 @@ export function ChatPanel({
  * lie. So it is a real `disabled` button carrying the reason, per the
  * flagged-capability rule.
  */
-function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean }) {
+function RoomBubble({
+  message,
+  isHost,
+  onReply,
+  onLove,
+  dragX,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: {
+  message: ChatMessage;
+  isHost: boolean;
+  /** Make this message the composer's reply target. */
+  onReply: (message: ChatMessage) => void;
+  /** Toggle the reader's love on it. */
+  onLove: (message: ChatMessage, loved: boolean) => void;
+  /** How far this row has been dragged, or 0 when it is not the one moving. */
+  dragX: number;
+  onDragStart: (message: ChatMessage, event: React.PointerEvent) => void;
+  onDragMove: (event: React.PointerEvent) => void;
+  onDragEnd: (message: ChatMessage, event: React.PointerEvent) => void;
+}) {
   const name = message.author?.displayName ?? `Member ·${message.authorId.slice(-4)}`;
+  const heart = message.reactions.find((entry) => entry.emoji === DEFAULT_REACTION);
+  const loved = heart?.mine === true;
+  const loves = heart?.count ?? 0;
+
   return (
-    <li className="flex items-end gap-2">
+    <li
+      className="relative flex items-end gap-2 touch-pan-y"
+      style={{ transform: dragX ? `translateX(${dragX}px)` : undefined }}
+      onPointerDown={(event) => onDragStart(message, event)}
+      onPointerMove={onDragMove}
+      onPointerUp={(event) => onDragEnd(message, event)}
+      onPointerCancel={(event) => onDragEnd(message, event)}
+    >
+      {/* The mark the swipe is travelling towards, so the gesture explains
+          itself the first time rather than after somebody guesses. */}
+      {dragX > 8 && (
+        <span
+          aria-hidden
+          className="absolute -left-1 bottom-2 text-white/50"
+          style={{ opacity: Math.min(1, dragX / SWIPE_TRIGGER) }}
+        >
+          <svg viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 3 1.5 6.5 5 10" />
+            <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+          </svg>
+        </span>
+      )}
       <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
         <Avatar name={name} seed={message.authorId} src={message.author?.avatarUrl} size={24} />
       </span>
@@ -757,6 +902,14 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
               </span>
             )}
           </p>
+          {/* WHAT THIS ANSWERS, above the words that answer it. A removed
+              original keeps its quote and says so: a reply to nothing reads
+              as a non-sequitur. */}
+          {message.replyTo && (
+            <p className="min-w-0 truncate rounded-md border-l-2 border-white/40 bg-black/15 px-2 py-1 text-[12px] leading-4 text-white/70">
+              {message.replyTo.deleted ? "Message deleted" : message.replyTo.text}
+            </p>
+          )}
           <p className="break-words text-[13px] leading-5 tracking-[-0.006em] text-white">
             {message.text}
           </p>
@@ -766,14 +919,37 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
         </span>
       </div>
 
+      {/* REPLY — a real control, not a hover-only one. The swipe is the
+          gesture on a phone; this is the same act for a mouse and for anybody
+          who never discovers the gesture, which on the last surface was
+          everybody. */}
       <button
         type="button"
-        disabled
-        title="Reacting to a single message isn't available yet."
-        aria-label="React to this message"
-        className="shrink-0 self-end pb-1 text-white/40 disabled:opacity-60"
+        onClick={() => onReply(message)}
+        aria-label={"Reply to " + name}
+        title="Reply"
+        className="ws-press shrink-0 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
       >
-        <IconRoomHeart className="h-4 w-4" />
+        <svg aria-hidden viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 3 1.5 6.5 5 10" />
+          <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+        </svg>
+      </button>
+
+      {/* LOVE THIS ONE. Filled once the reader has, with the service's own
+          tally beside it — the count is everybody's, so it comes from the
+          read rather than from adding one to our own copy. */}
+      <button
+        type="button"
+        onClick={() => onLove(message, !loved)}
+        aria-pressed={loved}
+        aria-label={loved ? `Remove your love from ${name}'s message` : `Love ${name}'s message`}
+        className="ws-press flex shrink-0 items-center gap-0.5 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
+      >
+        {/* FILLED once the reader has loved it — a tinted outline reads as a
+            hover state, not as an act somebody took. */}
+        <IconRoomHeart className={cn("h-4 w-4", loved && "text-like")} filled={loved} />
+        {loves > 0 && <span className="tnum text-[11px] leading-none">{loves}</span>}
       </button>
     </li>
   );

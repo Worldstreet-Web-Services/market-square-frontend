@@ -1,7 +1,9 @@
 "use client";
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchChat, sendChat } from "@/features/streams/lib/api";
+import { toast } from "sonner";
+import { errorMessage } from "@/lib/api/envelope";
+import { fetchChat, sendChat, setChatReaction } from "@/features/streams/lib/api";
 
 const CHAT_POLL_MS = 5_000;
 
@@ -36,6 +38,33 @@ export function useChatHistory(streamId: string, after: string | null, enabled: 
     getNextPageParam: (last) => last.nextCursor,
     enabled: enabled && after !== null,
     staleTime: Infinity,
+  });
+}
+
+/**
+ * LOVING A MESSAGE.
+ *
+ * The chat is invalidated rather than patched: the count is the SERVICE's
+ * tally across everybody, and a client that added one to its own copy would be
+ * guessing about other people. The poll is a few seconds, so the row settles
+ * quickly and settles correctly.
+ */
+export function useChatReaction(streamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      messageId,
+      emoji,
+      loved,
+    }: {
+      messageId: string;
+      emoji: string;
+      loved: boolean;
+    }) => setChatReaction(streamId, messageId, emoji, loved),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ms", "stream", streamId, "chat"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't react to that message.")),
   });
 }
 

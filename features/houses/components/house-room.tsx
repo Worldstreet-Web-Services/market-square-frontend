@@ -62,6 +62,7 @@ import { useHouseAudio } from "@/features/houses/hooks/use-house-audio";
 import { ANNOUNCE_STABLE_MS } from "@/features/houses/lib/audio-levels";
 import { houseShareUrl, houseTopic, isHouse } from "@/features/houses/lib/house";
 import { parseParticipantMeta, participantName } from "@/features/houses/lib/participant-meta";
+import type { MentionableMember } from "@/lib/mentionable-members";
 import {
   getMutes,
   getServerMutes,
@@ -997,6 +998,38 @@ function LiveHouse({
     (identity: string) => setMutes(stream.id, toggleMuteSet(getMutes(stream.id), identity)),
     [stream.id]
   );
+
+  /*
+    EVERYONE IN THE ROOM, FOR THE CHAT'S @ PICKER.
+
+    The stage and the audience, which is what "in this room" means to somebody
+    typing a name into the column beside them. Only people whose USERNAME we
+    know can be offered — a mention is a link to a profile, and a seat with no
+    handle is somebody we cannot address.
+  */
+  const chatMentionables: MentionableMember[] = useMemo(() => {
+    const seen = new Map<string, MentionableMember>();
+    for (const slot of slots) {
+      const meta = parseParticipantMeta(slot.metadata);
+      const username = meta?.username;
+      if (!username) continue;
+      seen.set(username.toLowerCase(), {
+        id: baseIdentity(slot.identity),
+        displayName: participantName(slot.name) ?? username,
+        username,
+      });
+    }
+    for (const member of audience) {
+      const username = member.meta?.username;
+      if (!username) continue;
+      seen.set(username.toLowerCase(), {
+        id: member.userId,
+        displayName: member.name || username,
+        username,
+      });
+    }
+    return [...seen.values()];
+  }, [slots, audience]);
 
   /* ---- reactions ------------------------------------------------------ */
 
@@ -1948,7 +1981,7 @@ function LiveHouse({
             Gistroom Chat
           </h2>
           <div className="min-h-0 flex-1">
-            <ChatPanel stream={stream} variant="room" />
+            <ChatPanel stream={stream} variant="room" members={chatMentionables} />
           </div>
         </div>
         </div>
@@ -2064,7 +2097,7 @@ function LiveHouse({
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <ChatPanel stream={stream} variant="room" />
+            <ChatPanel stream={stream} variant="room" members={chatMentionables} />
           </div>
         </div>
       </Sheet>
