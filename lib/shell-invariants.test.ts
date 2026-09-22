@@ -1330,15 +1330,20 @@ describe("The account dropdown follows 747:14001", () => {
   const shell = stripComments(read("components/layout/app-shell.tsx"));
   const items = block(shell, "function AccountMenuItems(", "\nfunction RailHandle(");
 
-  it("offers Profile, Settings, Gender and Log out", () => {
+  it("offers Profile and Settings, and every row shuts the menu", () => {
     assert.match(items, /label="Profile"/);
     // By id since QA ("users can change their username"); the settings page redirects to the current username.
     assert.match(items, /go\(me\.data \? profileHref\(me\.data, "settings"\) : "\/auth"\)/, "Settings no longer opens the person's own settings");
-    assert.match(items, /setStep\("gender"\)/);
-    assert.match(items, /GENDER_OPTIONS\.map\(\(option\) =>/);
-    assert.match(items, /update\.mutate\(\{ gender: option\.value \}/);
-    assert.doesNotMatch(items, /<input/, "the account menu asks people to type their gender again");
-    assert.match(items, /label=\{`Log out @/, "Log out is gone from the account menu");
+    // Removed: the Gender row, its Male/Female sub-step and the Log out row
+    // (ogazboiz, 2026-09-22). Gender is still set from Edit profile and
+    // onboarding; the phone nav drawer still carries Sign out.
+    assert.doesNotMatch(items, /"[Gg]ender"|setStep/, "the gender row or its sub-step is back in the account menu");
+    assert.doesNotMatch(items, /Log out/, "Log out is back in the account menu");
+    // A row that leaves the menu open leaves it hanging over the page it just
+    // navigated to, so every row either calls `go` (which closes) or `close`.
+    for (const row of items.split("<MenuRow").slice(1)) {
+      assert.match(row, /onClick=\{(?:\(\) => )?(?:go\(|\{\s*close\(\))/, `an account menu row does not close the menu: ${row.slice(0, 120)}`);
+    }
   });
 
   it("hangs in the 264 panel on every account menu", () => {
@@ -1370,7 +1375,8 @@ describe("The account dropdown follows 747:14001", () => {
 
 describe("Gender is one choice everywhere: Male or Female", () => {
   const places = [
-    "components/layout/app-shell.tsx",
+    // Removed: components/layout/app-shell.tsx — the account menu no longer
+    // sets gender at all (ogazboiz, 2026-09-22).
     "components/layout/onboarding-flow.tsx",
     "features/profile/components/edit-profile-sheet.tsx",
     "components/layout/friends-filter.tsx",
