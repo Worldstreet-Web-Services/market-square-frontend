@@ -278,6 +278,15 @@ function LinkFlow({
   // poll that cannot answer, or answers anything short of settled, changes
   // nothing — the next one asks again. Only a dead session ends the wait
   // early, because no number of polls revives one.
+  //
+  // Keyed on `waiting` ALONE. The Privy object changes identity on every
+  // Privy state change, and an effect that re-ran on it cancelled the timer
+  // each time — a poll that keeps being rescheduled is a poll that never
+  // fires. What the ticks need from the outside they read through refs.
+  const pollDeps = useRef({ privy, queryClient, router });
+  useEffect(() => {
+    pollDeps.current = { privy, queryClient, router };
+  });
   useEffect(() => {
     if (!waiting) return;
     let live = true;
@@ -293,13 +302,14 @@ function LinkFlow({
         return;
       }
       if (result.outcome.kind === "linked" && squareSettled(result.square) && result.square !== "unknown") {
+        const deps = pollDeps.current;
         setSquare(result.square);
         setWaiting(false);
         // Its one job is done either way.
-        void privy.logout().catch(() => {});
+        void deps.privy.logout().catch(() => {});
         if (result.square === "done") {
-          settleMovedProfile(queryClient);
-          void goToMovedProfile(router);
+          settleMovedProfile(deps.queryClient);
+          void goToMovedProfile(deps.router);
         }
         return;
       }
@@ -310,7 +320,7 @@ function LinkFlow({
       live = false;
       clearTimeout(timer);
     };
-  }, [waiting, queryClient, privy, router]);
+  }, [waiting]);
 
   const signInAgain = () => {
     started.current = false;
