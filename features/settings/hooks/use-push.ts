@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/envelope";
-import { PUSH_COPY, pushAvailability } from "@/lib/push";
+import { PUSH_COPY, looksLikeIos, pushAvailability } from "@/lib/push";
 import {
   fetchVapidPublicKey,
   hasPushSubscription,
@@ -57,8 +57,36 @@ export function usePushNotifications() {
     staleTime: Infinity,
   });
 
+  /*
+    READ FROM THE BROWSER, not from state: neither answer can change while
+    this screen is open. An iPhone cannot become a desktop, and installing to
+    the Home Screen opens a NEW app window rather than changing this one — so
+    a subscription here would never fire, and the server render (false) has to
+    match the first client render anyway.
+  */
+  const ios = useSyncExternalStore(
+    noSubscribe,
+    () =>
+      looksLikeIos({
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        maxTouchPoints: navigator.maxTouchPoints,
+      }),
+    () => false
+  );
+  const standalone = useSyncExternalStore(
+    noSubscribe,
+    () =>
+      window.matchMedia("(display-mode: standalone)").matches ||
+      // Safari's own, older flag — the one that is actually set on an iPhone.
+      (navigator as Navigator & { standalone?: boolean }).standalone === true,
+    () => false
+  );
+
   const availability = pushAvailability({
     supported,
+    ios,
+    standalone,
     settingsState: settings.isSuccess ? "live" : settings.isError ? "gone" : "loading",
     pushSetting: settings.data?.notifications.push,
     publicKey: publicKey.isError ? null : publicKey.data,

@@ -4650,3 +4650,60 @@ describe("invite to speak and the soft mute, after review", () => {
     assert.match(people, /text-\[11px\] font-bold leading-4/);
   });
 });
+
+describe("A notification can reach a phone's lock screen", () => {
+  /*
+    Web push was built end to end on both sides and could not work on an
+    iPhone, because iOS delivers a push only to a Home Screen app and a site
+    with no manifest cannot be installed as one. These pin the two halves of
+    that fix, and the reason each has to carry the build's prefix.
+  */
+  it("ships a manifest whose scope is the build's, not the origin's", () => {
+    const manifest = stripComments(read("app/manifest.webmanifest/route.ts"));
+    // Inside Ark the Square is a zone beside WSWS on one origin. A manifest
+    // claiming "/" would let the installed app swallow WSWS's pages.
+    assert.match(manifest, /scope: SQUARE_BASE === "" \? "\/" : `\$\{SQUARE_BASE\}\/`/);
+    assert.match(manifest, /start_url: sq\("\/"\)/);
+    assert.match(manifest, /id: sq\("\/"\)/);
+    // `standalone` is what makes iOS hand the tile a notification permission.
+    assert.match(manifest, /display: "standalone"/);
+  });
+
+  it("links the manifest through the prefix, not at the origin root", () => {
+    /*
+      Next's `app/manifest.ts` convention writes the link tag ITSELF, always as
+      href="/manifest.webmanifest" and always winning over `metadata.manifest`.
+      Inside Ark that is WSWS's origin root. The body was right and the link
+      pointed elsewhere — invisible in the source, visible in the built HTML.
+      A route handler serves the same URL and emits no tag.
+    */
+    assert.ok(
+      !existsSync(new URL("../app/manifest.ts", import.meta.url)),
+      "app/manifest.ts would re-add an unprefixed <link rel=manifest>"
+    );
+    assert.match(
+      stripComments(read("app/manifest.webmanifest/route.ts")),
+      /export function GET\(\): Response/
+    );
+    const layout = stripComments(read("app/layout.tsx"));
+    assert.match(layout, /manifest: asset\("\/manifest\.webmanifest"\)/);
+    assert.match(layout, /appleWebApp: \{\s*capable: true/);
+  });
+
+  it("draws the maskable icon separately from the square one", () => {
+    // Android crops a maskable icon to the launcher's shape, so a mark sized
+    // for a square tile loses its corners. One file cannot be both.
+    const manifest = stripComments(read("app/manifest.webmanifest/route.ts"));
+    assert.match(manifest, /icon-maskable-512\.png[\s\S]*purpose: "maskable"/);
+    assert.doesNotMatch(manifest, /purpose: "any maskable"/);
+  });
+
+  it("tells an iPhone in a tab the step that unlocks push", () => {
+    // Otherwise the row reads "this browser can't show push notifications",
+    // which is untrue of the phone and names no way forward.
+    const push = stripComments(read("lib/push.ts"));
+    assert.match(push, /if \(!input\.supported && input\.ios && !input\.standalone\) return "needs-install";/);
+    const hook = stripComments(read("features/settings/hooks/use-push.ts"));
+    assert.match(hook, /navigator as Navigator & \{ standalone\?: boolean \}/);
+  });
+});

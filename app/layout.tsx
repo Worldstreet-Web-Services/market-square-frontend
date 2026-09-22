@@ -78,6 +78,34 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin(process.env)),
   /*
+    DECLARED WITH THE PREFIX, for the same reason the icons above are. Next's
+    `app/manifest.ts` convention emits `href="/manifest.webmanifest"`, which
+    inside Ark (www.tsionark.com/square) points at WSWS's origin root and would
+    hand Safari somebody else's manifest — or none.
+  */
+  manifest: asset("/manifest.webmanifest"),
+  /*
+    iOS READS THIS, NOT ONLY THE MANIFEST. Safari has honoured
+    `apple-mobile-web-app-capable` far longer than it has honoured the
+    manifest's `display`, and web push on an iPhone is only delivered to a Home
+    Screen app — so both say "standalone" and neither is load-bearing alone.
+    `statusBarStyle` keeps the status bar legible on the app's black wash.
+  */
+  appleWebApp: {
+    capable: true,
+    title: SITE_NAME,
+    statusBarStyle: "black-translucent",
+  },
+  /*
+    AND THE LEGACY SPELLING, BY HAND. `appleWebApp.capable` now emits the
+    unprefixed `mobile-web-app-capable` and nothing else — verified in the
+    built HTML, not assumed. iOS 16.4 is the first version with web push and
+    the first that reads `display` out of the manifest, so the manifest alone
+    is enough on paper; through 17.3 the prefixed meta is the one Safari has
+    always honoured, and it costs a line.
+  */
+  other: { "apple-mobile-web-app-capable": "yes" },
+  /*
     Declared, not the `app/icon.svg` file convention: that convention writes a
     root `/icon.svg` link, which inside Ark (www.tsionark.com/square) would load
     WSWS's icon. Same two files, same sizes and types, through `asset()`.
