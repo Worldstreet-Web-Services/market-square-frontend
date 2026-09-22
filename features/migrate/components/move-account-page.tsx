@@ -193,13 +193,18 @@ function LinkFlow({
     the flag, the 200 arrived and was thrown away, and `started` stopped it
     from ever being sent again: a linked account, and a spinner forever.
   */
-  const mounted = useRef(true);
-  useEffect(
-    () => () => {
+  //
+  // Set on mount as well as cleared on unmount. React's development-mode
+  // double invoke runs mount, cleanup, mount — a ref that only the cleanup
+  // wrote stayed false for the whole life of the component, and every link
+  // answer was discarded: `done` in the response, a spinner on the screen.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    []
-  );
+    };
+  }, []);
   /*
     LEFT-OVER SESSIONS ARE DISCARDED, NOT SPENT.
 
