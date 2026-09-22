@@ -5,7 +5,7 @@ Market Square: the social, discovery, streaming and ARK Store surface of the Ark
 ## Tech Stack
 - Next.js (App Router) + React 19 + TypeScript, pnpm
 - Tailwind CSS v4 — theme in `app/globals.css` via `@theme inline`; NO component library
-- Auth: Decane (`decane-connect-kit` client, `decane-node` server verification). Privy remains only for the migration window: the BFF still accepts pre-migration Privy sessions, and `/move-account` signs into the OLD Privy account once to link it (`POST /v1/migration/link`, contract in tsionark-monorepo `apps/market-square/llms-link.txt`)
+- Auth: Decane (`decane-connect-kit` client, `decane-node` server verification). Privy remains only for the migration window: the BFF still accepts pre-migration Privy sessions, and `/move-account` signs into the OLD Privy account once to link it (`POST /v1/user-management/link`, contract in tsionark-monorepo `apps/market-square/llms-link.txt`)
 - Server state: TanStack Query v5. NO global state manager (no Redux/Zustand); React local state for UI
 - Validation at boundaries: zod v4. Toasts: sonner. Animation: motion
 

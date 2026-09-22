@@ -1,7 +1,7 @@
 /**
  * WHAT A LINK ATTEMPT MEANS — the one decision the old-account flow rests on.
  *
- * `POST /v1/migration/link` tells the platform "this Decane account is that
+ * `POST /v1/user-management/link` tells the platform "this Decane account is that
  * Privy account", and Square then moves the old profile — handle, followers,
  * posts, tips — onto the new id. The contract
  * (tsionark-monorepo/apps/market-square/llms-link.txt) answers with a handful

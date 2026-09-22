@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyPrivyAccessToken } from "@/lib/server/auth";
 
 /**
- * The platform's account-link service, `/v1/migration` on the gateway.
+ * The platform's account-link service: user-management, `/v1/user-management`
+ * on the gateway (the migration contract is mounted at that service's root).
  *
  * Off unless `MIGRATION_SERVICE_ENABLED=1`, and that flag is a promise about
  * the ENVIRONMENT: the gateway `WSAPI_BASE_URL` points at must actually carry a
@@ -20,7 +21,7 @@ export function migrationServiceEnabled(): boolean {
 function base(): string | null {
   if (process.env.MIGRATION_API_URL) return process.env.MIGRATION_API_URL.replace(/\/+$/u, "");
   const gateway = process.env.WSAPI_BASE_URL?.replace(/\/+$/u, "");
-  return gateway ? `${gateway}/v1/migration` : null;
+  return gateway ? `${gateway}/v1/user-management` : null;
 }
 
 /** The OLD Privy identity's credentials, riding beside the Decane bearer. */
