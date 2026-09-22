@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateIdentitySurfaces } from "@/lib/api/invalidate";
 import { useIdentityToken, usePrivy } from "@privy-io/react-auth";
+import { useSocialAuth } from "decane-connect-kit";
 import { Button, Spinner } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
@@ -73,7 +74,18 @@ import type { LegacyProfileSummary } from "@/lib/account-state";
  * profile. Announcing success over that last one is how somebody loses their
  * followers quietly.
  */
-export function MoveAccountPage({ legacy = null }: { legacy?: LegacyProfileSummary | null }) {
+export function MoveAccountPage({
+  legacy = null,
+  onContinueAsNew,
+}: {
+  legacy?: LegacyProfileSummary | null;
+  /**
+   * From the gate: the reader may go on with this account as a new one. On
+   * the /move-account route there is nothing to continue into, so it is
+   * absent and the screens offer the way back instead.
+   */
+  onContinueAsNew?: () => void;
+}) {
   if (DEMO_AUTH || !LEGACY_PRIVY_APP_ID) {
     return (
       <Frame title="Bring your old account">
@@ -87,7 +99,7 @@ export function MoveAccountPage({ legacy = null }: { legacy?: LegacyProfileSumma
   // anything is drawn. It still wraps this one route and nothing else.
   return (
     <LegacyPrivyProvider>
-      <LinkFlow legacy={legacy} />
+      <LinkFlow legacy={legacy} onContinueAsNew={onContinueAsNew} />
     </LegacyPrivyProvider>
   );
 }
@@ -137,10 +149,20 @@ function settleMovedProfile(queryClient: ReturnType<typeof useQueryClient>): voi
   invalidateIdentitySurfaces(queryClient);
 }
 
-function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
+function LinkFlow({
+  legacy,
+  onContinueAsNew,
+}: {
+  legacy: LegacyProfileSummary | null;
+  onContinueAsNew?: () => void;
+}) {
   const privy = usePrivy();
   const { identityToken } = useIdentityToken();
   const decane = useAuth();
+  // Which NEW account is asking — what the sign-in intent is bound to. Null
+  // until the Decane sign-in exists, which on this route is after the old one.
+  // Safe to call: this flow never renders in demo mode, where no kit is mounted.
+  const owner = useSocialAuth().addresses?.evm ?? null;
   const queryClient = useQueryClient();
   const router = useRouter();
   const [outcome, setOutcome] = useState<LinkOutcome | null>(null);
@@ -180,13 +202,16 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
     (see lib/legacy-signin-intent) and read on the way back. Anything else is
     signed out before it can be read.
   */
-  const purged = useRef(false);
+  // Once per NEW account, not once per mount: the account that asked for the
+  // old session is what the intent is bound to, and a different one signing
+  // in here must find that session gone rather than inherit it.
+  const purgedFor = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!privy.ready || purged.current) return;
-    purged.current = true;
-    if (privy.authenticated && !legacySignInIntended()) void privy.logout().catch(() => {});
-  }, [privy]);
+    if (!privy.ready || purgedFor.current === owner) return;
+    purgedFor.current = owner;
+    if (privy.authenticated && !legacySignInIntended(owner)) void privy.logout().catch(() => {});
+  }, [privy, owner]);
 
   useEffect(() => {
     // BOTH sides, and the new one last. The link needs the old account's token
@@ -197,7 +222,7 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
     // Only a session this tab asked for. A leftover is being signed out by the
     // effect above and never reaches here.
     if (!privy.ready || !privy.authenticated || !decane.authenticated || started.current) return;
-    if (!legacySignInIntended()) return;
+    if (!legacySignInIntended(owner)) return;
     started.current = true;
     void (async () => {
       const accessToken = await privy.getAccessToken().catch(() => null);
@@ -228,7 +253,7 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
         await privy.logout().catch(() => {});
       }
     })();
-  }, [privy, decane.authenticated, identityToken, queryClient]);
+  }, [privy, decane.authenticated, identityToken, queryClient, owner]);
 
   // Poll only while the move is in flight. Every exit clears the timer, and a
   // poll that cannot answer reads as `unknown`, which ends the wait — a
@@ -273,7 +298,7 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
   const signInAgain = () => {
     started.current = false;
     setOutcome(null);
-    markLegacySignIn();
+    markLegacySignIn(owner);
     // The login must happen whether or not the logout does. Chained without a
     // catch, a rejected logout skipped it and left the reader on the bare
     // spinner below — no text, no button, and an unhandled rejection.
@@ -294,7 +319,7 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
   // FIRST: the account they already have. A returning reader came here to sign
   // in as themselves, and asking them to make a new account before proving who
   // they are reads as being told their account is gone.
-  if ((!privy.authenticated || !legacySignInIntended()) && !outcome) {
+  if ((!privy.authenticated || !legacySignInIntended(owner)) && !outcome) {
     return (
       <Frame title="Sign in to your old account">
         {legacy && <LegacyAccountCard legacy={legacy} />}
@@ -305,7 +330,7 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
         <Button
           className="w-full"
           onClick={() => {
-            markLegacySignIn();
+            markLegacySignIn(owner);
             privy.login();
           }}
         >
@@ -422,14 +447,59 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
         </Frame>
       );
     case "already-linked":
+      // The old account is already joined to a DIFFERENT new sign-in. Usually
+      // the same person, upgraded before under another email or method; the
+      // answer is that account, not this one. Nothing here can link it.
+      if (outcome.side === "legacy") {
+        return (
+          <Frame title="That old account has already been upgraded">
+            {legacy && <LegacyAccountCard legacy={legacy} />}
+            <p>
+              It&apos;s already joined to a different new sign-in. If that was you, sign out and
+              sign in with that account — your handle, followers and posts are there. If you have
+              another old account, sign in to that one instead.
+            </p>
+            <Button className="w-full" onClick={signInAgain}>
+              Sign in to a different old account
+            </Button>
+            <Button variant="secondary" className="w-full" onClick={() => void decane.logout()}>
+              Sign out and use my other account
+            </Button>
+            {onContinueAsNew ? (
+              <Button variant="ghost" className="w-full" onClick={onContinueAsNew}>
+                Continue with this account as new
+              </Button>
+            ) : (
+              <Button variant="ghost" className="w-full" onClick={() => router.push(sq("/auth"))}>
+                Back to Square
+              </Button>
+            )}
+          </Frame>
+        );
+      }
+      // The NEW account already holds an old one; a second cannot be added.
+      if (outcome.side === "current") {
+        return (
+          <Frame title="This account already has an old one">
+            <p>
+              The account you&apos;re signed in to is already joined to a different old account, so
+              this one can&apos;t be added to it. If that&apos;s wrong, contact support and
+              we&apos;ll sort it out.
+            </p>
+            <Button className="w-full" onClick={onContinueAsNew ?? (() => router.push(sq("/auth")))}>
+              {onContinueAsNew ? "Continue" : "Back to Square"}
+            </Button>
+          </Frame>
+        );
+      }
       return (
         <Frame title="That account is already linked">
           <p>
             One of these accounts is already linked to a different account, so we can&apos;t link
             them here. Contact support and we&apos;ll sort it out.
           </p>
-          <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
-            Back to Square
+          <Button className="w-full" onClick={onContinueAsNew ?? (() => router.push(sq("/auth")))}>
+            {onContinueAsNew ? "Continue as a new account" : "Back to Square"}
           </Button>
         </Frame>
       );

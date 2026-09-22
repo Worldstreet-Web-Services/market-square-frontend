@@ -41,7 +41,7 @@
 
 export type LinkOutcome =
   | { kind: "linked" }
-  | { kind: "already-linked" }
+  | { kind: "already-linked"; side: AlreadyLinkedSide }
   | { kind: "reauth" }
   | { kind: "retry-later" }
   | { kind: "unavailable" };
@@ -91,6 +91,22 @@ export function readSquareRekey(body: unknown): SquareRekey {
     : "unknown";
 }
 
+/**
+ * Which side of the pairing is already taken. The service says so only in
+ * its message (llms-link.txt §5 fixes the code, not the wording), and the
+ * three read very differently to the person: an OLD account already upgraded
+ * under another sign-in means "use that one"; a NEW account that already
+ * holds an old one means "this one is full"; a wallet is a support case.
+ */
+export type AlreadyLinkedSide = "legacy" | "current" | "wallet" | "unknown";
+
+function alreadyLinkedSide(message: string): AlreadyLinkedSide {
+  if (/privy account is linked to a different/iu.test(message)) return "legacy";
+  if (/decane account is already linked to a different/iu.test(message)) return "current";
+  if (/wallet is linked to a different/iu.test(message)) return "wallet";
+  return "unknown";
+}
+
 export function classifyLinkResponse(
   status: number,
   error: { code?: string; message?: string } | null | undefined
@@ -102,7 +118,7 @@ export function classifyLinkResponse(
     if (code === "SAME_WALLET") return { kind: "linked" };
     // Any other conflict is the same person problem; looping on it would be
     // exactly what the contract forbids.
-    return { kind: "already-linked" };
+    return { kind: "already-linked", side: alreadyLinkedSide(message) };
   }
   if (status === 401) return { kind: "reauth" };
   if (status === 503 && /retry shortly/iu.test(message) && !/AUTH_PROVIDERS/u.test(message)) {

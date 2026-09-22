@@ -63,7 +63,7 @@ export function MigrationGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-[#0F0F0F]">
-      <MoveAccountPage legacy={legacy} />
+      <MoveAccountPage legacy={legacy} onContinueAsNew={continueAsNew} />
       {/*
         The way past, for the one case the email got wrong: a shared address,
         or an old account this person genuinely cannot sign into. Quiet on

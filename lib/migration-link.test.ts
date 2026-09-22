@@ -18,8 +18,27 @@ describe("reading a link response (llms-link.txt §5)", () => {
 
   it("stops on LEGACY_ALREADY_LINKED and never asks for a retry", () => {
     const outcome = classifyLinkResponse(409, { code: "LEGACY_ALREADY_LINKED" });
-    assert.deepEqual(outcome, { kind: "already-linked" });
+    assert.deepEqual(outcome, { kind: "already-linked", side: "unknown" });
     assert.equal(nextRetryMarker(outcome), "clear");
+  });
+
+  // The code is fixed by the contract; which side is taken is only in the
+  // wording, and the person needs to be told which.
+  it("says which side of the pairing is already taken", () => {
+    const side = (message: string) =>
+      classifyLinkResponse(409, { code: "LEGACY_ALREADY_LINKED", message });
+    assert.deepEqual(side("this Privy account is linked to a different Decane account"), {
+      kind: "already-linked",
+      side: "legacy",
+    });
+    assert.deepEqual(side("this Decane account is already linked to a different Privy account"), {
+      kind: "already-linked",
+      side: "current",
+    });
+    assert.deepEqual(side("that wallet is linked to a different Decane account"), {
+      kind: "already-linked",
+      side: "wallet",
+    });
   });
 
   it("asks for a fresh sign-in on a 401", () => {
