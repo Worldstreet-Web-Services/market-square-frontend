@@ -1656,7 +1656,9 @@ describe("Settings controls never pretend to save", () => {
     assert.equal((screen.match(/<Toggle\s+disabled=\{(personalizeDisabled|visibilityDisabled)\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
     for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
       const source = read(`components/layout/${file}.tsx`);
-      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
+      // `row.disabled` is the per-bucket push switch: off while the master
+      // switch is, and always for the bucket that cannot be declined.
+      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled|row\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
     }
   });
 
@@ -4726,5 +4728,169 @@ describe("invite to speak and the soft mute, after review", () => {
     const people = code("features/houses/components/room-people.tsx");
     assert.doesNotMatch(people, /text-\[9px\]/);
     assert.match(people, /text-\[11px\] font-bold leading-4/);
+  });
+});
+
+describe("A notification can reach a phone's lock screen", () => {
+  /*
+    Web push was built end to end on both sides and could not work on an
+    iPhone, because iOS delivers a push only to a Home Screen app and a site
+    with no manifest cannot be installed as one. These pin the two halves of
+    that fix, and the reason each has to carry the build's prefix.
+  */
+  it("ships a manifest whose scope is the build's, not the origin's", () => {
+    const manifest = stripComments(read("app/manifest.webmanifest/route.ts"));
+    // Inside Ark the Square is a zone beside WSWS on one origin. A manifest
+    // claiming "/" would let the installed app swallow WSWS's pages.
+    assert.match(manifest, /scope: SQUARE_BASE === "" \? "\/" : `\$\{SQUARE_BASE\}\/`/);
+    assert.match(manifest, /start_url: sq\("\/"\)/);
+    assert.match(manifest, /id: sq\("\/"\)/);
+    // `standalone` is what makes iOS hand the tile a notification permission.
+    assert.match(manifest, /display: "standalone"/);
+  });
+
+  it("links the manifest through the prefix, not at the origin root", () => {
+    /*
+      Next's `app/manifest.ts` convention writes the link tag ITSELF, always as
+      href="/manifest.webmanifest" and always winning over `metadata.manifest`.
+      Inside Ark that is WSWS's origin root. The body was right and the link
+      pointed elsewhere — invisible in the source, visible in the built HTML.
+      A route handler serves the same URL and emits no tag.
+    */
+    assert.ok(
+      !existsSync(new URL("../app/manifest.ts", import.meta.url)),
+      "app/manifest.ts would re-add an unprefixed <link rel=manifest>"
+    );
+    assert.match(
+      stripComments(read("app/manifest.webmanifest/route.ts")),
+      /export function GET\(\): Response/
+    );
+    const layout = stripComments(read("app/layout.tsx"));
+    assert.match(layout, /manifest: asset\("\/manifest\.webmanifest"\)/);
+    assert.match(layout, /appleWebApp: \{\s*capable: true/);
+  });
+
+  it("draws the maskable icon separately from the square one", () => {
+    // Android crops a maskable icon to the launcher's shape, so a mark sized
+    // for a square tile loses its corners. One file cannot be both.
+    const manifest = stripComments(read("app/manifest.webmanifest/route.ts"));
+    assert.match(manifest, /icon-maskable-512\.png[\s\S]*purpose: "maskable"/);
+    assert.doesNotMatch(manifest, /purpose: "any maskable"/);
+  });
+
+  it("tells an iPhone in a tab the step that unlocks push", () => {
+    // Otherwise the row reads "this browser can't show push notifications",
+    // which is untrue of the phone and names no way forward.
+    const push = stripComments(read("lib/push.ts"));
+    assert.match(push, /if \(!input\.supported && input\.ios && !input\.standalone\) return "needs-install";/);
+    const hook = stripComments(read("features/settings/hooks/use-push.ts"));
+    assert.match(hook, /navigator as Navigator & \{ standalone\?: boolean \}/);
+  });
+});
+
+describe("A phone can be told what it may be woken for", () => {
+  /*
+    Fifteen kinds shared one switch, so a phone that buzzed for a comment
+    buzzed for a DM — and the way people fix that is by revoking the
+    permission in the OS, which they never grant again. These pin the shape of
+    the fix, whose whole point is that it does NOT enumerate kinds.
+  */
+  it("never re-derives which bucket a kind belongs to", () => {
+    // The service sets `group` on every row precisely so the client does not.
+    // A map here would silently drop every kind added after it shipped, which
+    // is the failure already shipped three times in the other direction.
+    const groups = stripComments(read("lib/notification-groups.ts"));
+    assert.doesNotMatch(groups, /tip_received|comment_reply|stream_live|speaker_invite/);
+    const view = stripComments(read("components/layout/notifications-view.tsx"));
+    assert.doesNotMatch(view, /tip_received|comment_reply|stream_live/);
+  });
+
+  it("keeps one list of buckets and one set of words for them", () => {
+    // Two vocabularies is how the notifications page and Settings drift into
+    // calling the same bucket different things.
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    assert.match(types, /export \{ NOTIFICATION_GROUPS, type NotificationGroup \} from "@\/lib\/notification-groups"/);
+    assert.match(types, /z\.enum\(NOTIFICATION_GROUPS\)/);
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.doesNotMatch(page, /const GROUP_LABEL/, "the label map moved to the shared module");
+    assert.match(page, /import \{ GROUP_LABEL \} from "@\/lib\/notification-groups"/);
+  });
+
+  it("treats the buckets as all-or-nothing, with no per-key default", () => {
+    /*
+      The service stores a boolean per group and always answers with all five.
+      A partial object is a contract break; `?? true` would turn it into a
+      switch reading ON while the service believed otherwise.
+    */
+    const settings = stripComments(read("features/settings/lib/types.ts"));
+    const block = settings.slice(settings.indexOf("pushGroups"));
+    assert.doesNotMatch(block.slice(0, 400), /\.optional\(\)[\s,]*\n?\s*(social|money|rooms|chat|account)/);
+    for (const group of ["social", "money", "rooms", "chat", "account"]) {
+      assert.match(block, new RegExp(`${group}: z\\.boolean\\(\\),`), `${group} must be required`);
+    }
+    const lib = stripComments(read("lib/notification-groups.ts"));
+    assert.doesNotMatch(lib, /groups\[group\] \?\? true/);
+    /*
+      LOOSE, and it has to stay loose. This object is read and written back
+      WHOLE, because the service refuses a partial one. A plain `z.object`
+      strips a bucket it has not heard of, so a sixth would be read, dropped
+      and then not sent — and every push-group save would 400 until the
+      frontend caught up, arriving as "saving my notifications is broken".
+    */
+    assert.match(block, /pushGroups: z\s*\n?\s*\.looseObject\(/);
+  });
+
+  it("saves a bucket by replacing the whole set, never one key", () => {
+    // A one-key patch would be the only partial `pushGroups` that ever
+    // existed, and the optimistic merge would have to guess the other four.
+    const hook = stripComments(read("features/settings/hooks/use-push.ts"));
+    assert.match(hook, /pushGroups: \{ \.\.\.groups, \[group\]: next \}/);
+  });
+});
+
+describe("Every notification kind has words of its own", () => {
+  /*
+    THE PROPERTY, NOT THE INSTANCE — the lesson three shipped bugs actually
+    taught, kept in the suite rather than in a comment.
+
+    `NotificationKindSchema` ends in `.catch("follow")`, so a kind this client
+    has not heard of renders as "New Follower · X started following you". That
+    is not hypothetical: `tip_received` shipped that way (a creator who had
+    been PAID was told they had a new follower), then `wink`, then four kinds
+    at once. Each was the service sending something our enum did not list.
+
+    Listing a kind fixes the parse and leaves the SECOND half of the same bug
+    open: a kind in the enum with no case in the copy falls to a default and
+    reads as somebody else's event. This walks every kind in the enum and
+    fails if either switch has nothing to say about it — so a kind added later
+    fails here, rather than in somebody's notifications.
+  */
+  const kindsInEnum = () => {
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    const start = types.indexOf(".enum([");
+    const end = types.indexOf("])", start);
+    assert.ok(start > 0 && end > start, "the kind enum moved — this test must follow it");
+    return [...types.slice(start, end).matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+  };
+
+  it("finds the kinds at all, so an empty list can never pass silently", () => {
+    // A regex that matches nothing makes every assertion below vacuous. This
+    // repo has shipped a find-and-replace that matched nothing and reported
+    // success, past typecheck, lint, tests and build.
+    const kinds = kindsInEnum();
+    assert.ok(kinds.length >= 15, `expected the full enum, found ${kinds.length}`);
+    for (const known of ["wink", "tip_received", "post_announced", "message"]) {
+      assert.ok(kinds.includes(known), `${known} missing — the enum is not being read`);
+    }
+  });
+
+  it("gives every kind a headline and a sentence", () => {
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    const headline = page.slice(page.indexOf("function headline("), page.indexOf("function describe("));
+    const describeFn = page.slice(page.indexOf("function describe("));
+    for (const kind of kindsInEnum()) {
+      assert.ok(headline.includes(`case "${kind}"`), `${kind} has no headline`);
+      assert.ok(describeFn.includes(`case "${kind}"`), `${kind} has no sentence`);
+    }
   });
 });
