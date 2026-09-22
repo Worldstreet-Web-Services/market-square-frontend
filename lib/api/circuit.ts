@@ -14,10 +14,10 @@
  * instantly, in-process, with no network and no function invocation. One probe
  * is allowed through per cooldown to find out whether it is back.
  *
- * WHAT COUNTS AS A FAILURE is deliberately narrow: transport errors and 5xx.
- * A 401, a 404 or a validation error is the server working correctly and
- * telling us something — tripping on those would take the whole app down over
- * one bad request.
+ * WHAT COUNTS AS A FAILURE is deliberately narrow: transport errors, 5xx, and
+ * the one flavour of 429 the service labels as back-pressure. A 401, a 404 or
+ * a validation error is the server working correctly and telling us something
+ * — tripping on those would take the whole app down over one bad request.
  *
  * Pure and framework-free so the state machine can be tested directly; the
  * clock is injected for the same reason.
@@ -50,21 +50,100 @@ export const DEFAULT_CIRCUIT: CircuitOptions = {
   maxCooldownMs: 120_000,
 };
 
-/** Status codes that mean "the server is broken", as opposed to "you are". */
-export function isCircuitFailure(status: number | undefined): boolean {
-  // No status at all is a transport failure — DNS, TCP, CORS, offline.
+/**
+ * What kind of 429 this is — the service's own word for it, not our guess.
+ *
+ * A 429 from Market Square does not mean one thing, which is the whole reason
+ * this type exists. `budget` is a per-user write budget being spent: real
+ * back-pressure, and the breaker's business. `action` is a rule about one
+ * action and usually about one PAIR of people — the wink cooldown ("you
+ * already winked them today"), the speaker-invite cooldown ("they declined
+ * recently"). Those are ordinary answers with nothing to do with load.
+ *
+ * It arrives on `error.details.scope` and is documented on the service's
+ * shared rate-limited response, so it is one field to switch on rather than a
+ * list of its error codes copied over here — a list that would rot silently
+ * the first time somebody added one.
+ */
+export type RateLimitScope = "budget" | "action";
+
+/**
+ * Read the scope off a gateway error body, or null when there isn't one.
+ *
+ * Null is the honest answer for every 429 sent before the flag shipped, and
+ * `isCircuitFailure` treats it as "not back-pressure" — so an older service,
+ * a proxy that rewrote the body, or an upstream that is not Market Square at
+ * all behaves exactly as it did before this existed.
+ */
+export function rateLimitScope(body: unknown): RateLimitScope | null {
+  const scope = (body as { error?: { details?: { scope?: unknown } } } | null)?.error?.details
+    ?.scope;
+  return scope === "budget" || scope === "action" ? scope : null;
+}
+
+/**
+ * Status codes that mean "the server is broken", as opposed to "you are".
+ *
+ * No status at all is a transport failure — DNS, TCP, CORS, offline. 502, 503
+ * and 504 are the gateway saying the thing behind it is not answering, which
+ * is exactly the case this exists for, and a plain 500 counts too: sustained
+ * 500s are an outage even if each one is technically "handled".
+ *
+ * ─── 429, WHICH TOOK TWO GOES ────────────────────────────────────────────────
+ * A rate limit is the one signal a backend has for asking a client to send
+ * less, so ignoring it means a struggling service cannot climb out under its
+ * own power. This counted every 429 for about an hour, which was wrong: it
+ * would have meant winking somebody twice quietly degraded the whole app,
+ * because that refusal is a 429 too. Then it counted none, which was the safer
+ * half of a bad trade.
+ *
+ * Now it counts the ones the service labels as back-pressure and no others. A
+ * 429 with no scope — anything sent before the flag shipped — is treated as an
+ * action, because the failure mode of guessing wrong in that direction is a
+ * missed slow-down, and the other direction is a dead app.
+ *
+ * ─── THE GAP THAT DEFAULT LEAVES, WRITTEN DOWN SO IT IS NOT A SURPRISE ───────
+ * The API GATEWAY in front of Market Square mints its own 429s — its per-IP
+ * and per-route budgets, refused before a request reaches the service at all —
+ * and those carry no `details` and so no scope. They are the clearest "send
+ * less" in the whole system, and under the rule above they trip nothing.
+ *
+ * That is the safe direction, not the correct one, and it cannot be fixed
+ * here: there is no body field to read, and our own proxy rebuilds the
+ * response headers from scratch (content-type and cache-control only), so a
+ * `Retry-After` would not survive the hop even if the gateway sent one. The
+ * fix is the gateway setting a scope like everything behind it does. Until it
+ * does, the 429 we would most want to back off from is the one without a flag.
+ */
+export function isCircuitFailure(
+  status: number | undefined,
+  scope?: RateLimitScope | null
+): boolean {
   if (status === undefined) return true;
-  // 502/503/504 are the gateway saying the thing behind it is not answering,
-  // which is exactly the case this exists for. A 500 counts too: sustained
-  // 500s are an outage even if each one is technically "handled".
+  if (status === 429) return scope === "budget";
   return status >= 500;
 }
 
-/** May a request go out right now? */
+/**
+ * May a request go out right now?
+ *
+ * ONE PROBE, WHICH IS WHAT THIS DID NOT DO. The comment here used to promise
+ * "exactly one probe gets through" and the code admitted EVERYTHING: `onProbe`
+ * relabelled the state and left `retryAt` in the past, so every queued request
+ * in every tab passed the moment the cooldown lapsed.
+ *
+ * That fires at precisely the worst moment — when a restarted backend is three
+ * seconds into being alive and every client's cooldown expires together. It is
+ * the mechanism that turns a ninety-second restart into a ten-minute one, and
+ * this app restarted its backend twice in one evening (2026-09-21).
+ *
+ * `retryAt` is now the gate in BOTH states: open means "not until then", and
+ * half-open means "a probe is already out; not until its own cooldown lapses".
+ * That second clause is what stops a probe that never answers — a hung
+ * request, a closed tab — from wedging the circuit shut for ever.
+ */
 export function allowsRequest(snapshot: CircuitSnapshot, now: number): boolean {
   if (snapshot.state === "closed") return true;
-  // Open, but the cooldown has elapsed: exactly one probe gets through, which
-  // is what `half-open` records.
   return now >= snapshot.retryAt;
 }
 
@@ -87,10 +166,24 @@ export function onSuccess(): CircuitSnapshot {
   return { state: "closed", retryAt: 0, failures: 0 };
 }
 
-/** The state to report while a probe is in flight, so the UI can say "checking". */
-export function onProbe(snapshot: CircuitSnapshot): CircuitSnapshot {
+/**
+ * A probe has just been let out: half-open, and the door shuts behind it.
+ *
+ * Advancing `retryAt` is the whole fix. Without it the state changed and the
+ * gate did not, so the second request through the door was admitted for the
+ * same reason the first was, and so was the thousandth.
+ *
+ * The next opening is a full cooldown away, not a doubled one: this is not a
+ * failure, it is a probe whose answer has not arrived. `onFailure` does the
+ * doubling if the answer turns out to be bad.
+ */
+export function onProbe(
+  snapshot: CircuitSnapshot,
+  now: number,
+  options: CircuitOptions = DEFAULT_CIRCUIT
+): CircuitSnapshot {
   if (snapshot.state !== "open") return snapshot;
-  return { ...snapshot, state: "half-open" };
+  return { ...snapshot, state: "half-open", retryAt: now + options.cooldownMs };
 }
 
 export const CLOSED: CircuitSnapshot = { state: "closed", retryAt: 0, failures: 0 };

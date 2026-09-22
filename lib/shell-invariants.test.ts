@@ -2128,6 +2128,84 @@ describe("The capture control is named for what it does, and safety is about oth
   });
 });
 
+describe("Recovery does not become the next outage", () => {
+  it("lets ONE probe through, and shuts the door behind it", () => {
+    // `onProbe` used to relabel the state and leave `retryAt` in the past, so
+    // every queued request in every tab passed the moment the cooldown lapsed
+    // — a fleet-wide burst aimed at a backend seconds into being alive.
+    const circuit = stripComments(read("lib/api/circuit.ts"));
+    assert.match(circuit, /state: "half-open", retryAt: now \+ options\.cooldownMs/);
+  });
+
+  it("decides a 429 on the service's flag, never on a list of its error codes", () => {
+    // A wink cooldown and an invite cooldown are both 429s and neither is
+    // back-pressure; a client-wide breaker on those would let winking somebody
+    // twice degrade the app. The discriminator is one field the service sets —
+    // enumerating its codes here is the version that rots silently the first
+    // time somebody adds one.
+    const circuit = stripComments(read("lib/api/circuit.ts"));
+    assert.match(circuit, /status === 429\) return scope === "budget"/);
+    assert.doesNotMatch(circuit, /WINK_COOLDOWN|INVITE_COOLDOWN/);
+  });
+
+  it("reads a body for the breaker on one status only", () => {
+    // Every other failure decides on the number alone. Parsing each one would
+    // put a JSON parse on the failing path of every request in the app.
+    const client = stripComments(read("lib/api/client.ts"));
+    assert.match(client, /if \(response\.status !== 429\) return null;/);
+    // And the caller's own body must survive it.
+    assert.match(client, /response\.clone\(\)\.json\(\)/);
+  });
+
+  it("does not refetch the whole tab when somebody presses Try now", () => {
+    // Everybody sees that banner in the same outage and presses it within
+    // seconds of each other; `states.tsx` disables thirty per-module retry
+    // buttons for exactly this reason.
+    const banner = stripComments(read("components/layout/connection-banner.tsx"));
+    assert.doesNotMatch(banner, /refetchQueries/);
+    assert.match(banner, /retryCircuitNow\(\);/);
+  });
+});
+
+describe("A DM message can be edited and removed, by its author", () => {
+  const thread = stripComments(read("features/messages/components/thread.tsx"));
+
+  it("offers the actions on the reader's OWN messages and nowhere else", () => {
+    // Editing or removing somebody else's words is moderation: it reads
+    // differently to everybody in the thread and is a separate feature.
+    assert.match(thread, /\{mine && !removed && !invite && \(\n\s*<OwnMessageActions/);
+  });
+
+  it("asks before removing, and says the removal is for everyone", () => {
+    assert.match(thread, /Remove this message for everyone in this chat\?/);
+  });
+
+  it("edits in the composer, not in the bubble", () => {
+    // A field inside the river would move the conversation under the reader
+    // while they type, and the composer already owns writing a message.
+    assert.match(thread, /const \[editing, setEditing\] = useState<Message \| null>\(null\);/);
+    assert.match(thread, /Editing your message/);
+  });
+
+  it("saves the edit with the same button that sends, and says which", () => {
+    // Two buttons that look alike would make the reader work out which one
+    // they are looking at every time.
+    assert.match(thread, /if \(editing\) \{\n\s*const next = text\.trim\(\);/);
+    assert.match(thread, /onSaveEdit\(next\);/);
+  });
+
+  it("says a message was edited, always", () => {
+    assert.match(thread, /\{message\.editedAt && \(/);
+  });
+
+  it("tells the truth when the edit window has passed", () => {
+    // "Not allowed" would suggest the message was never theirs.
+    const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
+    assert.match(hooks, /EDIT_WINDOW_PASSED/);
+    assert.match(hooks, /Too late to edit/);
+  });
+});
+
 describe("Media that will not load asks for a fresh link", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
 

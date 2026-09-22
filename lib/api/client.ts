@@ -14,7 +14,30 @@ import {
   recordCircuitFailure,
   recordCircuitSuccess,
 } from "@/lib/api/circuit-store";
+import { type RateLimitScope, rateLimitScope } from "@/lib/api/circuit";
 import { recordServerDate } from "@/lib/server-clock";
+
+/**
+ * Which kind of 429 this was, for the breaker only.
+ *
+ * READING A BODY HERE IS A COST, so it happens on exactly one status. Every
+ * other failure decides on the number alone and never touches the stream, and
+ * the caller still gets an untouched `response` to read itself — the clone is
+ * what makes that true.
+ *
+ * Anything unexpected is null, which the breaker reads as "not back-pressure":
+ * a body that is not JSON, a 429 from before the service grew the flag, a
+ * response whose body has already gone. Guessing that direction costs a missed
+ * slow-down; guessing the other one costs the app.
+ */
+async function failureScope(response: Response): Promise<RateLimitScope | null> {
+  if (response.status !== 429) return null;
+  try {
+    return rateLimitScope(await response.clone().json());
+  } catch {
+    return null;
+  }
+}
 
 // Fetch wrapper for our BFF routes. Attaches the Privy access token so the
 // server can verify the caller and forward it upstream. In demo mode there is
@@ -128,6 +151,6 @@ export async function apiFetch(
   }
   if (!watched) return response;
   if (response.ok) recordCircuitSuccess();
-  else recordCircuitFailure(response.status);
+  else recordCircuitFailure(response.status, await failureScope(response));
   return response;
 }
