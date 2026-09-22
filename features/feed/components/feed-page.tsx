@@ -14,6 +14,7 @@ import { useComposePrefill } from "@/hooks/use-compose-prefill";
 import { useFeed } from "@/features/feed/hooks/use-feed";
 import { Composer } from "@/features/feed/components/composer";
 import { StoriesRow } from "@/features/feed/components/stories-row";
+import { Hallway } from "@/features/houses/components/hallway";
 import { ReelsFeed } from "@/features/feed/components/reels-feed";
 import { VideoViewer } from "@/features/feed/components/video-viewer";
 import { isVideoPost } from "@/lib/media";
@@ -268,6 +269,25 @@ export function FeedPage({
             browsing furniture: left in place they push the first clip halfway
             down the screen, which is the whole reason home's reels did not
             feel like Explore's. */}
+        {/*
+          The hallway leads.
+
+          Home opened on a composer and a feed — a product about what people
+          SAID. What 2.0 is for is what people are saying right now, out loud,
+          in a room you can walk into, so the open rooms go above everything
+          and the feed reads underneath them.
+
+          It renders nothing when no house is open, so a quiet evening costs no
+          space, and it sits outside the reels lane for the same reason the
+          stories row does: browsing furniture pushes the first clip halfway
+          down the screen.
+        */}
+        {lane !== "reels" && MARKET_FLAGS.houses && (
+          <div className="mb-4">
+            <Hallway />
+          </div>
+        )}
+
         {authenticated && lane !== "reels" && (
           <div className="mb-4">
             <StoriesRow />

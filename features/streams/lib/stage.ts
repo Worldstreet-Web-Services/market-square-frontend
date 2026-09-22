@@ -57,6 +57,16 @@ export interface StageParticipant {
   /** LiveKit sets this on join; used only to order guests behind the host. */
   joinedAt?: Date | number | null;
   name?: string;
+  /**
+   * The participant's own token metadata, verbatim.
+   *
+   * Opaque here on purpose: this module is about SEATING and must not learn a
+   * payload shape. Houses parses it (features/houses/lib/participant-meta.ts)
+   * to turn a seat into a link to somebody's profile, which is the whole
+   * discovery loop in an audio room — a face at a table is the only thing
+   * naming a person who has no chat message and no request row.
+   */
+  metadata?: string | null;
   isSpeaking?: boolean;
   connectionQuality?: string;
   videoTrackPublications: ReadonlyMap<string, StagePublication>;
@@ -79,6 +89,8 @@ export interface StageSlot {
   role: "host" | "guest";
   isLocal: boolean;
   name: string;
+  /** The token's metadata string, unparsed. See StageParticipant.metadata. */
+  metadata: string | null;
   /** The face. Null for an audio-only or camera-off participant. */
   cameraTrack: StagePublication | null;
   /**
@@ -136,6 +148,7 @@ function toSlot(participant: StageParticipant, role: "host" | "guest"): StageSlo
     role,
     isLocal: participant.isLocal === true,
     name: participantLabel(participant.name, participant.identity),
+    metadata: participant.metadata ?? null,
     cameraTrack: camera,
     screenTrack: screen,
     audioTrack: audio,

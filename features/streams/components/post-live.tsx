@@ -9,7 +9,7 @@ import { MARKET_FLAGS } from "@/lib/market-config";
 import { IconPlay } from "@/components/ui/icons";
 import { useStreamStats } from "@/features/streams/hooks/use-streams";
 import { CreateStreamSheet, type StreamDraft } from "@/features/streams/components/create-stream-sheet";
-import { STREAM_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
+import { BROADCAST_CATEGORIES, type Stream, type StreamCategory } from "@/features/streams/lib/types";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -40,7 +40,7 @@ export function PostLive({ stream }: { stream: Stream }) {
   const draft: StreamDraft = {
     title: stream.title,
     thumbnailUrl: stream.thumbnailUrl ?? "",
-    category: (STREAM_CATEGORIES as readonly string[]).includes(stream.category)
+    category: (BROADCAST_CATEGORIES as readonly string[]).includes(stream.category)
       ? (stream.category as StreamCategory)
       : "other",
     ticketPriceKash: stream.ticketPriceKash ?? "",
