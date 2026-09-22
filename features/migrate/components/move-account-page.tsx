@@ -151,6 +151,22 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
   const [waiting, setWaiting] = useState(false);
   const started = useRef(false);
   /*
+    Whether this component is still on screen — and ONLY that. The link
+    effect used to answer "am I still wanted" with a flag its own cleanup
+    cleared, and its dependencies include the Privy object, which changes
+    identity on every Privy state change. Getting the access token is one.
+    So the effect re-ran while the link was in flight, the cleanup cleared
+    the flag, the 200 arrived and was thrown away, and `started` stopped it
+    from ever being sent again: a linked account, and a spinner forever.
+  */
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    []
+  );
+  /*
     LEFT-OVER SESSIONS ARE DISCARDED, NOT SPENT.
 
     Privy keeps its session in the browser and restores it on load, so
@@ -183,19 +199,18 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
     if (!privy.ready || !privy.authenticated || !decane.authenticated || started.current) return;
     if (!legacySignInIntended()) return;
     started.current = true;
-    let live = true;
     void (async () => {
       const accessToken = await privy.getAccessToken().catch(() => null);
       if (!accessToken) {
         // Spent, whatever came of it: leaving the intent set would let the next
         // restored session in this tab be treated as one the reader asked for.
         clearLegacySignIn();
-        if (!live) return;
+        if (!mounted.current) return;
         setOutcome({ kind: "reauth" });
         return;
       }
       const result = await linkLegacyAccount({ accessToken, idToken: identityToken });
-      if (!live) return;
+      if (!mounted.current) return;
       setOutcome(result.outcome);
       setSquare(result.square);
       if (result.outcome.kind === "linked") {
@@ -213,9 +228,6 @@ function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
         await privy.logout().catch(() => {});
       }
     })();
-    return () => {
-      live = false;
-    };
   }, [privy, decane.authenticated, identityToken, queryClient]);
 
   // Poll only while the move is in flight. Every exit clears the timer, and a
