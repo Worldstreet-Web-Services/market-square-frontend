@@ -28,9 +28,23 @@ export const ProfileSettingsSchema = z.object({
      * partial object is a contract break, and tolerating it with `?? true`
      * would show somebody a switch reading on while the service believed
      * something else — the quiet failure this whole file is strict to avoid.
+     *
+     * ─── LOOSE, AND ONLY HERE, BECAUSE THE PATCH IS ALL-OR-NOTHING ───────────
+     * The one place this object is written, it is written WHOLE: a save
+     * spreads what was read and replaces one key, because the service refuses
+     * a partial `pushGroups`. A plain `z.object` strips keys it does not know,
+     * so the day a SIXTH bucket ships, this would read six, keep five, and
+     * send five — and every push-group save would 400 until the frontend
+     * caught up. That is the deploy-ordering trap this repo has been bitten by
+     * before, and it would arrive as "saving my notifications is broken".
+     *
+     * Loose parsing carries the unknown key through untouched, so the save
+     * stays complete and only the ROW for it is missing until we add one.
+     * Strict everywhere else in this file is still right: nothing else is
+     * read and written back as a whole object.
      */
     pushGroups: z
-      .object({
+      .looseObject({
         social: z.boolean(),
         money: z.boolean(),
         rooms: z.boolean(),

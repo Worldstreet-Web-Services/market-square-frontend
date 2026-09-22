@@ -4752,6 +4752,14 @@ describe("A phone can be told what it may be woken for", () => {
     }
     const lib = stripComments(read("lib/notification-groups.ts"));
     assert.doesNotMatch(lib, /groups\[group\] \?\? true/);
+    /*
+      LOOSE, and it has to stay loose. This object is read and written back
+      WHOLE, because the service refuses a partial one. A plain `z.object`
+      strips a bucket it has not heard of, so a sixth would be read, dropped
+      and then not sent — and every push-group save would 400 until the
+      frontend caught up, arriving as "saving my notifications is broken".
+    */
+    assert.match(block, /pushGroups: z\s*\n?\s*\.looseObject\(/);
   });
 
   it("saves a bucket by replacing the whole set, never one key", () => {

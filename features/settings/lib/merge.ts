@@ -28,6 +28,15 @@ export interface PushGroupSettings {
   rooms: boolean;
   chat: boolean;
   account: boolean;
+  /**
+   * A bucket this build has not heard of yet.
+   *
+   * The schema parses this object loosely and a save replaces it WHOLE, so an
+   * unknown sixth bucket has to survive both — drop it here and the save goes
+   * out one key short, which the service refuses. The type says so rather
+   * than leaving the next person to discover it from a 400.
+   */
+  [group: string]: unknown;
 }
 
 export interface SettingsShape {
