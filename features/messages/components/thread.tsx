@@ -60,6 +60,8 @@ import {
   useRenameGroup,
   useSendMessage,
   useOpenSnap,
+  useRemoveMessage,
+  useEditMessage,
   useCreateInvite,
   useRemoveGroupMember,
   useSetMemberRole,
@@ -713,6 +715,20 @@ function BubbleMeta({
 
   return (
     <span className="flex shrink-0 items-center gap-1">
+      {/* EDITED IS ALWAYS SHOWN. An edit nobody can see is a way to change
+          what you said after somebody answered it; saying so is what keeps it
+          a correction rather than a rewrite. */}
+      {message.editedAt && (
+        <span
+          className={cn(
+            "text-[11px] font-medium leading-4",
+            mine ? "text-[#8A8A8A]" : "text-white/70"
+          )}
+          title={"Edited " + formatClockTime(message.editedAt)}
+        >
+          edited
+        </span>
+      )}
       <span
         className={cn(
           "tnum text-[12px] font-medium leading-4 tracking-[-0.005em]",
@@ -873,6 +889,112 @@ function ReplyButton({
     >
       <IconQuote className="h-3.5 w-3.5" />
     </button>
+  );
+}
+
+/**
+ * THE READER'S OWN MESSAGE, AND THE TWO THINGS THEY MAY DO TO IT.
+ *
+ * Same reveal rules as Reply — invisible until hover, focus, or a long-press
+ * on a phone — because a row of controls on every bubble turns a conversation
+ * into a toolbar. Only ever drawn on their OWN messages: editing or removing
+ * somebody else's is moderation, which reads differently to everybody in the
+ * thread and is not this.
+ */
+function OwnMessageActions({
+  onEdit,
+  onRemove,
+  revealed,
+  canEdit,
+}: {
+  onEdit: () => void;
+  onRemove: () => void;
+  revealed: boolean;
+  /** False for a message with no words — there is nothing to edit. */
+  canEdit: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setConfirming(false);
+          setOpen(true);
+        }}
+        aria-label="Message actions"
+        title="More"
+        className={cn(
+          "ws-glass-pill ws-press order-first flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-full text-white/80 transition-opacity hover:bg-white/10 hover:text-white",
+          revealed
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden"
+        )}
+      >
+        <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor">
+          <circle cx="3.5" cy="8" r="1.4" />
+          <circle cx="8" cy="8" r="1.4" />
+          <circle cx="12.5" cy="8" r="1.4" />
+        </svg>
+      </button>
+
+      <Sheet open={open} onClose={() => setOpen(false)} title="Your message">
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+            className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-body"
+          >
+            Edit message
+          </button>
+        )}
+        {/*
+          REMOVING ASKS FIRST, and says what it means rather than "are you
+          sure": the message goes for EVERYONE, not just this screen, and that
+          is the part somebody needs to know before they tap.
+        */}
+        {confirming ? (
+          <div className="px-1 py-3">
+            <p className="text-[13px] leading-[19px] text-body">
+              Remove this message for everyone in this chat? The words and any photo go with it.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setConfirming(false)}
+              >
+                Keep it
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                onClick={() => {
+                  setOpen(false);
+                  setConfirming(false);
+                  onRemove();
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="ws-row flex w-full items-center px-1 py-3 text-left text-[13px] font-semibold text-danger"
+          >
+            Remove message
+          </button>
+        )}
+      </Sheet>
+    </>
   );
 }
 
@@ -1853,6 +1975,8 @@ function MessageRow({
   flash,
   onOpenSnap,
   openingSnap,
+  onEdit,
+  onRemove,
 }: {
   message: Message;
   mine: boolean;
@@ -1865,6 +1989,10 @@ function MessageRow({
   roomCardSlot?: (streamId: string) => React.ReactNode;
   /** Make this message the composer's reply target. */
   onReply: (message: Message) => void;
+  /** Put this message's words back in the composer to be changed. */
+  onEdit: (message: Message) => void;
+  /** Remove it for everybody. */
+  onRemove: (message: Message) => void;
   /** Scroll to a loaded message and flash it. */
   onJump: (messageId: string) => void;
   /** A sender id as a name — "You" for the reader. */
@@ -2119,6 +2247,15 @@ function MessageRow({
       {!removed && !invite && (
         <ReplyButton mine={mine} revealed={revealed} onClick={() => onReply(message)} />
       )}
+      {/* Their own message, and only while it still has something to act on. */}
+      {mine && !removed && !invite && (
+        <OwnMessageActions
+          revealed={revealed}
+          canEdit={Boolean(message.text?.trim())}
+          onEdit={() => onEdit(message)}
+          onRemove={() => onRemove(message)}
+        />
+      )}
     </div>
   );
 }
@@ -2135,8 +2272,17 @@ function Composer({
   members,
   meId,
   conversationKind,
+  editing,
+  onCancelEdit,
+  onSaveEdit,
+  savingEdit,
 }: {
   conversationId: string;
+  /** The message whose words are being changed, or null for an ordinary send. */
+  editing: Message | null;
+  onCancelEdit: () => void;
+  onSaveEdit: (text: string) => void;
+  savingEdit: boolean;
   /** Direct or group — a snap is only offered in a one-to-one. */
   conversationKind: string;
   /** The message being answered, chosen from a bubble; null for a plain send. */
@@ -2392,7 +2538,36 @@ function Composer({
     }
   };
 
+  /*
+    THE WORDS GO INTO THE FIELD WHEN AN EDIT STARTS, once per message.
+
+    Keyed on the id, so a re-render cannot clobber what the reader has typed
+    since, and cleared when the edit is cancelled or saved.
+  */
+  const editingId = editing?.id ?? null;
+  const seeded = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingId === seeded.current) return;
+    seeded.current = editingId;
+    typing.replace(editingId ? (editing?.text ?? "") : "", null);
+    field.current?.focus();
+    // Read only when the id changes — that guard is the dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingId]);
+
   const submit = () => {
+    /*
+      SAVING AN EDIT AND SENDING A MESSAGE ARE THE SAME BUTTON, and the strip
+      above the field is what tells them apart. Two buttons that look alike
+      would be worse: the reader would have to work out which one they are
+      looking at every time.
+    */
+    if (editing) {
+      const next = text.trim();
+      if (!next || savingEdit) return;
+      onSaveEdit(next);
+      return;
+    }
     if (!canSend) return;
     send.mutate(outgoing, {
       onSuccess: () => {
@@ -2431,6 +2606,30 @@ function Composer({
         service records who was answered from `replyToId`, and the bubble
         draws the quote from `replyTo`, so a typed handle would print twice.
       */}
+      {/* EDITING SAYS SO, above the field. The send button becomes a save, so
+          the reader has to be able to see which act is about to happen —
+          otherwise one control means two things with nothing to tell them
+          apart. */}
+      {editing && (
+        <div
+          role="status"
+          className="mb-2 flex items-center gap-3 rounded-xl border border-white/10 border-l-2 border-l-create bg-white/[0.04] py-2 pl-3 pr-2"
+        >
+          <span className="min-w-0 flex-1 text-[12px] font-semibold leading-[17px] text-body">
+            Editing your message
+          </span>
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            aria-label="Cancel edit"
+            className="ws-press shrink-0 rounded-full p-1.5 text-meta transition-colors hover:bg-white/10 hover:text-heading"
+          >
+            <svg aria-hidden viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+              <path d="m3 3 6 6m0-6-6 6" />
+            </svg>
+          </button>
+        </div>
+      )}
       {replyTo && (
         <div
           role="status"
@@ -2920,6 +3119,18 @@ export function Thread({
     the row that must show it as busy — two bubbles can never be opening at the
     same time, which matters when the thing being spent is unrecoverable.
   */
+  /*
+    EDITING HAPPENS IN THE COMPOSER, not in the bubble.
+
+    A field that appears inside the river would move the whole conversation
+    under the reader's eye while they type, and the composer already owns
+    everything about writing a message — the emoji picker, the mention picker,
+    the character cap. So an edit puts the words back where they were written
+    and the send button saves them.
+  */
+  const [editing, setEditing] = useState<Message | null>(null);
+  const remove = useRemoveMessage(conversation.id);
+  const edit = useEditMessage(conversation.id);
   const openSnapMutation = useOpenSnap(conversation.id);
   const [openingSnapId, setOpeningSnapId] = useState<string | null>(null);
   const openSnapMutate = openSnapMutation.mutateAsync;
@@ -3222,6 +3433,8 @@ export function Thread({
                     flash={flashId === message.id}
                     onOpenSnap={openSnap}
                     openingSnap={openingSnapId === message.id}
+                    onEdit={setEditing}
+                    onRemove={(target) => remove.mutate(target.id)}
                   />
                 ))}
               </div>
@@ -3249,6 +3462,17 @@ export function Thread({
         members={mentionable}
         meId={me.data?.id}
         conversationKind={conversation.kind}
+        editing={editing}
+        onCancelEdit={() => setEditing(null)}
+        onSaveEdit={(text) => {
+          const target = editing;
+          if (!target) return;
+          edit.mutate(
+            { messageId: target.id, text },
+            { onSuccess: () => setEditing(null) }
+          );
+        }}
+        savingEdit={edit.isPending}
       />
 
       {group && (

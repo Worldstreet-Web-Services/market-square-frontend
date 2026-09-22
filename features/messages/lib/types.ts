@@ -148,6 +148,14 @@ export const MessageSchema = z.object({
    * where the payload carries one.
    */
   mediaSource: z.enum(["camera", "upload"]).nullable().optional().default(null).catch(null),
+  /**
+   * When the author last edited the words, or null.
+   *
+   * ALWAYS SHOWN where it is set. An edit nobody can see is a way to change
+   * what you said after somebody answered it, which is a different feature
+   * from fixing a typo and not one we are building.
+   */
+  editedAt: z.string().nullable().optional().default(null),
   viewOnce: z.boolean().optional().default(false),
   destroyedAt: z.string().nullable().optional().default(null),
   // The spec's enum. `catch` keeps an unknown future state from blanking the
