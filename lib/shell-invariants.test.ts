@@ -4769,3 +4769,50 @@ describe("A phone can be told what it may be woken for", () => {
     assert.match(hook, /pushGroups: \{ \.\.\.groups, \[group\]: next \}/);
   });
 });
+
+describe("Every notification kind has words of its own", () => {
+  /*
+    THE PROPERTY, NOT THE INSTANCE — the lesson three shipped bugs actually
+    taught, kept in the suite rather than in a comment.
+
+    `NotificationKindSchema` ends in `.catch("follow")`, so a kind this client
+    has not heard of renders as "New Follower · X started following you". That
+    is not hypothetical: `tip_received` shipped that way (a creator who had
+    been PAID was told they had a new follower), then `wink`, then four kinds
+    at once. Each was the service sending something our enum did not list.
+
+    Listing a kind fixes the parse and leaves the SECOND half of the same bug
+    open: a kind in the enum with no case in the copy falls to a default and
+    reads as somebody else's event. This walks every kind in the enum and
+    fails if either switch has nothing to say about it — so a kind added later
+    fails here, rather than in somebody's notifications.
+  */
+  const kindsInEnum = () => {
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    const start = types.indexOf(".enum([");
+    const end = types.indexOf("])", start);
+    assert.ok(start > 0 && end > start, "the kind enum moved — this test must follow it");
+    return [...types.slice(start, end).matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+  };
+
+  it("finds the kinds at all, so an empty list can never pass silently", () => {
+    // A regex that matches nothing makes every assertion below vacuous. This
+    // repo has shipped a find-and-replace that matched nothing and reported
+    // success, past typecheck, lint, tests and build.
+    const kinds = kindsInEnum();
+    assert.ok(kinds.length >= 15, `expected the full enum, found ${kinds.length}`);
+    for (const known of ["wink", "tip_received", "post_announced", "message"]) {
+      assert.ok(kinds.includes(known), `${known} missing — the enum is not being read`);
+    }
+  });
+
+  it("gives every kind a headline and a sentence", () => {
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    const headline = page.slice(page.indexOf("function headline("), page.indexOf("function describe("));
+    const describeFn = page.slice(page.indexOf("function describe("));
+    for (const kind of kindsInEnum()) {
+      assert.ok(headline.includes(`case "${kind}"`), `${kind} has no headline`);
+      assert.ok(describeFn.includes(`case "${kind}"`), `${kind} has no sentence`);
+    }
+  });
+});
