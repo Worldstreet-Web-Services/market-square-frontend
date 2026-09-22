@@ -120,6 +120,8 @@ export function usePeople(
     excludeFollowing?: boolean;
     /** Server-side "not already winked" — see `fetchPeople`. */
     excludeWinked?: boolean;
+    excludeWinkedEver?: boolean;
+    excludePassed?: boolean;
   } = {}
 ) {
   const trimmed = query.trim();
@@ -128,6 +130,8 @@ export function usePeople(
   const gender = facets.gender?.trim() ?? "";
   const excludeFollowing = Boolean(facets.excludeFollowing);
   const excludeWinked = Boolean(facets.excludeWinked);
+  const excludeWinkedEver = Boolean(facets.excludeWinkedEver);
+  const excludePassed = Boolean(facets.excludePassed);
   return useInfiniteQuery({
     // The sort is in the KEY, not applied to a loaded page. Re-ordering one
     // page would make page 1 look sorted while page 2 contradicted it; the
@@ -135,7 +139,19 @@ export function usePeople(
     // In the KEY for the same reason the facets are: the cursor encodes the
     // filter, so changing it starts a new list rather than paging the old one
     // with a token that no longer describes it.
-    queryKey: ["ms", "people", trimmed, sort, city, region, gender, excludeFollowing, excludeWinked],
+    queryKey: [
+      "ms",
+      "people",
+      trimmed,
+      sort,
+      city,
+      region,
+      gender,
+      excludeFollowing,
+      excludeWinked,
+      excludeWinkedEver,
+      excludePassed,
+    ],
     queryFn: ({ pageParam }) =>
       fetchPeople({
         query: trimmed,
@@ -145,6 +161,8 @@ export function usePeople(
         gender,
         excludeFollowing,
         excludeWinked,
+        excludeWinkedEver,
+        excludePassed,
         cursor: pageParam ?? undefined,
       }),
     initialPageParam: null as string | null,

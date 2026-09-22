@@ -47,7 +47,19 @@ import {
 const SORT_LABEL: Record<PeopleSort, string> = {
   followers: "Most followed",
   recent: "Recently active",
+  foryou: "For you",
 };
+
+/**
+ * The orderings EXPLORE offers, which is not every ordering the service has.
+ *
+ * `foryou` is the deck's: it is ranked for one reader (reciprocity, mutual
+ * followers, place, freshness) and means nothing as a directory filter — a
+ * search for "photographers in Lagos" wants the list, not a personalised
+ * sample of it. Offering it here would also make two surfaces fight over what
+ * the chip row means.
+ */
+const EXPLORE_SORTS = PEOPLE_SORTS.filter((sort) => sort !== "foryou");
 
 /** Roles worth offering as a filter, with the service's own enum values. */
 const ROLE_CHIPS: Array<{ role: string; label: string }> = [
@@ -113,7 +125,7 @@ export function PeopleFilters({
           aria-label="Order people by"
           className="flex h-8 shrink-0 items-center rounded-full border border-white/15 p-0.5"
         >
-          {PEOPLE_SORTS.map((entry) => (
+          {EXPLORE_SORTS.map((entry) => (
             <button
               key={entry}
               type="button"

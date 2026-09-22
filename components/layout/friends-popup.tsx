@@ -27,6 +27,7 @@ import { useSwipeCard } from "@/hooks/use-swipe-card";
 import { useFriendsCardRequest } from "@/lib/friends-card-store";
 import type { Profile } from "@/lib/api/schemas";
 import { api, asset, sq } from "@/lib/square-path";
+import { profileHref } from "@/lib/profile-href";
 
 /** Node 647:16629 — the card's width, and its height while its text is two
     lines; more lines grow it (see the text column), and it is scaled to fit. */
@@ -314,7 +315,26 @@ function FriendsDialog({
       },
     });
   };
+  /*
+    WINK BACK OPENS THE CHAT. A wink returned is mutual interest, so it takes
+    the pair straight into their personal thread — the same door "Start gisting"
+    opens — rather than advancing the fan to nothing or dropping them on the
+    inbox list. The popup stays up for the one request (see startGisting for why
+    closing first would lose this navigation), and only closes once the thread
+    exists.
+  */
   const winkBack = () => {
+    wink.send();
+    chat.mutate(other, {
+      onSuccess: (conversation) => {
+        onClose();
+        router.push(sq(`/messages?c=${conversation.id}`));
+      },
+    });
+  };
+  // The SECONDARY "wink" on a friends/mutual card is a lighter act — say hello,
+  // stay where you are — so it keeps the old advance rather than opening a chat.
+  const winkOnly = () => {
     wink.send();
     onNext();
   };
@@ -323,16 +343,34 @@ function FriendsDialog({
     onNext();
   };
 
+  /*
+    TAP THE OTHER PERSON'S CARD → THEIR PROFILE. By id (`profileHref`), the
+    rename-safe address every link in the app uses. Close first — the fan
+    marks what was seen as read on the way out — then navigate.
+
+    A guard keeps this from firing on the click the browser synthesises at the
+    end of a horizontal SWIPE (the fan's page-turn): `pressStart` records where
+    the pointer went down, and a click that landed more than a few px away was a
+    drag, not a tap. A plain tap never captures the pointer (see useSwipeCard),
+    so its click lands where it started and passes through.
+  */
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const openProfile = () => {
+    onClose();
+    router.push(profileHref(other));
+  };
+
   const primaryAct =
     copy.primary === "start-gisting" ? startGisting : copy.primary === "wink-back" ? winkBack : followBack;
   // While the thread is being opened, both entry points to it are held: a
   // second tap would be a second request racing the first to the same place.
   const gisting = chat.isPending;
   const primaryOff =
-    (copy.primary === "wink-back" && (wink.unavailable || wink.refusal !== null)) ||
+    // Wink back now opens the thread too, so it is held while that is in flight.
+    (copy.primary === "wink-back" && (wink.unavailable || wink.refusal !== null || gisting)) ||
     (copy.primary === "start-gisting" && gisting);
 
-  const secondaryAct = copy.secondary === "wink" ? winkBack : startGisting;
+  const secondaryAct = copy.secondary === "wink" ? winkOnly : startGisting;
   const secondaryOff =
     (copy.secondary === "wink" && (wink.unavailable || wink.refusal !== null)) ||
     (copy.secondary !== "wink" && gisting);
@@ -513,10 +551,32 @@ function FriendsDialog({
               )}
               <div
                 {...(fan.length > 1 ? swipe.handlers : {})}
-                aria-label={remaining > 0 ? `${name} — swipe for the next` : name}
+                role="link"
+                tabIndex={0}
+                // Capture phase, so it records the press WITHOUT overriding the
+                // swipe hook's own onPointerDown in the bubble phase.
+                onPointerDownCapture={(event) => {
+                  pressStart.current = { x: event.clientX, y: event.clientY };
+                }}
+                onClick={(event) => {
+                  const from = pressStart.current;
+                  // A click that travelled was a swipe's tail, not a tap.
+                  if (from && Math.hypot(event.clientX - from.x, event.clientY - from.y) > 8) return;
+                  openProfile();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openProfile();
+                  }
+                }}
+                aria-label={
+                  remaining > 0 ? `View ${name}'s profile — swipe for the next` : `View ${name}'s profile`
+                }
                 className={cn(
                   card,
-                  fan.length > 1 && "touch-pan-y cursor-grab select-none active:cursor-grabbing",
+                  "cursor-pointer",
+                  fan.length > 1 && "touch-pan-y select-none active:cursor-grabbing",
                   swipe.dragging ? "transition-none" : "transition-all duration-300 motion-reduce:transition-none"
                 )}
                 style={{
@@ -572,7 +632,9 @@ function FriendsDialog({
             title={copy.primary === "wink-back" ? (wink.refusal ?? undefined) : undefined}
             className="ws-btn-welcome ws-press flex h-9 w-[214px] items-center justify-center rounded-full text-[11.77px] font-medium leading-[20.45px] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {copy.primary === "start-gisting" && gisting ? "Opening…" : labels.primary}
+            {(copy.primary === "start-gisting" || copy.primary === "wink-back") && gisting
+              ? "Opening…"
+              : labels.primary}
           </button>
           {copy.secondary && (
             <button

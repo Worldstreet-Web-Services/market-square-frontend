@@ -6,6 +6,7 @@ import { DeckDots } from "@/components/ui/deck-dots";
 import { PalCard, DECK_CARD, HOME_DECK_CARD, type PalCardNodeGeometry } from "@/components/layout/pal-card";
 import { FriendsFilter } from "@/components/layout/friends-filter";
 import { SectionHeading } from "@/components/layout/section-heading";
+import { DECK_SORT } from "@/lib/people-filters";
 import {
   EMPTY_FRIENDS_FILTER,
   friendsFilterFacets,
@@ -16,7 +17,7 @@ import { usePeople } from "@/features/discovery";
 import { useMe } from "@/hooks/use-me";
 import { useSwipeCard } from "@/hooks/use-swipe-card";
 import { SwipeVerdict } from "@/components/layout/swipe-verdict";
-import { useFollow, useIsFollowing } from "@/features/profile";
+import { useFollow, useIsFollowing, usePassProfile } from "@/features/profile";
 import { useGate } from "@/hooks/use-gate";
 import { cn } from "@/lib/cn";
 import { DECK_NODE, HOME_DECK_NODE, PALS_PAGE, deckLayout, type DeckLayout, type DeckNode } from "@/lib/deck-layout";
@@ -24,6 +25,11 @@ import type { Profile } from "@/lib/api/schemas";
 import { deckCandidates } from "@/lib/deck-candidates";
 import { hasWinked } from "@/lib/winks";
 import { useSentWinks } from "@/features/profile/lib/wink-store";
+import {
+  rememberDecision,
+  useDeckDecisions,
+} from "@/features/profile/lib/deck-decision-store";
+import { decidedIds } from "@/lib/deck-decisions";
 
 /**
  * "MAKE SOME FRIENDS" — node 844:18440's deck, on Home and on `/pals`.
@@ -83,7 +89,9 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     a list that no longer exists means nothing.
   */
   const [filter, setFilter] = useState<FriendsFilterState>(EMPTY_FRIENDS_FILTER);
-  const people = usePeople("", "followers", true, friendsFilterFacets(filter));
+  // THE DECK'S OWN ORDERING, named once in lib/people-filters.ts so switching
+  // it to the service's ranked `foryou` is one line rather than a hunt.
+  const people = usePeople("", DECK_SORT, true, friendsFilterFacets(filter));
   const [index, setIndex] = useState(0);
   const changeFilter = (next: FriendsFilterState) => {
     setFilter(next);
@@ -123,7 +131,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     pills, 67 to the rule, 60 to the timeline — so its section carries no gap
     of its own, only the 60 under it.
   */
-  const sectionClass = cn("flex flex-col", heading === "pals" ? "w-full md:max-w-[596px]" : "mb-[64px]");
+  const sectionClass = cn("flex flex-col", heading === "pals" ? "w-full md:max-w-[596px]" : "mb-10");
   /* HOME DRAWS ITS OWN DECK (647:16300), not `/pals`' at another scale. */
   const node: DeckNode = heading === "home" ? HOME_DECK_NODE : DECK_NODE;
   const card: PalCardNodeGeometry = heading === "home" ? HOME_DECK_CARD : DECK_CARD;
@@ -141,6 +149,20 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     "this payload has no follow edge", never "not followed".
   */
   const winkedHere = useSentWinks(me.data?.id ?? null);
+  /*
+    EVERY CARD THIS READER HAS ANSWERED, whichever way they answered it.
+
+    The service remembers a follow and a wink; it has no idea about a PASS,
+    which is the commonest answer of the three, and its memory of a wink lapses
+    with the cooldown — so a face came back a day after being winked at, and a
+    face that had been dismissed came back immediately. Both are the same
+    complaint: the deck kept re-asking a question the reader had answered.
+
+    This closes the card the instant it is answered and keeps it closed. The
+    service's own exclusions still do the real work across devices; a pass is
+    asked for and will join them.
+  */
+  const answered = decidedIds(useDeckDecisions(me.data?.id ?? null));
   /*
     THE CLOCK A LAPSED WINK IS READ AGAINST. Seeded once and nudged on a coarse
     tick: the boundary it decides moves once a DAY, so a minute of staleness
@@ -160,7 +182,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
     // the service's own `excludeWinked` leaves them out (ogazboiz, 2026-09-18).
     // Past that the wink has lapsed, and an unanswered question is a question
     // again. `now` is state, not a call to the clock during render.
-    winkedHere: (id) => hasWinked(winkedHere, id, now),
+    winkedHere: (id) => answered.has(id) || hasWinked(winkedHere, id, now),
   });
   const filtering = isFriendsFilterActive(filter);
 
@@ -249,7 +271,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         {header}
         {/* The front card's own footprint, so the column does not jump when it lands. */}
         <div
-          className={cn("ws-skeleton mx-auto", heading === "home" && "mt-[90px]")}
+          className={cn("ws-skeleton mx-auto", heading === "home" && "mt-8 md:mt-22.5")}
           style={{
             width: node.card.width * layout.k,
             height: layout.height,
@@ -323,7 +345,7 @@ export function FriendsDeck({ heading = "home" }: { heading?: "home" | "pals" })
         of deciding about a person.
       */}
       <div
-        className={cn("relative isolate w-full overflow-x-clip", heading === "home" && "mt-[90px]")}
+        className={cn("relative isolate w-full overflow-x-clip", heading === "home" && "mt-8 md:mt-22.5")}
         style={{ height: layout.height }}
       >
         {window.map((position) => (
@@ -581,6 +603,22 @@ function DeckCard({
   const follow = useFollow(profile);
   const isFollowing = useIsFollowing(profile);
   const gate = useGate();
+  /*
+    THE ANSWER IS RECORDED WHERE IT IS GIVEN, on the tap rather than on the
+    response. A pass has no response to wait for at all, and a follow that only
+    closed the card once the service replied would leave it under the reader's
+    thumb through the whole round trip — which is precisely when the next swipe
+    lands on it.
+  */
+  const viewer = useMe();
+  const pass = usePassProfile();
+  const remember = (decision: "passed" | "winked" | "followed") => {
+    rememberDecision(viewer.data?.id ?? null, profile.id, decision);
+    // The local record closes the card; this is what makes it stay closed on
+    // the reader's other devices. A follow and a wink already tell the service
+    // themselves — a pass had nothing to tell until now.
+    if (decision === "passed") pass.mutate({ profileId: profile.id, passed: true });
+  };
 
   const swipe = useSwipeCard({
     width: node.card.width * k,
@@ -602,6 +640,8 @@ function DeckCard({
         return;
       }
       if (decision === "follow" && !isFollowing) gate(() => follow.mutate(true));
+      // A left swipe is a real answer even though it sends nothing.
+      remember(decision === "follow" ? "followed" : "passed");
       onStep(1);
     },
   });
@@ -639,9 +679,18 @@ function DeckCard({
         profile={profile}
         geometry={card}
         interactive={front}
-        onPass={() => onStep(1)}
-        onWinked={() => onStep(1)}
-        onFollowed={() => onStep(1)}
+        onPass={() => {
+          remember("passed");
+          onStep(1);
+        }}
+        onWinked={() => {
+          remember("winked");
+          onStep(1);
+        }}
+        onFollowed={() => {
+          remember("followed");
+          onStep(1);
+        }}
       />
       {/* Only the front card, and only where the gesture decides — a stamp on
           a card you are merely paging past would promise an act that is not

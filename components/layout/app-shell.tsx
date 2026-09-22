@@ -1,6 +1,5 @@
 "use client";
 
-import { GENDER_OPTIONS, genderLabel, normalizeGender } from "@/lib/gender";
 import { profileHref } from "@/lib/profile-href";
 import { createPortal } from "react-dom";
 
@@ -13,8 +12,7 @@ import { refreshPushSubscription } from "@/lib/push-client";
 import { MenuRow } from "@/components/ui/menu-row";
 import { ArkChevron, ArkWordmark, BackToArk, goBackToArk } from "@/components/layout/ark-nav";
 import { ARK_DESTINATIONS, SHOWS_ARK_NAV } from "@/lib/ark-links";
-import { IconFilterChevronRight, IconFilterFriends, IconFilterGender, IconFilterLocation } from "@/components/ui/home-icons";
-import { useUpdateMe } from "@/features/profile";
+import { IconFilterChevronRight, IconFilterFriends, IconFilterLocation } from "@/components/ui/home-icons";
 import { useTrackNavHistory } from "@/lib/nav-history";
 import {
   type RailState,
@@ -693,9 +691,9 @@ function AccountChip() {
   // The chip is a BUTTON, not a link with a hover menu. It was
   // `group-hover:block group-focus-within:block`, which is the same defect
   // MoreMenu was fixed for one screen earlier: on a touch device a tap follows
-  // the link and the menu never opens, so "View profile" and "Log out" did not
-  // exist on a tablet at all. Opening it on click gives both entries a target
-  // and keeps the profile reachable as the menu's first item.
+  // the link and the menu never opens, so the menu's entries did not exist on a
+  // tablet at all. Opening it on click gives them a target and keeps the
+  // profile reachable as the menu's first item.
   return (
     <RailMenu
       label="Account"
@@ -756,17 +754,10 @@ export function AccountMenuItems({
    */
   onOpenNav?: () => void;
 }) {
-  const logout = useLogout();
   const me = useMe();
   const router = useRouter();
-  const update = useUpdateMe();
-  const [step, setStep] = useState<"root" | "gender">("root");
-  /* The file's own chevron (747:14009), and turned round for a step's Back. */
+  /* The file's own chevron (747:14009). */
   const chevron = <IconFilterChevronRight className="h-2.5 w-[5px] text-white" />;
-  const back = <IconFilterChevronRight className="h-2.5 w-[5px] -scale-x-100 text-white" />;
-  /* The option that is on carries the filter menu's own dot in `--color-create`. */
-  const dot = (on: boolean) =>
-    on ? <span aria-hidden className="block h-2 w-2 rounded-full bg-create" /> : undefined;
   const go = (href: string) => {
     close();
     // `sq` is idempotent: a helper-built href (profileHref) is already under
@@ -775,32 +766,12 @@ export function AccountMenuItems({
   };
 
   /*
-    GENDER — a CHOICE, never typed: Male or Female ("we dont make them type
-    they choose either male or female"). It saves the reader's public profile
-    gender, the field Explore's people filters read, and steps back.
-  */
-  if (step === "gender") {
-    return (
-      <>
-        <MenuRow icon={back} label="Back" onClick={() => setStep("root")} />
-        {GENDER_OPTIONS.map((option) => (
-          <MenuRow
-            key={option.value}
-            icon={dot(normalizeGender(me.data?.gender) === option.value)}
-            label={option.label}
-            onClick={() => update.mutate({ gender: option.value }, { onSuccess: () => setStep("root") })}
-          />
-        ))}
-      </>
-    );
-  }
-
-  /*
-    NODE 747:14001 — Profile, Settings, Gender, in the file's rows and glyphs
-    (the same "gist dm" component the friends filter draws, so its exported
-    icons are reused), then Log out, which the file does not draw and
-    ogazboiz asked to keep. Settings goes to `/u/<username>/settings`, a page
-    being built elsewhere.
+    NODE 747:14001 — Profile and Settings, in the file's rows and glyphs (the
+    same "gist dm" component the friends filter draws, so its exported icons
+    are reused). Settings goes to `/u/<username>/settings`, a page being built
+    elsewhere. Gender and Log out were dropped at ogazboiz's word (2026-09-22);
+    gender is still set from Edit profile and onboarding, and the phone's nav
+    drawer still carries Sign out.
   */
   return (
     <>
@@ -826,20 +797,6 @@ export function AccountMenuItems({
         label="Settings"
         // Each person's own settings live under their profile.
         onClick={() => go(me.data ? profileHref(me.data, "settings") : "/auth")}
-      />
-      <MenuRow
-        icon={<IconFilterGender className="h-5 w-5 text-grey-400" />}
-        label={genderLabel(me.data?.gender) ? `Gender · ${genderLabel(me.data?.gender)}` : "Gender"}
-        trailing={chevron}
-        onClick={me.data ? () => setStep("gender") : undefined}
-      />
-      <MenuRow
-        icon={<IconLogout className="h-5 w-5 text-grey-400" />}
-        label={`Log out @${me.data?.username ?? ""}`}
-        onClick={() => {
-          close();
-          void logout();
-        }}
       />
     </>
   );
@@ -1886,7 +1843,10 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
     Unset (no visualViewport) everything falls back to `100dvh`, which is the
     behaviour this replaces.
   */
-  useKeyboardInset();
+  // `chatOpen` locks page scroll (below), so on iOS the window may be held at
+  // the top for the whole time the composer is focused — otherwise Safari's
+  // keyboard scroll pushes the thread header off the top of the glass.
+  useKeyboardInset(chatOpen);
 
   /*
     A CHAT THREAD CLAIMS THE VIEWPORT, so the page must not scroll behind it.
@@ -2061,7 +2021,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
           under the logo, directly above the bar's own full-width bottom
           border. Only that full-width border stays.
         */}
-        <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-[72px] items-center justify-between border-b border-white/10 px-6 md:hidden">
+        <div className="ws-head fixed inset-x-0 top-0 z-40 flex h-[var(--ws-topbar-h)] items-center justify-between border-b border-white/10 px-6 md:hidden">
           {/*
             `flex` belongs on the LOCKUP, not on this box. BrandLockup renders
             a bare span carrying `items-center` and nothing else — the caller

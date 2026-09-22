@@ -7,11 +7,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
-import { relativeTime } from "@/lib/format";
+import { relativeTime, formatDateTime } from "@/lib/format";
 import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
 import { MediaFrame } from "@/components/ui/media-frame";
+import { TransactionCard } from "@/components/ui/transaction-card";
 import { postMediaList } from "@/lib/post-media";
 import { MediaRail } from "@/features/feed/components/media-rail";
 import { PostText } from "@/components/ui/post-text";
@@ -49,6 +50,8 @@ import { CommentsSheet } from "@/features/feed/components/comments-sheet";
 import { useMentionTyping } from "@/features/feed/hooks/use-mention-typing";
 import { MentionPicker } from "@/features/feed/components/mention-picker";
 import { ShareSheet } from "@/components/ui/share-sheet";
+import { SharedLinkCard } from "@/components/layout/shared-link-card";
+import { firstSquareLink } from "@/lib/square-link";
 import { sharePostId } from "@/lib/short-id";
 import type { Post, ReportReason } from "@/features/feed/lib/types";
 import type { Profile } from "@/lib/api/schemas";
@@ -703,9 +706,30 @@ export function PostCard({
   const video = isVideoPost(post);
   // Two or more photos ride the rail (node 1029:22591); one keeps the
   // hugging frame below.
+  // The first Square link in the post's words, if there is one.
+  const shared = firstSquareLink(post.text);
   const rail = postMediaList(post);
+  // SINGLE-IMAGE FRAMING, the X / Instagram rule: the photo fills the column
+  // width and keeps its own aspect ratio CLAMPED to a pleasant range — 4:5 at
+  // the tallest, 1.91:1 at the widest. An image inside that range shows whole
+  // (the frame IS its ratio, so `object-cover` crops nothing); only a photo
+  // taller or wider than the range gets a minimal centre crop, exactly as both
+  // apps do. Needs the media's real pixels, which the payload carries.
+  const dims = post.media?.[0];
+  const naturalAspect = dims?.width && dims?.height ? dims.width / dims.height : null;
+  const framedAspect = naturalAspect ? Math.min(1.91, Math.max(0.8, naturalAspect)) : null;
   const viewRef = useRecordView(post.id, !video);
   const cta = resolveCta(post.deepLink, `feed:post:${post.id}`);
+  // A TRANSACTION post — the trade deep-link (`<network>:<hash>`). It gets the
+  // receipt card instead of the plain "View transaction" row. The amount is not
+  // in the post, so the card shows the author's own words + who, when and the
+  // wallet; the hero amount fills in only if the payload ever carries one.
+  const isTrade = post.deepLink?.kind === "trade";
+  const txWallet = (() => {
+    if (!isTrade || !post.deepLink) return "";
+    const hash = post.deepLink.ref.slice(post.deepLink.ref.indexOf(":") + 1);
+    return hash.length > 12 ? `${hash.slice(0, 6)}…${hash.slice(-4)}` : hash;
+  })();
 
   // Share the POST, not its author's profile — a reader following the link
   // has to land on the thing they were shown. The sheet offers WhatsApp, X,
@@ -865,31 +889,103 @@ export function PostCard({
 
 
       {/*
-        MEDIA IS LEFT-ALIGNED AND KEEPS ITS OWN WIDTH — 496:13599 against
-        496:13662.
+        MEDIA IS UNIFORM — every single photo fills the column at the same 3:2
+        frame, `object-cover` (product decision, 2026-09: images at their own
+        sizes read as a ragged column). A tall shot is centre-cropped here and
+        opens to its true ratio in the immersive viewer, which is where a photo
+        needs its own size.
 
-        The file draws a picture that fills the column at the full 718 (13662)
-        and one that does not at 383.31, hard against the content column's LEFT
-        edge (13599). Not centred, and never letterboxed: the media box is the
-        media's own size, capped at the column's width and at 420 tall.
-
-        This replaces a fixed `h-[420px] w-full` frame with `object-contain`,
-        which centred everything and gave a portrait clip a black margin on
-        either side as wide as the clip itself. `MediaFrame`'s ambient blur went
-        with it, for the same reason: it exists to fill leftover space beside
-        contained media, and hugging the media means there is none. It still
-        does that job in the immersive viewer, where a full-viewport slide has
-        leftover space and the fill is the whole point.
-
-        The cost is that the box's width is not known until the media loads, so
-        a card can settle once on first paint. `mediaWidth`/`mediaHeight` on the
-        post payload would remove it — asked for; `MessageMedia` already carries
-        both, so the service is storing them somewhere.
+        This replaced the earlier "keeps its own width" rendering (`w-fit`,
+        `object-contain`, capped at 420 tall), which drew each image at a
+        different size. Video still keeps its own fit for now; the rail handles
+        galleries.
       */}
-      {compact && rail.length > 0 ? (
-        // Every compact card reserves the same media strip — the file's own
-        // 134.3 x 188.52 tiles — which is the other half of the equal height.
-        <MediaRail items={rail} size="compact" />
+      {compact ? (
+        // COMPACT — Home's "Post For You" rail (node 1313:149187) is a VERTICAL
+        // card like the timeline's: the media FULL-WIDTH, filling the box so a
+        // photo or clip is actually visible, with the caption clamped under it.
+        // The old build shrank the media to a 134px side tile, which is what
+        // read as "compressed on mobile" — the whole point of the rail is the
+        // media, so it takes the height the header, caption and actions leave.
+        // The reply field is still dropped (in the actions below): a rail is the
+        // wrong place to type a reply, and tapping the card opens the post.
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+          {post.mediaUrl ? (
+            rail.length === 2 ? (
+              // TWO PHOTOS — half the box each, side by side (X / Instagram).
+              <div className="flex min-h-0 flex-1 gap-1">
+                {rail.slice(0, 2).map((media, i) => (
+                  <button
+                    key={`${media.url}-${i}`}
+                    type="button"
+                    onClick={onOpenMedia ? () => onOpenMedia(post) : openPost}
+                    aria-label="View post"
+                    className="ws-press relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-xl"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+                    <img src={media.url} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : rail.length > 2 ? (
+              <MediaRail items={rail} size="compact" />
+            ) : isVideoPost(post) ? (
+              // A CLIP — its poster fills the box with a play badge; the tap
+              // opens the post, where it plays. Autoplaying several clips across
+              // a rail fights for attention (and bandwidth), so the preview is a
+              // still frame, like every other feed's rail.
+              <button
+                type="button"
+                onClick={onOpenMedia ? () => onOpenMedia(post) : openPost}
+                aria-label="Play post"
+                className="ws-press relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-xl bg-black"
+              >
+                {post.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- service-issued poster
+                  <img src={post.thumbnailUrl} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+                ) : null}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="ws-glass flex h-11 w-11 items-center justify-center rounded-full text-white">
+                    <IconReplayPlay className="h-5 w-5" />
+                  </span>
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenMedia ? () => onOpenMedia(post) : openPost}
+                aria-label="View post"
+                className="ws-press relative min-h-0 flex-1 cursor-pointer overflow-hidden rounded-xl"
+              >
+                {/* FULL-BLEED — a single image fills the rail's whole media box
+                    (`object-cover`), the way this card was designed; the tap
+                    opens the post at the photo's true ratio. */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+                <img
+                  src={post.mediaUrl}
+                  alt=""
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </button>
+            )
+          ) : null}
+          <div data-post-body onClick={openPost} className="shrink-0 cursor-pointer overflow-hidden">
+            {/* With media the caption is a two-line strip beneath it; a
+                TEXT-ONLY card reads as a normal post — the words at the top, at
+                the timeline's own body size, up to eight lines. */}
+            <PostText
+              text={post.text}
+              mentions={post.mentions}
+              className={cn(
+                "text-white/90",
+                post.mediaUrl
+                  ? "text-[13.8px] leading-5.75 line-clamp-2"
+                  : "text-[15px] leading-6 line-clamp-8"
+              )}
+            />
+          </div>
+        </div>
       ) : rail.length > 1 ? (
         <MediaRail items={rail} />
       ) : post.mediaUrl &&
@@ -942,10 +1038,11 @@ export function PostCard({
             />
           )
         ) : (
-          // A photo expands too. It is contained in the card, so a tall shot
-          // is letterboxed there and a tap is the only way to see it at any
-          // size: leaving the clip tappable and the photo inert taught two
-          // different rules for the same gesture on the same surface.
+          // FULL-WIDTH, TRUE RATIO — every photo fills the column's whole width
+          // and keeps its own aspect (height auto), so the card grows to the
+          // image and it is never cropped and never letterboxed: no small,
+          // left-aligned shots, and no empty side gaps from a fixed frame. The
+          // tap opens the full-screen viewer.
           <Tag
             {...(onOpenMedia
               ? {
@@ -955,18 +1052,37 @@ export function PostCard({
                 }
               : {})}
             className={cn(
-              "block w-fit max-w-full",
+              // Full CONTENT width (inside the card's padding), not bled to the
+              // card edges — the image keeps its aspect within this width.
+              "block w-full",
               onOpenMedia && "ws-press cursor-pointer"
             )}
             style={{ viewTransitionName: `media-${post.id}` }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
-            <img
-              src={post.mediaUrl}
-              alt=""
-              decoding="async"
-              className="block h-auto max-h-[420px] w-auto max-w-full rounded-xl object-contain"
-            />
+            {framedAspect ? (
+              // Known dimensions: the X / Instagram frame — full width at the
+              // clamped ratio, the image covering it (whole within range, a
+              // minimal centre crop beyond it).
+              <div
+                // Capped height so a tall (portrait) photo does not run the
+                // length of the desktop column — beyond the cap it centre-crops
+                // to fill, like X. 420 is the design's own media ceiling
+                // (496:13599). On a phone the column is narrow enough that the
+                // cap is rarely reached.
+                className="max-h-105 w-full overflow-hidden rounded-xl"
+                style={{ aspectRatio: framedAspect }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown */}
+                <img src={post.mediaUrl} alt="" decoding="async" className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              // No dimensions on the payload: full width at the image's own
+              // ratio, but still capped at the 420 ceiling so a tall photo the
+              // payload never measured cannot run the whole column — beyond the
+              // cap it centre-crops like the framed case above.
+              // eslint-disable-next-line @next/next/no-img-element -- author-supplied media host is unknown
+              <img src={post.mediaUrl} alt="" decoding="async" className="block max-h-105 w-full rounded-xl object-cover" />
+            )}
           </Tag>
         ))}
 
@@ -978,32 +1094,68 @@ export function PostCard({
         exactly 18 below the hairline, the same distance the media does on the
         first). So the 12 belongs to the media, not to the text.
       */}
-      <div
-        data-post-body
-        onClick={full ? undefined : openPost}
-        className={cn(!full && "cursor-pointer", compact && "shrink-0 overflow-hidden")}
-      >
-        <PostText
-          text={post.text}
-          mentions={post.mentions}
-          className={cn(
-            "text-[13.8px] leading-[23px] text-white/90",
-            // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
-            rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3",
-            // Two lines in the rail, clamped by the class rather than by
-            // `clampLines`: that one brings a "Show more" which expands in
-            // place, and this card cannot grow.
-            compact && "line-clamp-2"
-          )}
-          clampLines={full || compact ? undefined : 6}
-        />
-      </div>
-      {/* The coins the post names, with today's move — the row Ark draws. */}
-      <CoinChips text={post.text} />
+      {/* On a trade post the author's words become the receipt card's headline
+          below, so the plain caption is not drawn twice. The compact rail draws
+          its caption beside the media (above), so this stacked one is off there. */}
+      {!compact && !isTrade && (
+        <div
+          data-post-body
+          onClick={full ? undefined : openPost}
+          className={cn(!full && "cursor-pointer")}
+        >
+          <PostText
+            text={post.text}
+            mentions={post.mentions}
+            className={cn(
+              "text-[13.8px] leading-[23px] text-white/90",
+              // The rail's caption sits 20.72 under the photos, as 1029:22591 draws it.
+              rail.length > 1 ? "mt-[20.72px]" : post.mediaUrl && "mt-3"
+            )}
+            clampLines={full ? undefined : 6}
+          />
+          {/* A SQUARE LINK IN THE WORDS, drawn as the thing it points at.
+              One per post: a post with four links is a post about four things,
+              and four previews bury whatever the person actually wrote. */}
+          {shared && <SharedLinkCard reference={shared.ref} href={shared.href} />}
+        </div>
+      )}
+      {/* The coins the post names, with today's move — the row Ark draws.
+          Off in the compact rail: it is a preview, and the chips, the quote and
+          the receipt card all belong on the full post the tap opens. */}
+      {!compact && !isTrade && <CoinChips text={post.text} />}
 
-      {post.quotedPost && <QuotedPost quoted={post.quotedPost} />}
+      {!compact && post.quotedPost && <QuotedPost quoted={post.quotedPost} />}
 
-      {cta && (
+      {!compact && (isTrade ? (
+        // The receipt card. Its artwork lives in public/tx-card/ (see the
+        // README there) — until those files land it renders as the gradient
+        // with the text and the seal animation. Tapping opens the explorer.
+        cta?.available ? (
+          <a href={cta.href} target="_blank" rel="noreferrer" className="ws-press mt-3 block">
+            <TransactionCard
+              title={post.text?.trim() || "Transaction"}
+              description=""
+              handle={atHandle(author?.username) ?? author?.displayName ?? ""}
+              avatarUrl={author?.avatarUrl}
+              avatarSeed={post.authorId}
+              wallet={txWallet}
+              timestamp={formatDateTime(post.createdAt)}
+            />
+          </a>
+        ) : (
+          <div className="mt-3">
+            <TransactionCard
+              title={post.text?.trim() || "Transaction"}
+              description=""
+              handle={atHandle(author?.username) ?? author?.displayName ?? ""}
+              avatarUrl={author?.avatarUrl}
+              avatarSeed={post.authorId}
+              wallet={txWallet}
+              timestamp={formatDateTime(post.createdAt)}
+            />
+          </div>
+        )
+      ) : cta ? (
         <Link
           href={cta.href}
           target={cta.external ? "_blank" : undefined}
@@ -1013,7 +1165,7 @@ export function PostCard({
           <span className="truncate text-[13px] font-semibold text-heading">{cta.label}</span>
           <span className="shrink-0 text-[13px] text-accent">Open →</span>
         </Link>
-      )}
+      ) : null)}
 
       {/* Action row. The design groups it as: a tallies pill, the inline reply
           pill, then share / Arkmark / more standing free at the end. */}
@@ -1196,7 +1348,10 @@ export function PostCard({
           any card width, which is what the file's fixed 113px gap expresses at
           its one width.
         */}
-        {!compact && (
+        {/* Inline "Comment here…" input is OFF for now (per request) — readers
+            reply through the comment tally / the comments sheet. Kept wired
+            behind a `false` guard so it can be switched back on in one edit. */}
+        {false && !compact && (
           <InlineComment
             postId={post.id}
             onOpenThread={() => setCommentsOpen(true)}

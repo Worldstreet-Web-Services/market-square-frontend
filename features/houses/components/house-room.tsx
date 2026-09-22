@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Room } from "livekit-client";
 import { Button } from "@/components/ui/button";
+import { AvatarStack } from "@/components/ui/avatar-stack";
 import { ErrorState } from "@/components/ui/states";
 import { Sheet } from "@/components/ui/sheet";
 import { DestructiveConfirmSheet } from "@/components/ui/destructive-confirm-sheet";
@@ -49,6 +50,7 @@ import { HouseControls } from "@/features/houses/components/house-controls";
 import { HouseHeader } from "@/features/houses/components/house-header";
 import { RecordGistButton, RoomDock } from "@/features/houses/components/room-dock";
 import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
+import { RoomReactions, useRoomReactions } from "@/features/houses/components/room-reactions";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PersonSheet, type PersonTarget } from "@/features/houses/components/person-sheet";
@@ -60,6 +62,7 @@ import { useHouseAudio } from "@/features/houses/hooks/use-house-audio";
 import { ANNOUNCE_STABLE_MS } from "@/features/houses/lib/audio-levels";
 import { houseShareUrl, houseTopic, isHouse } from "@/features/houses/lib/house";
 import { parseParticipantMeta, participantName } from "@/features/houses/lib/participant-meta";
+import type { MentionableMember } from "@/lib/mentionable-members";
 import {
   getMutes,
   getServerMutes,
@@ -75,6 +78,7 @@ import {
   seatsFull,
 } from "@/features/houses/lib/seating";
 import { sq } from "@/lib/square-path";
+import { IconChevronRight } from "@/components/ui/icons";
 import { roomFailureCopy } from "@/lib/room-connection-copy";
 import { roomEntryReady } from "@/lib/room-session/entry";
 import { roomStagePanel } from "@/lib/room-session/presence";
@@ -995,12 +999,57 @@ function LiveHouse({
     [stream.id]
   );
 
+  /*
+    EVERYONE IN THE ROOM, FOR THE CHAT'S @ PICKER.
+
+    The stage and the audience, which is what "in this room" means to somebody
+    typing a name into the column beside them. Only people whose USERNAME we
+    know can be offered — a mention is a link to a profile, and a seat with no
+    handle is somebody we cannot address.
+  */
+  const chatMentionables: MentionableMember[] = useMemo(() => {
+    const seen = new Map<string, MentionableMember>();
+    for (const slot of slots) {
+      const meta = parseParticipantMeta(slot.metadata);
+      const username = meta?.username;
+      if (!username) continue;
+      seen.set(username.toLowerCase(), {
+        id: baseIdentity(slot.identity),
+        displayName: participantName(slot.name) ?? username,
+        username,
+      });
+    }
+    for (const member of audience) {
+      const username = member.meta?.username;
+      if (!username) continue;
+      seen.set(username.toLowerCase(), {
+        id: member.userId,
+        displayName: member.name || username,
+        username,
+      });
+    }
+    return [...seen.values()];
+  }, [slots, audience]);
+
   /* ---- reactions ------------------------------------------------------ */
 
-  const [incoming, setIncoming] = useState(0);
+  // A picked emoji floats over the stage the way a call reaction does, and the
+  // SAME overlay draws the ones other people send — the data channel now
+  // carries the glyph, so an incoming heart and an incoming 🎉 both land here.
+  const roomReactions = useRoomReactions();
   const live = useLiveReactions(room, {
-    onReceive: (burst) => setIncoming((current) => current + burst),
+    onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
   });
+  // One tap, two destinations: draw it here immediately labelled "You", and
+  // broadcast it under your name so the rest of the room sees who sent it —
+  // the way a reaction is attributed in a Meet or WhatsApp call.
+  const sendReaction = useCallback(
+    (emoji: string) => {
+      roomReactions.emit(emoji, 1, "You");
+      live.react(emoji, 1, myName ?? "Someone");
+    },
+    [roomReactions, live, myName]
+  );
 
   /* ---- announcements --------------------------------------------------- */
 
@@ -1441,6 +1490,19 @@ function LiveHouse({
   const listening = audience.length;
   const speaking = slots.length;
 
+  // The gist partners as a FACE PILE for the header — speakers first, then the
+  // audience, seeded on the USER id so the artwork matches everywhere else.
+  const partnerFaces = useMemo(
+    () =>
+      [...speakerPeople, ...audiencePeople].map((person) => ({
+        id: person.id,
+        name: person.name,
+        avatarUrl: person.avatarUrl,
+        seed: person.userId ?? person.id,
+      })),
+    [speakerPeople, audiencePeople]
+  );
+
   return (
     /*
       NODE 129:11748. The room is TWO columns, not one narrow one.
@@ -1478,7 +1540,7 @@ function LiveHouse({
          (`--ws-nav-h`), which the shell reserves under every route. Before,
          only the header was subtracted and the page scrolled by exactly one
          dock (ogazboiz, 2026-09-13). The chat column is `h-full` inside. */
-      className="flex w-full flex-col bg-chrome pb-[calc(80px+env(safe-area-inset-bottom,0px))] md:pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-room-top,var(--ws-crumb-h))-var(--ws-nav-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
+      className="flex w-full flex-col bg-chrome pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-[calc(var(--ws-nav-h)+72px)] xl:h-[calc(100dvh-var(--ws-room-top,var(--ws-crumb-h))-var(--ws-nav-h))] xl:flex-row xl:overflow-hidden xl:pb-0"
     >
       {/* The audio is NOT here. The shell's RoomSessionProvider mounts it
           (HouseAudioSinks), so it keeps playing when this view unmounts. */}
@@ -1488,6 +1550,11 @@ function LiveHouse({
       <div role="status" aria-live="polite" className="sr-only">
         {message}
       </div>
+
+      {/* Call-style reactions rising over the stage — local taps and the ones
+          other people send, one layer. Viewport-fixed, so it is mounted once
+          here regardless of which control opened the picker. */}
+      <RoomReactions items={roomReactions.items} />
 
       {/* LEFT COLUMN — 805 in the file, 744 of content inside 32px gutters.
           A COLUMN, not a plain block: the file's bottom bar (129:12197) is the
@@ -1508,26 +1575,31 @@ function LiveHouse({
             larger type. The house is still named beside this; its size is a
             fact about the house, and this line describes the room.
           */
-          <>
-            {/* The phone frame's one line (1285:92933) — "306 gist partners".
-                Still the ROOM's count, never the house's: everybody here,
-                listening and speaking, in the file's own words. */}
-            <span className="md:hidden">
-              <span className="tnum">{listening + speaking}</span> gist partners
-            </span>
-            <span className="hidden md:inline">
-              <span className="tnum">{listening}</span> listening ·{" "}
-              <span className="tnum">{speaking}</span> speaking
-            </span>
-            {/* THE CODE, ON THE LINE EVERYONE IN THE ROOM ALREADY READS — for
-                everyone in a public room, for the host in a private one. */}
-            {roomCodeVisible(stream, isHost) && stream.roomCode && (
-              <>
-                {" · "}
-                <CopyCodeChip code={stream.roomCode} />
-              </>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {/* PRESENCE YOU CAN SEE — the room's partners as a face pile, then
+                the count. Speakers first, then the audience; the total is still
+                the ROOM's own ("gist partners"), never the house's size. The
+                sharing lives on the share button, so this line is who is here
+                rather than a second place to copy a link. */}
+            {partnerFaces.length > 0 && (
+              <AvatarStack people={partnerFaces} max={4} size={20} />
             )}
-          </>
+            {/* Beside a long title on a phone the words would steal the title's
+                room, so mobile shows just the count; the label returns at md. */}
+            <span className="shrink-0">
+              <span className="tnum">{listening + speaking}</span>
+              <span className="hidden md:inline"> gist partners</span>
+            </span>
+            {/* THE CODE — desktop only. On a phone the header is a compact
+                title row and sharing lives on the share button, so the code
+                (and its copy) is hidden below md rather than crowding the line. */}
+            {roomCodeVisible(stream, isHost) && stream.roomCode && (
+              <span className="hidden items-center gap-2 md:flex">
+                <span aria-hidden>·</span>
+                <CopyCodeChip code={stream.roomCode} />
+              </span>
+            )}
+          </span>
         }
         // 1285:92940 — the host's phone pill says what leaving means for them.
         leaveLabel={isHost ? "Close Room" : "Leave Room"}
@@ -1634,7 +1706,7 @@ function LiveHouse({
         />
       )}
 
-      <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-10 xl:px-[30px]", state === "failed" && "opacity-40")}>
+      <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-4 xl:px-[30px]", state === "failed" && "opacity-40")}>
         <RoomPeopleSection
           title="Speakers"
           rule={false}
@@ -1843,7 +1915,7 @@ function LiveHouse({
               }
             : null
         }
-        onReact={() => live.react(1)}
+        onReact={sendReaction}
         /* Absent on a phone: the frame's bottom bar (RoomPhoneBar, below) is
            pinned to the viewport there and carries the same controls. */
         className="hidden md:flex xl:sticky xl:bottom-0"
@@ -1909,7 +1981,7 @@ function LiveHouse({
             Gistroom Chat
           </h2>
           <div className="min-h-0 flex-1">
-            <ChatPanel stream={stream} variant="room" />
+            <ChatPanel stream={stream} variant="room" members={chatMentionables} />
           </div>
         </div>
         </div>
@@ -1957,8 +2029,7 @@ function LiveHouse({
             : null
         }
         tray={isHost ? { count: handsUp.length, onOpen: () => setTray(true) } : null}
-        onReact={() => live.react(1)}
-        incoming={incoming}
+        onReact={sendReaction}
         leave={
           isHost
             ? { label: "Close the gist room", onLeave: () => setConfirmLeave(true) }
@@ -1999,8 +2070,7 @@ function LiveHouse({
             : null
         }
         tray={isHost ? { count: handsUp.length, onOpen: () => setTray(true) } : null}
-        onReact={() => live.react(1)}
-        incoming={incoming}
+        onReact={sendReaction}
         onChat={() => setChatSheet(true)}
       />
 
@@ -2027,7 +2097,7 @@ function LiveHouse({
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <ChatPanel stream={stream} variant="room" />
+            <ChatPanel stream={stream} variant="room" members={chatMentionables} />
           </div>
         </div>
       </Sheet>
@@ -2112,6 +2182,33 @@ function LiveHouse({
           hint="Anyone with this can walk in and listen."
           url={houseShareUrl(shareOrigin, stream.id)}
         />
+        {/*
+          POST IT TO SQUARE — the share that stays inside the product.
+
+          ogazboiz, 2026-09-21: "the share link I mean is like posting to
+          Square for gist room". A copied link is for somewhere else; this puts
+          the room in front of the people already here, and it arrives in the
+          feed as the room's OWN card — live, not open yet, or ended — rather
+          than as a line of characters nobody can read.
+
+          It reuses the composer's prefill contract, so there is one door into
+          posting rather than a second one built for rooms.
+        */}
+        <Link
+          href={sq(
+            "/?compose=1&text=" + encodeURIComponent(houseShareUrl(shareOrigin, stream.id))
+          )}
+          onClick={() => setOverflowSheet(false)}
+          className="ws-press mt-2 flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-heading">Post to Square</span>
+            <span className="ws-meta block">
+              Shares the room in the feed, with its own card. Anyone can walk in and listen.
+            </span>
+          </span>
+          <IconChevronRight className="h-4 w-4 shrink-0 text-meta" />
+        </Link>
         {isHost && (
           <CopyRow
             label="Speaker link"

@@ -2,13 +2,28 @@
 
 import { cn } from "@/lib/cn";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+// Colour only — geometry comes from the size prop (the ws-btn-* size utilities).
+// The brand fills reference the colour-only ws-btn-* utilities in globals.css so
+// the ramp lives in one place (CLAUDE.md's purple/arena/silver rules govern it).
+type Variant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "danger"
+  | "create"
+  | "silver"
+  | "arena"
+  | "welcome";
 
 const VARIANTS: Record<Variant, string> = {
   primary: "bg-accent text-ink hover:bg-white active:bg-grey-200",
   secondary: "border border-white/15 bg-white/5 text-white hover:bg-white/10",
   ghost: "text-grey-300 hover:bg-white/5 hover:text-white",
   danger: "border border-down/40 bg-down/10 text-down hover:bg-down/20",
+  create: "ws-btn-create",
+  silver: "ws-btn-silver",
+  arena: "ws-btn-arena",
+  welcome: "ws-btn-welcome",
 };
 
 export function Button({
@@ -29,9 +44,12 @@ export function Button({
       disabled={disabled || loading}
       className={cn(
         "ws-press inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-        size === "sm" && "h-8 px-3.5 text-xs",
-        size === "md" && "h-10 px-5 text-sm",
-        size === "lg" && "h-12 px-7 text-base",
+        // Geometry (height, inline padding, font) is the one source of truth in
+        // globals.css: 44px touch floor, shrinking to today's desktop sizes on a
+        // fine pointer. See the BUTTON SIZE SCALE block there.
+        size === "sm" && "ws-btn-sm",
+        size === "md" && "ws-btn-md",
+        size === "lg" && "ws-btn-lg",
         VARIANTS[variant],
         className
       )}

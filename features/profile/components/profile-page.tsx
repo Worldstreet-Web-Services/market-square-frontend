@@ -12,7 +12,7 @@ import { useMe } from "@/hooks/use-me";
 import { LiveBadge, Pill } from "@/components/ui/badge";
 import { IconCalendar } from "@/components/ui/icons";
 import { ProfilePhotos } from "@/features/profile/components/profile-photos";
-import { ShareSheet } from "@/components/ui/share-sheet";
+import { ProfileShareSheet } from "@/components/ui/profile-share-sheet";
 import { ProfileCover } from "@/features/profile/components/profile-cover";
 import { ColumnHeader, ColumnTabs } from "@/components/layout/column-header";
 import { RowSkeleton, Skeleton } from "@/components/ui/skeleton";
@@ -893,15 +893,7 @@ export function ProfilePage({
       )}
 
       {sharing && (
-        <ShareSheet
-          open
-          onClose={() => setSharing(false)}
-          title="Share profile"
-          payload={{
-            text: `${data.displayName || data.username} on Square`,
-            url: `${window.location.origin}${sq(`/u/${data.username}`)}`,
-          }}
-        />
+        <ProfileShareSheet open onClose={() => setSharing(false)} profile={data} />
       )}
 
       {isMe && (

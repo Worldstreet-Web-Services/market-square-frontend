@@ -112,6 +112,8 @@ export async function fetchPeople(
      * loaded page instead leaves holes no cursor can top up.
      */
     excludeWinked?: boolean;
+    excludeWinkedEver?: boolean;
+    excludePassed?: boolean;
   } = {}
 ) {
   const query = params.query?.trim() ?? "";
@@ -130,6 +132,8 @@ export async function fetchPeople(
       // explicit `excludeFollowing=false` is a different request to make.
       ...(params.excludeFollowing ? { excludeFollowing: "true" } : {}),
       ...(params.excludeWinked ? { excludeWinked: "true" } : {}),
+      ...(params.excludeWinkedEver ? { excludeWinkedEver: "true" } : {}),
+      ...(params.excludePassed ? { excludePassed: "true" } : {}),
       sort: parsePeopleSort(params.sort),
       limit: 30,
       cursor: params.cursor,

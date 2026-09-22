@@ -23,6 +23,7 @@ import {
   type MarketNotification,
   type NotificationGroup,
 } from "@/features/notifications/lib/types";
+import { GROUP_LABEL } from "@/lib/notification-groups";
 import { asset } from "@/lib/square-path";
 
 /**
@@ -215,14 +216,6 @@ function describe(item: MarketNotification): string {
 
 // Where a notification points. Nulls are real — a like on a deleted post has
 // no post to open — so the row stays unclickable rather than linking nowhere.
-/** Our words for the service's buckets — the MAPPING stays server-side. */
-const GROUP_LABEL: Record<NotificationGroup, string> = {
-  social: "Social",
-  money: "Money",
-  rooms: "Rooms",
-  chat: "Chat",
-  account: "Account",
-};
 
 /**
  * The destination is decided in `lib/notification-href.ts`, not here.
@@ -498,7 +491,7 @@ export function NotificationsPage({
             action={
               <button
                 onClick={login}
-                className="ws-btn-silver ws-press rounded-full px-5 py-2 text-[13px] font-bold"
+                className="ws-btn-silver ws-press ws-btn-md rounded-full font-bold"
               >
                 Sign in
               </button>

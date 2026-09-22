@@ -17,8 +17,36 @@ export interface PrivacySettings {
   personalizeByPlace?: boolean;
 }
 
+/**
+ * Which buckets may reach a phone. Always all five or absent — see the schema;
+ * a save replaces the whole object rather than patching one key, so there is
+ * never a partial one in flight.
+ */
+export interface PushGroupSettings {
+  social: boolean;
+  money: boolean;
+  rooms: boolean;
+  chat: boolean;
+  account: boolean;
+  /**
+   * A bucket this build has not heard of yet.
+   *
+   * The schema parses this object loosely and a save replaces it WHOLE, so an
+   * unknown sixth bucket has to survive both — drop it here and the save goes
+   * out one key short, which the service refuses. The type says so rather
+   * than leaving the next person to discover it from a 400.
+   */
+  [group: string]: unknown;
+}
+
 export interface SettingsShape {
-  notifications: { friendsRooms: boolean; direct: boolean; push?: boolean; emailDigest?: boolean };
+  notifications: {
+    friendsRooms: boolean;
+    direct: boolean;
+    push?: boolean;
+    emailDigest?: boolean;
+    pushGroups?: PushGroupSettings;
+  };
   chat: { messagesFrom: MessagesFrom; allowHouseMembers: boolean; allowPastAudience: boolean };
   /** Absent on a service without stage 3. */
   privacy?: PrivacySettings;

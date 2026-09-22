@@ -157,6 +157,57 @@ export const ChatMessageSchema = z.object({
   status: z.string().optional().default("active"),
   createdAt: z.string(),
   author: ProfileSchema.nullable().optional().default(null),
+  /**
+   * THE MESSAGE THIS ONE ANSWERS — one level, no threading, the same shape a
+   * DM's reply carries so the two panes cannot disagree about what a reply IS.
+   *
+   * The service embeds the original's author and a short excerpt, so the quote
+   * draws without a second lookup. `deleted` keeps the quote when the original
+   * has gone: "Message deleted" is a truer answer than a quote that silently
+   * vanishes and leaves a reply to nothing.
+   *
+   * Optional with a null default AND `catch(null)`: a service that has not
+   * shipped it yet, or a malformed row, draws no quote rather than blanking
+   * the whole chat.
+   */
+  replyTo: z
+    .object({
+      id: z.string(),
+      authorId: z.string().optional().default(""),
+      /**
+       * The original's words, capped by the service, and NULL once it has been
+       * removed — the flag is the content in that case, because showing what a
+       * host removed would defeat removing it.
+       */
+      text: z.string().nullable().optional().default(null),
+      deleted: z.boolean().optional().default(false),
+    })
+    .nullable()
+    .optional()
+    .default(null)
+    .catch(null),
+  /** Profile ids named in the text, so a handle links to the person rather than to a guess. */
+  mentions: z.array(z.string()).optional().default([]).catch([]),
+  /**
+   * LOVES ON THIS MESSAGE — busiest first, and `mine` is about the reader.
+   *
+   * Empty rather than absent when nobody has reacted, so a row never has to
+   * distinguish "no loves" from "this service does not do loves". Stored, not
+   * ephemeral: a love sits on somebody else's message and has to survive a
+   * reload, which is why it is a route rather than more data-channel traffic.
+   */
+  reactions: z
+    .array(
+      z.object({
+        emoji: z.string(),
+        count: z.number().optional().default(0),
+        /** Always false for a signed-out reader. */
+        mine: z.boolean().optional().default(false),
+      })
+    )
+    .optional()
+    .default([])
+    .catch([]),
 });
 
 export const ChatSchema = z.object({

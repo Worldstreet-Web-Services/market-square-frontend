@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/ui/states";
 import { IconChevronDown, IconDots, IconEmoji, IconSend } from "@/components/ui/icons";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 // The gist room's own glyphs, exported from the file. See room-icons.tsx.
 import {
   IconEmojiAdd,
@@ -17,7 +18,12 @@ import {
   IconRoomSend,
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
-import { useChat, useChatHistory, useSendChat } from "@/features/streams/hooks/use-chat";
+import { useChat, useChatHistory, useChatReaction, useSendChat } from "@/features/streams/hooks/use-chat";
+import { useMentionTyping } from "@/hooks/use-mention-typing";
+import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
+import { DEFAULT_REACTION } from "@/lib/reactions";
+import { MentionPicker } from "@/components/ui/mention-picker";
+import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
 import { OLDER_THRESHOLD_PX, oldestFirst, preservedScrollTop } from "@/lib/chat-order";
 import type { ChatMessage, Stream } from "@/features/streams/lib/types";
 
@@ -97,8 +103,20 @@ export function ChatPanel({
   heading = false,
   moderation,
   showTopViewers = false,
+  members = [],
 }: {
   stream: Stream;
+  /**
+   * EVERYONE IN THE ROOM, for the @ picker.
+   *
+   * A gist room's chat is a conversation between people who are present, so
+   * the list to offer is the people on the stage and in the audience — not
+   * the whole directory, and not only the handful who have happened to TYPE
+   * something. Passed in because only the room knows who is in it; empty
+   * everywhere else, which simply means the picker offers whoever the
+   * service's own search finds.
+   */
+  members?: MentionableMember[];
   /**
    * "overlay": transparent column over video — masked top fade, text shadows,
    * glass input, no panel chrome.
@@ -140,8 +158,98 @@ export function ChatPanel({
   );
   const hasOlder = history.data ? history.hasNextPage : (chat.data?.nextCursor ?? null) !== null;
   const gate = useGate();
-  const [draft, setDraft] = useState("");
+  /*
+    THE MESSAGE BEING ANSWERED.
+
+    A room chat moves fast and several conversations share one column, so
+    "which of these were you answering?" is the question a reply exists to
+    settle (ogazboiz, 2026-09-21). One level, never a thread: a reply to a
+    reply points at that message, which is what the DM pane does and what
+    keeps a live column readable.
+  */
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /*
+    SWIPE A MESSAGE TO ANSWER IT — the gesture the DM thread already has.
+
+    The reply control here appears on HOVER, which on a phone is no control at
+    all: ogazboiz went looking for it and found nothing (2026-09-21). The rules
+    are `lib/swipe-reply`, shared with the thread, so the two surfaces cannot
+    disagree about what counts as a swipe — claimed only once the drag is
+    clearly HORIZONTAL, because this column's main gesture is scrolling and a
+    finger travelling up always drifts sideways.
+
+    ONE row at a time, so this is a single piece of state rather than state per
+    bubble: two fingers dragging two messages is not a gesture anybody makes.
+  */
+  const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
+  const dragFrom = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+  const love = useChatReaction(stream.id);
+
+  /*
+    The gesture itself. Claimed only once it is clearly horizontal, committed
+    only on RELEASE — a reply that fired under a moving finger would be one
+    nobody chose to send — and the row springs back either way.
+  */
+  const startDrag = (message: ChatMessage, event: React.PointerEvent) => {
+    if (event.pointerType === "mouse") return;
+    dragFrom.current = { x: event.clientX, y: event.clientY };
+    dragging.current = false;
+    setDrag({ id: message.id, dx: 0 });
+  };
+  const moveDrag = (event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (!from) return;
+    const dx = event.clientX - from.x;
+    const dy = event.clientY - from.y;
+    if (!isReplySwipe(dx, dy)) return;
+    dragging.current = true;
+    setDrag((current) => (current ? { ...current, dx: swipeOffset(dx) } : current));
+  };
+  const endDrag = (message: ChatMessage, event: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (from && dragging.current) {
+      const dx = event.clientX - from.x;
+      const dy = event.clientY - from.y;
+      if (swipeCommits(dx, dy)) setReplyTo(message);
+    }
+    dragFrom.current = null;
+    dragging.current = false;
+    setDrag(null);
+  };
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  /*
+    TYPING @ OFFERS THE PEOPLE IN THE ROOM.
+
+    The same hook and the same picker the DM composer uses, so a mention is one
+    behaviour in this product rather than two that drift. It had none at all
+    until now — the plumbing was here, the picker was not, and typing @ simply
+    did nothing (ogazboiz, 2026-09-21: "I want to @someone in the room but it
+    is not working").
+
+    WHO IT OFFERS: everyone on the stage and in the audience, handed down by
+    the room, ahead of whatever the service's own search finds. A gist room's
+    chat is a conversation between people who are PRESENT, and the person you
+    want to name is almost always one of the faces above the column. Anyone
+    who has spoken is already among them.
+
+    The ids are read back out of the TEXT on send (`mentionsFor`), never
+    accumulated as they are picked: a handle typed and then deleted is not a
+    mention, and sending it would notify somebody the sender changed their mind
+    about.
+  */
+  const typing = useMentionTyping({
+    max: 500,
+    field: inputRef,
+    candidates: (found, query) => mentionCandidates({ found, members, query }),
+  });
+  const draft = typing.text;
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  // The gist room's chat composer has a full emoji picker (it is a MESSAGE
+  // field, not the six-glyph reaction bar) that types the glyph into the draft.
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiWrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
 
   /**
@@ -227,16 +335,71 @@ export function ChatPanel({
     const text = draft.trim();
     if (!text) return;
     gate(() =>
-      send.mutate(text, {
+      send.mutate(
+        {
+          text,
+          ...(replyTo ? { replyToId: replyTo.id } : {}),
+          // Only the handles STILL WRITTEN in the line: a name picked and then
+          // deleted is not a mention, and sending it would notify somebody the
+          // sender decided against.
+          ...(typing.mentionsFor(text).length > 0
+            ? { mentions: typing.mentionsFor(text).map((mention) => mention.id) }
+            : {}),
+        },
+        {
         onSuccess: () => {
-          setDraft("");
+          typing.reset();
+          setReplyTo(null);
           // Saying something is opting back into the live edge: nobody types a
           // message and then wants to keep reading history.
           jumpToLatest(true);
         },
-      })
+        }
+      )
     );
   };
+
+  // Insert at the caret so a picked emoji lands where the reader is typing, not
+  // always at the end; caps at the input's own 300 and restores the caret after
+  // the glyph. The picker stays open so several can be added in a row.
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    {
+      const prev = typing.text;
+      const start = el?.selectionStart ?? prev.length;
+      const end = el?.selectionEnd ?? prev.length;
+      const next = (prev.slice(0, start) + emoji + prev.slice(end)).slice(0, 300);
+      const caret = Math.min(start + emoji.length, next.length);
+      // Through the hook, so an @ token already being typed is re-measured
+      // rather than left pointing at a caret that has moved.
+      typing.replace(next, caret);
+      if (el) {
+        requestAnimationFrame(() => {
+          el.focus();
+          el.setSelectionRange(caret, caret);
+        });
+      }
+    }
+  };
+
+  // Dismiss the picker on a click away from it or Escape.
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const onDown = (event: PointerEvent) => {
+      if (emojiWrapRef.current && !emojiWrapRef.current.contains(event.target as Node)) {
+        setEmojiOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEmojiOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [emojiOpen]);
 
   const overlay = variant === "overlay";
   const theater = variant === "theater";
@@ -336,13 +499,21 @@ export function ChatPanel({
                 key={message.id}
                 message={message}
                 isHost={message.authorId === stream.ownerId}
+                onReply={setReplyTo}
+                onLove={(target, loved) =>
+                  gate(() => love.mutate({ messageId: target.id, emoji: DEFAULT_REACTION, loved }))
+                }
+                dragX={drag?.id === message.id ? drag.dx : 0}
+                onDragStart={startDrag}
+                onDragMove={moveDrag}
+                onDragEnd={endDrag}
               />
             ))
           : ordered.map((message) => (
             <li
               key={message.id}
               className={cn(
-                "group relative flex gap-2.5 rounded-xl px-2 py-1.5 transition-colors",
+                "group/chat-row group relative flex gap-2.5 rounded-xl px-2 py-1.5 transition-colors",
                 overlay ? "ws-text-shadow" : "hover:bg-white/[0.04]"
               )}
             >
@@ -370,10 +541,52 @@ export function ChatPanel({
                   ) : null}
                   {overlay && <span className="shrink-0">· {relativeTime(message.createdAt)}</span>}
                 </p>
+                {/* THE MESSAGE THIS ONE ANSWERS, above the words that answer
+                    it. Drawn only where the service sent one, so a chat from
+                    before replies existed reads exactly as it did. */}
+                {message.replyTo && (
+                  <p className="mb-1 flex items-center gap-1.5 rounded-md border-l-2 border-white/25 bg-white/[0.05] px-2 py-1 text-[12px] leading-[16px] text-meta">
+                    {/* The quote carries an authorId and no second author
+                        object — the page already holds every author, so a copy
+                        per quote would be the same profile twice. */}
+                    <span className="truncate">
+                      {message.replyTo.deleted ? "Message deleted" : message.replyTo.text}
+                    </span>
+                  </p>
+                )}
                 <p className="break-words text-[14px] font-medium leading-snug text-heading">
                   {message.text}
                 </p>
               </div>
+
+              {/* REPLY — the one action on somebody else's message here. It is
+                  drawn beside the row rather than hidden behind a long press,
+                  because a live column scrolls and a gesture nobody finds is
+                  not an affordance. */}
+              <button
+                type="button"
+                onClick={() => setReplyTo(message)}
+                aria-label={"Reply to " + (message.author?.displayName ?? "this message")}
+                title="Reply"
+                className="ws-press mt-0.5 shrink-0 self-start rounded-full p-1.5 text-meta opacity-0 transition-opacity hover:bg-white/10 hover:text-heading focus-visible:opacity-100 group-hover/chat-row:opacity-100"
+              >
+                {/* A curved arrow back — drawn inline because the house set
+                    has no reply glyph and one borrowed from elsewhere would
+                    mean something else. */}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 14 14"
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 3 1.5 6.5 5 10" />
+                  <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+                </svg>
+              </button>
 
               {moderation && message.authorId !== stream.ownerId && (
                 <div className="shrink-0">
@@ -454,30 +667,101 @@ export function ChatPanel({
             to within one value per channel — inside a 1px `#26262B`, which is
             white at 6% over that same fill, at radius 30. The emoji glyph is
             held at its right edge, then 16px of gap
-            and the 38.37px send disc. The disc is `ws-glass-pill` rather than
-            a painted `#1C1C1C` circle for the same reason every other circular
+            and the 38.37px send disc. The disc is a ws-glass-pill rather than
+            a painted #1C1C1C circle for the same reason every other circular
             control in this file is: the node reports a stroke with no weight,
             which renders nothing, and the measured disc is an opaque near-black
             lens.
           */
+          <div className="flex flex-col gap-2">
+            {/* WHAT YOU ARE ANSWERING, above the field rather than inside it:
+                the reply target is a fact about the message, not part of the
+                text, and putting it in the field would make it deletable with
+                a backspace. Dismissable, because changing your mind about
+                which message you meant is the commonest correction here. */}
+            {/* The list of people, anchored to the field. Only ever open while
+                an @ token is being typed. */}
+            <MentionPicker typing={typing} heading="In this room" emptyLabel="Nobody in this room matches." />
+            {replyTo && (
+              <div className="flex items-center gap-2 rounded-xl border-l-2 border-create bg-white/[0.05] px-3 py-1.5">
+                <span className="min-w-0 flex-1 truncate text-[12px] leading-[16px] text-meta">
+                  <span className="font-semibold text-body">
+                    Replying to {replyTo.author?.displayName ?? "Someone"}
+                  </span>
+                  {/* Concatenated, not a template literal: lib/button-sizing
+                      scans backticks naively and one here pairs with another
+                      further down to swallow a control's class string. */}
+                  {replyTo.text ? " · " + replyTo.text : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(null)}
+                  aria-label="Cancel reply"
+                  className="ws-press shrink-0 rounded-full p-1 text-meta transition-colors hover:bg-white/10 hover:text-heading"
+                >
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 12 12"
+                    className="h-3 w-3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                  >
+                    <path d="m3 3 6 6m0-6-6 6" />
+                  </svg>
+                </button>
+              </div>
+            )}
           <div className="flex items-center gap-4">
             <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-[30px] border border-white/[0.06] bg-overlay px-4">
               <input
+                ref={inputRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submit()}
+                onChange={(e) => typing.update(e.target.value, e.target.selectionStart)}
+                onKeyDown={(e) => {
+                  // The picker owns the arrows, Enter and Escape WHILE it is
+                  // open: choosing a name and sending the line are the same
+                  // key, and the list has to win or Enter sends "@pri".
+                  if (typing.token && typing.items.length > 0) {
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      typing.pick(typing.items[0]!);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      typing.dismiss();
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter") submit();
+                }}
                 maxLength={300}
                 disabled={stream.status !== "live"}
                 placeholder={stream.status === "live" ? "Start typing" : "Chat is closed"}
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/50 disabled:opacity-50"
               />
-              {/* The file's `emoji-add` glyph. There is no picker behind it, so
-                  it is decoration on the field rather than a dead button — it
-                  focuses the input, which is what tapping a field's furniture
-                  should do. */}
-              <span aria-hidden className="shrink-0 text-white/50">
-                <IconEmojiAdd className="h-5 w-5" />
-              </span>
+              {/* The file's emoji-add glyph opens the full emoji picker; a pick
+                  types into the message field above. (The dock's reaction button
+                  is a different thing — it floats a reaction over the room.) */}
+              <div ref={emojiWrapRef} className="relative shrink-0">
+                {emojiOpen && <EmojiPicker onPick={insertEmoji} />}
+                <button
+                  type="button"
+                  aria-label="Add emoji"
+                  aria-haspopup="dialog"
+                  aria-expanded={emojiOpen}
+                  disabled={stream.status !== "live"}
+                  onClick={() => setEmojiOpen((value) => !value)}
+                  className={cn(
+                    "ws-press flex text-white/50 transition-colors hover:text-white/80 disabled:opacity-50",
+                    emojiOpen && "text-white"
+                  )}
+                >
+                  <IconEmojiAdd className="h-5 w-5" />
+                </button>
+              </div>
             </div>
             <button
               onClick={submit}
@@ -488,6 +772,7 @@ export function ChatPanel({
               <IconRoomSend className="h-4 w-4" />
             </button>
           </div>
+          </div>
         ) : (
           <div
             className={cn(
@@ -497,7 +782,7 @@ export function ChatPanel({
           >
             <input
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => typing.update(e.target.value, e.target.selectionStart)}
               onKeyDown={(e) => e.key === "Enter" && submit()}
               maxLength={300}
               disabled={stream.status !== "live"}
@@ -546,10 +831,56 @@ export function ChatPanel({
  * lie. So it is a real `disabled` button carrying the reason, per the
  * flagged-capability rule.
  */
-function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean }) {
+function RoomBubble({
+  message,
+  isHost,
+  onReply,
+  onLove,
+  dragX,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: {
+  message: ChatMessage;
+  isHost: boolean;
+  /** Make this message the composer's reply target. */
+  onReply: (message: ChatMessage) => void;
+  /** Toggle the reader's love on it. */
+  onLove: (message: ChatMessage, loved: boolean) => void;
+  /** How far this row has been dragged, or 0 when it is not the one moving. */
+  dragX: number;
+  onDragStart: (message: ChatMessage, event: React.PointerEvent) => void;
+  onDragMove: (event: React.PointerEvent) => void;
+  onDragEnd: (message: ChatMessage, event: React.PointerEvent) => void;
+}) {
   const name = message.author?.displayName ?? `Member ·${message.authorId.slice(-4)}`;
+  const heart = message.reactions.find((entry) => entry.emoji === DEFAULT_REACTION);
+  const loved = heart?.mine === true;
+  const loves = heart?.count ?? 0;
+
   return (
-    <li className="flex items-end gap-2">
+    <li
+      className="relative flex items-end gap-2 touch-pan-y"
+      style={{ transform: dragX ? `translateX(${dragX}px)` : undefined }}
+      onPointerDown={(event) => onDragStart(message, event)}
+      onPointerMove={onDragMove}
+      onPointerUp={(event) => onDragEnd(message, event)}
+      onPointerCancel={(event) => onDragEnd(message, event)}
+    >
+      {/* The mark the swipe is travelling towards, so the gesture explains
+          itself the first time rather than after somebody guesses. */}
+      {dragX > 8 && (
+        <span
+          aria-hidden
+          className="absolute -left-1 bottom-2 text-white/50"
+          style={{ opacity: Math.min(1, dragX / SWIPE_TRIGGER) }}
+        >
+          <svg viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 3 1.5 6.5 5 10" />
+            <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+          </svg>
+        </span>
+      )}
       <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border border-white/20 bg-white/10">
         <Avatar name={name} seed={message.authorId} src={message.author?.avatarUrl} size={24} />
       </span>
@@ -571,6 +902,14 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
               </span>
             )}
           </p>
+          {/* WHAT THIS ANSWERS, above the words that answer it. A removed
+              original keeps its quote and says so: a reply to nothing reads
+              as a non-sequitur. */}
+          {message.replyTo && (
+            <p className="min-w-0 truncate rounded-md border-l-2 border-white/40 bg-black/15 px-2 py-1 text-[12px] leading-4 text-white/70">
+              {message.replyTo.deleted ? "Message deleted" : message.replyTo.text}
+            </p>
+          )}
           <p className="break-words text-[13px] leading-5 tracking-[-0.006em] text-white">
             {message.text}
           </p>
@@ -580,14 +919,37 @@ function RoomBubble({ message, isHost }: { message: ChatMessage; isHost: boolean
         </span>
       </div>
 
+      {/* REPLY — a real control, not a hover-only one. The swipe is the
+          gesture on a phone; this is the same act for a mouse and for anybody
+          who never discovers the gesture, which on the last surface was
+          everybody. */}
       <button
         type="button"
-        disabled
-        title="Reacting to a single message isn't available yet."
-        aria-label="React to this message"
-        className="shrink-0 self-end pb-1 text-white/40 disabled:opacity-60"
+        onClick={() => onReply(message)}
+        aria-label={"Reply to " + name}
+        title="Reply"
+        className="ws-press shrink-0 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
       >
-        <IconRoomHeart className="h-4 w-4" />
+        <svg aria-hidden viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 3 1.5 6.5 5 10" />
+          <path d="M1.5 6.5h6A4.5 4.5 0 0 1 12 11v1.5" />
+        </svg>
+      </button>
+
+      {/* LOVE THIS ONE. Filled once the reader has, with the service's own
+          tally beside it — the count is everybody's, so it comes from the
+          read rather than from adding one to our own copy. */}
+      <button
+        type="button"
+        onClick={() => onLove(message, !loved)}
+        aria-pressed={loved}
+        aria-label={loved ? `Remove your love from ${name}'s message` : `Love ${name}'s message`}
+        className="ws-press flex shrink-0 items-center gap-0.5 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
+      >
+        {/* FILLED once the reader has loved it — a tinted outline reads as a
+            hover state, not as an act somebody took. */}
+        <IconRoomHeart className={cn("h-4 w-4", loved && "text-like")} filled={loved} />
+        {loves > 0 && <span className="tnum text-[11px] leading-none">{loves}</span>}
       </button>
     </li>
   );
