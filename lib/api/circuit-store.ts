@@ -38,7 +38,10 @@ export function circuitSnapshot(): CircuitSnapshot {
 /** True when a request may go out. A probe flips the state so the UI can say so. */
 export function circuitAllows(now = Date.now()): boolean {
   if (allowsRequest(snapshot, now)) {
-    if (snapshot.state === "open") publish(onProbe(snapshot));
+    // The probe shuts the door behind it — see `onProbe`. A half-open circuit
+    // whose cooldown has lapsed again gets another single probe, which is why
+    // this runs for "half-open" too and not only for "open".
+    if (snapshot.state !== "closed") publish(onProbe({ ...snapshot, state: "open" }, now));
     return true;
   }
   return false;

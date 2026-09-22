@@ -50,21 +50,50 @@ export const DEFAULT_CIRCUIT: CircuitOptions = {
   maxCooldownMs: 120_000,
 };
 
-/** Status codes that mean "the server is broken", as opposed to "you are". */
+/**
+ * Status codes that mean "the server is broken", as opposed to "you are".
+ *
+ * No status at all is a transport failure — DNS, TCP, CORS, offline. 502, 503
+ * and 504 are the gateway saying the thing behind it is not answering, which
+ * is exactly the case this exists for, and a plain 500 counts too: sustained
+ * 500s are an outage even if each one is technically "handled".
+ *
+ * AND 429, WHICH DID NOT COUNT. A rate limit is the server's own request to
+ * stop, and we answered it by polling at exactly the same rate for as long as
+ * the reader left the tab open. That is the one signal a backend has for
+ * asking a client to back off, and ignoring it takes away its only way of
+ * climbing out under its own power.
+ *
+ * A 429 is not an outage, so it does not deserve the same weight as one — but
+ * the thing it needs is the same thing: fewer requests for a while. The
+ * breaker is what the app already has for "fewer requests for a while".
+ */
 export function isCircuitFailure(status: number | undefined): boolean {
-  // No status at all is a transport failure — DNS, TCP, CORS, offline.
   if (status === undefined) return true;
-  // 502/503/504 are the gateway saying the thing behind it is not answering,
-  // which is exactly the case this exists for. A 500 counts too: sustained
-  // 500s are an outage even if each one is technically "handled".
+  if (status === 429) return true;
   return status >= 500;
 }
 
-/** May a request go out right now? */
+/**
+ * May a request go out right now?
+ *
+ * ONE PROBE, WHICH IS WHAT THIS DID NOT DO. The comment here used to promise
+ * "exactly one probe gets through" and the code admitted EVERYTHING: `onProbe`
+ * relabelled the state and left `retryAt` in the past, so every queued request
+ * in every tab passed the moment the cooldown lapsed.
+ *
+ * That fires at precisely the worst moment — when a restarted backend is three
+ * seconds into being alive and every client's cooldown expires together. It is
+ * the mechanism that turns a ninety-second restart into a ten-minute one, and
+ * this app restarted its backend twice in one evening (2026-09-21).
+ *
+ * `retryAt` is now the gate in BOTH states: open means "not until then", and
+ * half-open means "a probe is already out; not until its own cooldown lapses".
+ * That second clause is what stops a probe that never answers — a hung
+ * request, a closed tab — from wedging the circuit shut for ever.
+ */
 export function allowsRequest(snapshot: CircuitSnapshot, now: number): boolean {
   if (snapshot.state === "closed") return true;
-  // Open, but the cooldown has elapsed: exactly one probe gets through, which
-  // is what `half-open` records.
   return now >= snapshot.retryAt;
 }
 
@@ -87,10 +116,24 @@ export function onSuccess(): CircuitSnapshot {
   return { state: "closed", retryAt: 0, failures: 0 };
 }
 
-/** The state to report while a probe is in flight, so the UI can say "checking". */
-export function onProbe(snapshot: CircuitSnapshot): CircuitSnapshot {
+/**
+ * A probe has just been let out: half-open, and the door shuts behind it.
+ *
+ * Advancing `retryAt` is the whole fix. Without it the state changed and the
+ * gate did not, so the second request through the door was admitted for the
+ * same reason the first was, and so was the thousandth.
+ *
+ * The next opening is a full cooldown away, not a doubled one: this is not a
+ * failure, it is a probe whose answer has not arrived. `onFailure` does the
+ * doubling if the answer turns out to be bad.
+ */
+export function onProbe(
+  snapshot: CircuitSnapshot,
+  now: number,
+  options: CircuitOptions = DEFAULT_CIRCUIT
+): CircuitSnapshot {
   if (snapshot.state !== "open") return snapshot;
-  return { ...snapshot, state: "half-open" };
+  return { ...snapshot, state: "half-open", retryAt: now + options.cooldownMs };
 }
 
 export const CLOSED: CircuitSnapshot = { state: "closed", retryAt: 0, failures: 0 };

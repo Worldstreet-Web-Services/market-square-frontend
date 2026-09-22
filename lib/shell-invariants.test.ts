@@ -2120,6 +2120,30 @@ describe("The capture control is named for what it does, and safety is about oth
   });
 });
 
+describe("Recovery does not become the next outage", () => {
+  it("lets ONE probe through, and shuts the door behind it", () => {
+    // `onProbe` used to relabel the state and leave `retryAt` in the past, so
+    // every queued request in every tab passed the moment the cooldown lapsed
+    // — a fleet-wide burst aimed at a backend seconds into being alive.
+    const circuit = stripComments(read("lib/api/circuit.ts"));
+    assert.match(circuit, /state: "half-open", retryAt: now \+ options\.cooldownMs/);
+  });
+
+  it("counts a rate limit as a reason to send less", () => {
+    const circuit = stripComments(read("lib/api/circuit.ts"));
+    assert.match(circuit, /if \(status === 429\) return true;/);
+  });
+
+  it("does not refetch the whole tab when somebody presses Try now", () => {
+    // Everybody sees that banner in the same outage and presses it within
+    // seconds of each other; `states.tsx` disables thirty per-module retry
+    // buttons for exactly this reason.
+    const banner = stripComments(read("components/layout/connection-banner.tsx"));
+    assert.doesNotMatch(banner, /refetchQueries/);
+    assert.match(banner, /retryCircuitNow\(\);/);
+  });
+});
+
 describe("Media that will not load asks for a fresh link", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
 

@@ -15,15 +15,22 @@ const T = 1_000_000;
 describe("isCircuitFailure", () => {
   // Narrow on purpose: tripping on a 401 or a 404 would take the whole app
   // down over one bad request, which is the opposite of the point.
-  it("counts transport failures and 5xx, nothing else", () => {
+  it("counts transport failures and 5xx, nothing else the server got right", () => {
     assert.equal(isCircuitFailure(undefined), true);
     assert.equal(isCircuitFailure(500), true);
     assert.equal(isCircuitFailure(502), true);
     assert.equal(isCircuitFailure(504), true);
     assert.equal(isCircuitFailure(401), false);
     assert.equal(isCircuitFailure(404), false);
-    assert.equal(isCircuitFailure(429), false);
     assert.equal(isCircuitFailure(200), false);
+  });
+
+  it("counts a rate limit, which this used to ignore", () => {
+    // 429 is the server's own request to stop, and we answered it by polling
+    // at exactly the same rate for as long as the tab stayed open. It is the
+    // one lever a backend has for asking a client to back off, and taking it
+    // away leaves the backend no way to climb out under its own power.
+    assert.equal(isCircuitFailure(429), true);
   });
 });
 
@@ -47,9 +54,40 @@ describe("opening", () => {
   it("lets exactly one probe through once the cooldown elapses", () => {
     let circuit = CLOSED;
     for (let i = 0; i < 3; i += 1) circuit = onFailure(circuit, T);
-    assert.equal(allowsRequest(circuit, circuit.retryAt - 1), false);
-    assert.equal(allowsRequest(circuit, circuit.retryAt), true);
-    assert.equal(onProbe(circuit).state, "half-open");
+    const open = circuit.retryAt;
+    assert.equal(allowsRequest(circuit, open - 1), false);
+    assert.equal(allowsRequest(circuit, open), true);
+
+    // THE PROBE SHUTS THE DOOR BEHIND IT. This test used to assert only the
+    // LABEL — `onProbe(circuit).state === "half-open"` — while `retryAt` was
+    // left in the past, so the second request at the same instant was admitted
+    // for the same reason the first was, and so was the thousandth. That is
+    // the recovery stampede: every tab's cooldown lapses together, and a
+    // backend three seconds into being alive takes the whole fleet at once.
+    circuit = onProbe(circuit, open);
+    assert.equal(circuit.state, "half-open");
+    assert.equal(allowsRequest(circuit, open), false, "the queue behind the probe waits");
+    assert.equal(allowsRequest(circuit, open + 1), false);
+  });
+
+  it("does not wedge shut when a probe never answers", () => {
+    // A hung request or a closed tab must not hold the circuit for ever, so
+    // half-open expires like open does — one more probe, a cooldown later.
+    let circuit = CLOSED;
+    for (let i = 0; i < 3; i += 1) circuit = onFailure(circuit, T);
+    const open = circuit.retryAt;
+    circuit = onProbe(circuit, open);
+    assert.equal(allowsRequest(circuit, open + DEFAULT_CIRCUIT.cooldownMs - 1), false);
+    assert.equal(allowsRequest(circuit, open + DEFAULT_CIRCUIT.cooldownMs), true);
+  });
+
+  it("waits a plain cooldown after a probe, not a doubled one", () => {
+    // A probe whose answer has not arrived is not a failure; `onFailure` owns
+    // the doubling, and applying it here would punish silence twice.
+    let circuit = CLOSED;
+    for (let i = 0; i < 3; i += 1) circuit = onFailure(circuit, T);
+    const probed = onProbe(circuit, circuit.retryAt);
+    assert.equal(probed.retryAt, circuit.retryAt + DEFAULT_CIRCUIT.cooldownMs);
   });
 
   // A backend that has been down for ten minutes does not need asking every
