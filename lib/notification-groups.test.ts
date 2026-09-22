@@ -93,3 +93,17 @@ describe("the rows under the push switch", () => {
     );
   });
 });
+
+describe("the rooms row tells the truth about whose rooms", () => {
+  it("says it covers your own, because silencing it silences your own reminder", () => {
+    /*
+      The bucket holds other people's rooms starting AND the running of yours,
+      including the reminder the service sends to a host about a room they
+      scheduled — to the host alone. Somebody switching this off to stop being
+      woken at 4am by a stranger going live also switches off their own room's
+      alarm. Splitting the bucket would reintroduce the per-kind problem, so
+      the row has to say it.
+    */
+    assert.match(PUSH_GROUP_HINT.rooms, /your own/);
+  });
+});

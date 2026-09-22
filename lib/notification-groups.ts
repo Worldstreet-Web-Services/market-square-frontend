@@ -64,7 +64,18 @@ export const PUSH_GROUP_ORDER: readonly NotificationGroup[] = [
  */
 export const PUSH_GROUP_HINT: Record<NotificationGroup, string> = {
   chat: "Messages, chat requests and groups.",
-  rooms: "Gist rooms going live, and being asked to speak.",
+  /*
+    "INCLUDING YOUR OWN" IS NOT PADDING. This bucket does two jobs: other
+    people's rooms starting, and the running of yours — being asked to speak,
+    and the reminder for a room you scheduled, which the service sends to the
+    host and to nobody else. So somebody silencing this to stop being woken by
+    a stranger's room also silences their own room's start reminder.
+
+    Splitting the bucket would fix that and reintroduce the per-kind problem
+    this module exists to avoid, so the honest move is to say so on the row
+    rather than let them find out by missing their own room.
+  */
+  rooms: "Rooms starting and requests to speak — including reminders for your own.",
   social: "Winks, follows, and activity on what you post.",
   money: "Tips and anything paid to you.",
   /*
