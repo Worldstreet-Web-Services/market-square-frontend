@@ -2162,6 +2162,9 @@ describe("Recovery does not become the next outage", () => {
     const banner = stripComments(read("components/layout/connection-banner.tsx"));
     assert.doesNotMatch(banner, /refetchQueries/);
     assert.match(banner, /retryCircuitNow\(\);/);
+  });
+});
+
 describe("A DM message can be edited and removed, by its author", () => {
   const thread = stripComments(read("features/messages/components/thread.tsx"));
 
