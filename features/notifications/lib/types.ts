@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ProfileSchema } from "@/lib/api/schemas";
+import { NOTIFICATION_GROUPS } from "@/lib/notification-groups";
 
 // The service's notification kinds. `catch` keeps an unknown future kind from
 // failing the whole page — it renders with the neutral glyph instead.
@@ -161,16 +162,17 @@ export const NotificationSchema = z.object({
    * nullable because the DEPLOYED environment is genuinely behind — required,
    * they would fail to parse production — not because they are speculative.
    */
-  group: z.enum(["social", "money", "rooms", "chat", "account"]).nullable().optional().default(null),
+  group: z.enum(NOTIFICATION_GROUPS).nullable().optional().default(null),
   // Null until the notification has been read.
   readAt: z.string().nullable().optional().default(null),
   createdAt: z.string().optional().default(""),
 });
 
-/** The service's own buckets. No `all` member: omitting the parameter IS all,
-    and an enum carrying both gives a client two ways to say one thing. */
-export const NOTIFICATION_GROUPS = ["social", "money", "rooms", "chat", "account"] as const;
-export type NotificationGroup = (typeof NOTIFICATION_GROUPS)[number];
+/* The buckets and their labels live in `lib/notification-groups.ts`, which is
+   pure so `node --test` can pin them and so Settings' per-group push switches
+   read the same list this schema validates against. Re-exported because every
+   consumer of a notification imports from here. */
+export { NOTIFICATION_GROUPS, type NotificationGroup } from "@/lib/notification-groups";
 
 export const NotificationPageSchema = z.object({
   items: z.array(NotificationSchema),

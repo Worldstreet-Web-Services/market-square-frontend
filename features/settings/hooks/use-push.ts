@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage } from "@/lib/api/envelope";
 import { PUSH_COPY, looksLikeIos, pushAvailability } from "@/lib/push";
+import { pushGroupRows, type NotificationGroup } from "@/lib/notification-groups";
 import {
   fetchVapidPublicKey,
   hasPushSubscription,
@@ -118,10 +119,30 @@ export function usePushNotifications() {
     }
   };
 
+  const pushOn = settings.data?.notifications.push === true;
+  /*
+    THE PER-BUCKET ROWS, and why a save sends all five.
+
+    The service stores a boolean per group and always answers with the
+    complete set, so a patch that carried one key would be the only partial
+    `pushGroups` that ever existed — and the merge below would have to guess
+    what the other four are. Replacing the whole object keeps one shape on the
+    wire, in the cache and on screen.
+  */
+  const groups = settings.data?.notifications.pushGroups;
+  const rows = pushGroupRows({ groups, pushOn, pushUsable: availability === "ready" });
+  const setGroup = (group: NotificationGroup, next: boolean) => {
+    if (!groups) return;
+    save.mutate({ notifications: { pushGroups: { ...groups, [group]: next } } });
+  };
+
   return {
-    checked: availability === "ready" && subscribed && settings.data?.notifications.push === true,
+    checked: availability === "ready" && subscribed && pushOn,
     disabled: availability !== "ready" || busy,
     description: PUSH_COPY[availability],
     onChange: (next: boolean) => void change(next),
+    /** Empty until the service sends `pushGroups` — see `pushGroupRows`. */
+    groups: rows,
+    onGroupChange: setGroup,
   };
 }

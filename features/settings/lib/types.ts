@@ -16,6 +16,28 @@ export const ProfileSettingsSchema = z.object({
     direct: z.boolean(),
     /** Web push to subscribed browsers. Absent on a service without push. */
     push: z.boolean().optional(),
+    /**
+     * Which of the service's buckets may reach a phone — `push` is the master
+     * switch and these only narrow it.
+     *
+     * OPTIONAL, AND ALL-OR-NOTHING. Absent means a service without per-group
+     * push, and Settings draws no rows at all. Present means all five keys:
+     * the service stores a boolean column per group and always sends the set.
+     *
+     * So the five are REQUIRED inside the object rather than optional. A
+     * partial object is a contract break, and tolerating it with `?? true`
+     * would show somebody a switch reading on while the service believed
+     * something else — the quiet failure this whole file is strict to avoid.
+     */
+    pushGroups: z
+      .object({
+        social: z.boolean(),
+        money: z.boolean(),
+        rooms: z.boolean(),
+        chat: z.boolean(),
+        account: z.boolean(),
+      })
+      .optional(),
     /** The daily email summary. Absent on a service without email; turned off by the email's unsubscribe link too. */
     emailDigest: z.boolean().optional(),
   }),

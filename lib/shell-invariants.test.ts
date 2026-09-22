@@ -1656,7 +1656,9 @@ describe("Settings controls never pretend to save", () => {
     assert.equal((screen.match(/<Toggle\s+disabled=\{(personalizeDisabled|visibilityDisabled)\}/g) ?? []).length, (screen.match(/<Toggle\b/g) ?? []).length);
     for (const file of ["chat-view", "house-notifications-view", "notifications-view"]) {
       const source = read(`components/layout/${file}.tsx`);
-      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
+      // `row.disabled` is the per-bucket push switch: off while the master
+      // switch is, and always for the bucket that cannot be declined.
+      assert.equal((source.match(/<Toggle\s+disabled=\{(?:disabled|push\.disabled|emailDigest\.disabled|row\.disabled)\}/g) ?? []).length, (source.match(/<Toggle\b/g) ?? []).length, `${file}: a toggle ignores its disabled state`);
     }
   });
 
@@ -4705,5 +4707,57 @@ describe("A notification can reach a phone's lock screen", () => {
     assert.match(push, /if \(!input\.supported && input\.ios && !input\.standalone\) return "needs-install";/);
     const hook = stripComments(read("features/settings/hooks/use-push.ts"));
     assert.match(hook, /navigator as Navigator & \{ standalone\?: boolean \}/);
+  });
+});
+
+describe("A phone can be told what it may be woken for", () => {
+  /*
+    Fifteen kinds shared one switch, so a phone that buzzed for a comment
+    buzzed for a DM — and the way people fix that is by revoking the
+    permission in the OS, which they never grant again. These pin the shape of
+    the fix, whose whole point is that it does NOT enumerate kinds.
+  */
+  it("never re-derives which bucket a kind belongs to", () => {
+    // The service sets `group` on every row precisely so the client does not.
+    // A map here would silently drop every kind added after it shipped, which
+    // is the failure already shipped three times in the other direction.
+    const groups = stripComments(read("lib/notification-groups.ts"));
+    assert.doesNotMatch(groups, /tip_received|comment_reply|stream_live|speaker_invite/);
+    const view = stripComments(read("components/layout/notifications-view.tsx"));
+    assert.doesNotMatch(view, /tip_received|comment_reply|stream_live/);
+  });
+
+  it("keeps one list of buckets and one set of words for them", () => {
+    // Two vocabularies is how the notifications page and Settings drift into
+    // calling the same bucket different things.
+    const types = stripComments(read("features/notifications/lib/types.ts"));
+    assert.match(types, /export \{ NOTIFICATION_GROUPS, type NotificationGroup \} from "@\/lib\/notification-groups"/);
+    assert.match(types, /z\.enum\(NOTIFICATION_GROUPS\)/);
+    const page = stripComments(read("features/notifications/components/notifications-page.tsx"));
+    assert.doesNotMatch(page, /const GROUP_LABEL/, "the label map moved to the shared module");
+    assert.match(page, /import \{ GROUP_LABEL \} from "@\/lib\/notification-groups"/);
+  });
+
+  it("treats the buckets as all-or-nothing, with no per-key default", () => {
+    /*
+      The service stores a boolean per group and always answers with all five.
+      A partial object is a contract break; `?? true` would turn it into a
+      switch reading ON while the service believed otherwise.
+    */
+    const settings = stripComments(read("features/settings/lib/types.ts"));
+    const block = settings.slice(settings.indexOf("pushGroups"));
+    assert.doesNotMatch(block.slice(0, 400), /\.optional\(\)[\s,]*\n?\s*(social|money|rooms|chat|account)/);
+    for (const group of ["social", "money", "rooms", "chat", "account"]) {
+      assert.match(block, new RegExp(`${group}: z\\.boolean\\(\\),`), `${group} must be required`);
+    }
+    const lib = stripComments(read("lib/notification-groups.ts"));
+    assert.doesNotMatch(lib, /groups\[group\] \?\? true/);
+  });
+
+  it("saves a bucket by replacing the whole set, never one key", () => {
+    // A one-key patch would be the only partial `pushGroups` that ever
+    // existed, and the optimistic merge would have to guess the other four.
+    const hook = stripComments(read("features/settings/hooks/use-push.ts"));
+    assert.match(hook, /pushGroups: \{ \.\.\.groups, \[group\]: next \}/);
   });
 });
