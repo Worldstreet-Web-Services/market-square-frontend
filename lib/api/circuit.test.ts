@@ -8,6 +8,7 @@ import {
   onFailure,
   onProbe,
   onSuccess,
+  rateLimitScope,
 } from "./circuit.ts";
 
 const T = 1_000_000;
@@ -25,14 +26,52 @@ describe("isCircuitFailure", () => {
     assert.equal(isCircuitFailure(200), false);
   });
 
-  it("does NOT trip on a rate limit, for now", () => {
-    // A 429 here is not one thing: a budget refusal is back-pressure, but a
-    // wink cooldown ("you already winked them today") and an invite cooldown
-    // are ordinary answers about one action. Tripping a client-wide breaker on
-    // those would let winking somebody twice degrade the whole app. The
-    // service is adding a flag that says which kind it is; until then the
-    // safer half of the trade is to ignore all of them.
+  it("trips on a 429 the service calls back-pressure, and only that one", () => {
+    // A 429 is not one thing. A spent write budget is the service asking us to
+    // send less. A wink cooldown ("you already winked them today") and a
+    // speaker-invite cooldown are 429s too, and they are answers about ONE
+    // action between two people — a client-wide breaker on those would let
+    // winking somebody twice degrade the whole app.
+    assert.equal(isCircuitFailure(429, "budget"), true);
+    assert.equal(isCircuitFailure(429, "action"), false);
+  });
+
+  it("treats an unlabelled 429 as an action, not as load", () => {
+    // Every 429 sent before the flag shipped arrives this way, as does one
+    // from anything that is not Market Square. The two wrong guesses are not
+    // symmetric: this direction costs a missed slow-down, the other costs the
+    // whole app over an ordinary refusal.
     assert.equal(isCircuitFailure(429), false);
+    assert.equal(isCircuitFailure(429, null), false);
+  });
+
+  it("ignores the scope on every status that is not a 429", () => {
+    // Nothing else carries one, and a stray value must not change what a 500
+    // or a 404 already means.
+    assert.equal(isCircuitFailure(500, "action"), true);
+    assert.equal(isCircuitFailure(404, "budget"), false);
+    assert.equal(isCircuitFailure(undefined, "action"), true);
+  });
+});
+
+describe("rateLimitScope", () => {
+  it("reads the service's flag off the error envelope", () => {
+    assert.equal(rateLimitScope({ error: { details: { scope: "budget" } } }), "budget");
+    assert.equal(rateLimitScope({ error: { details: { scope: "action" } } }), "action");
+  });
+
+  it("is null for every body that does not carry one", () => {
+    // Tolerant on purpose: this parses a body from the network on a failing
+    // request, which is the last place that should throw.
+    assert.equal(rateLimitScope(null), null);
+    assert.equal(rateLimitScope(undefined), null);
+    assert.equal(rateLimitScope("nope"), null);
+    assert.equal(rateLimitScope({}), null);
+    assert.equal(rateLimitScope({ error: {} }), null);
+    assert.equal(rateLimitScope({ error: { details: {} } }), null);
+    // A value we do not know is not a value we act on.
+    assert.equal(rateLimitScope({ error: { details: { scope: "global" } } }), null);
+    assert.equal(rateLimitScope({ error: { details: { scope: 7 } } }), null);
   });
 });
 

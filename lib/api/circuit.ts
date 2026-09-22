@@ -14,10 +14,10 @@
  * instantly, in-process, with no network and no function invocation. One probe
  * is allowed through per cooldown to find out whether it is back.
  *
- * WHAT COUNTS AS A FAILURE is deliberately narrow: transport errors and 5xx.
- * A 401, a 404 or a validation error is the server working correctly and
- * telling us something — tripping on those would take the whole app down over
- * one bad request.
+ * WHAT COUNTS AS A FAILURE is deliberately narrow: transport errors, 5xx, and
+ * the one flavour of 429 the service labels as back-pressure. A 401, a 404 or
+ * a validation error is the server working correctly and telling us something
+ * — tripping on those would take the whole app down over one bad request.
  *
  * Pure and framework-free so the state machine can be tested directly; the
  * clock is injected for the same reason.
@@ -51,6 +51,37 @@ export const DEFAULT_CIRCUIT: CircuitOptions = {
 };
 
 /**
+ * What kind of 429 this is — the service's own word for it, not our guess.
+ *
+ * A 429 from Market Square does not mean one thing, which is the whole reason
+ * this type exists. `budget` is a per-user write budget being spent: real
+ * back-pressure, and the breaker's business. `action` is a rule about one
+ * action and usually about one PAIR of people — the wink cooldown ("you
+ * already winked them today"), the speaker-invite cooldown ("they declined
+ * recently"). Those are ordinary answers with nothing to do with load.
+ *
+ * It arrives on `error.details.scope` and is documented on the service's
+ * shared rate-limited response, so it is one field to switch on rather than a
+ * list of its error codes copied over here — a list that would rot silently
+ * the first time somebody added one.
+ */
+export type RateLimitScope = "budget" | "action";
+
+/**
+ * Read the scope off a gateway error body, or null when there isn't one.
+ *
+ * Null is the honest answer for every 429 sent before the flag shipped, and
+ * `isCircuitFailure` treats it as "not back-pressure" — so an older service,
+ * a proxy that rewrote the body, or an upstream that is not Market Square at
+ * all behaves exactly as it did before this existed.
+ */
+export function rateLimitScope(body: unknown): RateLimitScope | null {
+  const scope = (body as { error?: { details?: { scope?: unknown } } } | null)?.error?.details
+    ?.scope;
+  return scope === "budget" || scope === "action" ? scope : null;
+}
+
+/**
  * Status codes that mean "the server is broken", as opposed to "you are".
  *
  * No status at all is a transport failure — DNS, TCP, CORS, offline. 502, 503
@@ -58,26 +89,25 @@ export const DEFAULT_CIRCUIT: CircuitOptions = {
  * is exactly the case this exists for, and a plain 500 counts too: sustained
  * 500s are an outage even if each one is technically "handled".
  *
- * ─── 429 IS DELIBERATELY NOT HERE, AND THAT IS A COMPROMISE ──────────────────
+ * ─── 429, WHICH TOOK TWO GOES ────────────────────────────────────────────────
  * A rate limit is the one signal a backend has for asking a client to send
- * less, and ignoring it means a struggling service cannot climb out under its
- * own power. So this SHOULD count it — and briefly did.
+ * less, so ignoring it means a struggling service cannot climb out under its
+ * own power. This counted every 429 for about an hour, which was wrong: it
+ * would have meant winking somebody twice quietly degraded the whole app,
+ * because that refusal is a 429 too. Then it counted none, which was the safer
+ * half of a bad trade.
  *
- * It does not, because a 429 from this service does not mean one thing. A
- * budget refusal ("too many posts this minute") is back-pressure. A wink
- * cooldown ("you already winked that person today") and an invite cooldown
- * ("they declined recently") are also 429s, and they are ordinary answers
- * about ONE action with nothing to do with load. Tripping a client-wide
- * breaker on those would mean winking somebody twice quietly degrades the
- * whole app — an overreaction far worse than the gap it closes.
- *
- * The discriminator has to come from the service rather than from a list of
- * its error codes copied over here, which would rot the first time one is
- * added. It has been asked for; when it arrives this reads that flag and
- * nothing else changes.
+ * Now it counts the ones the service labels as back-pressure and no others. A
+ * 429 with no scope — anything sent before the flag shipped — is treated as an
+ * action, because the failure mode of guessing wrong in that direction is a
+ * missed slow-down, and the other direction is a dead app.
  */
-export function isCircuitFailure(status: number | undefined): boolean {
+export function isCircuitFailure(
+  status: number | undefined,
+  scope?: RateLimitScope | null
+): boolean {
   if (status === undefined) return true;
+  if (status === 429) return scope === "budget";
   return status >= 500;
 }
 

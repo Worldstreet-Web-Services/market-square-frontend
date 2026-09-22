@@ -2129,13 +2129,24 @@ describe("Recovery does not become the next outage", () => {
     assert.match(circuit, /state: "half-open", retryAt: now \+ options\.cooldownMs/);
   });
 
-  it("does not trip the whole client on an action-scoped 429", () => {
+  it("decides a 429 on the service's flag, never on a list of its error codes", () => {
     // A wink cooldown and an invite cooldown are both 429s and neither is
-    // back-pressure; a client-wide breaker on those would let winking
-    // somebody twice degrade the app. Waiting on a flag from the service
-    // rather than copying its error codes over here, where they would rot.
+    // back-pressure; a client-wide breaker on those would let winking somebody
+    // twice degrade the app. The discriminator is one field the service sets —
+    // enumerating its codes here is the version that rots silently the first
+    // time somebody adds one.
     const circuit = stripComments(read("lib/api/circuit.ts"));
-    assert.doesNotMatch(circuit, /status === 429/);
+    assert.match(circuit, /status === 429\) return scope === "budget"/);
+    assert.doesNotMatch(circuit, /WINK_COOLDOWN|INVITE_COOLDOWN/);
+  });
+
+  it("reads a body for the breaker on one status only", () => {
+    // Every other failure decides on the number alone. Parsing each one would
+    // put a JSON parse on the failing path of every request in the app.
+    const client = stripComments(read("lib/api/client.ts"));
+    assert.match(client, /if \(response\.status !== 429\) return null;/);
+    // And the caller's own body must survive it.
+    assert.match(client, /response\.clone\(\)\.json\(\)/);
   });
 
   it("does not refetch the whole tab when somebody presses Try now", () => {

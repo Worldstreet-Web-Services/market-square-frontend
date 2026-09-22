@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import {
   CLOSED,
   type CircuitSnapshot,
+  type RateLimitScope,
   allowsRequest,
   isCircuitFailure,
   onFailure,
@@ -47,8 +48,17 @@ export function circuitAllows(now = Date.now()): boolean {
   return false;
 }
 
-export function recordCircuitFailure(status?: number, now = Date.now()): void {
-  if (!isCircuitFailure(status)) return;
+export function recordCircuitFailure(
+  status?: number,
+  /**
+   * For a 429 only: which kind the service said it was. Everything else
+   * ignores it, and a 429 without one counts as an action — see
+   * `isCircuitFailure`.
+   */
+  scope?: RateLimitScope | null,
+  now = Date.now()
+): void {
+  if (!isCircuitFailure(status, scope)) return;
   publish(onFailure({ ...snapshot, state: snapshot.state === "half-open" ? "open" : snapshot.state }, now));
 }
 
