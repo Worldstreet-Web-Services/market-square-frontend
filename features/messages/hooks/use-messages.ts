@@ -29,6 +29,8 @@ import {
   transferOwnership,
   sendMessage,
   openSnap,
+  removeMessage,
+  editMessage,
   fetchHouseNotificationSettings,
   updateHouseNotificationSettings,
 } from "@/features/messages/lib/api";
@@ -110,6 +112,57 @@ export function useSendMessage(conversationId: string) {
     },
     onError: (error, body) => toast.error(sendErrorCopy(error, body)),
   });
+}
+
+/**
+ * REMOVES THE READER'S OWN MESSAGE.
+ *
+ * The thread and the inbox are both invalidated: the row becomes a tombstone
+ * in place, and the inbox preview shows the tombstone rather than falling back
+ * to the message before it — a preview that reverts to older words reads as a
+ * message arriving backwards.
+ */
+export function useRemoveMessage(conversationId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) => removeMessage(conversationId, messageId),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["ms", "messages", conversationId] });
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Couldn't remove that message.")),
+  });
+}
+
+/**
+ * EDITS THE READER'S OWN WORDS, inside the service's window.
+ *
+ * A refusal past the window has its own code, so the toast says the true
+ * thing: "too late to edit" rather than "not allowed", which would suggest
+ * the message was never theirs.
+ */
+export function useEditMessage(conversationId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ messageId, text }: { messageId: string; text: string }) =>
+      editMessage(conversationId, messageId, text),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["ms", "messages", conversationId] });
+      client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+    },
+    onError: (error) => toast.error(editErrorCopy(error)),
+  });
+}
+
+function editErrorCopy(error: unknown): string {
+  if (errorCode(error) === "EDIT_WINDOW_PASSED") {
+    const minutes = (error as { details?: { windowMinutes?: unknown } } | null)?.details
+      ?.windowMinutes;
+    return typeof minutes === "number"
+      ? `Too late to edit — messages can be changed for ${minutes} minutes after sending.`
+      : "Too late to edit that message.";
+  }
+  return errorMessage(error, "Couldn't save that edit.");
 }
 
 /**
