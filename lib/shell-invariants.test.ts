@@ -2129,9 +2129,13 @@ describe("Recovery does not become the next outage", () => {
     assert.match(circuit, /state: "half-open", retryAt: now \+ options\.cooldownMs/);
   });
 
-  it("counts a rate limit as a reason to send less", () => {
+  it("does not trip the whole client on an action-scoped 429", () => {
+    // A wink cooldown and an invite cooldown are both 429s and neither is
+    // back-pressure; a client-wide breaker on those would let winking
+    // somebody twice degrade the app. Waiting on a flag from the service
+    // rather than copying its error codes over here, where they would rot.
     const circuit = stripComments(read("lib/api/circuit.ts"));
-    assert.match(circuit, /if \(status === 429\) return true;/);
+    assert.doesNotMatch(circuit, /status === 429/);
   });
 
   it("does not refetch the whole tab when somebody presses Try now", () => {

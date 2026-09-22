@@ -25,12 +25,14 @@ describe("isCircuitFailure", () => {
     assert.equal(isCircuitFailure(200), false);
   });
 
-  it("counts a rate limit, which this used to ignore", () => {
-    // 429 is the server's own request to stop, and we answered it by polling
-    // at exactly the same rate for as long as the tab stayed open. It is the
-    // one lever a backend has for asking a client to back off, and taking it
-    // away leaves the backend no way to climb out under its own power.
-    assert.equal(isCircuitFailure(429), true);
+  it("does NOT trip on a rate limit, for now", () => {
+    // A 429 here is not one thing: a budget refusal is back-pressure, but a
+    // wink cooldown ("you already winked them today") and an invite cooldown
+    // are ordinary answers about one action. Tripping a client-wide breaker on
+    // those would let winking somebody twice degrade the whole app. The
+    // service is adding a flag that says which kind it is; until then the
+    // safer half of the trade is to ignore all of them.
+    assert.equal(isCircuitFailure(429), false);
   });
 });
 

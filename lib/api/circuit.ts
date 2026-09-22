@@ -58,19 +58,26 @@ export const DEFAULT_CIRCUIT: CircuitOptions = {
  * is exactly the case this exists for, and a plain 500 counts too: sustained
  * 500s are an outage even if each one is technically "handled".
  *
- * AND 429, WHICH DID NOT COUNT. A rate limit is the server's own request to
- * stop, and we answered it by polling at exactly the same rate for as long as
- * the reader left the tab open. That is the one signal a backend has for
- * asking a client to back off, and ignoring it takes away its only way of
- * climbing out under its own power.
+ * ─── 429 IS DELIBERATELY NOT HERE, AND THAT IS A COMPROMISE ──────────────────
+ * A rate limit is the one signal a backend has for asking a client to send
+ * less, and ignoring it means a struggling service cannot climb out under its
+ * own power. So this SHOULD count it — and briefly did.
  *
- * A 429 is not an outage, so it does not deserve the same weight as one — but
- * the thing it needs is the same thing: fewer requests for a while. The
- * breaker is what the app already has for "fewer requests for a while".
+ * It does not, because a 429 from this service does not mean one thing. A
+ * budget refusal ("too many posts this minute") is back-pressure. A wink
+ * cooldown ("you already winked that person today") and an invite cooldown
+ * ("they declined recently") are also 429s, and they are ordinary answers
+ * about ONE action with nothing to do with load. Tripping a client-wide
+ * breaker on those would mean winking somebody twice quietly degrades the
+ * whole app — an overreaction far worse than the gap it closes.
+ *
+ * The discriminator has to come from the service rather than from a list of
+ * its error codes copied over here, which would rot the first time one is
+ * added. It has been asked for; when it arrives this reads that flag and
+ * nothing else changes.
  */
 export function isCircuitFailure(status: number | undefined): boolean {
   if (status === undefined) return true;
-  if (status === 429) return true;
   return status >= 500;
 }
 
