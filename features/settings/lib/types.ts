@@ -42,6 +42,13 @@ export const ProfileSettingsSchema = z.object({
      * stays complete and only the ROW for it is missing until we add one.
      * Strict everywhere else in this file is still right: nothing else is
      * read and written back as a whole object.
+     *
+     * ADDING a bucket is safe in both directions because of that. REMOVING
+     * one is not, and the asymmetry is worth knowing before somebody proposes
+     * it: a client still echoing a retired key would be refused on every
+     * save, with no frontend change to blame. Retiring a bucket means the
+     * service accepting and ignoring that key for a release first. Nobody is
+     * planning to, and nothing here is built for it.
      */
     pushGroups: z
       .looseObject({
