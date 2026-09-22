@@ -82,8 +82,8 @@ export function MoveAccountPage({
 }) {
   if (DEMO_AUTH || !LEGACY_PRIVY_APP_ID) {
     return (
-      <Frame title="Bring your old account">
-        <p>Moving an old account isn&apos;t available in this build.</p>
+      <Frame title="Upgrade your account">
+        <p>Upgrading an account isn&apos;t available in this build.</p>
       </Frame>
     );
   }
@@ -107,7 +107,7 @@ export function MoveAccountPage({
  */
 function LegacyAccountCard({ legacy }: { legacy: LegacyProfileSummary }) {
   const handle = atHandle(legacy.username);
-  const name = legacy.displayName ?? handle ?? "Your old account";
+  const name = legacy.displayName ?? handle ?? "Your account";
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
       <Avatar name={name} seed={legacy.username ?? name} src={legacy.avatarUrl ?? undefined} size={44} />
@@ -342,7 +342,7 @@ function LinkFlow({
 
   if (!privy.ready || !decane.ready) {
     return (
-      <Frame title="Bring your old account">
+      <Frame eyebrow="New economy unveiling." title="Upgrade your account">
         <Spinner className="mx-auto h-6 w-6 text-grey-500" />
       </Frame>
     );
@@ -353,11 +353,12 @@ function LinkFlow({
   // they are reads as being told their account is gone.
   if ((!privy.authenticated || !legacySignInIntended(owner)) && !outcome) {
     return (
-      <Frame title="Sign in to your old account">
+      <Frame eyebrow="New economy unveiling." title="Upgrade your account">
         {legacy && <LegacyAccountCard legacy={legacy} />}
         <p>
-          Sign in the same way you used to. Your handle, followers and posts come across in a
-          moment.
+          Square is on the new economy now. Confirm it&apos;s you — sign in the same way you used
+          to — and your handle, followers and posts come across. It takes a moment, and you only
+          do it once.
         </p>
         <Button
           className="w-full"
@@ -366,7 +367,7 @@ function LinkFlow({
             privy.login();
           }}
         >
-          Sign in to my old account
+          Upgrade your account
         </Button>
       </Frame>
     );
@@ -374,11 +375,10 @@ function LinkFlow({
 
   if (!decane.authenticated && !outcome) {
     return (
-      <Frame title="Welcome back — Square has moved">
+      <Frame eyebrow="Almost there." title="Set up your new sign-in">
         <p>
-          Square accounts have moved to Market 2.0. Set up your new sign-in and everything you
-          have — your handle, followers, posts and tips — comes with you. It takes a moment and
-          you only do it once.
+          Confirmed. Now set up the sign-in you&apos;ll use from here on, and everything you have
+          — your handle, followers, posts and tips — comes with you.
         </p>
         <Button className="w-full" onClick={decane.login}>
           Continue
@@ -389,7 +389,7 @@ function LinkFlow({
 
   if (!outcome) {
     return (
-      <Frame title="Bringing your account across">
+      <Frame eyebrow="Almost there." title="Upgrading your account…">
         <Spinner className="mx-auto h-6 w-6 text-grey-500" />
       </Frame>
     );
@@ -401,7 +401,7 @@ function LinkFlow({
       // question, and the three answers need opposite words.
       if (waiting) {
         return (
-          <Frame title="Bringing your profile across">
+          <Frame eyebrow="Almost there." title="Upgrading your account…">
             <p>Your handle, followers and posts are moving onto this account now.</p>
             <Spinner className="mx-auto h-6 w-6 text-grey-500" />
           </Frame>
@@ -412,7 +412,7 @@ function LinkFlow({
         // the person is split. Calling this "all set" is how somebody loses
         // their followers quietly.
         return (
-          <Frame title="Your accounts need a hand">
+          <Frame title="Your upgrade needs a hand">
             <p>
               Your accounts are linked, but your old profile could not move across because this
               account already has one. Contact support and we&apos;ll join them up — nothing is
@@ -428,10 +428,10 @@ function LinkFlow({
         // Only reachable when the polls stopped without an answer (a dead
         // session ends them). The move is still coming; a reload lands on it.
         return (
-          <Frame title="Still finishing">
+          <Frame eyebrow="Almost there." title="Finishing your upgrade">
             <p>
-              Your old account is linked and your profile is on its way. It will appear on its
-              own — reload in a moment.
+              Your accounts are linked and your profile is on its way. It will appear on its own
+              — reload in a moment.
             </p>
             <Button className="w-full" onClick={() => window.location.reload()}>
               Reload
@@ -443,10 +443,10 @@ function LinkFlow({
         // Nothing was there to move. Claiming their posts arrived invents an
         // old account they never had.
         return (
-          <Frame title="Your accounts are linked">
+          <Frame title="You're all set">
             <p>
-              There was no old profile to bring across, so nothing has changed here. Anything else
-              on your old account is linked to this one.
+              Your account is upgraded. There was no old Square profile to bring across, so nothing
+              has changed here; everything else on your old account is joined to this one.
             </p>
             <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
               Done
@@ -458,7 +458,8 @@ function LinkFlow({
         return (
           <Frame title="You're all set">
             <p>
-              Your old account is linked. Your handle, followers and posts are on this account now.
+              Done. Your account and everything on it — your handle, followers and posts — are on
+              the new Square now.
             </p>
             <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
               Done
@@ -470,9 +471,9 @@ function LinkFlow({
       // of the profile — an older service, or a conflict that carries no rekey
       // map. Promising it arrived is the one thing that must not be said.
       return (
-        <Frame title="Your accounts are linked">
+        <Frame title="Your account is upgraded">
           <p>
-            Your old account is linked. If your handle, followers and posts are not here yet, they
+            Your accounts are joined. If your handle, followers and posts are not here yet, they
             will appear shortly.
           </p>
           <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
@@ -486,15 +487,15 @@ function LinkFlow({
       // answer is that account, not this one. Nothing here can link it.
       if (outcome.side === "legacy") {
         return (
-          <Frame title="That old account has already been upgraded">
+          <Frame title="This account was already upgraded">
             {legacy && <LegacyAccountCard legacy={legacy} />}
             <p>
               It&apos;s already joined to a different new sign-in. If that was you, sign out and
-              sign in with that account — your handle, followers and posts are there. If you have
-              another old account, sign in to that one instead.
+              sign in with that account — your handle, followers and posts are there. If your old
+              account used a different email or login, upgrade that one instead.
             </p>
             <Button className="w-full" onClick={signInAgain}>
-              Sign in to a different old account
+              Upgrade a different account
             </Button>
             <Button variant="secondary" className="w-full" onClick={() => void decane.logout()}>
               Sign out and use my other account
@@ -514,11 +515,11 @@ function LinkFlow({
       // The NEW account already holds an old one; a second cannot be added.
       if (outcome.side === "current") {
         return (
-          <Frame title="This account already has an old one">
+          <Frame title="Nothing more to upgrade here">
             <p>
-              The account you&apos;re signed in to is already joined to a different old account, so
-              this one can&apos;t be added to it. If that&apos;s wrong, contact support and
-              we&apos;ll sort it out.
+              The account you&apos;re signed in to has already been upgraded from a different old
+              account, so this one can&apos;t be added to it. If that&apos;s wrong, contact support
+              and we&apos;ll sort it out.
             </p>
             <Button className="w-full" onClick={onContinueAsNew ?? (() => router.push(sq("/auth")))}>
               {onContinueAsNew ? "Continue" : "Back to Square"}
@@ -539,19 +540,19 @@ function LinkFlow({
       );
     case "reauth":
       return (
-        <Frame title="Sign in again">
-          <p>We couldn&apos;t confirm one of the two sign-ins. Sign in to your old account again.</p>
+        <Frame title="Confirm it's you again">
+          <p>We couldn&apos;t confirm one of the two sign-ins. Sign in the way you used to once more.</p>
           <Button className="w-full" onClick={signInAgain}>
-            Sign in to my old account
+            Upgrade your account
           </Button>
         </Frame>
       );
     case "retry-later":
       return (
-        <Frame title="Not finished yet">
+        <Frame title="Your upgrade isn't finished yet">
           <p>
-            We couldn&apos;t reach the service that links accounts. Nothing was changed. Come back
-            to this page in a little while to finish.
+            We couldn&apos;t reach the service that joins accounts. Nothing was changed. Come back
+            in a little while to finish.
           </p>
           <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
             Back to Square
@@ -560,8 +561,8 @@ function LinkFlow({
       );
     case "unavailable":
       return (
-        <Frame title="Not available right now">
-          <p>Moving an old account isn&apos;t available right now.</p>
+        <Frame title="Upgrading isn't available right now">
+          <p>Upgrading an account isn&apos;t available right now. Nothing was changed.</p>
           <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
             Back to Square
           </Button>
@@ -570,11 +571,27 @@ function LinkFlow({
   }
 }
 
-function Frame({ title, children }: { title: string; children: React.ReactNode }) {
+function Frame({
+  eyebrow,
+  title,
+  children,
+}: {
+  /** The announcement above the title — "New economy unveiling." — as in wsws. */
+  eyebrow?: string;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex min-h-[80dvh] items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-5 text-center text-[15px] leading-normal text-meta">
-        <h1 className="text-[24px] font-bold leading-[28px] text-white">{title}</h1>
+        <div className="space-y-2">
+          {eyebrow && (
+            <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-spotlight">
+              {eyebrow}
+            </p>
+          )}
+          <h1 className="text-[24px] font-bold leading-[28px] text-white">{title}</h1>
+        </div>
         {children}
       </div>
     </div>

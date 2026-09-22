@@ -100,7 +100,7 @@ export function AuthPage() {
                   className="w-full"
                   onClick={() => router.push(sq("/move-account"))}
                 >
-                  {linkRetryPending() ? "Finish bringing your old account" : "Bring your old account"}
+                  {linkRetryPending() ? "Finish your upgrade" : "Upgrade your account"}
                 </Button>
               )}
               {!DEMO_AUTH && (

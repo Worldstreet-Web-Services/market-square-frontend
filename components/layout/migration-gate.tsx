@@ -78,7 +78,7 @@ export function MigrationGate({ children }: { children: React.ReactNode }) {
           onClick={continueAsNew}
           className="text-[14px] text-[#999999] underline-offset-4 transition-colors hover:text-white hover:underline"
         >
-          This isn&apos;t my old account — continue as new
+          Nothing to upgrade on this account? Continue as new
         </button>
       </p>
     </div>

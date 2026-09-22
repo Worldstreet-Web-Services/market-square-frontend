@@ -396,12 +396,12 @@ function BringOldAccountStep({ onNew }: { onNew: () => void }) {
     <>
       <CardHead
         title="Had a Square account before?"
-        subtitle="Bring it across now and your handle, followers and posts come with it."
+        subtitle="Upgrade it now and your handle, followers and posts come with it."
         step={1}
       />
       <div className="mt-10 space-y-3">
         <StepButton onClick={() => router.push(sq("/move-account"))}>
-          Yes, bring my account
+          Upgrade your account
         </StepButton>
         <button
           type="button"
@@ -414,7 +414,7 @@ function BringOldAccountStep({ onNew }: { onNew: () => void }) {
       {/* Said plainly, because it is the whole reason this screen exists and
           the cost of finding out later is two accounts. */}
       <p className="mt-6 text-center text-[13px] leading-normal text-[#777777]">
-        Choosing a new name first means an old account can no longer be joined to this one.
+        Choosing a new name first means an old account can no longer be upgraded into this one.
       </p>
     </>
   );

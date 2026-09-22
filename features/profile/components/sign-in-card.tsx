@@ -551,7 +551,7 @@ export function SignInCard({
           href={sq("/move-account")}
           className="mt-6 text-[14px] font-medium text-[#999999] underline-offset-4 transition-colors hover:text-white hover:underline"
         >
-          I had a Square account before
+          Upgrade your old Square account
         </Link>
       )}
 
