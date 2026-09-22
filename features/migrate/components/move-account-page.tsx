@@ -16,26 +16,20 @@ import {
 } from "@/lib/legacy-signin-intent";
 import { squareSettled, type LinkOutcome, type SquareRekey } from "@/lib/migration-link";
 import { sq } from "@/lib/square-path";
-import { fetchSquareRekey, linkLegacyAccount } from "../lib/api";
+import { profileHref } from "@/lib/profile-href";
+import { msApi } from "@/lib/api/service";
+import { ProfileSchema } from "@/lib/api/schemas";
+import { linkLegacyAccount } from "../lib/api";
 
 /**
- * How long to wait for Square to finish moving the profile before saying so
- * plainly. The synchronous re-key answers inside the link itself, so reaching
- * this ceiling means the move is going through the queue and the worker is
- * behind — which the reader should be told, not shown as a spinner that never
- * ends. That exact spinner-versus-outage ambiguity is what made a broken
- * migration invisible for days.
+ * While Square is still moving the profile, the LINK is re-sent every three
+ * seconds until `rekey.square` settles. The link is idempotent by contract
+ * and its answer carries the ledger's state, so it is the one call that both
+ * asks where the move stands and re-announces it if the report went missing.
+ * No ceiling: a reload lands the person on their profile as soon as the move
+ * is done, so waiting here is only ever cheaper than that.
  */
-const SQUARE_WAIT_MS = 30_000;
-const SQUARE_POLL_MS = 2_500;
-/*
-  Each poll is bounded well inside the ceiling. Without this the BFF's own 15s
-  upstream timeout plus overhead pushed the real wait past 45s, and a request
-  that never settled meant the deadline was never evaluated at all: no further
-  tick was scheduled and the spinner ran forever — the exact outage-versus-slow
-  ambiguity this screen exists to end.
-*/
-const SQUARE_POLL_TIMEOUT_MS = 6_000;
+const LINK_POLL_MS = 3_000;
 import { LegacyPrivyProvider } from "./legacy-privy-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { atHandle } from "@/lib/handle";
@@ -141,6 +135,21 @@ function LegacyAccountCard({ legacy }: { legacy: LegacyProfileSummary }) {
  * The linked flag goes too: it is read by the offer in onboarding, and its own
  * stale time would keep asking somebody who has just finished.
  */
+/**
+ * Where the finished move lands: the profile that just arrived. Read fresh,
+ * because the id it now lives under is the new one and nothing cached knows
+ * it yet. If even that fails, the front door — never a screen that asks the
+ * person to do it again.
+ */
+async function goToMovedProfile(router: ReturnType<typeof useRouter>): Promise<void> {
+  try {
+    const me = ProfileSchema.parse(await msApi.authedGet("/me"));
+    router.replace(profileHref(me));
+  } catch {
+    router.replace(sq("/"));
+  }
+}
+
 function settleMovedProfile(queryClient: ReturnType<typeof useQueryClient>): void {
   void queryClient.invalidateQueries({ queryKey: ["ms", "me"] });
   void queryClient.invalidateQueries({ queryKey: ["ms", "migration", "linked"] });
@@ -172,6 +181,9 @@ function LinkFlow({
   const [square, setSquare] = useState<SquareRekey>("unknown");
   const [waiting, setWaiting] = useState(false);
   const started = useRef(false);
+  // The old account's tokens, kept for as long as the move is still being
+  // asked about: each poll re-sends the link, and the link needs both sides.
+  const legacyTokens = useRef<{ accessToken: string; idToken: string | null } | null>(null);
   /*
     Whether this component is still on screen — and ONLY that. The link
     effect used to answer "am I still wanted" with a flag its own cleanup
@@ -234,66 +246,71 @@ function LinkFlow({
         setOutcome({ kind: "reauth" });
         return;
       }
-      const result = await linkLegacyAccount({ accessToken, idToken: identityToken });
+      legacyTokens.current = { accessToken, idToken: identityToken };
+      const result = await linkLegacyAccount(legacyTokens.current);
       if (!mounted.current) return;
       setOutcome(result.outcome);
       setSquare(result.square);
-      if (result.outcome.kind === "linked") {
-        // Wait for the move rather than announcing success over it: sending
-        // the reader on during `pending` lands them on a profile that does not
-        // have their posts yet, which reads as data loss.
-        if (result.square === "pending") setWaiting(true);
-        else if (result.square === "done") settleMovedProfile(queryClient);
-      }
       // The intent has been spent, whatever the answer was.
       clearLegacySignIn();
+      if (result.outcome.kind === "linked" && result.square === "pending") {
+        // Wait for the move rather than announcing success over it: sending
+        // the reader on during `pending` lands them on a profile that does not
+        // have their posts yet, which reads as data loss. The old session
+        // stays for the polls, which re-send the link.
+        setWaiting(true);
+        return;
+      }
+      if (result.outcome.kind === "linked" && result.square === "done") {
+        settleMovedProfile(queryClient);
+        void goToMovedProfile(router);
+      }
       if (result.outcome.kind !== "reauth") {
         // The old session has done its one job. Leaving it signed in would
         // keep a second identity alive in this browser for no reason.
         await privy.logout().catch(() => {});
       }
     })();
-  }, [privy, decane.authenticated, identityToken, queryClient, owner]);
+  }, [privy, decane.authenticated, identityToken, queryClient, owner, router]);
 
-  // Poll only while the move is in flight. Every exit clears the timer, and a
-  // poll that cannot answer reads as `unknown`, which ends the wait — a
-  // spinner that outlives the thing it is waiting for is the failure mode this
-  // whole screen exists to avoid.
+  // Re-send the link every three seconds while the move is in flight, until
+  // Square reports `done` (on to the profile) or `failed` (said plainly). A
+  // poll that cannot answer, or answers anything short of settled, changes
+  // nothing — the next one asks again. Only a dead session ends the wait
+  // early, because no number of polls revives one.
   useEffect(() => {
     if (!waiting) return;
     let live = true;
     let timer: ReturnType<typeof setTimeout>;
-    const startedAt = Date.now();
     const tick = async () => {
-      const state = await fetchSquareRekey(SQUARE_POLL_TIMEOUT_MS);
+      const tokens = legacyTokens.current;
+      if (!tokens) return;
+      const result = await linkLegacyAccount(tokens);
       if (!live) return;
-      /*
-        `null` is the poll failing, not Square answering. It used to read as
-        `unknown`, `unknown` counted as settled, and settled fell through to
-        "your posts are on this account now" — telling somebody their move had
-        finished because one request 500'd. A silent poll changes nothing; the
-        wait simply continues until the ceiling.
-      */
-      if (state !== null && squareSettled(state)) {
-        setSquare(state);
-        setWaiting(false);
-        if (state === "done") settleMovedProfile(queryClient);
-        return;
-      }
-      if (Date.now() - startedAt >= SQUARE_WAIT_MS) {
-        // Still pending, and we stop asking. The copy below says so rather
-        // than claiming it finished.
+      if (result.outcome.kind === "reauth") {
+        setOutcome(result.outcome);
         setWaiting(false);
         return;
       }
-      timer = setTimeout(() => void tick(), SQUARE_POLL_MS);
+      if (result.outcome.kind === "linked" && squareSettled(result.square) && result.square !== "unknown") {
+        setSquare(result.square);
+        setWaiting(false);
+        // Its one job is done either way.
+        void privy.logout().catch(() => {});
+        if (result.square === "done") {
+          settleMovedProfile(queryClient);
+          void goToMovedProfile(router);
+        }
+        return;
+      }
+      timer = setTimeout(() => void tick(), LINK_POLL_MS);
     };
-    timer = setTimeout(() => void tick(), SQUARE_POLL_MS);
+    timer = setTimeout(() => void tick(), LINK_POLL_MS);
     return () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [waiting, queryClient]);
+  }, [waiting, queryClient, privy, router]);
 
   const signInAgain = () => {
     started.current = false;
@@ -393,14 +410,16 @@ function LinkFlow({
         );
       }
       if (square === "pending") {
+        // Only reachable when the polls stopped without an answer (a dead
+        // session ends them). The move is still coming; a reload lands on it.
         return (
           <Frame title="Still finishing">
             <p>
-              Your old account is linked and your profile is on its way, but it is taking longer
-              than usual. It will appear on its own — check back shortly.
+              Your old account is linked and your profile is on its way. It will appear on its
+              own — reload in a moment.
             </p>
-            <Button className="w-full" onClick={() => router.push(sq("/auth"))}>
-              Done
+            <Button className="w-full" onClick={() => window.location.reload()}>
+              Reload
             </Button>
           </Frame>
         );
