@@ -101,6 +101,19 @@ export function rateLimitScope(body: unknown): RateLimitScope | null {
  * 429 with no scope — anything sent before the flag shipped — is treated as an
  * action, because the failure mode of guessing wrong in that direction is a
  * missed slow-down, and the other direction is a dead app.
+ *
+ * ─── THE GAP THAT DEFAULT LEAVES, WRITTEN DOWN SO IT IS NOT A SURPRISE ───────
+ * The API GATEWAY in front of Market Square mints its own 429s — its per-IP
+ * and per-route budgets, refused before a request reaches the service at all —
+ * and those carry no `details` and so no scope. They are the clearest "send
+ * less" in the whole system, and under the rule above they trip nothing.
+ *
+ * That is the safe direction, not the correct one, and it cannot be fixed
+ * here: there is no body field to read, and our own proxy rebuilds the
+ * response headers from scratch (content-type and cache-control only), so a
+ * `Retry-After` would not survive the hop even if the gateway sent one. The
+ * fix is the gateway setting a scope like everything behind it does. Until it
+ * does, the 429 we would most want to back off from is the one without a flag.
  */
 export function isCircuitFailure(
   status: number | undefined,
