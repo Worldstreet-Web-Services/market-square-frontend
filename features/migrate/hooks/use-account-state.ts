@@ -11,6 +11,8 @@ import {
   rememberSignInEmail,
   writeCachedAccountState,
   type AccountState,
+  type AccountStateAnswerBody,
+  type LegacyProfileSummary,
 } from "@/lib/account-state";
 import { fetchAccountState } from "../lib/api";
 
@@ -20,6 +22,8 @@ export const ACCOUNT_STATE_KEY = ["ms", "migration", "account-state"] as const;
 export interface AccountStateAnswer {
   /** Undefined while on its way; the gate renders nothing of the app until then. */
   state: AccountState | undefined;
+  /** For `legacy`: the old Square account, so the screen can show which one. */
+  legacy: LegacyProfileSummary | null;
   /** Stable per sign-in — what the browser's memory is keyed on. */
   key: string | null;
   /** Linking exists in this deployment at all. */
@@ -54,19 +58,19 @@ export function useAccountState(): AccountStateAnswer {
   }, [key, email]);
 
   const cached = key ? readCachedAccountState(storage(), key) : undefined;
-  const query = useQuery<AccountState>({
+  const query = useQuery<AccountStateAnswerBody>({
     queryKey: [...ACCOUNT_STATE_KEY, key],
     enabled: enabled && ready && authenticated && key !== null && cached === undefined,
     queryFn: async () => {
-      const state = await fetchAccountState(email ?? recallSignInEmail(storage(), key!));
-      writeCachedAccountState(storage(), key!, state);
-      return state;
+      const answer = await fetchAccountState(email ?? recallSignInEmail(storage(), key!));
+      writeCachedAccountState(storage(), key!, answer.state);
+      return answer;
     },
     staleTime: Infinity,
     retry: false,
   });
 
-  return { state: cached ?? query.data, key, enabled };
+  return { state: cached ?? query.data?.state, legacy: query.data?.legacy ?? null, key, enabled };
 }
 
 interface SignInIdentity {

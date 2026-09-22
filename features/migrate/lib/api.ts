@@ -10,7 +10,7 @@ import {
   type SquareRekey,
 } from "@/lib/migration-link";
 import { api } from "@/lib/square-path";
-import type { AccountState } from "@/lib/account-state";
+import type { AccountStateAnswerBody, LegacyProfileSummary } from "@/lib/account-state";
 
 /**
  * What a link attempt produced: how it went, and — when Square answered —
@@ -135,7 +135,8 @@ export async function fetchMigrationLinked(): Promise<boolean | null> {
  * dropped request. The gate lets `unknown` through, because an outage must
  * not lock anybody out; the manual door stays.
  */
-export async function fetchAccountState(email: string | null): Promise<AccountState> {
+export async function fetchAccountState(email: string | null): Promise<AccountStateAnswerBody> {
+  const unknown: AccountStateAnswerBody = { state: "unknown", legacy: null };
   try {
     const res = await apiFetch(
       api("/api/migration/account-state"),
@@ -146,11 +147,30 @@ export async function fetchAccountState(email: string | null): Promise<AccountSt
       },
       { requireAuth: true, breaker: false }
     );
-    if (!res.ok) return "unknown";
-    const body = (await res.json().catch(() => null)) as { data?: { state?: unknown } } | null;
+    if (!res.ok) return unknown;
+    const body = (await res.json().catch(() => null)) as {
+      data?: { state?: unknown; legacy?: { square?: unknown } | null };
+    } | null;
     const state = body?.data?.state;
-    return state === "new" || state === "linked" || state === "legacy" ? state : "unknown";
+    if (state !== "new" && state !== "linked" && state !== "legacy") return unknown;
+    return { state, legacy: readLegacyProfile(body?.data?.legacy?.square) };
   } catch {
-    return "unknown";
+    return unknown;
   }
+}
+
+/** Total: any shape the service could send becomes a summary or null. */
+function readLegacyProfile(value: unknown): LegacyProfileSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const text = (key: string): string | null => (typeof raw[key] === "string" ? (raw[key] as string) : null);
+  const count = (key: string): number => (typeof raw[key] === "number" ? (raw[key] as number) : 0);
+  return {
+    username: text("username"),
+    displayName: text("displayName"),
+    avatarUrl: text("avatarUrl"),
+    followerCount: count("followerCount"),
+    followingCount: count("followingCount"),
+    createdAt: text("createdAt"),
+  };
 }

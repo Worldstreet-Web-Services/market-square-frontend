@@ -14,6 +14,23 @@
 
 export type AccountState = "new" | "linked" | "legacy" | "unknown";
 
+/** The old Square account, as its profile page shows it — public fields only. */
+export interface LegacyProfileSummary {
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  followerCount: number;
+  followingCount: number;
+  createdAt: string | null;
+}
+
+/** What the service said, and — for `legacy` — which account is waiting. */
+export interface AccountStateAnswerBody {
+  state: AccountState;
+  /** Null when Square holds no profile under the old id, or was not asked. */
+  legacy: LegacyProfileSummary | null;
+}
+
 export type GateDecision = "app" | "checking" | "upgrade";
 
 export function gateDecision(input: {

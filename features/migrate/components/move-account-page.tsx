@@ -36,6 +36,9 @@ const SQUARE_POLL_MS = 2_500;
 */
 const SQUARE_POLL_TIMEOUT_MS = 6_000;
 import { LegacyPrivyProvider } from "./legacy-privy-provider";
+import { Avatar } from "@/components/ui/avatar";
+import { atHandle } from "@/lib/handle";
+import type { LegacyProfileSummary } from "@/lib/account-state";
 
 /**
  * BRING YOUR OLD ACCOUNT — /move-account.
@@ -70,7 +73,7 @@ import { LegacyPrivyProvider } from "./legacy-privy-provider";
  * profile. Announcing success over that last one is how somebody loses their
  * followers quietly.
  */
-export function MoveAccountPage() {
+export function MoveAccountPage({ legacy = null }: { legacy?: LegacyProfileSummary | null }) {
   if (DEMO_AUTH || !LEGACY_PRIVY_APP_ID) {
     return (
       <Frame title="Bring your old account">
@@ -84,8 +87,32 @@ export function MoveAccountPage() {
   // anything is drawn. It still wraps this one route and nothing else.
   return (
     <LegacyPrivyProvider>
-      <LinkFlow />
+      <LinkFlow legacy={legacy} />
     </LegacyPrivyProvider>
+  );
+}
+
+/**
+ * The account being asked for, when the gate already knows which one: the
+ * same handle, name and avatar its profile page shows. "Sign in to your old
+ * account" is a request; "sign in to @sharpe, 12 followers" is a recognition,
+ * and it is what stops somebody with two old accounts signing in to the
+ * wrong one.
+ */
+function LegacyAccountCard({ legacy }: { legacy: LegacyProfileSummary }) {
+  const handle = atHandle(legacy.username);
+  const name = legacy.displayName ?? handle ?? "Your old account";
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
+      <Avatar name={name} seed={legacy.username ?? name} src={legacy.avatarUrl ?? undefined} size={44} />
+      <div className="min-w-0">
+        <p className="truncate text-[15px] font-semibold text-white">{name}</p>
+        <p className="truncate text-[13px] text-meta">
+          {handle && handle !== name ? `${handle} · ` : ""}
+          {legacy.followerCount} {legacy.followerCount === 1 ? "follower" : "followers"}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -110,7 +137,7 @@ function settleMovedProfile(queryClient: ReturnType<typeof useQueryClient>): voi
   invalidateIdentitySurfaces(queryClient);
 }
 
-function LinkFlow() {
+function LinkFlow({ legacy }: { legacy: LegacyProfileSummary | null }) {
   const privy = usePrivy();
   const { identityToken } = useIdentityToken();
   const decane = useAuth();
@@ -258,6 +285,7 @@ function LinkFlow() {
   if ((!privy.authenticated || !legacySignInIntended()) && !outcome) {
     return (
       <Frame title="Sign in to your old account">
+        {legacy && <LegacyAccountCard legacy={legacy} />}
         <p>
           Sign in the same way you used to. Your handle, followers and posts come across in a
           moment.

@@ -31,7 +31,7 @@ import { MoveAccountPage } from "@/features/migrate/components/move-account-page
  */
 export function MigrationGate({ children }: { children: React.ReactNode }) {
   const { ready, authenticated } = useAuth();
-  const { state, key, enabled } = useAccountState();
+  const { state, legacy, key, enabled } = useAccountState();
   const queryClient = useQueryClient();
   // Read once per sign-in; the button below is the only thing that sets it.
   const [declined, setDeclined] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export function MigrationGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-[#0F0F0F]">
-      <MoveAccountPage />
+      <MoveAccountPage legacy={legacy} />
       {/*
         The way past, for the one case the email got wrong: a shared address,
         or an old account this person genuinely cannot sign into. Quiet on
