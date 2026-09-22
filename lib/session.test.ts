@@ -42,3 +42,22 @@ test("the snapshot itself is still mirrored verbatim", () => {
   setAuthSnapshot({ ready: true, authenticated: false });
   assert.deepEqual(getAuthSnapshot(), { ready: true, authenticated: false });
 });
+
+/**
+ * WHY A SESSION ENDED IS PART OF THE SIGNAL.
+ *
+ * ACCOUNT_UPGRADED from the service means the account MOVED to its upgraded
+ * sign-in — here, or in the Market app, which shares the account. Told
+ * "session expired — sign in again", the reader goes back through the door
+ * that was just refused. The guard needs the reason to say which door.
+ */
+test("the reason reaches the listener, and defaults to an ordinary expiry", async () => {
+  const { markSessionExpired, onSessionExpired } = await import("./session.ts");
+  const seen: string[] = [];
+  const off = onSessionExpired((reason) => seen.push(reason));
+  markSessionExpired();
+  markSessionExpired("upgraded");
+  off();
+  markSessionExpired("upgraded");
+  assert.deepEqual(seen, ["expired", "upgraded"], "one per call while subscribed, none after");
+});

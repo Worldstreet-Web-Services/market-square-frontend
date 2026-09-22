@@ -26,12 +26,25 @@ export function AuthPage() {
   // Where an expired session should land the user again after signing in.
   const rawReturnTo = searchParams.get("returnTo");
   const returnTo = rawReturnTo?.startsWith("/") ? rawReturnTo : null;
+  // Sent here by the guard because the service retired the old sign-in: the
+  // account moved to its upgraded one, and the card should say so.
+  const upgraded = searchParams.get("upgraded") === "1";
 
   /* Signed out, this route IS the design's sign-in card (Desktop 40) — the
      same one the welcome sequence ends on, so an expired session and a first
      visit land on one surface rather than two that drift. The column below is
      only ever the SIGNED-IN state: where to go next, and how to sign out. */
-  if (ready && !authenticated) return <SignInCard />;
+  if (ready && !authenticated) {
+    return (
+      <SignInCard
+        notice={
+          upgraded
+            ? "Your account has been upgraded. Sign in with your new account and everything is where you left it."
+            : undefined
+        }
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-[80dvh] items-center justify-center px-6">

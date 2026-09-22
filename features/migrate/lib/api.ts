@@ -64,7 +64,7 @@ export async function linkLegacyAccount(legacy: {
     */
     const code = errorCode(error);
     outcome =
-      code === "SESSION_EXPIRED" || code === "UNAUTHORIZED"
+      code === "SESSION_EXPIRED" || code === "UNAUTHORIZED" || code === "ACCOUNT_UPGRADED"
         ? { kind: "reauth" }
         : { kind: "retry-later" };
   }

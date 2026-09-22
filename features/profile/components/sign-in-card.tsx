@@ -476,7 +476,18 @@ function DemoForm() {
 
 const Form = DEMO_AUTH ? DemoForm : DecaneForm;
 
-export function SignInCard({ onSkip }: { onSkip?: () => void }) {
+export function SignInCard({
+  onSkip,
+  notice,
+}: {
+  onSkip?: () => void;
+  /**
+   * One line above the form for a reader who was sent here for a reason —
+   * "your account has been upgraded, sign in with the new one". Absent for
+   * a first visit, which needs no explaining.
+   */
+  notice?: string;
+}) {
   return (
     /* The file centres the CARD in the viewport, not the card plus its lockup:
        the card runs 269-757 in a 1024 frame, whose midpoint is the frame's. The
@@ -506,6 +517,15 @@ export function SignInCard({ onSkip }: { onSkip?: () => void }) {
             <span className="h-2 w-[17px] rounded-[25px] bg-[#D9D9D9]" />
           </div>
         </div>
+
+        {notice && (
+          <p
+            role="status"
+            className="mx-6 mt-5 rounded-2xl border border-spotlight/30 bg-spotlight/10 px-4 py-3 text-[14px] leading-[20px] text-white"
+          >
+            {notice}
+          </p>
+        )}
 
         <Form />
       </div>

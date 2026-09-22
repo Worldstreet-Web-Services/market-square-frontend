@@ -126,8 +126,46 @@ export async function apiFetch(
     if (watched) recordCircuitFailure(undefined);
     throw error;
   }
+  if (response.status === 401) await noticeUpgradedAccount(response);
   if (!watched) return response;
   if (response.ok) recordCircuitSuccess();
   else recordCircuitFailure(response.status);
   return response;
+}
+
+/**
+ * The one 401 that is not "sign in again": ACCOUNT_UPGRADED means the service
+ * has retired the sign-in this request rode on, because the account moved to
+ * its upgraded one — here, or in the Market app, which shares it. The token
+ * that just failed will fail identically forever, so it is dropped here
+ * rather than resent on every poll, and the guard is told the real reason.
+ *
+ * Reads a clone: the caller still owns the body.
+ */
+async function noticeUpgradedAccount(response: Response): Promise<void> {
+  let code: unknown;
+  try {
+    const body = (await response.clone().json()) as { error?: { code?: unknown } } | null;
+    code = body?.error?.code;
+  } catch {
+    return;
+  }
+  if (code !== "ACCOUNT_UPGRADED") return;
+  forgetLegacySession();
+  markSessionExpired("upgraded");
+}
+
+/**
+ * A browser from before the move can still carry the old provider's cookie,
+ * and the BFF reads it when there is no bearer. Once the service has said the
+ * account moved, that cookie only buys the same refusal again.
+ */
+function forgetLegacySession(): void {
+  try {
+    for (const name of ["privy-token", "privy-id-token"]) {
+      document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+    }
+  } catch {
+    // No document, or cookies unavailable: nothing to forget.
+  }
 }

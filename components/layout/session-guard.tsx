@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { DEMO_AUTH } from "@/lib/auth-mode";
-import { onSessionExpired, setAuthSnapshot } from "@/lib/session";
+import { onSessionExpired, setAuthSnapshot, type SessionEndReason } from "@/lib/session";
 import { useAuth } from "@/hooks/use-auth";
 import { useBroadcastStatus } from "@/hooks/use-broadcast-status";
 import { sq, stripSquare } from "@/lib/square-path";
@@ -38,7 +38,7 @@ export function SessionGuard() {
   useEffect(() => {
     if (DEMO_AUTH) return;
 
-    const expire = () => {
+    const expire = (reason: SessionEndReason) => {
       if (handled.current) return;
       // Declining the live-broadcast prompt ABORTS this expiry: the guard must
       // stay armed so the next one still fires. Marking it handled up front
@@ -49,10 +49,18 @@ export function SessionGuard() {
       }
       handled.current = true;
       queryClient.removeQueries({ queryKey: ["ms", "me"] });
-      toast.error("Session expired — sign in again.");
+      // An account that has MOVED did not expire, and "sign in again" would
+      // point at the sign-in that was just refused. Say which door.
+      toast.error(
+        reason === "upgraded"
+          ? "Your account has been upgraded — sign in with your new account."
+          : "Session expired — sign in again."
+      );
       // Logical route: usePathname() answers /square/auth since the move.
       if (stripSquare(pathname) !== "/auth") {
-        router.push(sq(`/auth?returnTo=${encodeURIComponent(pathname)}`));
+        const params = new URLSearchParams({ returnTo: pathname });
+        if (reason === "upgraded") params.set("upgraded", "1");
+        router.push(sq(`/auth?${params.toString()}`));
       }
     };
 
@@ -61,7 +69,7 @@ export function SessionGuard() {
 
     // Proactive: the session settled as logged-out while we still show a profile.
     if (ready && !authenticated && queryClient.getQueryData(["ms", "me"])) {
-      expire();
+      expire("expired");
     }
 
     return unsubscribe;
