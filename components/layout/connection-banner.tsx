@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/cn";
 import { useCircuit } from "@/lib/api/circuit-store";
 import { retryCircuitNow } from "@/lib/api/circuit-store";
@@ -27,7 +26,6 @@ import { retryCircuitNow } from "@/lib/api/circuit-store";
  */
 export function ConnectionBanner() {
   const circuit = useCircuit();
-  const queryClient = useQueryClient();
   const [now, setNow] = useState(() => Date.now());
   const down = circuit.state !== "closed";
 
@@ -77,11 +75,26 @@ export function ConnectionBanner() {
       </p>
       <button
         onClick={() => {
-          // Forcing it is a real action, so it does both halves: drop the
-          // cooldown, then actually re-ask. Without the refetch the reader
-          // would press a button and watch nothing happen until the next poll.
+          /*
+            ONE QUERY, NOT THE WHOLE FLEET.
+
+            This used to drop the cooldown and then `refetchQueries({ type:
+            "active" })` — every mounted query in the tab, at once. The banner
+            is on every screen of every tab during the SAME outage, so everyone
+            sees it at the same second and presses it within a few seconds of
+            each other: a synchronised burst of forty-odd requests per tab
+            aimed at a backend that is, by definition, in trouble.
+
+            `states.tsx` disables thirty per-module retry buttons with a
+            comment explaining exactly this hazard, and then this one global
+            button did it anyway.
+
+            Dropping the cooldown is the whole action. The breaker's own probe
+            goes out on the next natural request, the polls resume on their own
+            cadence rather than in lockstep, and the reader still sees the
+            banner change to "Reconnecting…" so the press did something.
+          */
           retryCircuitNow();
-          void queryClient.refetchQueries({ type: "active" });
         }}
         className="ws-press shrink-0 rounded-full bg-white/10 px-3 py-1 text-[12px] font-bold text-heading transition-colors hover:bg-white/[0.16]"
       >

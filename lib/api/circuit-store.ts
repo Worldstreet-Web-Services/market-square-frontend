@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import {
   CLOSED,
   type CircuitSnapshot,
+  type RateLimitScope,
   allowsRequest,
   isCircuitFailure,
   onFailure,
@@ -38,14 +39,26 @@ export function circuitSnapshot(): CircuitSnapshot {
 /** True when a request may go out. A probe flips the state so the UI can say so. */
 export function circuitAllows(now = Date.now()): boolean {
   if (allowsRequest(snapshot, now)) {
-    if (snapshot.state === "open") publish(onProbe(snapshot));
+    // The probe shuts the door behind it — see `onProbe`. A half-open circuit
+    // whose cooldown has lapsed again gets another single probe, which is why
+    // this runs for "half-open" too and not only for "open".
+    if (snapshot.state !== "closed") publish(onProbe({ ...snapshot, state: "open" }, now));
     return true;
   }
   return false;
 }
 
-export function recordCircuitFailure(status?: number, now = Date.now()): void {
-  if (!isCircuitFailure(status)) return;
+export function recordCircuitFailure(
+  status?: number,
+  /**
+   * For a 429 only: which kind the service said it was. Everything else
+   * ignores it, and a 429 without one counts as an action — see
+   * `isCircuitFailure`.
+   */
+  scope?: RateLimitScope | null,
+  now = Date.now()
+): void {
+  if (!isCircuitFailure(status, scope)) return;
   publish(onFailure({ ...snapshot, state: snapshot.state === "half-open" ? "open" : snapshot.state }, now));
 }
 
