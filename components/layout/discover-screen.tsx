@@ -26,7 +26,7 @@ import { CitizenSpotlightRail, PersonRow } from "@/features/profile";
 import { useMe } from "@/hooks/use-me";
 import { excludeViewer } from "@/lib/people-directory";
 import { useMediaFeed, mediaPostsOf, videoPostsOf, VideoViewer } from "@/features/feed";
-import { PostLikePill, ReelsFeed } from "@/features/feed";
+import { PostLikePill } from "@/features/feed";
 import { useStoreItems, StoreItemCard } from "@/features/store";
 
 /**
@@ -73,9 +73,9 @@ export function DiscoverScreen() {
   const live = useStreamList("live", topics);
   // `Streams` browses live broadcasts only — a stream tab that folded in
   // recorded clips would stop meaning "streams".
-  // The Posts tab is reels, and reels are the recorded videos, so it feeds
-  // from the same media query the grid does.
-  const media = useMediaFeed(topics, !hasQuery && (exploreTabShowsVideos(tab) || tab === "posts"));
+  // The grid's media. The Posts tab used to feed from this too — it was the
+  // endless reel — and went with the rest of them.
+  const media = useMediaFeed(topics, !hasQuery && exploreTabShowsVideos(tab));
   const search = useDiscovery(deferredQuery, searchType, topics);
   // The People tab is its own paged directory, populated on arrival and
   // narrowed by the query — never a blank tab waiting to be searched.
@@ -223,19 +223,6 @@ export function DiscoverScreen() {
           query: people,
           items: directoryPeople,
         }}
-        // Posts is the reels surface: video only, one per screen, no ending.
-        // It is the feed slice's, composed in here because discovery never
-        // imports it. The pager is the SAME media query the grid browses, so
-        // scrolling reels pages exactly as the grid would.
-        postsSlot={
-          <ReelsFeed
-            items={browseVideos}
-            isPending={media.isPending}
-            hasNextPage={Boolean(media.hasNextPage)}
-            isFetchingNextPage={media.isFetchingNextPage}
-            fetchNextPage={() => void media.fetchNextPage()}
-          />
-        }
         products={{
           query: storeItems,
           items: storeItems.data?.pages.flatMap((page) => page.items) ?? [],

@@ -408,6 +408,42 @@ export function IconFullscreen({ className }: IconProps) {
   );
 }
 
+/**
+ * The raised hand: asking for the floor.
+ *
+ * Four fingers rising over a thumb folded across the palm. Drawn to the file's
+ * own convention — 24-box, 1.6 stroke, round caps, currentColor — rather than
+ * imported, because an icon from another set reads as a foreign object next to
+ * these even when nobody can say why.
+ */
+export function IconHand({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M8 11V5.5a1.5 1.5 0 1 1 3 0V11m0 0V4.5a1.5 1.5 0 1 1 3 0V11m0 0V6.5a1.5 1.5 0 1 1 3 0V14c0 3.9-2.6 6.5-6 6.5-2.6 0-4.2-1.2-5.4-3.3L5 14.2a1.5 1.5 0 0 1 2.4-1.7L8 13.2V11Z" />
+    </svg>
+  );
+}
+
+/**
+ * A house: a room you can talk in.
+ *
+ * Two people under one roof rather than a building — the nav entry is not
+ * about property, it is about the two visible sections a house has, speakers
+ * and audience. Drawn to the file's own convention (24-box, 1.6 stroke, round
+ * caps, currentColor) and filled for the active nav state like the other
+ * navigation glyphs.
+ */
+export function IconHouses({ className, filled }: NavIconProps) {
+  return (
+    <svg {...base(className, filled)}>
+      <path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8.5Z" />
+      <circle cx="9.5" cy="12.5" r="1.6" fill="none" />
+      <circle cx="14.5" cy="12.5" r="1.6" fill="none" />
+      <path d="M8 17.2c1-.9 2.4-1.4 4-1.4s3 .5 4 1.4" fill="none" />
+    </svg>
+  );
+}
+
 export function IconVolume({ className, muted }: IconProps & { muted?: boolean }) {
   return (
     <svg {...base(className)}>
