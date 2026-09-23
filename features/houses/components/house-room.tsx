@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
-import { useAppointModerator, useGrantEndRoom } from "@/features/streams/lib/moderators";
+import { useAppointModerator, useGrantEndRoom, useRoomModerators } from "@/features/streams/lib/moderators";
 import { AddModeratorSheet } from "@/features/houses/components/add-moderator-sheet";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
@@ -1280,6 +1280,26 @@ function LiveHouse({
   const [moderatorsOpen, setModeratorsOpen] = useState(false);
   const moderators = useAppointModerator(stream.id);
   const grantEndRoom = useGrantEndRoom(stream.id);
+
+  /*
+    ─── MAY *I* CLOSE THIS ROOM? ────────────────────────────────────────────────
+    `moderatorIds` says WHO holds an appointment; it does not say what any of
+    them may do. `canEndRoom` is per person and rides on the moderator row, so
+    a moderator who has been handed the closing has to read their own row to
+    find out — which is why this fetches at all, and only for somebody who is
+    actually in that list.
+
+    Without this the grant was a permission with no button: the host handed
+    over the closing on the way out and the moderator still saw "Leave Room",
+    because every end control in this file was gated on `isHost`. The power
+    existed on the server and nowhere a person could reach it.
+  */
+  const iAmModerator = Boolean(myId) && (moderatorIds ?? []).includes(myId ?? "");
+  const moderatorRows = useRoomModerators(stream.id, iAmModerator && stream.status === "live");
+  const iCanEndRoom =
+    !isHost && moderatorRows.items.some((row) => row.profileId === myId && row.canEndRoom);
+  /** Either office that may close the room — the host, or a moderator given it. */
+  const canCloseRoom = isHost || iCanEndRoom;
   const canManageModerators = isHost && moderatorIds !== undefined;
   const hasModerators = (moderatorIds?.length ?? 0) > 0;
   /*
@@ -1738,7 +1758,7 @@ function LiveHouse({
           </span>
         }
         // 1285:92940 — the host's phone pill says what leaving means for them.
-        leaveLabel={isHost ? "Close Room" : "Leave Room"}
+        leaveLabel={canCloseRoom ? "Close Room" : "Leave Room"}
         /*
           THIS file confirms, not the header. Both paths open the sheet below,
           whose copy knows whether the reader is the HOST — closing the room
@@ -1747,7 +1767,7 @@ function LiveHouse({
           in front of this one.
         */
         confirmBeforeLeave={false}
-        onLeave={isHost ? () => setConfirmLeave(true) : leave}
+        onLeave={canCloseRoom ? () => setConfirmLeave(true) : leave}
         // The file's row 2 has two circles, not three. The overflow sheet the
         // third one opened is this one — both room links and the keyboard
         // shortcuts — so nothing was lost when the dots went.
@@ -2471,15 +2491,19 @@ function LiveHouse({
       <DestructiveConfirmSheet
         open={confirmLeave}
         onClose={() => setConfirmLeave(false)}
-        title={isHost ? "Close the gist room?" : "Leave quietly?"}
+        title={canCloseRoom ? "Close the gist room?" : "Leave quietly?"}
         body={
           isHost
             ? hasModerators
               ? "You can step out and leave it running, or close it for everybody."
               : "Everyone will be sent out and the gist room will be closed."
-            : "Nobody is told you left."
+            : iCanEndRoom
+              ? // The host handed this over on their way out. Both doors are
+                // real for a moderator too: going is not the same as closing.
+                "The host left you the closing. You can slip out quietly, or close it for everybody."
+              : "Nobody is told you left."
         }
-        confirmLabel={isHost ? "Close it" : "Leave"}
+        confirmLabel={canCloseRoom ? "Close it" : "Leave"}
         /*
           THE HOST'S THIRD DOOR, and it only exists once somebody can hold the
           room without them.
@@ -2502,7 +2526,16 @@ function LiveHouse({
           than the empty stage.
         */
         secondary={
-          isHost && hasModerators
+          iCanEndRoom
+            ? {
+                // A moderator's safe door is the ordinary leave — the room
+                // keeps running without them exactly as it does for anyone
+                // else who steps out.
+                label: "Just leave",
+                hint: "The room stays open and somebody else can close it.",
+                onClick: () => void leaveNow(),
+              }
+            : isHost && hasModerators
             ? {
                 label: "Leave it running",
                 /*
@@ -2539,7 +2572,7 @@ function LiveHouse({
         }
         loading={endHouse.isPending}
         onConfirm={() => {
-          if (isHost) {
+          if (canCloseRoom) {
             endHouse.mutate(stream.id, {
               onSuccess: () => {
                 void session.end().then(() => router.push(sq("/gist-rooms")));

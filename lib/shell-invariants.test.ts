@@ -5743,3 +5743,42 @@ describe("The room says who is running it when the host is not", () => {
     assert.match(probe.slice(0, probe.indexOf("]);")), /slots\.some/);
   });
 });
+
+describe("A granted power has a control that reaches it", () => {
+  /*
+    The host hands the closing to their moderators on the way out. For a while
+    that grant was real on the server and unreachable in the app: every end
+    control here was gated on `isHost`, so a moderator holding `canEndRoom`
+    still saw "Leave Room", and leaving just left.
+
+    ogazboiz found it by using it — "when the host leaves the moderator cant
+    end the live". It is the same failure as a column nothing writes and a
+    card nothing feeds, one more time: a capability with nothing on the other
+    side of it.
+
+    So the end control follows `canCloseRoom` — the host, OR a moderator who
+    was given it — and never `isHost` alone.
+  */
+  it("routes the close control on the POWER, not on the office", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /const canCloseRoom = isHost \|\| iCanEndRoom;/);
+    assert.match(room, /leaveLabel=\{canCloseRoom \? "Close Room" : "Leave Room"\}/);
+    assert.match(room, /confirmLabel=\{canCloseRoom \? "Close it" : "Leave"\}/);
+    assert.match(room, /if \(canCloseRoom\) \{\s*\n?\s*endHouse\.mutate/);
+  });
+
+  /*
+    AND IT READS THE PERSON'S OWN ROW. `moderatorIds` says who holds an
+    appointment; it says nothing about what any of them may do. `canEndRoom` is
+    per person, so believing the id list would give every moderator the host's
+    closing — the exact escalation the separate PATCH route exists to prevent.
+  */
+  it("asks whether THIS moderator was given it, not merely whether they are one", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(
+      room,
+      /moderatorRows\.items\.some\(\(row\) => row\.profileId === myId && row\.canEndRoom\)/,
+      "being a moderator is not the same as holding the closing"
+    );
+  });
+});
