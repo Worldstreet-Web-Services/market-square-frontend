@@ -5623,3 +5623,49 @@ describe("The room's chat signal carries no words", () => {
     assert.match(hook, /invalidateQueries\(\{ queryKey: \["ms", "stream", streamId, "chat"\] \}\)/);
   });
 });
+
+describe("A host leaving is told the truth about what happens next", () => {
+  /*
+    The room's exit makes a PROMISE — "your moderators keep the room open" —
+    and the service is what keeps it. Verified there, not assumed: exactly
+    three paths end a room (the orphan reaper, an account suspension, and an
+    explicit end by the host or a moderator holding `canEndRoom`), and NONE of
+    them fires because the host left. The seat sweeper reacts to a disconnect
+    but only releases seats; it never touches the stream's status.
+
+    ─── THE WORDING IS LOAD BEARING, WHICH IS WHY IT IS PINNED ─────────────────
+    The reaper's grace window is measured from the LAST SIGHTING OF ANY
+    PUBLISHER, not from the host's departure. So "a few minutes after the last
+    person stops talking" is exact, and "five minutes after you leave" would be
+    wrong every time somebody else is still speaking — which is precisely the
+    case a host uses this door for.
+
+    And the two branches must stay two. Appointing somebody a moderator does
+    NOT put them on a microphone, so a moderator in the audience holds nothing
+    open. Collapsing these into one cheerful line would have a host walk out of
+    an empty stage believing the room survives, and then blame the feature
+    rather than the silence.
+  */
+  it("does not promise the room survives merely because a moderator exists", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    const hint = room.slice(room.indexOf("label: \"Leave it running\""));
+    const body = hint.slice(0, hint.indexOf("onClick"));
+
+    assert.match(body, /someModeratorOnStage/, "the promise must turn on PUBLISHING, not on appointment");
+    assert.match(body, /stops talking/, "the window runs from the last speech, not from the host's exit");
+    assert.ok(
+      !/after you leave/i.test(body),
+      "the grace window is measured from the last publisher, so it is never counted from the host leaving"
+    );
+  });
+
+  /*
+    And the safe door only exists when somebody can actually hold the room.
+    Offered with no moderator at all it would be a way to abandon a room that
+    then dies quietly, which is worse than the honest binary it replaced.
+  */
+  it("offers the door only when there is somebody to leave it with", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /isHost && hasModerators/, "leaving it running needs a moderator to leave it TO");
+  });
+});
