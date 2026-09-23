@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { errorCode } from "@/lib/api/envelope";
 import { msApi } from "@/lib/api/service";
-import { ProfileSchema } from "@/lib/api/schemas";
+import { MentionSchema, ProfileSchema } from "@/lib/api/schemas";
 import { fetchStreams } from "@/features/streams/lib/api";
 
 /**
@@ -55,6 +55,21 @@ export const HouseSchema = z.object({
   */
   members: z.array(ProfileSchema).optional().default([]),
   website: z.string().nullable().optional().default(null),
+  /**
+   * WHO THE DESCRIPTION @-MENTIONS — the same `Mention` rows a post and a DM
+   * already carry, rendered by the same `PostText`.
+   *
+   * A separate array rather than handles parsed out of the text, for the
+   * reason posts have one: the handle in the string is a SNAPSHOT and the
+   * person behind it is not. A house description lives for months, so a
+   * regex-linkified mention breaks at the first rename while a row carrying
+   * the profile id survives it.
+   *
+   * Optional with an empty default, so a service that has not shipped it
+   * renders the description as plain text — with its line breaks — rather
+   * than failing to parse.
+   */
+  descriptionMentions: z.array(MentionSchema).optional().default([]).catch([]),
   weeklyRoomLimit: z.number().nullable().optional().default(null),
 });
 
