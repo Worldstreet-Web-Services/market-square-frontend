@@ -5549,3 +5549,45 @@ describe("A slot's wrapper accepts whatever the slot may hold", () => {
     assert.match(header, /<div[^>]*>\{meta\}<\/div>/, "the meta slot needs a wrapper that accepts flow content");
   });
 });
+
+describe("The room's chat signal carries no words", () => {
+  /*
+    ADR-0009's rule, applied to the room: a frame is a REFETCH SIGNAL and never
+    content. Only the stream id is read out of `roomChatChanged`; the messages
+    come from `GET /streams/:id/chat` whether the socket spoke or the interval
+    ticked. That is what makes a forged or replayed frame cost one extra read
+    instead of putting words on somebody's screen — and it is why the payload
+    is not carried even though carrying it would be faster.
+
+    The topic is PUBLIC (`market-square:stream:<id>`) rather than personal.
+    Everyone in the room needs the same signal and the chat read is anonymous
+    anyway; `user:<id>` is for what concerns one reader — an invitation, their
+    own mute — and a room's chat is not that.
+  */
+  it("reads only the stream id off a chat frame", () => {
+    const gateway = stripComments(read("lib/ws-gateway.ts"));
+    const signal = gateway.slice(gateway.indexOf("export function roomChatSignalOf"));
+    const body = signal.slice(0, signal.indexOf("\n}"));
+    for (const field of ["text", "author", "message", "body", "authorId"]) {
+      assert.ok(
+        !body.includes(field),
+        `roomChatSignalOf reads \`${field}\` off the frame — the socket must carry no content`
+      );
+    }
+    assert.match(body, /frame\.data\.streamId/);
+  });
+
+  /*
+    AND THE POLL STAYS THE FLOOR. Every realtime piece in this app is layered
+    over a read that still works alone, so an unconfigured gateway, a refused
+    socket and a dropped one are all invisible. A signal that REPLACED the
+    interval would make a socket outage look like a dead room.
+  */
+  it("layers the signal over the interval rather than replacing it", () => {
+    const chat = stripComments(read("features/streams/hooks/use-chat.ts"));
+    assert.match(chat, /refetchInterval: enabled \? pollMs : false/, "the chat interval is the floor and must remain");
+    const hook = stripComments(read("features/streams/hooks/use-room-chat-signal.ts"));
+    assert.match(hook, /MARKET_FLAGS\.wsGatewayUrl/, "an unconfigured gateway must opt out entirely");
+    assert.match(hook, /invalidateQueries\(\{ queryKey: \["ms", "stream", streamId, "chat"\] \}\)/);
+  });
+});

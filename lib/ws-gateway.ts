@@ -113,6 +113,38 @@ export function speakerSignalOf(frame: GatewayFrame | null): SpeakerSignal | nul
   return null;
 }
 
+/* ─── THE ROOM'S CHAT SIGNAL, on the room's own public topic ─────────────────
+ * `market-square:stream:<id>` says "this room's chat changed". Like every
+ * other frame here it is a REFETCH SIGNAL and nothing more: only the stream id
+ * is read out of it, never a message, an author or a body. The chat renders
+ * from `GET /streams/:id/chat` exactly as it does on the poll, so a forged or
+ * stale frame can cause at most one extra read — it can never put words in
+ * somebody's mouth, which is the whole reason the payload is not carried.
+ *
+ * PUBLIC, not personal. A room's chat is read anonymously (the service answers
+ * that route with no token), and every participant needs the same signal, so
+ * one public topic per room serves them all. `user:<id>` is for things that
+ * concern ONE reader — an invitation, their own mute — and a room's chat is
+ * not one of those.
+ *
+ * The poll stays the floor. An unconfigured gateway, a refused socket and a
+ * dropped one are all invisible: the chat keeps its own interval and the
+ * signal only makes it feel immediate.
+ */
+export const ROOM_CHAT_CHANGED = "roomChatChanged";
+
+/** A room's public topic, or null without an id. */
+export function roomChatTopic(streamId: string | null | undefined): string | null {
+  return streamId ? `market-square:stream:${streamId}` : null;
+}
+
+/** The stream whose chat changed, or null for anything else. */
+export function roomChatSignalOf(frame: GatewayFrame | null): string | null {
+  if (!frame || frame.type !== ROOM_CHAT_CHANGED) return null;
+  const streamId = frame.data.streamId;
+  return typeof streamId === "string" && streamId.length > 0 ? streamId : null;
+}
+
 export const PING_MS = 25_000;
 export const BACKOFF_CAP_MS = 30_000;
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import Link from "next/link";
@@ -1242,6 +1243,14 @@ function LiveHouse({
     repeated poll cannot double count (lib/room-chat-unread.ts).
   */
   const chatFeed = useChat(stream.id, here && phone && stream.status === "live");
+  /*
+    The phone's feed reads the SAME key as the panel, so one invalidation
+    refreshes both — but the panel is not mounted here, and a subscriber that
+    only exists on the desktop would leave the phone on the interval alone.
+    Two subscribers on one topic share the socket; the extra cost is a second
+    listener in a Set.
+  */
+  useRoomChatSignal(stream.id, here && phone && stream.status === "live");
   const chatItems = chatFeed.data?.items;
   const [seenChat, setSeenChat] = useState<{ id: string; createdAt: string } | null>(null);
   // Adjusted during render, React's pattern for state that follows a value:

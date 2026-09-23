@@ -21,6 +21,7 @@ import {
 import { useChat, useChatHistory, useChatReaction, useSendChat } from "@/features/streams/hooks/use-chat";
 import { useMentionTyping } from "@/hooks/use-mention-typing";
 import { useMe } from "@/hooks/use-me";
+import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
 import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
 import { DEFAULT_REACTION } from "@/lib/reactions";
 import { MentionPicker } from "@/components/ui/mention-picker";
@@ -142,6 +143,9 @@ export function ChatPanel({
   showTopViewers?: boolean;
 }) {
   const chat = useChat(stream.id, stream.status === "live");
+  // ADR-0009 over the top of it: the interval stays the floor, the frame makes
+  // it immediate. Inert until the service publishes the room's topic.
+  useRoomChatSignal(stream.id, stream.status === "live");
   const send = useSendChat(stream.id);
   /*
     THE LIST IS READ OLDEST → NEWEST, and the page arrives the other way round.
