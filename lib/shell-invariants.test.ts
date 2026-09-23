@@ -2606,7 +2606,15 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(soonCard, /h-\[106px\] w-full/, "the card lost its fixed height or fluid width");
     assert.match(soonCard, /w-\[7px\] bg-\[#7E3BEB\]/);
     assert.match(soonCard, /w-\[144\.507px\]/, "the cover stopped bleeding under the panel");
-    assert.match(soonCard, /absolute inset-y-0 left-\[40px\] right-0/);
+    /*
+      THE SCRIM RUNS ACROSS, NOT DOWN, and is opaque by 120 — before the
+      image's own 144.5 edge — so no cover ever ends against a wall. Built to
+      the node instead (a flat panel starting at 40) it is a hard vertical
+      line, which is invisible only because the file's sample cover is a dark
+      photograph of a trading screen. A real cover is a face in daylight.
+    */
+    assert.match(soonCard, /linear-gradient\(to right, rgba\(16,16,18,0\) 0px[^"]*#101012 120px\)/);
+    assert.doesNotMatch(soonCard, /left-\[40px\]/, "the scrim went back to a wall at x=40");
     /*
       The two columns are a FLEX ROW, not two absolutely placed boxes. The node
       fixes them at 64 and 259, which only holds at its own 342 — and the rail

@@ -17,10 +17,10 @@ import { asset } from "@/lib/square-path";
  *
  * The redesign of the 467 × 136 card this file used to draw (1542:3294). The
  * shape changed rather than the content: the cover is no longer a rounded tile
- * in a row of four blocks, it is a FULL-BLEED image on the card's left with a
- * near-opaque panel laid over it from 40px in, so the picture bleeds out under
- * the text instead of sitting beside it. The divider is gone; the right column
- * keeps date, time, the "Starts in" pill and Share.
+ * in a row of four blocks, it is a FULL-BLEED image on the card's left that
+ * dissolves under a scrim, so the picture bleeds out beneath the text instead
+ * of sitting beside it. The divider is gone; the right column keeps date,
+ * time, the "Starts in" pill and Share.
  *
  * Every length here is the node's own. The ones that look like typos are real:
  * the 0.552 stroke, the 7.726 background blur and the 8.83 / 4.415 button
@@ -109,15 +109,39 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
         className="absolute inset-y-0 left-0 w-[7px] bg-[#7E3BEB]"
       />
 
-      {/* `Frame 1000011513` — 302 wide from 40px in, which is what fades the
-          picture out under the text. The file's gradient runs UPWARD over the
-          top 17.2% only: solid #101012 below it, 25% alpha at the very top. */}
+      {/*
+        `Frame 1000011513` — THE SCRIM, AND THE ONE PLACE THIS READS THE RENDER
+        RATHER THAN THE NODE.
+
+        In the file this is a 302-wide panel from 40px in, filled with a
+        gradient that runs UPWARD over the top 17.2% and is flat #101012
+        everywhere below. Built that way it is a hard vertical wall at x=40,
+        and the picture stops dead against it.
+
+        The file does not LOOK like that, and the reason is the sample: its
+        cover is a dark photograph of a trading screen, so it dissolves into
+        #101012 on its own and the panel never has an edge to show. A real
+        cover is somebody's face in daylight, and then the wall is all you see
+        — which is exactly what it did (ogazboiz, 2026-09-23: "the image is not
+        fading or blending away").
+
+        So the scrim runs ACROSS instead, and reaches full opacity at 120 —
+        BEFORE the image's own 144.5 edge — so that edge is never visible
+        whatever the photograph is. It starts clear at the accent bar, is half
+        way by 72, and is solid under the text, which is also what keeps a
+        title legible over a bright cover.
+
+        The node's vertical variation is NOT reproduced: it lifts the top 18px
+        to 25% alpha, and sampling the file's own render shows that reads as
+        flat #101012 wherever no picture sits behind it. Carrying it over would
+        only punch a translucent band across the top of the text.
+      */}
       <span
         aria-hidden
-        className="absolute inset-y-0 left-[40px] right-0"
+        className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(16,16,18,0.25) 0%, #101012 17.2%)",
+            "linear-gradient(to right, rgba(16,16,18,0) 0px, rgba(16,16,18,0.18) 28px, rgba(16,16,18,0.72) 72px, #101012 120px)",
         }}
       />
 
