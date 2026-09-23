@@ -5142,6 +5142,18 @@ describe("Nobody is put in a house they did not agree to", () => {
   it("says what happens instead of the add", () => {
     // Without it, "No one" reads as "never hear about a house again" rather
     // than "it waits for you".
-    assert.match(chat(), /sends a request instead/);
+    assert.match(chat(), /Everyone else has to ask/);
+  });
+
+  it("asks who may skip the asking, not who may reach you", () => {
+    /*
+      ogazboiz ruled that "No one" still lets a REQUEST through (2026-09-23):
+      somebody you have never met can ask, and you decline. That is the kinder
+      setting — a true "no one" would stop a friend inviting you to their own
+      house — but it makes the heading "Who can add you to houses / No one" a
+      lie, because people CAN still reach you. The heading names what the
+      setting actually governs, and "No one" then means what it says.
+    */
+    assert.match(chat(), /Who can add you to houses without asking/);
   });
 });

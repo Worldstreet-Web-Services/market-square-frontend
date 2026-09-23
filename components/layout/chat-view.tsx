@@ -57,7 +57,18 @@ export function ChatView({
       </div>
 
       {/*
-        WHO CAN ADD YOU TO A HOUSE — the consent gate.
+        WHO CAN ADD YOU TO A HOUSE WITHOUT ASKING — the consent gate.
+
+        THE HEADING CARRIES THE WHOLE MEANING, and it took a decision to get
+        right. ogazboiz ruled that "No one" still lets a REQUEST through
+        (2026-09-23) — somebody you have never met can still ask, and you
+        decline it — which is the kinder setting, because a true "no one"
+        would mean a friend could not invite you to their own house.
+
+        But that makes "Who can add you to houses / No one" a lie: people CAN
+        still reach you. The question the setting actually answers is who may
+        skip the asking, so the heading says so, and "No one" then means
+        exactly what it says — nobody adds you outright, everybody asks.
 
         Until this exists, `POST /conversations/:id/members` is summarised in
         the service's own spec as "Add people to a group (any member may)": any
@@ -78,7 +89,7 @@ export function ChatView({
         <div className="flex flex-col gap-2 pt-6">
           <div className="flex h-6 items-center px-4">
             <p className="text-sm font-normal leading-[16.5px] text-white/50">
-              Who can add you to houses
+              Who can add you to houses without asking
             </p>
           </div>
           <div className="flex flex-col">
@@ -98,8 +109,9 @@ export function ChatView({
           {/* Say what happens INSTEAD, so the choice does not read as "never
               hear from anybody about a house again". */}
           <p className="px-4 pt-2 text-[13px] leading-5 text-white/50">
-            Anyone else who adds you sends a request instead — it waits in Gist
-            Requests until you accept it.
+            Everyone else has to ask. Their request waits in Gist Requests
+            until you accept it, and nothing appears in your chats until you
+            do.
           </p>
         </div>
       )}
