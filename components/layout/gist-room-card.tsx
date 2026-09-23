@@ -12,6 +12,7 @@ import { useConversationMembers } from "@/features/messages";
 import { opensAtLabel } from "@/lib/format";
 import { housePath, parseParticipantMeta, participantName } from "@/features/houses";
 import { useRoomPreview, useStream } from "@/features/streams";
+import { liveRoomFaces } from "@/features/streams/lib/room-faces";
 import { previewCaption } from "@/lib/room-preview-caption";
 import { asset } from "@/lib/square-path";
 
@@ -276,14 +277,13 @@ export function GistRoomCard({
     their own sample AND their own house, and a face drawn twice reads as a
     bug). Three at most — the file's cluster has three tiles.
   */
-  const roster = (members.data?.items ?? []).flatMap((member) =>
-    member.profile ? [member.profile] : []
-  );
-  const host = room?.owner ?? null;
-  const seen = new Set<string>();
-  const faces = [...(room?.participants ?? []), ...(host ? [host] : []), ...roster]
-    .filter((profile) => (seen.has(profile.id) ? false : (seen.add(profile.id), true)))
-    .slice(0, 3);
+  const faces = liveRoomFaces({
+    participants: room?.participants,
+    owner: room?.owner,
+    roster: (members.data?.items ?? []).flatMap((member) =>
+      member.profile ? [member.profile] : []
+    ),
+  });
 
   return (
     /*

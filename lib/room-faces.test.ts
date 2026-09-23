@@ -48,10 +48,33 @@ test("three plates at most, because the card draws three", () => {
   ]);
 });
 
+test("the house roster fills only the places presence and the host left empty", () => {
+  // Last tier, and it is the order production has shipped for months: the
+  // people the invite is addressed to, when nobody connected is resolvable.
+  assert.deepEqual(liveRoomFaces({ participants: [], owner: ada, roster: [grace, alan, edsger] }), [
+    ada,
+    grace,
+    alan,
+  ]);
+  // Presence still outranks it: a connected stranger beats a house member.
+  assert.deepEqual(liveRoomFaces({ participants: [grace], owner: ada, roster: [edsger] }), [
+    grace,
+    ada,
+    edsger,
+  ]);
+});
+
+test("a host who is also in their own house is not drawn twice", () => {
+  assert.deepEqual(liveRoomFaces({ participants: [], owner: ada, roster: [ada, grace] }), [
+    ada,
+    grace,
+  ]);
+});
+
 test("a room with nobody resolvable draws nothing rather than a placeholder", () => {
   // An empty stack is honest when there is genuinely no one to name — it is
   // only a bug when somebody IS there, which is what the first test pins.
-  assert.deepEqual(liveRoomFaces({ participants: [], owner: null }), []);
+  assert.deepEqual(liveRoomFaces({ participants: [], owner: null, roster: [] }), []);
   assert.deepEqual(liveRoomFaces({}), []);
 });
 
@@ -65,6 +88,7 @@ test("attendees is NEVER a source — it is the ended-room field", () => {
   const faces = liveRoomFaces({
     participants: [],
     owner: null,
+    roster: [],
     // @ts-expect-error — not part of the input type; passed to prove it is ignored.
     attendees: [grace, alan],
   });

@@ -7,6 +7,8 @@ import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { housePath } from "@/features/houses";
 import { liveRoomFaces } from "@/features/streams/lib/room-faces";
+import { useStream } from "@/features/streams/hooks/use-streams";
+import { useConversationMembers } from "@/features/messages";
 import { formatCount } from "@/lib/format";
 import type { Stream } from "@/lib/api/schemas";
 
@@ -52,42 +54,64 @@ export function LiveRoomCard({
   const TopicIcon = topicKey ? (TOPIC_ICONS[topicKey] ?? IconSpark) : null;
 
   /*
-    ─── WHOSE FACES THESE ARE, AND WHY THE STACK WAS EMPTY ────────────────────
+    ─── WHOSE FACES THESE ARE, AND WHY THE STACK HAD ONE ──────────────────────
 
-    This read `stream.attendees` and drew NOTHING — a live room with somebody
-    in it and no stack at all (ogazboiz, 2026-09-23, on a room showing LIVE 1).
+    THE LIST ROW CANNOT NAME ANYBODY BUT THE OWNER. `participants` — the
+    sample of who is currently connected — is carried by `GET /streams/:id`
+    and NOT by the list route this rail is fed from. So a card built only from
+    its list row draws exactly one plate no matter how many people are in the
+    room: ogazboiz, 2026-09-23, on a room reading LIVE 2 with a single face.
 
-    `attendees` IS THE REPLAY FIELD. Its own schema note says it plainly:
-    "Absent while a room is LIVE", carried on the single read of an ENDED room
-    and nowhere else. Wiring a live card to it asked the service for a fact it
-    is designed never to have here, and got a silent empty array — the field
-    name read like the right one, and the field name is not the mechanism.
+    THE ANSWER WAS ALREADY IN THE REPO. `GistRoomCard` — shipped, on `main`,
+    drawing this stack in production — reads the DETAIL route for precisely
+    this. So this card does what that one does, through the shared
+    `liveRoomFaces` rule, instead of waiting on a backend change it does not
+    need — I had referred this to the service, and I was wrong to: the
+    mechanism was already shipped, three files away.
 
-    MEASURED, not assumed. `GET /streams?status=live&kind=room` on this stack
-    answers, for the one open room: `owner` hydrated, `participants: []`, and
-    NO `attendees` key at all. So:
+    The earlier bug underneath it: this read `stream.attendees`, which is the
+    ENDED-room field ("Absent while a room is LIVE", per its own schema note),
+    so it drew nothing at all. The name read like the right one. The name is
+    not the mechanism.
 
-      · `participants` FIRST — "a sample of up to three people currently
-        connected, host first" (gist rooms only, by the backend's privacy
-        call). Present-but-empty on the list route today, which is a backend
-        gap and not a client one; the moment it fills, this stack fills.
-      · `owner` SECOND — the host, hydrated on every stream surface and the one
-        person certainly in the room. It is what makes a room show a face at
-        all today, and it is why the card no longer looks abandoned.
+    ONE READ PER CARD, ONCE. NO POLL — and that is a real difference from
+    `GistRoomCard`, not an oversight copying it.
 
-    Deduped, because a host is normally in their own sample too and a face
-    drawn twice reads as a bug. Three at most — the file draws three plates.
+    That card polls at 60s because it lives in a DM thread FOR EVER, so it has
+    to catch live -> ended by itself or it goes on offering to join a room that
+    closed. This one cannot outlive its room: the rail is fed by
+    `GET /streams?status=live`, so when a room ends it leaves the list and the
+    card goes with it. There is nothing for an interval to discover here.
 
-    NOT PADDED WITH HOUSE MEMBERS. A face here says "this person is in the
-    room"; somebody who merely belongs to the house would make the card state
-    something false on every quiet room, quietly, for ever. One honest face
-    beats three that include two people who are not there.
+    So the cost is N requests per page view, not N per minute — with the rail
+    holding one to three open rooms in practice, that is one to three reads
+    that never repeat. An interval per card would have been the thing that
+    stopped scaling the moment the app had rooms in it (ogazboiz, 2026-09-23:
+    "i dont want polling ... this want to be scalable").
 
-    And no per-card detail fetch to get `participants` properly: this rail
-    draws up to twelve cards, and twelve polls to fill an avatar stack is the
-    wrong trade on the surface a reader passes through in two seconds.
+    THE CHEAPER SHAPE STILL EXISTS AND IS THE SERVICE'S: `participants` on the
+    LIST route would make the whole rail one request instead of N. Asked for,
+    not waited on — this works today either way, and collapses to zero extra
+    reads if it ever lands.
   */
-  const faces = liveRoomFaces(stream);
+  const detail = useStream(stream.id);
+  const houseId = stream.houseConversationId ?? "";
+  const members = useConversationMembers(houseId, Boolean(houseId));
+  const room = detail.data;
+
+  const faces = liveRoomFaces({
+    participants: room?.participants,
+    // The list row's owner until the detail read lands, so the stack is never
+    // empty for a beat on first paint.
+    owner: room?.owner ?? stream.owner,
+    roster: (members.data?.items ?? []).flatMap((member) =>
+      member.profile ? [member.profile] : []
+    ),
+  });
+
+  // The detail read is the fresher number once it lands; the list row is what
+  // there is until then. Still never `peakViewers` — see below.
+  const viewers = room?.viewerCount ?? stream.viewerCount;
 
   return (
     <Link
@@ -196,10 +220,10 @@ export function LiveRoomCard({
             A number beside a LIVE badge states an audience that is present, so
             it is absent rather than zero when the service did not measure it.
           */}
-          {typeof stream.viewerCount === "number" && (
+          {typeof viewers === "number" && (
             <span className="tnum flex items-center gap-1 text-[10px] font-medium leading-[13px] text-white">
               <IconTwoPeople />
-              {formatCount(stream.viewerCount)}
+              {formatCount(viewers)}
             </span>
           )}
         </span>
