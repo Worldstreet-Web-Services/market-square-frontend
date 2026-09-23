@@ -5451,7 +5451,10 @@ describe("A room's chat reaches a post as COMMENTS, not as an overlay", () => {
     ]) {
       const source = stripComments(read(surface));
       assert.ok(!source.includes("RoomChatComments"), `${surface} draws the room's chat itself again`);
-      assert.ok(!source.includes("mayShowRoomChat"), `${surface} re-decides what the service already decided`);
+      assert.ok(
+        !source.includes("mayShowRoomChat"),
+        `${surface} re-decides what the service already decided`
+      );
     }
   });
 
@@ -5461,8 +5464,23 @@ describe("A room's chat reaches a post as COMMENTS, not as an overlay", () => {
     whether a room may be announced on the public socket topic. Deleting it
     with the overlay would have taken that with it.
   */
-  it("keeps the rule the socket topic still needs", () => {
-    assert.ok(existsSync(resolve("lib/room-chat-visibility.ts")));
+  /*
+    ONE RULE SURVIVES, AND ONLY ONE. `maySignalRoomChat` still answers whether
+    a room may be ANNOUNCED on the public socket topic, which is live and has
+    nothing to do with the overlay. Its twin went with the overlay: a reader
+    with no caller is the exact shape this codebase has spent a day finding,
+    and a test asserting the pair differed was protecting a function that
+    existed only for the test.
+
+    The sentence it was guarding — a member may READ a private house's chat
+    and nobody may BROADCAST that it is busy — moved into the survivor's own
+    comment, where the next person meets it rather than finding it in a test
+    for something nothing calls.
+  */
+  it("keeps the one rule the socket topic still needs, and no twin", () => {
+    const rules = stripComments(read("lib/room-chat-visibility.ts"));
+    assert.ok(!rules.includes("mayShowRoomChat"), "a predicate with no caller came back");
+    assert.match(rules, /export function maySignalRoomChat/);
     const signal = stripComments(read("features/streams/hooks/use-room-chat-signal.ts"));
     assert.match(signal, /maySignalRoomChat/, "the topic gate lost its rule");
   });
