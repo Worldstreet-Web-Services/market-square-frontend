@@ -109,22 +109,29 @@ export function IconRoomSend({ className }: { className?: string }) {
 /** The per-message heart beside a chat bubble — node 215:2904. */
 export function IconRoomHeart({ className, filled = false }: { className?: string; filled?: boolean }) {
   /*
-    TWO SHAPES, ONE GLYPH. The file's heart is a DONUT — an outer silhouette
-    and an inner cut — which reads as an outline. A loved message wants the
-    silhouette alone, solid: ogazboiz tinted one red and said it still "did
-    not look as if they love a comment", and he was right. Colour is not the
-    signal here; fill is.
+    TWO SHAPES, ONE GLYPH — and the empty one is a HOLE, not a second shape.
+
+    The file's heart is a donut: an outer silhouette with an inner cut. Drawn
+    as two separate `<path>`s they were both painted in `currentColor`, so the
+    "cut" filled the middle back in and every unloved message carried a SOLID
+    white heart — which reads as already loved (ogazboiz: "the white love for
+    that side doesnt make sense make the love icon empty").
+
+    Both subpaths now live in ONE path under `fillRule="evenodd"`, which is
+    what actually punches the middle out. It cannot be done by painting the
+    inner shape a background colour: the chat sits over a room, and the
+    "background" there is whatever the last person's video happens to be.
+
+    LOVED is the silhouette alone, solid, and the caller tints it `text-like`.
+    Colour is not the signal by itself — fill is, and the red confirms it.
   */
   return (
     <svg aria-hidden viewBox="0 0 16 16" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M7.99967 14.4331C7.79301 14.4331 7.59301 14.4064 7.42634 14.3464C4.87967 13.4731 0.833008 10.3731 0.833008 5.79307C0.833008 3.45974 2.71967 1.56641 5.03967 1.56641C6.16634 1.56641 7.21967 2.00641 7.99967 2.79307C8.77967 2.00641 9.83301 1.56641 10.9597 1.56641C13.2797 1.56641 15.1663 3.46641 15.1663 5.79307C15.1663 10.3797 11.1197 13.4731 8.57301 14.3464C8.40634 14.4064 8.20634 14.4331 7.99967 14.4331Z"
-        fill="currentColor"
-        fillOpacity={filled ? 1 : 0.6}
-      />
-      {/* The inner cut, which is what makes it an outline. Dropped when the
-          heart is filled. */}
-      {!filled && <path d="M5.03967 2.56641C3.27301 2.56641 1.83301 4.01307 1.83301 5.79307C1.83301 10.3464 6.21301 12.8797 7.75301 13.4064C7.87301 13.4464 8.13301 13.4464 8.25301 13.4064C9.78634 12.8797 14.173 10.3531 14.173 5.79307C14.173 4.01307 12.733 2.56641 10.9663 2.56641C9.95301 2.56641 9.01301 3.03974 8.40634 3.85974C8.21967 4.11307 7.79301 4.11307 7.60634 3.85974C6.98634 3.03307 6.05301 2.56641 5.03967 2.56641Z" fill="currentColor" fillOpacity="0.6" />}
+      {filled ? (
+        <path d="M7.99967 14.4331C7.79301 14.4331 7.59301 14.4064 7.42634 14.3464C4.87967 13.4731 0.833008 10.3731 0.833008 5.79307C0.833008 3.45974 2.71967 1.56641 5.03967 1.56641C6.16634 1.56641 7.21967 2.00641 7.99967 2.79307C8.77967 2.00641 9.83301 1.56641 10.9597 1.56641C13.2797 1.56641 15.1663 3.46641 15.1663 5.79307C15.1663 10.3797 11.1197 13.4731 8.57301 14.3464C8.40634 14.4064 8.20634 14.4331 7.99967 14.4331Z" fill="currentColor" />
+      ) : (
+        <path fillRule="evenodd" clipRule="evenodd" d="M7.99967 14.4331C7.79301 14.4331 7.59301 14.4064 7.42634 14.3464C4.87967 13.4731 0.833008 10.3731 0.833008 5.79307C0.833008 3.45974 2.71967 1.56641 5.03967 1.56641C6.16634 1.56641 7.21967 2.00641 7.99967 2.79307C8.77967 2.00641 9.83301 1.56641 10.9597 1.56641C13.2797 1.56641 15.1663 3.46641 15.1663 5.79307C15.1663 10.3797 11.1197 13.4731 8.57301 14.3464C8.40634 14.4064 8.20634 14.4331 7.99967 14.4331Z M5.03967 2.56641C3.27301 2.56641 1.83301 4.01307 1.83301 5.79307C1.83301 10.3464 6.21301 12.8797 7.75301 13.4064C7.87301 13.4464 8.13301 13.4464 8.25301 13.4064C9.78634 12.8797 14.173 10.3531 14.173 5.79307C14.173 4.01307 12.733 2.56641 10.9663 2.56641C9.95301 2.56641 9.01301 3.03974 8.40634 3.85974C8.21967 4.11307 7.79301 4.11307 7.60634 3.85974C6.98634 3.03307 6.05301 2.56641 5.03967 2.56641Z" fill="currentColor" />
+      )}
     </svg>
   );
 }

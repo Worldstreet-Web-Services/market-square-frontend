@@ -162,26 +162,33 @@ export function AddModeratorSheet({
   );
 }
 
-/** `vuesax/linear/search-normal` at 16. */
+/** `vuesax/linear/search-normal`, exported at 16. Strokes, not a drawn circle. */
 function IconSearch() {
   return (
     <svg aria-hidden viewBox="0 0 16 16" className="size-4 shrink-0 text-meta" fill="none">
-      <circle cx="7.3" cy="7.3" r="5.3" stroke="currentColor" strokeWidth="1.3" />
-      <path d="m13.5 13.5-2.2-2.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M7.66732 14.0007C11.1651 14.0007 14.0007 11.1651 14.0007 7.66732C14.0007 4.16951 11.1651 1.33398 7.66732 1.33398C4.16951 1.33398 1.33398 4.16951 1.33398 7.66732C1.33398 11.1651 4.16951 14.0007 7.66732 14.0007Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14.6673 14.6673L13.334 13.334" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-/** `vuesax/outline/tick-square` — empty while they are not one, filled once they are. */
+/**
+ * `vuesax/outline/tick-square` — BOTH of the file's states, exported.
+ *
+ * They are not one shape with a tick added: the empty square is a hollow
+ * rounded outline at white/50, and the filled one is a SOLID rounded square
+ * with the tick punched out of it as a single path. Drawing the second as the
+ * first plus a checkmark gives a different corner radius and a different
+ * stroke weight, which is what the hand-drawn version did.
+ */
 function IconTickSquare({ on }: { on: boolean }) {
   return on ? (
-    <svg aria-hidden viewBox="0 0 16 16" className="size-4 shrink-0" fill="none">
-      <rect x="0.8" y="0.8" width="14.4" height="14.4" rx="4" fill="currentColor" className="text-spotlight" />
-      <path d="m4.6 8.2 2.2 2.2 4.6-4.6" stroke="currentColor" className="text-white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg aria-hidden viewBox="0 0 16 16" className="size-4 shrink-0 text-spotlight" fill="none">
+      <path d="M10.794 1.33398H5.20732C2.78065 1.33398 1.33398 2.78065 1.33398 5.20732V10.7873C1.33398 13.2207 2.78065 14.6673 5.20732 14.6673H10.7873C13.214 14.6673 14.6607 13.2207 14.6607 10.794V5.20732C14.6673 2.78065 13.2207 1.33398 10.794 1.33398ZM11.1873 6.46732L7.40732 10.2473C7.31398 10.3407 7.18732 10.394 7.05398 10.394C6.92065 10.394 6.79398 10.3407 6.70065 10.2473L4.81398 8.36065C4.62065 8.16732 4.62065 7.84732 4.81398 7.65398C5.00732 7.46065 5.32732 7.46065 5.52065 7.65398L7.05398 9.18732L10.4807 5.76065C10.674 5.56732 10.994 5.56732 11.1873 5.76065C11.3807 5.95398 11.3807 6.26732 11.1873 6.46732Z" fill="currentColor" />
     </svg>
   ) : (
-    <svg aria-hidden viewBox="0 0 16 16" className="size-4 shrink-0" fill="none">
-      <rect x="0.8" y="0.8" width="14.4" height="14.4" rx="4" stroke="currentColor" strokeWidth="1.2" className="text-white/40" />
+    <svg aria-hidden viewBox="0 0 16 16" className="size-4 shrink-0 text-white/50" fill="none">
+      <path d="M10.0007 15.1673H6.00065C2.38065 15.1673 0.833984 13.6207 0.833984 10.0007V6.00065C0.833984 2.38065 2.38065 0.833984 6.00065 0.833984H10.0007C13.6207 0.833984 15.1673 2.38065 15.1673 6.00065V10.0007C15.1673 13.6207 13.6207 15.1673 10.0007 15.1673ZM6.00065 1.83398C2.92732 1.83398 1.83398 2.92732 1.83398 6.00065V10.0007C1.83398 13.074 2.92732 14.1673 6.00065 14.1673H10.0007C13.074 14.1673 14.1673 13.074 14.1673 10.0007V6.00065C14.1673 2.92732 13.074 1.83398 10.0007 1.83398H6.00065Z" fill="currentColor" />
     </svg>
   );
 }

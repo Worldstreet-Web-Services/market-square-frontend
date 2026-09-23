@@ -2042,8 +2042,27 @@ describe("A gist room's chat can answer a particular message", () => {
     // FILLED, not merely tinted: a coloured outline reads as a hover state
     // rather than as an act somebody took.
     assert.match(panel, /filled=\{loved\}/);
+    /*
+      AND THE EMPTY ONE IS A HOLE, NOT A SECOND SHAPE.
+
+      The heart was two paths — an outer silhouette and an inner "cut" — both
+      painted in `currentColor`, so the cut filled the middle straight back in
+      and every unloved message carried a SOLID heart. An unloved message that
+      looks loved is the one thing this control must never do.
+
+      `fillRule="evenodd"` on a single path is what actually punches the
+      middle out, and it is the only way that works here: the chat sits over a
+      room, so there is no background colour to paint the inner shape with —
+      it is whatever the last person's video happens to be.
+    */
     const icons = stripComments(read("components/ui/room-icons.tsx"));
-    assert.match(icons, /\{!filled && <path/);
+    const heart = icons.slice(icons.indexOf("export function IconRoomHeart"));
+    const body = heart.slice(0, heart.indexOf("</svg>"));
+    assert.match(body, /fillRule="evenodd"/, "the empty heart must be a hole, or it reads as loved");
+    assert.ok(
+      !/fillOpacity/.test(body),
+      "opacity cannot stand in for an outline — a dimmed solid heart is still a solid heart"
+    );
     const api = stripComments(read("features/streams/lib/api.ts"));
     // The emoji is a path segment and an emoji is several bytes.
     assert.match(api, /encodeURIComponent\(emoji\)/);
