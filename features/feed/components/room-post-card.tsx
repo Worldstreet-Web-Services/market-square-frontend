@@ -70,14 +70,30 @@ export function RoomPostCard({ streamId }: { streamId: string }) {
   }
 
   return (
-    <div className="flex w-full flex-col rounded-[16px] bg-[#101012] p-4">
+    /*
+      THE CARD IS GLASS, AND IT HAS A BORDER — node 2082:21143.
+
+      I drew it as a flat `#101012` panel. The node is `#101012 at 62%` over a
+      7.726 BACKGROUND_BLUR, ringed by a 0.5519 INSIDE stroke at `#FFFFFF@18%`.
+      Same material as the Coming Soon card, which I built correctly from the
+      same file weeks ago — so this was not a thing I did not know, it was a
+      thing I did not re-read.
+
+      The ring is an inset shadow rather than a `border`: the stroke is INSIDE
+      and sub-pixel, and a real border would round differently against a 16
+      radius and steal half a pixel from the padding.
+    */
+    <div className="flex w-full flex-col rounded-[16px] bg-[rgba(16,16,18,0.62)] p-4 shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)] backdrop-blur-[7.726px]">
       {/* `Frame 2147230648` — the host, 20 round, the name 8 away. */}
       {host && (
         <Link
           href={sq(profileHref(host))}
           className="ws-press flex w-fit items-center gap-2"
         >
-          <span className="size-5 shrink-0 overflow-hidden rounded-full bg-[#DCDAD5]">
+          {/* The host's disc carries a white hairline and the file's own soft
+              shadow — `0 2.76px 10.35px rgba(147,147,147,0.25)`. Without them
+              a plate-coloured avatar dissolves into the glass behind it. */}
+          <span className="size-5 shrink-0 overflow-hidden rounded-full bg-[#DCDAD5] shadow-[0_2.76px_10.35px_rgba(147,147,147,0.25)] ring-[0.69px] ring-white">
             <Avatar
               name={host.displayName || host.username}
               seed={host.id}
@@ -101,8 +117,11 @@ export function RoomPostCard({ streamId }: { streamId: string }) {
         >
           {data?.title ?? "Gist room"}
         </Link>
+        {/* `Frame 2147225009` — white at 10% carrying Figma's own GLASS effect,
+            which is a backdrop blur; flat, the chip sits ON the card rather
+            than in it. */}
         {topicLabel && (
-          <span className="inline-flex h-4 w-fit items-center gap-1 rounded-full bg-white/10 px-1.5">
+          <span className="inline-flex h-4 w-fit items-center gap-1 rounded-full bg-white/10 px-1.5 backdrop-blur-[2px]">
             {TopicIcon ? (
               <TopicIcon className="h-2.5 w-[13px] shrink-0" />
             ) : (
