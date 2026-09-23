@@ -5686,3 +5686,60 @@ describe("A host leaving is told the truth about what happens next", () => {
       "the host must leave even when the grant fails");
   });
 });
+
+describe("The room says who is running it when the host is not", () => {
+  /*
+    The host KEEPS the title when they leave — they can come back and resume,
+    which is the whole reason moderators exist here. So nothing about the
+    roster changes: their HOST pill stays, their tile stays, and to everybody
+    else the room looks exactly as it did while they were steering it.
+
+    That is the gap this closes. Not a handover of the title, which would lock
+    a host out of their own room over a dropped connection — just saying out
+    loud that somebody else is at the wheel.
+  */
+  it("tells the room the host stepped out, and who is covering", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /The host stepped out\. Moderators are running the room\./);
+    assert.match(room, /hostAway && !isHost/, "the host must not be told they have left a room they are in");
+  });
+
+  /*
+    ─── A RECONNECT IS NOT A DEPARTURE ──────────────────────────────────────────
+    A host whose connection blips leaves the roster for seconds and returns.
+    Announcing that the instant it happens flashes "the host stepped out" at
+    everybody over a hiccup, which makes a working room look like a failing
+    one — worse than saying nothing at all.
+
+    So absence must PERSIST before it is reported, while presence clears it
+    immediately: coming back is never news that needs settling.
+  */
+  it("waits before believing it, and stops believing it at once", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /HOST_AWAY_AFTER_MS/, "absence must be timed, not instant");
+    /*
+      The reset lives in the effect's CLEANUP, not its body — that is what runs
+      the instant `hostOnStage` flips back, so a returning host clears the
+      notice at once AND the next departure is timed afresh rather than firing
+      immediately on a stale flag. It also keeps the effect free of a
+      synchronous setState, which cascades renders.
+    */
+    assert.match(
+      room,
+      /return \(\) => \{\s*\n?\s*window\.clearTimeout\(timer\);\s*\n?\s*setHostAway\(false\);/,
+      "the host returning must clear it without waiting, from cleanup"
+    );
+    const delay = /HOST_AWAY_AFTER_MS = (\d+)_000/.exec(room);
+    assert.ok(delay && Number(delay[1]) >= 5, "shorter than a reconnect and the notice fires on a hiccup");
+  });
+
+  /*
+    And it reads the STAGE, not the record. Every stream has an owner; the
+    question the room is asking is whether that person is currently in it.
+  */
+  it("asks whether the host is on the stage, not whether the room has one", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    const probe = room.slice(room.indexOf("const hostOnStage"));
+    assert.match(probe.slice(0, probe.indexOf("]);")), /slots\.some/);
+  });
+});

@@ -218,6 +218,15 @@ interface SlotProps {
 }
 
 /** One frozen empty set, so an unresolved roster is not a new value per render. */
+/**
+ * How long the host must be off the stage before the room says so.
+ *
+ * A reconnect takes a few seconds and is not a departure; ten is long enough
+ * to ride one out and short enough that a real exit is reported while it still
+ * matters to the people deciding whether to keep talking.
+ */
+const HOST_AWAY_AFTER_MS = 10_000;
+
 const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 export function HouseRoom({
@@ -1279,6 +1288,47 @@ function LiveHouse({
     Read off the stage rather than the appointment: being a moderator and being
     on stage are two separate things here, on purpose.
   */
+  /*
+    IS THE HOST ACTUALLY HERE? Read off the STAGE, not off the record: the
+    stream always has an owner, and the question everybody else in the room is
+    asking is whether that person is currently in it.
+  */
+  const hostOnStage = useMemo(
+    () =>
+      slots.some(
+        (slot) => slot.role === "host" || baseIdentity(slot.identity) === stream.ownerId
+      ),
+    [slots, stream.ownerId]
+  );
+
+  /*
+    ─── DELAYED, BECAUSE A RECONNECT IS NOT A DEPARTURE ─────────────────────────
+    A host whose connection blips vanishes from the roster for a few seconds and
+    comes straight back. Announcing that instantly would flash "the host stepped
+    out" at the whole room over a hiccup, which is worse than saying nothing —
+    it makes a working room look like a failing one.
+
+    So absence has to persist before it is reported, and presence clears it at
+    once: coming back is never news that needs settling.
+  */
+  const [hostAway, setHostAway] = useState(false);
+  useEffect(() => {
+    // Present: nothing to schedule, and nothing to clear that the cleanup
+    // below has not already cleared on the way in.
+    if (hostOnStage) return;
+    const timer = window.setTimeout(() => setHostAway(true), HOST_AWAY_AFTER_MS);
+    /*
+      The reset lives in CLEANUP rather than in the body above, which is what
+      runs the moment `hostOnStage` flips back to true — so a returning host
+      clears the notice immediately, and the second departure is timed afresh
+      instead of firing instantly on a stale flag.
+    */
+    return () => {
+      window.clearTimeout(timer);
+      setHostAway(false);
+    };
+  }, [hostOnStage]);
+
   const someModeratorOnStage = useMemo(
     () =>
       slots.some((slot) => (moderatorIds ?? []).includes(baseIdentity(slot.identity))),
@@ -1793,6 +1843,29 @@ function LiveHouse({
       )}
 
       <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-4 xl:px-[30px]", state === "failed" && "opacity-40")}>
+        {/*
+          WHO IS RUNNING THIS ROOM, when it is not the person whose name is on
+          it. The host keeps the title and the HOST pill — they can come back
+          and resume, which is the whole reason this feature exists — so
+          without a line like this the room simply looks normal while nobody is
+          steering it.
+
+          A STATUS LINE, NOT AN ALARM: muted, inline, no icon, no colour. The
+          room is fine; it is being run by somebody else. Panic styling here
+          would empty the room faster than the silence would.
+
+          Not shown to the host. They know where they are, and telling somebody
+          they have stepped out of a room they are standing in is the kind of
+          notice that makes an app feel unaware of itself.
+        */}
+        {stream.status === "live" && hostAway && !isHost && (
+          <p className="text-[12px] leading-4 text-meta">
+            {hasModerators
+              ? "The host stepped out. Moderators are running the room."
+              : "The host stepped out."}
+          </p>
+        )}
+
         <RoomPeopleSection
           title="Speakers"
           rule={false}
