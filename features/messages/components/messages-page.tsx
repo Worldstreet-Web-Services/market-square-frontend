@@ -179,6 +179,15 @@ function Inbox({
             */}
             {/*
               TWO DIFFERENT ANIMALS SHARE THIS TAB — see `answerable`.
+
+              AND THE BUTTONS SAY WHICH ONE THEY ARE ON. "Accept" is right for a
+              chat request, where accepting opens a thread with one person. It
+              is wrong on a house: accepting there puts you IN a room with
+              strangers who can see you from then on, and a label that hides
+              that is the consent problem this whole tab exists to fix
+              (ogazboiz, 2026-09-23: "so people wont just be added... maybe just
+              like the way whatsapp does it"). "Join house" names the thing that
+              actually happens, which is the whole point of asking first.
             */}
             {tab === "requests" && answerable(conversation, me.data?.id) && (
                 <div className="flex items-center gap-2 pl-16.5">
@@ -188,14 +197,22 @@ function Inbox({
                     onClick={() => requests.accept.mutate(conversation.id)}
                     className="ws-press rounded-full bg-spotlight px-3 py-1.5 text-[12px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
-                    Accept
+                    {conversation.kind === "group" ? "Join house" : "Accept"}
                   </button>
                   <button
                     type="button"
                     disabled={answering}
                     onClick={() => requests.decline.mutate(conversation.id)}
-                    // Declining DELETES the thread and tells the sender
-                    // nothing, so it is worded as the plain refusal it is.
+                    // One word, two outcomes, and each is the honest one for its
+                    // kind: declining a DM DELETES the thread and tells the
+                    // sender nothing, while declining a house gives back only
+                    // the seat and leaves the house untouched. The title says
+                    // which, because the button cannot.
+                    title={
+                      conversation.kind === "group"
+                        ? "You won't join. Nobody in the house is told."
+                        : "This removes the request. The sender isn't told."
+                    }
                     className="ws-press rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white/70 transition-colors hover:text-white disabled:opacity-50"
                   >
                     Decline

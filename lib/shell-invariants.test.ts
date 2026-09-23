@@ -5214,3 +5214,44 @@ describe("Declining a request cannot take a house down with it", () => {
     );
   });
 });
+
+describe("Answering a house invite lands everywhere the house is read", () => {
+  /*
+    THE CONTROL IS IN THE INBOX; THE HOUSE IS READ SOMEWHERE ELSE.
+
+    `["ms", "house", <id>]` carries `viewerIsMember`, `memberCount` and
+    `canJoin` — every one of which accepting an invite flips. Invalidating only
+    the conversation lists leaves that entry cached, so somebody who accepts an
+    invite and then opens the house is shown the stranger's view of it: a Join
+    House button on a house they are already in, and a member count one short.
+
+    The key is the CONVERSATION id, which is the id being answered, so one call
+    covers both kinds. For a DM nothing is cached under it and the invalidation
+    costs nothing — which is why it is unconditional rather than branched.
+  */
+  it("invalidates the house entry, not just the conversation lists", () => {
+    const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
+    const settle = hooks.slice(hooks.indexOf("const settle ="), hooks.indexOf("const accept ="));
+    assert.match(settle, /queryKey: \["ms", "conversations"\]/);
+    assert.match(
+      settle,
+      /queryKey: \["ms", "house", conversationId\]/,
+      "accepting an invite must not leave the house showing Join House"
+    );
+  });
+
+  /*
+    "Accept" is right for a chat request and wrong for a house. Accepting a
+    house puts you in a room with strangers who can see you from then on, and a
+    button that hides that is the consent problem the tab exists to fix. The
+    label names the thing that actually happens.
+  */
+  it("asks to JOIN A HOUSE rather than to accept something unnamed", () => {
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+    assert.match(
+      page,
+      /conversation\.kind === "group" \? "Join house" : "Accept"/,
+      "a house invite must not be answered by a button reading only Accept"
+    );
+  });
+});

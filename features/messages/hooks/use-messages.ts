@@ -241,17 +241,27 @@ export function useCreateGroup() {
 }
 
 /**
- * Accept or decline a chat request.
+ * Answer a request — a chat request, or an invitation to a house.
  *
  * Both invalidate every conversation list, not just the requests tab: accepting
  * MOVES a row from Gist Requests into All and Gists, so a tab that kept its
  * cached page would show the same conversation in two places at once.
+ *
+ * ─── AND THE HOUSE'S OWN CACHE, WHICH IS NOT A CONVERSATION LIST ─────────────
+ * A house invite is answered here but READ somewhere else. `["ms", "house", id]`
+ * carries `viewerIsMember`, `memberCount` and `canJoin`, and accepting flips all
+ * three. Invalidate only the lists and somebody who accepts an invite and then
+ * opens the house is shown the cached stranger's view — a Join House button on a
+ * house they just joined, and a member count one short. It is keyed by the
+ * conversation id, which is the id being answered, so the same call covers both
+ * kinds; for a DM nothing is cached under that key and the invalidation is free.
  */
 export function useAnswerRequest() {
   const client = useQueryClient();
   const refreshUnread = useRefreshUnread();
-  const settle = () => {
+  const settle = (_result: unknown, conversationId: string) => {
     client.invalidateQueries({ queryKey: ["ms", "conversations"] });
+    client.invalidateQueries({ queryKey: ["ms", "house", conversationId] });
     refreshUnread();
   };
   const accept = useMutation({
