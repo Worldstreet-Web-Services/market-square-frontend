@@ -5005,8 +5005,23 @@ describe("A house has its own page, the way a person does", () => {
       one — so they are absent until the service ships the fields.
     */
     const screen = stripComments(read("components/layout/house-profile-screen.tsx"));
-    for (const stub of [">Members<", ">Replays<", "gistrooms/week"]) {
+    for (const stub of [">Replays<", "gistrooms/week"]) {
       assert.ok(!screen.includes(stub), `${stub} is on the page with nothing behind it`);
     }
+    /*
+      Members DOES render, but only off a roster that was actually read.
+      `GET /conversations/:id/members` is bearerAuth, so a signed-out reader
+      and a stranger to a private house get nothing — and the section is then
+      absent rather than an empty shelf, because "we may not see who is in
+      here" and "nobody is in here" are different things.
+    */
+    assert.match(screen, /members_\.data && members_\.data\.length > 0 && \(/);
+    /*
+      NO AVATAR BESIDE THE NAME. The node draws one because its cover and its
+      mark are two different images; a house here has exactly one `imageUrl`,
+      so the node's own layout prints the same picture twice a few pixels apart
+      (ogazboiz, 2026-09-23).
+    */
+    assert.doesNotMatch(screen, /size-\[72px\]/, "the hero is printing the banner twice");
   });
 });

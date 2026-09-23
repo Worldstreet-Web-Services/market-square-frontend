@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/states";
-import { useHouse } from "@/features/messages/lib/house";
+import Link from "next/link";
+import { useHouse, useHouseMembers } from "@/features/messages/lib/house";
 import { useJoinGroup } from "@/features/messages";
 import { sq } from "@/lib/square-path";
+import { profileHref } from "@/lib/profile-href";
 import { cn } from "@/lib/cn";
 
 /**
@@ -24,13 +26,18 @@ import { cn } from "@/lib/cn";
  * a different meaning and no address you can send anyone.
  *
  * ─── WHAT THE FILE DRAWS THAT IS NOT HERE, AND WHY IT IS NOT STUBBED ─────────
- * The design also carries a members row, a website, a location, a
- * "gistrooms/week" figure and a Replays rail. The service has a field for NONE
- * of them: `GET /conversations/:id` answers title, description, imageUrl,
- * memberCount, visibility, viewerIsMember and canJoin, and nothing else. The
- * roster exists on `/conversations/discover` items but not on this read;
- * replays would need a `houseConversationId` filter on `GET /streams`, which
- * has no house parameter at all.
+ * The design also carries a website, a location, a "gistrooms/week" figure and
+ * a Replays rail, and the service has a field for none of them. Members DOES
+ * render, off `GET /conversations/:id/members` — but that route is bearerAuth,
+ * so a signed-out reader and a stranger to a private house see no row at all,
+ * while the design draws it in the NON-MEMBER state. The fix is a capped
+ * roster on the house read itself; the backend has taken it, public houses
+ * only, because a private house deliberately never enumerates who is inside.
+ *
+ * Replays needs a `houseConversationId` filter on `GET /streams` — taken too.
+ * The weekly figure turned out to be a REAL CAP a house sets rather than
+ * design filler, so it is a feature being built and NOT a number to draw until
+ * the service enforces it.
  *
  * So those sections are ABSENT rather than empty. A shelf captioned "Members"
  * with nothing on it tells a reader the house has no members, which is a
@@ -46,6 +53,7 @@ export function HouseProfileScreen({ id }: { id: string }) {
   const router = useRouter();
   const house = useHouse(id);
   const join = useJoinGroup();
+  const members_ = useHouseMembers(id, Boolean(house.data));
   const [expanded, setExpanded] = useState(false);
 
   if (house.missing) {
@@ -63,8 +71,15 @@ export function HouseProfileScreen({ id }: { id: string }) {
   const title = data?.title ?? "House";
   const members = data?.memberCount ?? null;
 
+  /*
+    THE COLUMN'S OWN INSET. The node puts the page column at x=112 and the
+    cover at x=144 — 32 between them — so the cover never touches the rule that
+    separates this column from the rail beside it (ogazboiz, 2026-09-23: "no
+    space in the left hand side touching the border line"). Built edge to edge
+    it read as a bleed nobody asked for.
+  */
   return (
-    <div className="mx-auto w-full max-w-[741px] px-4 pb-16 pt-4 md:px-0">
+    <div className="mx-auto w-full max-w-[773px] px-4 pb-16 pt-6 md:px-8">
       {/*
         `Caver` — 741 x 473 at a 20 radius, the house picture full-bleed with a
         scrim at each end: 108 down from the top so Back stays readable, and
@@ -106,18 +121,19 @@ export function HouseProfileScreen({ id }: { id: string }) {
           Back
         </button>
 
-        {/* `Frame 2147230511` — the 72 picture, then the name over the count,
-            16 apart and centred on each other. */}
+        {/* `Frame 2147230511` — the name over the count, on the cover. */}
         <div className="absolute inset-x-6 bottom-6 flex items-end justify-between gap-4">
+          {/*
+            NO AVATAR BESIDE THE NAME, and that is a departure with a reason.
+            The node draws a 72 picture next to the title because its cover is
+            a DIFFERENT image — a photograph behind, the house's own mark in
+            front. A house here has exactly one `imageUrl`, so reproducing the
+            node means printing the same picture twice, a few pixels apart
+            (ogazboiz, 2026-09-23: "the background banner image we are using it
+            has the image already"). The banner is the picture; the name sits
+            on it.
+          */}
           <div className="flex min-w-0 items-center gap-4">
-            <span className="size-[72px] shrink-0 overflow-hidden rounded-[16.36px] bg-white">
-              {data?.imageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
-                <img src={data.imageUrl} alt="" className="size-full object-cover" />
-              ) : (
-                <Avatar name={title} seed={id} size={72} sizeClassName="size-full" className="rounded-none border-0" />
-              )}
-            </span>
             <div className="flex min-w-0 flex-col gap-2">
               <h1 className="truncate text-[24px] font-bold leading-8 text-white">{title}</h1>
               {/* Never "0 members": a null count means the payload does not
@@ -176,6 +192,41 @@ export function HouseProfileScreen({ id }: { id: string }) {
 
         {house.isPending && (
           <div aria-hidden className="h-5 w-40 animate-pulse rounded bg-white/10" />
+        )}
+
+        {/*
+          `Frame 2147230544` — Members: the heading, then 104-wide tiles 24
+          apart, each a 104 x 113 picture at a 32 radius with the name 8 under
+          it. The row is ABSENT rather than empty when the roster cannot be
+          read: "we may not see who is in here" and "nobody is in here" are
+          different things and must not look the same.
+        */}
+        {members_.data && members_.data.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">Members</h2>
+            <ul className="flex gap-6 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {members_.data.slice(0, 12).map((member) => (
+                <li key={member.profile.id} className="flex w-[104px] shrink-0 flex-col gap-2">
+                  <Link
+                    href={sq(profileHref(member.profile))}
+                    className="ws-press block h-[113px] w-[104px] overflow-hidden rounded-[32px] bg-[#EDEDED]"
+                  >
+                    <Avatar
+                      name={member.profile.displayName || member.profile.username}
+                      seed={member.profile.id}
+                      src={member.profile.avatarUrl}
+                      size={113}
+                      sizeClassName="size-full"
+                      className="rounded-none border-0"
+                    />
+                  </Link>
+                  <p className="truncate text-center text-[14px] leading-6 text-white">
+                    {member.profile.displayName || member.profile.username}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     </div>

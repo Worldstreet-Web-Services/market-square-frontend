@@ -50,3 +50,39 @@ export function useHouse(id: string) {
   });
   return { ...query, missing: errorCode(query.error) === "NOT_FOUND" };
 }
+
+/**
+ * A HOUSE'S MEMBERS — `GET /conversations/:id/members`.
+ *
+ * `ConversationMember` is `{ profile, role, joinedAt }`. Unlike the house read
+ * this one is bearerAuth, so it answers for a signed-in reader and not for a
+ * signed-out one, and a house you are not in may refuse it outright. Either
+ * way the section simply does not render: `unavailable` covers both, because
+ * "we cannot read the roster" and "there is no roster" must not look the same
+ * on screen.
+ *
+ * The design draws this row in the NON-MEMBER state, which this cannot serve
+ * — that needs the capped roster on the house read itself, the way
+ * `/conversations/discover` items already carry one. It is with the backend.
+ */
+const MemberSchema = z.object({
+  profile: z.object({
+    id: z.string(),
+    username: z.string(),
+    displayName: z.string().nullable().optional().default(null),
+    avatarUrl: z.string().nullable().optional().default(null),
+  }),
+  role: z.string().nullable().optional().default(null),
+});
+
+export type HouseMember = z.infer<typeof MemberSchema>;
+
+export function useHouseMembers(id: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["ms", "house", id, "members"],
+    queryFn: async () => z.array(MemberSchema).parse(await msApi.authedGet(`/conversations/${id}/members`)),
+    enabled: enabled && id.length > 0,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 1,
+  });
+  return { ...query, unavailable: query.isError };
+}
