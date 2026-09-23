@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { HouseMemberTile } from "@/components/layout/house-member-tile";
 import { EmptyState } from "@/components/ui/states";
 import { useHouse, useHouseMembers, useHouseReplays } from "@/features/messages/lib/house";
+import { useTopics } from "@/features/discovery";
 import { useJoinGroup } from "@/features/messages";
 import { useLeaveGroup } from "@/features/messages/hooks/use-messages";
 import { useMe } from "@/hooks/use-me";
@@ -78,6 +79,9 @@ export function HouseProfileScreen({ id }: { id: string }) {
   */
   const fromHouse = house.data?.members ?? [];
   const replays = useHouseReplays(id, Boolean(house.data));
+  // The replay card wears the room's topics as chips; the labels come from the
+  // shared vocabulary rather than being title-cased off the key.
+  const topics = useTopics();
   const membersQuery = useHouseMembers(
     id,
     Boolean(house.data) && fromHouse.length === 0,
@@ -414,60 +418,14 @@ export function HouseProfileScreen({ id }: { id: string }) {
         )}
 
         {/*
-          `Frame 2147230546` — Replays: the heading, then 359 x 120 cards 16
-          apart at a 22 radius. Each is a 24 mic disc beside a 2-line title,
-          its topic chips and the date under it, and the room's own faces at
-          the right with a +N for the rest.
+          MEMBERS FIRST, REPLAYS LAST — the file's own order (1285:36895:
+          "Members" at y=44151, "Replays" at y=44364, and 1285:36373 agrees).
 
-          THE CONTROL IS DEAD AND SAYS SO. The file draws "Play now"; nothing
-          records a gist room, because the media server runs the SFU alone with
-          no egress, so `replayUrl` is null on every room that has ever ended
-          here. A live-looking Play on a card that cannot play is the same
-          promise the post card refuses to make. It becomes Play the day a room
-          carries a `replayUrl` — the field is already on `Stream`.
-
-          Absent when there is nothing: a house that has never opened a room
-          shows no Replays heading rather than an empty shelf under one.
+          I had them the other way round. It reads wrong as well as being
+          wrong: a house is its people, and its past rooms are what those
+          people did. Leading with the archive puts the record of a
+          conversation above the conversation's participants.
         */}
-        {replays.items.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">Replays</h2>
-            <ul className="flex gap-4 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {replays.items.map((room) => (
-                <li
-                  key={room.id}
-                  className="flex h-[120px] w-[359px] shrink-0 items-center gap-4 rounded-[22px] bg-[#101012] px-[27px]"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <div className="flex items-start gap-2">
-                      {/* `Frame 2147230443` — the 24 mic disc on the create ramp. */}
-                      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)]">
-                        <svg aria-hidden viewBox="0 0 16 16" className="size-3 text-white" fill="none">
-                          <rect x="6" y="2.2" width="4" height="7.2" rx="2" fill="currentColor" />
-                          <path d="M4 7.4a4 4 0 0 0 8 0M8 11.4v2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                        </svg>
-                      </span>
-                      <p className="line-clamp-2 min-w-0 text-[12px] font-semibold leading-4 text-white">
-                        {room.title}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 pl-8">
-                      <span className="rounded-full bg-white/10 px-[12px] py-[5px] text-[10px] font-medium leading-4 text-white/60">
-                        Ended
-                      </span>
-                      {room.endedAt && (
-                        <span className="text-[10px] font-medium leading-4 text-white">
-                          {shortDateLabel(room.endedAt)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {roster.length > 0 && (
           <section
             id="house-members"
@@ -541,6 +499,106 @@ export function HouseProfileScreen({ id }: { id: string }) {
                   </span>
                 </li>
               )}
+            </ul>
+          </section>
+        )}
+
+        {/*
+          `Frame 2147230546` — Replays: the heading, then 359 x 120 cards 16
+          apart at a 22 radius. Each is a 24 mic disc beside a 2-line title,
+          its topic chips and the date under it, and the room's own faces at
+          the right with a +N for the rest.
+
+          THE CONTROL IS DEAD AND SAYS SO. The file draws "Play now"; nothing
+          records a gist room, because the media server runs the SFU alone with
+          no egress, so `replayUrl` is null on every room that has ever ended
+          here. A live-looking Play on a card that cannot play is the same
+          promise the post card refuses to make. It becomes Play the day a room
+          carries a `replayUrl` — the field is already on `Stream`.
+
+          Absent when there is nothing: a house that has never opened a room
+          shows no Replays heading rather than an empty shelf under one.
+        */}
+        {replays.items.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">Replays</h2>
+            <ul className="flex gap-4 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {replays.items.map((room) => (
+                <li
+                  key={room.id}
+                  /*
+                    `Component 22` — 359 x 120 at a 22 radius, and it is the
+                    same GLASS the rest of this file is made of: #101012 at
+                    62% over a 14 background blur, ringed by a 1px INSIDE
+                    stroke at white/18. I had drawn a flat #101012 slab with
+                    no ring, which is the fourth time today the same omission
+                    has cost a card its material.
+                  */
+                  className="flex h-[120px] w-[359px] shrink-0 items-center gap-4 rounded-[22px] bg-[rgba(16,16,18,0.62)] px-[27px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[14px]"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                      {/* `Frame 2147230443` — the 24 mic disc on the create ramp. */}
+                      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)]">
+                        <svg aria-hidden viewBox="0 0 16 16" className="size-3 text-white" fill="none">
+                          <rect x="6" y="2.2" width="4" height="7.2" rx="2" fill="currentColor" />
+                          <path d="M4 7.4a4 4 0 0 0 8 0M8 11.4v2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                      <p className="line-clamp-2 min-w-0 text-[12px] font-semibold leading-4 text-white">
+                        {room.title}
+                      </p>
+                    </div>
+
+                    {/*
+                      THE ROOM'S TOPICS — `Frame 2147225009` and `2147225006`,
+                      white/10 pills carrying Figma's GLASS, 12.3 tall with the
+                      file's own 3.16/3.79 padding. I had left them out
+                      entirely, which is why the card read as a bare line of
+                      text where the file has a row of tags.
+                    */}
+                    {(room.topics ?? []).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 pl-8">
+                        {(room.topics ?? []).slice(0, 2).map((key) => (
+                          <span
+                            key={key}
+                            className="inline-flex items-center rounded-full bg-white/10 px-[3.8px] py-[3.2px] text-[8px] font-medium leading-[10.4px] text-white backdrop-blur-[2px]"
+                          >
+                            {topics.data?.find((entry) => entry.key === key)?.label ?? key}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/*
+                      `Frame 2147230546` — the action and the date, 8 apart.
+
+                      The file's pill says "Play now" on the create ramp. It is
+                      DEAD here and says Ended, for the reason ogazboiz gave on
+                      the post card: nothing records a gist room yet, so a
+                      live-looking Play is a promise the product does not keep.
+                      The SHAPE is the file's — 73 x 22 at a 30 radius — so it
+                      becomes Play the day `replayUrl` carries something, with
+                      only the words and the disabled flag to change.
+                    */}
+                    <div className="flex items-center gap-2 pl-8">
+                      <button
+                        type="button"
+                        disabled
+                        title="This gist room has ended. Recordings aren't available yet."
+                        className="inline-flex h-[22px] cursor-not-allowed items-center gap-[3px] rounded-[30px] bg-white/10 px-3 py-[5px] text-[10px] font-medium leading-4 text-white/50"
+                      >
+                        Ended
+                      </button>
+                      {room.endedAt && (
+                        <span className="text-[10px] font-medium leading-4 text-white">
+                          {shortDateLabel(room.endedAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
             </ul>
           </section>
         )}
