@@ -5052,3 +5052,35 @@ describe("A house has its own page, the way a person does", () => {
     assert.doesNotMatch(screen, /size-\[72px\]/, "the hero is printing the banner twice");
   });
 });
+
+describe("Onboarding asks for notifications, now that one can arrive", () => {
+  /*
+    The row was drawn and DISABLED for months, on a good reason: nothing
+    consumed the grant, and a browser gives a site exactly ONE notification
+    prompt — Chrome and Safari never re-prompt after a dismissal. Spending it
+    on a promise the product could not keep would have burned the real ask for
+    ever. All three things it was waiting on now exist.
+  */
+  const flow = () => stripComments(read("components/layout/onboarding-flow.tsx"));
+
+  it("asks, rather than showing a dead row", () => {
+    assert.match(flow(), /onAsk=\{askNotify\}/, "the notifications row went back to being disabled");
+    assert.doesNotMatch(flow(), /Push notifications aren't wired up yet/);
+  });
+
+  it("reads the deployment's key BEFORE spending the prompt", () => {
+    /*
+      A deployment with no VAPID key cannot deliver a push, so asking there
+      would burn the one prompt for nothing. The key is read first and the row
+      reports unsupported when there is none — which is the same reason the
+      Settings row refuses to offer a switch that saves nothing.
+    */
+    const code = flow();
+    const ask = code.slice(code.indexOf("const askNotify"));
+    assert.ok(
+      ask.indexOf("fetchVapidPublicKey") < ask.indexOf("subscribeThisBrowser"),
+      "it subscribes before checking the deployment can deliver"
+    );
+    assert.match(ask, /if \(!key\) return setNotify\("unsupported"\);/);
+  });
+});
