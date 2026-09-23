@@ -1013,8 +1013,29 @@ function LiveHouse({
       const meta = parseParticipantMeta(slot.metadata);
       const username = meta?.username;
       if (!username) continue;
+      /*
+        THE HOST'S IDENTITY IS NOT AN ID — it is the literal string
+        `broadcaster`, because their publisher token carries no user id. So
+        `baseIdentity` returns "broadcaster" unchanged (there is no `#` to
+        split on), and mentioning the host sent `mentions: ["broadcaster"]`,
+        which is not a profile id. The service rejected the whole request and
+        the sender lost their message to "Request validation failed" — the
+        failure was total, not partial: one bad id and nothing was sent.
+
+        Keyed on the stream's own `ownerId` instead, exactly as the speaker
+        roster does a hundred lines below. THIS IS THE SAME BUG TWICE — the
+        roster's own comment says it "is a bug this codebase has already fixed
+        once", and it was fixed there and not here, because the two lists were
+        built from the same slots on different days.
+
+        A participant we cannot resolve to a real id is NOT offered. Mentioning
+        them cannot work, and a name in the picker that breaks the message when
+        chosen is worse than a name that was never there.
+      */
+      const id = slot.role === "host" ? stream.ownerId : baseIdentity(slot.identity);
+      if (!id || id === "broadcaster") continue;
       seen.set(username.toLowerCase(), {
-        id: baseIdentity(slot.identity),
+        id,
         displayName: participantName(slot.name) ?? username,
         username,
       });
@@ -1029,7 +1050,10 @@ function LiveHouse({
       });
     }
     return [...seen.values()];
-  }, [slots, audience]);
+    // `stream.ownerId` is read for the host's slot, so it belongs here: a room
+    // whose owner resolved late would otherwise keep a mention list built
+    // before the id arrived.
+  }, [slots, audience, stream.ownerId]);
 
   /* ---- reactions ------------------------------------------------------ */
 
