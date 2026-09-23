@@ -64,6 +64,18 @@ export async function fetchStreams(params: {
   kind?: StreamKind;
   /** Topic keys from the viewer's picker; omitted when nothing is chosen. */
   topics?: string[];
+  /**
+   * ONE HOUSE'S ROOMS — `GET /streams?houseConversationId=` on the contract.
+   *
+   * The house page's Replays rail wants the rooms of ONE house, and the only
+   * alternative was loading every ended house room and dropping most of them
+   * on the client. That is not a slow version of the right answer, it is a
+   * wrong one: it breaks the moment there is a second page, which is exactly
+   * when a house has enough history for the rail to matter.
+   *
+   * A malformed uuid is a clean 400 rather than a 500.
+   */
+  houseConversationId?: string;
   cursor?: string;
   limit?: number;
 }) {

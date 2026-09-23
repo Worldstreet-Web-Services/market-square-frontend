@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { HouseMemberTile } from "@/components/layout/house-member-tile";
 import { EmptyState } from "@/components/ui/states";
-import { useHouse, useHouseMembers } from "@/features/messages/lib/house";
+import { useHouse, useHouseMembers, useHouseReplays } from "@/features/messages/lib/house";
 import { useJoinGroup } from "@/features/messages";
 import { useLeaveGroup } from "@/features/messages/hooks/use-messages";
 import { useMe } from "@/hooks/use-me";
@@ -19,6 +19,7 @@ import {
 } from "@/components/layout/house-menu";
 import { sq } from "@/lib/square-path";
 import { cn } from "@/lib/cn";
+import { shortDateLabel } from "@/lib/format";
 
 /**
  * A HOUSE'S OWN PAGE — nodes 1285:36373 and 1285:36895 (SQUARE 2.0 Copy).
@@ -76,10 +77,15 @@ export function HouseProfileScreen({ id }: { id: string }) {
     which is why the count in the hero does not go through this at all.
   */
   const fromHouse = house.data?.members ?? [];
-  const membersQuery = useHouseMembers(id, Boolean(house.data) && fromHouse.length === 0);
-  const roster = fromHouse.length > 0
-    ? fromHouse.map((profile) => ({ profile }))
-    : (membersQuery.data ?? []);
+  const replays = useHouseReplays(id, Boolean(house.data));
+  const membersQuery = useHouseMembers(
+    id,
+    Boolean(house.data) && fromHouse.length === 0,
+  );
+  const roster =
+    fromHouse.length > 0
+      ? fromHouse.map((profile) => ({ profile }))
+      : (membersQuery.data ?? []);
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -115,23 +121,52 @@ export function HouseProfileScreen({ id }: { id: string }) {
         scrim at each end: 108 down from the top so Back stays readable, and
         215 up from the bottom so the name does. Both are the file's own.
       */}
-      <div className="relative aspect-[741/473] w-full overflow-hidden rounded-[20px] bg-[#101012]">
-        {data?.imageUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
-          <img src={data.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
-        ) : (
-          <div aria-hidden className="absolute inset-0 bg-[linear-gradient(160deg,#241640_0%,#101012_70%)]" />
-        )}
-        <div
-          aria-hidden
-          className="absolute inset-x-0 top-0 h-[23%]"
-          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55), rgba(0,0,0,0))" }}
-        />
-        <div
-          aria-hidden
-          className="absolute inset-x-0 bottom-0 h-[46%]"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))" }}
-        />
+      {/*
+        THE COVER CLIPS, THE CARD DOES NOT.
+
+        This was one box with `overflow-hidden` so the picture would take the
+        20 radius — and the overflow menu lives inside it, so the menu was
+        clipped to the banner and disappeared into the photograph (ogazboiz,
+        2026-09-23: "the dropdown is hiding inside the background profile
+        picture"). A menu that opens downward from a control near the bottom
+        edge has nowhere to go inside its own parent.
+
+        So the clip moved INWARD: the picture and its scrims sit in their own
+        rounded, clipping layer, and everything that has to escape — the menu —
+        sits in the outer box, which does not clip.
+      */}
+      <div className="relative aspect-[741/473] w-full rounded-[20px] bg-[#101012]">
+        <div className="absolute inset-0 overflow-hidden rounded-[20px]">
+          {data?.imageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
+            <img
+              src={data.imageUrl}
+              alt=""
+              className="absolute inset-0 size-full object-cover"
+            />
+          ) : (
+            <div
+              aria-hidden
+              className="absolute inset-0 bg-[linear-gradient(160deg,#241640_0%,#101012_70%)]"
+            />
+          )}
+          <div
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-[23%]"
+            style={{
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0.55), rgba(0,0,0,0))",
+            }}
+          />
+          <div
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 h-[46%]"
+            style={{
+              background:
+                "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))",
+            }}
+          />
+        </div>
 
         {/* `Frame 1000002771` — 24 in and 24 down, a 20 glyph and the label 8 away. */}
         <button
@@ -165,13 +200,19 @@ export function HouseProfileScreen({ id }: { id: string }) {
           */}
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex min-w-0 flex-col gap-2">
-              <h1 className="truncate text-[24px] font-bold leading-8 text-white">{title}</h1>
+              <h1 className="truncate text-[24px] font-bold leading-8 text-white">
+                {title}
+              </h1>
               {/* Never "0 members": a null count means the payload does not
                   count them, which is a different claim. */}
               {members !== null && (
                 <p className="flex items-baseline gap-1 text-[15px] leading-5">
-                  <span className="tnum font-semibold text-[#F7F9F9]">{members.toLocaleString()}</span>
-                  <span className="text-white">{members === 1 ? "member" : "members"}</span>
+                  <span className="tnum font-semibold text-[#F7F9F9]">
+                    {members.toLocaleString()}
+                  </span>
+                  <span className="text-white">
+                    {members === 1 ? "member" : "members"}
+                  </span>
                 </p>
               )}
             </div>
@@ -194,7 +235,11 @@ export function HouseProfileScreen({ id }: { id: string }) {
               <button
                 type="button"
                 disabled={!data?.canJoin || join.isPending}
-                title={data && !data.canJoin ? "This house isn't open to join" : undefined}
+                title={
+                  data && !data.canJoin
+                    ? "This house isn't open to join"
+                    : undefined
+                }
                 onClick={() => join.mutate(id)}
                 className="ws-btn-welcome ws-btn-sm ws-press flex items-center justify-center whitespace-nowrap rounded-full font-medium text-white disabled:opacity-40"
               >
@@ -232,9 +277,14 @@ export function HouseProfileScreen({ id }: { id: string }) {
                     onSelect: () =>
                       document
                         .getElementById("house-members")
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        }),
                     disabledReason:
-                      roster.length > 0 ? undefined : "Nobody to show here yet.",
+                      roster.length > 0
+                        ? undefined
+                        : "Nobody to show here yet.",
                   },
                   {
                     key: "report",
@@ -253,7 +303,9 @@ export function HouseProfileScreen({ id }: { id: string }) {
                           label: "Leave house",
                           icon: IconMenuLeave,
                           destructive: true,
-                          disabledReason: me.data?.id ? undefined : "Still loading your account.",
+                          disabledReason: me.data?.id
+                            ? undefined
+                            : "Still loading your account.",
                           // Leaving is removing YOURSELF — the same route an
                           // owner uses to remove anybody, so it needs the
                           // reader's own id and is absent without one.
@@ -273,7 +325,12 @@ export function HouseProfileScreen({ id }: { id: string }) {
       {/* `Frame 2147230547` — the body, 24 between its blocks. */}
       <div className="flex flex-col gap-6 pt-6">
         {data?.description && (
-          <p className={cn("text-[15px] leading-5 text-[#F7F9F9]", !expanded && "line-clamp-6")}>
+          <p
+            className={cn(
+              "text-[15px] leading-5 text-[#F7F9F9]",
+              !expanded && "line-clamp-6",
+            )}
+          >
             {data.description}{" "}
             {!expanded && data.description.length > 260 && (
               <button
@@ -288,7 +345,10 @@ export function HouseProfileScreen({ id }: { id: string }) {
         )}
 
         {house.isPending && (
-          <div aria-hidden className="h-5 w-40 animate-pulse rounded bg-white/10" />
+          <div
+            aria-hidden
+            className="h-5 w-40 animate-pulse rounded bg-white/10"
+          />
         )}
 
         {/*
@@ -311,7 +371,9 @@ export function HouseProfileScreen({ id }: { id: string }) {
         {data?.weeklyRoomLimit != null && (
           <p className="flex items-baseline gap-1 text-[15px] leading-5 text-white">
             <span>Up to</span>
-            <span className="tnum font-semibold text-[#F7F9F9]">{data.weeklyRoomLimit}</span>
+            <span className="tnum font-semibold text-[#F7F9F9]">
+              {data.weeklyRoomLimit}
+            </span>
             <span>gist rooms in any 7 days</span>
           </p>
         )}
@@ -328,22 +390,100 @@ export function HouseProfileScreen({ id }: { id: string }) {
             rel="noreferrer nofollow"
             className="ws-press flex w-fit items-center gap-2 text-[15px] leading-5 text-white underline-offset-4 hover:underline"
           >
-            <svg aria-hidden viewBox="0 0 20 20" className="size-5 text-accent" fill="none">
-              <path d="M8.5 11.5a3 3 0 0 0 4.24 0l2.4-2.4a3 3 0 1 0-4.24-4.25l-1 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M11.5 8.5a3 3 0 0 0-4.24 0l-2.4 2.4a3 3 0 1 0 4.24 4.25l1-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              className="size-5 text-accent"
+              fill="none"
+            >
+              <path
+                d="M8.5 11.5a3 3 0 0 0 4.24 0l2.4-2.4a3 3 0 1 0-4.24-4.25l-1 1"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M11.5 8.5a3 3 0 0 0-4.24 0l-2.4 2.4a3 3 0 1 0 4.24 4.25l1-1"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
             </svg>
             {data.website.replace(/^https?:\/\//, "")}
           </a>
         )}
 
+        {/*
+          `Frame 2147230546` — Replays: the heading, then 359 x 120 cards 16
+          apart at a 22 radius. Each is a 24 mic disc beside a 2-line title,
+          its topic chips and the date under it, and the room's own faces at
+          the right with a +N for the rest.
+
+          THE CONTROL IS DEAD AND SAYS SO. The file draws "Play now"; nothing
+          records a gist room, because the media server runs the SFU alone with
+          no egress, so `replayUrl` is null on every room that has ever ended
+          here. A live-looking Play on a card that cannot play is the same
+          promise the post card refuses to make. It becomes Play the day a room
+          carries a `replayUrl` — the field is already on `Stream`.
+
+          Absent when there is nothing: a house that has never opened a room
+          shows no Replays heading rather than an empty shelf under one.
+        */}
+        {replays.items.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">Replays</h2>
+            <ul className="flex gap-4 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {replays.items.map((room) => (
+                <li
+                  key={room.id}
+                  className="flex h-[120px] w-[359px] shrink-0 items-center gap-4 rounded-[22px] bg-[#101012] px-[27px]"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                      {/* `Frame 2147230443` — the 24 mic disc on the create ramp. */}
+                      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)]">
+                        <svg aria-hidden viewBox="0 0 16 16" className="size-3 text-white" fill="none">
+                          <rect x="6" y="2.2" width="4" height="7.2" rx="2" fill="currentColor" />
+                          <path d="M4 7.4a4 4 0 0 0 8 0M8 11.4v2.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                      <p className="line-clamp-2 min-w-0 text-[12px] font-semibold leading-4 text-white">
+                        {room.title}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 pl-8">
+                      <span className="rounded-full bg-white/10 px-[12px] py-[5px] text-[10px] font-medium leading-4 text-white/60">
+                        Ended
+                      </span>
+                      {room.endedAt && (
+                        <span className="text-[10px] font-medium leading-4 text-white">
+                          {shortDateLabel(room.endedAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {roster.length > 0 && (
-          <section id="house-members" className="flex flex-col gap-4 scroll-mt-24">
-            <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">Members</h2>
+          <section
+            id="house-members"
+            className="flex flex-col gap-4 scroll-mt-24"
+          >
+            <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">
+              Members
+            </h2>
             {/* `Frame 2147225670` — the tiles 24 apart, centred on each other,
                 and the rail clips rather than wraps: the file draws one row. */}
             <ul className="flex items-center gap-6 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {roster.slice(0, 12).map((member) => (
-                <HouseMemberTile key={member.profile.id} profile={member.profile} />
+                <HouseMemberTile
+                  key={member.profile.id}
+                  profile={member.profile}
+                />
               ))}
               {/* `Frame 2147225673` — View all: a 48 disc over its label, both
                   centred in a 104 x 113 cell so it sits on the tiles' photos
@@ -362,14 +502,43 @@ export function HouseProfileScreen({ id }: { id: string }) {
                     className="ws-press grid size-12 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
                     aria-label="View all members"
                   >
-                    <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="none">
-                      <circle cx="5.6" cy="5" r="2.1" stroke="currentColor" strokeWidth="1.3" />
-                      <circle cx="11" cy="5.6" r="1.7" stroke="currentColor" strokeWidth="1.3" />
-                      <path d="M1.9 12.4c0-1.8 1.7-2.8 3.7-2.8s3.7 1 3.7 2.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                      <path d="M11.2 9.9c1.7.1 2.9 1 2.9 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 16 16"
+                      className="size-4"
+                      fill="none"
+                    >
+                      <circle
+                        cx="5.6"
+                        cy="5"
+                        r="2.1"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                      />
+                      <circle
+                        cx="11"
+                        cy="5.6"
+                        r="1.7"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                      />
+                      <path
+                        d="M1.9 12.4c0-1.8 1.7-2.8 3.7-2.8s3.7 1 3.7 2.8"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M11.2 9.9c1.7.1 2.9 1 2.9 2.5"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                      />
                     </svg>
                   </button>
-                  <span className="text-[14px] leading-[16.5px] text-white">View all</span>
+                  <span className="text-[14px] leading-[16.5px] text-white">
+                    View all
+                  </span>
                 </li>
               )}
             </ul>

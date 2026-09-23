@@ -5,6 +5,7 @@ import { z } from "zod";
 import { errorCode } from "@/lib/api/envelope";
 import { msApi } from "@/lib/api/service";
 import { ProfileSchema } from "@/lib/api/schemas";
+import { fetchStreams } from "@/features/streams/lib/api";
 
 /**
  * ONE HOUSE, READ BY ANYBODY — `GET /conversations/:id`.
@@ -107,4 +108,28 @@ export function useHouseMembers(id: string, enabled: boolean) {
     retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 1,
   });
   return { ...query, unavailable: query.isError };
+}
+
+/**
+ * A HOUSE'S PAST ROOMS — the Replays rail (node 1285:37015).
+ *
+ * `GET /streams?houseConversationId=<id>&status=ended`. The filter is on the
+ * contract and indexed (`streams_house_created_idx`), which is what makes this
+ * one house's history rather than everybody's filtered down on the client —
+ * and the client version breaks on page two, which is precisely when a house
+ * has enough history for this rail to exist at all.
+ *
+ * Absent when there is nothing: a house that has never opened a room shows no
+ * Replays heading rather than an empty shelf under one.
+ */
+export function useHouseReplays(id: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["ms", "house", id, "replays"],
+    queryFn: () => fetchStreams({ houseConversationId: id, status: "ended", limit: 12 }),
+    enabled: enabled && id.length > 0,
+    // A house's history does not change while somebody reads the page.
+    staleTime: 5 * 60_000,
+    retry: (count, error) => errorCode(error) !== "NOT_FOUND" && count < 1,
+  });
+  return { ...query, items: query.data?.items ?? [] };
 }

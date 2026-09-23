@@ -5005,9 +5005,25 @@ describe("A house has its own page, the way a person does", () => {
       one — so they are absent until the service ships the fields.
     */
     const screen = stripComments(read("components/layout/house-profile-screen.tsx"));
-    for (const stub of [">Replays<", "gistrooms/week"]) {
-      assert.ok(!screen.includes(stub), `${stub} is on the page with nothing behind it`);
-    }
+    // The weekly cap is still the one thing with no field behind it — and a
+    // cap that displays but does not enforce is worse than no cap, so it waits
+    // for the service rather than being drawn from a guess.
+    assert.ok(!screen.includes("gistrooms/week"), "the cap is drawn with nothing behind it");
+    /*
+      REPLAYS DOES render, off `GET /streams?houseConversationId=&status=ended`
+      — one house's history, server-side. The client-filtered version breaks on
+      page two, which is exactly when a house has enough history for the rail
+      to matter. Absent when the house has never opened a room: a heading over
+      nothing says the house has no past, which is a claim.
+    */
+    assert.match(screen, /replays\.items\.length > 0 && \(/);
+    /*
+      AND ITS CONTROL IS DEAD. The file draws "Play now"; the media server runs
+      the SFU alone with no egress, so no room that has ever ended here carries
+      a `replayUrl`. A live-looking Play that cannot play is the promise the
+      post card refuses to make, for the same reason.
+    */
+    assert.doesNotMatch(screen, />Play now</, "Replays offers a play that cannot play");
     /*
       Members DOES render, but only off a roster that was actually read.
       `GET /conversations/:id/members` is bearerAuth, so a signed-out reader
