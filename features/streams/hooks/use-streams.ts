@@ -814,14 +814,35 @@ export function useSpeakerInvites(streamId: string, enabled: boolean) {
 /**
  * The host's approved speakers, by row. The seat that settles an accepted
  * invitation, read from the service rather than waiting on the LiveKit grant.
+ *
+ * ─── SLOWER THAN THE PENDING QUEUE, ON PURPOSE ───────────────────────────────
+ * The two lists look alike and change for completely different reasons.
+ *
+ * PENDING arrives from OTHER PEOPLE — somebody raises a hand and the host has
+ * no other way to learn of it, so that queue is genuinely event-driven and
+ * keeps the short poll.
+ *
+ * APPROVED changes when the HOST ACTS, and `useResolveSpeakerRequest`
+ * invalidates `["ms","stream",id,"speaker-requests"]` on success — a PREFIX of
+ * this key, so seating or moving somebody down refreshes this list
+ * immediately, not on the next tick. The poll is only covering the one case
+ * the host did not cause: a guest accepting an invitation. And even that shows
+ * instantly in the room, because accepting makes them a LiveKit participant
+ * and the roster is live.
+ *
+ * So the short poll was re-asking a question the mutation had already
+ * answered. At 8s it was 7.5 requests a minute per host for a list that is
+ * usually identical to the last one.
  */
+const SEATED_POLL_MS = 30_000;
+
 export function useSeatedSpeakers(streamId: string, enabled: boolean) {
   return useQuery({
     queryKey: ["ms", "stream", streamId, "speaker-requests", "approved"],
     queryFn: () => fetchSeatedSpeakers(streamId),
     enabled,
     retry: false,
-    refetchInterval: enabled ? SPEAKER_POLL_MS : false,
+    refetchInterval: enabled ? SEATED_POLL_MS : false,
   });
 }
 
