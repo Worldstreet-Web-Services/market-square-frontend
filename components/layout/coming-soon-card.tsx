@@ -135,9 +135,15 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
         </span>
       </div>
 
-      {/* `Frame 2147230722` — the right column: 259 in, 15 down, 67 wide, 8
-          gap, right-aligned. */}
-      <div className="absolute left-[259px] top-[15px] flex w-[67px] flex-col items-end gap-[8px]">
+      {/* `Frame 2147230722` — the right column: 15 down, 8 gap, right-aligned.
+          ANCHORED BY ITS RIGHT INSET (16 = the card's 342 less the node's
+          259 + 67), not by a left offset and a fixed 67 width. The 67 only
+          held while "Starts in …" was five pixels; at the 8 it is drawn at
+          (see the note at the top of this file) a real "Starts in 27h 8m"
+          wraps to two lines inside it. Right-anchored, the block grows
+          leftward into the 35px of slack the node leaves before the text
+          column, and the edge the design actually fixes stays exact. */}
+      <div className="absolute right-[16px] top-[15px] flex flex-col items-end gap-[8px]">
         <div className="flex flex-col items-end gap-[4px]">
           {startsAt && (
             <div className="flex flex-col items-end gap-[2px]">
@@ -158,7 +164,7 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
             /* `Frame 2147230649` — 2/4 padding on a full radius, #9F5AFF at 9%.
                Its label is 5px in the file; see the note at the top of this
                file for why it is drawn at 8. */
-            <span className="rounded-full bg-[rgba(159,90,255,0.09)] px-[4px] py-[2px] text-[8px] font-medium leading-[10.4px] text-[#9F65FD]">
+            <span className="whitespace-nowrap rounded-full bg-[rgba(159,90,255,0.09)] px-[4px] py-[2px] text-[8px] font-medium leading-[10.4px] text-[#9F65FD]">
               {startsInLabel(startsAt)}
             </span>
           )}

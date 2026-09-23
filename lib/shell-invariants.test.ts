@@ -2610,6 +2610,17 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.doesNotMatch(soonCard, /bg-\[#3C3C3C\]/, "the divider is gone in the redesign");
     assert.match(soonCard, /text-\[8px\] font-medium leading-\[10\.4px\]">Hosted by/);
     assert.match(soonCard, /text-\[10px\] font-semibold leading-\[10\.4px\]/);
+    /*
+      "Starts in 27h 8m" WRAPPED TO TWO LINES, and the cause was a deviation
+      rather than the node: the label is 5px in the file and is drawn at 8, so
+      the file's 67-wide right column — which only ever fitted 5px text — was
+      too narrow for a real countdown. Anchoring that column by its right inset
+      instead of a left offset plus a fixed width lets it grow leftward into
+      the slack the node leaves, and keeps the edge the design actually fixes.
+    */
+    assert.match(soonCard, /absolute right-\[16px\] top-\[15px\]/);
+    assert.doesNotMatch(soonCard, /top-\[15px\] flex w-\[67px\]/, "the right column went back to a width that only fits 5px text");
+    assert.match(soonCard, /whitespace-nowrap rounded-full bg-\[rgba\(159,90,255,0\.09\)\]/);
   });
 
   it("does not drop a host into the soundcheck for a room scheduled for later", () => {
