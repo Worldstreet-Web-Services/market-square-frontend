@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { GistRoomCard } from "@/components/layout/gist-room-card";
+import { LiveRoomCard } from "@/features/streams/components/live-room-card";
 import { useStreamList } from "@/features/streams";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { sq } from "@/lib/square-path";
@@ -71,12 +71,20 @@ export function LiveGistRooms() {
         ref={railRef}
         className="flex gap-[17px] overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
+        {/*
+          NODE 2078:19217 — this rail's own card, and ONLY this rail's.
+
+          `GistRoomCard` still draws the room in a DM, on the gist-rooms screen
+          and in a shared link, where it is a reference to a room rather than
+          an invitation into one. Here it is the invitation: the file leads
+          with the topic, gives the title two lines, and puts the people who
+          are already inside next to a LIVE badge and a live count. Swapping
+          the shared component would have changed three surfaces nobody asked
+          about.
+        */}
         {items.map((room) => (
           <div key={room.id} className="shrink-0 snap-start">
-            <GistRoomCard
-              streamId={room.id}
-              conversationId={room.houseConversationId ?? ""}
-            />
+            <LiveRoomCard stream={room} />
           </div>
         ))}
       </div>
