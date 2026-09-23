@@ -6,7 +6,6 @@ import { ColumnHeader } from "@/components/layout/column-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/states";
 import { usePost } from "@/features/feed/hooks/use-feed";
-import { RoomChatComments } from "@/features/feed/components/room-chat-excerpt";
 import { CommentBox, CommentThread, type ReplyTarget } from "@/features/feed/components/comment-thread";
 import { PostCard } from "@/features/feed/components/post-card";
 import { Composer } from "@/features/feed/components/composer";
@@ -101,13 +100,6 @@ export function PostDetailPage({
 
       {/* The thread — replies nest under their comment, TikTok's shape. See
           `comment-thread.tsx` for what is live and what waits on a route. */}
-      {/* The room's chat sits with the comments, because that is what it is
-          to a reader: the conversation under this post. Labelled, so nobody
-          mistakes it for a reply they can answer here. */}
-      {post.data?.deepLink?.kind === "stream" && (
-        <RoomChatComments streamId={post.data.deepLink.ref} />
-      )}
-
       <CommentThread postId={postId} onReply={setReplyTo} focusCommentId={focusCommentId} />
     </>
   );

@@ -5414,81 +5414,57 @@ describe("An ended room says how many came, and never guesses", () => {
   });
 });
 
-describe("A room's chat on a post is gated before it is fetched", () => {
+describe("A room's chat reaches a post as COMMENTS, not as an overlay", () => {
   /*
-    WHO MAY SEE IT is decided in `lib/room-chat-visibility.ts`, which has its
-    own behavioural tests. What is pinned HERE is the wiring, because the
-    judgement being right does not help if the component asks the question too
-    late.
+    It used to be drawn beside the comments and labelled, because it was not
+    one: no comment id, so nothing could reply, and after the room ended it sat
+    frozen next to a live thread. ogazboiz overruled that — "it should be like
+    normal comment even though it has ended they can reply" — and the label was
+    the tell. It was me papering over second-class rows.
 
-    `enabled` carries the gate. Gate only the RENDER and a refused room is
-    still requested and still lands in the client's query cache — the same leak
-    one component away, and one that any later `useChat` on the same key would
-    read straight out of memory. The request must not happen at all.
+    The service now writes each line of a public room's chat as an ORDINARY
+    comment on the announcement post. So replies nest, likes work, the count is
+    right, and nothing outlives the room because nothing was tied to it.
+
+    ─── WHICH MEANS THIS CLIENT HAS NOTHING TO SAY ABOUT IT ─────────────────────
+    No component, no gate, no label. A comment is a comment. The judgement about
+    whether a room's words may be public lives once, on the service, in the same
+    `signalableRoom` that gates the socket topic — and a ticketed or private
+    room writes nothing, so the four access rules survive because only what
+    anyone could already read ever moves.
+
+    This test exists to keep the deletion deleted. Re-adding a client-side
+    overlay would put that judgement in two places, and the second one is the
+    one that drifts.
   */
-  it("never even requests the chat of a room it may not show", () => {
-    const excerpt = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
-    assert.match(
-      excerpt,
-      /const allowed = mayShowRoomChat\(stream\)/,
-      "the gate is `mayShowRoomChat`, which is where the tests are"
+  it("draws no room-chat overlay of its own", () => {
+    assert.equal(
+      existsSync(resolve("features/feed/components/room-chat-excerpt.tsx")),
+      false,
+      "the overlay came back; a room's chat reaches a post as comments now"
     );
-    assert.match(
-      excerpt,
-      /useChat\(streamId, allowed,/,
-      "a refused room must not be FETCHED, not merely left unrendered"
-    );
-  });
-
-  /*
-    AND IT LIVES WITH THE COMMENTS, NOT ON THE CARD.
-
-    What people are saying in the room IS the conversation under the post, so
-    it belongs where a reader looks for conversation (ogazboiz: "the comment
-    suppose to be in the comment section aspect in like the normal aspect").
-    On the card it was a decoration on an advert; under the post it is the
-    thing itself.
-
-    It reads the room ITSELF rather than taking a verdict from the caller: the
-    comment surfaces know a post, not a stream, and threading a whole room
-    through three of them to answer one question would scatter the judgement
-    that `mayShowRoomChat` exists to hold in one place.
-  */
-  it("puts the room's chat with the comments, and reads the room itself", () => {
-    const card = stripComments(read("features/feed/components/room-post-card.tsx"));
-    assert.ok(!card.includes("RoomChatComments"), "the card advertises the room; it does not host its chat");
-    const block = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
-    assert.match(block, /const room = useStream\(streamId,/, "the gate needs the room, so it reads it");
     for (const surface of [
       "features/feed/components/comments-sheet.tsx",
       "features/feed/components/post-detail-page.tsx",
+      "features/feed/components/post-card.tsx",
+      "features/feed/components/room-post-card.tsx",
     ]) {
-      assert.match(stripComments(read(surface)), /<RoomChatComments streamId=/, surface);
+      const source = stripComments(read(surface));
+      assert.ok(!source.includes("RoomChatComments"), `${surface} draws the room's chat itself again`);
+      assert.ok(!source.includes("mayShowRoomChat"), `${surface} re-decides what the service already decided`);
     }
   });
 
   /*
-    LABELLED, because they are not replies. Nobody typed them here, they
-    cannot be answered here, and somebody replying to one in the comment box
-    is talking past the person who said it. Unlabelled they read as comments,
-    and the first reply lands on a stranger.
+    The predicate itself STAYS, and its tests with it. It is the client's copy
+    of the rule the service gates on, and it still answers the other question:
+    whether a room may be announced on the public socket topic. Deleting it
+    with the overlay would have taken that with it.
   */
-  it("says the words came from the room rather than from the comments", () => {
-    const block = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
-    assert.match(block, /Being said in the room|Said in the room/);
-  });
-
-  /*
-    A feed is many cards. The room panel's five-second poll is right for one
-    reader watching one conversation and wrong for a screen of them, and an
-    ENDED room is a frozen transcript that cannot change at all — `false`, not
-    a slower number.
-  */
-  it("does not poll a feed at the room panel's cadence", () => {
-    const excerpt = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
-    assert.match(excerpt, /live \? FEED_POLL_MS : false/, "an ended room must not be polled");
-    const poll = /FEED_POLL_MS = (\d+)_000/.exec(excerpt);
-    assert.ok(poll && Number(poll[1]) >= 15, "a per-card poll faster than 15s is a feed hammering the service");
+  it("keeps the rule the socket topic still needs", () => {
+    assert.ok(existsSync(resolve("lib/room-chat-visibility.ts")));
+    const signal = stripComments(read("features/streams/hooks/use-room-chat-signal.ts"));
+    assert.match(signal, /maySignalRoomChat/, "the topic gate lost its rule");
   });
 });
 
