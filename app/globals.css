@@ -29,6 +29,12 @@
   --color-spotlight: #7e3beb;
   --color-spotlight-chip: #6829ce;
   --color-spotlight-chip-ink: #c27aff;
+  /* The room's MODERATOR pill (node 1285:30456) — the label at full, the pill
+     behind it at 10%. Deliberately not the spotlight purple: a moderator drawn
+     in the accent reads as a second host, and the whole point of the pair of
+     badges is that the two offices are different. One appointed the other and
+     can take it back. Small text only, always on its own tinted pill. */
+  --color-moderator: #cd640f;
   /* The live-arena CTA, and ONLY that. Green here does not mean "positive" —
      --color-up (#7ce7b0) already owns value deltas — it is the brand's arena
      colour, revised off the purple ramp on 2026-08-26. Four stops because the

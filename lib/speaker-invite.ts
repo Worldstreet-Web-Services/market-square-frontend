@@ -76,7 +76,20 @@ export type InviteView =
     };
 
 /** The contract's lifetime of an invitation. The server owns it; this only caps a reading. */
-export const INVITE_TTL_MS = 60_000;
+/**
+ * HOW LONG AN INVITATION STAYS ANSWERABLE — the service's window, mirrored.
+ *
+ * Raised from 60s when the service raised it. A minute was a reflex test
+ * rather than an invitation: a listener with their screen off never saw it,
+ * and the host read "isn't available" about somebody who was simply not
+ * looking at their phone.
+ *
+ * This is the FALLBACK. `inviteExpiresAt` off the row is authoritative
+ * wherever it is trustworthy; this only decides when the server's own
+ * deadline cannot be trusted, so it must not drift from the service's value
+ * or the two disagree about when the same invitation died.
+ */
+export const INVITE_TTL_MS = 180_000;
 
 /**
  * When an invitation stops being answerable, on THIS device's clock, or null

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { skipToken, useQuery } from "@tanstack/react-query";
+import { profileHref } from "@/lib/profile-href";
+import { sq } from "@/lib/square-path";
 import { setChatOpen } from "@/lib/chat-open-store";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
@@ -177,30 +180,85 @@ function Inbox({
               act: `requestedBy` is the person who asked, and only the other
               side may answer.
             */}
-            {tab === "requests" &&
-              conversation.requestState === "pending" &&
-              conversation.requestedBy !== me.data?.id && (
-                <div className="flex items-center gap-2 pl-16.5">
+            {/*
+              TWO DIFFERENT ANIMALS SHARE THIS TAB — see `answerable`.
+
+              AND THE BUTTONS SAY WHICH ONE THEY ARE ON. "Accept" is right for a
+              chat request, where accepting opens a thread with one person. It
+              is wrong on a house: accepting there puts you IN a room with
+              strangers who can see you from then on, and a label that hides
+              that is the consent problem this whole tab exists to fix
+              (ogazboiz, 2026-09-23: "so people wont just be added... maybe just
+              like the way whatsapp does it"). "Join house" names the thing that
+              actually happens, which is the whole point of asking first.
+            */}
+            {tab === "requests" && answerable(conversation, me.data?.id) && (
+              <div className="flex flex-col gap-2 pl-16.5">
+                {/*
+                  WHO ADDED YOU, ON THE ROW, BEFORE YOU ANSWER.
+
+                  Which house is already on the row above. This is the other
+                  half of the question, and it is the half that decides the
+                  answer: recognising the person is why you join, and not
+                  recognising them is why the gate exists at all.
+
+                  The name is a LINK, because "who is this?" is a question you
+                  answer by looking, not by guessing from a name — and looking
+                  before accepting is the entire point of being asked.
+
+                  A null inviter is not an error and not a missing field: you
+                  joined a public house yourself, or the membership predates the
+                  gate. The line then says what happened without naming anybody,
+                  rather than disappearing — it is still the sentence that
+                  explains why this row is here.
+                */}
+                {conversation.kind === "group" && (
+                  <p className="text-[12px] leading-4 text-white/55">
+                    {conversation.invitedBy ? (
+                      <>
+                        <Link
+                          href={sq(profileHref(conversation.invitedBy))}
+                          className="ws-press font-semibold text-white/80 hover:underline"
+                        >
+                          {conversation.invitedBy.displayName || conversation.invitedBy.username}
+                        </Link>{" "}
+                        added you to this house
+                      </>
+                    ) : (
+                      "You were added to this house"
+                    )}
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     disabled={answering}
                     onClick={() => requests.accept.mutate(conversation.id)}
                     className="ws-press rounded-full bg-spotlight px-3 py-1.5 text-[12px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
-                    Accept
+                    {conversation.kind === "group" ? "Join house" : "Accept"}
                   </button>
                   <button
                     type="button"
                     disabled={answering}
                     onClick={() => requests.decline.mutate(conversation.id)}
-                    // Declining DELETES the thread and tells the sender
-                    // nothing, so it is worded as the plain refusal it is.
+                    // One word, two outcomes, and each is the honest one for its
+                    // kind: declining a DM DELETES the thread and tells the
+                    // sender nothing, while declining a house gives back only
+                    // the seat and leaves the house untouched. The title says
+                    // which, because the button cannot.
+                    title={
+                      conversation.kind === "group"
+                        ? "You won't join. Nobody in the house is told."
+                        : "This removes the request. The sender isn't told."
+                    }
                     className="ws-press rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white/70 transition-colors hover:text-white disabled:opacity-50"
                   >
                     Decline
                   </button>
                 </div>
-              )}
+              </div>
+            )}
           </div>
         ))}
 
@@ -268,6 +326,43 @@ function NewChatFab({ onClick }: { onClick: () => void }) {
       </svg>
     </button>
   );
+}
+
+/**
+ * MAY THIS ROW BE ANSWERED HERE, AND IS IT SAFE TO?
+ *
+ * The requests tab now holds two different animals.
+ *
+ *   · A CHAT REQUEST — the CONVERSATION itself is pending. Accept flips the
+ *     thread; decline DELETES it and every message in it, deliberately,
+ *     because for a DM the whole thread is the request.
+ *   · A HOUSE INVITE — the conversation is an ordinary, accepted group. What
+ *     is pending is MY SEAT in it. Decline removes the seat and nothing else:
+ *     the house, its history and everybody else stay exactly as they were.
+ *
+ * `requestState` DOES NOT TELL THEM APART. On a house invite it reads
+ * `accepted`, because the house is accepted — so a renderer that switches on
+ * it sends a house down the DM path, where decline deletes the house for
+ * everyone. The discriminator is `kind`.
+ *
+ * ─── WHY THE GROUP BRANCH CANNOT FIRE BEFORE THE SERVICE IS READY ────────────
+ * The seat-level accept and decline ship with the service's own change. Until
+ * that deploys, its requests filter returns pending CONVERSATIONS only, so no
+ * group can appear in this tab at all and this branch is unreachable. And a
+ * group that somehow did arrive carrying `requestState: "pending"` is not a
+ * seat invite — it is something older that the seat-level decline does not
+ * understand — so it is refused here rather than answered into the route that
+ * would take the house down. No deploy ordering, and no window where the
+ * destructive path is reachable from a house.
+ */
+function answerable(
+  conversation: { kind: string; requestState?: string; requestedBy?: string | null },
+  viewerId: string | undefined
+): boolean {
+  if (conversation.kind === "direct") {
+    return conversation.requestState === "pending" && conversation.requestedBy !== viewerId;
+  }
+  return conversation.requestState !== "pending";
 }
 
 export function MessagesPage({

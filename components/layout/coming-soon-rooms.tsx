@@ -49,9 +49,9 @@ export function ComingSoonRooms() {
 
       {/* The rail, clipped at the column's edge; the horizontal cards at the
           node's own 467 on a 16 gap (see the header). */}
-      <div className="flex items-stretch gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex items-stretch gap-6 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((room) => (
-          <div key={room.id} className="w-100 max-w-[95%] shrink-0">
+          <div key={room.id} className="w-[342px] max-w-[95%] shrink-0">
             <ComingSoonCard stream={room} />
           </div>
         ))}

@@ -93,7 +93,7 @@ import {
   type MessageReplyTo,
 } from "@/features/messages/lib/types";
 import type { Profile } from "@/lib/api/schemas";
-import { asset } from "@/lib/square-path";
+import { asset, sq } from "@/lib/square-path";
 
 /**
  * The conversation pane — the right-hand 751px column of the Messages screen.
@@ -372,8 +372,22 @@ function ThreadHeader({
             {/* QA: the person's or group's name is the page's heading, so it is set
                 like one — 16px, up from the file's 12. */}
             <h1 className="truncate text-[16px] font-bold leading-6 text-white">
-              {/* A one-to-one chat's name opens that person, like their face. */}
-              {!group && peer?.username ? (
+              {/*
+                A NAME HERE OPENS THE THING IT NAMES — a person's opens their
+                profile, and a house's opens the house.
+
+                Only the first was true. Once you joined a house it lived in
+                your inbox and there was no route back to its page at all: not
+                the members, the description or the replays you looked at
+                before deciding to join (ogazboiz, 2026-09-23: "when i have
+                join the house how can i see the profile"). The page existed
+                and became unreachable the moment you used it.
+              */}
+              {group ? (
+                <Link href={sq(`/houses/${conversation.id}`)} className="hover:underline">
+                  {title}
+                </Link>
+              ) : peer?.username ? (
                 <Link href={profileHref(peer)} className="hover:underline">
                   {title}
                 </Link>

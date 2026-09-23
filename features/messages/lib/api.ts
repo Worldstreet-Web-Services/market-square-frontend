@@ -262,6 +262,24 @@ export interface GroupEdit {
   description?: string | null;
   imageUrl?: string | null;
   visibility?: "public" | "private";
+  /**
+   * THE HOUSE'S LINK, http(s) only — the service enforces that at its own
+   * boundary and the profile re-checks before rendering an anchor, because a
+   * public page must never carry a `javascript:` href.
+   *
+   * Null CLEARS it, which is why the type is nullable and the key is omitted
+   * when untouched: "leave it alone" and "remove it" are different edits and
+   * an optional-only field cannot say the second.
+   */
+  website?: string | null;
+  /**
+   * HOW MANY ROOMS THIS HOUSE MAY OPEN IN ANY SEVEN DAYS, 1-50, owner only.
+   *
+   * NULL MEANS UNCAPPED and is a real value rather than a missing one — it is
+   * how a cap is REMOVED. The profile draws the line only when this is
+   * non-null, so null and absent must stay distinguishable all the way down.
+   */
+  weeklyRoomLimit?: number | null;
 }
 
 /**
@@ -283,6 +301,10 @@ export async function updateGroup(conversationId: string, edit: GroupEdit) {
     ...(edit.description !== undefined ? { description: edit.description } : {}),
     ...(edit.imageUrl !== undefined ? { imageUrl: edit.imageUrl } : {}),
     ...(edit.visibility !== undefined ? { visibility: edit.visibility } : {}),
+    // `null` is sent, `undefined` is not: clearing a link and leaving it alone
+    // are different edits, and `!== undefined` is what keeps them apart.
+    ...(edit.website !== undefined ? { website: edit.website } : {}),
+    ...(edit.weeklyRoomLimit !== undefined ? { weeklyRoomLimit: edit.weeklyRoomLimit } : {}),
   });
 }
 

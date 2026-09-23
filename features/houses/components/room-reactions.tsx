@@ -37,6 +37,29 @@ const MAX_ON_SCREEN = 24;
 /** One tap can burst, but not spray the whole stage. */
 const MAX_BURST = 8;
 
+/**
+ * HOW LONG ONE EMOJI TAKES TO DRIFT UP, in seconds.
+ *
+ * The travel is fixed in CSS (-42vh), so this IS the speed: a longer duration
+ * over the same distance is a slower drift, not a longer one. Raised from
+ * 2.2–3.0s, which read as a flick — the emoji was gone before anybody could
+ * see whose it was or what it said (ogazboiz, 2026-09-23: "can we reduce the
+ * speed a little bit for the reaction time").
+ *
+ * Kept as a RANGE rather than one number: identical durations make a burst
+ * move like a single object, and the spread is what makes it read as several
+ * people reacting rather than one animation playing.
+ *
+ * `MAX_ON_SCREEN` (24) is what keeps the slower drift from becoming clutter —
+ * each one lives longer, so more overlap, and the cap is the thing that bounds
+ * it. Raising these much further means lowering that.
+ *
+ * Reduced motion ignores both: `.ws-reaction` is pinned to 0.8s in globals.css,
+ * and a slower drift is the opposite of what that setting asks for.
+ */
+const FLOAT_SECONDS_MIN = 3.2;
+const FLOAT_SECONDS_SPREAD = 1;
+
 export function useRoomReactions() {
   const [items, setItems] = useState<FloatingReaction[]>([]);
   const timers = useRef<number[]>([]);
@@ -59,7 +82,7 @@ export function useRoomReactions() {
         left: 8 + Math.random() * 74,
         drift: Math.random() * 44 - 22,
         rotate: Math.random() * 40 - 20,
-        duration: 2.2 + Math.random() * 0.8,
+        duration: FLOAT_SECONDS_MIN + Math.random() * FLOAT_SECONDS_SPREAD,
       };
       setItems((current) => [...current.slice(-(MAX_ON_SCREEN - 1)), item]);
       const timer = window.setTimeout(() => {
