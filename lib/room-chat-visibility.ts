@@ -75,3 +75,44 @@ export function mayShowRoomChat(stream: RoomChatSubject | null | undefined): boo
   if (house.visibility === "public") return true;
   return house.viewerIsMember === true;
 }
+
+/**
+ * MAY THIS ROOM'S CHAT BE SIGNALLED ON A PUBLIC SOCKET TOPIC?
+ *
+ * Stricter than `mayShowRoomChat`, and the difference is the whole point.
+ *
+ * The room's realtime topic is `market-square:stream:<id>`, which matches the
+ * `<service>:<channel>` shape the gateway treats as PUBLIC — anyone who opens
+ * a socket may subscribe, with no grant. That is fine for a room whose chat is
+ * already readable by anyone: a signal about it tells nobody anything they
+ * could not simply fetch.
+ *
+ * It is NOT fine for a room whose chat is gated. The frame carries no words —
+ * that rule is absolute and tested — but a subscriber would still learn WHEN a
+ * private house's room is active and HOW OFTEN people speak in it, about a
+ * room whose entire purpose is that outsiders cannot see in. "Nothing readable
+ * leaked" is not the same as "nothing leaked": activity and timing are
+ * information, and they are exactly the information a private room is keeping.
+ *
+ * ─── WHY MEMBERSHIP DOES NOT RESCUE IT ───────────────────────────────────────
+ * `mayShowRoomChat` lets a MEMBER see a private house's chat, because that
+ * reader is entitled to it. That exception cannot apply here. A public topic
+ * is not subscribed per-reader — publishing to it exposes it to everyone at
+ * once, so the question is not "may THIS reader know" but "may ANYONE". One
+ * entitled member does not make a topic safe to broadcast.
+ *
+ * A room that fails this keeps its interval. That is the honest trade: gated
+ * rooms are the rare case, and the alternative is a grant-required topic,
+ * which is a larger piece of work than the saving it would buy.
+ */
+export function maySignalRoomChat(stream: RoomChatSubject | null | undefined): boolean {
+  if (!stream) return false;
+  // A ticket gates the chat, so the room's activity is part of what is gated.
+  if (stream.visibility === "ticketed") return false;
+  const house = stream.house;
+  if (!house) return true;
+  // Stated public only — the same fail-closed reading as above, and for the
+  // stronger reason: here a wrong `true` is broadcast rather than shown to one
+  // person.
+  return house.visibility === "public";
+}

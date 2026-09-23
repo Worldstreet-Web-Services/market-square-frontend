@@ -1250,7 +1250,7 @@ function LiveHouse({
     Two subscribers on one topic share the socket; the extra cost is a second
     listener in a Set.
   */
-  useRoomChatSignal(stream.id, here && phone && stream.status === "live");
+  useRoomChatSignal(stream.id, stream, here && phone && stream.status === "live");
   const chatItems = chatFeed.data?.items;
   const [seenChat, setSeenChat] = useState<{ id: string; createdAt: string } | null>(null);
   // Adjusted during render, React's pattern for state that follows a value:

@@ -660,7 +660,31 @@ export function useBanFromChat(streamId: string) {
  * the honest interim, and it is written down so the next person knows which
  * one this is.
  */
-const SPEAKER_POLL_MS = 8_000;
+/*
+  THE FLOOR UNDER A SIGNAL THAT IS LIVE, not the mechanism.
+
+  `speakerInvited`, `speakerRequestChanged` and `speakerMuted` are published on
+  `user:<did>` and consumed in `components/layout/room-session.tsx`, which
+  invalidates both speaker keys the moment a frame lands. So a raised hand
+  already reaches the host over the socket; this interval only covers a socket
+  that is unconfigured, refused or dropped.
+
+  VERIFIED PUBLISHED rather than assumed, because a consumer existing says
+  nothing about anything writing to it — the mistake that cost an afternoon on
+  `peakViewers`. The service calls `personal.send(...)` at three sites, and one
+  layer under that `personalSignal` is a no-op that DISCARDS everything unless
+  `RABBITMQ_URL` is set. All three signals share that single if-block, so they
+  cannot be independently off: realtime DM chat has been live in production
+  since 2026-09-09, which means the block ran. The 2026-09-21 incident is the
+  independent corroboration — a dead RabbitMQ channel was 500ing writes, and a
+  broker that is not configured cannot have a dead channel.
+
+  8s was the right number when the interval WAS the mechanism. At 30s a
+  dropped socket costs a host half a minute to see a raised hand, which is the
+  degraded path rather than the normal one, and it saves ~11 requests a minute
+  per host.
+*/
+const SPEAKER_POLL_MS = 30_000;
 
 export function useMySpeakerRequest(streamId: string, enabled: boolean) {
   const { ready, authenticated } = useAuth();

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MARKET_FLAGS } from "@/lib/market-config";
 import { roomChatSignalOf, roomChatTopic } from "@/lib/ws-gateway";
 import { sharedGateway } from "@/lib/ws-gateway-shared";
+import { maySignalRoomChat, type RoomChatSubject } from "@/lib/room-chat-visibility";
 
 /**
  * THE ROOM CHAT SIGNAL, layered over the poll — ADR-0009's shape, applied to
@@ -31,13 +32,28 @@ import { sharedGateway } from "@/lib/ws-gateway-shared";
  * Detached when the tab is hidden, like the feed's: a backgrounded room does
  * not need to be told about messages nobody is reading, and the interval is
  * already suspended there too.
+ *
+ * ─── AND ONLY WHERE A PUBLISHER WILL EXIST ───────────────────────────────────
+ * `maySignalRoomChat` is the gate, and it is STRICTER than the one that
+ * decides whether to draw a room's chat on a post. The topic is public, so a
+ * private house's room and a ticketed room are never signalled — a frame with
+ * no words still tells any subscriber WHEN that room is active. The service
+ * publishes on exactly the same condition, so subscribing outside it would be
+ * listening to a topic nobody writes to; asking the same question on both
+ * sides is what keeps that true.
  */
-export function useRoomChatSignal(streamId: string, enabled: boolean) {
+export function useRoomChatSignal(
+  streamId: string,
+  /** The room itself — the gate reads its ticketing and its house from this. */
+  stream: RoomChatSubject | null | undefined,
+  enabled: boolean
+) {
   const queryClient = useQueryClient();
   const topic = roomChatTopic(streamId);
+  const eligible = maySignalRoomChat(stream);
 
   useEffect(() => {
-    if (!enabled || !topic || !MARKET_FLAGS.wsGatewayUrl) return;
+    if (!enabled || !eligible || !topic || !MARKET_FLAGS.wsGatewayUrl) return;
     let off: (() => void) | null = null;
     const attach = () => {
       if (off || document.visibilityState !== "visible") return;
@@ -58,5 +74,5 @@ export function useRoomChatSignal(streamId: string, enabled: boolean) {
       document.removeEventListener("visibilitychange", onVisibility);
       detach();
     };
-  }, [enabled, topic, streamId, queryClient]);
+  }, [enabled, eligible, topic, streamId, queryClient]);
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mayShowRoomChat } from "./room-chat-visibility.ts";
+import { mayShowRoomChat, maySignalRoomChat } from "./room-chat-visibility.ts";
 
 /*
   These are BEHAVIOURAL tests, not source-text pins, because this is the one
@@ -108,6 +108,49 @@ describe("Whose room chat may appear on a public post", () => {
         visibility: "ticketed",
         house: { visibility: "public", viewerIsMember: true },
       }),
+      false
+    );
+  });
+});
+
+/*
+  THE SIGNAL GATE IS STRICTER THAN THE DISPLAY GATE, and the gap is the point:
+  a public socket topic is broadcast to everyone at once, so "may this reader
+  know" is the wrong question — it is "may ANYONE". One entitled member cannot
+  make a topic safe to publish.
+*/
+describe("Whose room may be announced on a public socket topic", () => {
+  it("signals an ordinary public room", () => {
+    assert.equal(maySignalRoomChat({ visibility: "public", house: null }), true);
+    assert.equal(
+      maySignalRoomChat({ visibility: "public", house: { visibility: "public", viewerIsMember: false } }),
+      true
+    );
+  });
+
+  it("never signals a ticketed room", () => {
+    assert.equal(maySignalRoomChat({ visibility: "ticketed", house: null }), false);
+  });
+
+  /*
+    The divergence, asserted as a PAIR so nobody later "simplifies" the two
+    predicates into one. A member may SEE a private house's chat; nobody may
+    BROADCAST that the room is busy, because the topic reaches outsiders too.
+  */
+  it("refuses a private house even to a member, where the display gate allows it", () => {
+    const room = {
+      visibility: "public" as const,
+      house: { visibility: "private" as const, viewerIsMember: true },
+    };
+    assert.equal(mayShowRoomChat(room), true, "a member may read it");
+    assert.equal(maySignalRoomChat(room), false, "but nobody may announce it on a public topic");
+  });
+
+  it("fails closed on anything it cannot positively clear", () => {
+    assert.equal(maySignalRoomChat(null), false);
+    assert.equal(maySignalRoomChat({ visibility: "public", house: {} }), false);
+    assert.equal(
+      maySignalRoomChat({ visibility: "public", house: { visibility: "private" } }),
       false
     );
   });

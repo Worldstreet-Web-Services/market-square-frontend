@@ -145,7 +145,7 @@ export function ChatPanel({
   const chat = useChat(stream.id, stream.status === "live");
   // ADR-0009 over the top of it: the interval stays the floor, the frame makes
   // it immediate. Inert until the service publishes the room's topic.
-  useRoomChatSignal(stream.id, stream.status === "live");
+  useRoomChatSignal(stream.id, stream, stream.status === "live");
   const send = useSendChat(stream.id);
   /*
     THE LIST IS READ OLDEST → NEWEST, and the page arrives the other way round.
