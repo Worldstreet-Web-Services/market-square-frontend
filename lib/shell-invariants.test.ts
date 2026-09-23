@@ -2619,8 +2619,17 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(soonCard, /mt-\[16px\] flex min-w-0 flex-1 flex-col/, "the text column stopped being the one that gives");
     assert.match(soonCard, /mt-\[15px\] flex shrink-0 flex-col items-end/);
     assert.doesNotMatch(soonCard, /bg-\[#3C3C3C\]/, "the divider is gone in the redesign");
-    assert.match(soonCard, /text-\[8px\] font-medium leading-\[10\.4px\]">\s*Hosted by/);
-    assert.match(soonCard, /text-\[10px\] font-semibold leading-\[10\.4px\]/);
+    /*
+      Scaled 1.4 from the node at ogazboiz's word (2026-09-23): the file sets
+      the title and the host's NAME at 10 and the "Hosted by" label at 8, which
+      reads as small type on a card whose job is to sell the room. The file's
+      own relationship is kept — title and name equal, label smaller — and the
+      two runs stay two runs, because the node's per-character overrides make
+      the name heavier and larger than the label it follows.
+    */
+    assert.match(soonCard, /line-clamp-2 text-\[14px\] font-semibold leading-\[16px\]/);
+    assert.match(soonCard, /text-\[11px\] font-medium leading-\[14px\]">\s*Hosted by/);
+    assert.match(soonCard, /text-\[14px\] font-semibold leading-\[14px\]/);
     /*
       "Starts in 27h 8m" WRAPPED TO TWO LINES, and the cause was a deviation
       rather than the node: the label is 5px in the file and is drawn at 8, so

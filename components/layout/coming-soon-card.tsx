@@ -33,7 +33,15 @@ import { asset } from "@/lib/square-path";
  *    and this card has already been rebuilt once for exactly that reason (the
  *    container-query build that shrank everything to ~5px). It is set at 8 to
  *    match the meta text beside it, which is the size its siblings use.
- * 2. `Hosted by` / the host's name are ONE text node whose per-character
+ * 2. THE TITLE AND THE HOST LINE ARE BIGGER THAN THE NODE, at ogazboiz's word
+ *    (2026-09-23). The file sets the title and the host's NAME at 10 and the
+ *    "Hosted by" label at 8, and at a real 342 that reads as small type on a
+ *    card whose whole job is to make somebody want the room. They are scaled
+ *    by 1.4 — title and name to 14, label to 11 — which keeps the file's own
+ *    relationship between the three (title and name equal, label smaller) and
+ *    still clears the card's 106: 32 of title, 8, the 16 chip, 12, the 16 host
+ *    row and the 16 it starts down at comes to 100.
+ * 3. `Hosted by` / the host's name are ONE text node whose per-character
  *    overrides flip the name to Geist 600 at 10px while the label stays 500 at
  *    8px (`styleOverrideTable` 5 → 7). The parent style says 500/8 for the
  *    whole string and is wrong; both runs are drawn as the overrides specify.
@@ -136,7 +144,7 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           <div className="flex flex-col gap-[8px]">
             <Link
               href={href}
-              className="ws-press line-clamp-2 text-[10px] font-semibold leading-[11px] text-white"
+              className="ws-press line-clamp-2 text-[14px] font-semibold leading-[16px] text-white"
             >
               {stream.title}
             </Link>
@@ -154,7 +162,7 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
                     className="h-[10px] w-[13px] shrink-0"
                   />
                 )}
-                <span className="text-[8px] font-medium leading-[10.4px] text-[#F4F4F4]">
+                <span className="whitespace-nowrap text-[8px] font-medium leading-[10.4px] text-[#F4F4F4]">
                   {topicLabel}
                 </span>
               </span>
@@ -173,10 +181,10 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
               />
             </span>
             <span className="min-w-0 truncate text-white">
-              <span className="text-[8px] font-medium leading-[10.4px]">
+              <span className="text-[11px] font-medium leading-[14px]">
                 Hosted by{" "}
               </span>
-              <span className="text-[10px] font-semibold leading-[10.4px]">
+              <span className="text-[14px] font-semibold leading-[14px]">
                 {host?.displayName ?? "a host"}
               </span>
             </span>
