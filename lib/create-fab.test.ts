@@ -84,22 +84,33 @@ describe("the create button is rendered once, fixed, in the shell", () => {
     }
   });
 
-  it("draws no circle at all on the gist rooms page, and the shell draws none there either", () => {
+  it("mounts no circle of its own on the gist rooms page — so the DOCK's + has to be there", () => {
     /*
       The rooms page used to mount `CreateFab` itself (407:17286 drew the same
       circle in the same corner, opening a room). The 2026-09-12 page,
-      1317:158073, draws NO circle: starting a room is the sidebar's "Start
-      Gistroom" and Home's banner, both of which land here with `?open=1`. So
-      the page mounts none, and it stays excluded from `allowsCompose` — a post
-      circle on the rooms page would be the wrong act in that corner.
+      1317:158073, draws NO circle of its own, and that half is still true and
+      still pinned below.
+
+      WHAT CHANGED IS THE OTHER HALF. This test also asserted that
+      `compose-surfaces` suppressed the shell on `/gist-rooms`, which meant the
+      two assertions together pinned a page with NO create control anywhere:
+      the page mounts none because the shell has one, and the shell has none
+      because the page mounts one. Each test read the other's promise as
+      satisfied. The reader got neither button (ogazboiz, 2026-09-23: "in the
+      gist room there is no that plus button ... why only in the home page").
+
+      So the page still draws no circle — one control, not two — and the rule
+      must now let the dock's `+` through, which asks "a post, or a gist room?"
+      and therefore reaches the room composer rather than being the wrong act
+      in that corner.
     */
     const surfaces = read("lib/compose-surfaces.ts");
     const screen = read("components/layout/gist-rooms-screen.tsx");
     assert.doesNotMatch(screen, /<CreateFab\b/, "the rooms page draws a circle 1317:158073 does not");
-    assert.match(
+    assert.doesNotMatch(
       surfaces,
       /NO_COMPOSE_EXACT[^\]]*"\/gist-rooms"/,
-      "the shell draws a post circle on the rooms page"
+      "the rooms page is back to having no create control at all"
     );
   });
 

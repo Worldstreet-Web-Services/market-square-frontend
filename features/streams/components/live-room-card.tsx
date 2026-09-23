@@ -29,7 +29,20 @@ import type { Stream } from "@/lib/api/schemas";
  * something to look at, and a gist room is audio. This card leads with the
  * topic and the people instead, which is what there actually is.
  */
-export function LiveRoomCard({ stream }: { stream: Stream }) {
+export function LiveRoomCard({
+  stream,
+  fluid = false,
+}: {
+  stream: Stream;
+  /**
+   * FILL THE CELL instead of holding 342. The rail on Home scrolls sideways,
+   * so the card keeps the file's own width there; the gist-rooms page lays the
+   * same card out in a one-or-two-across grid, where a fixed 342 leaves a gutter
+   * beside every card on a wide screen and overflows a 320 phone. Only the
+   * width moves — the height, the rows and every inner number stay the file's.
+   */
+  fluid?: boolean;
+}) {
   const topics = useTopics();
   const topicKey = stream.topics?.[0];
   const topicLabel = topicKey
@@ -42,7 +55,9 @@ export function LiveRoomCard({ stream }: { stream: Stream }) {
     <Link
       href={housePath(stream.id)}
       aria-label={`Join ${stream.title}`}
-      className="ws-press flex h-[141px] w-[342px] shrink-0 flex-col rounded-[16.86px] bg-[rgba(16,16,18,0.62)] px-4 pt-4 shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[10.73px]"
+      className={`ws-press flex h-[141px] flex-col rounded-[16.86px] bg-[rgba(16,16,18,0.62)] px-4 pt-4 shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[10.73px] ${
+        fluid ? "w-full min-w-0" : "w-[342px] shrink-0"
+      }`}
     >
       {/* `Frame 2147225009` — 16 tall, pill, white/10 under Figma's GLASS,
           3/6 of padding and 4 between the glyph and the word. */}

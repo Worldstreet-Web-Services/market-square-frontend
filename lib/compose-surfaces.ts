@@ -14,12 +14,6 @@
  *   - `/admin/**`, `/operations/**` — dense operator tables where a floating
  *     control overlaps row actions, and where posting is not the task.
  *   - `/auth` — there is no one to post as yet.
- *   - `/gist-rooms` — same shape of reason as `/messages`. Node 407:17286 draws
- *     a `+` in that corner and it opens a ROOM, which is what the page is for.
- *     The shell's circle is the same size in the same place and writes a POST,
- *     so both on screen would be two identical buttons doing different things,
- *     and the one under the reader's hand would be the wrong one. The page
- *     mounts its own; `/gist-rooms/:id` is already excluded by prefix.
  *   - `/messages` — the chat surface has its own `+`, INSIDE the conversation
  *     column, where node 15:1302 draws it and where a `+` means "start a new
  *     conversation". The shell's button holds the right edge of the VIEWPORT,
@@ -34,10 +28,33 @@
  * broadcast or two-pane surface. That distinction is the whole reason these are
  * prefix rules with a trailing slash rather than plain `startsWith` on the
  * section name.
+ *
+ * ─── `/gist-rooms` WAS AN EXCEPTION AND SHOULD NOT HAVE BEEN ─────────────────
+ * It was suppressed here on the argument that node 407:17286 draws a `+` in
+ * that same corner which opens a ROOM, so the shell's circle would be a second
+ * identical button doing a different thing — "the page mounts its own".
+ *
+ * THE PAGE MOUNTS NOTHING. `GistRoomsScreen` renders the search row and
+ * `HousesStreet`, and that design (the header of houses-street says so in its
+ * own words) dropped 407:17074's "Happening Now!", its topic row AND its
+ * floating create button. So the collision this exception avoided never
+ * existed, and the only effect was that the dock's `+` — the one control on
+ * every other list in the app — vanished on the rooms list. ogazboiz, on
+ * 2026-09-23, looking at the route: "in the gist room there is no that plus
+ * button ... why only in the home page".
+ *
+ * A suppression is a promise that something else is there. When nothing is,
+ * the reader is left with a missing control and no way to name what is gone.
+ * The dock's `+` asks "a post, or a gist room?" (`CreateChoiceSheet`), so on
+ * this page it reaches the room composer in one more tap rather than being the
+ * wrong button — which is the opposite of the risk that was argued.
+ *
+ * `/gist-rooms/:id` stays excluded by the prefix rule: that IS an immersive
+ * room, and the floating circle lands over the stage there.
  */
 import { stripSquare } from "./square-path.ts";
 
-const NO_COMPOSE_EXACT = ["/auth", "/operations", "/messages", "/gist-rooms"];
+const NO_COMPOSE_EXACT = ["/auth", "/operations", "/messages"];
 const NO_COMPOSE_PREFIX = ["/live/", "/studio/", "/admin", "/operations/", "/gist-rooms/"];
 
 export function allowsCompose(pathname: string): boolean {

@@ -2484,12 +2484,18 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // "Live GistRooms" and "Coming Soon" in the shared heading, WITHOUT View more.
     assert.match(screen, /<SectionHeading id="live-gistrooms" lead="Live" accent="GistRooms" \/>/);
     assert.match(screen, /<SectionHeading id="coming-soon-page" lead="Coming Soon" \/>/);
-    // The live grid draws the card FLUID at its natural size (node 1769:3670) —
-    // the old CSS `zoom` into a 290 cell broke the mic badge's SVG gradient, so
-    // it is an at-most-two-across grid of fluid cards now.
+    // The live grid draws HOME'S OWN LIVE CARD (node 2078:19217), `fluid` so it
+    // fills its cell instead of holding the rail's 342 — the same component the
+    // Top GistRooms rail draws, because this page and that rail are the same
+    // act. It was `GistRoomCard` (1769:3670), which is the card a DM and a
+    // shared link draw, where a room is a reference to something mentioned
+    // elsewhere rather than a door to walk through.
+    // Still never CSS `zoom`: scaling into a 290 cell broke the mic badge's SVG
+    // gradient, and an at-most-two-across grid of fluid cards is the answer.
     assert.doesNotMatch(screen, /ROOM_CARD_SCALE|zoom:/, "the card is scaled with CSS zoom again");
     assert.match(street, /aria-label="Gist rooms open now"[\s\S]{0,120}grid grid-cols-1 gap-4 lg:grid-cols-2/);
-    assert.match(screen, /<GistRoomCard\s+fluid\s+preview/);
+    assert.match(screen, /roomCardSlot=\{\(stream\) => <LiveRoomCard fluid stream=\{stream\} \/>\}/);
+    assert.doesNotMatch(screen, /<GistRoomCard/, "the rooms page and Home's rail draw different cards again");
     // Coming Soon is a GRID here (1317:158179), 59 under the live grid — now at
     // most TWO across, because the cards are the wide horizontal ComingSoonCard.
     assert.match(street, /className=\{liveHouses\.length > 0 \? "mt-\[59px\]" : "mt-9"\}/);
