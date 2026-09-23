@@ -5441,15 +5441,41 @@ describe("A room's chat on a post is gated before it is fetched", () => {
   });
 
   /*
-    And the card hands over the ROOM, not a verdict. Passing a precomputed
-    boolean would move the judgement into the card, where the next person
-    adding a case would not find the tests — and the gate reads two unrelated
-    things off the room (its ticketing, and its house), so a single flag cannot
-    carry it.
+    AND IT LIVES WITH THE COMMENTS, NOT ON THE CARD.
+
+    What people are saying in the room IS the conversation under the post, so
+    it belongs where a reader looks for conversation (ogazboiz: "the comment
+    suppose to be in the comment section aspect in like the normal aspect").
+    On the card it was a decoration on an advert; under the post it is the
+    thing itself.
+
+    It reads the room ITSELF rather than taking a verdict from the caller: the
+    comment surfaces know a post, not a stream, and threading a whole room
+    through three of them to answer one question would scatter the judgement
+    that `mayShowRoomChat` exists to hold in one place.
   */
-  it("passes the room itself, so the judgement stays in one place", () => {
+  it("puts the room's chat with the comments, and reads the room itself", () => {
     const card = stripComments(read("features/feed/components/room-post-card.tsx"));
-    assert.match(card, /<RoomChatExcerpt streamId=\{streamId\} stream=\{data\} live=\{live\} \/>/);
+    assert.ok(!card.includes("RoomChatComments"), "the card advertises the room; it does not host its chat");
+    const block = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
+    assert.match(block, /const room = useStream\(streamId,/, "the gate needs the room, so it reads it");
+    for (const surface of [
+      "features/feed/components/comments-sheet.tsx",
+      "features/feed/components/post-detail-page.tsx",
+    ]) {
+      assert.match(stripComments(read(surface)), /<RoomChatComments streamId=/, surface);
+    }
+  });
+
+  /*
+    LABELLED, because they are not replies. Nobody typed them here, they
+    cannot be answered here, and somebody replying to one in the comment box
+    is talking past the person who said it. Unlabelled they read as comments,
+    and the first reply lands on a stranger.
+  */
+  it("says the words came from the room rather than from the comments", () => {
+    const block = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
+    assert.match(block, /Being said in the room|Said in the room/);
   });
 
   /*

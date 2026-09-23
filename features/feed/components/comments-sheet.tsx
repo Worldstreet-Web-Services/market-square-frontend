@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
+import { RoomChatComments } from "@/features/feed/components/room-chat-excerpt";
 import {
   CommentBox,
   CommentThread,
@@ -17,10 +18,20 @@ import {
  */
 export function CommentsSheet({
   postId,
+  streamId = null,
   open,
   onClose,
 }: {
   postId: string;
+  /**
+   * The gist room this post is about, when it is about one.
+   *
+   * The room's chat belongs in the COMMENT section rather than on the card
+   * (ogazboiz: "the comment suppose to be in the comment section aspect in
+   * like the normal aspect") — what people are saying in the room reads as
+   * the conversation under the post, because that is what it is.
+   */
+  streamId?: string | null;
   open: boolean;
   onClose: () => void;
 }) {
@@ -30,6 +41,7 @@ export function CommentsSheet({
     <Sheet open={open} onClose={onClose} title="Comments">
       <div className="flex max-h-[70vh] flex-col">
         <div className="-mx-4 min-h-0 flex-1 overflow-y-auto">
+          {streamId && <RoomChatComments streamId={streamId} />}
           <CommentThread
             postId={postId}
             enabled={open}

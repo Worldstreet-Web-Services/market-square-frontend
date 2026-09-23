@@ -6,7 +6,6 @@ import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { useStream, useRemindMe } from "@/features/streams";
-import { RoomChatExcerpt } from "@/features/feed/components/room-chat-excerpt";
 import { housePath } from "@/features/houses";
 import { clockLabel, shortDateLabel } from "@/lib/format";
 import { profileHref } from "@/lib/profile-href";
@@ -223,18 +222,6 @@ export function RoomPostCard({ streamId }: { streamId: string }) {
         )}
       </div>
 
-      {/*
-        BELOW THE ACTION, NOT ABOVE IT. The button is what the card is FOR, so
-        it keeps its place; the chat is the reason to press it. A reader who is
-        already convinced never has to scroll past the conversation to find the
-        way in, and a reader who is not gets the argument that convinces them.
-
-        `stream` is the whole room rather than a flag, because the gate reads
-        two unrelated things off it — the ticketing and the house — and passing
-        a precomputed boolean would put that judgement in this file, where the
-        next person to add a case would not find the tests.
-      */}
-      <RoomChatExcerpt streamId={streamId} stream={data} live={live} />
     </div>
   );
 }

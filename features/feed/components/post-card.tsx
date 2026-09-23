@@ -1380,7 +1380,13 @@ export function PostCard({
         )}
       </div>
 
-      <CommentsSheet postId={post.id} open={commentsOpen} onClose={() => setCommentsOpen(false)} />
+      <CommentsSheet
+        postId={post.id}
+        /* A gist room's chat belongs under the post, not on the card. */
+        streamId={post.deepLink?.kind === "stream" ? post.deepLink.ref : null}
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+      />
     </article>
   );
 }

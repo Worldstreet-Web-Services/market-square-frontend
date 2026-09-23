@@ -2,7 +2,8 @@
 
 import { Avatar } from "@/components/ui/avatar";
 import { useChat } from "@/features/streams/hooks/use-chat";
-import { mayShowRoomChat, type RoomChatSubject } from "@/lib/room-chat-visibility";
+import { useStream } from "@/features/streams";
+import { mayShowRoomChat } from "@/lib/room-chat-visibility";
 
 /**
  * WHAT PEOPLE ARE SAYING IN THE ROOM, ON THE POST.
@@ -41,16 +42,14 @@ import { mayShowRoomChat, type RoomChatSubject } from "@/lib/room-chat-visibilit
 const EXCERPT_LINES = 3;
 const FEED_POLL_MS = 30_000;
 
-export function RoomChatExcerpt({
-  streamId,
-  stream,
-  live,
-}: {
-  streamId: string;
-  /** The room itself — the gate reads its ticketing and its house from this. */
-  stream: RoomChatSubject | null | undefined;
-  live: boolean;
-}) {
+export function RoomChatComments({ streamId }: { streamId: string }) {
+  // The room decides whether its chat may be shown at all, so the room is
+  // read here rather than passed: the comment surfaces know a post, not a
+  // stream, and threading the whole room through them to answer one question
+  // would put that judgement in three files instead of one.
+  const room = useStream(streamId, ["while-live", 30_000]);
+  const stream = room.data;
+  const live = stream?.status === "live";
   const allowed = mayShowRoomChat(stream);
   // `enabled` carries the gate too, so a refused room is never even REQUESTED.
   // Gating only the render would still put a private room's chat in the
@@ -67,28 +66,41 @@ export function RoomChatExcerpt({
   const lines = items.slice(0, EXCERPT_LINES).reverse();
 
   return (
-    <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3">
-      {lines.map((message) => {
-        const name = message.author?.displayName || message.author?.username || "Someone";
-        return (
-          <div key={message.id} className="flex items-start gap-2">
-            <span className="mt-px size-4 shrink-0 overflow-hidden rounded-full bg-[#DCDAD5]">
-              <Avatar
-                name={name}
-                seed={message.author?.id ?? message.id}
-                src={message.author?.avatarUrl}
-                size={16}
-                sizeClassName="size-full"
-                className="rounded-none border-0"
-              />
-            </span>
-            <p className="line-clamp-2 text-[11px] leading-[14.3px] text-[#D9D9D9]">
-              <span className="font-semibold text-white">{name}</span>{" "}
-              {message.text}
-            </p>
-          </div>
-        );
-      })}
-    </div>
+    <section className="border-b border-white/[0.06] px-4 pb-3 pt-1">
+      {/*
+        SAID IN THE ROOM, NOT UNDER THE POST — and the heading is the whole
+        reason this is honest. These are not replies to the post: nobody typed
+        them here, they cannot be replied to here, and somebody who answers one
+        in the comment box is not answering the person who said it. Dropped
+        into the list unlabelled they would read as comments, and the first
+        person to reply to one would be talking past a stranger.
+      */}
+      <p className="pb-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-meta">
+        {live ? "Being said in the room" : "Said in the room"}
+      </p>
+      <ul className="flex flex-col gap-3">
+        {lines.map((message) => {
+          const name = message.author?.displayName || message.author?.username || "Someone";
+          return (
+            <li key={message.id} className="flex items-start gap-2">
+              <span className="mt-0.5 size-7 shrink-0 overflow-hidden rounded-full bg-[#DCDAD5]">
+                <Avatar
+                  name={name}
+                  seed={message.author?.id ?? message.id}
+                  src={message.author?.avatarUrl}
+                  size={28}
+                  sizeClassName="size-full"
+                  className="rounded-none border-0"
+                />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-semibold leading-4 text-heading">{name}</p>
+                <p className="mt-0.5 break-words text-[13px] leading-5 text-body">{message.text}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
