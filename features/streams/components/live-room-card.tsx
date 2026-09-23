@@ -6,6 +6,7 @@ import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { housePath } from "@/features/houses";
+import { liveRoomFaces } from "@/features/streams/lib/room-faces";
 import { formatCount } from "@/lib/format";
 import type { Stream } from "@/lib/api/schemas";
 
@@ -49,7 +50,44 @@ export function LiveRoomCard({
     ? (topics.data?.find((entry) => entry.key === topicKey)?.label ?? topicKey)
     : null;
   const TopicIcon = topicKey ? (TOPIC_ICONS[topicKey] ?? IconSpark) : null;
-  const faces = stream.attendees.slice(0, 3);
+
+  /*
+    ─── WHOSE FACES THESE ARE, AND WHY THE STACK WAS EMPTY ────────────────────
+
+    This read `stream.attendees` and drew NOTHING — a live room with somebody
+    in it and no stack at all (ogazboiz, 2026-09-23, on a room showing LIVE 1).
+
+    `attendees` IS THE REPLAY FIELD. Its own schema note says it plainly:
+    "Absent while a room is LIVE", carried on the single read of an ENDED room
+    and nowhere else. Wiring a live card to it asked the service for a fact it
+    is designed never to have here, and got a silent empty array — the field
+    name read like the right one, and the field name is not the mechanism.
+
+    MEASURED, not assumed. `GET /streams?status=live&kind=room` on this stack
+    answers, for the one open room: `owner` hydrated, `participants: []`, and
+    NO `attendees` key at all. So:
+
+      · `participants` FIRST — "a sample of up to three people currently
+        connected, host first" (gist rooms only, by the backend's privacy
+        call). Present-but-empty on the list route today, which is a backend
+        gap and not a client one; the moment it fills, this stack fills.
+      · `owner` SECOND — the host, hydrated on every stream surface and the one
+        person certainly in the room. It is what makes a room show a face at
+        all today, and it is why the card no longer looks abandoned.
+
+    Deduped, because a host is normally in their own sample too and a face
+    drawn twice reads as a bug. Three at most — the file draws three plates.
+
+    NOT PADDED WITH HOUSE MEMBERS. A face here says "this person is in the
+    room"; somebody who merely belongs to the house would make the card state
+    something false on every quiet room, quietly, for ever. One honest face
+    beats three that include two people who are not there.
+
+    And no per-card detail fetch to get `participants` properly: this rail
+    draws up to twelve cards, and twelve polls to fill an avatar stack is the
+    wrong trade on the surface a reader passes through in two seconds.
+  */
+  const faces = liveRoomFaces(stream);
 
   return (
     <Link
@@ -92,29 +130,56 @@ export function LiveRoomCard({
       </div>
 
       {/* `Frame 2147230808` — the faces at one end, the badge and the count at
-          the other. `justify-between` rather than the file's 150 gap: the gap
-          is what separates two fixed-width groups at 342, and a name of a
-          different length would break it where the ends hold. */}
+          the other. `primaryAxisAlignItems: SPACE_BETWEEN` is the FILE'S OWN
+          mode; the 150 itemSpacing beside it is just what that measures to at
+          342, so `justify-between` is the value rather than a substitute for
+          it — and it holds when a longer name moves the middle. */}
       <div className="mt-4 flex items-center justify-between">
-        {/* `Frame 2147230803` — 25.6 plates at an 8 radius, overlapping by 8,
-            each with a 1px white inside hairline and the file's own soft
-            shadow. The hairline is what keeps three dark faces from reading as
-            one smudge once they overlap. */}
+        {/*
+          `Frame 2147230803` — 25.6157 plates at an 8 radius, `itemSpacing: -8`,
+          so they overlap by exactly 8.
+
+          THE RING IS A 1px INSIDE STROKE, so it is drawn as a 1px pad of the
+          ring's own paint with the portrait clipped inside at radius 7 — not
+          Tailwind's `ring`, which sits OUTSIDE the box and would push each
+          plate 1px wider, walking the whole stack out of its 60.85.
+
+          THE TOP PLATE'S RING IS A GRADIENT. The file gives the last plate —
+          the one drawn on top — a vertical white -> #F1E8FF stroke where the
+          two beneath it are flat white. It is a lift, and it is what stops the
+          topmost face reading as flat against the two it covers. Keyed to the
+          LAST face rather than to index 2, so a room with one or two faces
+          still gets it on the one in front.
+
+          The shadow is the file's: rgba(147,147,147,0.25) at 0/4.6 with a
+          17.26 blur. It was `0 0 17px black/25` here, which is a different
+          colour cast in a different place. (`showShadowBehindNode: false` is
+          Figma's knockout and has no CSS equivalent; the plate is opaque, so
+          nothing shows through it anyway.)
+        */}
         <span className="flex items-center">
           {faces.map((person, index) => (
             <span
               key={person.id}
-              className="size-[25.6px] shrink-0 overflow-hidden rounded-[8px] bg-[#EDEDED] shadow-[0_0_17px_rgba(0,0,0,0.25)] ring-1 ring-white"
-              style={{ marginLeft: index === 0 ? 0 : -8 }}
+              className="size-[25.6px] shrink-0 rounded-[8px] p-px shadow-[0_4.6px_17.26px_rgba(147,147,147,0.25)]"
+              style={{
+                marginLeft: index === 0 ? 0 : -8,
+                background:
+                  index === faces.length - 1
+                    ? "linear-gradient(180deg,#FFFFFF 0%,#F1E8FF 100%)"
+                    : "#FFFFFF",
+              }}
             >
-              <Avatar
-                name={person.displayName || person.username}
-                seed={person.id}
-                src={person.avatarUrl}
-                size={26}
-                sizeClassName="size-full"
-                className="rounded-none border-0"
-              />
+              <span className="block size-full overflow-hidden rounded-[7px] bg-[#EDEDED]">
+                <Avatar
+                  name={person.displayName || person.username}
+                  seed={person.id}
+                  src={person.avatarUrl}
+                  size={26}
+                  sizeClassName="size-full"
+                  className="rounded-none border-0"
+                />
+              </span>
             </span>
           ))}
         </span>
