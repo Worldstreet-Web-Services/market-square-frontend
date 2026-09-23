@@ -134,8 +134,15 @@ export function RoomPostCard({ streamId }: { streamId: string }) {
                 nobody can enter: how long it ran, and how many came. Each is
                 absent rather than zero when the service did not measure it. */}
             {data?.startedAt && data?.endedAt && <span>{runLength(data.startedAt, data.endedAt)}</span>}
-            {data?.startedAt && data?.endedAt && data?.peakViewers ? <span aria-hidden>•</span> : null}
-            {data?.peakViewers ? <span>{data.peakViewers.toLocaleString()} joined</span> : null}
+            {/*
+              "428 JOINED" IS NOT A FIELD WE HAVE, and `peakViewers` is not it.
+              Peak is the most people in the room AT ONCE; joined is how many
+              came at all. A room where fifty people passed through in ones and
+              twos peaks at three. Printing one under the other's label is a
+              wrong number with a confident caption, so the count is omitted
+              until the service counts joins — asked for, and it is the only
+              thing on this card that is not real.
+            */}
           </>
         ) : (
           when && <span>{clockLabel(when)}</span>
