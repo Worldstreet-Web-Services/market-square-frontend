@@ -92,6 +92,15 @@ export interface RoomPerson {
    * where they sit; the slot owns what they do. See `PersonQuickActions`.
    */
   actions?: React.ReactNode;
+  /**
+   * WHO THIS PERSON IS IN THE ROOM — node 1285:30456 draws a pill under the
+   * name for two of the three, and nothing at all for an ordinary speaker.
+   *
+   * Absent rather than a `"speaker"` value on purpose: most people in a room
+   * hold no office, and a badge reading SPEAKER under every face would make
+   * the two that matter invisible by making the row look uniform.
+   */
+  role?: "host" | "moderator";
 }
 
 /**
@@ -128,7 +137,7 @@ function PersonCard({ person }: { person: RoomPerson }) {
         // Fluid: fills its grid cell so a row holds at least 3 and grows with
         // the column's real width (see the @container grid below). A fixed 104
         // left the narrowest phones room for only 2.
-        "relative flex w-full flex-col gap-2",
+        "relative flex w-full flex-col items-center gap-2",
         person.onOpen && "ws-press text-left"
       )}
     >
@@ -244,6 +253,31 @@ function PersonCard({ person }: { person: RoomPerson }) {
       <span className="line-clamp-2 w-full text-center text-[12px] leading-3.5 text-white md:line-clamp-1 md:text-[14px] md:leading-6">
         {person.name}
       </span>
+
+      {/*
+        `Badge` — 16 tall at a 12 radius, the label 8/10.4 semibold at -0.04
+        tracking, and the SAME hue at 10% behind text at full: HOST on #7E3BEB,
+        MODERATOR on #CD640F. The file gives each a fixed width (30 and 58) for
+        its own word; `w-fit` with the node's padding holds the shape for names
+        of any length without pinning two magic numbers.
+
+        The orange is the point of the pair. A moderator drawn in the accent
+        would read as a second host, and the whole reason the pill exists is
+        that the two are NOT the same office — one appointed the other and can
+        take it back.
+      */}
+      {person.role && (
+        <span
+          className={cn(
+            "inline-flex h-4 w-fit items-center rounded-[12px] px-2 text-[8px] font-semibold leading-[10.4px] tracking-[-0.04px]",
+            person.role === "host"
+              ? "bg-spotlight/10 text-spotlight"
+              : "bg-moderator/10 text-moderator"
+          )}
+        >
+          {person.role === "host" ? "HOST" : "MODERATOR"}
+        </span>
+      )}
     </figure>
   );
 }

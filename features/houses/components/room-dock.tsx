@@ -52,6 +52,7 @@ export function RoomDock({
   mic,
   ask,
   onReact,
+  onPeople,
   className,
 }: {
   /** The file's left-hand pill: `Record Gist` for a host, `Give a tip` for everyone else. */
@@ -69,6 +70,17 @@ export function RoomDock({
     onLower: () => void;
   } | null;
   onReact: (emoji: string) => void;
+  /**
+   * THE HOST'S PEOPLE BUTTON — node 1285:29830 puts it third in the dock,
+   * between the microphone and the reactions, and it is where a host appoints
+   * a moderator (ogazboiz: "that is where the host will give someone in the
+   * space a moderator").
+   *
+   * Null for everybody else, and for a host on a service that does not carry
+   * moderators yet — so the dock simply has one fewer button rather than a
+   * button that cannot work.
+   */
+  onPeople: (() => void) | null;
   className?: string;
 }) {
   return (
@@ -135,6 +147,21 @@ export function RoomDock({
           </button>
         )}
 
+        {/* `vuesax/outline/people`, 20 inside the dock's own 40 target. It sits
+            between the microphone and the reactions exactly as the file draws
+            it — the order is the file's, not a preference. */}
+        {onPeople && (
+          <button
+            type="button"
+            onClick={onPeople}
+            aria-label="Manage moderators"
+            title="Add or remove a moderator"
+            className="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white transition-opacity"
+          >
+            <IconDockPeople />
+          </button>
+        )}
+
         <ReactionControl
           onReact={onReact}
           triggerClassName="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white"
@@ -150,6 +177,18 @@ export function RoomDock({
  * Exported so the room can hand it to `primary` beside the tip slot without
  * either of them knowing about the other.
  */
+/** `vuesax/outline/people` — two figures, the file's own dock glyph at 20. */
+function IconDockPeople() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5" fill="none">
+      <circle cx="7.6" cy="6.2" r="2.9" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2.6 15.6c0-2.4 2.3-3.8 5-3.8s5 1.4 5 3.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M13.6 4.2a2.6 2.6 0 0 1 0 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M15.1 11.6c1.7.2 2.9 1.1 2.9 2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function RecordGistButton() {
   return (
     <button

@@ -440,6 +440,23 @@ export const StreamSchema = z.object({
    * without this one rather than print peak under its caption.
    */
   joined: z.number().optional(),
+  /**
+   * WHO MAY ACT FOR THE HOST IN THIS ROOM — up to three, and the room's own
+   * appointment rather than the house's. A moderator here is not a house
+   * admin: the role ends with the room, which is the whole point of putting
+   * it on the stream.
+   *
+   * NO DEFAULT, deliberately, and it is the feature switch. `undefined` means
+   * "this service does not carry moderators" and every control stays hidden;
+   * `[]` means "it does and there are none", which is a different sentence and
+   * draws an empty sheet rather than nothing. Defaulting to `[]` would merge
+   * the two and put a dead button in the dock of every room on a service that
+   * has never heard of the route.
+   *
+   * SINGLE-ROOM READ ONLY — never on a list page, so nothing may build a grid
+   * that expects it.
+   */
+  moderatorIds: z.array(z.string()).optional(),
   // Aggregate live reactions. Optional until all gateway deployments expose it.
   likeCount: z.number().optional().default(0),
   pulse: z.object({

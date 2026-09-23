@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
+import { useAppointModerator } from "@/features/streams/lib/moderators";
+import { AddModeratorSheet } from "@/features/houses/components/add-moderator-sheet";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import Link from "next/link";
@@ -1251,6 +1253,24 @@ function LiveHouse({
     listener in a Set.
   */
   useRoomChatSignal(stream.id, stream, here && phone && stream.status === "live");
+
+  /*
+    MODERATORS — the dock's people button and the sheet behind it.
+
+    `moderatorIds` is UNDEFINED on a service that does not carry moderators and
+    an ARRAY once it does, which is the whole feature switch: a host on an
+    older service gets a dock with one fewer button rather than a button that
+    answers 404. Same switch-on as `joined`, and the reason it is not defaulted
+    to `[]` in the schema.
+
+    Host only. A moderator may not appoint another — with a cap of three, one
+    who could would spend the host's remaining seats on their own picks, and
+    undoing it means demoting somebody.
+  */
+  const moderatorIds = stream.moderatorIds;
+  const [moderatorsOpen, setModeratorsOpen] = useState(false);
+  const moderators = useAppointModerator(stream.id);
+  const canManageModerators = isHost && moderatorIds !== undefined;
   const chatItems = chatFeed.data?.items;
   const [seenChat, setSeenChat] = useState<{ id: string; createdAt: string } | null>(null);
   // Adjusted during render, React's pattern for state that follows a value:
@@ -1432,6 +1452,23 @@ function LiveHouse({
               (isMe && myName ? myName : participantLabel(slot.name, slot.identity)),
             avatarUrl: owner ? (owner.avatarUrl ?? null) : isMe ? myAvatar : (meta?.avatarUrl ?? null),
             speaking: audio.loudest === slot.identity,
+            /*
+              THE PILL UNDER THE NAME — node 1285:30456. The host is keyed on
+              the stream's `ownerId` rather than the slot, because the host's
+              publisher identity is the literal string `broadcaster` and
+              carries no user id; the roster a hundred lines up already does
+              this, and getting it wrong drew the host as nobody.
+
+              Ordinary speakers get NOTHING, on purpose: a SPEAKER pill under
+              every face would make the two that matter invisible by making the
+              row uniform.
+            */
+            role:
+              slot.role === "host" || (owner && owner.id === stream.ownerId)
+                ? ("host" as const)
+                : (stream.moderatorIds ?? []).includes(owner ? owner.id : baseIdentity(slot.identity))
+                  ? ("moderator" as const)
+                  : undefined,
             // The file draws a microphone on every speaker's plate. It reads
             // the PUBLICATION (`slot.isMuted`), which is their real microphone,
             // and falls back to muted when this viewer has silenced them — a
@@ -1450,7 +1487,10 @@ function LiveHouse({
             onOpen: () => openSlot(slot),
           };
         }),
-    [seating, audio.loudest, mutedForMe, openSlot, personActionsSlot, myId, myName, myAvatar, stream.owner]
+    // `moderatorIds` and `ownerId` decide the pill under each name, so a list
+    // built before either arrived would draw the host as an ordinary speaker
+    // until something else happened to invalidate it.
+    [seating, audio.loudest, mutedForMe, openSlot, personActionsSlot, myId, myName, myAvatar, stream.owner, stream.ownerId, stream.moderatorIds]
   );
 
   const audiencePeople: RoomPerson[] = useMemo(
@@ -1949,6 +1989,7 @@ function LiveHouse({
             : null
         }
         onReact={sendReaction}
+        onPeople={canManageModerators ? () => setModeratorsOpen(true) : null}
         /* Absent on a phone: the frame's bottom bar (RoomPhoneBar, below) is
            pinned to the viewport there and carries the same controls. */
         className="hidden md:flex xl:sticky xl:bottom-0"
@@ -2134,6 +2175,29 @@ function LiveHouse({
           </div>
         </div>
       </Sheet>
+
+      {/*
+        EVERYBODY IN THE ROOM, speakers and audience alike — appointing does not
+        seat anybody, so the candidate list is not the stage. `chatMentionables`
+        is already exactly that roster (every slot plus every audience member,
+        de-duplicated by username, and resolved to a real profile id), which is
+        why the sheet needs no read of its own.
+      */}
+      {canManageModerators && (
+        <AddModeratorSheet
+          open={moderatorsOpen}
+          onClose={() => setModeratorsOpen(false)}
+          people={chatMentionables.map((person) => ({
+            id: person.id,
+            name: person.displayName,
+            username: person.username,
+          }))}
+          moderatorIds={moderatorIds ?? []}
+          busy={moderators.appoint.isPending || moderators.remove.isPending}
+          onAppoint={(userId) => moderators.appoint.mutate({ userId })}
+          onRemove={(userId) => moderators.remove.mutate(userId)}
+        />
+      )}
 
       {isHost && (
         <HandTray
