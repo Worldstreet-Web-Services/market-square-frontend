@@ -61,6 +61,9 @@ export function RoomPostCard({ streamId }: { streamId: string }) {
   const when = data?.scheduledAt ?? data?.startedAt ?? null;
   const live = data?.status === "live";
   const ended = data?.status === "ended";
+  // Null when the room never started, so the meta line can tell "we did not
+  // measure this" from "it ran for no time".
+  const ran = data?.startedAt && data?.endedAt ? runLength(data.startedAt, data.endedAt) : null;
 
   if (stream.isPending) {
     return <div aria-hidden className="h-[235px] w-full animate-pulse rounded-[16px] bg-white/5" />;
@@ -133,16 +136,30 @@ export function RoomPostCard({ streamId }: { streamId: string }) {
             {/* What it WAS, which is the only honest thing to show about a room
                 nobody can enter: how long it ran, and how many came. Each is
                 absent rather than zero when the service did not measure it. */}
-            {data?.startedAt && data?.endedAt && <span>{runLength(data.startedAt, data.endedAt)}</span>}
+            {ran && <span>{ran}</span>}
             {/*
-              "428 JOINED" IS NOT A FIELD WE HAVE, and `peakViewers` is not it.
-              Peak is the most people in the room AT ONCE; joined is how many
-              came at all. A room where fifty people passed through in ones and
-              twos peaks at three. Printing one under the other's label is a
-              wrong number with a confident caption, so the count is omitted
-              until the service counts joins — asked for, and it is the only
-              thing on this card that is not real.
+              "428 joined" — distinct people who came AT ALL, which is what the
+              caption claims. NOT `peakViewers`: peak is the most people in the
+              room at once, so fifty people passing through in ones and twos
+              peaks at three. This card went without the number rather than
+              print peak under this word.
+
+              `typeof === "number"` rather than a truthiness test, because a
+              room nobody joined really is 0 and deserves to say so. Absent is
+              the different case — a live room, or a list row that does not
+              carry the count — and absent draws nothing.
+
+              The bullet belongs to the PAIR, not to this half: a room that was
+              ended before it ever started has no run length, and a separator
+              that does not check what precedes it draws "Sep 20 • • 428
+              joined".
             */}
+            {typeof data?.joined === "number" && (
+              <>
+                {ran && <span aria-hidden>•</span>}
+                <span>{data.joined.toLocaleString()} joined</span>
+              </>
+            )}
           </>
         ) : (
           when && <span>{clockLabel(when)}</span>

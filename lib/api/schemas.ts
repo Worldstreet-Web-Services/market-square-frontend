@@ -423,6 +423,23 @@ export const StreamSchema = z.object({
   // "nobody is watching", and a discovery grid rendering a confident 0 (or
   // worse, a historical peak) is stating something untrue.
   viewerCount: z.number().nullable().optional().default(null),
+  /**
+   * HOW MANY DISTINCT PEOPLE CAME AT ALL — the number "428 joined" claims.
+   *
+   * NO DEFAULT, and that is the whole design of the field. It is carried on the
+   * single-room read of an ENDED room and nowhere else: absent while the room is
+   * live (`viewerCount` is the honest field while it is still moving), and
+   * absent on list rows, where a count per card is the query that read exists to
+   * avoid. Default it to 0 and every one of those absences renders as "0 joined"
+   * — a room nobody came to — which is a lie told confidently on the two
+   * surfaces where the number is merely unavailable.
+   *
+   * It is NOT `peakViewers`. Peak is the most people in the room at once;
+   * joined is how many came at all. Fifty people passing through in ones and
+   * twos peaks at three. They are different questions, and the card went
+   * without this one rather than print peak under its caption.
+   */
+  joined: z.number().optional(),
   // Aggregate live reactions. Optional until all gateway deployments expose it.
   likeCount: z.number().optional().default(0),
   pulse: z.object({

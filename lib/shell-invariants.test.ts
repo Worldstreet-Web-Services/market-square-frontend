@@ -5306,3 +5306,57 @@ describe("Answering a house invite lands everywhere the house is read", () => {
     );
   });
 });
+
+describe("An ended room says how many came, and never guesses", () => {
+  /*
+    NO DEFAULT ON `joined`, AND THAT IS THE ENTIRE DESIGN OF THE FIELD.
+
+    It is carried on the single-room read of an ENDED room and nowhere else:
+    absent while the room is live, where `viewerCount` is the honest field
+    because the number is still moving, and absent on list rows, where a count
+    per card is the query that read exists to avoid.
+
+    Give it `.default(0)` and every one of those absences renders "0 joined" —
+    a room nobody came to — on the two surfaces where the number is merely
+    unavailable. That is a lie told confidently, and it is the same mistake
+    `viewerCount` already carries a comment about: a default turns "we do not
+    know" into a specific, wrong claim.
+  */
+  it("carries no default, so an absent count cannot read as nobody came", () => {
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    assert.match(schemas, /joined: z\.number\(\)\.optional\(\),/);
+    assert.ok(
+      !/joined: z\.number\(\)[^,\n]*\.default\(/.test(schemas),
+      "defaulting `joined` prints 0 joined on every live room and every list row"
+    );
+  });
+
+  /*
+    And the card reads it as a NUMBER, not as a truth. A room nobody joined
+    really is 0 and should say so; absent is the different case and draws
+    nothing. `joined && ...` collapses those two into one, hiding the honest
+    zero and keeping the card silent about a real measurement.
+  */
+  it("tells a measured zero from an absent count", () => {
+    const card = stripComments(read("features/feed/components/room-post-card.tsx"));
+    assert.match(
+      card,
+      /typeof data\?\.joined === "number"/,
+      "a truthiness test would hide a room that genuinely had nobody join"
+    );
+  });
+
+  /*
+    IT IS STILL NOT `peakViewers`. Peak is the most people in the room at once;
+    joined is how many came at all. Fifty people passing through in ones and
+    twos peaks at three. The card went without this number for a release rather
+    than print peak under the word "joined", and this holds that line.
+  */
+  it("never prints peakViewers under the word joined", () => {
+    const card = stripComments(read("features/feed/components/room-post-card.tsx"));
+    assert.ok(
+      !card.includes("peakViewers"),
+      "peak is not joined — they answer different questions and differ wildly"
+    );
+  });
+});
