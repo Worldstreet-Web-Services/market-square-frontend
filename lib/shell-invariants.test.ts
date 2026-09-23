@@ -2459,6 +2459,45 @@ describe("Home and the dock after Pals took the stories", () => {
   });
 });
 
+describe("A card whose children go full bleed draws its ring on TOP of them", () => {
+  /*
+    AN INSET BOX-SHADOW IS PAINTED BEFORE CHILD CONTENT.
+
+    CSS paints an element's background and its inset shadows, and only then its
+    children. So on a card with a full-bleed absolute child — a cover photo, an
+    opaque scrim — the hairline is drawn and then buried, and the card loses the
+    edge that separates it from the page. The class is invisible in review: the
+    shadow IS in the className, it reads as correct, and nothing about the code
+    says it never reaches a pixel.
+
+    Both cards below had it. `ComingSoonCard` has a cover on the left AND a
+    scrim at inset-0 that goes solid by 120, so it lost all four edges;
+    `UpcomingRoomCard` has an h-40 banner, so it lost the top and the upper
+    sides and kept the bottom (ogazboiz, 2026-09-23, on a Home rail where the
+    live card and the house card either side of these had their rings).
+
+    The fix is an overlay drawn LAST with the same radius and stroke. The root
+    keeps its inset shadow too — it is the honest description of the node's
+    INSIDE stroke, and it is what shows wherever no layer covers.
+  */
+  for (const [path, radius] of [
+    ["components/layout/coming-soon-card.tsx", "16px"],
+    ["components/layout/upcoming-room-card.tsx", "20px"],
+  ] as const) {
+    it(`${path.split("/").pop()} redraws its ring above the cover`, () => {
+      const card = stripComments(read(path));
+      const overlay = new RegExp(
+        `pointer-events-none absolute inset-0 rounded-\\[${radius.replace("[", "\\[")}\\] shadow-\\[inset_0_0_0_[\\d.]+px_rgba\\(255,255,255,0\\.18\\)\\]`
+      );
+      assert.match(card, overlay, "the ring is only on the root, where the cover buries it");
+      // ...and it is the LAST thing drawn, or something else covers it again.
+      const at = card.search(overlay);
+      const banner = card.indexOf("object-cover");
+      assert.ok(at > banner, "the ring overlay is drawn before the cover it has to sit on top of");
+    });
+  }
+});
+
 describe("Gist rooms can be scheduled, and upcoming ones look like open ones", () => {
   it("offers Now or Later when opening a room, and refuses a past time", () => {
     const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));

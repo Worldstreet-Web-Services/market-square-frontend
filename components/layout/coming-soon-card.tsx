@@ -74,6 +74,21 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
       : null;
 
   return (
+    /*
+      THE RING IS DRAWN AT THE END OF THIS CARD, NOT HERE — see the last child.
+
+      The inset shadow stays on the root because it is the correct description
+      of the node's 0.552 INSIDE stroke, and because it is what shows through
+      the few pixels no layer covers. It is not what the reader sees, though:
+      an INSET box-shadow paints immediately after the element's own background
+      and BEFORE any child content, and this card has two full-bleed absolute
+      children — the cover on the left and the scrim at `inset-0` that reaches
+      solid #101012 by 120. Between them they cover all four edges, so the
+      hairline was painted and then buried on every card.
+
+      It is why the live card and the house card keep their rings and this one
+      lost its: they have no child that reaches their edges.
+    */
     <div className="relative h-[106px] w-full overflow-hidden rounded-[16px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)] backdrop-blur-[7.726px]">
       {/* `image 64` — 144.507 wide, full bleed to the card's left edge and
           under everything else. STRETCH in the file; `object-cover` here, so a
@@ -268,6 +283,26 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           </button>
         </div>
       </div>
+
+      {/*
+        `Frame 2147230802`'s STROKE — 0.552 INSIDE, white at 18%, on the 16
+        radius. Drawn LAST so it lands on top of the cover and the scrim, which
+        is the only way an edge this thin survives a card whose children go
+        full bleed (ogazboiz, 2026-09-23: "even for coming soon there is border
+        line").
+
+        An overlay rather than a `border`: a real border would sit OUTSIDE the
+        0.552 and round differently against the radius, and it would take part
+        in layout — every inner offset on this card is measured from the node's
+        own edges, so a border would move all of them by half a pixel.
+
+        `pointer-events-none` so it never sits between a reader and the title
+        link or the Share button underneath it.
+      */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[16px] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)]"
+      />
 
       {sharing && (
         <ShareSheet
