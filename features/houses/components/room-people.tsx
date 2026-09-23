@@ -92,6 +92,15 @@ export interface RoomPerson {
    * where they sit; the slot owns what they do. See `PersonQuickActions`.
    */
   actions?: React.ReactNode;
+  /**
+   * WHO THIS PERSON IS IN THE ROOM — node 1285:30456 draws a pill under the
+   * name for two of the three, and nothing at all for an ordinary speaker.
+   *
+   * Absent rather than a `"speaker"` value on purpose: most people in a room
+   * hold no office, and a badge reading SPEAKER under every face would make
+   * the two that matter invisible by making the row look uniform.
+   */
+  role?: "host" | "moderator";
 }
 
 /**
@@ -103,27 +112,67 @@ export interface RoomPerson {
  */
 function PersonCard({ person }: { person: RoomPerson }) {
   /*
-    A BUTTON when there is a sheet to open, a plain figure otherwise. The seat
-    ring this replaced opened a person on tap, and dropping that would quietly
-    remove the only route to mute, follow or report somebody in the room.
+    THE CARD OPENS A PERSON, AND IT CANNOT BE A BUTTON TO DO IT.
+
+    It used to be one, and `person.actions` — the wink and the follow — are
+    buttons too, so every card in the room nested a button inside a button.
+    That is invalid HTML: the browser does not build the tree the server sent,
+    which is a hydration error, and before that it is a real behaviour bug —
+    what a click on the inner control does is left to the browser to decide.
+
+    So the card is a FIGURE, and the tap target is a transparent button laid
+    over it. The actions are painted above that overlay and are ordinary
+    siblings of it, not descendants, so each control is reached directly and
+    neither swallows the other. This is the stretched-target pattern, and it is
+    the only shape that keeps both a whole-card tap AND controls on the card.
+
+    `ws-press` stays on the ROOT rather than moving to the overlay, and that is
+    not laziness: `:active` matches an ancestor of the element being pressed,
+    so the whole card still scales — including when the wink is what was
+    pressed, which is exactly what it did as a button. The feel is unchanged.
   */
-  const Root = person.onOpen ? "button" : "figure";
   return (
-    <Root
-      {...(person.onOpen ? { type: "button" as const, onClick: person.onOpen } : {})}
+    <figure
       className={cn(
         // Fluid: fills its grid cell so a row holds at least 3 and grows with
         // the column's real width (see the @container grid below). A fixed 104
         // left the narrowest phones room for only 2.
-        "flex w-full flex-col gap-2",
+        "relative flex w-full flex-col items-center gap-2",
         person.onOpen && "ws-press text-left"
       )}
     >
-      {/* The plate keeps the file's 104:113 ratio at ANY width (aspect-ratio,
-          not a fixed 104). `pb-3` reserves the badge's 12px of overhang below
-          the plate — only when a badge is drawn — so it never pushes the name
-          down. */}
-      <div className={cn("relative w-full", person.actions && "pb-3")}>
+      {/* Covers the card and sits UNDER the badges (z-10 against their z-20),
+          so a tap on the face opens the person and a tap on the wink winks.
+          It carries its own name because the plate and the label it covers are
+          no longer inside it. */}
+      {person.onOpen && (
+        <button
+          type="button"
+          onClick={person.onOpen}
+          aria-label={`Open ${person.name}`}
+          className="absolute inset-0 z-10 rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:rounded-4xl"
+        />
+      )}
+      {/*
+        The plate keeps the file's 104:113 ratio at ANY width (aspect-ratio,
+        not a fixed 104), and `pb-3` reserves the 12px the badge row hangs
+        below it.
+
+        RESERVED ALWAYS, EVEN WITH NO BADGES, and that is the fix for a real
+        misalignment rather than defensive padding. It used to be conditional,
+        which seemed tidier: no badges, no space. But whether a tile HAS badges
+        is per-person — you cannot wink at or follow YOURSELF — so in any room
+        the viewer is in, their own tile was 12px shorter than everybody
+        else's, and its name and role pill rode 12px higher than the names
+        beside them. One row, two baselines, and the odd one out was always
+        the reader's own face.
+
+        The file draws the badge row on every tile (`Frame 2147225666` in
+        1285:30456), so a uniform column is what it asks for anyway. Twelve
+        pixels of air under a lone self-tile costs nothing; a ragged row of
+        names costs the section its shape.
+      */}
+      <div className="relative w-full pb-3">
         <div
           className={cn(
             "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-3xl bg-white/10 transition-shadow md:aspect-104/113 md:rounded-4xl",
@@ -206,7 +255,7 @@ function PersonCard({ person }: { person: RoomPerson }) {
         {person.actions && (
           /* Straddles the plate's lower edge — 24px tall, centred on the plate
              bottom (12 above it, 12 below into the reserved `pb-3`). */
-          <span className="absolute bottom-0 left-1/2 -translate-x-1/2">
+          <span className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2">
             {person.actions}
           </span>
         )}
@@ -216,10 +265,48 @@ function PersonCard({ person }: { person: RoomPerson }) {
           phone's name (1285:92958) is 12/14.06. Two lines on the small mobile
           tiles so a real name like "Uchechukwu" is not clipped to "Uchechu…";
           the desktop keeps the file's single line. */}
-      <span className="line-clamp-2 w-full text-center text-[12px] leading-3.5 text-white md:line-clamp-1 md:text-[14px] md:leading-6">
-        {person.name}
-      </span>
-    </Root>
+      {/*
+        NAME AND PILL ARE ONE BLOCK, 4 apart — `Frame 1707478243`, VERTICAL
+        gap 4, inside a tile whose own gap is 8. So the plate sits 8 above the
+        name and the pill only 4 under it: the role belongs to the name, not to
+        the column, and 8 everywhere read as three unrelated rows.
+
+        Every tile's name starts at the SAME y in the file (31505 on all three,
+        including the one with no pill), which is what the uniform 125-tall
+        plate group above buys. The pill hangs below that line rather than
+        pushing it.
+      */}
+      <div className="flex w-full flex-col items-center gap-1">
+        <span className="line-clamp-2 w-full text-center text-[12px] leading-3.5 text-white md:line-clamp-1 md:text-[14px] md:leading-6">
+          {person.name}
+        </span>
+
+        {/*
+          `Badge` — 16 tall at a 12 radius, the label 8/10.4 semibold at -0.04
+          tracking, and the SAME hue at 10% behind text at full: the spotlight
+          purple for HOST, --color-moderator for MODERATOR. The file gives each a fixed width (30 and 58) for
+          its own word; `w-fit` with the node's padding holds the shape for names
+          of any length without pinning two magic numbers.
+
+          The orange is the point of the pair. A moderator drawn in the accent
+          would read as a second host, and the whole reason the pill exists is
+          that the two are NOT the same office — one appointed the other and can
+          take it back.
+        */}
+        {person.role && (
+          <span
+            className={cn(
+              "inline-flex h-4 w-fit items-center rounded-[12px] px-2 text-[8px] font-semibold leading-[10.4px] tracking-[-0.04px]",
+              person.role === "host"
+                ? "bg-spotlight/10 text-spotlight"
+                : "bg-moderator/10 text-moderator"
+            )}
+          >
+            {person.role === "host" ? "HOST" : "MODERATOR"}
+          </span>
+        )}
+      </div>
+    </figure>
   );
 }
 

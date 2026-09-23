@@ -2042,8 +2042,27 @@ describe("A gist room's chat can answer a particular message", () => {
     // FILLED, not merely tinted: a coloured outline reads as a hover state
     // rather than as an act somebody took.
     assert.match(panel, /filled=\{loved\}/);
+    /*
+      AND THE EMPTY ONE IS A HOLE, NOT A SECOND SHAPE.
+
+      The heart was two paths — an outer silhouette and an inner "cut" — both
+      painted in `currentColor`, so the cut filled the middle straight back in
+      and every unloved message carried a SOLID heart. An unloved message that
+      looks loved is the one thing this control must never do.
+
+      `fillRule="evenodd"` on a single path is what actually punches the
+      middle out, and it is the only way that works here: the chat sits over a
+      room, so there is no background colour to paint the inner shape with —
+      it is whatever the last person's video happens to be.
+    */
     const icons = stripComments(read("components/ui/room-icons.tsx"));
-    assert.match(icons, /\{!filled && <path/);
+    const heart = icons.slice(icons.indexOf("export function IconRoomHeart"));
+    const body = heart.slice(0, heart.indexOf("</svg>"));
+    assert.match(body, /fillRule="evenodd"/, "the empty heart must be a hole, or it reads as loved");
+    assert.ok(
+      !/fillOpacity/.test(body),
+      "opacity cannot stand in for an outline — a dimmed solid heart is still a solid heart"
+    );
     const api = stripComments(read("features/streams/lib/api.ts"));
     // The emoji is a path segment and an emoji is several bytes.
     assert.match(api, /encodeURIComponent\(emoji\)/);
@@ -2440,6 +2459,45 @@ describe("Home and the dock after Pals took the stories", () => {
   });
 });
 
+describe("A card whose children go full bleed draws its ring on TOP of them", () => {
+  /*
+    AN INSET BOX-SHADOW IS PAINTED BEFORE CHILD CONTENT.
+
+    CSS paints an element's background and its inset shadows, and only then its
+    children. So on a card with a full-bleed absolute child — a cover photo, an
+    opaque scrim — the hairline is drawn and then buried, and the card loses the
+    edge that separates it from the page. The class is invisible in review: the
+    shadow IS in the className, it reads as correct, and nothing about the code
+    says it never reaches a pixel.
+
+    Both cards below had it. `ComingSoonCard` has a cover on the left AND a
+    scrim at inset-0 that goes solid by 120, so it lost all four edges;
+    `UpcomingRoomCard` has an h-40 banner, so it lost the top and the upper
+    sides and kept the bottom (ogazboiz, 2026-09-23, on a Home rail where the
+    live card and the house card either side of these had their rings).
+
+    The fix is an overlay drawn LAST with the same radius and stroke. The root
+    keeps its inset shadow too — it is the honest description of the node's
+    INSIDE stroke, and it is what shows wherever no layer covers.
+  */
+  for (const [path, radius] of [
+    ["components/layout/coming-soon-card.tsx", "16px"],
+    ["components/layout/upcoming-room-card.tsx", "20px"],
+  ] as const) {
+    it(`${path.split("/").pop()} redraws its ring above the cover`, () => {
+      const card = stripComments(read(path));
+      const overlay = new RegExp(
+        `pointer-events-none absolute inset-0 rounded-\\[${radius.replace("[", "\\[")}\\] shadow-\\[inset_0_0_0_[\\d.]+px_rgba\\(255,255,255,0\\.18\\)\\]`
+      );
+      assert.match(card, overlay, "the ring is only on the root, where the cover buries it");
+      // ...and it is the LAST thing drawn, or something else covers it again.
+      const at = card.search(overlay);
+      const banner = card.indexOf("object-cover");
+      assert.ok(at > banner, "the ring overlay is drawn before the cover it has to sit on top of");
+    });
+  }
+});
+
 describe("Gist rooms can be scheduled, and upcoming ones look like open ones", () => {
   it("offers Now or Later when opening a room, and refuses a past time", () => {
     const sheet = stripComments(read("features/houses/components/open-house-sheet.tsx"));
@@ -2465,12 +2523,18 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // "Live GistRooms" and "Coming Soon" in the shared heading, WITHOUT View more.
     assert.match(screen, /<SectionHeading id="live-gistrooms" lead="Live" accent="GistRooms" \/>/);
     assert.match(screen, /<SectionHeading id="coming-soon-page" lead="Coming Soon" \/>/);
-    // The live grid draws the card FLUID at its natural size (node 1769:3670) —
-    // the old CSS `zoom` into a 290 cell broke the mic badge's SVG gradient, so
-    // it is an at-most-two-across grid of fluid cards now.
+    // The live grid draws HOME'S OWN LIVE CARD (node 2078:19217), `fluid` so it
+    // fills its cell instead of holding the rail's 342 — the same component the
+    // Top GistRooms rail draws, because this page and that rail are the same
+    // act. It was `GistRoomCard` (1769:3670), which is the card a DM and a
+    // shared link draw, where a room is a reference to something mentioned
+    // elsewhere rather than a door to walk through.
+    // Still never CSS `zoom`: scaling into a 290 cell broke the mic badge's SVG
+    // gradient, and an at-most-two-across grid of fluid cards is the answer.
     assert.doesNotMatch(screen, /ROOM_CARD_SCALE|zoom:/, "the card is scaled with CSS zoom again");
     assert.match(street, /aria-label="Gist rooms open now"[\s\S]{0,120}grid grid-cols-1 gap-4 lg:grid-cols-2/);
-    assert.match(screen, /<GistRoomCard\s+fluid\s+preview/);
+    assert.match(screen, /roomCardSlot=\{\(stream\) => <LiveRoomCard fluid stream=\{stream\} \/>\}/);
+    assert.doesNotMatch(screen, /<GistRoomCard/, "the rooms page and Home's rail draw different cards again");
     // Coming Soon is a GRID here (1317:158179), 59 under the live grid — now at
     // most TWO across, because the cards are the wide horizontal ComingSoonCard.
     assert.match(street, /className=\{liveHouses\.length > 0 \? "mt-\[59px\]" : "mt-9"\}/);
@@ -2497,36 +2561,60 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // "Explore communities" (ogazboiz, 2026-09-12) over the file's pasted "Live GistRooms".
     assert.match(screen, /<SectionHeading id="explore-communities" lead="Explore" accent="communities" \/>/);
     assert.doesNotMatch(screen, /Live GistRooms/);
-    // 1373:3367's card: 290 x 86 at 16.86, three across, rows 16 apart, paged.
-    assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,290px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
-    assert.match(screen, /h-\[86px\] w-\[290px\] cursor-pointer overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
-    assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
-    assert.match(screen, /left-\[75\.75px\] top-\[16\.25px\] flex w-\[127\.52px\] flex-col gap-\[4\.93px\]/);
-    assert.match(screen, /ws-btn-welcome ws-press absolute right-4 top-\[31px\] flex h-6 w-16 items-center justify-center rounded-\[61\.6px\]/, "the Join House pill lost its ramp");
-    // The phone (1381:37677 in SQUARE 2.0 Copy, ogazboiz 2026-09-12): one
-    // column, each card FILLING the row at 106 tall, the node's own type,
-    // the pill 40 down. Below lg, not md — a 290 cell in the 600 column
-    // between them leaves two thirds of the row empty.
+    /*
+      ONE CARD FOR BOTH SURFACES. Home's rail and this directory were two
+      copies of the same object and they had drifted: Home's was rebuilt at
+      legible sizes, this one was left at node 1373:3367's 290 x 86 with a 10px
+      title and an 8px Join pill, and only its PHONE variant was ever
+      corrected. So the rail looked right and the page its own "View more"
+      opens looked like a different product (ogazboiz, 2026-09-23).
+      Home's shape survived, because it is the one designed against real
+      content. Neither surface draws its own house markup any more.
+    */
+    assert.match(screen, /<HouseDirectoryCard\n\s*key=\{house\.id\}/);
+    /*
+      THE TRACK SIZES TO THE CARD, not the other way round. `lg:grid-cols-3`
+      cut the row into three whatever the card needed, which at 1440 left each
+      cell around 273 against Home's 400 — so the SAME component truncated its
+      title to "Entitl…" and wrapped "1 member" onto two lines, and the two
+      surfaces looked different again for a new reason (ogazboiz, 2026-09-23).
+      `auto-fill` with a 360 floor gives as many columns as actually fit.
+    */
+    assert.match(screen, /grid-cols-\[repeat\(auto-fill,minmax\(360px,1fr\)\)\]/);
+    assert.doesNotMatch(screen, /lg:grid-cols-3/, "a fixed column count is squeezing the card again");
+
+    assert.doesNotMatch(screen, /h-\[86px\]|w-\[290px\]|text-\[8px\] font-semibold/, "the directory went back to its own micro card");
+    assert.match(stripComments(read("components/layout/popular-houses.tsx")), /<HouseDirectoryCard/, "Home's rail stopped sharing the card");
+    const houseCard = stripComments(read("components/layout/house-directory-card.tsx"));
+    assert.match(houseCard, /h-\[80px\] w-\[74px\]/, "the picture shrank back");
+    assert.match(houseCard, /text-\[15px\] font-semibold/);
+    // The body opens the house; only the pill joins it — held by STRUCTURE
+    // now rather than by cancelling an event. See the house-card invariant
+    // below for why the anchor could not wrap the button in the first place.
+    assert.match(houseCard, /aria-label=\{`View \$\{house\.title \?\? "house"\}`\}/);
+    assert.match(houseCard, /className="absolute inset-0 z-10/, "the link must cover the card as an overlay");
     assert.match(screen, /max-lg:grid-cols-1 max-lg:justify-stretch/, "the phone's one column is gone");
-    assert.match(screen, /max-lg:h-\[106px\] max-lg:w-full/, "the phone's card no longer fills the row");
-    assert.match(screen, /max-lg:left-\[76px\] max-lg:right-\[94px\] max-lg:top-4 max-lg:w-auto max-lg:gap-2/);
-    assert.match(screen, /max-lg:text-\[14px\] max-lg:leading-\[18\.2px\]/, "the phone's 14/18.2 name is gone");
-    assert.match(screen, /max-lg:text-\[12px\] max-lg:font-medium max-lg:leading-\[15\.6px\]/, "the phone's 12/15.6 description is gone");
-    assert.match(screen, /max-lg:top-\[40px\]/, "the phone's pill offset is gone");
-    // The picture is the node's 48.05 square inset on the white plate; with
-    // no picture the plate is 1373:3990's — `#D8D8D8` with the gist glyph
-    // centred — never a seeded person, never the node's sample photo
-    // (ogazboiz, 2026-09-12).
-    assert.match(screen, /left-\[1\.23px\] top-\[3\.08px\] h-\[48\.05px\] w-\[48\.05px\] object-cover/, "the picture no longer sits square on its plate");
-    assert.match(screen, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
-    assert.match(screen, /src=\{asset\("\/gist-rooms\/card-default-cover\.svg"\)\}[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
-    assert.doesNotMatch(screen, /default-picture|<Avatar[\s\S]{0,120}src=\{house\.imageUrl\}/, "a house picture is being invented again");
+    assert.doesNotMatch(screen, /max-lg:text-\[14px\]/, "the legible sizes went back to being phone-only");
+    /*
+      A HOUSE WITH NO PICTURE GETS THE FILE'S PLATE (1373:3990 — #D8D8D8 with
+      the gist glyph), NEVER A SEEDED PERSON and never the node's sample photo
+      (ogazboiz, 2026-09-12). Home's card passed imageUrl straight to `Avatar`,
+      which falls back to a generated FACE, so a house with no photo wore a
+      stranger's — and unifying the two cards on Home's would have carried that
+      across. These now guard the shared card, which is where the picture is
+      drawn for both surfaces.
+    */
+    assert.match(houseCard, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
+    assert.match(houseCard, /src=\{asset\("\/gist-rooms\/card-default-cover\.svg"\)\}[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
+    assert.doesNotMatch(houseCard, /<Avatar[\s\S]{0,140}src=\{house\.imageUrl\}/, "a house picture is being invented again");
     assert.ok(!existsSync(resolve("public/houses")), "the node's sample photo is back as a default");
     // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
     assert.match(screen, /useDiscoverHousesPages\(\)/);
     assert.match(screen, /useInfiniteScroll\(/);
     assert.doesNotMatch(screen, /\.sort\(/);
-    assert.match(screen, /house\.memberCount !== null && \(/);
+    // A null count means the payload does not count members, which is a
+    // different claim from "none" — so it prints nothing, never "0 members".
+    assert.match(houseCard, /house\.memberCount !== null && \(/);
   });
 
   it("gives the room card 415:12704's hover state, only where the file wires it", () => {
@@ -2583,24 +2671,71 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // Nothing scheduled is no section — never an empty shelf or a spacer.
     assert.match(soon, /if \(items\.length === 0\) return null;/);
     assert.match(soon, /useStreamList\("scheduled"/);
-    // The HORIZONTAL card ogazboiz asked back for (node 1542:3294): its own
-    // component, NOT the gist-rooms grid's vertical banner, in a sideways rail
-    // at the node's own 467 on a 16 gap.
+    // The HORIZONTAL card (redesigned at node 2077:19030): its own component,
+    // NOT the gist-rooms grid's vertical banner, in a sideways rail at the
+    // node's own 342 on a 24 gap — the rail frame 2078:19117 is 1806 wide,
+    // which is exactly 5 x 342 + 4 x 24.
     assert.match(soon, /<ComingSoonCard stream=\{room\} \/>/);
-    assert.match(soon, /gap-4 overflow-x-auto/);
-    // Capped at 400 (w-100) on desktop, but never more than 95% of the column
-    // so a second card always PEEKS in at the edge — on a phone especially,
-    // where 100% would fill the column and hide the next one (ogazboiz).
-    assert.match(soon, /w-100 max-w-\[95%\] shrink-0/);
+    assert.match(soon, /gap-6 overflow-x-auto/);
+    // The node's own 342 on desktop, but never more than 95% of the column so
+    // a second card always PEEKS in at the edge — on a phone especially, where
+    // 100% would fill the column and hide the next one (ogazboiz).
+    assert.match(soon, /w-\[342px\] max-w-\[95%\] shrink-0/);
     assert.doesNotMatch(soon, /UpcomingRoomCard/, "Home's Coming Soon fell back to the banner card");
     const soonCard = stripComments(read("components/layout/coming-soon-card.tsx"));
-    // 136 tall, width fills its (≤467) wrapper; the text column flexes so the
-    // card fits a narrow column without overflow. Plus the marks of the design:
-    // the purple accent bar, the #3C3C3C divider, the one Regular run.
-    assert.match(soonCard, /h-\[136px\] w-full/, "the card lost its fixed height or fluid width");
-    assert.match(soonCard, /w-\[7px\] bg-spotlight/);
-    assert.match(soonCard, /w-px shrink-0 bg-\[#3C3C3C\]/);
-    assert.match(soonCard, /font-normal leading-normal text-\[#D9D9D9\]/);
+    /*
+      106 tall at node 2077:19030, width fills its 342 wrapper. Plus the marks
+      of the redesign: the 7px accent still hard on the left edge, the image
+      bleeding full-height under the panel that starts 40 in, and the host line
+      drawn as TWO runs — the file's per-character overrides flip the name to
+      Geist 600 at 10 while the label stays 500 at 8, and the parent style says
+      500/8 for the whole string and is wrong.
+    */
+    assert.match(soonCard, /h-\[106px\] w-full/, "the card lost its fixed height or fluid width");
+    assert.match(soonCard, /w-\[7px\] bg-\[#7E3BEB\]/);
+    assert.match(soonCard, /w-\[144\.507px\]/, "the cover stopped bleeding under the panel");
+    /*
+      THE SCRIM RUNS ACROSS, NOT DOWN, and is opaque by 120 — before the
+      image's own 144.5 edge — so no cover ever ends against a wall. Built to
+      the node instead (a flat panel starting at 40) it is a hard vertical
+      line, which is invisible only because the file's sample cover is a dark
+      photograph of a trading screen. A real cover is a face in daylight.
+    */
+    assert.match(soonCard, /linear-gradient\(to right, rgba\(16,16,18,0\) 0px[^"]*#101012 120px\)/);
+    assert.doesNotMatch(soonCard, /left-\[40px\]/, "the scrim went back to a wall at x=40");
+    /*
+      The two columns are a FLEX ROW, not two absolutely placed boxes. The node
+      fixes them at 64 and 259, which only holds at its own 342 — and the rail
+      caps a card at 95% of its column so a second one peeks, so a narrow
+      column brings the card in around 277 and the two absolute columns
+      overlap, the schedule sliding under a long title. Invisible until
+      somebody writes a real title.
+    */
+    assert.match(soonCard, /flex h-full items-start gap-\[35px\] pl-\[64px\] pr-\[16px\]/);
+    assert.match(soonCard, /mt-\[16px\] flex min-w-0 flex-1 flex-col/, "the text column stopped being the one that gives");
+    assert.match(soonCard, /mt-\[15px\] flex shrink-0 flex-col items-end/);
+    assert.doesNotMatch(soonCard, /bg-\[#3C3C3C\]/, "the divider is gone in the redesign");
+    /*
+      Scaled 1.4 from the node at ogazboiz's word (2026-09-23): the file sets
+      the title and the host's NAME at 10 and the "Hosted by" label at 8, which
+      reads as small type on a card whose job is to sell the room. The file's
+      own relationship is kept — title and name equal, label smaller — and the
+      two runs stay two runs, because the node's per-character overrides make
+      the name heavier and larger than the label it follows.
+    */
+    assert.match(soonCard, /line-clamp-2 text-\[14px\] font-semibold leading-\[16px\]/);
+    assert.match(soonCard, /text-\[11px\] font-medium leading-\[14px\]">\s*Hosted by/);
+    assert.match(soonCard, /text-\[14px\] font-semibold leading-\[14px\]/);
+    /*
+      "Starts in 27h 8m" WRAPPED TO TWO LINES, and the cause was a deviation
+      rather than the node: the label is 5px in the file and is drawn at 8, so
+      the file's 67-wide right column — which only ever fitted 5px text — was
+      too narrow for a real countdown. Anchoring that column by its right inset
+      instead of a left offset plus a fixed width lets it grow leftward into
+      the slack the node leaves, and keeps the edge the design actually fixes.
+    */
+    assert.doesNotMatch(soonCard, /w-\[67px\]/, "the right column went back to a width that only fits 5px text");
+    assert.match(soonCard, /whitespace-nowrap rounded-full bg-\[rgba\(159,90,255,0\.09\)\]/);
   });
 
   it("does not drop a host into the soundcheck for a room scheduled for later", () => {
@@ -2641,10 +2776,12 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(houses, /useDiscoverHouses\(/);
     assert.doesNotMatch(houses, /\.sort\(/, "one loaded page is being re-sorted");
     // Node 1302:148763: capped at 400 (w-100) so a second card peeks, max-w-95%
-    // so it fits a narrow column; 17px radius, and Join House on the create ramp.
+    // so it fits a narrow column. The card itself is no longer drawn here —
+    // it is `HouseDirectoryCard`, the one the directory draws too.
     assert.match(houses, /w-100 max-w-\[95%\] shrink-0/);
-    assert.match(houses, /rounded-\[17px\]/);
-    assert.match(houses, /bg-\[linear-gradient\(90deg,#9f65fd_0%,#5b05e6_100%\)\]/);
+    const shared = stripComments(read("components/layout/house-directory-card.tsx"));
+    assert.match(shared, /rounded-\[17px\]/);
+    assert.match(shared, /bg-\[linear-gradient\(90deg,#9f65fd_0%,#5b05e6_100%\)\]/);
     // Empty or undeployed is ABSENT, never an empty shelf.
     assert.match(houses, /if \(houses\.unavailable \|\| items\.length === 0\) return null;/);
   });
@@ -3491,10 +3628,18 @@ describe("QA round, 2026-09-15", () => {
     assert.match(thread, /<h1 className="truncate text-\[16px\] font-bold leading-6 text-white">/);
   });
 
-  it("4 · a member's face, and a one-to-one chat's header, open that person's profile", () => {
+  it("4 · a header opens the thing it names — a person, or a house", () => {
     assert.match(thread, /sender\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(sender\)\}/);
     assert.match(thread, /peer\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(peer\)\}/);
-    assert.match(thread, /\{!group && peer\?\.username \? \(\n\s*<Link href=\{profileHref\(peer\)\}/);
+    assert.match(thread, /\) : peer\?\.username \? \(\n\s*<Link href=\{profileHref\(peer\)\}/);
+    /*
+      A HOUSE'S NAME OPENS THE HOUSE. Only the person half was true: once you
+      joined a house it lived in your inbox and there was no route back to its
+      page at all — not the members, the description or the replays you looked
+      at before deciding to join. The page existed and became unreachable the
+      moment you used it (ogazboiz, 2026-09-23).
+    */
+    assert.match(thread, /\{group \? \(\n\s*<Link href=\{sq\(`\/houses\/\$\{conversation\.id\}`\)\}/);
   });
 
   it("5 · the thread column and the room's chat column end with a divider, like X", () => {
@@ -4184,7 +4329,20 @@ describe("the mini-player fits every frame it is drawn in", () => {
 
   it("destructive confirmations share one sheet: Stay focused, the act in danger red", () => {
     const sheet = code("components/ui/destructive-confirm-sheet.tsx");
-    assert.match(sheet, /<Button variant="ghost" className="flex-1" autoFocus onClick=\{onClose\}>/);
+    /*
+      FOCUS LANDS ON THE SAFEST THING PRESENT, which is Stay when Stay is the
+      only way not to do the irreversible act — and is the SECONDARY when one
+      exists, because then it is the safe answer and Stay is merely retreat.
+
+      The sheet grew that third door when a host with a moderator needed to
+      leave a room without closing it. Before that, "leave" and "close" were
+      the same act for a host, so two buttons were the whole truth.
+
+      What must never change: focus is never on the destructive button, and
+      the destructive button is the only one in danger red.
+    */
+    assert.match(sheet, /autoFocus=\{!secondary\}/, "Stay must yield focus only to a SAFER option, never to the destructive one");
+    assert.doesNotMatch(sheet, /bg-danger[^>]*autoFocus/, "the destructive act must never take focus");
     assert.match(sheet, /bg-danger text-white/);
     for (const path of [
       "components/layout/room-mini-player.tsx",
@@ -4892,5 +5050,829 @@ describe("Every notification kind has words of its own", () => {
       assert.ok(headline.includes(`case "${kind}"`), `${kind} has no headline`);
       assert.ok(describeFn.includes(`case "${kind}"`), `${kind} has no sentence`);
     }
+  });
+});
+
+describe("A house has its own page, the way a person does", () => {
+  /*
+    Tapping a house used to open a MODAL. A person's avatar goes to their
+    profile, and ogazboiz asked for the same of a house (2026-09-23: "just
+    like the way normal person avatar is taking me to his own profile") — a
+    modal is a different gesture with a different meaning and no address you
+    can send anybody.
+  */
+  it("navigates to the house rather than opening a sheet", () => {
+    const card = stripComments(read("components/layout/house-directory-card.tsx"));
+    assert.match(card, /href=\{sq\(`\/houses\/\$\{house\.id\}`\)\}/);
+    assert.doesNotMatch(card, /role="button"/, "the card went back to being a modal trigger");
+    /*
+      JOINING IS A DECISION, NOT A LOOK — it must never also navigate. That was
+      held by `stopPropagation` inside the anchor, which was the wrong tool
+      twice over: an `<a>` may not contain a `<button>` at all (the browser
+      rebuilds the tree, React reports a hydration mismatch), and
+      stopPropagation halts React's synthetic bubbling rather than the anchor's
+      own default navigation.
+
+      It is now held STRUCTURALLY: the link is a transparent overlay and Join
+      is its sibling painted above it, so the two controls never contain one
+      another and no handler has to undo the other's behaviour.
+    */
+    assert.match(
+      card,
+      /<Link[\s\S]*?className="absolute inset-0 z-10/,
+      "the card's link must be an overlay, not a wrapper around the Join button"
+    );
+    assert.ok(
+      !card.includes("stopPropagation"),
+      "Join is a sibling of the link now; cancelling propagation would be papering over nesting that is gone"
+    );
+    assert.ok(existsSync(resolve("app/houses/[id]/page.tsx")), "the house route is gone");
+  });
+
+  it("decides Join from View on the service's answer, never its own", () => {
+    /*
+      1285:36373 and 1285:36895 are ONE page in two states and the only
+      difference is that button. `viewerIsMember` and `canJoin` come off the
+      house read — a client that works out for itself who may join is a client
+      that will eventually disagree with the service about it.
+    */
+    const screen = stripComments(read("components/layout/house-profile-screen.tsx"));
+    assert.match(screen, /data\?\.viewerIsMember \?/);
+    assert.match(screen, /disabled=\{!data\?\.canJoin \|\| join\.isPending\}/);
+    assert.match(screen, /members !== null && \(/, '"0 members" can be claimed again');
+  });
+
+  it("leaves the sections it has no data for OUT, rather than empty", () => {
+    /*
+      The file also draws a members row, a website, a location, a
+      gistrooms/week figure and a Replays rail. `GET /conversations/:id`
+      carries none of them. A shelf captioned "Members" with nothing on it
+      tells a reader the house has no members, which is a claim and a false
+      one — so they are absent until the service ships the fields.
+    */
+    const screen = stripComments(read("components/layout/house-profile-screen.tsx"));
+    // The weekly cap is still the one thing with no field behind it — and a
+    // cap that displays but does not enforce is worse than no cap, so it waits
+    // for the service rather than being drawn from a guess.
+    assert.ok(!screen.includes("gistrooms/week"), "the cap is drawn with nothing behind it");
+    /*
+      REPLAYS DOES render, off `GET /streams?houseConversationId=&status=ended`
+      — one house's history, server-side. The client-filtered version breaks on
+      page two, which is exactly when a house has enough history for the rail
+      to matter. Absent when the house has never opened a room: a heading over
+      nothing says the house has no past, which is a claim.
+    */
+    assert.match(screen, /replays\.items\.length > 0 && \(/);
+    /*
+      AND ITS CONTROL IS DEAD. The file draws "Play now"; the media server runs
+      the SFU alone with no egress, so no room that has ever ended here carries
+      a `replayUrl`. A live-looking Play that cannot play is the promise the
+      post card refuses to make, for the same reason.
+    */
+    assert.doesNotMatch(screen, />Play now</, "Replays offers a play that cannot play");
+    /*
+      Members DOES render, but only off a roster that was actually read.
+      `GET /conversations/:id/members` is bearerAuth, so a signed-out reader
+      and a stranger to a private house get nothing — and the section is then
+      absent rather than an empty shelf, because "we may not see who is in
+      here" and "nobody is in here" are different things.
+    */
+    /*
+      ONE ROSTER, TWO SOURCES, and the house read wins. It carries a capped
+      roster for a PUBLIC house — including to a signed-out stranger, the state
+      the design is built around — while the members route is bearerAuth and
+      serves a member of a PRIVATE house, which the house read deliberately
+      will not. Neither is asked to cover the other's case, and an empty array
+      is never read as "no members": a private house answers [] to everyone
+      outside it, and `memberCount` stays the truth.
+    */
+    assert.match(screen, /const fromHouse = house\.data\?\.members \?\? \[\];/);
+    assert.match(screen, /fromHouse\.length > 0\s*\n?\s*\?/);
+    assert.match(screen, /roster\.length > 0 && \(/);
+    /*
+      The three fields the service is adding are parsed ahead of it, all
+      optional, so each section appears the moment its field does and the
+      release is a backend deploy rather than a coordinated pair — the ordering
+      that has bitten this app twice.
+    */
+    const houseLib = stripComments(read("features/messages/lib/house.ts"));
+    for (const field of ["members", "website", "weeklyRoomLimit"]) {
+      assert.ok(houseLib.includes(`${field}:`), `${field} is not parsed yet`);
+    }
+    // A cap of null is UNCAPPED, so there is no number and no default.
+    assert.match(screen, /data\?\.weeklyRoomLimit != null && \(/);
+    // The service counts on a ROLLING window and stores no timezone, so "this
+    // week" would promise a Monday reset that does not exist.
+    assert.ok(screen.includes("in any 7 days"), "the cap claims a calendar week");
+    assert.ok(!screen.includes("this week"), "the cap claims a calendar week");
+    /*
+      NO AVATAR BESIDE THE NAME. The node draws one because its cover and its
+      mark are two different images; a house here has exactly one `imageUrl`,
+      so the node's own layout prints the same picture twice a few pixels apart
+      (ogazboiz, 2026-09-23).
+    */
+    assert.doesNotMatch(screen, /size-\[72px\]/, "the hero is printing the banner twice");
+  });
+});
+
+describe("Onboarding asks for notifications, now that one can arrive", () => {
+  /*
+    The row was drawn and DISABLED for months, on a good reason: nothing
+    consumed the grant, and a browser gives a site exactly ONE notification
+    prompt — Chrome and Safari never re-prompt after a dismissal. Spending it
+    on a promise the product could not keep would have burned the real ask for
+    ever. All three things it was waiting on now exist.
+  */
+  const flow = () => stripComments(read("components/layout/onboarding-flow.tsx"));
+
+  it("asks, rather than showing a dead row", () => {
+    assert.match(flow(), /onAsk=\{askNotify\}/, "the notifications row went back to being disabled");
+    assert.doesNotMatch(flow(), /Push notifications aren't wired up yet/);
+  });
+
+  it("reads the deployment's key BEFORE spending the prompt", () => {
+    /*
+      A deployment with no VAPID key cannot deliver a push, so asking there
+      would burn the one prompt for nothing. The key is read first and the row
+      reports unsupported when there is none — which is the same reason the
+      Settings row refuses to offer a switch that saves nothing.
+    */
+    const code = flow();
+    const ask = code.slice(code.indexOf("const askNotify"));
+    assert.ok(
+      ask.indexOf("fetchVapidPublicKey") < ask.indexOf("subscribeThisBrowser"),
+      "it subscribes before checking the deployment can deliver"
+    );
+    assert.match(ask, /if \(!key\) return setNotify\("unsupported"\);/);
+  });
+});
+
+describe("Nobody is put in a house they did not agree to", () => {
+  /*
+    The service's own spec summarises `POST /conversations/:id/members` as
+    "Add people to a group (any member may)" — so any member of any house can
+    add anybody, silently, and the person finds out because a house has
+    appeared in their inbox (ogazboiz, 2026-09-23: "adding someone to a group
+    without their approval is wrong").
+  */
+  const chat = () => stripComments(read("components/layout/chat-view.tsx"));
+
+  it("offers a relationship, not a badge, as the middle choice", () => {
+    /*
+      `verified` is granted by the platform — it says somebody is who they
+      claim to be, not that you know them. A verified stranger adding you to a
+      house is exactly the complaint, so the circle that gates it is who YOU
+      follow.
+    */
+    assert.match(chat(), /addToHousesFrom === "following"/);
+    assert.doesNotMatch(
+      stripComments(read("features/settings/lib/types.ts")),
+      /addToHousesFrom: z\.enum\(\["no_one", "everyone", "verified"\]\)/,
+      "the house gate went back to a badge"
+    );
+  });
+
+  it("is absent until the service enforces it", () => {
+    /*
+      An option that says somebody is protected while anybody can still add
+      them is worse than no option: they would stop watching for it. So the
+      whole section is gated on the field arriving.
+    */
+    assert.match(chat(), /addToHousesFrom !== undefined && onAddToHousesFromChange && \(/);
+    assert.match(
+      stripComments(read("features/settings/lib/types.ts")),
+      /addToHousesFrom: z\.enum\(\["no_one", "everyone", "following"\]\)\.optional\(\)/
+    );
+  });
+
+  it("says what happens instead of the add", () => {
+    // Without it, "No one" reads as "never hear about a house again" rather
+    // than "it waits for you".
+    assert.match(chat(), /Everyone else has to ask/);
+  });
+
+  it("asks who may skip the asking, not who may reach you", () => {
+    /*
+      ogazboiz ruled that "No one" still lets a REQUEST through (2026-09-23):
+      somebody you have never met can ask, and you decline. That is the kinder
+      setting — a true "no one" would stop a friend inviting you to their own
+      house — but it makes the heading "Who can add you to houses / No one" a
+      lie, because people CAN still reach you. The heading names what the
+      setting actually governs, and "No one" then means what it says.
+    */
+    assert.match(chat(), /Who can add you to houses without asking/);
+  });
+});
+
+describe("Declining a request cannot take a house down with it", () => {
+  /*
+    THE REQUESTS TAB HOLDS TWO ANIMALS, AND ONE OF THE DECLINES IS DESTRUCTIVE.
+
+    A CHAT REQUEST is the conversation itself: `requestState` and `requestedBy`
+    are columns on the CONVERSATION, which is right for a DM, where the whole
+    thread IS the request. So its decline DELETES the thread and every message
+    in it, deliberately.
+
+    A HOUSE INVITE is not that. The house is ordinary and accepted; what is
+    pending is one person's SEAT. It has its own accept and decline, and that
+    decline removes the seat and only the seat.
+
+    `requestState` DOES NOT SEPARATE THEM — on a house invite it reads
+    `accepted`, because the house is accepted. A renderer that switches on it
+    sends a house down the DM path, where one person declining an unwanted
+    invite deletes the house, its history and everybody else's membership.
+    `kind` is the discriminator; this pins that it stays the discriminator.
+
+    The second assertion is the one that survives a bad deploy. A group
+    carrying `requestState: "pending"` is not a seat invite — it is something
+    older that the seat-level decline does not understand — so it is refused
+    rather than answered into the route that would take the house down. That
+    refusal is why the group branch is safe to ship before the service does.
+  */
+  it("separates the two by kind, and refuses a group that is not a seat invite", () => {
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+
+    // The call site delegates. An inlined, kind-blind check is the bug.
+    assert.match(
+      page,
+      /tab === "requests" && answerable\(conversation, me\.data\?\.id\)/,
+      "the requests row must ask `answerable`, which knows a house from a DM"
+    );
+
+    const helper = page.slice(page.indexOf("function answerable"));
+    assert.match(
+      helper,
+      /kind === "direct"[\s\S]*?requestState === "pending" && conversation\.requestedBy !== viewerId/,
+      "a direct request is still only answerable while IT is pending and is not mine"
+    );
+    assert.match(
+      helper,
+      /return conversation\.requestState !== "pending";/,
+      "a group carrying requestState 'pending' is not a seat invite and must not reach decline"
+    );
+  });
+});
+
+describe("Answering a house invite lands everywhere the house is read", () => {
+  /*
+    THE CONTROL IS IN THE INBOX; THE HOUSE IS READ SOMEWHERE ELSE.
+
+    `["ms", "house", <id>]` carries `viewerIsMember`, `memberCount` and
+    `canJoin` — every one of which accepting an invite flips. Invalidating only
+    the conversation lists leaves that entry cached, so somebody who accepts an
+    invite and then opens the house is shown the stranger's view of it: a Join
+    House button on a house they are already in, and a member count one short.
+
+    The key is the CONVERSATION id, which is the id being answered, so one call
+    covers both kinds. For a DM nothing is cached under it and the invalidation
+    costs nothing — which is why it is unconditional rather than branched.
+  */
+  it("invalidates the house entry, not just the conversation lists", () => {
+    const hooks = stripComments(read("features/messages/hooks/use-messages.ts"));
+    const settle = hooks.slice(hooks.indexOf("const settle ="), hooks.indexOf("const accept ="));
+    assert.match(settle, /queryKey: \["ms", "conversations"\]/);
+    assert.match(
+      settle,
+      /queryKey: \["ms", "house", conversationId\]/,
+      "accepting an invite must not leave the house showing Join House"
+    );
+  });
+
+  /*
+    "Accept" is right for a chat request and wrong for a house. Accepting a
+    house puts you in a room with strangers who can see you from then on, and a
+    button that hides that is the consent problem the tab exists to fix. The
+    label names the thing that actually happens.
+  */
+  it("asks to JOIN A HOUSE rather than to accept something unnamed", () => {
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+    assert.match(
+      page,
+      /conversation\.kind === "group" \? "Join house" : "Accept"/,
+      "a house invite must not be answered by a button reading only Accept"
+    );
+  });
+
+  /*
+    WHO ADDED YOU IS THE HALF THAT DECIDES THE ANSWER.
+
+    Which house is on the row already. Whether you recognise the PERSON is why
+    you join or do not, and it is the only thing that makes a decline informed —
+    the gate exists because strangers were adding people, so a row that cannot
+    name the stranger has not closed the gap it was built for.
+
+    Two things are pinned. The name comes from `invitedBy` and is a LINK, since
+    "who is this?" is answered by looking rather than by guessing from a name.
+    And a null inviter still renders a sentence: null is a real answer (you
+    joined a public house yourself, or the membership predates the gate), not a
+    missing field, so the line says what happened without naming anybody rather
+    than vanishing and leaving the controls unexplained.
+  */
+  it("names the inviter, links them, and still speaks when there is none", () => {
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+    assert.match(
+      page,
+      /href=\{sq\(profileHref\(conversation\.invitedBy\)\)\}/,
+      "the inviter's name must be a link — you check who they are BEFORE accepting"
+    );
+    assert.match(
+      page,
+      /"You were added to this house"/,
+      "a null inviter must still explain why the row is there"
+    );
+  });
+
+  /*
+    AND IT IS NEVER THE HOUSE'S OWNER WEARING THE INVITER'S NAME.
+
+    `createdBy` is on the same object and is tempting as a fallback. Whoever
+    adds you is often not whoever made the house, so that fallback prints a real
+    person's name against something they did not do — worse than no name,
+    because it is believable. The field is a profile so the row never has to
+    resolve an id into a face and be tempted to resolve the wrong one.
+  */
+  it("takes the inviter from invitedBy alone, as a whole profile", () => {
+    const types = stripComments(read("features/messages/lib/types.ts"));
+    assert.match(types, /invitedBy: ProfileSchema\.nullable\(\)\.optional\(\)\.default\(null\)/);
+
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+    const line = page.slice(page.indexOf("conversation.kind === \"group\" && ("));
+    const controls = line.slice(0, line.indexOf("requests.accept.mutate"));
+    assert.ok(
+      !controls.includes("createdBy"),
+      "the inviter line must not fall back to the house's creator"
+    );
+  });
+});
+
+describe("An ended room says how many came, and never guesses", () => {
+  /*
+    NO DEFAULT ON `joined`, AND THAT IS THE ENTIRE DESIGN OF THE FIELD.
+
+    It is carried on the single-room read of an ENDED room and nowhere else:
+    absent while the room is live, where `viewerCount` is the honest field
+    because the number is still moving, and absent on list rows, where a count
+    per card is the query that read exists to avoid.
+
+    Give it `.default(0)` and every one of those absences renders "0 joined" —
+    a room nobody came to — on the two surfaces where the number is merely
+    unavailable. That is a lie told confidently, and it is the same mistake
+    `viewerCount` already carries a comment about: a default turns "we do not
+    know" into a specific, wrong claim.
+  */
+  it("carries no default, so an absent count cannot read as nobody came", () => {
+    const schemas = stripComments(read("lib/api/schemas.ts"));
+    assert.match(schemas, /joined: z\.number\(\)\.optional\(\),/);
+    assert.ok(
+      !/joined: z\.number\(\)[^,\n]*\.default\(/.test(schemas),
+      "defaulting `joined` prints 0 joined on every live room and every list row"
+    );
+  });
+
+  /*
+    And the card reads it as a NUMBER, not as a truth. A room nobody joined
+    really is 0 and should say so; absent is the different case and draws
+    nothing. `joined && ...` collapses those two into one, hiding the honest
+    zero and keeping the card silent about a real measurement.
+  */
+  it("tells a measured zero from an absent count", () => {
+    const card = stripComments(read("features/feed/components/room-post-card.tsx"));
+    assert.match(
+      card,
+      /typeof data\?\.joined === "number"/,
+      "a truthiness test would hide a room that genuinely had nobody join"
+    );
+  });
+
+  /*
+    IT IS STILL NOT `peakViewers`. Peak is the most people in the room at once;
+    joined is how many came at all. Fifty people passing through in ones and
+    twos peaks at three. The card went without this number for a release rather
+    than print peak under the word "joined", and this holds that line.
+  */
+  it("never prints peakViewers under the word joined", () => {
+    const card = stripComments(read("features/feed/components/room-post-card.tsx"));
+    assert.ok(
+      !card.includes("peakViewers"),
+      "peak is not joined — they answer different questions and differ wildly"
+    );
+  });
+});
+
+describe("A room's chat reaches a post as COMMENTS, not as an overlay", () => {
+  /*
+    It used to be drawn beside the comments and labelled, because it was not
+    one: no comment id, so nothing could reply, and after the room ended it sat
+    frozen next to a live thread. ogazboiz overruled that — "it should be like
+    normal comment even though it has ended they can reply" — and the label was
+    the tell. It was me papering over second-class rows.
+
+    The service now writes each line of a public room's chat as an ORDINARY
+    comment on the announcement post. So replies nest, likes work, the count is
+    right, and nothing outlives the room because nothing was tied to it.
+
+    ─── WHICH MEANS THIS CLIENT HAS NOTHING TO SAY ABOUT IT ─────────────────────
+    No component, no gate, no label. A comment is a comment. The judgement about
+    whether a room's words may be public lives once, on the service, in the same
+    `signalableRoom` that gates the socket topic — and a ticketed or private
+    room writes nothing, so the four access rules survive because only what
+    anyone could already read ever moves.
+
+    This test exists to keep the deletion deleted. Re-adding a client-side
+    overlay would put that judgement in two places, and the second one is the
+    one that drifts.
+  */
+  it("draws no room-chat overlay of its own", () => {
+    assert.equal(
+      existsSync(resolve("features/feed/components/room-chat-excerpt.tsx")),
+      false,
+      "the overlay came back; a room's chat reaches a post as comments now"
+    );
+    for (const surface of [
+      "features/feed/components/comments-sheet.tsx",
+      "features/feed/components/post-detail-page.tsx",
+      "features/feed/components/post-card.tsx",
+      "features/feed/components/room-post-card.tsx",
+    ]) {
+      const source = stripComments(read(surface));
+      assert.ok(!source.includes("RoomChatComments"), `${surface} draws the room's chat itself again`);
+      assert.ok(
+        !source.includes("mayShowRoomChat"),
+        `${surface} re-decides what the service already decided`
+      );
+    }
+  });
+
+  /*
+    The predicate itself STAYS, and its tests with it. It is the client's copy
+    of the rule the service gates on, and it still answers the other question:
+    whether a room may be announced on the public socket topic. Deleting it
+    with the overlay would have taken that with it.
+  */
+  /*
+    ONE RULE SURVIVES, AND ONLY ONE. `maySignalRoomChat` still answers whether
+    a room may be ANNOUNCED on the public socket topic, which is live and has
+    nothing to do with the overlay. Its twin went with the overlay: a reader
+    with no caller is the exact shape this codebase has spent a day finding,
+    and a test asserting the pair differed was protecting a function that
+    existed only for the test.
+
+    The sentence it was guarding — a member may READ a private house's chat
+    and nobody may BROADCAST that it is busy — moved into the survivor's own
+    comment, where the next person meets it rather than finding it in a test
+    for something nothing calls.
+  */
+  it("keeps the one rule the socket topic still needs, and no twin", () => {
+    const rules = stripComments(read("lib/room-chat-visibility.ts"));
+    assert.ok(!rules.includes("mayShowRoomChat"), "a predicate with no caller came back");
+    assert.match(rules, /export function maySignalRoomChat/);
+    const signal = stripComments(read("features/streams/hooks/use-room-chat-signal.ts"));
+    assert.match(signal, /maySignalRoomChat/, "the topic gate lost its rule");
+  });
+});
+
+describe("A dead column is never rendered as a measurement", () => {
+  /*
+    `peakViewers` HAS NO WRITER. The column is created `NOT NULL DEFAULT 0`,
+    set to 0 once when a stream is created, and never written again by any
+    service, worker or sweeper — the only non-zero value in the repo is demo
+    seed data. It is permanently 0 for every stream that has ever existed.
+
+    It is not a field awaiting a feature. `total_view_seconds` sits in the SAME
+    ROW, is read by the SAME route, is drawn in the SAME panel, and IS
+    maintained on every heartbeat flush. One counter was kept and its
+    neighbour forgotten. That is an omission, and until it is corrected the
+    honest thing to draw is nothing.
+
+    The host's post-live panel was the worst instance: `getStats` returns
+    `stream.peakViewers` off the row while `uniqueViewers` is computed live, so
+    hosts were shown peak 0 beside a real unique count — arithmetically
+    impossible, on their own stream, where they are the one person positioned
+    to know it is nonsense.
+  */
+  it("draws no Peak viewers tile while nothing writes the column", () => {
+    const panel = stripComments(read("features/streams/components/post-live.tsx"));
+    assert.ok(
+      !/Peak viewers/.test(panel),
+      "peakViewers has no writer — a tile for it states a measurement that was never taken"
+    );
+    assert.ok(
+      !panel.includes("peakViewers"),
+      "and it is not read at all here, so nobody can reintroduce the tile from a local variable"
+    );
+  });
+
+  /*
+    THE TWO FEED SITES STAY AS THEY ARE, and this pins WHY rather than freezing
+    them by accident. Both guard with `> 0`, so against a permanently-zero
+    column they render nothing and no wrong number has ever reached a feed.
+    That guard was written because "peak 0 viewers" is silly copy, not because
+    anyone knew the column was dead — but it is the correct behaviour either
+    way, and it means both surfaces light up on their own the day something
+    writes the column. Removing the guard would publish the zero.
+  */
+  it("keeps the feed's peak lines guarded, so a dead zero never prints", () => {
+    for (const file of [
+      "features/feed/components/featured-arena.tsx",
+      "features/feed/components/feed-cards.tsx",
+    ]) {
+      const source = stripComments(read(file));
+      assert.match(
+        source,
+        /peakViewers > 0/,
+        `${file} must not print peak unguarded — the column is permanently 0`
+      );
+    }
+  });
+});
+
+describe("Moving somebody down finishes the host's errand", () => {
+  /*
+    The triage sheet closes on Move down and STAYS OPEN on approve, and the
+    asymmetry is about what the host came to do.
+
+    Approve and decline are queue work: a list of raised hands the host is
+    working through, so closing after each one would make them reopen the sheet
+    for the next person. The sheet is the workspace.
+
+    Move down is not queue work. It is one corrective act on somebody already
+    seated, and it is the reason the sheet was opened — after it there is
+    nothing else here, and a sheet still covering the room is standing between
+    the host and the room they are running.
+
+    ON SUCCESS, NOT ON CLICK. Closing on the click would hide a failure: the
+    row disappears behind a closing sheet while the person is still seated and
+    the host believes otherwise. The hook toasts the error either way, but the
+    sheet staying open is what puts the error where the control was.
+  */
+  it("closes the tray when a seated person is moved down, and only then", () => {
+    const tray = stripComments(read("features/houses/components/hand-tray.tsx"));
+    assert.match(
+      tray,
+      /action === "remove" \? \{ onSuccess: \(\) => onClose\(\) \} : undefined/,
+      "Move down must close the sheet on SUCCESS, and approve must not close it at all"
+    );
+  });
+});
+
+describe("A slot's wrapper accepts whatever the slot may hold", () => {
+  /*
+    `meta` on the room header is a SLOT: the caller decides what goes in it,
+    and the live room puts a face pile there — an `AvatarStack` whose every
+    avatar is a `div`. It was wrapped in a `<p>`.
+
+    A `<p>` may contain only phrasing content, so the browser CLOSES it early
+    when a `div` arrives. The server serialises one tree, the browser parses a
+    different one, and React reports a hydration mismatch on a page that had
+    nothing wrong with its data. The nesting was the cause; the mismatch was
+    only where it surfaced.
+
+    Nothing about that line was ever a paragraph — it is one line of meta
+    beside a title — and Tailwind's reset already zeroes a `<p>`'s margins, so
+    the two render identically and there is no reason to prefer the one that
+    constrains its own children.
+
+    The rule this pins is general: a component that renders a caller-supplied
+    node must wrap it in an element that can legally contain anything. Every
+    other `<p>{slot}</p>` in the app takes a STRING, which is why this was the
+    only one that broke.
+  */
+  it("does not wrap the room header's meta slot in a paragraph", () => {
+    const header = stripComments(read("features/houses/components/house-header.tsx"));
+    assert.ok(
+      !/<p[^>]*>\{meta\}<\/p>/.test(header),
+      "`meta` can hold a face pile, and a <p> cannot legally contain one"
+    );
+    assert.match(header, /<div[^>]*>\{meta\}<\/div>/, "the meta slot needs a wrapper that accepts flow content");
+  });
+});
+
+describe("The room's chat signal carries no words", () => {
+  /*
+    ADR-0009's rule, applied to the room: a frame is a REFETCH SIGNAL and never
+    content. Only the stream id is read out of `roomChatChanged`; the messages
+    come from `GET /streams/:id/chat` whether the socket spoke or the interval
+    ticked. That is what makes a forged or replayed frame cost one extra read
+    instead of putting words on somebody's screen — and it is why the payload
+    is not carried even though carrying it would be faster.
+
+    The topic is PUBLIC (`market-square:stream:<id>`) rather than personal.
+    Everyone in the room needs the same signal and the chat read is anonymous
+    anyway; `user:<id>` is for what concerns one reader — an invitation, their
+    own mute — and a room's chat is not that.
+  */
+  it("reads only the stream id off a chat frame", () => {
+    const gateway = stripComments(read("lib/ws-gateway.ts"));
+    const signal = gateway.slice(gateway.indexOf("export function roomChatSignalOf"));
+    const body = signal.slice(0, signal.indexOf("\n}"));
+    for (const field of ["text", "author", "message", "body", "authorId"]) {
+      assert.ok(
+        !body.includes(field),
+        `roomChatSignalOf reads \`${field}\` off the frame — the socket must carry no content`
+      );
+    }
+    assert.match(body, /frame\.data\.streamId/);
+  });
+
+  /*
+    AND THE POLL STAYS THE FLOOR. Every realtime piece in this app is layered
+    over a read that still works alone, so an unconfigured gateway, a refused
+    socket and a dropped one are all invisible. A signal that REPLACED the
+    interval would make a socket outage look like a dead room.
+  */
+  it("layers the signal over the interval rather than replacing it", () => {
+    const chat = stripComments(read("features/streams/hooks/use-chat.ts"));
+    assert.match(chat, /refetchInterval: enabled \? pollMs : false/, "the chat interval is the floor and must remain");
+    const hook = stripComments(read("features/streams/hooks/use-room-chat-signal.ts"));
+    assert.match(hook, /MARKET_FLAGS\.wsGatewayUrl/, "an unconfigured gateway must opt out entirely");
+    assert.match(hook, /invalidateQueries\(\{ queryKey: \["ms", "stream", streamId, "chat"\] \}\)/);
+  });
+});
+
+describe("A host leaving is told the truth about what happens next", () => {
+  /*
+    The room's exit makes a PROMISE — "your moderators keep the room open" —
+    and the service is what keeps it. Verified there, not assumed: exactly
+    three paths end a room (the orphan reaper, an account suspension, and an
+    explicit end by the host or a moderator holding `canEndRoom`), and NONE of
+    them fires because the host left. The seat sweeper reacts to a disconnect
+    but only releases seats; it never touches the stream's status.
+
+    ─── THE WORDING IS LOAD BEARING, WHICH IS WHY IT IS PINNED ─────────────────
+    The reaper's grace window is measured from the LAST SIGHTING OF ANY
+    PUBLISHER, not from the host's departure. So "a few minutes after the last
+    person stops talking" is exact, and "five minutes after you leave" would be
+    wrong every time somebody else is still speaking — which is precisely the
+    case a host uses this door for.
+
+    And the two branches must stay two. Appointing somebody a moderator does
+    NOT put them on a microphone, so a moderator in the audience holds nothing
+    open. Collapsing these into one cheerful line would have a host walk out of
+    an empty stage believing the room survives, and then blame the feature
+    rather than the silence.
+  */
+  it("does not promise the room survives merely because a moderator exists", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    const hint = room.slice(room.indexOf("label: \"Leave it running\""));
+    const body = hint.slice(0, hint.indexOf("onClick"));
+
+    assert.match(body, /someModeratorOnStage/, "the promise must turn on PUBLISHING, not on appointment");
+    /*
+      AND IT SAYS WHAT IT GRANTS. Leaving the room running hands the
+      moderators the power to CLOSE it, which is a bigger sentence than "you
+      left" and must be read before it is confirmed. A permission that changes
+      without being stated is not one the host gave.
+    */
+    assert.match(body, /close it when everyone's done|close the room when everyone's done/,
+      "the host must be told the moderators gain the power to close the room");
+    assert.match(body, /stops talking/, "the window runs from the last speech, not from the host's exit");
+    assert.ok(
+      !/after you leave/i.test(body),
+      "the grace window is measured from the last publisher, so it is never counted from the host leaving"
+    );
+  });
+
+  /*
+    And the safe door only exists when somebody can actually hold the room.
+    Offered with no moderator at all it would be a way to abandon a room that
+    then dies quietly, which is worse than the honest binary it replaced.
+  */
+  it("offers the door only when there is somebody to leave it with", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /isHost && hasModerators/, "leaving it running needs a moderator to leave it TO");
+    /*
+      THE GRANT IS ITS OWN ROUTE, never a side effect of appointing. The
+      service's appoint is `ON CONFLICT DO NOTHING`, so re-posting somebody
+      cannot raise the flag — which is what stops a client escalating a
+      moderator by accident while merely re-adding them. Raising it is a
+      deliberate PATCH, and the host leaves whether or not it lands.
+    */
+    assert.match(room, /grantEndRoom\.mutate\(moderatorIds \?\? \[\], \{\s*\n?\s*onSettled: \(\) => void leaveNow\(\),/,
+      "the host must leave even when the grant fails");
+  });
+});
+
+describe("The room says who is running it when the host is not", () => {
+  /*
+    The host KEEPS the title when they leave — they can come back and resume,
+    which is the whole reason moderators exist here. So nothing about the
+    roster changes: their HOST pill stays, their tile stays, and to everybody
+    else the room looks exactly as it did while they were steering it.
+
+    That is the gap this closes. Not a handover of the title, which would lock
+    a host out of their own room over a dropped connection — just saying out
+    loud that somebody else is at the wheel.
+  */
+  it("tells the room the host stepped out, and who is covering", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /The host stepped out\. Moderators are running the room\./);
+    assert.match(room, /hostAway && !isHost/, "the host must not be told they have left a room they are in");
+  });
+
+  /*
+    ─── A RECONNECT IS NOT A DEPARTURE ──────────────────────────────────────────
+    A host whose connection blips leaves the roster for seconds and returns.
+    Announcing that the instant it happens flashes "the host stepped out" at
+    everybody over a hiccup, which makes a working room look like a failing
+    one — worse than saying nothing at all.
+
+    So absence must PERSIST before it is reported, while presence clears it
+    immediately: coming back is never news that needs settling.
+  */
+  it("waits before believing it, and stops believing it at once", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /HOST_AWAY_AFTER_MS/, "absence must be timed, not instant");
+    /*
+      The reset lives in the effect's CLEANUP, not its body — that is what runs
+      the instant `hostOnStage` flips back, so a returning host clears the
+      notice at once AND the next departure is timed afresh rather than firing
+      immediately on a stale flag. It also keeps the effect free of a
+      synchronous setState, which cascades renders.
+    */
+    assert.match(
+      room,
+      /return \(\) => \{\s*\n?\s*window\.clearTimeout\(timer\);\s*\n?\s*setHostAway\(false\);/,
+      "the host returning must clear it without waiting, from cleanup"
+    );
+    const delay = /HOST_AWAY_AFTER_MS = (\d+)_000/.exec(room);
+    assert.ok(delay && Number(delay[1]) >= 5, "shorter than a reconnect and the notice fires on a hiccup");
+  });
+
+  /*
+    And it reads the STAGE, not the record. Every stream has an owner; the
+    question the room is asking is whether that person is currently in it.
+  */
+  it("asks whether the host is on the stage, not whether the room has one", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    const probe = room.slice(room.indexOf("const hostOnStage"));
+    assert.match(probe.slice(0, probe.indexOf("]);")), /slots\.some/);
+  });
+});
+
+describe("A granted power has a control that reaches it", () => {
+  /*
+    The host hands the closing to their moderators on the way out. For a while
+    that grant was real on the server and unreachable in the app: every end
+    control here was gated on `isHost`, so a moderator holding `canEndRoom`
+    still saw "Leave Room", and leaving just left.
+
+    ogazboiz found it by using it — "when the host leaves the moderator cant
+    end the live". It is the same failure as a column nothing writes and a
+    card nothing feeds, one more time: a capability with nothing on the other
+    side of it.
+
+    So the end control follows `canCloseRoom` — the host, OR a moderator who
+    was given it — and never `isHost` alone.
+  */
+  it("routes the close control on the POWER, not on the office", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(room, /const canCloseRoom = isHost \|\| iCanEndRoom;/);
+    assert.match(room, /leaveLabel=\{canCloseRoom \? "Close Room" : "Leave Room"\}/);
+    assert.match(room, /confirmLabel=\{canCloseRoom \? "Close it" : "Leave"\}/);
+    assert.match(room, /if \(canCloseRoom\) \{\s*\n?\s*endHouse\.mutate/);
+  });
+
+  /*
+    AND IT READS THE PERSON'S OWN ROW. `moderatorIds` says who holds an
+    appointment; it says nothing about what any of them may do. `canEndRoom` is
+    per person, so believing the id list would give every moderator the host's
+    closing — the exact escalation the separate PATCH route exists to prevent.
+  */
+  it("asks whether THIS moderator was given it, not merely whether they are one", () => {
+    const room = stripComments(read("features/houses/components/house-room.tsx"));
+    assert.match(
+      room,
+      /moderatorRows\.items\.some\(\(row\) => row\.profileId === myId && row\.canEndRoom\)/,
+      "being a moderator is not the same as holding the closing"
+    );
+  });
+});
+
+describe("A count tap shows what the count is counting", () => {
+  /*
+    A number beside a control is a promise that something is behind it, and
+    tapping one has to show that thing.
+
+    The comment tally used to decide on the INLINE FIELD'S GEOMETRY: if the
+    composer happened to be laid out with height, open the thread; otherwise
+    reveal the composer. So on a post that HAD comments the tap offered a box
+    to type in and never showed the comment already sitting there. ogazboiz hit
+    it twice on his own profile and both times reported it as the button doing
+    nothing — which was an accurate description of what he got.
+
+    Revealing the field stays right when there is nothing to read: at zero,
+    "be the first" is the only sensible answer. The rule is what is BEHIND THE
+    NUMBER, never where a div happened to land.
+  */
+  it("opens the thread when there is something in it, and offers the field when there is not", () => {
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    const tally = card.slice(card.indexOf("const onCommentTally"));
+    const body = tally.slice(0, tally.indexOf("\n  };"));
+    assert.match(body, /post\.commentCount > 0/, "the tap must ask what is behind the number");
+    assert.ok(
+      !/getBoundingClientRect/.test(body),
+      "a control's behaviour must not depend on whether another element got laid out"
+    );
+    assert.match(body, /setReplyOpen\(true\)/, "an empty post still offers the field");
   });
 });

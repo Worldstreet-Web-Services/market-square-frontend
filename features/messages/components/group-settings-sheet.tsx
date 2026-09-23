@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Sheet } from "@/components/ui/sheet";
+import { cn } from "@/lib/cn";
 import { Spinner } from "@/components/ui/button";
 import { ensureUploadLimits, uploadFile, validateUpload } from "@/lib/api/upload";
 import { useUpdateGroup } from "@/features/messages/hooks/use-messages";
@@ -50,6 +51,18 @@ export function GroupSettingsSheet({
   const [visibility, setVisibility] = useState<"public" | "private">(
     conversation.visibility === "public" ? "public" : "private"
   );
+  const [website, setWebsite] = useState(conversation.website ?? "");
+  /*
+    THE CAP IS A STRING IN THE FORM AND A NUMBER-OR-NULL ON THE WIRE.
+
+    Empty means UNCAPPED, which is a real setting rather than a blank — it is
+    how an owner removes a cap they set last month. Holding it as a string is
+    what lets the field be empty at all; a number state would have to invent a
+    sentinel and then remember which one it chose.
+  */
+  const [roomLimit, setRoomLimit] = useState(
+    conversation.weeklyRoomLimit === null ? "" : String(conversation.weeklyRoomLimit)
+  );
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
 
@@ -85,14 +98,46 @@ export function GroupSettingsSheet({
   };
 
   const named = title.trim();
+  /*
+    WHAT THE CAP FIELD IS ASKING FOR, or `undefined` for "unchanged".
+
+    Empty is null (uncapped) and a number is itself, but anything that is not a
+    whole number in range is simply NOT AN EDIT — the form refuses to send it
+    rather than guessing, and the hint below says so. Sending a bad value to
+    find out it was bad is a round trip the user watches.
+  */
+  const roomLimitTrimmed = roomLimit.trim();
+  const roomLimitParsed = roomLimitTrimmed === "" ? null : Number(roomLimitTrimmed);
+  const roomLimitValid =
+    roomLimitParsed === null ||
+    (Number.isInteger(roomLimitParsed) && roomLimitParsed >= 1 && roomLimitParsed <= 50);
+  const roomLimitEdit =
+    roomLimitValid && roomLimitParsed !== (conversation.weeklyRoomLimit ?? null)
+      ? roomLimitParsed
+      : undefined;
   // Only the fields that actually moved. See the header.
   const edit = {
     ...(named && named !== (conversation.title ?? "") ? { title: named } : {}),
+    /*
+      TRIMMED AT THE ENDS ONLY, AND THE INSIDE IS LEFT ALONE.
+
+      `trim()` strips leading and trailing whitespace and touches nothing
+      between, which is what a description wants: no accidental blank line at
+      the top, every deliberate one in the middle kept. The renderer prints
+      them now (`whitespace-pre-line`), so what the author typed is what the
+      house shows.
+    */
     ...(description.trim() !== (conversation.description ?? "")
       ? { description: description.trim() || null }
       : {}),
     ...(imageUrl !== (conversation.imageUrl ?? null) ? { imageUrl } : {}),
     ...(isOwner && visibility !== (conversation.visibility ?? "private") ? { visibility } : {}),
+    // Trimmed-empty CLEARS the link. `|| null` is the clear, and the outer
+    // comparison is what stops an untouched field being sent at all.
+    ...(website.trim() !== (conversation.website ?? "")
+      ? { website: website.trim() || null }
+      : {}),
+    ...(isOwner && roomLimitEdit !== undefined ? { weeklyRoomLimit: roomLimitEdit } : {}),
   };
   const changed = Object.keys(edit).length > 0;
 
@@ -141,7 +186,7 @@ export function GroupSettingsSheet({
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={3}
+            rows={5}
             placeholder="What is this group for?"
             className={field}
           />
@@ -196,9 +241,67 @@ export function GroupSettingsSheet({
           )}
         </div>
 
+        {/*
+          THE HOUSE'S LINK. Optional, cleared by emptying it, and rendered on
+          the profile only when it is an http(s) URL — the profile re-checks
+          rather than trusting this, because a public page must never carry a
+          `javascript:` href.
+        */}
+        <div>
+          <label className="block text-[13px] font-semibold text-heading" htmlFor="house-website">
+            Website
+          </label>
+          <input
+            id="house-website"
+            type="url"
+            inputMode="url"
+            value={website}
+            onChange={(event) => setWebsite(event.target.value)}
+            placeholder="https://"
+            className={cn(field, "mt-1.5")}
+          />
+          <p className="mt-1 text-[12px] leading-4 text-meta">
+            Shown on the house profile. Leave it empty for none.
+          </p>
+        </div>
+
+        {/*
+          ROOMS PER WEEK — OWNER ONLY, like visibility, and gated on the role
+          rather than on "can edit this form": an admin who sees a field that
+          always 403s is worse off than one who never sees it.
+
+          EMPTY MEANS UNCAPPED, and that is a setting rather than a blank. It
+          is the only way to remove a cap, so the hint has to say it — a field
+          whose empty state does something needs to admit what.
+        */}
+        {isOwner && (
+          <div>
+            <label className="block text-[13px] font-semibold text-heading" htmlFor="house-room-limit">
+              Rooms per week
+            </label>
+            <input
+              id="house-room-limit"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={50}
+              value={roomLimit}
+              onChange={(event) => setRoomLimit(event.target.value)}
+              placeholder="No limit"
+              aria-invalid={!roomLimitValid}
+              className={cn(field, "mt-1.5", !roomLimitValid && "border-danger")}
+            />
+            <p className="mt-1 text-[12px] leading-4 text-meta">
+              {roomLimitValid
+                ? "How many gist rooms this house can open in any 7 days. Empty means no limit."
+                : "Pick a whole number from 1 to 50, or empty it for no limit."}
+            </p>
+          </div>
+        )}
+
         <button
           type="button"
-          disabled={!changed || !named || save.isPending || imageBusy}
+          disabled={!changed || !named || !roomLimitValid || save.isPending || imageBusy}
           onClick={() => save.mutate(edit, { onSuccess: onClose })}
           className="ws-btn-create ws-press flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >

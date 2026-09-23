@@ -204,6 +204,11 @@ export function CreateGroupFlow({ open, onClose, onStarted }: NewChatPickerProps
       // Both stated rather than defaulted: this group was just created BY the
       // caller, and with the visibility they chose on the form.
       createdBy: me.data?.id ?? null,
+      // Nobody invited you into a house you just made.
+      invitedBy: null,
+      // Neither is set at creation; both are owner edits afterwards.
+      website: null,
+      weeklyRoomLimit: null,
       visibility,
       // The creator is its owner, and every member starts at all/all — the
       // next inbox poll brings the stored levels.

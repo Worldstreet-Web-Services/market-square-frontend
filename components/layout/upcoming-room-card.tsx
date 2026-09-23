@@ -208,6 +208,26 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
         </div>
       </div>
 
+      {/*
+        THE RING, DRAWN LAST — the same fix `ComingSoonCard` needed, for the
+        same reason, found while fixing that one.
+
+        The inset shadow on the root describes the stroke correctly, but an
+        INSET box-shadow paints before any child content, and the banner Link
+        below is `h-40 w-full` and full bleed. So the card's top edge and the
+        upper 160 of both sides had their hairline painted and then covered by
+        the photograph; only the bottom, below the banner, ever showed it. On a
+        card whose banner is a bright daylight photo that is the difference
+        between a card and a floating picture.
+
+        Redrawn on top, `pointer-events-none` so it never sits between a reader
+        and the banner link or the Share button.
+      */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[20px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]"
+      />
+
       {sharing && (
         <ShareSheet
           open

@@ -1,7 +1,7 @@
 "use client";
 
 import { HousesStreet } from "@/features/houses";
-import { GistRoomCard } from "@/components/layout/gist-room-card";
+import { LiveRoomCard } from "@/features/streams/components/live-room-card";
 import { ComingSoonCard } from "@/components/layout/coming-soon-card";
 import { useState } from "react";
 import { HomeTopRow } from "@/components/layout/home-top-row";
@@ -20,10 +20,14 @@ import { SectionHeading } from "@/components/layout/section-heading";
  *    908 wide with the pill open);
  *  · THE HEADINGS are `SectionHeading`, the one object Home repeats — here
  *    without its "View more", because this is the page that pill opens;
- *  · THE ROOM CARD is `GistRoomCard` (node 1769:3670) with its hover state
- *    (415:12704), rendered FLUID at its natural size — the old `zoom` that
- *    scaled it into a 290 cell broke the mic badge's SVG gradient on desktop,
- *    so the card fills its grid cell instead;
+ *  · THE ROOM CARD is `LiveRoomCard` (node 2078:19217) — the SAME card Home's
+ *    Top GistRooms rail draws, rendered `fluid` so it fills its grid cell
+ *    rather than holding the rail's 342. It used to be `GistRoomCard`
+ *    (1769:3670), which is the card a DM and a shared link draw, where a room
+ *    is a REFERENCE to something mentioned elsewhere. This page and that rail
+ *    are the same act — a list of rooms you can walk into — so they are one
+ *    card, and ogazboiz asked for exactly that on 2026-09-23. Two cards for
+ *    one act is how one of them ends up with the wrong topic chips;
  *  · THE UPCOMING CARD is `ComingSoonCard` — the wide horizontal card
  *    (node 1542:3294), the same one Home's Coming Soon rail draws, so the two
  *    surfaces cannot drift. It fills its grid cell, so the grid is at most two
@@ -58,14 +62,7 @@ export function GistRoomsScreen() {
           <SectionHeading id="coming-soon-page" lead="Coming Soon" />
         )
       }
-      roomCardSlot={(stream) => (
-        <GistRoomCard
-          fluid
-          preview
-          streamId={stream.id}
-          conversationId={stream.houseConversationId ?? ""}
-        />
-      )}
+      roomCardSlot={(stream) => <LiveRoomCard fluid stream={stream} />}
       upcomingCardSlot={(stream) => <ComingSoonCard stream={stream} />}
     />
   );

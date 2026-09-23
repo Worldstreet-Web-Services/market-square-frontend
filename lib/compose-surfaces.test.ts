@@ -52,20 +52,28 @@ test("index routes are not their detail routes", () => {
   assert.equal(allowsCompose("/gist-rooms/abc"), false);
 });
 
-test("/gist-rooms is an EXACT exception, not a prefix one", () => {
+test("/gist-rooms keeps the +, /gist-rooms/:id does not", () => {
   /*
-    The index is excluded here where /studio and /live are not, and for a
-    different reason than its own detail route. 407:17286 draws a `+` in the
-    page's bottom-right corner and it opens a ROOM; the shell's circle is the
-    same size in the same place and writes a POST. Both on screen would be two
-    identical buttons doing different things, with the wrong one under the
-    reader's hand. The page mounts its own.
+    THIS ASSERTION USED TO RUN THE OTHER WAY, and it was wrong.
 
-    /gist-rooms/:id is still excluded by the prefix rule, for the older reason:
-    it is a two-pane room and the viewport's right edge lands on the chat
+    The index was excluded on the argument that 407:17286 draws a `+` in the
+    page's own bottom-right corner which opens a ROOM, so the shell's circle
+    would be a second identical button doing a different thing — "the page
+    mounts its own".
+
+    The page mounts NOTHING. `GistRoomsScreen` is the search row and
+    `HousesStreet`, and that design dropped 407:17074's create button along
+    with its "Happening Now!" heading and topic row. The neighbouring test in
+    create-fab.test.ts even asserts the absence — it pinned BOTH halves of a
+    contradiction and neither half noticed. So the collision never existed and
+    the rooms list was simply the one list in the app with no way to create
+    anything (ogazboiz, 2026-09-23).
+
+    /gist-rooms/:id stays excluded by the prefix rule, for the reason it always
+    had: it is a two-pane room and the viewport's right edge lands on the chat
     composer.
   */
-  assert.equal(allowsCompose("/gist-rooms"), false, "the shell's + is back on the rooms index");
+  assert.equal(allowsCompose("/gist-rooms"), true, "the rooms index lost the dock's +");
   assert.equal(allowsCompose("/gist-rooms/abc"), false);
   // ...and the RAIL's Post gist is untouched by that: it is not this button.
   assert.equal(allowsRailCompose("/gist-rooms"), true, "the rail lost Post gist on the rooms page");

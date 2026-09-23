@@ -7,14 +7,24 @@ import { fetchChat, sendChat, setChatReaction } from "@/features/streams/lib/api
 
 const CHAT_POLL_MS = 5_000;
 
-// Polling now; the transport upgrades to WebSocket later without the panel
-// changing shape.
-export function useChat(streamId: string, enabled: boolean) {
+/**
+ * Polling now; the transport upgrades to WebSocket later without the panel
+ * changing shape.
+ *
+ * `pollMs` exists because the same chat is read from two places with opposite
+ * economics. INSIDE the room one reader watches one conversation and five
+ * seconds is the point of it. In a FEED, a card is one of many on screen and
+ * five seconds each would mean ten requests every five seconds from a screen
+ * nobody is reading — so the excerpt asks for a slower cadence, and an ended
+ * room passes `false` and never polls at all, because a frozen transcript
+ * cannot change. The default keeps the panel exactly as it was.
+ */
+export function useChat(streamId: string, enabled: boolean, pollMs: number | false = CHAT_POLL_MS) {
   return useQuery({
     queryKey: ["ms", "stream", streamId, "chat"],
     queryFn: () => fetchChat(streamId),
     enabled,
-    refetchInterval: enabled ? CHAT_POLL_MS : false,
+    refetchInterval: enabled ? pollMs : false,
   });
 }
 

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { msApi } from "@/lib/api/service";
+import type { Mention } from "@/lib/api/schemas";
 import { ProfileSchema } from "@/lib/api/schemas";
 import {
   CreatorApplicationSchema,
@@ -161,6 +162,15 @@ export async function updateMe(input: {
   username?: string;
   displayName?: string;
   bio?: string;
+  /**
+   * WHO THE BIO TAGS — the same `Mention` rows a post carries.
+   *
+   * Sent whenever `bio` is, INCLUDING as an empty array: a bio edited from
+   * "@square" to "nothing" must clear the mention, and an omitted key means
+   * "leave it alone" everywhere else in this payload. Silence would leave a
+   * link pointing out of text that no longer names anybody.
+   */
+  bioMentions?: Mention[];
   /** http(s) only, checked by the service; null clears, absent leaves alone. */
   website?: string | null;
   avatarUrl?: string;

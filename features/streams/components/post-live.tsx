@@ -73,7 +73,32 @@ export function PostLive({ stream }: { stream: Stream }) {
       )}
       {stats.isSuccess && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Stat label="Peak viewers" value={formatCount(stats.data.peakViewers)} />
+          {/*
+            NO "PEAK VIEWERS" TILE. `peakViewers` is a DEAD COLUMN — nothing in
+            the service has ever written it. It is created `NOT NULL DEFAULT 0`,
+            set to 0 once when the stream is made, and never touched again; the
+            only non-zero value anywhere is demo seed data. `getStats` reads it
+            off the stream ROW (`stream.peakViewers`) while `uniqueViewers` is
+            computed live over `view_sessions`, so the two tiles came from
+            different worlds and only one of them was real.
+
+            This was the worst place in the app for it. Peak 0 beside a unique
+            count of 12 is not merely useless, it is ARITHMETICALLY IMPOSSIBLE —
+            and it is the host's own stream, so they are the one person
+            positioned to know it is nonsense.
+
+            REMOVED, NOT HIDDEN BEHIND `> 0`. On a panel of tiles a missing tile
+            reads as "we did not measure that", which is exactly true. A tile
+            that silently vanishes on zero would instead claim the number is
+            real and merely happened to be nought.
+
+            And it is not backfilled from `uniqueViewers`: peak is the most
+            people at once, unique is how many came at all, and printing one
+            under the other's label is the mislabel this card already refuses
+            elsewhere. The tile comes back when something writes the column —
+            the heartbeat flush that already maintains `total_view_seconds` in
+            the same row is where that belongs.
+          */}
           <Stat label="Unique viewers" value={formatCount(stats.data.uniqueViewers)} />
           <Stat label="View time" value={formatViewTime(stats.data.totalViewSeconds)} />
           <Stat label="Messages" value={formatCount(stats.data.messages)} />

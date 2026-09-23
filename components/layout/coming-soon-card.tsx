@@ -13,27 +13,49 @@ import type { Stream } from "@/features/streams";
 import { asset } from "@/lib/square-path";
 
 /**
- * HOME'S "COMING SOON" CARD — node 1542:3294 (SQUARE 2.0), PIXEL FOR PIXEL.
+ * HOME'S "COMING SOON" CARD — node 2077:19030 (SQUARE 2.0 Copy), 342 × 106.
  *
- * The horizontal card ogazboiz asked to bring back and then to make exact
- * (2026-09-21: "height, layout and size"). The node is 467 × 136. Every length
- * below is the file's own — the 82×89 cover, the 189 text column, the 94 rule,
- * the 108 right column, the 16 gaps, the 14.45 / 24.55 side insets — so this is
- * built to fixed widths rather than a fluid card, which is the only way the
- * measurements land where the design put them.
+ * The redesign of the 467 × 136 card this file used to draw (1542:3294). The
+ * shape changed rather than the content: the cover is no longer a rounded tile
+ * in a row of four blocks, it is a FULL-BLEED image on the card's left that
+ * dissolves under a scrim, so the picture bleeds out beneath the text instead
+ * of sitting beside it. The divider is gone; the right column keeps date,
+ * time, the "Starts in" pill and Share.
  *
- * It is a SEPARATE component from `UpcomingRoomCard` (the vertical banner tile
- * the gist-rooms grid and a house room draw): two surfaces, two shapes. The
- * data wiring is the same — topic + host from the stream, the format helpers,
- * the share sheet — so the two cannot drift on what a room IS. The node draws
- * only Share; Remind me lives on the gist-rooms cards, where there is room.
+ * Every length here is the node's own. The ones that look like typos are real:
+ * the 0.552 stroke, the 7.726 background blur and the 8.83 / 4.415 button
+ * padding are a component that was scaled by 0.5519 when it was pasted in, and
+ * they divide back to a clean 1, 14 and 16 / 8. They are reproduced as drawn.
  *
- * It is on `button-sizing`'s DESIGN_LOCKED list: the cover and Share carry the
- * file's own pixel heights rather than the button scale, on purpose.
+ * ─── THE TWO PLACES THIS DELIBERATELY LEAVES THE FILE ────────────────────────
+ * 1. "Starts in …" is FIVE pixels in the node — the same 0.5519 scaling, on a
+ *    label rather than a box. Five-pixel text is not small, it is unreadable,
+ *    and this card has already been rebuilt once for exactly that reason (the
+ *    container-query build that shrank everything to ~5px). It is set at 8 to
+ *    match the meta text beside it, which is the size its siblings use.
+ * 2. THE TITLE AND THE HOST LINE ARE BIGGER THAN THE NODE, at ogazboiz's word
+ *    (2026-09-23). The file sets the title and the host's NAME at 10 and the
+ *    "Hosted by" label at 8, and at a real 342 that reads as small type on a
+ *    card whose whole job is to make somebody want the room. They are scaled
+ *    by 1.4 — title and name to 14, label to 11 — which keeps the file's own
+ *    relationship between the three (title and name equal, label smaller) and
+ *    still clears the card's 106: 32 of title, 8, the 16 chip, 12, the 16 host
+ *    row and the 16 it starts down at comes to 100.
+ * 3. `Hosted by` / the host's name are ONE text node whose per-character
+ *    overrides flip the name to Geist 600 at 10px while the label stays 500 at
+ *    8px (`styleOverrideTable` 5 → 7). The parent style says 500/8 for the
+ *    whole string and is wrong; both runs are drawn as the overrides specify.
+ *
+ * The cover, topic glyph, calendar and share icons are the file's own exports,
+ * already on disk from the previous build — each vector compared against a
+ * fresh export of the new node before being reused, not assumed from the name.
  */
 
 /** The topic the file draws with its own exported glyph. */
 const FIGMA_TOPIC = "trading";
+
+/** 2077:19030 — the card's own width and height, which the rail sizes to. */
+export const COMING_SOON_CARD_WIDTH = 342;
 
 export function ComingSoonCard({ stream }: { stream: Stream }) {
   const topics = useTopics();
@@ -46,77 +68,149 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
   const topicLabel = topicKey
     ? (topics.data?.find((entry) => entry.key === topicKey)?.label ?? topicKey)
     : null;
-  const TopicIcon = topicKey && topicKey !== FIGMA_TOPIC ? (TOPIC_ICONS[topicKey] ?? IconSpark) : null;
+  const TopicIcon =
+    topicKey && topicKey !== FIGMA_TOPIC
+      ? (TOPIC_ICONS[topicKey] ?? IconSpark)
+      : null;
 
   return (
-    <div className="relative h-[136px] w-full overflow-hidden rounded-[16px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)] backdrop-blur-[3.863px]">
-      {/* 1542:3295 — the purple accent bar hard on the left edge. */}
-      <span aria-hidden className="absolute bottom-[5.48px] left-[-0.55px] h-[130px] w-[7px] bg-spotlight" />
+    /*
+      THE RING IS DRAWN AT THE END OF THIS CARD, NOT HERE — see the last child.
 
-      {/* 1542:3296 — the content row: 14.45 in on the left, 16.93 on the right,
-          items centred, 16 between the four blocks. */}
-      <div className="flex h-full items-center gap-4 pl-[14.45px] pr-[16.93px]">
-        {/* 1542:3297 — the cover GRID. Its cell is 89.62 × 94.62, not 82 × 89:
-            the mic badge sits at 73.62/78.62 and overflows the tile, and in the
-            file the grid cell grows to contain it. That extra 7.62 on the right
-            is real layout — it is what sets the text column's left edge — so it
-            must be reproduced, not thrown away by an absolutely-placed badge on
-            an 82-wide box. */}
-        <div className="relative h-[94.62px] w-[89.62px] shrink-0">
-          <Link
-            href={href}
-            aria-label={`Open ${stream.title}`}
-            className="ws-press absolute left-0 top-0 block h-[89px] w-[82px] overflow-hidden rounded-[11.038px] bg-white"
-          >
-            {stream.thumbnailUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
-              <img src={stream.thumbnailUrl} alt="" className="size-full object-cover" />
-            ) : (
-              <span className="flex size-full items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-                <img src={asset("/gist-rooms/card-default-cover.svg")} alt="" aria-hidden className="h-8 w-11" />
-              </span>
-            )}
-          </Link>
-          {/* 1542:3300 — the mic badge (create→spotlight ramp), 73.62/78.62 in. */}
-          <span className="absolute left-[73.62px] top-[78.62px] grid size-[16px] place-items-center rounded-full bg-gradient-to-b from-[#9f65fd] to-[#7e3beb]">
+      The inset shadow stays on the root because it is the correct description
+      of the node's 0.552 INSIDE stroke, and because it is what shows through
+      the few pixels no layer covers. It is not what the reader sees, though:
+      an INSET box-shadow paints immediately after the element's own background
+      and BEFORE any child content, and this card has two full-bleed absolute
+      children — the cover on the left and the scrim at `inset-0` that reaches
+      solid #101012 by 120. Between them they cover all four edges, so the
+      hairline was painted and then buried on every card.
+
+      It is why the live card and the house card keep their rings and this one
+      lost its: they have no child that reaches their edges.
+    */
+    <div className="relative h-[106px] w-full overflow-hidden rounded-[16px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)] backdrop-blur-[7.726px]">
+      {/* `image 64` — 144.507 wide, full bleed to the card's left edge and
+          under everything else. STRETCH in the file; `object-cover` here, so a
+          real photograph of any ratio fills the box without distorting. */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[144.507px] overflow-hidden"
+      >
+        {stream.thumbnailUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
+          <img
+            src={stream.thumbnailUrl}
+            alt=""
+            className="size-full object-cover"
+          />
+        ) : (
+          <span className="flex size-full items-center justify-center bg-[#101012]">
             {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-            <img src={asset("/gist-rooms/card-mark.svg")} alt="" aria-hidden className="size-[8px]" />
+            <img
+              src={asset("/gist-rooms/card-default-cover.svg")}
+              alt=""
+              aria-hidden
+              className="h-8 w-11"
+            />
           </span>
-        </div>
+        )}
+      </span>
 
-        {/* 1542:3305 — the text column. The file's own 189 at the node's 467
-            width; it FLEXES so the card can narrow to a column smaller than 467
-            (a phone) without overflowing — every other block keeps its exact
-            width, only this one gives. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex flex-col gap-1">
+      {/* `Rectangle 34624595` — the 7px accent, hard on the left edge and drawn
+          OVER the image (it is the later sibling in the file). */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[7px] bg-[#7E3BEB]"
+      />
+
+      {/*
+        `Frame 1000011513` — THE SCRIM, AND THE ONE PLACE THIS READS THE RENDER
+        RATHER THAN THE NODE.
+
+        In the file this is a 302-wide panel from 40px in, filled with a
+        gradient that runs UPWARD over the top 17.2% and is flat #101012
+        everywhere below. Built that way it is a hard vertical wall at x=40,
+        and the picture stops dead against it.
+
+        The file does not LOOK like that, and the reason is the sample: its
+        cover is a dark photograph of a trading screen, so it dissolves into
+        #101012 on its own and the panel never has an edge to show. A real
+        cover is somebody's face in daylight, and then the wall is all you see
+        — which is exactly what it did (ogazboiz, 2026-09-23: "the image is not
+        fading or blending away").
+
+        So the scrim runs ACROSS instead, and reaches full opacity at 120 —
+        BEFORE the image's own 144.5 edge — so that edge is never visible
+        whatever the photograph is. It starts clear at the accent bar, is half
+        way by 72, and is solid under the text, which is also what keeps a
+        title legible over a bright cover.
+
+        The node's vertical variation is NOT reproduced: it lifts the top 18px
+        to 25% alpha, and sampling the file's own render shows that reads as
+        flat #101012 wherever no picture sits behind it. Carrying it over would
+        only punch a translucent band across the top of the text.
+      */}
+      <span
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to right, rgba(16,16,18,0) 0px, rgba(16,16,18,0.18) 28px, rgba(16,16,18,0.72) 72px, #101012 120px)",
+        }}
+      />
+
+      {/*
+        THE TWO COLUMNS ARE A FLEX ROW, NOT TWO ABSOLUTE BOXES.
+
+        The node is a fixed 342 and its blocks sit at fixed offsets — 64 in for
+        the text, 259 for the schedule. Reproduced literally, that only holds AT
+        342: the rail caps a card at 95% of its column so a second one peeks, so
+        on a narrow column the card comes in around 277, and two absolutely
+        placed columns then OVERLAP — the schedule slides under a long title
+        with nothing to stop it. It reads as fine until somebody writes a real
+        title.
+
+        So the insets the design fixes are kept (64 left, 16 right, the 35
+        between) and the TEXT column is the one that gives, exactly as the
+        467-wide build before this did. At 342 the text column lands at 153
+        rather than the node's 160, because the countdown pill beside it is
+        drawn at 8px rather than the file's unreadable 5 and needs the width.
+      */}
+      <div className="relative flex h-full items-start gap-[35px] pl-[64px] pr-[16px]">
+        {/* `Frame 2147230720` — 16 down, 12 gap; the column that flexes. */}
+        <div className="mt-[16px] flex min-w-0 flex-1 flex-col gap-[12px]">
+          <div className="flex flex-col gap-[8px]">
             <Link
               href={href}
-              className="ws-press line-clamp-2 text-[15px] font-semibold leading-normal text-white"
+              className="ws-press line-clamp-2 text-[14px] font-semibold leading-[16px] text-white"
             >
               {stream.title}
             </Link>
             {topicLabel && (
-              // 1542:3308 — the file's own tiny category chip (5.288 text).
-              <span className="inline-flex w-fit items-center justify-center gap-[1.763px] rounded-full bg-white/10 px-[5.288px] py-[4.407px]">
+              /* `Frame 2147225009` — 16 tall, 3/6 padding, 4 gap, white at 10%. */
+              <span className="inline-flex h-[16px] w-fit items-center gap-[4px] rounded-full bg-white/10 px-[6px]">
                 {TopicIcon ? (
-                  <TopicIcon className="size-[7.051px] shrink-0" />
+                  <TopicIcon className="h-[10px] w-[13px] shrink-0" />
                 ) : (
                   /* eslint-disable-next-line @next/next/no-img-element -- the node's own export */
-                  <img src={asset("/gist-rooms/card-topic-trading.svg")} alt="" aria-hidden className="size-[7.051px] shrink-0" />
+                  <img
+                    src={asset("/gist-rooms/card-topic-trading.svg")}
+                    alt=""
+                    aria-hidden
+                    className="h-[10px] w-[13px] shrink-0"
+                  />
                 )}
-                <span className="text-[5.288px] font-bold leading-[7.051px] text-grey-100">{topicLabel}</span>
+                <span className="whitespace-nowrap text-[8px] font-medium leading-[10.4px] text-[#F4F4F4]">
+                  {topicLabel}
+                </span>
               </span>
             )}
           </div>
 
-          {/* 1542:3312 — the host, 8 gap. */}
-          <span className="flex min-w-0 items-center gap-2">
-            <span
-              className="size-[16px] shrink-0 overflow-hidden rounded-[25%] border-[0.552px] border-white bg-[#DCDAD5]"
-              style={{ boxShadow: "0 2.208px 8.278px rgba(147,147,147,0.25)" }}
-            >
+          {/* `Frame 2147230648` — host row, 16 tall, 4 gap, centred. */}
+          <span className="flex min-w-0 items-center gap-[4px]">
+            <span className="size-[16px] shrink-0 overflow-hidden rounded-full border-[0.552px] border-white bg-[#DCDAD5]">
               <Avatar
                 name={host?.displayName ?? "Host"}
                 seed={stream.ownerId}
@@ -125,56 +219,100 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
                 sizeClassName="size-full"
               />
             </span>
-            <span className="truncate text-[12px] font-medium">
-              <span className="text-[#5A5A5A]">Hosted by </span>
-              <span className="text-white">{host?.displayName ?? "a host"}</span>
+            <span className="min-w-0 truncate text-white">
+              <span className="text-[11px] font-medium leading-[14px]">
+                Hosted by{" "}
+              </span>
+              <span className="text-[14px] font-semibold leading-[14px]">
+                {host?.displayName ?? "a host"}
+              </span>
             </span>
           </span>
         </div>
 
-        {/* 1542:3316 — the 94-tall #3C3C3C divider. */}
-        <span aria-hidden className="h-[94px] w-px shrink-0 bg-[#3C3C3C]" />
-
-        {/* 1542:3317 — the 108 right column, 16 gap, right-aligned. */}
-        <div className="flex w-[108px] shrink-0 flex-col items-end justify-center gap-4">
-          <div className="flex flex-col items-end gap-2">
+        {/* `Frame 2147230722` — 15 down, 8 gap, right-aligned, and it never
+            gives: its width is its content. The node's 67 only held while
+            "Starts in …" was five pixels; at 8 a real "Starts in 27h 8m" wraps
+            inside 67, which is what it did. */}
+        <div className="mt-[15px] flex shrink-0 flex-col items-end gap-[8px]">
+          <div className="flex flex-col items-end gap-[4px]">
             {startsAt && (
-              <div className="flex flex-col items-end gap-2">
-                <span className="text-[10px] font-normal leading-normal text-[#D9D9D9]">
-                  {shortDateLabel(startsAt)}
+              <div className="flex flex-col items-end gap-[2px]">
+                {/* `Frame 2147230647` — calendar + date, 12 icon, 4 gap. */}
+                <span className="flex items-center gap-[4px]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+                  <img
+                    src={asset("/gist-rooms/card-calendar.svg")}
+                    alt=""
+                    aria-hidden
+                    className="size-[12px] shrink-0"
+                  />
+                  <span className="text-[8px] font-normal leading-[10.4px] text-[#D9D9D9]">
+                    {shortDateLabel(startsAt)}
+                  </span>
                 </span>
-                <span className="text-[16px] font-semibold leading-[10px] text-white">
+                <span className="text-[16px] font-bold leading-[20.8px] text-white">
                   {clockLabel(startsAt)}
                 </span>
               </div>
             )}
             {startsAt && (
-              // 1542:3323 — the "Starts in …" pill.
-              <span className="rounded-[30px] bg-[rgba(159,90,255,0.09)] px-2 py-1 text-[10px] font-medium text-[#9F65FD]">
+              /* `Frame 2147230649` — 2/4 padding on a full radius, #9F5AFF at 9%.
+               Its label is 5px in the file; see the note at the top of this
+               file for why it is drawn at 8. */
+              <span className="whitespace-nowrap rounded-full bg-[rgba(159,90,255,0.09)] px-[4px] py-[2px] text-[8px] font-medium leading-[10.4px] text-[#9F65FD]">
                 {startsInLabel(startsAt)}
               </span>
             )}
           </div>
 
-          {/* 1542:3325 — Share, 28×87 on the create ramp at 90°. */}
+          {/* `Olive Button` — 19 tall, 8.83/4.415 padding, 4 gap, the create ramp. */}
           <button
             type="button"
             onClick={() => setSharing(true)}
-            className="ws-press flex h-[28px] w-[87px] items-center justify-center gap-1 rounded-full bg-[linear-gradient(90deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] py-[4.415px] text-[14px] font-medium text-white transition-opacity hover:opacity-90"
+            className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-            <img src={asset("/gist-rooms/card-share.svg")} alt="" aria-hidden className="size-[16px] shrink-0" />
+            <img
+              src={asset("/gist-rooms/card-share.svg")}
+              alt=""
+              aria-hidden
+              className="size-[10px] shrink-0"
+            />
             Share
           </button>
         </div>
       </div>
+
+      {/*
+        `Frame 2147230802`'s STROKE — 0.552 INSIDE, white at 18%, on the 16
+        radius. Drawn LAST so it lands on top of the cover and the scrim, which
+        is the only way an edge this thin survives a card whose children go
+        full bleed (ogazboiz, 2026-09-23: "even for coming soon there is border
+        line").
+
+        An overlay rather than a `border`: a real border would sit OUTSIDE the
+        0.552 and round differently against the radius, and it would take part
+        in layout — every inner offset on this card is measured from the node's
+        own edges, so a border would move all of them by half a pixel.
+
+        `pointer-events-none` so it never sits between a reader and the title
+        link or the Share button underneath it.
+      */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[16px] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)]"
+      />
 
       {sharing && (
         <ShareSheet
           open
           onClose={() => setSharing(false)}
           title="Share gist room"
-          payload={{ text: `${stream.title} on Square`, url: `${window.location.origin}${href}` }}
+          payload={{
+            text: `${stream.title} on Square`,
+            url: `${window.location.origin}${href}`,
+          }}
         />
       )}
     </div>

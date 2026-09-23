@@ -33,6 +33,18 @@ const VerificationSchema = z.enum(["none", "pending", "verified", "lapsed"]).cat
 // parse, and the default keeps a backend without the field parsing cleanly.
 const OrgBadgeSchema = z.enum(["market", "ark"]).nullable().catch(null);
 
+/**
+ * ONE @-MENTION, resolved. Declared here because the PROFILE now carries them
+ * too — a bio's mentions are the same rows a post's are, and the same
+ * `PostText` draws all of them.
+ */
+export const MentionSchema = z.object({
+  type: z.enum(["profile", "group"]),
+  id: z.string(),
+  label: z.string(),
+  handle: z.string(),
+});
+
 const RawProfileSchema = z.object({
   id: z.string(),
   username: z.string().nullable().optional().default(null),
@@ -57,6 +69,16 @@ const RawProfileSchema = z.object({
   generatedUsername: z.string().nullable().optional().default(null),
   displayName: z.string().nullable().optional().default(null),
   bio: z.string().nullable().optional().default(null),
+  /**
+   * WHO THE BIO @-MENTIONS — the same `Mention` rows a post and a DM carry,
+   * drawn by the same `PostText`.
+   *
+   * A row rather than handles parsed out of the text, for the reason posts
+   * have one: the handle in a stored bio is a SNAPSHOT and the person behind
+   * it is not. A bio outlives a rename by months, so a regex-linkified
+   * mention points at nobody the first time somebody changes their handle.
+   */
+  bioMentions: z.array(MentionSchema).optional().default([]).catch([]),
   avatarUrl: z.string().nullable().optional().default(null),
   /**
    * The cover photograph behind the profile header — node 435:27500.
@@ -423,6 +445,60 @@ export const StreamSchema = z.object({
   // "nobody is watching", and a discovery grid rendering a confident 0 (or
   // worse, a historical peak) is stating something untrue.
   viewerCount: z.number().nullable().optional().default(null),
+  /**
+   * HOW MANY DISTINCT PEOPLE CAME AT ALL — the number "428 joined" claims.
+   *
+   * NO DEFAULT, and that is the whole design of the field. It is carried on the
+   * single-room read of an ENDED room and nowhere else: absent while the room is
+   * live (`viewerCount` is the honest field while it is still moving), and
+   * absent on list rows, where a count per card is the query that read exists to
+   * avoid. Default it to 0 and every one of those absences renders as "0 joined"
+   * — a room nobody came to — which is a lie told confidently on the two
+   * surfaces where the number is merely unavailable.
+   *
+   * It is NOT `peakViewers`. Peak is the most people in the room at once;
+   * joined is how many came at all. Fifty people passing through in ones and
+   * twos peaks at three. They are different questions, and the card went
+   * without this one rather than print peak under its caption.
+   */
+  joined: z.number().optional(),
+  /**
+   * UP TO THREE FACES FROM AN ENDED ROOM — speakers first, then listeners.
+   *
+   * ONE ORDERED LIST, not two fields: a reader recognises somebody who held
+   * the floor, so speakers take the places and listeners fill what is left.
+   * Padding it with people who merely belong to the house was considered and
+   * dropped — a face here reads as "this person was in the room", and
+   * somebody who was not there would make the card state something false on
+   * every quiet room, quietly, for ever.
+   *
+   * `attendees.length` IS NOT THE ATTENDANCE. It is capped at three, and an
+   * anonymous session resolves to no profile and can never be a face. `joined`
+   * is the count; this is a sample of it. The "+N" therefore subtracts the
+   * faces actually DRAWN from `joined`, never the array's length from anything.
+   *
+   * Absent while a room is LIVE, and absent for a private or ticketed room —
+   * the same gate the chat signal uses, because publishing who attended a room
+   * outsiders could not enter reveals something they could not already see.
+   */
+  attendees: z.array(ProfileSchema).optional().default([]),
+  /**
+   * WHO MAY ACT FOR THE HOST IN THIS ROOM — up to three, and the room's own
+   * appointment rather than the house's. A moderator here is not a house
+   * admin: the role ends with the room, which is the whole point of putting
+   * it on the stream.
+   *
+   * NO DEFAULT, deliberately, and it is the feature switch. `undefined` means
+   * "this service does not carry moderators" and every control stays hidden;
+   * `[]` means "it does and there are none", which is a different sentence and
+   * draws an empty sheet rather than nothing. Defaulting to `[]` would merge
+   * the two and put a dead button in the dock of every room on a service that
+   * has never heard of the route.
+   *
+   * SINGLE-ROOM READ ONLY — never on a list page, so nothing may build a grid
+   * that expects it.
+   */
+  moderatorIds: z.array(z.string()).optional(),
   // Aggregate live reactions. Optional until all gateway deployments expose it.
   likeCount: z.number().optional().default(0),
   pulse: z.object({
@@ -492,13 +568,6 @@ export const SpeakerRequestSchema = z.object({
   joinToken: z.string().nullable().optional().default(null),
 });
 
-
-export const MentionSchema = z.object({
-  type: z.enum(["profile", "group"]),
-  id: z.string(),
-  label: z.string(),
-  handle: z.string(),
-});
 
 /** One picture or clip of a post, in the order the author chose. */
 export const PostMediaSchema = z.object({

@@ -107,8 +107,33 @@ export function HandTray({
     );
   }, [pending, open, onOpen]);
 
+  /**
+   * MOVING SOMEBODY DOWN CLOSES THE SHEET. APPROVING DOES NOT.
+   *
+   * The asymmetry is the point, and it is about what the host came here to do.
+   *
+   * Approve and decline are QUEUE TRIAGE: there is a list of people with their
+   * hands up and the host is working through it, so closing after each one
+   * would make them reopen the sheet for the next person — the sheet is the
+   * workspace and it stays open.
+   *
+   * Move down is not triage. It is a single corrective act on somebody already
+   * seated, and it is the whole reason the host opened the sheet: take that
+   * person off the table. Once it is done there is nothing else here for them,
+   * and a sheet still covering the room is between the host and the room they
+   * are running (ogazboiz, 2026-09-23: "when they move me ... the modal should
+   * close").
+   *
+   * ON SUCCESS ONLY. Closing on the click would hide a failure: the row would
+   * vanish behind a closing sheet and the person would still be seated, with
+   * the host believing otherwise. A refused move keeps the sheet open so the
+   * error is read where the control is.
+   */
   const act = (request: SpeakerRequest, action: "approve" | "decline" | "remove") =>
-    resolve.mutate({ requestId: request.id, action });
+    resolve.mutate(
+      { requestId: request.id, action },
+      action === "remove" ? { onSuccess: () => onClose() } : undefined
+    );
 
   const fullReason = `All ${SEAT_COUNT} seats are taken. Move someone down first.`;
 

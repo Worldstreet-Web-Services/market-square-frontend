@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
+import { useAppointModerator, useGrantEndRoom, useRoomModerators } from "@/features/streams/lib/moderators";
+import { AddModeratorSheet } from "@/features/houses/components/add-moderator-sheet";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
 import Link from "next/link";
@@ -215,6 +218,15 @@ interface SlotProps {
 }
 
 /** One frozen empty set, so an unresolved roster is not a new value per render. */
+/**
+ * How long the host must be off the stage before the room says so.
+ *
+ * A reconnect takes a few seconds and is not a departure; ten is long enough
+ * to ride one out and short enough that a real exit is reported while it still
+ * matters to the people deciding whether to keep talking.
+ */
+const HOST_AWAY_AFTER_MS = 10_000;
+
 const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 export function HouseRoom({
@@ -1013,8 +1025,29 @@ function LiveHouse({
       const meta = parseParticipantMeta(slot.metadata);
       const username = meta?.username;
       if (!username) continue;
+      /*
+        THE HOST'S IDENTITY IS NOT AN ID — it is the literal string
+        `broadcaster`, because their publisher token carries no user id. So
+        `baseIdentity` returns "broadcaster" unchanged (there is no `#` to
+        split on), and mentioning the host sent `mentions: ["broadcaster"]`,
+        which is not a profile id. The service rejected the whole request and
+        the sender lost their message to "Request validation failed" — the
+        failure was total, not partial: one bad id and nothing was sent.
+
+        Keyed on the stream's own `ownerId` instead, exactly as the speaker
+        roster does a hundred lines below. THIS IS THE SAME BUG TWICE — the
+        roster's own comment says it "is a bug this codebase has already fixed
+        once", and it was fixed there and not here, because the two lists were
+        built from the same slots on different days.
+
+        A participant we cannot resolve to a real id is NOT offered. Mentioning
+        them cannot work, and a name in the picker that breaks the message when
+        chosen is worse than a name that was never there.
+      */
+      const id = slot.role === "host" ? stream.ownerId : baseIdentity(slot.identity);
+      if (!id || id === "broadcaster") continue;
       seen.set(username.toLowerCase(), {
-        id: baseIdentity(slot.identity),
+        id,
         displayName: participantName(slot.name) ?? username,
         username,
       });
@@ -1029,7 +1062,10 @@ function LiveHouse({
       });
     }
     return [...seen.values()];
-  }, [slots, audience]);
+    // `stream.ownerId` is read for the host's slot, so it belongs here: a room
+    // whose owner resolved late would otherwise keep a mention list built
+    // before the id arrived.
+  }, [slots, audience, stream.ownerId]);
 
   /* ---- reactions ------------------------------------------------------ */
 
@@ -1218,6 +1254,106 @@ function LiveHouse({
     repeated poll cannot double count (lib/room-chat-unread.ts).
   */
   const chatFeed = useChat(stream.id, here && phone && stream.status === "live");
+  /*
+    The phone's feed reads the SAME key as the panel, so one invalidation
+    refreshes both — but the panel is not mounted here, and a subscriber that
+    only exists on the desktop would leave the phone on the interval alone.
+    Two subscribers on one topic share the socket; the extra cost is a second
+    listener in a Set.
+  */
+  useRoomChatSignal(stream.id, stream, here && phone && stream.status === "live");
+
+  /*
+    MODERATORS — the dock's people button and the sheet behind it.
+
+    `moderatorIds` is UNDEFINED on a service that does not carry moderators and
+    an ARRAY once it does, which is the whole feature switch: a host on an
+    older service gets a dock with one fewer button rather than a button that
+    answers 404. Same switch-on as `joined`, and the reason it is not defaulted
+    to `[]` in the schema.
+
+    Host only. A moderator may not appoint another — with a cap of three, one
+    who could would spend the host's remaining seats on their own picks, and
+    undoing it means demoting somebody.
+  */
+  const moderatorIds = stream.moderatorIds;
+  const [moderatorsOpen, setModeratorsOpen] = useState(false);
+  const moderators = useAppointModerator(stream.id);
+  const grantEndRoom = useGrantEndRoom(stream.id);
+
+  /*
+    ─── MAY *I* CLOSE THIS ROOM? ────────────────────────────────────────────────
+    `moderatorIds` says WHO holds an appointment; it does not say what any of
+    them may do. `canEndRoom` is per person and rides on the moderator row, so
+    a moderator who has been handed the closing has to read their own row to
+    find out — which is why this fetches at all, and only for somebody who is
+    actually in that list.
+
+    Without this the grant was a permission with no button: the host handed
+    over the closing on the way out and the moderator still saw "Leave Room",
+    because every end control in this file was gated on `isHost`. The power
+    existed on the server and nowhere a person could reach it.
+  */
+  const iAmModerator = Boolean(myId) && (moderatorIds ?? []).includes(myId ?? "");
+  const moderatorRows = useRoomModerators(stream.id, iAmModerator && stream.status === "live");
+  const iCanEndRoom =
+    !isHost && moderatorRows.items.some((row) => row.profileId === myId && row.canEndRoom);
+  /** Either office that may close the room — the host, or a moderator given it. */
+  const canCloseRoom = isHost || iCanEndRoom;
+  const canManageModerators = isHost && moderatorIds !== undefined;
+  const hasModerators = (moderatorIds?.length ?? 0) > 0;
+  /*
+    Is a moderator actually PUBLISHING? Only a live track holds the room open,
+    so this is what decides whether "leave it running" is a promise or a hope.
+    Read off the stage rather than the appointment: being a moderator and being
+    on stage are two separate things here, on purpose.
+  */
+  /*
+    IS THE HOST ACTUALLY HERE? Read off the STAGE, not off the record: the
+    stream always has an owner, and the question everybody else in the room is
+    asking is whether that person is currently in it.
+  */
+  const hostOnStage = useMemo(
+    () =>
+      slots.some(
+        (slot) => slot.role === "host" || baseIdentity(slot.identity) === stream.ownerId
+      ),
+    [slots, stream.ownerId]
+  );
+
+  /*
+    ─── DELAYED, BECAUSE A RECONNECT IS NOT A DEPARTURE ─────────────────────────
+    A host whose connection blips vanishes from the roster for a few seconds and
+    comes straight back. Announcing that instantly would flash "the host stepped
+    out" at the whole room over a hiccup, which is worse than saying nothing —
+    it makes a working room look like a failing one.
+
+    So absence has to persist before it is reported, and presence clears it at
+    once: coming back is never news that needs settling.
+  */
+  const [hostAway, setHostAway] = useState(false);
+  useEffect(() => {
+    // Present: nothing to schedule, and nothing to clear that the cleanup
+    // below has not already cleared on the way in.
+    if (hostOnStage) return;
+    const timer = window.setTimeout(() => setHostAway(true), HOST_AWAY_AFTER_MS);
+    /*
+      The reset lives in CLEANUP rather than in the body above, which is what
+      runs the moment `hostOnStage` flips back to true — so a returning host
+      clears the notice immediately, and the second departure is timed afresh
+      instead of firing instantly on a stale flag.
+    */
+    return () => {
+      window.clearTimeout(timer);
+      setHostAway(false);
+    };
+  }, [hostOnStage]);
+
+  const someModeratorOnStage = useMemo(
+    () =>
+      slots.some((slot) => (moderatorIds ?? []).includes(baseIdentity(slot.identity))),
+    [slots, moderatorIds]
+  );
   const chatItems = chatFeed.data?.items;
   const [seenChat, setSeenChat] = useState<{ id: string; createdAt: string } | null>(null);
   // Adjusted during render, React's pattern for state that follows a value:
@@ -1399,6 +1535,23 @@ function LiveHouse({
               (isMe && myName ? myName : participantLabel(slot.name, slot.identity)),
             avatarUrl: owner ? (owner.avatarUrl ?? null) : isMe ? myAvatar : (meta?.avatarUrl ?? null),
             speaking: audio.loudest === slot.identity,
+            /*
+              THE PILL UNDER THE NAME — node 1285:30456. The host is keyed on
+              the stream's `ownerId` rather than the slot, because the host's
+              publisher identity is the literal string `broadcaster` and
+              carries no user id; the roster a hundred lines up already does
+              this, and getting it wrong drew the host as nobody.
+
+              Ordinary speakers get NOTHING, on purpose: a SPEAKER pill under
+              every face would make the two that matter invisible by making the
+              row uniform.
+            */
+            role:
+              slot.role === "host" || (owner && owner.id === stream.ownerId)
+                ? ("host" as const)
+                : (stream.moderatorIds ?? []).includes(owner ? owner.id : baseIdentity(slot.identity))
+                  ? ("moderator" as const)
+                  : undefined,
             // The file draws a microphone on every speaker's plate. It reads
             // the PUBLICATION (`slot.isMuted`), which is their real microphone,
             // and falls back to muted when this viewer has silenced them — a
@@ -1417,7 +1570,10 @@ function LiveHouse({
             onOpen: () => openSlot(slot),
           };
         }),
-    [seating, audio.loudest, mutedForMe, openSlot, personActionsSlot, myId, myName, myAvatar, stream.owner]
+    // `moderatorIds` and `ownerId` decide the pill under each name, so a list
+    // built before either arrived would draw the host as an ordinary speaker
+    // until something else happened to invalidate it.
+    [seating, audio.loudest, mutedForMe, openSlot, personActionsSlot, myId, myName, myAvatar, stream.owner, stream.ownerId, stream.moderatorIds]
   );
 
   const audiencePeople: RoomPerson[] = useMemo(
@@ -1602,7 +1758,7 @@ function LiveHouse({
           </span>
         }
         // 1285:92940 — the host's phone pill says what leaving means for them.
-        leaveLabel={isHost ? "Close Room" : "Leave Room"}
+        leaveLabel={canCloseRoom ? "Close Room" : "Leave Room"}
         /*
           THIS file confirms, not the header. Both paths open the sheet below,
           whose copy knows whether the reader is the HOST — closing the room
@@ -1611,7 +1767,7 @@ function LiveHouse({
           in front of this one.
         */
         confirmBeforeLeave={false}
-        onLeave={isHost ? () => setConfirmLeave(true) : leave}
+        onLeave={canCloseRoom ? () => setConfirmLeave(true) : leave}
         // The file's row 2 has two circles, not three. The overflow sheet the
         // third one opened is this one — both room links and the keyboard
         // shortcuts — so nothing was lost when the dots went.
@@ -1707,6 +1863,29 @@ function LiveHouse({
       )}
 
       <div className={cn("flex flex-col gap-6 px-6 pb-6 md:px-4 md:pt-4 xl:px-[30px]", state === "failed" && "opacity-40")}>
+        {/*
+          WHO IS RUNNING THIS ROOM, when it is not the person whose name is on
+          it. The host keeps the title and the HOST pill — they can come back
+          and resume, which is the whole reason this feature exists — so
+          without a line like this the room simply looks normal while nobody is
+          steering it.
+
+          A STATUS LINE, NOT AN ALARM: muted, inline, no icon, no colour. The
+          room is fine; it is being run by somebody else. Panic styling here
+          would empty the room faster than the silence would.
+
+          Not shown to the host. They know where they are, and telling somebody
+          they have stepped out of a room they are standing in is the kind of
+          notice that makes an app feel unaware of itself.
+        */}
+        {stream.status === "live" && hostAway && !isHost && (
+          <p className="text-[12px] leading-4 text-meta">
+            {hasModerators
+              ? "The host stepped out. Moderators are running the room."
+              : "The host stepped out."}
+          </p>
+        )}
+
         <RoomPeopleSection
           title="Speakers"
           rule={false}
@@ -1916,6 +2095,7 @@ function LiveHouse({
             : null
         }
         onReact={sendReaction}
+        onPeople={canManageModerators ? () => setModeratorsOpen(true) : null}
         /* Absent on a phone: the frame's bottom bar (RoomPhoneBar, below) is
            pinned to the viewport there and carries the same controls. */
         className="hidden md:flex xl:sticky xl:bottom-0"
@@ -2101,6 +2281,29 @@ function LiveHouse({
           </div>
         </div>
       </Sheet>
+
+      {/*
+        EVERYBODY IN THE ROOM, speakers and audience alike — appointing does not
+        seat anybody, so the candidate list is not the stage. `chatMentionables`
+        is already exactly that roster (every slot plus every audience member,
+        de-duplicated by username, and resolved to a real profile id), which is
+        why the sheet needs no read of its own.
+      */}
+      {canManageModerators && (
+        <AddModeratorSheet
+          open={moderatorsOpen}
+          onClose={() => setModeratorsOpen(false)}
+          people={chatMentionables.map((person) => ({
+            id: person.id,
+            name: person.displayName,
+            username: person.username,
+          }))}
+          moderatorIds={moderatorIds ?? []}
+          busy={moderators.appoint.isPending || moderators.remove.isPending}
+          onAppoint={(userId) => moderators.appoint.mutate({ userId })}
+          onRemove={(userId) => moderators.remove.mutate(userId)}
+        />
+      )}
 
       {isHost && (
         <HandTray
@@ -2288,12 +2491,88 @@ function LiveHouse({
       <DestructiveConfirmSheet
         open={confirmLeave}
         onClose={() => setConfirmLeave(false)}
-        title={isHost ? "Close the gist room?" : "Leave quietly?"}
-        body={isHost ? "Everyone will be sent out and the gist room will be closed." : "Nobody is told you left."}
-        confirmLabel={isHost ? "Close it" : "Leave"}
+        title={canCloseRoom ? "Close the gist room?" : "Leave quietly?"}
+        body={
+          isHost
+            ? hasModerators
+              ? "You can step out and leave it running, or close it for everybody."
+              : "Everyone will be sent out and the gist room will be closed."
+            : iCanEndRoom
+              ? // The host handed this over on their way out. Both doors are
+                // real for a moderator too: going is not the same as closing.
+                "The host left you the closing. You can slip out quietly, or close it for everybody."
+              : "Nobody is told you left."
+        }
+        confirmLabel={canCloseRoom ? "Close it" : "Leave"}
+        /*
+          THE HOST'S THIRD DOOR, and it only exists once somebody can hold the
+          room without them.
+
+          Leaving used to be the same act as closing for a host, which was true
+          when the host was the only person who could run a room. With a
+          moderator it stopped being true, and the dialog did not notice —
+          ogazboiz hit it live: "i dont want to end the stream since i have
+          moderator there was nowhere for me to pass it to him".
+
+          There is nothing to HAND OVER: the moderator already holds the
+          permissions. What was missing was a way for the host to go without
+          taking the room with them, and that is just the listener's own leave.
+
+          THE HINT IS THE HONEST PART. The service keeps a room alive while
+          SOMEBODY is publishing and closes it after a few minutes of total
+          silence, so "it keeps running" is only true if a moderator is
+          actually on stage. A moderator sitting in the audience holds nothing
+          open, and a host who is not told that would blame the feature rather
+          than the empty stage.
+        */
+        secondary={
+          iCanEndRoom
+            ? {
+                // A moderator's safe door is the ordinary leave — the room
+                // keeps running without them exactly as it does for anyone
+                // else who steps out.
+                label: "Just leave",
+                hint: "The room stays open and somebody else can close it.",
+                onClick: () => void leaveNow(),
+              }
+            : isHost && hasModerators
+            ? {
+                label: "Leave it running",
+                /*
+                  SAID BEFORE THEY CONFIRM, because this act GRANTS something.
+                  A permission that changes without being stated is not one the
+                  host gave — and "your moderators can close the room" is a
+                  bigger sentence than "you left".
+
+                  The stage clause is the other half of the truth: appointing
+                  somebody does not put them on a microphone, and only a live
+                  track holds a room open. With everyone in the audience the
+                  room really will close itself, and a host who was not told
+                  that would blame the feature rather than the silence.
+                */
+                hint: someModeratorOnStage
+                  ? "Your moderators keep the room open, and can close it when everyone's done."
+                  : "Your moderators can close the room when everyone's done. None is on stage, so it will close on its own a few minutes after the last person stops talking.",
+                loading: grantEndRoom.isPending,
+                onClick: () => {
+                  /*
+                    GRANT, THEN GO — and go even if the grant failed. Trapping a
+                    host in a room because a permission write did not land is
+                    the worse trade, and the room still closes on its own once
+                    everybody stops talking. The grant is best-effort inside
+                    the mutation too, so one moderator whose row has gone does
+                    not cost the others theirs.
+                  */
+                  grantEndRoom.mutate(moderatorIds ?? [], {
+                    onSettled: () => void leaveNow(),
+                  });
+                },
+              }
+            : undefined
+        }
         loading={endHouse.isPending}
         onConfirm={() => {
-          if (isHost) {
+          if (canCloseRoom) {
             endHouse.mutate(stream.id, {
               onSuccess: () => {
                 void session.end().then(() => router.push(sq("/gist-rooms")));
