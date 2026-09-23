@@ -5100,3 +5100,48 @@ describe("Onboarding asks for notifications, now that one can arrive", () => {
     assert.match(ask, /if \(!key\) return setNotify\("unsupported"\);/);
   });
 });
+
+describe("Nobody is put in a house they did not agree to", () => {
+  /*
+    The service's own spec summarises `POST /conversations/:id/members` as
+    "Add people to a group (any member may)" — so any member of any house can
+    add anybody, silently, and the person finds out because a house has
+    appeared in their inbox (ogazboiz, 2026-09-23: "adding someone to a group
+    without their approval is wrong").
+  */
+  const chat = () => stripComments(read("components/layout/chat-view.tsx"));
+
+  it("offers a relationship, not a badge, as the middle choice", () => {
+    /*
+      `verified` is granted by the platform — it says somebody is who they
+      claim to be, not that you know them. A verified stranger adding you to a
+      house is exactly the complaint, so the circle that gates it is who YOU
+      follow.
+    */
+    assert.match(chat(), /addToHousesFrom === "following"/);
+    assert.doesNotMatch(
+      stripComments(read("features/settings/lib/types.ts")),
+      /addToHousesFrom: z\.enum\(\["no_one", "everyone", "verified"\]\)/,
+      "the house gate went back to a badge"
+    );
+  });
+
+  it("is absent until the service enforces it", () => {
+    /*
+      An option that says somebody is protected while anybody can still add
+      them is worse than no option: they would stop watching for it. So the
+      whole section is gated on the field arriving.
+    */
+    assert.match(chat(), /addToHousesFrom !== undefined && onAddToHousesFromChange && \(/);
+    assert.match(
+      stripComments(read("features/settings/lib/types.ts")),
+      /addToHousesFrom: z\.enum\(\["no_one", "everyone", "following"\]\)\.optional\(\)/
+    );
+  });
+
+  it("says what happens instead of the add", () => {
+    // Without it, "No one" reads as "never hear about a house again" rather
+    // than "it waits for you".
+    assert.match(chat(), /sends a request instead/);
+  });
+});

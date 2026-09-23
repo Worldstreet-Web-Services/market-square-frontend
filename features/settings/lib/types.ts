@@ -64,6 +64,20 @@ export const ProfileSettingsSchema = z.object({
   }),
   chat: z.object({
     messagesFrom: z.enum(["no_one", "everyone", "verified"]),
+    /**
+     * WHO MAY ADD YOU TO A HOUSE — the consent gate.
+     *
+     * Absent on a service that does not enforce it, and the section is then
+     * not drawn: an option that claims to protect somebody while anybody can
+     * still add them is worse than no option, because they would stop
+     * watching for it.
+     *
+     * `following` rather than `verified`, deliberately. Verified is a badge
+     * the platform grants — it says somebody is who they claim to be, not
+     * that you know them — and a verified stranger adding you to a house is
+     * exactly the complaint. The circle that matters here is who YOU follow.
+     */
+    addToHousesFrom: z.enum(["no_one", "everyone", "following"]).optional(),
     allowHouseMembers: z.boolean(),
     allowPastAudience: z.boolean(),
   }),

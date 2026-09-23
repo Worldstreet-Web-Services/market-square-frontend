@@ -917,6 +917,8 @@ export function SettingsScreen({ username }: { username: string }) {
                 onAllowHouseMembersChange={(value) => save.mutate({ chat: { allowHouseMembers: value } })}
                 allowPastAudience={settings.data?.chat.allowPastAudience ?? false}
                 onAllowPastAudienceChange={(value) => save.mutate({ chat: { allowPastAudience: value } })}
+                addToHousesFrom={settings.data?.chat.addToHousesFrom}
+                onAddToHousesFromChange={(value) => save.mutate({ chat: { addToHousesFrom: value } })}
                 disabled={!settingsLive}
               />
             )}
