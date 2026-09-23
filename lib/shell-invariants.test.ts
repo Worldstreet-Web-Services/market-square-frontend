@@ -5360,3 +5360,55 @@ describe("An ended room says how many came, and never guesses", () => {
     );
   });
 });
+
+describe("A room's chat on a post is gated before it is fetched", () => {
+  /*
+    WHO MAY SEE IT is decided in `lib/room-chat-visibility.ts`, which has its
+    own behavioural tests. What is pinned HERE is the wiring, because the
+    judgement being right does not help if the component asks the question too
+    late.
+
+    `enabled` carries the gate. Gate only the RENDER and a refused room is
+    still requested and still lands in the client's query cache — the same leak
+    one component away, and one that any later `useChat` on the same key would
+    read straight out of memory. The request must not happen at all.
+  */
+  it("never even requests the chat of a room it may not show", () => {
+    const excerpt = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
+    assert.match(
+      excerpt,
+      /const allowed = mayShowRoomChat\(stream\)/,
+      "the gate is `mayShowRoomChat`, which is where the tests are"
+    );
+    assert.match(
+      excerpt,
+      /useChat\(streamId, allowed,/,
+      "a refused room must not be FETCHED, not merely left unrendered"
+    );
+  });
+
+  /*
+    And the card hands over the ROOM, not a verdict. Passing a precomputed
+    boolean would move the judgement into the card, where the next person
+    adding a case would not find the tests — and the gate reads two unrelated
+    things off the room (its ticketing, and its house), so a single flag cannot
+    carry it.
+  */
+  it("passes the room itself, so the judgement stays in one place", () => {
+    const card = stripComments(read("features/feed/components/room-post-card.tsx"));
+    assert.match(card, /<RoomChatExcerpt streamId=\{streamId\} stream=\{data\} live=\{live\} \/>/);
+  });
+
+  /*
+    A feed is many cards. The room panel's five-second poll is right for one
+    reader watching one conversation and wrong for a screen of them, and an
+    ENDED room is a frozen transcript that cannot change at all — `false`, not
+    a slower number.
+  */
+  it("does not poll a feed at the room panel's cadence", () => {
+    const excerpt = stripComments(read("features/feed/components/room-chat-excerpt.tsx"));
+    assert.match(excerpt, /live \? FEED_POLL_MS : false/, "an ended room must not be polled");
+    const poll = /FEED_POLL_MS = (\d+)_000/.exec(excerpt);
+    assert.ok(poll && Number(poll[1]) >= 15, "a per-card poll faster than 15s is a feed hammering the service");
+  });
+});
