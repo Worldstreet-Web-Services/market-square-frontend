@@ -45,6 +45,14 @@
  */
 export interface RoomChatSubject {
   visibility?: "public" | "ticketed";
+  /**
+   * WHO MAY FIND AND ENTER THE ROOM — `public`, or `private` for one gated to
+   * its house. Distinct from `visibility`, which is about PAYING, and it is
+   * the field the service itself gates on. `unknown` is what the schema parses
+   * an absent or unrecognised value to, deliberately, so it is never read as
+   * "open".
+   */
+  audience?: "public" | "private" | "unknown";
   house?: {
     visibility?: "public" | "private";
     viewerIsMember?: boolean;
@@ -55,12 +63,23 @@ export function mayShowRoomChat(stream: RoomChatSubject | null | undefined): boo
   // Nothing to decide about, and "we have not loaded it" is not permission.
   if (!stream) return false;
 
-  // The chat is part of what the ticket buys.
-  if (stream.visibility === "ticketed") return false;
+  /*
+    STATED PUBLIC, not merely "not ticketed". The negative form passes every
+    value that is not that one word — an absent field, a paid tier added later
+    — which is the same trap this file already fell into once below.
+  */
+  if (stream.visibility !== "public") return false;
 
   const house = stream.house;
-  // No house, no membership to have been excluded from.
-  if (!house) return true;
+  /*
+    NO DOORPLATE IS NOT THE SAME AS NO GATE. `house` is only carried on the
+    single-room read, so its absence means "this payload does not describe a
+    house", not "this room has none. `audience` is the field the SERVICE gates
+    on and it is on every payload — a `private` room is reachable only by its
+    house's members — so with no doorplate to check membership against, only a
+    stated-public audience clears.
+  */
+  if (!house) return stream.audience === "public";
 
   /*
     STATED PUBLIC, OR A MEMBER. Written as a positive test rather than as
@@ -107,12 +126,24 @@ export function mayShowRoomChat(stream: RoomChatSubject | null | undefined): boo
  */
 export function maySignalRoomChat(stream: RoomChatSubject | null | undefined): boolean {
   if (!stream) return false;
-  // A ticket gates the chat, so the room's activity is part of what is gated.
-  if (stream.visibility === "ticketed") return false;
-  const house = stream.house;
-  if (!house) return true;
-  // Stated public only — the same fail-closed reading as above, and for the
-  // stronger reason: here a wrong `true` is broadcast rather than shown to one
-  // person.
-  return house.visibility === "public";
+  /*
+    THIS MIRRORS THE SERVICE'S OWN `signalableRoom`, FIELD FOR FIELD:
+    `visibility === 'public' && audience === 'public'`. It is not an
+    independent judgement and must not drift into one — the service decides
+    whether a frame EXISTS, so a client that is more permissive subscribes to a
+    topic nobody writes to, and one that is more restrictive silently misses
+    signals that were sent. Neither is dangerous; both are wrong.
+
+    It does NOT read the house, and that is the deliberate difference from the
+    display gate above. `audience` already answers "is this room gated to its
+    house" and it is the field the service gates on; adding a doorplate check
+    here would make this stricter than the publisher and lose real frames.
+
+    The one place the two ends differ is an ABSENT audience: the service reads
+    a missing value as public, this schema parses it to `unknown` and refuses.
+    That is left as-is rather than matched. A safety rule should not adopt
+    somebody else's optimistic default, and the divergence can only appear on a
+    payload that omits the field — which the running service does not send.
+  */
+  return stream.visibility === "public" && stream.audience === "public";
 }

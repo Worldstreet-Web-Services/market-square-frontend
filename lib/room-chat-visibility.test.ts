@@ -14,12 +14,25 @@ import { mayShowRoomChat, maySignalRoomChat } from "./room-chat-visibility.ts";
 */
 describe("Whose room chat may appear on a public post", () => {
   it("shows an ordinary public room with no house", () => {
-    assert.equal(mayShowRoomChat({ visibility: "public", house: null }), true);
+    assert.equal(mayShowRoomChat({ visibility: "public", audience: "public", house: null }), true);
+  });
+
+  /*
+    NO DOORPLATE IS NOT NO GATE. `house` rides only on the single-room read, so
+    its absence means "this payload does not describe a house", never "this
+    room has none". `audience` is what the SERVICE gates on and it is always
+    sent — so with no doorplate to check membership against, an audience that
+    is private or merely unstated must refuse.
+  */
+  it("refuses a room with no doorplate unless its audience is stated public", () => {
+    assert.equal(mayShowRoomChat({ visibility: "public", house: null }), false, "absent audience is not public");
+    assert.equal(mayShowRoomChat({ visibility: "public", audience: "private", house: null }), false);
+    assert.equal(mayShowRoomChat({ visibility: "public", audience: "unknown", house: null }), false);
   });
 
   it("shows a room in a PUBLIC house to anybody, member or not", () => {
     const house = { visibility: "public" as const, viewerIsMember: false };
-    assert.equal(mayShowRoomChat({ visibility: "public", house }), true);
+    assert.equal(mayShowRoomChat({ visibility: "public", audience: "public", house }), true);
   });
 
   /*
@@ -121,10 +134,35 @@ describe("Whose room chat may appear on a public post", () => {
 */
 describe("Whose room may be announced on a public socket topic", () => {
   it("signals an ordinary public room", () => {
-    assert.equal(maySignalRoomChat({ visibility: "public", house: null }), true);
+    assert.equal(maySignalRoomChat({ visibility: "public", audience: "public", house: null }), true);
     assert.equal(
-      maySignalRoomChat({ visibility: "public", house: { visibility: "public", viewerIsMember: false } }),
+      maySignalRoomChat({
+        visibility: "public",
+        audience: "public",
+        house: { visibility: "public", viewerIsMember: false },
+      }),
       true
+    );
+  });
+
+  /*
+    IT MIRRORS THE SERVICE, FIELD FOR FIELD — `visibility` and `audience`, and
+    NOT the house. The service decides whether a frame exists, so a client that
+    is stricter silently misses signals that were sent. This asserts the
+    difference from the display gate in the direction that would be easy to
+    "tidy up": a private house does not by itself silence the topic; a private
+    AUDIENCE does.
+  */
+  it("gates on the audience the service gates on, not on the doorplate", () => {
+    assert.equal(
+      maySignalRoomChat({ visibility: "public", audience: "private", house: null }),
+      false,
+      "a house-gated room is never announced"
+    );
+    assert.equal(
+      maySignalRoomChat({ visibility: "public", audience: "public", house: { visibility: "private" } }),
+      true,
+      "stricter than the publisher would lose real frames"
     );
   });
 
@@ -140,6 +178,7 @@ describe("Whose room may be announced on a public socket topic", () => {
   it("refuses a private house even to a member, where the display gate allows it", () => {
     const room = {
       visibility: "public" as const,
+      audience: "private" as const,
       house: { visibility: "private" as const, viewerIsMember: true },
     };
     assert.equal(mayShowRoomChat(room), true, "a member may read it");
@@ -148,10 +187,8 @@ describe("Whose room may be announced on a public socket topic", () => {
 
   it("fails closed on anything it cannot positively clear", () => {
     assert.equal(maySignalRoomChat(null), false);
-    assert.equal(maySignalRoomChat({ visibility: "public", house: {} }), false);
-    assert.equal(
-      maySignalRoomChat({ visibility: "public", house: { visibility: "private" } }),
-      false
-    );
+    assert.equal(maySignalRoomChat({ visibility: "public", house: {} }), false, "absent audience refuses");
+    assert.equal(maySignalRoomChat({ visibility: "public", audience: "unknown", house: null }), false);
+    assert.equal(maySignalRoomChat({ visibility: "ticketed", audience: "public", house: null }), false);
   });
 });
