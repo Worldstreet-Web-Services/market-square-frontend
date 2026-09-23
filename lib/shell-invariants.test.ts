@@ -2606,9 +2606,20 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(soonCard, /h-\[106px\] w-full/, "the card lost its fixed height or fluid width");
     assert.match(soonCard, /w-\[7px\] bg-\[#7E3BEB\]/);
     assert.match(soonCard, /w-\[144\.507px\]/, "the cover stopped bleeding under the panel");
-    assert.match(soonCard, /left-\[40px\] w-\[302px\]/);
+    assert.match(soonCard, /absolute inset-y-0 left-\[40px\] right-0/);
+    /*
+      The two columns are a FLEX ROW, not two absolutely placed boxes. The node
+      fixes them at 64 and 259, which only holds at its own 342 — and the rail
+      caps a card at 95% of its column so a second one peeks, so a narrow
+      column brings the card in around 277 and the two absolute columns
+      overlap, the schedule sliding under a long title. Invisible until
+      somebody writes a real title.
+    */
+    assert.match(soonCard, /flex h-full items-start gap-\[35px\] pl-\[64px\] pr-\[16px\]/);
+    assert.match(soonCard, /mt-\[16px\] flex min-w-0 flex-1 flex-col/, "the text column stopped being the one that gives");
+    assert.match(soonCard, /mt-\[15px\] flex shrink-0 flex-col items-end/);
     assert.doesNotMatch(soonCard, /bg-\[#3C3C3C\]/, "the divider is gone in the redesign");
-    assert.match(soonCard, /text-\[8px\] font-medium leading-\[10\.4px\]">Hosted by/);
+    assert.match(soonCard, /text-\[8px\] font-medium leading-\[10\.4px\]">\s*Hosted by/);
     assert.match(soonCard, /text-\[10px\] font-semibold leading-\[10\.4px\]/);
     /*
       "Starts in 27h 8m" WRAPPED TO TWO LINES, and the cause was a deviation
@@ -2618,8 +2629,7 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
       instead of a left offset plus a fixed width lets it grow leftward into
       the slack the node leaves, and keeps the edge the design actually fixes.
     */
-    assert.match(soonCard, /absolute right-\[16px\] top-\[15px\]/);
-    assert.doesNotMatch(soonCard, /top-\[15px\] flex w-\[67px\]/, "the right column went back to a width that only fits 5px text");
+    assert.doesNotMatch(soonCard, /w-\[67px\]/, "the right column went back to a width that only fits 5px text");
     assert.match(soonCard, /whitespace-nowrap rounded-full bg-\[rgba\(159,90,255,0\.09\)\]/);
   });
 

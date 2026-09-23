@@ -60,126 +60,181 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
   const topicLabel = topicKey
     ? (topics.data?.find((entry) => entry.key === topicKey)?.label ?? topicKey)
     : null;
-  const TopicIcon = topicKey && topicKey !== FIGMA_TOPIC ? (TOPIC_ICONS[topicKey] ?? IconSpark) : null;
+  const TopicIcon =
+    topicKey && topicKey !== FIGMA_TOPIC
+      ? (TOPIC_ICONS[topicKey] ?? IconSpark)
+      : null;
 
   return (
     <div className="relative h-[106px] w-full overflow-hidden rounded-[16px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)] backdrop-blur-[7.726px]">
       {/* `image 64` — 144.507 wide, full bleed to the card's left edge and
           under everything else. STRETCH in the file; `object-cover` here, so a
           real photograph of any ratio fills the box without distorting. */}
-      <span aria-hidden className="absolute inset-y-0 left-0 w-[144.507px] overflow-hidden">
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[144.507px] overflow-hidden"
+      >
         {stream.thumbnailUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
-          <img src={stream.thumbnailUrl} alt="" className="size-full object-cover" />
+          <img
+            src={stream.thumbnailUrl}
+            alt=""
+            className="size-full object-cover"
+          />
         ) : (
           <span className="flex size-full items-center justify-center bg-[#101012]">
             {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-            <img src={asset("/gist-rooms/card-default-cover.svg")} alt="" aria-hidden className="h-8 w-11" />
+            <img
+              src={asset("/gist-rooms/card-default-cover.svg")}
+              alt=""
+              aria-hidden
+              className="h-8 w-11"
+            />
           </span>
         )}
       </span>
 
       {/* `Rectangle 34624595` — the 7px accent, hard on the left edge and drawn
           OVER the image (it is the later sibling in the file). */}
-      <span aria-hidden className="absolute inset-y-0 left-0 w-[7px] bg-[#7E3BEB]" />
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[7px] bg-[#7E3BEB]"
+      />
 
       {/* `Frame 1000011513` — 302 wide from 40px in, which is what fades the
           picture out under the text. The file's gradient runs UPWARD over the
           top 17.2% only: solid #101012 below it, 25% alpha at the very top. */}
       <span
         aria-hidden
-        className="absolute inset-y-0 left-[40px] w-[302px]"
-        style={{ background: "linear-gradient(to bottom, rgba(16,16,18,0.25) 0%, #101012 17.2%)" }}
+        className="absolute inset-y-0 left-[40px] right-0"
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(16,16,18,0.25) 0%, #101012 17.2%)",
+        }}
       />
 
-      {/* `Frame 2147230720` — the text column: 64 in, 16 down, 160 wide, 12 gap. */}
-      <div className="absolute left-[64px] top-[16px] flex w-[160px] flex-col gap-[12px]">
-        <div className="flex flex-col gap-[8px]">
-          <Link
-            href={href}
-            className="ws-press line-clamp-2 text-[10px] font-semibold leading-[11px] text-white"
-          >
-            {stream.title}
-          </Link>
-          {topicLabel && (
-            /* `Frame 2147225009` — 16 tall, 3/6 padding, 4 gap, white at 10%. */
-            <span className="inline-flex h-[16px] w-fit items-center gap-[4px] rounded-full bg-white/10 px-[6px]">
-              {TopicIcon ? (
-                <TopicIcon className="h-[10px] w-[13px] shrink-0" />
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element -- the node's own export */
-                <img src={asset("/gist-rooms/card-topic-trading.svg")} alt="" aria-hidden className="h-[10px] w-[13px] shrink-0" />
-              )}
-              <span className="text-[8px] font-medium leading-[10.4px] text-[#F4F4F4]">{topicLabel}</span>
-            </span>
-          )}
-        </div>
+      {/*
+        THE TWO COLUMNS ARE A FLEX ROW, NOT TWO ABSOLUTE BOXES.
 
-        {/* `Frame 2147230648` — host row, 16 tall, 4 gap, centred. */}
-        <span className="flex min-w-0 items-center gap-[4px]">
-          <span className="size-[16px] shrink-0 overflow-hidden rounded-full border-[0.552px] border-white bg-[#DCDAD5]">
-            <Avatar
-              name={host?.displayName ?? "Host"}
-              seed={stream.ownerId}
-              src={host?.avatarUrl}
-              size={16}
-              sizeClassName="size-full"
-            />
-          </span>
-          <span className="min-w-0 truncate text-white">
-            <span className="text-[8px] font-medium leading-[10.4px]">Hosted by </span>
-            <span className="text-[10px] font-semibold leading-[10.4px]">
-              {host?.displayName ?? "a host"}
-            </span>
-          </span>
-        </span>
-      </div>
+        The node is a fixed 342 and its blocks sit at fixed offsets — 64 in for
+        the text, 259 for the schedule. Reproduced literally, that only holds AT
+        342: the rail caps a card at 95% of its column so a second one peeks, so
+        on a narrow column the card comes in around 277, and two absolutely
+        placed columns then OVERLAP — the schedule slides under a long title
+        with nothing to stop it. It reads as fine until somebody writes a real
+        title.
 
-      {/* `Frame 2147230722` — the right column: 15 down, 8 gap, right-aligned.
-          ANCHORED BY ITS RIGHT INSET (16 = the card's 342 less the node's
-          259 + 67), not by a left offset and a fixed 67 width. The 67 only
-          held while "Starts in …" was five pixels; at the 8 it is drawn at
-          (see the note at the top of this file) a real "Starts in 27h 8m"
-          wraps to two lines inside it. Right-anchored, the block grows
-          leftward into the 35px of slack the node leaves before the text
-          column, and the edge the design actually fixes stays exact. */}
-      <div className="absolute right-[16px] top-[15px] flex flex-col items-end gap-[8px]">
-        <div className="flex flex-col items-end gap-[4px]">
-          {startsAt && (
-            <div className="flex flex-col items-end gap-[2px]">
-              {/* `Frame 2147230647` — calendar + date, 12 icon, 4 gap. */}
-              <span className="flex items-center gap-[4px]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-                <img src={asset("/gist-rooms/card-calendar.svg")} alt="" aria-hidden className="size-[12px] shrink-0" />
-                <span className="text-[8px] font-normal leading-[10.4px] text-[#D9D9D9]">
-                  {shortDateLabel(startsAt)}
+        So the insets the design fixes are kept (64 left, 16 right, the 35
+        between) and the TEXT column is the one that gives, exactly as the
+        467-wide build before this did. At 342 the text column lands at 153
+        rather than the node's 160, because the countdown pill beside it is
+        drawn at 8px rather than the file's unreadable 5 and needs the width.
+      */}
+      <div className="relative flex h-full items-start gap-[35px] pl-[64px] pr-[16px]">
+        {/* `Frame 2147230720` — 16 down, 12 gap; the column that flexes. */}
+        <div className="mt-[16px] flex min-w-0 flex-1 flex-col gap-[12px]">
+          <div className="flex flex-col gap-[8px]">
+            <Link
+              href={href}
+              className="ws-press line-clamp-2 text-[10px] font-semibold leading-[11px] text-white"
+            >
+              {stream.title}
+            </Link>
+            {topicLabel && (
+              /* `Frame 2147225009` — 16 tall, 3/6 padding, 4 gap, white at 10%. */
+              <span className="inline-flex h-[16px] w-fit items-center gap-[4px] rounded-full bg-white/10 px-[6px]">
+                {TopicIcon ? (
+                  <TopicIcon className="h-[10px] w-[13px] shrink-0" />
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element -- the node's own export */
+                  <img
+                    src={asset("/gist-rooms/card-topic-trading.svg")}
+                    alt=""
+                    aria-hidden
+                    className="h-[10px] w-[13px] shrink-0"
+                  />
+                )}
+                <span className="text-[8px] font-medium leading-[10.4px] text-[#F4F4F4]">
+                  {topicLabel}
                 </span>
               </span>
-              <span className="text-[16px] font-bold leading-[20.8px] text-white">
-                {clockLabel(startsAt)}
-              </span>
-            </div>
-          )}
-          {startsAt && (
-            /* `Frame 2147230649` — 2/4 padding on a full radius, #9F5AFF at 9%.
-               Its label is 5px in the file; see the note at the top of this
-               file for why it is drawn at 8. */
-            <span className="whitespace-nowrap rounded-full bg-[rgba(159,90,255,0.09)] px-[4px] py-[2px] text-[8px] font-medium leading-[10.4px] text-[#9F65FD]">
-              {startsInLabel(startsAt)}
+            )}
+          </div>
+
+          {/* `Frame 2147230648` — host row, 16 tall, 4 gap, centred. */}
+          <span className="flex min-w-0 items-center gap-[4px]">
+            <span className="size-[16px] shrink-0 overflow-hidden rounded-full border-[0.552px] border-white bg-[#DCDAD5]">
+              <Avatar
+                name={host?.displayName ?? "Host"}
+                seed={stream.ownerId}
+                src={host?.avatarUrl}
+                size={16}
+                sizeClassName="size-full"
+              />
             </span>
-          )}
+            <span className="min-w-0 truncate text-white">
+              <span className="text-[8px] font-medium leading-[10.4px]">
+                Hosted by{" "}
+              </span>
+              <span className="text-[10px] font-semibold leading-[10.4px]">
+                {host?.displayName ?? "a host"}
+              </span>
+            </span>
+          </span>
         </div>
 
-        {/* `Olive Button` — 19 tall, 8.83/4.415 padding, 4 gap, the create ramp. */}
-        <button
-          type="button"
-          onClick={() => setSharing(true)}
-          className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
-          <img src={asset("/gist-rooms/card-share.svg")} alt="" aria-hidden className="size-[10px] shrink-0" />
-          Share
-        </button>
+        {/* `Frame 2147230722` — 15 down, 8 gap, right-aligned, and it never
+            gives: its width is its content. The node's 67 only held while
+            "Starts in …" was five pixels; at 8 a real "Starts in 27h 8m" wraps
+            inside 67, which is what it did. */}
+        <div className="mt-[15px] flex shrink-0 flex-col items-end gap-[8px]">
+          <div className="flex flex-col items-end gap-[4px]">
+            {startsAt && (
+              <div className="flex flex-col items-end gap-[2px]">
+                {/* `Frame 2147230647` — calendar + date, 12 icon, 4 gap. */}
+                <span className="flex items-center gap-[4px]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+                  <img
+                    src={asset("/gist-rooms/card-calendar.svg")}
+                    alt=""
+                    aria-hidden
+                    className="size-[12px] shrink-0"
+                  />
+                  <span className="text-[8px] font-normal leading-[10.4px] text-[#D9D9D9]">
+                    {shortDateLabel(startsAt)}
+                  </span>
+                </span>
+                <span className="text-[16px] font-bold leading-[20.8px] text-white">
+                  {clockLabel(startsAt)}
+                </span>
+              </div>
+            )}
+            {startsAt && (
+              /* `Frame 2147230649` — 2/4 padding on a full radius, #9F5AFF at 9%.
+               Its label is 5px in the file; see the note at the top of this
+               file for why it is drawn at 8. */
+              <span className="whitespace-nowrap rounded-full bg-[rgba(159,90,255,0.09)] px-[4px] py-[2px] text-[8px] font-medium leading-[10.4px] text-[#9F65FD]">
+                {startsInLabel(startsAt)}
+              </span>
+            )}
+          </div>
+
+          {/* `Olive Button` — 19 tall, 8.83/4.415 padding, 4 gap, the create ramp. */}
+          <button
+            type="button"
+            onClick={() => setSharing(true)}
+            className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+            <img
+              src={asset("/gist-rooms/card-share.svg")}
+              alt=""
+              aria-hidden
+              className="size-[10px] shrink-0"
+            />
+            Share
+          </button>
+        </div>
       </div>
 
       {sharing && (
@@ -187,7 +242,10 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           open
           onClose={() => setSharing(false)}
           title="Share gist room"
-          payload={{ text: `${stream.title} on Square`, url: `${window.location.origin}${href}` }}
+          payload={{
+            text: `${stream.title} on Square`,
+            url: `${window.location.origin}${href}`,
+          }}
         />
       )}
     </div>
