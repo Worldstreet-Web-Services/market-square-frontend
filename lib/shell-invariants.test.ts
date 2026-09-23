@@ -5496,3 +5496,35 @@ describe("Moving somebody down finishes the host's errand", () => {
     );
   });
 });
+
+describe("A slot's wrapper accepts whatever the slot may hold", () => {
+  /*
+    `meta` on the room header is a SLOT: the caller decides what goes in it,
+    and the live room puts a face pile there — an `AvatarStack` whose every
+    avatar is a `div`. It was wrapped in a `<p>`.
+
+    A `<p>` may contain only phrasing content, so the browser CLOSES it early
+    when a `div` arrives. The server serialises one tree, the browser parses a
+    different one, and React reports a hydration mismatch on a page that had
+    nothing wrong with its data. The nesting was the cause; the mismatch was
+    only where it surfaced.
+
+    Nothing about that line was ever a paragraph — it is one line of meta
+    beside a title — and Tailwind's reset already zeroes a `<p>`'s margins, so
+    the two render identically and there is no reason to prefer the one that
+    constrains its own children.
+
+    The rule this pins is general: a component that renders a caller-supplied
+    node must wrap it in an element that can legally contain anything. Every
+    other `<p>{slot}</p>` in the app takes a STRING, which is why this was the
+    only one that broke.
+  */
+  it("does not wrap the room header's meta slot in a paragraph", () => {
+    const header = stripComments(read("features/houses/components/house-header.tsx"));
+    assert.ok(
+      !/<p[^>]*>\{meta\}<\/p>/.test(header),
+      "`meta` can hold a face pile, and a <p> cannot legally contain one"
+    );
+    assert.match(header, /<div[^>]*>\{meta\}<\/div>/, "the meta slot needs a wrapper that accepts flow content");
+  });
+});
