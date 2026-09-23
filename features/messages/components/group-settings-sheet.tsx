@@ -118,6 +118,15 @@ export function GroupSettingsSheet({
   // Only the fields that actually moved. See the header.
   const edit = {
     ...(named && named !== (conversation.title ?? "") ? { title: named } : {}),
+    /*
+      TRIMMED AT THE ENDS ONLY, AND THE INSIDE IS LEFT ALONE.
+
+      `trim()` strips leading and trailing whitespace and touches nothing
+      between, which is what a description wants: no accidental blank line at
+      the top, every deliberate one in the middle kept. The renderer prints
+      them now (`whitespace-pre-line`), so what the author typed is what the
+      house shows.
+    */
     ...(description.trim() !== (conversation.description ?? "")
       ? { description: description.trim() || null }
       : {}),
@@ -177,7 +186,7 @@ export function GroupSettingsSheet({
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={3}
+            rows={5}
             placeholder="What is this group for?"
             className={field}
           />

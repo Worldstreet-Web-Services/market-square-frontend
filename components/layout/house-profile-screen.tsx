@@ -6,6 +6,7 @@ import { HouseMemberTile } from "@/components/layout/house-member-tile";
 import { EmptyState } from "@/components/ui/states";
 import { useHouse, useHouseMembers, useHouseReplays } from "@/features/messages/lib/house";
 import { useTopics } from "@/features/discovery";
+import { PostText } from "@/components/ui/post-text";
 import { useJoinGroup } from "@/features/messages";
 import { useLeaveGroup } from "@/features/messages/hooks/use-messages";
 import { useMe } from "@/hooks/use-me";
@@ -331,11 +332,23 @@ export function HouseProfileScreen({ id }: { id: string }) {
         {data?.description && (
           <p
             className={cn(
-              "text-[15px] leading-5 text-[#F7F9F9]",
+              // `whitespace-pre-line` is the whole of "they can format their
+              // bio": the textarea has always accepted newlines and the column
+              // has always stored them — the renderer was collapsing them into
+              // one paragraph, so every house description read as a wall
+              // whatever its owner typed.
+              "whitespace-pre-line text-[15px] leading-5 text-[#F7F9F9]",
               !expanded && "line-clamp-6",
             )}
           >
-            {data.description}{" "}
+            {/*
+              The SAME renderer a post's body and a DM use, so an @mention in a
+              house bio behaves exactly as it does everywhere else — one
+              component, not a third one written for this surface. Inert until
+              the service ships `descriptionMentions`, and plain text with its
+              line breaks until then.
+            */}
+            <PostText text={data.description} mentions={data.descriptionMentions} />{" "}
             {!expanded && data.description.length > 260 && (
               <button
                 type="button"
