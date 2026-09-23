@@ -4284,7 +4284,20 @@ describe("the mini-player fits every frame it is drawn in", () => {
 
   it("destructive confirmations share one sheet: Stay focused, the act in danger red", () => {
     const sheet = code("components/ui/destructive-confirm-sheet.tsx");
-    assert.match(sheet, /<Button variant="ghost" className="flex-1" autoFocus onClick=\{onClose\}>/);
+    /*
+      FOCUS LANDS ON THE SAFEST THING PRESENT, which is Stay when Stay is the
+      only way not to do the irreversible act — and is the SECONDARY when one
+      exists, because then it is the safe answer and Stay is merely retreat.
+
+      The sheet grew that third door when a host with a moderator needed to
+      leave a room without closing it. Before that, "leave" and "close" were
+      the same act for a host, so two buttons were the whole truth.
+
+      What must never change: focus is never on the destructive button, and
+      the destructive button is the only one in danger red.
+    */
+    assert.match(sheet, /autoFocus=\{!secondary\}/, "Stay must yield focus only to a SAFER option, never to the destructive one");
+    assert.doesNotMatch(sheet, /bg-danger[^>]*autoFocus/, "the destructive act must never take focus");
     assert.match(sheet, /bg-danger text-white/);
     for (const path of [
       "components/layout/room-mini-player.tsx",

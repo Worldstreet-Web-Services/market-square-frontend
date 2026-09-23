@@ -1271,6 +1271,18 @@ function LiveHouse({
   const [moderatorsOpen, setModeratorsOpen] = useState(false);
   const moderators = useAppointModerator(stream.id);
   const canManageModerators = isHost && moderatorIds !== undefined;
+  const hasModerators = (moderatorIds?.length ?? 0) > 0;
+  /*
+    Is a moderator actually PUBLISHING? Only a live track holds the room open,
+    so this is what decides whether "leave it running" is a promise or a hope.
+    Read off the stage rather than the appointment: being a moderator and being
+    on stage are two separate things here, on purpose.
+  */
+  const someModeratorOnStage = useMemo(
+    () =>
+      slots.some((slot) => (moderatorIds ?? []).includes(baseIdentity(slot.identity))),
+    [slots, moderatorIds]
+  );
   const chatItems = chatFeed.data?.items;
   const [seenChat, setSeenChat] = useState<{ id: string; createdAt: string } | null>(null);
   // Adjusted during render, React's pattern for state that follows a value:
@@ -2386,8 +2398,46 @@ function LiveHouse({
         open={confirmLeave}
         onClose={() => setConfirmLeave(false)}
         title={isHost ? "Close the gist room?" : "Leave quietly?"}
-        body={isHost ? "Everyone will be sent out and the gist room will be closed." : "Nobody is told you left."}
+        body={
+          isHost
+            ? hasModerators
+              ? "You can step out and leave it running, or close it for everybody."
+              : "Everyone will be sent out and the gist room will be closed."
+            : "Nobody is told you left."
+        }
         confirmLabel={isHost ? "Close it" : "Leave"}
+        /*
+          THE HOST'S THIRD DOOR, and it only exists once somebody can hold the
+          room without them.
+
+          Leaving used to be the same act as closing for a host, which was true
+          when the host was the only person who could run a room. With a
+          moderator it stopped being true, and the dialog did not notice —
+          ogazboiz hit it live: "i dont want to end the stream since i have
+          moderator there was nowhere for me to pass it to him".
+
+          There is nothing to HAND OVER: the moderator already holds the
+          permissions. What was missing was a way for the host to go without
+          taking the room with them, and that is just the listener's own leave.
+
+          THE HINT IS THE HONEST PART. The service keeps a room alive while
+          SOMEBODY is publishing and closes it after a few minutes of total
+          silence, so "it keeps running" is only true if a moderator is
+          actually on stage. A moderator sitting in the audience holds nothing
+          open, and a host who is not told that would blame the feature rather
+          than the empty stage.
+        */
+        secondary={
+          isHost && hasModerators
+            ? {
+                label: "Leave it running",
+                hint: someModeratorOnStage
+                  ? "Your moderators keep the room open."
+                  : "No moderator is on stage, so the room will close on its own a few minutes after the last person stops talking.",
+                onClick: () => void leaveNow(),
+              }
+            : undefined
+        }
         loading={endHouse.isPending}
         onConfirm={() => {
           if (isHost) {
