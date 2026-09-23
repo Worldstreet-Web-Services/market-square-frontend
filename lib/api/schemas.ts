@@ -441,6 +441,26 @@ export const StreamSchema = z.object({
    */
   joined: z.number().optional(),
   /**
+   * UP TO THREE FACES FROM AN ENDED ROOM — speakers first, then listeners.
+   *
+   * ONE ORDERED LIST, not two fields: a reader recognises somebody who held
+   * the floor, so speakers take the places and listeners fill what is left.
+   * Padding it with people who merely belong to the house was considered and
+   * dropped — a face here reads as "this person was in the room", and
+   * somebody who was not there would make the card state something false on
+   * every quiet room, quietly, for ever.
+   *
+   * `attendees.length` IS NOT THE ATTENDANCE. It is capped at three, and an
+   * anonymous session resolves to no profile and can never be a face. `joined`
+   * is the count; this is a sample of it. The "+N" therefore subtracts the
+   * faces actually DRAWN from `joined`, never the array's length from anything.
+   *
+   * Absent while a room is LIVE, and absent for a private or ticketed room —
+   * the same gate the chat signal uses, because publishing who attended a room
+   * outsiders could not enter reveals something they could not already see.
+   */
+  attendees: z.array(ProfileSchema).optional().default([]),
+  /**
    * WHO MAY ACT FOR THE HOST IN THIS ROOM — up to three, and the room's own
    * appointment rather than the house's. A moderator here is not a house
    * admin: the role ends with the room, which is the whole point of putting

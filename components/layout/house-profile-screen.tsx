@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/states";
 import { useHouse, useHouseMembers, useHouseReplays } from "@/features/messages/lib/house";
 import { useTopics } from "@/features/discovery";
 import { PostText } from "@/components/ui/post-text";
+import { Avatar } from "@/components/ui/avatar";
 import { useJoinGroup } from "@/features/messages";
 import { useLeaveGroup } from "@/features/messages/hooks/use-messages";
 import { useMe } from "@/hooks/use-me";
@@ -610,6 +611,50 @@ export function HouseProfileScreen({ id }: { id: string }) {
                       )}
                     </div>
                   </div>
+
+                  {/*
+                    `Group 1000002783` — WHO WAS IN THE ROOM.
+
+                    Up to three 32px plates at a 10.67 radius, each with the
+                    file's 1.67 white inside hairline and its 15-radius drop
+                    shadow, overlapping leftwards, then the file's `+48` at
+                    8/10.4. The hairline is what separates one face from the
+                    next once they overlap; without it three dark avatars read
+                    as one smudge.
+
+                    THE "+N" SUBTRACTS THE FACES ACTUALLY DRAWN from `joined`,
+                    never `attendees.length` from anything: the array is capped
+                    at three and an anonymous listener resolves to no profile,
+                    so its length is a sample and the count is the truth. A
+                    room with one attendee shows one face and no +N, which is
+                    the honest picture rather than a padded one.
+                  */}
+                  {room.attendees.length > 0 && (
+                    <div className="flex shrink-0 items-center">
+                      {room.attendees.slice(0, 3).map((person, index) => (
+                        <span
+                          key={person.id}
+                          className="size-8 shrink-0 overflow-hidden rounded-[10.67px] bg-[#EDEDED] shadow-[0_0_15px_rgba(0,0,0,0.25)] ring-[1.67px] ring-white"
+                          style={{ marginLeft: index === 0 ? 0 : -10 }}
+                        >
+                          <Avatar
+                            name={person.displayName || person.username}
+                            seed={person.id}
+                            src={person.avatarUrl}
+                            size={32}
+                            sizeClassName="size-full"
+                            className="rounded-none border-0"
+                          />
+                        </span>
+                      ))}
+                      {typeof room.joined === "number" &&
+                        room.joined > Math.min(room.attendees.length, 3) && (
+                          <span className="ml-1 text-[8px] font-medium leading-[10.4px] text-white">
+                            +{room.joined - Math.min(room.attendees.length, 3)}
+                          </span>
+                        )}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
