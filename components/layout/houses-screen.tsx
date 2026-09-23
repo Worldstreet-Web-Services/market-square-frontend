@@ -141,7 +141,7 @@ export function HousesScreen() {
             <div
               role="list"
               aria-label="Houses to join"
-              className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(330px,1fr))] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between max-lg:grid-cols-1 max-lg:justify-stretch"
+              className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] justify-start gap-x-5 gap-y-4 max-lg:grid-cols-1 max-lg:justify-stretch"
             >
               {items.map((house) => (
                 <HouseDirectoryCard

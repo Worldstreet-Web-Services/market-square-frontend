@@ -2508,6 +2508,17 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
       content. Neither surface draws its own house markup any more.
     */
     assert.match(screen, /<HouseDirectoryCard\n\s*key=\{house\.id\}/);
+    /*
+      THE TRACK SIZES TO THE CARD, not the other way round. `lg:grid-cols-3`
+      cut the row into three whatever the card needed, which at 1440 left each
+      cell around 273 against Home's 400 — so the SAME component truncated its
+      title to "Entitl…" and wrapped "1 member" onto two lines, and the two
+      surfaces looked different again for a new reason (ogazboiz, 2026-09-23).
+      `auto-fill` with a 360 floor gives as many columns as actually fit.
+    */
+    assert.match(screen, /grid-cols-\[repeat\(auto-fill,minmax\(360px,1fr\)\)\]/);
+    assert.doesNotMatch(screen, /lg:grid-cols-3/, "a fixed column count is squeezing the card again");
+
     assert.doesNotMatch(screen, /h-\[86px\]|w-\[290px\]|text-\[8px\] font-semibold/, "the directory went back to its own micro card");
     assert.match(stripComments(read("components/layout/popular-houses.tsx")), /<HouseDirectoryCard/, "Home's rail stopped sharing the card");
     const houseCard = stripComments(read("components/layout/house-directory-card.tsx"));
