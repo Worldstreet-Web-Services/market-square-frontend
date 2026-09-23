@@ -5467,3 +5467,32 @@ describe("A dead column is never rendered as a measurement", () => {
     }
   });
 });
+
+describe("Moving somebody down finishes the host's errand", () => {
+  /*
+    The triage sheet closes on Move down and STAYS OPEN on approve, and the
+    asymmetry is about what the host came to do.
+
+    Approve and decline are queue work: a list of raised hands the host is
+    working through, so closing after each one would make them reopen the sheet
+    for the next person. The sheet is the workspace.
+
+    Move down is not queue work. It is one corrective act on somebody already
+    seated, and it is the reason the sheet was opened — after it there is
+    nothing else here, and a sheet still covering the room is standing between
+    the host and the room they are running.
+
+    ON SUCCESS, NOT ON CLICK. Closing on the click would hide a failure: the
+    row disappears behind a closing sheet while the person is still seated and
+    the host believes otherwise. The hook toasts the error either way, but the
+    sheet staying open is what puts the error where the control was.
+  */
+  it("closes the tray when a seated person is moved down, and only then", () => {
+    const tray = stripComments(read("features/houses/components/hand-tray.tsx"));
+    assert.match(
+      tray,
+      /action === "remove" \? \{ onSuccess: \(\) => onClose\(\) \} : undefined/,
+      "Move down must close the sheet on SUCCESS, and approve must not close it at all"
+    );
+  });
+});
