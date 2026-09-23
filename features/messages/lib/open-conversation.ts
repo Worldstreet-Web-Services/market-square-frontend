@@ -46,6 +46,9 @@ export function conversationFromRef(ref: ConversationRef, peer: Profile): Conver
     createdBy: null,
     // Nobody is invited into a 1:1; it is opened, by one of the two people in it.
     invitedBy: null,
+    // House fields. A 1:1 has no link and no room cap.
+    website: null,
+    weeklyRoomLimit: null,
     visibility: "private",
     // Roles and per-house levels belong to groups.
     viewerRole: null,

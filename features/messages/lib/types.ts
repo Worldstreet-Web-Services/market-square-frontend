@@ -306,6 +306,20 @@ export const ConversationSchema = z.object({
    * whoever made the house, and a confident wrong name is worse than no name.
    */
   invitedBy: ProfileSchema.nullable().optional().default(null),
+  /**
+   * The house's link and its rooms-per-week cap — both editable by the owner
+   * on `PATCH /conversations/:id`, both drawn on the house profile.
+   *
+   * Carried HERE as well as on the house read because the settings sheet edits
+   * a `Conversation` and needs to show what the current values are; a form
+   * that cannot read a field can only overwrite it blind.
+   *
+   * `weeklyRoomLimit` null means UNCAPPED and is a real value, not a missing
+   * one — it is how a cap is removed — so null and absent stay distinct all
+   * the way down.
+   */
+  website: z.string().nullable().optional().default(null),
+  weeklyRoomLimit: z.number().nullable().optional().default(null),
   unreadCount: z.number().optional().default(0),
 });
 
