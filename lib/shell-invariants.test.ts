@@ -2497,22 +2497,31 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // "Explore communities" (ogazboiz, 2026-09-12) over the file's pasted "Live GistRooms".
     assert.match(screen, /<SectionHeading id="explore-communities" lead="Explore" accent="communities" \/>/);
     assert.doesNotMatch(screen, /Live GistRooms/);
-    // 1373:3367's card: 290 x 86 at 16.86, three across, rows 16 apart, paged.
-    assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,290px\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
-    assert.match(screen, /h-\[86px\] w-\[290px\] cursor-pointer overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
+    /*
+      1373:3367's card WAS built at the node's 290 x 86 with 10px titles, 8px
+      member counts and an 8px Join pill — while the SAME component's phone
+      variant already carried 14 and 12. So the directory you reach from Home's
+      "View more" was the small one and Home's own rail was the legible one
+      (ogazboiz, 2026-09-23: "the card is too small there").
+      The phone's sizes now apply at every width and the track grew to fit
+      them. The node's own micro-type is what is pinned OUT.
+    */
+    assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,minmax\(330px,1fr\)\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
+    assert.match(screen, /h-\[106px\] w-full cursor-pointer overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
     assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
-    assert.match(screen, /left-\[75\.75px\] top-\[16\.25px\] flex w-\[127\.52px\] flex-col gap-\[4\.93px\]/);
-    assert.match(screen, /ws-btn-welcome ws-press absolute right-4 top-\[31px\] flex h-6 w-16 items-center justify-center rounded-\[61\.6px\]/, "the Join House pill lost its ramp");
-    // The phone (1381:37677 in SQUARE 2.0 Copy, ogazboiz 2026-09-12): one
-    // column, each card FILLING the row at 106 tall, the node's own type,
-    // the pill 40 down. Below lg, not md — a 290 cell in the 600 column
-    // between them leaves two thirds of the row empty.
+    assert.match(screen, /truncate text-\[14px\] font-semibold leading-\[18\.2px\] text-white/);
+    assert.doesNotMatch(screen, /text-\[8px\] font-semibold leading-\[10\.4px\]/, "the Join pill went back to 8px");
+    assert.match(screen, /ws-btn-welcome ws-btn-sm ws-press absolute right-4 top-1\/2 flex -translate-y-1\/2/, "the Join House pill lost its ramp");
+    /*
+      The phone (1381:37677 in SQUARE 2.0 Copy, ogazboiz 2026-09-12) keeps its
+      one column below lg — not md, because a 330 cell in the 600 column
+      between them leaves half the row empty. The rest of what the phone used
+      to override is now the BASE, so there are no `max-lg:` type rules left to
+      pin: one card, one set of sizes, at every width. That is the point.
+    */
     assert.match(screen, /max-lg:grid-cols-1 max-lg:justify-stretch/, "the phone's one column is gone");
-    assert.match(screen, /max-lg:h-\[106px\] max-lg:w-full/, "the phone's card no longer fills the row");
-    assert.match(screen, /max-lg:left-\[76px\] max-lg:right-\[94px\] max-lg:top-4 max-lg:w-auto max-lg:gap-2/);
-    assert.match(screen, /max-lg:text-\[14px\] max-lg:leading-\[18\.2px\]/, "the phone's 14/18.2 name is gone");
-    assert.match(screen, /max-lg:text-\[12px\] max-lg:font-medium max-lg:leading-\[15\.6px\]/, "the phone's 12/15.6 description is gone");
-    assert.match(screen, /max-lg:top-\[40px\]/, "the phone's pill offset is gone");
+    assert.doesNotMatch(screen, /max-lg:text-\[14px\]/, "the legible sizes went back to being phone-only");
+    assert.match(screen, /line-clamp-2 text-\[12px\] font-medium leading-\[15\.6px\]/);
     // The picture is the node's 48.05 square inset on the white plate; with
     // no picture the plate is 1373:3990's — `#D8D8D8` with the gist glyph
     // centred — never a seeded person, never the node's sample photo

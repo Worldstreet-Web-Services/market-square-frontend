@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
+import { HousePreviewSheet, type HousePreview } from "@/components/layout/house-preview-sheet";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { useDiscoverHouses } from "@/features/messages/lib/discover-houses";
 import { useJoinGroup } from "@/features/messages";
@@ -41,6 +43,7 @@ import { sq } from "@/lib/square-path";
 export function PopularHouses() {
   const houses = useDiscoverHouses(8);
   const join = useJoinGroup();
+  const [preview, setPreview] = useState<HousePreview | null>(null);
 
   const items = houses.data?.items ?? [];
   if (houses.unavailable || items.length === 0) return null;
@@ -62,8 +65,26 @@ export function PopularHouses() {
           // more than 95% of the column so it fits a phone.
           <article key={house.id} className="w-100 max-w-[95%] shrink-0">
             {/* The card: the house picture, a text column that takes the slack,
-                and the Join pill, all vertically centred. */}
-            <div className="flex items-center gap-4 rounded-[17px] bg-[rgba(16,16,18,0.62)] px-4 py-4 shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[5.365px]">
+                and the Join pill, all vertically centred.
+
+                THE WHOLE CARD OPENS THE HOUSE, which it did not before: the
+                only thing this rail offered was Join, so the only way to find
+                out what a house WAS on Home was to join it and look
+                (ogazboiz, 2026-09-23). `/houses` has always opened a preview
+                on the card body; this is the same sheet, so the two surfaces
+                answer a tap the same way. */}
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${house.title ?? "house"}`}
+              onClick={() => setPreview(house)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setPreview(house);
+                }
+              }}
+              className="ws-press flex cursor-pointer items-center gap-4 rounded-[17px] bg-[rgba(16,16,18,0.62)] px-4 py-4 shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[5.365px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
               {/* 1302:148764 — the house picture on its white plate. */}
               <span className="h-[80px] w-[74px] shrink-0 overflow-hidden rounded-[12px] bg-white">
                 <Avatar
@@ -126,7 +147,12 @@ export function PopularHouses() {
               <button
                 type="button"
                 disabled={join.isPending}
-                onClick={() => join.mutate(house.id)}
+                onClick={(event) => {
+                  // Join is a decision, not a look: it must not also open the
+                  // sheet the card body opens.
+                  event.stopPropagation();
+                  join.mutate(house.id);
+                }}
                 className="ws-press shrink-0 self-center whitespace-nowrap rounded-full bg-[linear-gradient(90deg,#9f65fd_0%,#5b05e6_100%)] px-4 py-2 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 Join House
@@ -135,6 +161,9 @@ export function PopularHouses() {
           </article>
         ))}
       </div>
+      {preview && (
+        <HousePreviewSheet house={preview} onClose={() => setPreview(null)} />
+      )}
     </section>
   );
 }

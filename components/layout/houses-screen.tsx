@@ -143,7 +143,7 @@ export function HousesScreen() {
             <div
               role="list"
               aria-label="Houses to join"
-              className="mt-4 grid grid-cols-[repeat(auto-fill,290px)] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between max-lg:grid-cols-1 max-lg:justify-stretch"
+              className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(330px,1fr))] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between max-lg:grid-cols-1 max-lg:justify-stretch"
             >
               {items.map((house) => (
                 <article
@@ -158,7 +158,7 @@ export function HousesScreen() {
                       setPreview(house);
                     }
                   }}
-                  className="ws-press relative h-[86px] w-[290px] cursor-pointer overflow-hidden rounded-[16.86px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.77px_rgba(255,255,255,0.18)] backdrop-blur-[5.37px] transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent max-lg:h-[106px] max-lg:w-full"
+                  className="ws-press relative h-[106px] w-full cursor-pointer overflow-hidden rounded-[16.86px] bg-[rgba(16,16,18,0.62)] shadow-[inset_0_0_0_0.77px_rgba(255,255,255,0.18)] backdrop-blur-[5.37px] transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   {/* 1373:3368 / 1381:37629 — the picture on its white plate:
                       a 48.05 SQUARE (image 66, sharp-cornered) inset 1.23 at
@@ -200,25 +200,25 @@ export function HousesScreen() {
                   </span>
 
                   {/* 1373:3370 — the text column. */}
-                  <div className="absolute left-[75.75px] top-[16.25px] flex w-[127.52px] flex-col gap-[4.93px] max-lg:left-[76px] max-lg:right-[94px] max-lg:top-4 max-lg:w-auto max-lg:gap-2">
-                    <div className="flex flex-col gap-[2.46px] max-lg:gap-1">
-                      <p className="truncate text-[10px] font-semibold leading-3 text-white max-lg:text-[14px] max-lg:leading-[18.2px]">
+                  <div className="absolute left-[76px] right-[104px] top-4 flex flex-col gap-2">
+                    <div className="flex flex-col gap-1">
+                      <p className="truncate text-[14px] font-semibold leading-[18.2px] text-white">
                         {house.title ?? "Untitled house"}
                       </p>
-                      <div className="flex h-[12.32px] items-center gap-[2.46px]">
+                      <div className="flex h-[16px] items-center gap-[4px]">
                         {house.members.length > 0 && (
                           <span aria-hidden className="flex items-center">
                             {house.members.slice(0, 3).map((member, index) => (
                               <span
                                 key={member.id}
-                                className="flex h-[12.32px] w-[12.32px] items-center justify-center overflow-hidden rounded-[25%] bg-[#DCDAD5] shadow-[inset_0_0_0_0.62px_#FFFFFF,0_2.46px_9.24px_rgba(147,147,147,0.25)]"
-                                style={{ marginLeft: index === 0 ? 0 : -4.93 }}
+                                className="flex h-[16px] w-[16px] items-center justify-center overflow-hidden rounded-[25%] bg-[#DCDAD5] shadow-[inset_0_0_0_0.62px_#FFFFFF,0_2.46px_9.24px_rgba(147,147,147,0.25)]"
+                                style={{ marginLeft: index === 0 ? 0 : -5 }}
                               >
                                 <Avatar
                                   name={member.displayName || member.username}
                                   seed={member.id}
                                   src={member.avatarUrl}
-                                  size={12}
+                                  size={16}
                                   sizeClassName="h-full w-full"
                                   className="rounded-none border-0"
                                 />
@@ -227,7 +227,7 @@ export function HousesScreen() {
                           </span>
                         )}
                         {house.memberCount !== null && (
-                          <span className="tnum text-[8px] font-medium leading-[10.4px] text-white">
+                          <span className="tnum text-[12px] font-medium leading-4 text-white">
                             {house.memberCount.toLocaleString()}{" "}
                             {house.memberCount === 1 ? "member" : "members"}
                           </span>
@@ -235,7 +235,7 @@ export function HousesScreen() {
                       </div>
                     </div>
                     {house.description && (
-                      <p className="line-clamp-2 text-[10px] font-normal leading-[12.32px] text-white max-lg:text-[12px] max-lg:font-medium max-lg:leading-[15.6px]">
+                      <p className="line-clamp-2 text-[12px] font-medium leading-[15.6px] text-white/70">
                         {house.description}
                       </p>
                     )}
@@ -254,7 +254,7 @@ export function HousesScreen() {
                        ramp, so only the ramp is ever seen — `ws-btn-welcome`, the
                        existing utility for exactly that pair. (A two-layer `background`
                        in an arbitrary class compiles to nothing.) */
-                    className="ws-btn-welcome ws-press absolute right-4 top-[31px] flex h-6 w-16 items-center justify-center rounded-[61.6px] text-[8px] font-semibold leading-[10.4px] text-white transition-opacity hover:opacity-90 disabled:opacity-40 max-lg:top-[40px]"
+                    className="ws-btn-welcome ws-btn-sm ws-press absolute right-4 top-1/2 flex -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-full font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
                   >
                     Join House
                   </button>
