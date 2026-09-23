@@ -4965,3 +4965,48 @@ describe("Every notification kind has words of its own", () => {
     }
   });
 });
+
+describe("A house has its own page, the way a person does", () => {
+  /*
+    Tapping a house used to open a MODAL. A person's avatar goes to their
+    profile, and ogazboiz asked for the same of a house (2026-09-23: "just
+    like the way normal person avatar is taking me to his own profile") — a
+    modal is a different gesture with a different meaning and no address you
+    can send anybody.
+  */
+  it("navigates to the house rather than opening a sheet", () => {
+    const card = stripComments(read("components/layout/house-directory-card.tsx"));
+    assert.match(card, /href=\{sq\(`\/houses\/\$\{house\.id\}`\)\}/);
+    assert.doesNotMatch(card, /role="button"/, "the card went back to being a modal trigger");
+    // Joining is still a decision rather than a look, so it must not navigate.
+    assert.match(card, /event\.stopPropagation\(\);\s*\n\s*onJoin\(\);/);
+    assert.ok(existsSync(resolve("app/houses/[id]/page.tsx")), "the house route is gone");
+  });
+
+  it("decides Join from View on the service's answer, never its own", () => {
+    /*
+      1285:36373 and 1285:36895 are ONE page in two states and the only
+      difference is that button. `viewerIsMember` and `canJoin` come off the
+      house read — a client that works out for itself who may join is a client
+      that will eventually disagree with the service about it.
+    */
+    const screen = stripComments(read("components/layout/house-profile-screen.tsx"));
+    assert.match(screen, /data\?\.viewerIsMember \?/);
+    assert.match(screen, /disabled=\{!data\?\.canJoin \|\| join\.isPending\}/);
+    assert.match(screen, /members !== null && \(/, '"0 members" can be claimed again');
+  });
+
+  it("leaves the sections it has no data for OUT, rather than empty", () => {
+    /*
+      The file also draws a members row, a website, a location, a
+      gistrooms/week figure and a Replays rail. `GET /conversations/:id`
+      carries none of them. A shelf captioned "Members" with nothing on it
+      tells a reader the house has no members, which is a claim and a false
+      one — so they are absent until the service ships the fields.
+    */
+    const screen = stripComments(read("components/layout/house-profile-screen.tsx"));
+    for (const stub of [">Members<", ">Replays<", "gistrooms/week"]) {
+      assert.ok(!screen.includes(stub), `${stub} is on the page with nothing behind it`);
+    }
+  });
+});

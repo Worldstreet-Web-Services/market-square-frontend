@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { HousePreviewSheet, type HousePreview } from "@/components/layout/house-preview-sheet";
 import { HouseDirectoryCard } from "@/components/layout/house-directory-card";
 import { SectionHeading } from "@/components/layout/section-heading";
 import { useDiscoverHouses } from "@/features/messages/lib/discover-houses";
@@ -43,7 +41,6 @@ import { sq } from "@/lib/square-path";
 export function PopularHouses() {
   const houses = useDiscoverHouses(8);
   const join = useJoinGroup();
-  const [preview, setPreview] = useState<HousePreview | null>(null);
 
   const items = houses.data?.items ?? [];
   if (houses.unavailable || items.length === 0) return null;
@@ -66,16 +63,12 @@ export function PopularHouses() {
           <article key={house.id} className="w-100 max-w-[95%] shrink-0">
             <HouseDirectoryCard
               house={house}
-              onOpen={() => setPreview(house)}
               onJoin={() => join.mutate(house.id)}
               joining={join.isPending}
             />
           </article>
         ))}
       </div>
-      {preview && (
-        <HousePreviewSheet house={preview} onClose={() => setPreview(null)} />
-      )}
     </section>
   );
 }

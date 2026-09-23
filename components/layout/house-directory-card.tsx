@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
 import { asset } from "@/lib/square-path";
+import { sq } from "@/lib/square-path";
 import type { HousePreview } from "@/components/layout/house-preview-sheet";
 
 /**
@@ -23,36 +25,31 @@ import type { HousePreview } from "@/components/layout/house-preview-sheet";
  * clipping inside a fixed height, which is what let a two-line description and
  * a long house name coexist.
  *
- * ─── THE BODY OPENS, THE PILL JOINS ──────────────────────────────────────────
- * Tapping the card opens the house; only the pill joins it, and it stops
- * propagation to say so. Before this the rail offered Join and nothing else,
- * so the only way to find out what a house WAS on Home was to join it and
- * look. `GET /conversations/{id}` is optional-auth and answers a public house
- * to a signed-out reader, so there was never anything owed by the service.
+ * ─── THE BODY GOES TO THE HOUSE, THE PILL JOINS IT ───────────────────────────
+ * Tapping the card NAVIGATES to /houses/<id>, the way tapping a face goes to
+ * /u/<username> (ogazboiz, 2026-09-23: "just like the way normal person avatar
+ * is taking me to his own profile"). It used to open a modal, which is a
+ * different gesture with a different meaning and no address you can send
+ * anybody. Only the pill joins, and it stops propagation to say so.
+ *
+ * Before any of this the rail offered Join and nothing else, so the only way
+ * to find out what a house WAS is to join it and look. `GET /conversations/:id`
+ * is optional-auth and answers a public house to a signed-out reader, so there
+ * was never anything owed by the service for it.
  */
 export function HouseDirectoryCard({
   house,
-  onOpen,
   onJoin,
   joining = false,
 }: {
   house: HousePreview & { members: Array<{ id: string; displayName?: string | null; username: string; avatarUrl?: string | null }> };
-  onOpen: () => void;
   onJoin: () => void;
   joining?: boolean;
 }) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <Link
+      href={sq(`/houses/${house.id}`)}
       aria-label={`View ${house.title ?? "house"}`}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
       className="ws-press flex h-full cursor-pointer items-center gap-4 rounded-[17px] bg-[rgba(16,16,18,0.62)] px-4 py-4 shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[5.365px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {/*
@@ -146,6 +143,6 @@ export function HouseDirectoryCard({
       >
         Join House
       </button>
-    </div>
+    </Link>
   );
 }

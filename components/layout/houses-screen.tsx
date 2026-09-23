@@ -10,7 +10,6 @@ import { useDiscoverHousesPages } from "@/features/messages/lib/discover-houses"
 import { useJoinGroup } from "@/features/messages";
 import { HomeTopRow } from "@/components/layout/home-top-row";
 import { HomeSearch } from "@/components/layout/home-search";
-import { HousePreviewSheet, type HousePreview } from "@/components/layout/house-preview-sheet";
 import { HouseDirectoryCard } from "@/components/layout/house-directory-card";
 import { SectionHeading } from "@/components/layout/section-heading";
 
@@ -84,7 +83,6 @@ export function HousesScreen() {
   const items = houses.data?.pages.flatMap((page) => page.items) ?? [];
   const [query, setQuery] = useState("");
   // The house the reader is previewing before they join — node 1285:36375.
-  const [preview, setPreview] = useState<HousePreview | null>(null);
   const searching = query.trim().length > 0;
   const sentinel = useInfiniteScroll(
     () => void houses.fetchNextPage(),
@@ -147,7 +145,6 @@ export function HousesScreen() {
                 <HouseDirectoryCard
                   key={house.id}
                   house={house}
-                  onOpen={() => setPreview(house)}
                   onJoin={() => join.mutate(house.id)}
                   joining={join.isPending}
                 />
@@ -162,7 +159,6 @@ export function HousesScreen() {
           </>
         )}
       </section>
-      {preview && <HousePreviewSheet house={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }
