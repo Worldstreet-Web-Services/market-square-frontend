@@ -5412,3 +5412,58 @@ describe("A room's chat on a post is gated before it is fetched", () => {
     assert.ok(poll && Number(poll[1]) >= 15, "a per-card poll faster than 15s is a feed hammering the service");
   });
 });
+
+describe("A dead column is never rendered as a measurement", () => {
+  /*
+    `peakViewers` HAS NO WRITER. The column is created `NOT NULL DEFAULT 0`,
+    set to 0 once when a stream is created, and never written again by any
+    service, worker or sweeper — the only non-zero value in the repo is demo
+    seed data. It is permanently 0 for every stream that has ever existed.
+
+    It is not a field awaiting a feature. `total_view_seconds` sits in the SAME
+    ROW, is read by the SAME route, is drawn in the SAME panel, and IS
+    maintained on every heartbeat flush. One counter was kept and its
+    neighbour forgotten. That is an omission, and until it is corrected the
+    honest thing to draw is nothing.
+
+    The host's post-live panel was the worst instance: `getStats` returns
+    `stream.peakViewers` off the row while `uniqueViewers` is computed live, so
+    hosts were shown peak 0 beside a real unique count — arithmetically
+    impossible, on their own stream, where they are the one person positioned
+    to know it is nonsense.
+  */
+  it("draws no Peak viewers tile while nothing writes the column", () => {
+    const panel = stripComments(read("features/streams/components/post-live.tsx"));
+    assert.ok(
+      !/Peak viewers/.test(panel),
+      "peakViewers has no writer — a tile for it states a measurement that was never taken"
+    );
+    assert.ok(
+      !panel.includes("peakViewers"),
+      "and it is not read at all here, so nobody can reintroduce the tile from a local variable"
+    );
+  });
+
+  /*
+    THE TWO FEED SITES STAY AS THEY ARE, and this pins WHY rather than freezing
+    them by accident. Both guard with `> 0`, so against a permanently-zero
+    column they render nothing and no wrong number has ever reached a feed.
+    That guard was written because "peak 0 viewers" is silly copy, not because
+    anyone knew the column was dead — but it is the correct behaviour either
+    way, and it means both surfaces light up on their own the day something
+    writes the column. Removing the guard would publish the zero.
+  */
+  it("keeps the feed's peak lines guarded, so a dead zero never prints", () => {
+    for (const file of [
+      "features/feed/components/featured-arena.tsx",
+      "features/feed/components/feed-cards.tsx",
+    ]) {
+      const source = stripComments(read(file));
+      assert.match(
+        source,
+        /peakViewers > 0/,
+        `${file} must not print peak unguarded — the column is permanently 0`
+      );
+    }
+  });
+});
