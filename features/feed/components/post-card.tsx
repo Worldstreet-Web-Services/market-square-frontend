@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { TransitionLink } from "@/components/ui/transition-link";
 import { cn } from "@/lib/cn";
 import { relativeTime, formatDateTime } from "@/lib/format";
+import { RoomPostCard } from "@/features/feed/components/room-post-card";
 import { resolveCta } from "@/lib/deeplink";
 import { isVideoPost } from "@/lib/media";
 import { InlineVideo } from "@/components/ui/inline-video";
@@ -725,6 +726,8 @@ export function PostCard({
   // in the post, so the card shows the author's own words + who, when and the
   // wallet; the hero amount fills in only if the payload ever carries one.
   const isTrade = post.deepLink?.kind === "trade";
+  // A gist room posted to the feed — drawn as the room, not as a link row.
+  const isRoom = post.deepLink?.kind === "stream";
   const txWallet = (() => {
     if (!isTrade || !post.deepLink) return "";
     const hash = post.deepLink.ref.slice(post.deepLink.ref.indexOf(":") + 1);
@@ -1126,7 +1129,21 @@ export function PostCard({
 
       {!compact && post.quotedPost && <QuotedPost quoted={post.quotedPost} />}
 
-      {!compact && (isTrade ? (
+      {/*
+        A GIST ROOM POSTED TO THE FEED gets the room's own card rather than the
+        generic "Watch" row — nodes 2082:20198 / 20246 / 1356:32947, one card
+        whose tail the room's STATUS picks. The post carries only the id, so
+        the card reads the room live: a post written while it was scheduled
+        shows LIVE when it opens and Ended when it closes, with nothing
+        rewritten into the post.
+      */}
+      {!compact && isRoom && post.deepLink && (
+        <div className="mt-3">
+          <RoomPostCard streamId={post.deepLink.ref} />
+        </div>
+      )}
+
+      {!compact && !isRoom && (isTrade ? (
         // The receipt card. Its artwork lives in public/tx-card/ (see the
         // README there) — until those files land it renders as the gradient
         // with the text and the seal animation. Tapping opens the explorer.

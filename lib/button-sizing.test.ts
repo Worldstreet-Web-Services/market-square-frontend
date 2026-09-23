@@ -38,6 +38,11 @@ const DESIGN_LOCKED = new Set<string>([
   // Home's "Coming Soon" card is node 1542:3294 pixel for pixel — the 89-tall
   // cover and the 28-tall Share carry the file's own heights, not the scale.
   "components/layout/coming-soon-card.tsx",
+  // A gist room posted to the feed (2082:20198 / 20246 / 1356:32947). Its
+  // three actions are 40 tall in all three states — the card's own geometry,
+  // four under the touch floor and four over the scale's smallest desktop
+  // tier, so neither `ws-btn-sm` nor `ws-btn-md` is the file's number.
+  "features/feed/components/room-post-card.tsx",
 ]);
 
 // Lower this as batches migrate. Target: 0. Raise ONLY by adding to
