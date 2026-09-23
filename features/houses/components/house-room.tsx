@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
-import { useAppointModerator } from "@/features/streams/lib/moderators";
+import { useAppointModerator, useGrantEndRoom } from "@/features/streams/lib/moderators";
 import { AddModeratorSheet } from "@/features/houses/components/add-moderator-sheet";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
@@ -1270,6 +1270,7 @@ function LiveHouse({
   const moderatorIds = stream.moderatorIds;
   const [moderatorsOpen, setModeratorsOpen] = useState(false);
   const moderators = useAppointModerator(stream.id);
+  const grantEndRoom = useGrantEndRoom(stream.id);
   const canManageModerators = isHost && moderatorIds !== undefined;
   const hasModerators = (moderatorIds?.length ?? 0) > 0;
   /*
@@ -2431,10 +2432,35 @@ function LiveHouse({
           isHost && hasModerators
             ? {
                 label: "Leave it running",
+                /*
+                  SAID BEFORE THEY CONFIRM, because this act GRANTS something.
+                  A permission that changes without being stated is not one the
+                  host gave — and "your moderators can close the room" is a
+                  bigger sentence than "you left".
+
+                  The stage clause is the other half of the truth: appointing
+                  somebody does not put them on a microphone, and only a live
+                  track holds a room open. With everyone in the audience the
+                  room really will close itself, and a host who was not told
+                  that would blame the feature rather than the silence.
+                */
                 hint: someModeratorOnStage
-                  ? "Your moderators keep the room open."
-                  : "No moderator is on stage, so the room will close on its own a few minutes after the last person stops talking.",
-                onClick: () => void leaveNow(),
+                  ? "Your moderators keep the room open, and can close it when everyone's done."
+                  : "Your moderators can close the room when everyone's done. None is on stage, so it will close on its own a few minutes after the last person stops talking.",
+                loading: grantEndRoom.isPending,
+                onClick: () => {
+                  /*
+                    GRANT, THEN GO — and go even if the grant failed. Trapping a
+                    host in a room because a permission write did not land is
+                    the worse trade, and the room still closes on its own once
+                    everybody stops talking. The grant is best-effort inside
+                    the mutation too, so one moderator whose row has gone does
+                    not cost the others theirs.
+                  */
+                  grantEndRoom.mutate(moderatorIds ?? [], {
+                    onSettled: () => void leaveNow(),
+                  });
+                },
               }
             : undefined
         }

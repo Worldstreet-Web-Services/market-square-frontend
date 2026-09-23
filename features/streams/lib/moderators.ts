@@ -112,3 +112,42 @@ export function useAppointModerator(streamId: string) {
 
   return { appoint, remove };
 }
+
+/**
+ * HAND THE CLOSING OVER, on the way out.
+ *
+ * `PATCH /streams/{id}/moderators/{profileId} { canEndRoom }` — a SEPARATE
+ * route from appointing, deliberately. Appointing is `ON CONFLICT DO NOTHING`,
+ * so re-posting somebody never touches this flag: a client re-adding a
+ * moderator cannot escalate them by accident, and the call named "appoint" is
+ * never the one that changes a permission.
+ *
+ * ─── WHY IT FIRES ON LEAVING AND NOT ON APPOINTMENT ──────────────────────────
+ * Granted at appointment, somebody brought in to triage speaker requests could
+ * close everybody's room while the host sat there watching. Tied to the host
+ * stepping away, the power exists exactly when it is needed and not before
+ * (ogazboiz: "let say the host have something to do he can give the moderator
+ * to help him end it").
+ *
+ * BEST EFFORT, AND THE HOST LEAVES EITHER WAY. Trapping somebody in a room
+ * because a permission write failed is the worse trade, and the room still
+ * closes on its own once everybody stops talking. `allSettled` rather than
+ * `all`: one moderator whose row has gone must not cost the others their
+ * grant.
+ */
+export function useGrantEndRoom(streamId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (profileIds: readonly string[]) => {
+      const results = await Promise.allSettled(
+        profileIds.map((id) =>
+          msApi.patch(`/streams/${streamId}/moderators/${id}`, { canEndRoom: true })
+        )
+      );
+      return results.filter((r) => r.status === "fulfilled").length;
+    },
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: ["ms", "stream", streamId, "moderators"] });
+    },
+  });
+}

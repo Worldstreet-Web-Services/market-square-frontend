@@ -5652,6 +5652,14 @@ describe("A host leaving is told the truth about what happens next", () => {
     const body = hint.slice(0, hint.indexOf("onClick"));
 
     assert.match(body, /someModeratorOnStage/, "the promise must turn on PUBLISHING, not on appointment");
+    /*
+      AND IT SAYS WHAT IT GRANTS. Leaving the room running hands the
+      moderators the power to CLOSE it, which is a bigger sentence than "you
+      left" and must be read before it is confirmed. A permission that changes
+      without being stated is not one the host gave.
+    */
+    assert.match(body, /close it when everyone's done|close the room when everyone's done/,
+      "the host must be told the moderators gain the power to close the room");
     assert.match(body, /stops talking/, "the window runs from the last speech, not from the host's exit");
     assert.ok(
       !/after you leave/i.test(body),
@@ -5667,5 +5675,14 @@ describe("A host leaving is told the truth about what happens next", () => {
   it("offers the door only when there is somebody to leave it with", () => {
     const room = stripComments(read("features/houses/components/house-room.tsx"));
     assert.match(room, /isHost && hasModerators/, "leaving it running needs a moderator to leave it TO");
+    /*
+      THE GRANT IS ITS OWN ROUTE, never a side effect of appointing. The
+      service's appoint is `ON CONFLICT DO NOTHING`, so re-posting somebody
+      cannot raise the flag — which is what stops a client escalating a
+      moderator by accident while merely re-adding them. Raising it is a
+      deliberate PATCH, and the host leaves whether or not it lands.
+    */
+    assert.match(room, /grantEndRoom\.mutate\(moderatorIds \?\? \[\], \{\s*\n?\s*onSettled: \(\) => void leaveNow\(\),/,
+      "the host must leave even when the grant fails");
   });
 });
