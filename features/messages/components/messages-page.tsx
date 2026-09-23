@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { skipToken, useQuery } from "@tanstack/react-query";
+import { profileHref } from "@/lib/profile-href";
+import { sq } from "@/lib/square-path";
 import { setChatOpen } from "@/lib/chat-open-store";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/hooks/use-auth";
@@ -190,7 +193,43 @@ function Inbox({
               actually happens, which is the whole point of asking first.
             */}
             {tab === "requests" && answerable(conversation, me.data?.id) && (
-                <div className="flex items-center gap-2 pl-16.5">
+              <div className="flex flex-col gap-2 pl-16.5">
+                {/*
+                  WHO ADDED YOU, ON THE ROW, BEFORE YOU ANSWER.
+
+                  Which house is already on the row above. This is the other
+                  half of the question, and it is the half that decides the
+                  answer: recognising the person is why you join, and not
+                  recognising them is why the gate exists at all.
+
+                  The name is a LINK, because "who is this?" is a question you
+                  answer by looking, not by guessing from a name — and looking
+                  before accepting is the entire point of being asked.
+
+                  A null inviter is not an error and not a missing field: you
+                  joined a public house yourself, or the membership predates the
+                  gate. The line then says what happened without naming anybody,
+                  rather than disappearing — it is still the sentence that
+                  explains why this row is here.
+                */}
+                {conversation.kind === "group" && (
+                  <p className="text-[12px] leading-4 text-white/55">
+                    {conversation.invitedBy ? (
+                      <>
+                        <Link
+                          href={sq(profileHref(conversation.invitedBy))}
+                          className="ws-press font-semibold text-white/80 hover:underline"
+                        >
+                          {conversation.invitedBy.displayName || conversation.invitedBy.username}
+                        </Link>{" "}
+                        added you to this house
+                      </>
+                    ) : (
+                      "You were added to this house"
+                    )}
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     disabled={answering}
@@ -218,7 +257,8 @@ function Inbox({
                     Decline
                   </button>
                 </div>
-              )}
+              </div>
+            )}
           </div>
         ))}
 

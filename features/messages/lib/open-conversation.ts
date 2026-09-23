@@ -44,6 +44,8 @@ export function conversationFromRef(ref: ConversationRef, peer: Profile): Conver
     kind: "direct",
     // A 1:1 has no creator and is never joinable by link.
     createdBy: null,
+    // Nobody is invited into a 1:1; it is opened, by one of the two people in it.
+    invitedBy: null,
     visibility: "private",
     // Roles and per-house levels belong to groups.
     viewerRole: null,

@@ -5254,4 +5254,55 @@ describe("Answering a house invite lands everywhere the house is read", () => {
       "a house invite must not be answered by a button reading only Accept"
     );
   });
+
+  /*
+    WHO ADDED YOU IS THE HALF THAT DECIDES THE ANSWER.
+
+    Which house is on the row already. Whether you recognise the PERSON is why
+    you join or do not, and it is the only thing that makes a decline informed —
+    the gate exists because strangers were adding people, so a row that cannot
+    name the stranger has not closed the gap it was built for.
+
+    Two things are pinned. The name comes from `invitedBy` and is a LINK, since
+    "who is this?" is answered by looking rather than by guessing from a name.
+    And a null inviter still renders a sentence: null is a real answer (you
+    joined a public house yourself, or the membership predates the gate), not a
+    missing field, so the line says what happened without naming anybody rather
+    than vanishing and leaving the controls unexplained.
+  */
+  it("names the inviter, links them, and still speaks when there is none", () => {
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+    assert.match(
+      page,
+      /href=\{sq\(profileHref\(conversation\.invitedBy\)\)\}/,
+      "the inviter's name must be a link — you check who they are BEFORE accepting"
+    );
+    assert.match(
+      page,
+      /"You were added to this house"/,
+      "a null inviter must still explain why the row is there"
+    );
+  });
+
+  /*
+    AND IT IS NEVER THE HOUSE'S OWNER WEARING THE INVITER'S NAME.
+
+    `createdBy` is on the same object and is tempting as a fallback. Whoever
+    adds you is often not whoever made the house, so that fallback prints a real
+    person's name against something they did not do — worse than no name,
+    because it is believable. The field is a profile so the row never has to
+    resolve an id into a face and be tempted to resolve the wrong one.
+  */
+  it("takes the inviter from invitedBy alone, as a whole profile", () => {
+    const types = stripComments(read("features/messages/lib/types.ts"));
+    assert.match(types, /invitedBy: ProfileSchema\.nullable\(\)\.optional\(\)\.default\(null\)/);
+
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+    const line = page.slice(page.indexOf("conversation.kind === \"group\" && ("));
+    const controls = line.slice(0, line.indexOf("requests.accept.mutate"));
+    assert.ok(
+      !controls.includes("createdBy"),
+      "the inviter line must not fall back to the house's creator"
+    );
+  });
 });

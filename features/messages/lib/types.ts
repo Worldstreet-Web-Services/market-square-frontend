@@ -288,6 +288,24 @@ export const ConversationSchema = z.object({
   // thread the reader is already in.
   requestState: z.enum(["pending", "accepted"]).optional().catch(undefined),
   requestedBy: z.string().nullable().optional().default(null),
+  /**
+   * WHO PUT ME IN THIS HOUSE — a group's counterpart to `requestedBy`, and a
+   * whole profile rather than an id so a page of invites is not one profile
+   * read per row.
+   *
+   * It is the question a person actually asks when an invite appears. Which
+   * house is on the row already; who added me is the difference between
+   * accepting because you recognise the person and accepting because the house
+   * looked fine, and it is the only thing that makes a decline an informed one.
+   *
+   * NULL IS A REAL ANSWER, NOT A GAP: somebody who joined a public house
+   * themselves, or any membership older than the consent gate, has no inviter.
+   * The row renders without a name in that case.
+   *
+   * It is never filled in from the house's owner. Whoever adds you is often not
+   * whoever made the house, and a confident wrong name is worse than no name.
+   */
+  invitedBy: ProfileSchema.nullable().optional().default(null),
   unreadCount: z.number().optional().default(0),
 });
 
