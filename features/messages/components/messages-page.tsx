@@ -177,7 +177,29 @@ function Inbox({
               act: `requestedBy` is the person who asked, and only the other
               side may answer.
             */}
+            {/*
+              DIRECT ONLY, AND THIS GUARD IS LOAD BEARING.
+
+              `requestState` and `requestedBy` are columns on the CONVERSATION,
+              not on a membership — which is right for a DM, where the whole
+              thread is the request. `decline` therefore DELETES THE
+              CONVERSATION AND EVERY MESSAGE IN IT, deliberately, and `accept`
+              flips the whole thread rather than one person's seat.
+
+              A pending HOUSE membership is a different animal: the house is
+              ordinary and accepted, it is MY SEAT in it that is pending. Point
+              these two controls at one and a single person declining an
+              unwanted invite deletes the house, its history, and everybody
+              else's membership.
+
+              The service is adding per-participant state with its own accept
+              and decline (migration 100). Until those exist this row answers
+              for direct threads and nothing else, so a group request can
+              appear in the tab — the backend is widening the filter — without
+              ever reaching a control that would take the house down with it.
+            */}
             {tab === "requests" &&
+              conversation.kind === "direct" &&
               conversation.requestState === "pending" &&
               conversation.requestedBy !== me.data?.id && (
                 <div className="flex items-center gap-2 pl-16.5">

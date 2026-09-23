@@ -5157,3 +5157,27 @@ describe("Nobody is put in a house they did not agree to", () => {
     assert.match(chat(), /Who can add you to houses without asking/);
   });
 });
+
+describe("Declining a request cannot take a house down with it", () => {
+  /*
+    `requestState` and `requestedBy` are columns on the CONVERSATION, not on a
+    membership — correct for a DM, where the whole thread IS the request. So
+    `decline` deletes the conversation and every message in it, deliberately,
+    and `accept` flips the whole thread rather than one person's seat.
+
+    A pending HOUSE membership is a different animal: the house is ordinary and
+    accepted; it is one person's SEAT that is pending. Point the existing
+    controls at one and a single person declining an unwanted invite deletes
+    the house, its history and everybody else's membership.
+
+    The service is adding per-participant state with its own accept and decline.
+    Until then these controls answer for direct threads and nothing else, so a
+    group request can appear in the tab without reaching a control that would
+    destroy the house.
+  */
+  it("answers only direct threads while decline still deletes the thread", () => {
+    const page = stripComments(read("features/messages/components/messages-page.tsx"));
+    const guard = /tab === "requests" &&\s*\n\s*conversation\.kind === "direct" &&\s*\n\s*conversation\.requestState === "pending"/;
+    assert.match(page, guard, "a group request can reach a decline that deletes the conversation");
+  });
+});
