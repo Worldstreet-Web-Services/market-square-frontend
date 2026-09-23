@@ -2583,24 +2583,33 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     // Nothing scheduled is no section — never an empty shelf or a spacer.
     assert.match(soon, /if \(items\.length === 0\) return null;/);
     assert.match(soon, /useStreamList\("scheduled"/);
-    // The HORIZONTAL card ogazboiz asked back for (node 1542:3294): its own
-    // component, NOT the gist-rooms grid's vertical banner, in a sideways rail
-    // at the node's own 467 on a 16 gap.
+    // The HORIZONTAL card (redesigned at node 2077:19030): its own component,
+    // NOT the gist-rooms grid's vertical banner, in a sideways rail at the
+    // node's own 342 on a 24 gap — the rail frame 2078:19117 is 1806 wide,
+    // which is exactly 5 x 342 + 4 x 24.
     assert.match(soon, /<ComingSoonCard stream=\{room\} \/>/);
-    assert.match(soon, /gap-4 overflow-x-auto/);
-    // Capped at 400 (w-100) on desktop, but never more than 95% of the column
-    // so a second card always PEEKS in at the edge — on a phone especially,
-    // where 100% would fill the column and hide the next one (ogazboiz).
-    assert.match(soon, /w-100 max-w-\[95%\] shrink-0/);
+    assert.match(soon, /gap-6 overflow-x-auto/);
+    // The node's own 342 on desktop, but never more than 95% of the column so
+    // a second card always PEEKS in at the edge — on a phone especially, where
+    // 100% would fill the column and hide the next one (ogazboiz).
+    assert.match(soon, /w-\[342px\] max-w-\[95%\] shrink-0/);
     assert.doesNotMatch(soon, /UpcomingRoomCard/, "Home's Coming Soon fell back to the banner card");
     const soonCard = stripComments(read("components/layout/coming-soon-card.tsx"));
-    // 136 tall, width fills its (≤467) wrapper; the text column flexes so the
-    // card fits a narrow column without overflow. Plus the marks of the design:
-    // the purple accent bar, the #3C3C3C divider, the one Regular run.
-    assert.match(soonCard, /h-\[136px\] w-full/, "the card lost its fixed height or fluid width");
-    assert.match(soonCard, /w-\[7px\] bg-spotlight/);
-    assert.match(soonCard, /w-px shrink-0 bg-\[#3C3C3C\]/);
-    assert.match(soonCard, /font-normal leading-normal text-\[#D9D9D9\]/);
+    /*
+      106 tall at node 2077:19030, width fills its 342 wrapper. Plus the marks
+      of the redesign: the 7px accent still hard on the left edge, the image
+      bleeding full-height under the panel that starts 40 in, and the host line
+      drawn as TWO runs — the file's per-character overrides flip the name to
+      Geist 600 at 10 while the label stays 500 at 8, and the parent style says
+      500/8 for the whole string and is wrong.
+    */
+    assert.match(soonCard, /h-\[106px\] w-full/, "the card lost its fixed height or fluid width");
+    assert.match(soonCard, /w-\[7px\] bg-\[#7E3BEB\]/);
+    assert.match(soonCard, /w-\[144\.507px\]/, "the cover stopped bleeding under the panel");
+    assert.match(soonCard, /left-\[40px\] w-\[302px\]/);
+    assert.doesNotMatch(soonCard, /bg-\[#3C3C3C\]/, "the divider is gone in the redesign");
+    assert.match(soonCard, /text-\[8px\] font-medium leading-\[10\.4px\]">Hosted by/);
+    assert.match(soonCard, /text-\[10px\] font-semibold leading-\[10\.4px\]/);
   });
 
   it("does not drop a host into the soundcheck for a room scheduled for later", () => {
