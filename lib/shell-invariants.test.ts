@@ -3562,10 +3562,18 @@ describe("QA round, 2026-09-15", () => {
     assert.match(thread, /<h1 className="truncate text-\[16px\] font-bold leading-6 text-white">/);
   });
 
-  it("4 · a member's face, and a one-to-one chat's header, open that person's profile", () => {
+  it("4 · a header opens the thing it names — a person, or a house", () => {
     assert.match(thread, /sender\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(sender\)\}/);
     assert.match(thread, /peer\?\.username \? \(\n\s*<Link\n\s*href=\{profileHref\(peer\)\}/);
-    assert.match(thread, /\{!group && peer\?\.username \? \(\n\s*<Link href=\{profileHref\(peer\)\}/);
+    assert.match(thread, /\) : peer\?\.username \? \(\n\s*<Link href=\{profileHref\(peer\)\}/);
+    /*
+      A HOUSE'S NAME OPENS THE HOUSE. Only the person half was true: once you
+      joined a house it lived in your inbox and there was no route back to its
+      page at all — not the members, the description or the replays you looked
+      at before deciding to join. The page existed and became unreachable the
+      moment you used it (ogazboiz, 2026-09-23).
+    */
+    assert.match(thread, /\{group \? \(\n\s*<Link href=\{sq\(`\/houses\/\$\{conversation\.id\}`\)\}/);
   });
 
   it("5 · the thread column and the room's chat column end with a divider, like X", () => {
