@@ -2498,44 +2498,46 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(screen, /<SectionHeading id="explore-communities" lead="Explore" accent="communities" \/>/);
     assert.doesNotMatch(screen, /Live GistRooms/);
     /*
-      1373:3367's card WAS built at the node's 290 x 86 with 10px titles, 8px
-      member counts and an 8px Join pill — while the SAME component's phone
-      variant already carried 14 and 12. So the directory you reach from Home's
-      "View more" was the small one and Home's own rail was the legible one
-      (ogazboiz, 2026-09-23: "the card is too small there").
-      The phone's sizes now apply at every width and the track grew to fit
-      them. The node's own micro-type is what is pinned OUT.
+      ONE CARD FOR BOTH SURFACES. Home's rail and this directory were two
+      copies of the same object and they had drifted: Home's was rebuilt at
+      legible sizes, this one was left at node 1373:3367's 290 x 86 with a 10px
+      title and an 8px Join pill, and only its PHONE variant was ever
+      corrected. So the rail looked right and the page its own "View more"
+      opens looked like a different product (ogazboiz, 2026-09-23).
+      Home's shape survived, because it is the one designed against real
+      content. Neither surface draws its own house markup any more.
     */
-    assert.match(screen, /grid grid-cols-\[repeat\(auto-fill,minmax\(330px,1fr\)\)\] justify-start gap-x-5 gap-y-4 lg:grid-cols-3 lg:justify-between/);
-    assert.match(screen, /h-\[106px\] w-full cursor-pointer overflow-hidden rounded-\[16\.86px\] bg-\[rgba\(16,16,18,0\.62\)\]/);
-    assert.match(screen, /left-4 top-4 h-\[54\.21px\] w-\[49\.89px\] overflow-hidden rounded-\[12\.32px\] bg-white/);
-    assert.match(screen, /truncate text-\[14px\] font-semibold leading-\[18\.2px\] text-white/);
-    assert.doesNotMatch(screen, /text-\[8px\] font-semibold leading-\[10\.4px\]/, "the Join pill went back to 8px");
-    assert.match(screen, /ws-btn-welcome ws-btn-sm ws-press absolute right-4 top-1\/2 flex -translate-y-1\/2/, "the Join House pill lost its ramp");
-    /*
-      The phone (1381:37677 in SQUARE 2.0 Copy, ogazboiz 2026-09-12) keeps its
-      one column below lg — not md, because a 330 cell in the 600 column
-      between them leaves half the row empty. The rest of what the phone used
-      to override is now the BASE, so there are no `max-lg:` type rules left to
-      pin: one card, one set of sizes, at every width. That is the point.
-    */
+    assert.match(screen, /<HouseDirectoryCard\n\s*key=\{house\.id\}/);
+    assert.doesNotMatch(screen, /h-\[86px\]|w-\[290px\]|text-\[8px\] font-semibold/, "the directory went back to its own micro card");
+    assert.match(stripComments(read("components/layout/popular-houses.tsx")), /<HouseDirectoryCard/, "Home's rail stopped sharing the card");
+    const houseCard = stripComments(read("components/layout/house-directory-card.tsx"));
+    assert.match(houseCard, /h-\[80px\] w-\[74px\]/, "the picture shrank back");
+    assert.match(houseCard, /text-\[15px\] font-semibold/);
+    // The body opens the house; only the pill joins it.
+    assert.match(houseCard, /aria-label=\{`View \$\{house\.title \?\? "house"\}`\}/);
+    assert.match(houseCard, /event\.stopPropagation\(\);\s*\n\s*onJoin\(\);/);
     assert.match(screen, /max-lg:grid-cols-1 max-lg:justify-stretch/, "the phone's one column is gone");
     assert.doesNotMatch(screen, /max-lg:text-\[14px\]/, "the legible sizes went back to being phone-only");
-    assert.match(screen, /line-clamp-2 text-\[12px\] font-medium leading-\[15\.6px\]/);
-    // The picture is the node's 48.05 square inset on the white plate; with
-    // no picture the plate is 1373:3990's — `#D8D8D8` with the gist glyph
-    // centred — never a seeded person, never the node's sample photo
-    // (ogazboiz, 2026-09-12).
-    assert.match(screen, /left-\[1\.23px\] top-\[3\.08px\] h-\[48\.05px\] w-\[48\.05px\] object-cover/, "the picture no longer sits square on its plate");
-    assert.match(screen, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
-    assert.match(screen, /src=\{asset\("\/gist-rooms\/card-default-cover\.svg"\)\}[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
-    assert.doesNotMatch(screen, /default-picture|<Avatar[\s\S]{0,120}src=\{house\.imageUrl\}/, "a house picture is being invented again");
+    /*
+      A HOUSE WITH NO PICTURE GETS THE FILE'S PLATE (1373:3990 — #D8D8D8 with
+      the gist glyph), NEVER A SEEDED PERSON and never the node's sample photo
+      (ogazboiz, 2026-09-12). Home's card passed imageUrl straight to `Avatar`,
+      which falls back to a generated FACE, so a house with no photo wore a
+      stranger's — and unifying the two cards on Home's would have carried that
+      across. These now guard the shared card, which is where the picture is
+      drawn for both surfaces.
+    */
+    assert.match(houseCard, /!house\.imageUrl && "flex items-center justify-center bg-\[#D8D8D8\]"/, "a house with no picture lost the file's default plate");
+    assert.match(houseCard, /src=\{asset\("\/gist-rooms\/card-default-cover\.svg"\)\}[\s\S]{0,200}className="h-6 w-\[32\.78px\]"/, "the default plate lost its glyph");
+    assert.doesNotMatch(houseCard, /<Avatar[\s\S]{0,140}src=\{house\.imageUrl\}/, "a house picture is being invented again");
     assert.ok(!existsSync(resolve("public/houses")), "the node's sample photo is back as a default");
     // The same directory Popular Houses reads, followed by cursor; never re-sorted, never "0 members".
     assert.match(screen, /useDiscoverHousesPages\(\)/);
     assert.match(screen, /useInfiniteScroll\(/);
     assert.doesNotMatch(screen, /\.sort\(/);
-    assert.match(screen, /house\.memberCount !== null && \(/);
+    // A null count means the payload does not count members, which is a
+    // different claim from "none" — so it prints nothing, never "0 members".
+    assert.match(houseCard, /house\.memberCount !== null && \(/);
   });
 
   it("gives the room card 415:12704's hover state, only where the file wires it", () => {
@@ -2697,10 +2699,12 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     assert.match(houses, /useDiscoverHouses\(/);
     assert.doesNotMatch(houses, /\.sort\(/, "one loaded page is being re-sorted");
     // Node 1302:148763: capped at 400 (w-100) so a second card peeks, max-w-95%
-    // so it fits a narrow column; 17px radius, and Join House on the create ramp.
+    // so it fits a narrow column. The card itself is no longer drawn here —
+    // it is `HouseDirectoryCard`, the one the directory draws too.
     assert.match(houses, /w-100 max-w-\[95%\] shrink-0/);
-    assert.match(houses, /rounded-\[17px\]/);
-    assert.match(houses, /bg-\[linear-gradient\(90deg,#9f65fd_0%,#5b05e6_100%\)\]/);
+    const shared = stripComments(read("components/layout/house-directory-card.tsx"));
+    assert.match(shared, /rounded-\[17px\]/);
+    assert.match(shared, /bg-\[linear-gradient\(90deg,#9f65fd_0%,#5b05e6_100%\)\]/);
     // Empty or undeployed is ABSENT, never an empty shelf.
     assert.match(houses, /if \(houses\.unavailable \|\| items\.length === 0\) return null;/);
   });
