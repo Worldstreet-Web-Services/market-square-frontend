@@ -103,16 +103,23 @@ describe("the invitee's banner reads the server's clock", () => {
     assert.deepEqual(inviteView(row(), seenAt, seenAt), { state: "open", requestId: "r1", secondsLeft: 60 });
     assert.equal(inviteDeadline(at(60_000), seenAt, { createdAt: at(0) }), seenAt + 60_000);
     // A lifetime longer than the contract's is capped at it.
-    assert.equal(inviteDeadline(at(130_000), seenAt, { createdAt: at(0) }), seenAt + INVITE_TTL_MS);
+    assert.equal(inviteDeadline(at(400_000), seenAt, { createdAt: at(0) }), seenAt + INVITE_TTL_MS);
   });
 
-  it("with no readable clock at all it is open without a countdown, and still ends after the contract's 60 seconds", () => {
+  it("with no readable clock at all it is open without a countdown, and still ends after the contract's window", () => {
     assert.deepEqual(inviteView(row({ inviteExpiresAt: null }), NOW), { state: "open", requestId: "r1", secondsLeft: null });
     assert.equal(inviteView(row({ inviteExpiresAt: "soon" }), NOW).state, "open");
     assert.deepEqual(inviteView(row({ createdAt: "" }), NOW + 5_000, NOW), { state: "open", requestId: "r1", secondsLeft: null });
     assert.equal(inviteDeadline(at(60_000), NOW, { createdAt: "" }), null);
     assert.deepEqual(inviteView(row({ inviteExpiresAt: null }), NOW + INVITE_TTL_MS, NOW), { state: "expired", requestId: "r1" });
-    assert.equal(INVITE_TTL_MS, 60_000);
+    /*
+      THREE MINUTES, and it tracks the SERVICE. Raised from 60s when the
+      service raised it: a minute was a reflex test rather than an invitation,
+      and a listener with their screen off never saw it. This is the fallback
+      used only where the server's own expiry cannot be trusted, so a drift
+      between the two would have them disagree about when one invitation died.
+    */
+    assert.equal(INVITE_TTL_MS, 180_000);
   });
 
   it("formats a countdown as m:ss and never negative", () => {
@@ -374,7 +381,7 @@ describe("the host is never told 'declined'", () => {
     assert.deepEqual(again, { tracked: [], unavailable: [] });
   });
 
-  it("an invitation with no readable expiry is held for the contract's 60 seconds, without a countdown", () => {
+  it("an invitation with no readable expiry is held for the contract's window, without a countdown", () => {
     const [tracked] = settleInvites([], { ...empty, offsetMs: null, open: [{ ...open[0], inviteExpiresAt: null }], now: NOW }).tracked;
     assert.equal(tracked?.deadline, NOW + INVITE_TTL_MS);
     assert.equal(tracked?.timed, false);
