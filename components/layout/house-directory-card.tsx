@@ -47,11 +47,29 @@ export function HouseDirectoryCard({
   joining?: boolean;
 }) {
   return (
-    <Link
-      href={sq(`/houses/${house.id}`)}
-      aria-label={`View ${house.title ?? "house"}`}
-      className="ws-press flex h-full cursor-pointer items-center gap-4 rounded-[17px] bg-[rgba(16,16,18,0.62)] px-4 py-4 shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[5.365px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
+    /*
+      THE WHOLE CARD OPENS THE HOUSE, AND IT IS NOT AN `<a>` AROUND EVERYTHING.
+
+      It used to be, with Join House inside it — a `<button>` nested in an
+      anchor. An `<a>` may not contain interactive content, so the browser
+      rebuilds the tree and React reports a hydration mismatch; before that it
+      is a behaviour bug, because what a click on the inner button does is left
+      to the browser. `stopPropagation` did not save it: that stops React's
+      synthetic bubbling, not the anchor's own default navigation.
+
+      So the link is a transparent overlay and Join is its SIBLING, painted
+      above it. Each control is reached directly and neither swallows the
+      other. Same shape as the room's person card, for the same reason.
+
+      `ws-press` stays on the root: `:active` matches an ancestor of whatever
+      is pressed, so the card still presses exactly as it did.
+    */
+    <div className="ws-press relative flex h-full items-center gap-4 rounded-[17px] bg-[rgba(16,16,18,0.62)] px-4 py-4 shadow-[inset_0_0_0_0.766px_rgba(255,255,255,0.18)] backdrop-blur-[5.365px]">
+      <Link
+        href={sq(`/houses/${house.id}`)}
+        aria-label={`View ${house.title ?? "house"}`}
+        className="absolute inset-0 z-10 cursor-pointer rounded-[17px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      />
       {/*
         1302:148764 — the house picture on its white plate.
 
@@ -133,16 +151,11 @@ export function HouseDirectoryCard({
       <button
         type="button"
         disabled={joining}
-        onClick={(event) => {
-          // Joining is a decision, not a look: it must not also open the sheet
-          // the card body opens.
-          event.stopPropagation();
-          onJoin();
-        }}
-        className="ws-press shrink-0 self-center whitespace-nowrap rounded-full bg-[linear-gradient(90deg,#9f65fd_0%,#5b05e6_100%)] px-4 py-2 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+        onClick={onJoin}
+        className="ws-press relative z-20 shrink-0 self-center whitespace-nowrap rounded-full bg-[linear-gradient(90deg,#9f65fd_0%,#5b05e6_100%)] px-4 py-2 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
       >
         Join House
       </button>
-    </Link>
+    </div>
   );
 }

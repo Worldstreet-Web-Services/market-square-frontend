@@ -2524,9 +2524,11 @@ describe("Gist rooms can be scheduled, and upcoming ones look like open ones", (
     const houseCard = stripComments(read("components/layout/house-directory-card.tsx"));
     assert.match(houseCard, /h-\[80px\] w-\[74px\]/, "the picture shrank back");
     assert.match(houseCard, /text-\[15px\] font-semibold/);
-    // The body opens the house; only the pill joins it.
+    // The body opens the house; only the pill joins it — held by STRUCTURE
+    // now rather than by cancelling an event. See the house-card invariant
+    // below for why the anchor could not wrap the button in the first place.
     assert.match(houseCard, /aria-label=\{`View \$\{house\.title \?\? "house"\}`\}/);
-    assert.match(houseCard, /event\.stopPropagation\(\);\s*\n\s*onJoin\(\);/);
+    assert.match(houseCard, /className="absolute inset-0 z-10/, "the link must cover the card as an overlay");
     assert.match(screen, /max-lg:grid-cols-1 max-lg:justify-stretch/, "the phone's one column is gone");
     assert.doesNotMatch(screen, /max-lg:text-\[14px\]/, "the legible sizes went back to being phone-only");
     /*
@@ -4986,8 +4988,27 @@ describe("A house has its own page, the way a person does", () => {
     const card = stripComments(read("components/layout/house-directory-card.tsx"));
     assert.match(card, /href=\{sq\(`\/houses\/\$\{house\.id\}`\)\}/);
     assert.doesNotMatch(card, /role="button"/, "the card went back to being a modal trigger");
-    // Joining is still a decision rather than a look, so it must not navigate.
-    assert.match(card, /event\.stopPropagation\(\);\s*\n\s*onJoin\(\);/);
+    /*
+      JOINING IS A DECISION, NOT A LOOK — it must never also navigate. That was
+      held by `stopPropagation` inside the anchor, which was the wrong tool
+      twice over: an `<a>` may not contain a `<button>` at all (the browser
+      rebuilds the tree, React reports a hydration mismatch), and
+      stopPropagation halts React's synthetic bubbling rather than the anchor's
+      own default navigation.
+
+      It is now held STRUCTURALLY: the link is a transparent overlay and Join
+      is its sibling painted above it, so the two controls never contain one
+      another and no handler has to undo the other's behaviour.
+    */
+    assert.match(
+      card,
+      /<Link[\s\S]*?className="absolute inset-0 z-10/,
+      "the card's link must be an overlay, not a wrapper around the Join button"
+    );
+    assert.ok(
+      !card.includes("stopPropagation"),
+      "Join is a sibling of the link now; cancelling propagation would be papering over nesting that is gone"
+    );
     assert.ok(existsSync(resolve("app/houses/[id]/page.tsx")), "the house route is gone");
   });
 
