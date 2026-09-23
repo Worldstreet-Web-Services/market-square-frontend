@@ -33,6 +33,18 @@ const VerificationSchema = z.enum(["none", "pending", "verified", "lapsed"]).cat
 // parse, and the default keeps a backend without the field parsing cleanly.
 const OrgBadgeSchema = z.enum(["market", "ark"]).nullable().catch(null);
 
+/**
+ * ONE @-MENTION, resolved. Declared here because the PROFILE now carries them
+ * too — a bio's mentions are the same rows a post's are, and the same
+ * `PostText` draws all of them.
+ */
+export const MentionSchema = z.object({
+  type: z.enum(["profile", "group"]),
+  id: z.string(),
+  label: z.string(),
+  handle: z.string(),
+});
+
 const RawProfileSchema = z.object({
   id: z.string(),
   username: z.string().nullable().optional().default(null),
@@ -57,6 +69,16 @@ const RawProfileSchema = z.object({
   generatedUsername: z.string().nullable().optional().default(null),
   displayName: z.string().nullable().optional().default(null),
   bio: z.string().nullable().optional().default(null),
+  /**
+   * WHO THE BIO @-MENTIONS — the same `Mention` rows a post and a DM carry,
+   * drawn by the same `PostText`.
+   *
+   * A row rather than handles parsed out of the text, for the reason posts
+   * have one: the handle in a stored bio is a SNAPSHOT and the person behind
+   * it is not. A bio outlives a rename by months, so a regex-linkified
+   * mention points at nobody the first time somebody changes their handle.
+   */
+  bioMentions: z.array(MentionSchema).optional().default([]).catch([]),
   avatarUrl: z.string().nullable().optional().default(null),
   /**
    * The cover photograph behind the profile header — node 435:27500.
@@ -546,13 +568,6 @@ export const SpeakerRequestSchema = z.object({
   joinToken: z.string().nullable().optional().default(null),
 });
 
-
-export const MentionSchema = z.object({
-  type: z.enum(["profile", "group"]),
-  id: z.string(),
-  label: z.string(),
-  handle: z.string(),
-});
 
 /** One picture or clip of a post, in the order the author chose. */
 export const PostMediaSchema = z.object({

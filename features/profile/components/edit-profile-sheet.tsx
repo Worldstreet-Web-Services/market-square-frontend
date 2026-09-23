@@ -2,6 +2,7 @@
 
 import { GENDER_OPTIONS, normalizeGender } from "@/lib/gender";
 import { useState } from "react";
+import { resolveHandles } from "@/lib/api/mentions";
 import { errorCode } from "@/lib/api/envelope";
 import type { Profile } from "@/lib/api/schemas";
 import { Button } from "@/components/ui/button";
@@ -146,12 +147,28 @@ export function EditProfileSheet({
         <Button
           className="w-full"
           loading={update.isPending}
-          onClick={() =>
+          onClick={async () => {
+            /*
+              RESOLVED AT SAVE, because this field has no picker.
+
+              The chat composer remembers who was chosen from its autocomplete;
+              a bio is a plain textarea, so the handles in the text are all we
+              have. `resolveHandles` asks the directory for each and keeps only
+              an EXACT match — "@ada" that could be adaeze or adaobi stays
+              plain text rather than tagging a stranger permanently on
+              somebody's profile.
+
+              Awaited rather than fired alongside: a save landing before its
+              mentions resolve would store the bio with an empty array, and the
+              tags would vanish until the next edit.
+            */
+            const bioMentions = await resolveHandles(bio);
             update.mutate(
               {
                 displayName: displayName.trim() || undefined,
                 username: username.trim() !== me.username ? username.trim() : undefined,
                 bio,
+                bioMentions,
                 avatarUrl: avatarUrl ?? undefined,
                 // Sent as typed, blank included: an omitted field means "leave
                 // it" and somebody who emptied the box meant "clear it". The
@@ -162,8 +179,8 @@ export function EditProfileSheet({
                 gender: gender.trim(),
               },
               { onSuccess: onClose }
-            )
-          }
+            );
+          }}
         >
           Save
         </Button>

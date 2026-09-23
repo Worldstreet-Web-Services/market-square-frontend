@@ -1,5 +1,6 @@
 "use client";
 
+import { PostText } from "@/components/ui/post-text";
 import { placeLine } from "@/lib/countries";
 import { profileHref } from "@/lib/profile-href";
 import { useState } from "react";
@@ -608,11 +609,21 @@ export function ProfilePage({
         <p
           className={
             data.bio
-              ? "text-[15px] font-normal leading-5 text-white"
+              // `whitespace-pre-line`: the bio has ALWAYS stored the newlines
+              // somebody typed — `building @square\n\ndone` was sitting in the
+              // payload while the page printed it as one line. The breaks were
+              // never lost, only unprinted.
+              ? "whitespace-pre-line text-[15px] font-normal leading-5 text-white"
               : "text-[15px] font-normal leading-5 text-white/50"
           }
         >
-          {data.bio || "Bio not updated"}
+          {/*
+            Drawn by the SAME renderer as a post's body and a DM's, so an
+            @handle in a bio is a link to that person exactly as it is
+            everywhere else — one component rather than a third written for
+            this surface. Plain text until `bioMentions` carries anybody.
+          */}
+          {data.bio ? <PostText text={data.bio} mentions={data.bioMentions} /> : "Bio not updated"}
         </p>
 
         {/*
