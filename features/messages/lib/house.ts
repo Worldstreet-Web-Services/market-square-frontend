@@ -86,12 +86,14 @@ export function useHouse(id: string) {
  * `/conversations/discover` items already carry one. It is with the backend.
  */
 const MemberSchema = z.object({
-  profile: z.object({
-    id: z.string(),
-    username: z.string(),
-    displayName: z.string().nullable().optional().default(null),
-    avatarUrl: z.string().nullable().optional().default(null),
-  }),
+  /*
+    PARSED AS A FULL PROFILE, not a four-field summary, and that is not
+    greed — the tile's wink and follow controls take a `Profile`, and the
+    roster on the house read is already one. Narrowing this would give the
+    page two member shapes and force a cast at the join. `ProfileSchema`
+    defaults every field the summary omits, so a thin payload still parses.
+  */
+  profile: ProfileSchema,
   role: z.string().nullable().optional().default(null),
 });
 

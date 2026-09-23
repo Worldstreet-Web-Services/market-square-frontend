@@ -2,13 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/ui/avatar";
+import { HouseMemberTile } from "@/components/layout/house-member-tile";
 import { EmptyState } from "@/components/ui/states";
-import Link from "next/link";
 import { useHouse, useHouseMembers } from "@/features/messages/lib/house";
 import { useJoinGroup } from "@/features/messages";
+import { useLeaveGroup } from "@/features/messages/hooks/use-messages";
+import { useMe } from "@/hooks/use-me";
+import { ShareSheet } from "@/components/ui/share-sheet";
+import {
+  HouseMenu,
+  IconMenuDots,
+  IconMenuFlag,
+  IconMenuLeave,
+  IconMenuPeople,
+  IconMenuShare,
+} from "@/components/layout/house-menu";
 import { sq } from "@/lib/square-path";
-import { profileHref } from "@/lib/profile-href";
 import { cn } from "@/lib/cn";
 
 /**
@@ -72,6 +81,10 @@ export function HouseProfileScreen({ id }: { id: string }) {
     ? fromHouse.map((profile) => ({ profile }))
     : (membersQuery.data ?? []);
   const [expanded, setExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const leave = useLeaveGroup(id);
+  const me = useMe();
 
   if (house.missing) {
     return (
@@ -167,7 +180,9 @@ export function HouseProfileScreen({ id }: { id: string }) {
           {/* `Frame` at 700,494 — the action and its overflow, 16 apart. The
               node draws TWO states of one button and the service decides
               which: a member views, everybody else joins. */}
-          <div className="flex shrink-0 items-center gap-4">
+          {/* `Frame` at 700,494 — the action and its overflow, 16 apart, both
+              at a full radius; the trigger is the file's own 38 square. */}
+          <div className="relative flex shrink-0 items-center gap-4">
             {data?.viewerIsMember ? (
               <a
                 href={sq(`/messages?c=${id}`)}
@@ -185,6 +200,71 @@ export function HouseProfileScreen({ id }: { id: string }) {
               >
                 Join House
               </button>
+            )}
+
+            <button
+              type="button"
+              aria-label="More about this house"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+              className="ws-press grid size-[38px] shrink-0 place-items-center rounded-full bg-white/10 text-[#F4F4F4] transition-colors hover:bg-white/20"
+            >
+              {IconMenuDots}
+            </button>
+            {menuOpen && (
+              <HouseMenu
+                onClose={() => setMenuOpen(false)}
+                items={[
+                  {
+                    key: "share",
+                    label: "Share group link",
+                    icon: IconMenuShare,
+                    onSelect: () => setSharing(true),
+                  },
+                  {
+                    key: "members",
+                    label: "View members",
+                    icon: IconMenuPeople,
+                    // The roster is on this page; the menu takes you to it
+                    // rather than opening a second surface showing the same
+                    // thing. Disabled when there is no roster to be taken to.
+                    onSelect: () =>
+                      document
+                        .getElementById("house-members")
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                    disabledReason:
+                      roster.length > 0 ? undefined : "Nobody to show here yet.",
+                  },
+                  {
+                    key: "report",
+                    label: "Report",
+                    icon: IconMenuFlag,
+                    // `reportTarget` takes post | comment | profile |
+                    // stream_message. A house is none of them, so this would
+                    // either invent a type the service rejects or report
+                    // nothing at all. Asked for; drawn and refused until then.
+                    disabledReason: "Reporting a house isn't available yet.",
+                  },
+                  ...(data?.viewerIsMember
+                    ? [
+                        {
+                          key: "leave",
+                          label: "Leave house",
+                          icon: IconMenuLeave,
+                          destructive: true,
+                          disabledReason: me.data?.id ? undefined : "Still loading your account.",
+                          // Leaving is removing YOURSELF — the same route an
+                          // owner uses to remove anybody, so it needs the
+                          // reader's own id and is absent without one.
+                          onSelect: () => {
+                            if (me.data?.id) leave.mutate(me.data.id);
+                          },
+                        },
+                      ]
+                    : []),
+                ]}
+              />
             )}
           </div>
         </div>
@@ -257,33 +337,56 @@ export function HouseProfileScreen({ id }: { id: string }) {
         )}
 
         {roster.length > 0 && (
-          <section className="flex flex-col gap-4">
+          <section id="house-members" className="flex flex-col gap-4 scroll-mt-24">
             <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">Members</h2>
-            <ul className="flex gap-6 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* `Frame 2147225670` — the tiles 24 apart, centred on each other,
+                and the rail clips rather than wraps: the file draws one row. */}
+            <ul className="flex items-center gap-6 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {roster.slice(0, 12).map((member) => (
-                <li key={member.profile.id} className="flex w-[104px] shrink-0 flex-col gap-2">
-                  <Link
-                    href={sq(profileHref(member.profile))}
-                    className="ws-press block h-[113px] w-[104px] overflow-hidden rounded-[32px] bg-[#EDEDED]"
-                  >
-                    <Avatar
-                      name={member.profile.displayName || member.profile.username}
-                      seed={member.profile.id}
-                      src={member.profile.avatarUrl}
-                      size={113}
-                      sizeClassName="size-full"
-                      className="rounded-none border-0"
-                    />
-                  </Link>
-                  <p className="truncate text-center text-[14px] leading-6 text-white">
-                    {member.profile.displayName || member.profile.username}
-                  </p>
-                </li>
+                <HouseMemberTile key={member.profile.id} profile={member.profile} />
               ))}
+              {/* `Frame 2147225673` — View all: a 48 disc over its label, both
+                  centred in a 104 x 113 cell so it sits on the tiles' photos
+                  rather than their names. It only appears when there is more
+                  than the row shows — a "View all" over everything there is
+                  would be a link to the same thing. */}
+              {roster.length > 12 && (
+                <li className="flex h-[113px] w-[104px] shrink-0 flex-col items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document
+                        .getElementById("house-members")
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }
+                    className="ws-press grid size-12 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                    aria-label="View all members"
+                  >
+                    <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="none">
+                      <circle cx="5.6" cy="5" r="2.1" stroke="currentColor" strokeWidth="1.3" />
+                      <circle cx="11" cy="5.6" r="1.7" stroke="currentColor" strokeWidth="1.3" />
+                      <path d="M1.9 12.4c0-1.8 1.7-2.8 3.7-2.8s3.7 1 3.7 2.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                      <path d="M11.2 9.9c1.7.1 2.9 1 2.9 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                  <span className="text-[14px] leading-[16.5px] text-white">View all</span>
+                </li>
+              )}
             </ul>
           </section>
         )}
       </div>
+      {sharing && (
+        <ShareSheet
+          open
+          onClose={() => setSharing(false)}
+          title="Share house"
+          payload={{
+            text: `${title} on Square`,
+            url: `${window.location.origin}${sq(`/houses/${id}`)}`,
+          }}
+        />
+      )}
     </div>
   );
 }

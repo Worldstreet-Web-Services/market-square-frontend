@@ -43,6 +43,20 @@ const DESIGN_LOCKED = new Set<string>([
   // four under the touch floor and four over the scale's smallest desktop
   // tier, so neither `ws-btn-sm` nor `ws-btn-md` is the file's number.
   "features/feed/components/room-post-card.tsx",
+  /*
+    A house member's tile (1285:36955). Its wink and follow controls are the
+    file's own 24px discs, sized to overlap a 104-wide photo — a badge on a
+    face, not a button in a row, and widening them to the 44 floor would push
+    them off the picture they belong to. WORTH KNOWING RATHER THAN HIDING:
+    24 is a little over half the touch floor, so these are the smallest real
+    controls in the app. They are also duplicates — the same wink and follow
+    live at full size on the person's profile, one tap away through the same
+    tile — so nobody is locked out of the action by missing them.
+  */
+  "components/layout/house-member-tile.tsx",
+  // The house banner's 38 overflow trigger and the 48 "View all" disc, both
+  // the file's own geometry on a surface built to its pixels.
+  "components/layout/house-profile-screen.tsx",
 ]);
 
 // Lower this as batches migrate. Target: 0. Raise ONLY by adding to
