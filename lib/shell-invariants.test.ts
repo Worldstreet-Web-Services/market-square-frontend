@@ -5802,3 +5802,32 @@ describe("A granted power has a control that reaches it", () => {
     );
   });
 });
+
+describe("A count tap shows what the count is counting", () => {
+  /*
+    A number beside a control is a promise that something is behind it, and
+    tapping one has to show that thing.
+
+    The comment tally used to decide on the INLINE FIELD'S GEOMETRY: if the
+    composer happened to be laid out with height, open the thread; otherwise
+    reveal the composer. So on a post that HAD comments the tap offered a box
+    to type in and never showed the comment already sitting there. ogazboiz hit
+    it twice on his own profile and both times reported it as the button doing
+    nothing — which was an accurate description of what he got.
+
+    Revealing the field stays right when there is nothing to read: at zero,
+    "be the first" is the only sensible answer. The rule is what is BEHIND THE
+    NUMBER, never where a div happened to land.
+  */
+  it("opens the thread when there is something in it, and offers the field when there is not", () => {
+    const card = stripComments(read("features/feed/components/post-card.tsx"));
+    const tally = card.slice(card.indexOf("const onCommentTally"));
+    const body = tally.slice(0, tally.indexOf("\n  };"));
+    assert.match(body, /post\.commentCount > 0/, "the tap must ask what is behind the number");
+    assert.ok(
+      !/getBoundingClientRect/.test(body),
+      "a control's behaviour must not depend on whether another element got laid out"
+    );
+    assert.match(body, /setReplyOpen\(true\)/, "an empty post still offers the field");
+  });
+});

@@ -693,9 +693,26 @@ export function PostCard({
       setCommentsOpen(true);
       return;
     }
-    const box = inlineRef.current?.getBoundingClientRect();
-    if (box && box.height > 0) setCommentsOpen(true);
-    else setReplyOpen(true);
+    /*
+      ANYTHING TO READ? THEN READ IT.
+
+      A count is a promise that there is something behind it, and tapping one
+      has to show that thing. This used to decide on the inline field's
+      geometry instead: if the composer happened to be laid out, open the
+      thread, otherwise reveal the composer. So on a post with comments the tap
+      offered a box to type in and never showed the comment that was already
+      there — ogazboiz hit it twice on his own profile and reported it, both
+      times, as the button doing nothing.
+
+      Revealing the field is still right when there is NOTHING to read: on an
+      empty post the count is zero and "be the first" is the only sensible
+      answer. The rule is what is behind the number, not where a div landed.
+    */
+    if (post.commentCount > 0) {
+      setCommentsOpen(true);
+      return;
+    }
+    setReplyOpen(true);
   };
   const author = post.author;
   // A button when the media can expand, a plain div when it cannot. Rendering
