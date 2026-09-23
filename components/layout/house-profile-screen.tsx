@@ -53,7 +53,24 @@ export function HouseProfileScreen({ id }: { id: string }) {
   const router = useRouter();
   const house = useHouse(id);
   const join = useJoinGroup();
-  const members_ = useHouseMembers(id, Boolean(house.data));
+  /*
+    ONE ROSTER, TWO SOURCES, AND THE HOUSE READ WINS.
+
+    The house read carries a capped roster for a PUBLIC house — including to a
+    signed-out stranger, which is the state the design is built around. The
+    members route is bearerAuth and serves a member of a PRIVATE house, which
+    the house read deliberately will not. So the first is preferred and the
+    second fills in, and neither is asked to cover the other's case.
+
+    An empty array is NOT "no members": a private house answers `[]` to
+    everyone outside it. `memberCount` is the true total and is unaffected,
+    which is why the count in the hero does not go through this at all.
+  */
+  const fromHouse = house.data?.members ?? [];
+  const membersQuery = useHouseMembers(id, Boolean(house.data) && fromHouse.length === 0);
+  const roster = fromHouse.length > 0
+    ? fromHouse.map((profile) => ({ profile }))
+    : (membersQuery.data ?? []);
   const [expanded, setExpanded] = useState(false);
 
   if (house.missing) {
@@ -201,11 +218,49 @@ export function HouseProfileScreen({ id }: { id: string }) {
           read: "we may not see who is in here" and "nobody is in here" are
           different things and must not look the same.
         */}
-        {members_.data && members_.data.length > 0 && (
+        {/*
+          `Frame 2147230507` — the stats line. Each half is absent unless the
+          service sent it: `weeklyRoomLimit` is null for every house today and
+          null means UNCAPPED, so there is no number and no default to invent.
+
+          "IN THE LAST 7 DAYS", NOT "THIS WEEK". The service counts on a
+          ROLLING seven-day window — it stores no timezone for anybody, so a
+          calendar week cannot be honest, and "this week" promises a Monday
+          reset that does not exist.
+        */}
+        {data?.weeklyRoomLimit != null && (
+          <p className="flex items-baseline gap-1 text-[15px] leading-5 text-white">
+            <span>Up to</span>
+            <span className="tnum font-semibold text-[#F7F9F9]">{data.weeklyRoomLimit}</span>
+            <span>gist rooms in any 7 days</span>
+          </p>
+        )}
+
+        {/* `Frame 2147230510` — the link, its chain glyph in the accent. The
+            service allows http(s) only and refuses anything else at its own
+            boundary, so this renders whatever it sent without re-judging it —
+            and still opens in a new tab with `noreferrer`, because it carries
+            a stranger's name. */}
+        {data?.website && (
+          <a
+            href={data.website}
+            target="_blank"
+            rel="noreferrer nofollow"
+            className="ws-press flex w-fit items-center gap-2 text-[15px] leading-5 text-white underline-offset-4 hover:underline"
+          >
+            <svg aria-hidden viewBox="0 0 20 20" className="size-5 text-accent" fill="none">
+              <path d="M8.5 11.5a3 3 0 0 0 4.24 0l2.4-2.4a3 3 0 1 0-4.24-4.25l-1 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M11.5 8.5a3 3 0 0 0-4.24 0l-2.4 2.4a3 3 0 1 0 4.24 4.25l1-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            {data.website.replace(/^https?:\/\//, "")}
+          </a>
+        )}
+
+        {roster.length > 0 && (
           <section className="flex flex-col gap-4">
             <h2 className="text-[12px] font-bold leading-4 text-[#F4F4F4]">Members</h2>
             <ul className="flex gap-6 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {members_.data.slice(0, 12).map((member) => (
+              {roster.slice(0, 12).map((member) => (
                 <li key={member.profile.id} className="flex w-[104px] shrink-0 flex-col gap-2">
                   <Link
                     href={sq(profileHref(member.profile))}

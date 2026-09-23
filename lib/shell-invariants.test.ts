@@ -5015,7 +5015,34 @@ describe("A house has its own page, the way a person does", () => {
       absent rather than an empty shelf, because "we may not see who is in
       here" and "nobody is in here" are different things.
     */
-    assert.match(screen, /members_\.data && members_\.data\.length > 0 && \(/);
+    /*
+      ONE ROSTER, TWO SOURCES, and the house read wins. It carries a capped
+      roster for a PUBLIC house — including to a signed-out stranger, the state
+      the design is built around — while the members route is bearerAuth and
+      serves a member of a PRIVATE house, which the house read deliberately
+      will not. Neither is asked to cover the other's case, and an empty array
+      is never read as "no members": a private house answers [] to everyone
+      outside it, and `memberCount` stays the truth.
+    */
+    assert.match(screen, /const fromHouse = house\.data\?\.members \?\? \[\];/);
+    assert.match(screen, /fromHouse\.length > 0\s*\n?\s*\?/);
+    assert.match(screen, /roster\.length > 0 && \(/);
+    /*
+      The three fields the service is adding are parsed ahead of it, all
+      optional, so each section appears the moment its field does and the
+      release is a backend deploy rather than a coordinated pair — the ordering
+      that has bitten this app twice.
+    */
+    const houseLib = stripComments(read("features/messages/lib/house.ts"));
+    for (const field of ["members", "website", "weeklyRoomLimit"]) {
+      assert.ok(houseLib.includes(`${field}:`), `${field} is not parsed yet`);
+    }
+    // A cap of null is UNCAPPED, so there is no number and no default.
+    assert.match(screen, /data\?\.weeklyRoomLimit != null && \(/);
+    // The service counts on a ROLLING window and stores no timezone, so "this
+    // week" would promise a Monday reset that does not exist.
+    assert.ok(screen.includes("in any 7 days"), "the cap claims a calendar week");
+    assert.ok(!screen.includes("this week"), "the cap claims a calendar week");
     /*
       NO AVATAR BESIDE THE NAME. The node draws one because its cover and its
       mark are two different images; a house here has exactly one `imageUrl`,

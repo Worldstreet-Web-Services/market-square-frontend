@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { errorCode } from "@/lib/api/envelope";
 import { msApi } from "@/lib/api/service";
+import { ProfileSchema } from "@/lib/api/schemas";
 
 /**
  * ONE HOUSE, READ BY ANYBODY — `GET /conversations/:id`.
@@ -35,6 +36,25 @@ export const HouseSchema = z.object({
   visibility: z.enum(["public", "private"]).optional().default("private").catch("private"),
   viewerIsMember: z.boolean().optional().default(false),
   canJoin: z.boolean().optional().default(false),
+  /*
+    THE THREE FIELDS THAT ARRIVE WITH THE SERVICE, PARSED BEFORE THEY DO.
+
+    All optional, so this reads today's payload unchanged — and the page draws
+    each section the moment the field appears, with no frontend deploy to wait
+    for. That is the whole point of parsing them early: the release becomes a
+    backend deploy rather than a coordinated pair, which is the ordering that
+    has bitten this app twice.
+
+    `members` is the capped roster (4), PUBLIC HOUSES ONLY. A private house
+    answers `[]` to anyone not in it, which is why an empty array must never be
+    read as "no members" — `memberCount` is the true total and is unaffected.
+    `website` is http(s)-only, enforced at the service's boundary.
+    `weeklyRoomLimit` is null for every house today; null means UNCAPPED, and
+    there is no default to invent.
+  */
+  members: z.array(ProfileSchema).optional().default([]),
+  website: z.string().nullable().optional().default(null),
+  weeklyRoomLimit: z.number().nullable().optional().default(null),
 });
 
 export type House = z.infer<typeof HouseSchema>;
