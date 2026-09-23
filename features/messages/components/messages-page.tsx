@@ -178,30 +178,9 @@ function Inbox({
               side may answer.
             */}
             {/*
-              DIRECT ONLY, AND THIS GUARD IS LOAD BEARING.
-
-              `requestState` and `requestedBy` are columns on the CONVERSATION,
-              not on a membership — which is right for a DM, where the whole
-              thread is the request. `decline` therefore DELETES THE
-              CONVERSATION AND EVERY MESSAGE IN IT, deliberately, and `accept`
-              flips the whole thread rather than one person's seat.
-
-              A pending HOUSE membership is a different animal: the house is
-              ordinary and accepted, it is MY SEAT in it that is pending. Point
-              these two controls at one and a single person declining an
-              unwanted invite deletes the house, its history, and everybody
-              else's membership.
-
-              The service is adding per-participant state with its own accept
-              and decline (migration 100). Until those exist this row answers
-              for direct threads and nothing else, so a group request can
-              appear in the tab — the backend is widening the filter — without
-              ever reaching a control that would take the house down with it.
+              TWO DIFFERENT ANIMALS SHARE THIS TAB — see `answerable`.
             */}
-            {tab === "requests" &&
-              conversation.kind === "direct" &&
-              conversation.requestState === "pending" &&
-              conversation.requestedBy !== me.data?.id && (
+            {tab === "requests" && answerable(conversation, me.data?.id) && (
                 <div className="flex items-center gap-2 pl-16.5">
                   <button
                     type="button"
@@ -290,6 +269,43 @@ function NewChatFab({ onClick }: { onClick: () => void }) {
       </svg>
     </button>
   );
+}
+
+/**
+ * MAY THIS ROW BE ANSWERED HERE, AND IS IT SAFE TO?
+ *
+ * The requests tab now holds two different animals.
+ *
+ *   · A CHAT REQUEST — the CONVERSATION itself is pending. Accept flips the
+ *     thread; decline DELETES it and every message in it, deliberately,
+ *     because for a DM the whole thread is the request.
+ *   · A HOUSE INVITE — the conversation is an ordinary, accepted group. What
+ *     is pending is MY SEAT in it. Decline removes the seat and nothing else:
+ *     the house, its history and everybody else stay exactly as they were.
+ *
+ * `requestState` DOES NOT TELL THEM APART. On a house invite it reads
+ * `accepted`, because the house is accepted — so a renderer that switches on
+ * it sends a house down the DM path, where decline deletes the house for
+ * everyone. The discriminator is `kind`.
+ *
+ * ─── WHY THE GROUP BRANCH CANNOT FIRE BEFORE THE SERVICE IS READY ────────────
+ * The seat-level accept and decline ship with the service's own change. Until
+ * that deploys, its requests filter returns pending CONVERSATIONS only, so no
+ * group can appear in this tab at all and this branch is unreachable. And a
+ * group that somehow did arrive carrying `requestState: "pending"` is not a
+ * seat invite — it is something older that the seat-level decline does not
+ * understand — so it is refused here rather than answered into the route that
+ * would take the house down. No deploy ordering, and no window where the
+ * destructive path is reachable from a house.
+ */
+function answerable(
+  conversation: { kind: string; requestState?: string; requestedBy?: string | null },
+  viewerId: string | undefined
+): boolean {
+  if (conversation.kind === "direct") {
+    return conversation.requestState === "pending" && conversation.requestedBy !== viewerId;
+  }
+  return conversation.requestState !== "pending";
 }
 
 export function MessagesPage({

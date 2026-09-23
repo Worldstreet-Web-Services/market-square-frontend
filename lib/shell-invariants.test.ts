@@ -5168,24 +5168,49 @@ describe("Nobody is put in a house they did not agree to", () => {
 
 describe("Declining a request cannot take a house down with it", () => {
   /*
-    `requestState` and `requestedBy` are columns on the CONVERSATION, not on a
-    membership — correct for a DM, where the whole thread IS the request. So
-    `decline` deletes the conversation and every message in it, deliberately,
-    and `accept` flips the whole thread rather than one person's seat.
+    THE REQUESTS TAB HOLDS TWO ANIMALS, AND ONE OF THE DECLINES IS DESTRUCTIVE.
 
-    A pending HOUSE membership is a different animal: the house is ordinary and
-    accepted; it is one person's SEAT that is pending. Point the existing
-    controls at one and a single person declining an unwanted invite deletes
-    the house, its history and everybody else's membership.
+    A CHAT REQUEST is the conversation itself: `requestState` and `requestedBy`
+    are columns on the CONVERSATION, which is right for a DM, where the whole
+    thread IS the request. So its decline DELETES the thread and every message
+    in it, deliberately.
 
-    The service is adding per-participant state with its own accept and decline.
-    Until then these controls answer for direct threads and nothing else, so a
-    group request can appear in the tab without reaching a control that would
-    destroy the house.
+    A HOUSE INVITE is not that. The house is ordinary and accepted; what is
+    pending is one person's SEAT. It has its own accept and decline, and that
+    decline removes the seat and only the seat.
+
+    `requestState` DOES NOT SEPARATE THEM — on a house invite it reads
+    `accepted`, because the house is accepted. A renderer that switches on it
+    sends a house down the DM path, where one person declining an unwanted
+    invite deletes the house, its history and everybody else's membership.
+    `kind` is the discriminator; this pins that it stays the discriminator.
+
+    The second assertion is the one that survives a bad deploy. A group
+    carrying `requestState: "pending"` is not a seat invite — it is something
+    older that the seat-level decline does not understand — so it is refused
+    rather than answered into the route that would take the house down. That
+    refusal is why the group branch is safe to ship before the service does.
   */
-  it("answers only direct threads while decline still deletes the thread", () => {
+  it("separates the two by kind, and refuses a group that is not a seat invite", () => {
     const page = stripComments(read("features/messages/components/messages-page.tsx"));
-    const guard = /tab === "requests" &&\s*\n\s*conversation\.kind === "direct" &&\s*\n\s*conversation\.requestState === "pending"/;
-    assert.match(page, guard, "a group request can reach a decline that deletes the conversation");
+
+    // The call site delegates. An inlined, kind-blind check is the bug.
+    assert.match(
+      page,
+      /tab === "requests" && answerable\(conversation, me\.data\?\.id\)/,
+      "the requests row must ask `answerable`, which knows a house from a DM"
+    );
+
+    const helper = page.slice(page.indexOf("function answerable"));
+    assert.match(
+      helper,
+      /kind === "direct"[\s\S]*?requestState === "pending" && conversation\.requestedBy !== viewerId/,
+      "a direct request is still only answerable while IT is pending and is not mine"
+    );
+    assert.match(
+      helper,
+      /return conversation\.requestState !== "pending";/,
+      "a group carrying requestState 'pending' is not a seat invite and must not reach decline"
+    );
   });
 });
