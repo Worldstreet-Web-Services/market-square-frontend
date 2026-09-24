@@ -114,10 +114,20 @@ export function useBuyGift() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: buyGift,
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: INVENTORY_KEY });
-      // A purchase spends COINS, so any surface showing that balance is stale.
-      void queryClient.invalidateQueries({ queryKey: COINS_KEY });
+      /*
+        THE NEW BALANCE COMES BACK IN THE RESPONSE, so it is written rather
+        than re-fetched. The service answers with the stock AND the balance
+        precisely so a client never has to ask again to redraw, and a refetch
+        here would put a round trip between the purchase and the number it
+        changed — the one moment somebody is actually watching that figure.
+
+        This is not an optimistic write: it is the server's own answer to the
+        request that moved it, which is the only number allowed to set a
+        balance in this file.
+      */
+      queryClient.setQueryData(COINS_KEY, result.balance);
     },
   });
 }

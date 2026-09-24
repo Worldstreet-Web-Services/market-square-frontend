@@ -271,7 +271,17 @@ export function ProfileGiftGallery() {
                   {
                     onSuccess: (result) => {
                       toast.success(
-                        `${quantity} ${gift.name}${quantity > 1 ? "s" : ""} added — you have ${result.owned ?? quantity}`
+                        /*
+                          `result.quantity` IS THE NEW TOTAL HELD, not the
+                          number just bought — the service upserts the stock
+                          and returns what the row now says. The old reading
+                          fell back to the LOCAL `quantity`, which is the
+                          amount bought, and those two agree only on a first
+                          purchase: buying a second rose would have said "you
+                          have 1". Verified in the repository contract, where
+                          buying 3 from nothing answers `quantity: 3`.
+                        */
+                        `${quantity} ${gift.name}${quantity > 1 ? "s" : ""} added — you have ${result.quantity}`
                       );
                       setBuying(null);
                     },

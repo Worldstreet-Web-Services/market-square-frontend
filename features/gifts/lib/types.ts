@@ -23,14 +23,53 @@ export const GiftCatalogItemSchema = z.object({
   /** Matches an id in `LIVE_GIFTS`; an id we do not know draws nothing. */
   id: z.string(),
   name: z.string(),
+  /**
+   * WHAT THE TRAY CHARGES, IN SQUARE COINS — a whole number, always.
+   *
+   * Coins are what people see and spend; KASH is what they buy coins WITH and
+   * what a recipient earns. An integer because a coin is the smallest thing
+   * there is, which is what makes the tray's arithmetic exact rather than
+   * carefully rounded: three Roses is 30, not 0.030000000000000002.
+   */
+  priceCoins: z.number(),
   /** A DECIMAL STRING, never a number. See `TipSchema` for why money is text. */
   priceKash: z.string(),
 });
 export type GiftCatalogItem = z.infer<typeof GiftCatalogItemSchema>;
 
+/**
+ * `GET /gifts` — the envelope's key is `gifts`, not `items`.
+ *
+ * READ OFF THE SERVICE RATHER THAN AGREED IN PROSE. This slice was written
+ * against a described shape and every read was keyed wrong — `items` where the
+ * controller answers `gifts`, `balance` where it answers `coins`. Each one
+ * parses to an empty list rather than throwing, so the failure on the day the
+ * routes shipped would have been an empty tray and a zero balance with nothing
+ * in the console. Verified against `gift-controller.ts` at `1399a253`.
+ */
 export const GiftCatalogSchema = z.object({
-  items: z.array(GiftCatalogItemSchema).catch([]),
+  gifts: z.array(GiftCatalogItemSchema).catch([]),
 });
+
+/**
+ * `GET /gifts/capability` — whether this deployment sells coins, and at what.
+ *
+ * `coinsPerKash` IS READ, NEVER ASSUMED. The rate exists in two repositories
+ * and a constant copied into both is a constant that can be changed in one;
+ * the service publishes it so a reprice is one deploy rather than two that
+ * have to land together. `lib/gifts.ts` keeps its own `COINS_PER_KASH` only to
+ * price the tray BEFORE this route answers — the catalogue's own `priceCoins`
+ * wins the moment it does.
+ *
+ * `purchasable: false` means no treasury is configured and coins cannot be
+ * bought here at all — a real state to draw, not an error.
+ */
+export const GiftCapabilitySchema = z.object({
+  purchasable: z.boolean(),
+  coinsPerKash: z.number(),
+  gifts: z.array(GiftCatalogItemSchema).catch([]),
+});
+export type GiftCapability = z.infer<typeof GiftCapabilitySchema>;
 
 /**
  * HOW MANY OF EACH GIFT THIS READER OWNS.
@@ -48,7 +87,7 @@ export const GiftHoldingSchema = z.object({
 export type GiftHolding = z.infer<typeof GiftHoldingSchema>;
 
 export const GiftInventorySchema = z.object({
-  items: z.array(GiftHoldingSchema).catch([]),
+  gifts: z.array(GiftHoldingSchema).catch([]),
 });
 
 /**
@@ -61,8 +100,16 @@ export const GiftInventorySchema = z.object({
 export const GiftPurchaseSchema = z.object({
   giftId: z.string(),
   quantity: z.number(),
-  /** The holding AFTER this purchase, as the service computed it. */
-  owned: z.number().optional(),
+  /**
+   * THE COIN BALANCE AFTER THIS PURCHASE, which is why nothing re-reads.
+   *
+   * The service answers with the new stock AND the new balance precisely so a
+   * client never has to ask again to redraw. It is also the reason this buy
+   * has no pending state: no money moves here — the KASH was paid when the
+   * COINS were bought — so the response is the final answer, not a receipt for
+   * something still settling.
+   */
+  balance: z.number(),
 });
 export type GiftPurchase = z.infer<typeof GiftPurchaseSchema>;
 
@@ -76,5 +123,22 @@ export type GiftPurchase = z.infer<typeof GiftPurchaseSchema>;
  * 0.030000000000000002.
  */
 export const CoinBalanceSchema = z.object({
+  coins: z.number(),
+});
+
+/**
+ * 409 `INSUFFICIENT_COINS`, and it CARRIES THE NUMBERS.
+ *
+ * `{ needed, balance }`, so a shortfall can be offered as the exact top-up
+ * rather than a refusal and a guess. Same instinct as the KASH path, which
+ * already offers the difference instead of saying no.
+ *
+ * Tolerant because it is an ERROR body: a refusal that cannot be parsed must
+ * still be a refusal, so a caller that cannot read the numbers falls back to
+ * the plain message rather than throwing inside a failure path.
+ */
+export const InsufficientCoinsSchema = z.object({
+  needed: z.number(),
   balance: z.number(),
 });
+export type InsufficientCoins = z.infer<typeof InsufficientCoinsSchema>;

@@ -214,8 +214,20 @@ test("a purchase never counts up optimistically", () => {
   const hooks = readFileSync("features/gifts/hooks/use-gifts.ts", "utf8");
   assert.doesNotMatch(hooks, /onMutate/, "the gift count is optimistic — it must not be");
   assert.match(hooks, /invalidateQueries\(\{ queryKey: INVENTORY_KEY \}\)/);
-  // Buying spends COINS, so any surface showing that balance is stale too.
-  assert.match(hooks, /invalidateQueries\(\{ queryKey: COINS_KEY \}\)/);
+  /*
+    THE BALANCE IS WRITTEN FROM THE SERVER'S OWN ANSWER, not re-fetched and
+    never computed. `POST /me/gifts` returns the new balance precisely so a
+    client does not have to ask again, and a refetch would put a round trip
+    between the purchase and the figure it just changed — the one moment
+    somebody is actually watching that number.
+
+    `result.balance` and nothing else: the only value allowed to set a balance
+    here is the response to the request that moved it. A local subtraction
+    would be the optimistic count this test exists to forbid, wearing a
+    different name.
+  */
+  assert.match(hooks, /queryClient\.setQueryData\(COINS_KEY, result\.balance\)/);
+  assert.doesNotMatch(hooks, /COINS_KEY,\s*\(?\w+\)? ?=>/, "the balance is computed rather than read");
 });
 
 test("the client never names a gift's price", () => {
@@ -272,4 +284,61 @@ test("every coin price is exactly its KASH price times the rate", () => {
       `a rung disagrees: ${coins} coins vs ${kash} KASH x ${rate} = ${fromKash}`
     );
   }
+});
+
+test("every gift read is keyed the way the service actually answers", () => {
+  /*
+    THIS SLICE WAS WRITTEN AGAINST A DESCRIBED CONTRACT AND EVERY READ WAS
+    KEYED WRONG. The service answers `{ gifts }`, `{ coins }` and
+    `{ giftId, quantity, balance }`; the client asked for `items`, `balance`
+    and `owned`.
+
+    NONE OF IT WOULD HAVE THROWN. The schemas are tolerant on purpose — a list
+    that cannot be parsed falls back to empty rather than taking a screen down
+    — so the failure on the day the routes shipped would have been an empty
+    tray and a zero balance, with a clean console, in a file nobody was
+    looking at. A tolerant parser turns a contract mismatch from a crash into
+    a silence, which is why the keys have to be pinned somewhere that fails.
+
+    Read off `gift-controller.ts` and `gift-service.ts` at `1399a253`.
+  */
+  const api = readFileSync("features/gifts/lib/api.ts", "utf8");
+  assert.match(api, /GiftCatalogSchema\.parse\(await msApi\.get\("\/gifts"\)\)\.gifts/);
+  assert.match(api, /CoinBalanceSchema\.parse\(await msApi\.authedGet\("\/me\/coins"\)\)\.coins/);
+  assert.match(api, /GiftInventorySchema\.parse\(await msApi\.authedGet\("\/me\/gifts"\)\)\.gifts/);
+
+  const types = readFileSync("features/gifts/lib/types.ts", "utf8");
+  // The old keys must not survive anywhere in the shapes, under any schema.
+  assert.doesNotMatch(types, /items: z\.array/, "a gift envelope still says `items`");
+  assert.doesNotMatch(types, /balance: z\.number\(\),\n\}\);\n\nexport type CoinBalance/, "the coin balance is keyed `balance` again");
+});
+
+test("the rate is the service's to publish, not ours to copy", () => {
+  /*
+    `COINS_PER_KASH` exists in BOTH repositories, and a constant copied into
+    two places is a constant that can be changed in one. The service publishes
+    `coinsPerKash` on `/gifts/capability` so a reprice is one deploy rather
+    than two that have to land together.
+
+    Ours stays only to price the tray BEFORE that route answers — it is 404
+    today — and the catalogue's own `priceCoins` wins the moment it does.
+  */
+  const types = readFileSync("features/gifts/lib/types.ts", "utf8");
+  assert.match(types, /coinsPerKash: z\.number\(\)/);
+  assert.match(types, /purchasable: z\.boolean\(\)/);
+  // The catalogue carries the coin price, so a tile never derives one.
+  assert.match(types, /priceCoins: z\.number\(\)/);
+
+  const api = readFileSync("features/gifts/lib/api.ts", "utf8");
+  assert.match(api, /msApi\.get\("\/gifts\/capability"\)/);
+});
+
+test("being short of coins offers the shortfall, and survives an unreadable one", () => {
+  // 409 carries `{ needed, balance }` so a top-up can name the exact number.
+  // Parsed with `safeParse`: an error that cannot be read is STILL an error,
+  // and a top-up offer is a nicety on top of a refusal, never a condition of
+  // showing one. Throwing inside a failure path loses the failure.
+  const api = readFileSync("features/gifts/lib/api.ts", "utf8");
+  assert.match(api, /InsufficientCoinsSchema\.safeParse\(details\)/);
+  assert.match(api, /return parsed\.success \? parsed\.data : null;/);
 });
