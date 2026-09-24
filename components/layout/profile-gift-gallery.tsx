@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { LIVE_GIFTS } from "@/lib/gifts";
+import { BuyGiftSheet } from "@/components/layout/buy-gift-sheet";
 import { useReceivedTips } from "@/features/tips";
 import { asset } from "@/lib/square-path";
 
@@ -36,14 +38,13 @@ import { asset } from "@/lib/square-path";
  */
 
 /** 485:40571 — a 16px white disc holding a 12px `+` in `--color-spotlight`. */
-function AddGiftButton({ name, reason }: { name: string; reason: string }) {
+function AddGiftButton({ name, onOpen }: { name: string; onOpen: () => void }) {
   return (
     <button
       type="button"
-      disabled
-      title={reason}
-      aria-label={`Send a ${name}`}
-      className="grid h-4 w-4 shrink-0 cursor-not-allowed place-items-center rounded-full bg-white opacity-60"
+      onClick={onOpen}
+      aria-label={`Buy a ${name}`}
+      className="ws-press grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white"
     >
       <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden>
         <path d="M6 2.625v6.75M2.625 6h6.75" stroke="#7E3BEB" strokeWidth="1.5" strokeLinecap="round" />
@@ -53,19 +54,35 @@ function AddGiftButton({ name, reason }: { name: string; reason: string }) {
 }
 
 /**
- * WHY THE `+` IS INERT.
+ * WHY THE `+` OPENS A TRAY BUT CANNOT YET PAY.
  *
- * It is a send control — the file puts it beside the count, on a gallery of
- * priced gifts — and sending a gift to a PROFILE has no route. The served spec
- * carries `/posts/{id}/tips`, `/streams/{id}/gifts` and both of their
- * `/transfer` steps, and nothing under `/profiles/{id}/tips`; the branch for it
- * in `sendTip` is a path the service has never answered. Worse, the settle
- * step is explicitly absent, so even a created profile tip could not be paid.
+ * Node 1285:83137 answers what this control is, and it is not what the earlier
+ * build assumed. It is not "send this gift to this profile" — it is "BUY Gift
+ * - Book", with a quantity stepper, a running total and "Proceed to Pay".
  *
- * So it renders, disabled, saying why — never a control that looks tappable
- * and quietly does nothing. It comes alive the day the two routes land.
+ * That is a DIFFERENT ECONOMIC MODEL from the one the service runs today, and
+ * the difference is the whole reason this is gated rather than wired:
+ *
+ *   TODAY — a gift is paid for AT SEND TIME. `POST /streams/:id/gifts` takes
+ *   `{ amountKash, giftId }` and charges the sender then and there. Nothing is
+ *   owned before or after; the money and the gesture are one act.
+ *
+ *   THE DESIGN — a gift is BOUGHT UP FRONT into a stock you hold, and the tile
+ *   count is how many you own. Sending one later spends from that stock. That
+ *   is the Bigo/TikTok shape, and it is coherent — it is also why the room's
+ *   tray shows no prices yet.
+ *
+ * The second needs three things the service does not have. Probed, not
+ * assumed: `GET /me/gifts`, `/gifts`, `/me/gift-inventory` and `/gifts/catalog`
+ * all answer NOT_FOUND, and `/purchases` buys KASH WITH USDC — it is the
+ * top-up flow, not a way to buy an item with KASH.
+ *
+ * So the tray opens, because browsing the catalogue at full size is real and
+ * works; and the pay action is disabled WITH ITS REASON, because a button that
+ * takes money it cannot take is the one failure worth refusing outright. It
+ * comes alive the day a catalogue, an inventory and a purchase route land.
  */
-const NO_PROFILE_GIFTS = "Sending a gift straight to a profile isn't available yet";
+const NO_GIFT_PURCHASE = "Buying gifts isn't available yet";
 
 export function ProfileGiftGallery() {
   /*
@@ -83,6 +100,9 @@ export function ProfileGiftGallery() {
     settled by construction, so the query is simply on.
   */
   const tips = useReceivedTips(true);
+  // Which tile opened the tray, or null. The id rather than a boolean, so
+  // reopening on a different gift lands on THAT gift.
+  const [buying, setBuying] = useState<string | null>(null);
 
   const counts = new Map<string, number>();
   for (const tip of tips.data ?? []) {
@@ -159,12 +179,19 @@ export function ProfileGiftGallery() {
                     {received}
                   </span>
                 )}
-                <AddGiftButton name={gift.name} reason={NO_PROFILE_GIFTS} />
+                <AddGiftButton name={gift.name} onOpen={() => setBuying(gift.id)} />
               </span>
             </div>
           </div>
         );
       })}
+
+      <BuyGiftSheet
+        open={buying !== null}
+        giftId={buying}
+        onClose={() => setBuying(null)}
+        disabledReason={NO_GIFT_PURCHASE}
+      />
     </div>
   );
 }
