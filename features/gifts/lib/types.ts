@@ -65,3 +65,16 @@ export const GiftPurchaseSchema = z.object({
   owned: z.number().optional(),
 });
 export type GiftPurchase = z.infer<typeof GiftPurchaseSchema>;
+
+/**
+ * SQUARE COINS — the unit gifts are priced in.
+ *
+ * An INTEGER, deliberately. A coin is the smallest spendable thing, so a
+ * fractional one cannot exist, and using a whole number here means the tray's
+ * arithmetic is exact by construction rather than by careful string handling.
+ * That is the quiet benefit of the unit: three Roses is 30, not
+ * 0.030000000000000002.
+ */
+export const CoinBalanceSchema = z.object({
+  balance: z.number(),
+});

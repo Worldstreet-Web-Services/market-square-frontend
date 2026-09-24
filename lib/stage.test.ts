@@ -362,10 +362,17 @@ describe("the stage renderer, by construction", () => {
     // to Ada"), because a gist room lets you gift anybody in the room, and an
     // exact-string assertion would have failed for a change that cannot
     // possibly charge anyone.
-    assert.match(giftSheet, /priced\s*\n?\s*\? `Send \$\{selected\.name\} · \$\{formatKash\(total\)\}`/);
+    // The total is COINS now, not KASH — gifts are priced in Square coins and
+    // the tray draws that unit. The rule this pins is unchanged: only the
+    // PRICED branch may print a total, and the free branch may not mention
+    // money at all.
+    assert.ok(
+      s_includes(giftSheet, "? `Send ${selected.name} · ${total.toLocaleString()}`"),
+      "the priced label no longer prints a total"
+    );
     const freeBranch = giftSheet.slice(giftSheet.indexOf("? `Send ${selected.name} · "));
     const freeLabel = freeBranch.slice(freeBranch.indexOf(": recipient"), freeBranch.indexOf("</Button>"));
-    assert.doesNotMatch(freeLabel, /formatKash|total|priceKash/, "the free tray prints a price");
+    assert.doesNotMatch(freeLabel, /total|priceCoins|priceKash/, "the free tray prints a price");
   });
 
   it("removes a guest from ONE place, whichever surface the host is on", () => {

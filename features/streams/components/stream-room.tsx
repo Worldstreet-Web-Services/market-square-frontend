@@ -60,7 +60,8 @@ import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-pl
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { GiftSheet } from "@/features/streams/components/gift-sheet";
-import { KashBuySheet, useKashAccount } from "@/features/kash";
+import { KashBuySheet } from "@/features/kash";
+import { useCoinBalance } from "@/features/gifts";
 import { LIVE_GIFTS, giftsArePriced, type LiveGift } from "@/lib/gifts";
 import { useSendTip } from "@/features/tips";
 import { multiplyKash } from "@/lib/kash-amount";
@@ -506,7 +507,8 @@ export function StreamRoom({
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [giftBursts, setGiftBursts] = useState<GiftBurst[]>([]);
   // Only while the tray is open; the hook polls at 15s. See house-room.
-  const giftAccount = useKashAccount(giftsOpen);
+  // Coins, not KASH — see house-room. Read only while the tray is open.
+  const giftCoins = useCoinBalance(giftsOpen);
   // See house-room: short of KASH offers the top-up instead of a refusal.
   const [topUpOpen, setTopUpOpen] = useState(false);
   const reactionTimers = useRef<number[]>([]);
@@ -825,7 +827,6 @@ export function StreamRoom({
    * was not ready, so the moment was withheld too.
    */
   const giftsAvailable = data.status === "live";
-  const giftBalance = giftAccount.data?.balance ?? null;
   const giftsPriced = giftsArePriced(data.status);
   // The service's own tally, never inflated by unsaved local taps.
   const likeCount = data.likeCount;
@@ -1430,7 +1431,7 @@ export function StreamRoom({
           /* Read only while the tray is open — see the note in house-room. A
              broadcast's tray IS priced once the flag is on, so this is the
              surface where affordability bites first. */
-          balanceKash={giftBalance}
+          balanceCoins={giftCoins}
           onTopUp={() => setTopUpOpen(true)}
         />
       )}

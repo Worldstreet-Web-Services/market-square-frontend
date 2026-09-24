@@ -4,8 +4,6 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { GiftGrid } from "@/components/ui/gift-grid";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
-import { exceedsBalance, multiplyKash } from "@/lib/kash-amount";
-import { formatKash } from "@/lib/format";
 import { asset } from "@/lib/square-path";
 import { Button } from "@/components/ui/button";
 import { IconX } from "@/components/ui/icons";
@@ -57,7 +55,7 @@ export function GiftSheet({
   priced = false,
   recipients,
   initialRecipientId,
-  balanceKash,
+  balanceCoins,
   onTopUp,
 }: {
   open: boolean;
@@ -82,7 +80,7 @@ export function GiftSheet({
    */
   initialRecipientId?: string | null;
   /**
-   * WHAT THIS READER CAN ACTUALLY SPEND, when the tray is priced.
+   * HOW MANY COINS THIS READER HOLDS, when the tray is priced.
    *
    * An honest tray is the whole point of keeping pay-at-send instead of
    * inventory: every tile tells the truth about its price AND about whether
@@ -96,7 +94,7 @@ export function GiftSheet({
    * that can actually refuse a spend. Unknown leaves everything sendable and
    * lets the service answer.
    */
-  balanceKash?: string | null;
+  balanceCoins?: number | null;
   /**
    * OPEN THE KASH TOP-UP, when the reader cannot afford what they chose.
    *
@@ -129,7 +127,16 @@ export function GiftSheet({
   // exceeding six places. The button must show the number that will be
   // charged. Null falls back to the single price rather than printing a total
   // this sheet cannot stand behind.
-  const total = multiplyKash(selected.priceKash, quantity) ?? selected.priceKash;
+  /*
+    THE TOTAL IS COINS, AND COINS ARE INTEGERS.
+
+    That is the quiet benefit of the unit change: a gift total was decimal
+    KASH, where three Roses at 0.01 is 0.03 and the float answer is
+    0.030000000000000002 — a number the engine rejects and which was never
+    what the sender was shown. Coins are whole, so the arithmetic is exact by
+    construction and `multiplyKash` is no longer needed here.
+  */
+  const total = selected.priceCoins * quantity;
 
   /*
     SHORT OF KASH IS NOT A REFUSAL, IT IS A DETOUR.
@@ -147,7 +154,7 @@ export function GiftSheet({
     Only when the tray is PRICED. On a free tray nothing is spent, so a balance
     cannot be short of anything.
   */
-  const overBalance = priced && exceedsBalance(total, balanceKash);
+  const overBalance = priced && typeof balanceCoins === "number" && total > balanceCoins;
   const needsTopUp = overBalance && Boolean(onTopUp);
 
   return (
@@ -253,12 +260,12 @@ export function GiftSheet({
           short; it is here too so somebody can top up BEFORE they are told
           they cannot afford something.
         */}
-        {priced && typeof balanceKash === "string" && (
+        {priced && typeof balanceCoins === "number" && (
           <div className="mt-4 flex items-center justify-between gap-3">
             <span className="flex items-center gap-1.5 text-[13px] text-grey-400">
               {/* eslint-disable-next-line @next/next/no-img-element -- the file's coin */}
               <img src={asset("/gifts/coin.svg")} alt="" aria-hidden className="size-4 shrink-0" />
-              <span className="tnum text-white">{formatKash(balanceKash)}</span>
+              <span className="tnum text-white">{balanceCoins.toLocaleString()}</span>
             </span>
             {onTopUp && (
               <button
@@ -323,11 +330,11 @@ export function GiftSheet({
           {recipients && people.length === 0
             ? "Nobody else is here yet"
             : needsTopUp
-              ? `Get KASH · ${formatKash(total)} needed`
+              ? `Get coins · ${total.toLocaleString()} needed`
               : overBalance
                 ? "Not enough KASH"
             : priced
-              ? `Send ${selected.name} · ${formatKash(total)}`
+              ? `Send ${selected.name} · ${total.toLocaleString()}`
               : recipient
                 ? `Send ${selected.name} to ${recipient.name}`
                 : `Send ${selected.name}`}
@@ -349,7 +356,7 @@ export function GiftSheet({
         */}
         <p className="mt-2 text-center text-[11px] text-grey-600">
           {priced
-            ? "Sent from your KASH balance."
+            ? "Sent from your coin balance."
             : "Nothing is charged — paid gifting isn't switched on yet. Everyone in the room sees what you send."}
         </p>
       </div>

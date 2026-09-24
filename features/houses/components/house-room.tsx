@@ -59,7 +59,8 @@ import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gif
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
 import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
-import { KashBuySheet, useKashAccount } from "@/features/kash";
+import { KashBuySheet } from "@/features/kash";
+import { useCoinBalance } from "@/features/gifts";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
@@ -1116,7 +1117,17 @@ function LiveHouse({
     it. `null` while closed is "not known", which the tray treats as "let the
     service decide" rather than as a shortfall.
   */
-  const giftBalance = useKashAccount(giftsOpen).data?.balance ?? null;
+  /*
+    COINS, NOT KASH — gifts are priced in Square coins now, so the number the
+    tray compares against is the coin balance. Read only while the tray is
+    open: a room is already the most expensive surface in the app, and a
+    balance nobody is looking at is a request nobody needed.
+
+    `null` while the service has no coins yet, which the tray reads as "not
+    known" and therefore blocks nothing. The interface must not invent a
+    shortfall it cannot see; only the service can refuse a spend.
+  */
+  const giftCoins = useCoinBalance(giftsOpen);
   /* Short of KASH mid-gift opens the top-up rather than stopping the sender —
      the TikTok shape, and the tray hands over rather than stacking dialogs. */
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -2561,7 +2572,7 @@ function LiveHouse({
         recipients={giftRecipients}
         priced={giftsArePriced(stream.status)}
         initialRecipientId={giftTo}
-        balanceKash={giftBalance}
+        balanceCoins={giftCoins}
         onTopUp={() => setTopUpOpen(true)}
       />
       <KashBuySheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />

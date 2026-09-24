@@ -3,11 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { errorCode } from "@/lib/api/envelope";
-import { buyGift, fetchGiftCatalog, fetchGiftInventory } from "@/features/gifts/lib/api";
+import { buyGift, fetchCoinBalance, fetchGiftCatalog, fetchGiftInventory } from "@/features/gifts/lib/api";
 import type { GiftHolding } from "@/features/gifts/lib/types";
 
 const CATALOG_KEY = ["ms", "gift-catalog"] as const;
 const INVENTORY_KEY = ["ms", "gift-inventory"] as const;
+const COINS_KEY = ["ms", "coins"] as const;
 
 /**
  * WHETHER THIS DEPLOYMENT HAS A GIFT ECONOMY AT ALL.
@@ -70,6 +71,29 @@ export function useGiftInventory(enabled = true) {
   });
 }
 
+/**
+ * THE READER'S COIN BALANCE, or null when this deployment has no coins.
+ *
+ * @param enabled  Off while nothing is showing it — the gift tray wants this
+ *                 only while open, and a balance nobody is looking at is a
+ *                 request nobody needed.
+ *
+ * NULL IS "NOT KNOWN", NOT "NONE". A read still in flight, a failed one, or a
+ * service without coins must not grey out the tray: that would be the
+ * interface inventing a shortfall it cannot see, and only the service can
+ * actually refuse a spend. The tray treats null as "let the service decide".
+ */
+export function useCoinBalance(enabled = true): number | null {
+  const { authenticated } = useAuth();
+  const query = useQuery({
+    queryKey: COINS_KEY,
+    queryFn: fetchCoinBalance,
+    enabled: enabled && authenticated,
+    retry: false,
+  });
+  return query.isSuccess ? query.data : null;
+}
+
 /** `giftId -> how many I own`, for the surfaces that render a count per tile. */
 export function ownedByGift(items: GiftHolding[] | undefined): Map<string, number> {
   const owned = new Map<string, number>();
@@ -92,8 +116,8 @@ export function useBuyGift() {
     mutationFn: buyGift,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: INVENTORY_KEY });
-      // A purchase spends KASH, so the balance every surface shows is stale.
-      void queryClient.invalidateQueries({ queryKey: ["kash", "account"] });
+      // A purchase spends COINS, so any surface showing that balance is stale.
+      void queryClient.invalidateQueries({ queryKey: COINS_KEY });
     },
   });
 }

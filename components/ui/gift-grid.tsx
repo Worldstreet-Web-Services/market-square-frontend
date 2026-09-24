@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { cn } from "@/lib/cn";
-import { formatKash } from "@/lib/format";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
 import { asset } from "@/lib/square-path";
 
@@ -87,7 +86,7 @@ export function GiftGrid({
             title={blocked ? unavailableReason : undefined}
             aria-label={
               showPrices
-                ? `${gift.name}, ${formatKash(gift.priceKash)}${blocked ? ` — ${unavailableReason}` : ""}`
+                ? `${gift.name}, ${gift.priceCoins.toLocaleString()} coins${blocked ? ` — ${unavailableReason}` : ""}`
                 : gift.name
             }
             className={cn(
@@ -103,7 +102,10 @@ export function GiftGrid({
               <span className="mt-1 flex items-center gap-1">
                 <Image src={asset("/gifts/coin.svg")} alt="" width={9} height={9} aria-hidden />
                 <span className="tnum text-[11px] font-bold leading-4 text-white">
-                  {gift.priceKash}
+                  {/* COINS, not KASH — the unit a reader spends. `toLocaleString`
+                      because the ladder reaches 50,000 and a five-digit run of
+                      bare digits is unreadable at 11px. */}
+                  {gift.priceCoins.toLocaleString()}
                 </span>
               </span>
             ) : (

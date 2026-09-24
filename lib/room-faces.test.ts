@@ -214,8 +214,8 @@ test("a purchase never counts up optimistically", () => {
   const hooks = readFileSync("features/gifts/hooks/use-gifts.ts", "utf8");
   assert.doesNotMatch(hooks, /onMutate/, "the gift count is optimistic — it must not be");
   assert.match(hooks, /invalidateQueries\(\{ queryKey: INVENTORY_KEY \}\)/);
-  // Buying spends KASH, so every surface showing a balance is stale.
-  assert.match(hooks, /invalidateQueries\(\{ queryKey: \["kash", "account"\] \}\)/);
+  // Buying spends COINS, so any surface showing that balance is stale too.
+  assert.match(hooks, /invalidateQueries\(\{ queryKey: COINS_KEY \}\)/);
 });
 
 test("the client never names a gift's price", () => {
@@ -243,4 +243,33 @@ test("an idempotency key is one per INTENT, not one per attempt", () => {
   const gallery = readFileSync("components/layout/profile-gift-gallery.tsx", "utf8");
   assert.match(gallery, /function buyKey\(giftId: string, quantity: number\): string \{/);
   assert.match(gallery, /return `gift:\$\{giftId\}:\$\{quantity\}`;/);
+});
+
+test("every coin price is exactly its KASH price times the rate", () => {
+  /*
+    THE COIN LADDER WAS DERIVED FROM THE KASH ONE, on purpose: switching the
+    displayed unit changes what a reader SEES and nothing about what anything
+    COSTS. A rose is 10 coins because it is 0.01 KASH, not because somebody
+    picked 10.
+
+    So if these two ever disagree, the tile is lying about one of them — and
+    the one it is lying about is whichever the service does not hold. Pinned
+    across all fourteen rungs rather than spot-checked, because the ones that
+    would drift are the sub-unit ones nobody reads twice.
+  */
+  const gifts = readFileSync("lib/gifts.ts", "utf8");
+  const rate = Number(/COINS_PER_KASH = (\d+)/.exec(gifts)?.[1]);
+  assert.equal(rate, 1000);
+
+  const rows = [...gifts.matchAll(/priceCoins: (\d+), priceKash: "([\d.]+)"/g)];
+  assert.equal(rows.length, 14, "the ladder changed length — re-check both units");
+  for (const [, coins, kash] of rows) {
+    // Compared in integer coins, never in floats: 0.1 * 1000 is 100.00000000000001.
+    const fromKash = Math.round(Number(kash) * rate);
+    assert.equal(
+      Number(coins),
+      fromKash,
+      `a rung disagrees: ${coins} coins vs ${kash} KASH x ${rate} = ${fromKash}`
+    );
+  }
 });

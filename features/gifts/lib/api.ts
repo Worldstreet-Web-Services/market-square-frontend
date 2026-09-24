@@ -2,6 +2,7 @@
 
 import { msApi } from "@/lib/api/service";
 import {
+  CoinBalanceSchema,
   GiftCatalogSchema,
   GiftInventorySchema,
   GiftPurchaseSchema,
@@ -28,6 +29,11 @@ import {
 /** The service's own price table. Ours is artwork only; see the schema note. */
 export async function fetchGiftCatalog(): Promise<GiftCatalogItem[]> {
   return GiftCatalogSchema.parse(await msApi.get("/gifts")).items;
+}
+
+/** How many coins this reader holds. Own account only. */
+export async function fetchCoinBalance(): Promise<number> {
+  return CoinBalanceSchema.parse(await msApi.authedGet("/me/coins")).balance;
 }
 
 /** What this reader owns, per gift. Own account only — there is no other read. */
