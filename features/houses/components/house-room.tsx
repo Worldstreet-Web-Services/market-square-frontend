@@ -2466,6 +2466,24 @@ function LiveHouse({
       */}
       <RoomPhoneBar
         unreadChat={unreadChat}
+        /*
+          EVERY CONTROL THE DOCK HAS, because this bar REPLACES it below `md`
+          rather than summarising it. It shipped with four of them and the dock
+          grew three more — the tip pill, the moderator sheet and the gift tray
+          — so on a phone a host could not appoint a moderator at all and
+          nobody could open the gift tray except by tapping a person first.
+
+          The same handlers and the same guards as the dock above, deliberately
+          written out rather than lifted into a shared object: two call sites
+          that must not drift are better pinned by a test than by indirection
+          that hides which one is missing an argument.
+        */
+        primary={isHost ? null : (tipSlot?.(stream.id, stream.owner) ?? null)}
+        onGift={() => {
+          setGiftTo(null);
+          setGiftsOpen(true);
+        }}
+        onPeople={canManageModerators ? () => setModeratorsOpen(true) : null}
         mic={
           onStage
             ? {
