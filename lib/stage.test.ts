@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+
+/** Substring check, used where a regex would need an escaped newline. */
+const s_includes = (haystack: string, needle: string) => haystack.includes(needle);
 import { describe, it } from "node:test";
 import {
   CROP_BUDGET,
@@ -986,6 +989,35 @@ describe("Gifting anybody in a gist room", () => {
       sheet.includes('recipients && people.length === 0'),
       "the empty-room guard no longer keys on the room shape"
     );
+  });
+
+  it("tapping a person offers a gift, and only when they resolve", () => {
+    /*
+      The dock's gift button is "pick an object, then a person". Tapping
+      somebody and saying send them a gift is how a person actually arrives at
+      the thought (ogazboiz, 2026-09-24: "how do we give a person gift in a
+      gist room"), so the room offers both doors into ONE tray.
+
+      THE GUARD IS THE IMPORTANT HALF. A host's LiveKit identity is the literal
+      string `broadcaster` and carries no account id, so the id must come from
+      `stream.ownerId` — and anybody who does not resolve to a row the roster
+      already knows is not offered the control at all. A row that quietly fell
+      back to the host would pay the WRONG PERSON while naming another.
+    */
+    const room = source("features/houses/components/house-room.tsx");
+    const sheet = source("features/houses/components/person-sheet.tsx");
+    assert.match(room, /const giftablePersonId = useMemo/);
+    assert.match(room, /livePerson\.isRoomHost \? stream\.ownerId : baseIdentity\(livePerson\.identity\)/);
+    assert.match(room, /giftRecipients\.some\(\(row\) => row\.id === id\) \? id : null/);
+    // Offered only when it resolves — `undefined` removes the row entirely.
+    assert.ok(
+      s_includes(room, "giftablePersonId"),
+      "the gift row is no longer gated on the person resolving"
+    );
+    // Never on yourself: the service refuses a self-gift outright.
+    assert.match(sheet, /\{!isSelf && onGift && \(/);
+    // And the tray opens ON that person rather than on the host.
+    assert.match(room, /initialRecipientId=\{giftTo\}/);
   });
 
   it("both rooms draw gift bursts from ONE component", () => {

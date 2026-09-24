@@ -55,6 +55,7 @@ export function GiftSheet({
   onSend,
   priced = false,
   recipients,
+  initialRecipientId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -71,6 +72,13 @@ export function GiftSheet({
    */
   recipients?: readonly GiftRecipient[];
   /**
+   * OPEN ON THIS PERSON, when the tray was reached by tapping THEM rather than
+   * by tapping the dock's gift button. Two doors into one tray: pick the
+   * object then the person, or pick the person then the object. Absent falls
+   * back to the host, which is the first row.
+   */
+  initialRecipientId?: string | null;
+  /**
    * Whether sending this actually costs KASH.
    *
    * False today, and the copy follows it exactly. There is no
@@ -85,7 +93,7 @@ export function GiftSheet({
   const [quantity, setQuantity] = useState<number>(1);
   // The host leads the roster, so index 0 is the sane default without this
   // sheet needing to know what a host is.
-  const [toId, setToId] = useState<string | null>(null);
+  const [toId, setToId] = useState<string | null>(initialRecipientId ?? null);
   const people = recipients ?? [];
   const recipient = people.find((person) => person.id === toId) ?? people[0] ?? null;
   const selected = LIVE_GIFTS.find((gift) => gift.id === selectedId) ?? LIVE_GIFTS[0];

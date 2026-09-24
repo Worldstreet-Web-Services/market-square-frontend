@@ -1096,6 +1096,13 @@ function LiveHouse({
   */
   const giftBursts = useGiftBursts();
   const [giftsOpen, setGiftsOpen] = useState(false);
+  /*
+    WHO THE TRAY OPENS ON. Null when it was reached from the dock's gift
+    button, which is "pick an object, then a person"; set when it was reached
+    by tapping SOMEBODY, which is "pick a person, then an object". Both doors
+    lead to the same tray rather than to two trays that drift.
+  */
+  const [giftTo, setGiftTo] = useState<string | null>(null);
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
     onGift: giftBursts.receive,
@@ -1195,6 +1202,7 @@ function LiveHouse({
     }
     return out;
   }, [chatMentionables, stream.owner, myId]);
+
 
   /* ---- announcements --------------------------------------------------- */
 
@@ -1552,6 +1560,23 @@ function LiveHouse({
     // Still in the audience: somebody who left is not offered an invitation.
     return person.isRoomHost ? person : { ...person, seated: false, micMuted: true, present: presentIds.has(base) };
   }, [person, slots, presentIds]);
+
+  /**
+   * THE OPEN PERSON'S GIFT ID, or null when they cannot be gifted.
+   *
+   * The id rule is the ROSTER'S OWN, reused rather than rewritten: the host is
+   * keyed on `stream.ownerId`, because a host's LiveKit identity is the
+   * literal string `broadcaster` and carries no account id at all. Anybody who
+   * does not resolve to a row the roster already knows is NOT offered a gift
+   * row — a row that quietly fell back to the host would pay the wrong person
+   * while naming another, which is the exact failure `toProfileId` exists to
+   * prevent, arriving through a different door.
+   */
+  const giftablePersonId = useMemo(() => {
+    if (!livePerson) return null;
+    const id = livePerson.isRoomHost ? stream.ownerId : baseIdentity(livePerson.identity);
+    return id && giftRecipients.some((row) => row.id === id) ? id : null;
+  }, [livePerson, giftRecipients, stream.ownerId]);
 
   /*
     A HOUSE MEMBER WHO IS LISTENING OPENS THE SAME SHEET AS THE AUDIENCE. The
@@ -2195,7 +2220,10 @@ function LiveHouse({
           is there for everyone including the host.
         */
         primary={isHost ? null : (tipSlot?.(stream.id, stream.owner) ?? null)}
-        onGift={() => setGiftsOpen(true)}
+        onGift={() => {
+          setGiftTo(null);
+          setGiftsOpen(true);
+        }}
         mic={
           onStage
             ? {
@@ -2452,6 +2480,7 @@ function LiveHouse({
         onClose={() => setGiftsOpen(false)}
         onSend={sendGift}
         recipients={giftRecipients}
+        initialRecipientId={giftTo}
       />
 
       {isHost && (
@@ -2469,12 +2498,31 @@ function LiveHouse({
         />
       )}
 
+      {/*
+        The gift row on a person is offered ONLY when that person resolves to
+        somebody the roster already knows. The id rule is the roster's own —
+        the host is keyed on `stream.ownerId`, because their LiveKit identity
+        is the literal string `broadcaster` and carries no account id — and
+        anybody who does not resolve is not offered, because a row that
+        silently fell back to the host would gift the WRONG PERSON while
+        naming another. That is the same failure the recipient field exists to
+        prevent, arriving through a different door.
+      */}
       <PersonSheet
         person={livePerson}
         open={person !== null}
         onClose={() => setPerson(null)}
         isHost={isHost}
         hostBusy={resolve.isPending}
+        onGift={
+          giftablePersonId
+            ? () => {
+                setGiftTo(giftablePersonId);
+                setPerson(null);
+                setGiftsOpen(true);
+              }
+            : undefined
+        }
         onMoveDown={(target) => {
           // An approved speaker's LiveKit identity is `<did>#speaker`; the
           // request row is keyed on the bare DID. Comparing them raw never
