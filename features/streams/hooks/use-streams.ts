@@ -180,12 +180,21 @@ export function useStream(
   id: string,
   poll: boolean | number | readonly ["while-live", number] = false,
   /** Off while there is no id to read — the shell's room session before a room is entered. */
-  enabled = true
+  enabled = true,
+  /**
+   * OVERRIDE THE CLIENT'S 30s DEFAULT, for readers that are not watching a
+   * counter. The default pairs with `refetchOnWindowFocus`, so a LIST of cards
+   * each holding one of these re-fans one request per card on every tab
+   * return — O(cards) in a burst. A card wants a long stale window; the room
+   * session, which is watching status, wants the default. Undefined inherits.
+   */
+  staleTime?: number
 ) {
   return useQuery({
     queryKey: ["ms", "stream", id],
     queryFn: () => fetchStream(id),
     enabled,
+    ...(staleTime === undefined ? {} : { staleTime }),
     refetchInterval: Array.isArray(poll)
       ? (query) => (query.state.data?.status === "live" ? poll[1] : false)
       : poll === false

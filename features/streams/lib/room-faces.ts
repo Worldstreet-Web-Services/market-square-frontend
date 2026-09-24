@@ -49,6 +49,19 @@ export interface RoomFaceSubject {
 /** How many plates the card draws — `Frame 2147230803` has three. */
 export const ROOM_FACE_LIMIT = 3;
 
+/**
+ * HOW LONG A CARD'S DETAIL READ STAYS FRESH — 5 minutes, against the client's
+ * 30s default.
+ *
+ * The default exists for things that move while you watch them. Who is in a
+ * room is not that, and the default pairs with `refetchOnWindowFocus: true`:
+ * a rail of twelve cards each holding a 30s-stale query re-fans TWELVE
+ * requests in one tick every time the reader alt-tabs back after half a
+ * minute. The list query behind the rail already refreshes, so the cards were
+ * paying for freshness the list had.
+ */
+export const ROOM_CARD_STALE_MS = 5 * 60_000;
+
 
 export function liveRoomFaces<T extends FaceProfile>(stream: {
   participants?: readonly T[] | null;

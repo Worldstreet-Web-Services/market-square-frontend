@@ -397,7 +397,10 @@ export function NotificationsPage({
   const { ready, authenticated, login } = useAuth();
   /* Omitted entirely for "everything" — the enum has no `all`. */
   const [group, setGroup] = useState<NotificationGroup | "">("");
-  const notifications = useNotifications(group || undefined);
+  // POLLS, because this IS the list the reader is looking at — the one place
+  // a 30s interval on notifications is the reader's own expectation rather
+  // than a background cost they cannot see. See the hook.
+  const notifications = useNotifications(group || undefined, true);
   const markRead = useMarkNotificationsRead();
   const sentinel = useInfiniteScroll(
     () => notifications.fetchNextPage(),
