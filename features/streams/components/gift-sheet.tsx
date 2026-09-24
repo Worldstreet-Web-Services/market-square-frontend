@@ -332,10 +332,25 @@ export function GiftSheet({
                 ? `Send ${selected.name} to ${recipient.name}`
                 : `Send ${selected.name}`}
         </Button>
+        {/*
+          WHAT THE FREE STATE IS, said without jargon or apology.
+
+          It read "KASH gifting turns on when live settlement ships", which is
+          a sentence written for us. A reader does not know what live
+          settlement is, cannot tell whether it is a bug or a plan, and is left
+          feeling the gift they just sent was not real (ogazboiz, 2026-09-24:
+          "why is it showing free ... this is not real").
+
+          So it names the state instead: nothing is charged, nobody is paid,
+          and the thing that DID happen — the whole room saw it — is said in
+          the present tense rather than as consolation. A free gift here is a
+          reaction everyone can see, which is a real act; what it is not is a
+          payment, and that is what the sentence has to be straight about.
+        */}
         <p className="mt-2 text-center text-[11px] text-grey-600">
           {priced
             ? "Sent from your KASH balance."
-            : "Free — everyone watching sees it. KASH gifting turns on when live settlement ships."}
+            : "Nothing is charged — paid gifting isn't switched on yet. Everyone in the room sees what you send."}
         </p>
       </div>
     </Sheet>
