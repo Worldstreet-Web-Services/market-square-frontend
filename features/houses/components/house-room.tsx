@@ -51,7 +51,7 @@ import { CopyRow, CopyCodeRow, CopyCodeChip } from "@/features/houses/components
 import { HandTray } from "@/features/houses/components/hand-tray";
 import { HouseControls } from "@/features/houses/components/house-controls";
 import { HouseHeader } from "@/features/houses/components/house-header";
-import { RecordGistButton, RoomDock } from "@/features/houses/components/room-dock";
+import { RoomDock } from "@/features/houses/components/room-dock";
 import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { RoomReactions, useRoomReactions } from "@/features/houses/components/room-reactions";
 import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bursts";
@@ -2180,7 +2180,21 @@ function LiveHouse({
            removes itself where a tip could not be taken — so a room with no
            tippable host simply has an empty left edge, as the file's host
            frame does before Record Gist is pressed. */
-        primary={isHost ? <RecordGistButton /> : (tipSlot?.(stream.id, stream.owner) ?? null)}
+        /*
+          NO "RECORD GIST" — removed 2026-09-24 at ogazboiz's word, and it was
+          never a working control: it rendered permanently disabled, because
+          recording a room needs LiveKit egress that is not provisioned. A
+          button that has never once been pressable is not a promise of a
+          feature, it is a dead pixel in the one row the host uses most.
+
+          The host's left edge is simply empty now, which is what the file's
+          own host frame draws before Record Gist is pressed. The audience
+          keeps "Give a tip"; a host tipping their own room is refused by the
+          service, so there is nothing to put there in its place. Gifting
+          somebody ELSE in the room is the gift button, which is beside it and
+          is there for everyone including the host.
+        */
+        primary={isHost ? null : (tipSlot?.(stream.id, stream.owner) ?? null)}
         onGift={() => setGiftsOpen(true)}
         mic={
           onStage

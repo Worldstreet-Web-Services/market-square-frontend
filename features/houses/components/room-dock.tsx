@@ -1,7 +1,7 @@
 "use client";
 
 import { IconHand } from "@/components/ui/icons";
-import { IconRecord, IconRoomMic, IconRoomMicOff } from "@/components/ui/room-icons";
+import { IconRoomMic, IconRoomMicOff } from "@/components/ui/room-icons";
 import { ReactionControl } from "@/features/houses/components/reaction-control";
 import { cn } from "@/lib/cn";
 
@@ -223,19 +223,6 @@ function IconDockPeople() {
   );
 }
 
-export function RecordGistButton() {
-  return (
-    <button
-      type="button"
-      disabled
-      title="Recording a gist room needs egress, which is not provisioned yet."
-      className="ws-press flex h-10 shrink-0 items-center gap-2 rounded-full bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] px-3 text-[12px] font-medium leading-4 text-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1),0_1px_3px_0_rgba(0,0,0,0.1)] disabled:opacity-40"
-    >
-      <IconRecord className="h-4 w-4" />
-      Record Gist
-    </button>
-  );
-}
 
 /**
  * The dock's gift mark — a wrapped box at 20 inside the dock's own 40 target,
