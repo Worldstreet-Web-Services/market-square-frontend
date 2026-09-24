@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { exceedsBalance, multiplyKash } from "./kash-amount.ts";
+import { readFileSync } from "node:fs";
 import {
   canSendTip,
   tipAmountOutOfBounds,
   tipBlockedBecause,
   tipBoundsMessage,
+  tipSurfaceOf,
 } from "./tip-capability.ts";
 
 /** What production actually publishes today. */
@@ -206,4 +208,59 @@ test("the total is multiplied exactly, so the tray blocks on the real figure", (
   // the wrong number and one the engine rejects outright.
   assert.equal(multiplyKash("0.01", 3), "0.03");
   assert.equal(exceedsBalance(multiplyKash("0.01", 3) ?? "", "0.03"), false);
+});
+
+/**
+ * PRODUCTION PUBLISHES TWO RULES AND THEY DISAGREE — deployed 2026-09-24:
+ *
+ *   verifiedAuthorsOnly         true   — a byline stays closed
+ *   verifiedRoomRecipientsOnly  false  — a gist room is open to everyone
+ *
+ * They agreed until that deploy, which is why nothing noticed that the room's
+ * own tip pill was asking the AUTHOR rule. The moment they diverged, the
+ * control vanished for an unverified host the service would happily have paid:
+ * no error, no refusal, just a button that was not there.
+ */
+const PROD = { ...LIVE, verifiedRoomRecipientsOnly: false };
+const unverified = { verification: "unverified" };
+
+test("a gist room is a room, and a byline is a byline", () => {
+  // Derived from the target, never chosen by the caller — a `stream` IS the
+  // gist room, since a room is a stream with category 'house'.
+  assert.equal(tipSurfaceOf("stream"), "room");
+  assert.equal(tipSurfaceOf("post"), "post");
+  assert.equal(tipSurfaceOf("profile"), "post");
+});
+
+test("an unverified person in a room can be paid; the same person's byline cannot", () => {
+  assert.equal(tipBlockedBecause(PROD, unverified, "room"), null);
+  assert.equal(tipBlockedBecause(PROD, unverified, "post"), "unverified-recipient");
+  // The whole point of the two flags: one answer must not stand in for the other.
+  assert.notEqual(
+    tipBlockedBecause(PROD, unverified, "room"),
+    tipBlockedBecause(PROD, unverified, "post")
+  );
+});
+
+test("the room's tip control asks the room rule, not the default", () => {
+  /*
+    The gate is in a component, so it is read as source. `tipBlockedBecause`
+    defaults its surface to `post`, which is right for the callers that predate
+    the room rule and wrong for this one — and a default is silent when it is
+    wrong, which is exactly how this shipped.
+  */
+  const button = readFileSync(new URL("../features/tips/components/tip-button.tsx", import.meta.url), "utf8");
+  assert.match(button, /tipBlockedBecause\(capability\.data, target\.recipient, tipSurfaceOf\(target\.kind\)\)/);
+  assert.doesNotMatch(
+    button,
+    /tipBlockedBecause\(capability\.data, target\.recipient\)/,
+    "the room's pill is back on the default surface"
+  );
+});
+
+test("a deployment with ONE switch still applies it to rooms", () => {
+  // `undefined` is not `false`: a service that has never heard of the room flag
+  // means "there is one rule here", not "rooms are open". `??`, never `||`.
+  assert.equal(tipBlockedBecause(LIVE, unverified, "room"), "unverified-recipient");
+  assert.equal(tipBlockedBecause({ ...LIVE, verifiedRoomRecipientsOnly: false }, unverified, "room"), null);
 });

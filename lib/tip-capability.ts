@@ -47,6 +47,25 @@ export type TipSurface =
   /** A gist room — somebody gifts a person off a live roster. */
   | "room";
 
+/**
+ * WHICH RULE A TARGET FALLS UNDER — derived, never remembered.
+ *
+ * `tipBlockedBecause` takes the surface as an argument with a `post` default,
+ * which is safe for the callers that predate the room rule and a trap for the
+ * ones that do not: the room's own tip pill went on reading the AUTHOR rule
+ * for as long as the two flags agreed, and became wrong the moment production
+ * opened rooms (`verifiedRoomRecipientsOnly: false`) while keeping bylines
+ * closed (`verifiedAuthorsOnly: true`). Nothing failed — the control simply
+ * stopped appearing for an unverified host the service would have paid.
+ *
+ * So the mapping lives here, next to the rule it selects, and a caller with a
+ * target derives it rather than choosing it. A gist room is a `stream`; a post
+ * and a profile are both bylines.
+ */
+export function tipSurfaceOf(kind: "post" | "profile" | "stream"): TipSurface {
+  return kind === "stream" ? "room" : "post";
+}
+
 export function tipBlockedBecause(
   capability: TipCapability | null | undefined,
   recipient: TipRecipient | null | undefined,
