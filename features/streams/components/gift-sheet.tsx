@@ -57,6 +57,9 @@ export function GiftSheet({
   initialRecipientId,
   balanceCoins,
   onTopUp,
+  fromStock = false,
+  owned,
+  onBuyGift,
 }: {
   open: boolean;
   onClose: () => void;
@@ -112,6 +115,30 @@ export function GiftSheet({
    */
   onTopUp?: (needed: number) => void;
   /**
+   * WHETHER THIS TRAY SPENDS STOCK RATHER THAN CHARGING AT SEND.
+   *
+   * The service's `spendGiftsFromInventory`, READ and never inferred. The two
+   * economies cannot both be live: with this on a gift is something you
+   * already OWN and sending costs nothing further; with it off a gift is paid
+   * for as it is sent, which is what every deployment does until somebody
+   * flips the switch.
+   *
+   * It is a prop rather than a hook call so this component stays the file's
+   * tray and the ROOM owns the reading — the same way `priced` arrives.
+   */
+  fromStock?: boolean;
+  /** How many of each this reader holds. Only meaningful when `fromStock`. */
+  owned?: ReadonlyMap<string, number>;
+  /**
+   * BUY THE GIFT THEY JUST TAPPED AND DO NOT OWN.
+   *
+   * The same shape as `onTopUp` and for the same reason: you do not stop
+   * somebody who is trying to spend money, you sell them the means. A stock
+   * tray that greys out everything you have not bought yet is a shop with the
+   * shutters down.
+   */
+  onBuyGift?: (gift: LiveGift, quantity: number) => void;
+  /**
    * Whether sending this actually costs KASH.
    *
    * False today, and the copy follows it exactly. There is no
@@ -164,6 +191,26 @@ export function GiftSheet({
   */
   const overBalance = priced && typeof balanceCoins === "number" && total > balanceCoins;
   const needsTopUp = overBalance && Boolean(onTopUp);
+
+  /*
+    IN THE STOCK ECONOMY YOU CAN ONLY SEND WHAT YOU HOLD.
+
+    The service refuses with 409 `NO_GIFT_IN_STOCK`, and a tray that let the
+    tap through anyway would be offering fourteen objects and refusing most of
+    them at the last step — the "it looks fake" complaint arriving for a third
+    time, from a third direction.
+
+    So the TILES stay live, exactly as they do when a balance is short, and the
+    ACTION changes: it offers to buy the shortfall rather than to send. Same
+    detour, different currency.
+
+    `owned` absent is NOT zero. It is "this tray has not been told", and
+    treating it as nothing would block every send the moment an inventory read
+    was slow — the same rule `balanceCoins` follows.
+  */
+  const held = owned?.get(selected.id) ?? null;
+  const shortOfStock = fromStock && held !== null && held < quantity;
+  const needsBuy = shortOfStock && Boolean(onBuyGift);
 
   return (
     <Sheet open={open} onClose={onClose} bare>
@@ -247,10 +294,14 @@ export function GiftSheet({
         {/* Scrolls, so the quantity row and Send stay put — see the note in
             the post tip sheet. */}
         <div className="mt-6 max-h-[min(46dvh,360px)] overflow-y-auto overscroll-contain">
+          {/* Counts only in the stock economy — owning a gift is not a thing
+              that exists on a pay-at-send tray, so the corner stays empty
+              rather than printing a zero that means nothing. */}
           <GiftGrid
             selectedId={selectedId}
             onSelect={(gift) => setSelectedId(gift.id)}
             showPrices={priced}
+            owned={fromStock ? owned : undefined}
           />
         </div>
 
@@ -321,7 +372,13 @@ export function GiftSheet({
         <Button
           size="lg"
           className="mt-3 w-full"
-          disabled={(Boolean(recipients) && people.length === 0) || (overBalance && !onTopUp)}
+          disabled={
+            (Boolean(recipients) && people.length === 0) ||
+            (overBalance && !onTopUp) ||
+            // Out of stock with nowhere to buy: the service would refuse this
+            // anyway, and a button that can only fail is worse than none.
+            (shortOfStock && !onBuyGift)
+          }
           onClick={() => {
             // Short of COINS sends you to the coin purchase instead of
             // sending the gift — and COINS, not KASH: they are different
@@ -333,16 +390,30 @@ export function GiftSheet({
               onTopUp?.(total);
               return;
             }
+            /*
+              DON'T OWN IT YET — buy the SHORTFALL, not the whole quantity.
+              Somebody holding two Roses who asks for three needs one more, and
+              charging for three would take money for stock they already have.
+            */
+            if (needsBuy) {
+              onClose();
+              onBuyGift?.(selected, quantity - (held ?? 0));
+              return;
+            }
             onSend(selected, quantity, recipient);
             onClose();
           }}
         >
           {recipients && people.length === 0
             ? "Nobody else is here yet"
-            : needsTopUp
-              ? `Get coins · ${total.toLocaleString()} needed`
-              : overBalance
-                ? "Not enough KASH"
+            : needsBuy
+              ? `Get ${selected.name} · ${(quantity - (held ?? 0)).toLocaleString()} more`
+              : shortOfStock
+                ? `You have no ${selected.name}`
+                : needsTopUp
+                  ? `Get coins · ${total.toLocaleString()} needed`
+                  : overBalance
+                    ? "Not enough KASH"
             : priced
               ? `Send ${selected.name} · ${total.toLocaleString()}`
               : recipient

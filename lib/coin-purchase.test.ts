@@ -138,3 +138,62 @@ describe("a deployment with no treasury says so", () => {
     assert.doesNotMatch(sheet, /coins added/iu);
   });
 });
+
+/**
+ * THE CLIENT IS READY FOR THE STOCK ECONOMY BEFORE THE SERVER FLIPS TO IT.
+ *
+ * ogazboiz asked devops to set `GIFT_SPEND_FROM_INVENTORY=true` alongside the
+ * treasury wallet. With the tray still drawing from the catalogue, that would
+ * have taken EVERY send down: nobody owns stock yet, so the service's
+ * `sendFromStock` path would answer 409 `NO_GIFT_IN_STOCK` for every gift in
+ * every room, and the client had no way to say why or offer a fix.
+ *
+ * Built so the switch is a switch: inert while the flag is false, correct the
+ * moment it is true, with no deploy needed in between.
+ */
+describe("the tray follows whichever economy the service is running", () => {
+  const tray = read("features/streams/components/gift-sheet.tsx");
+  const room = read("features/houses/components/house-room.tsx");
+  const grid = read("components/ui/gift-grid.tsx");
+
+  it("reads the switch rather than inferring it from the routes answering", () => {
+    assert.match(room, /giftsComeFromStock\(useTipCapability\(\)\.data\)/u);
+    // And the inventory read only happens in that economy, and only while the
+    // tray is open — a pay-at-send deployment never fires it at all.
+    assert.match(room, /useGiftInventory\(fromStock && giftsOpen\)/u);
+  });
+
+  it("shows what you hold, and only where holding is a thing", () => {
+    assert.match(tray, /owned=\{fromStock \? owned : undefined\}/u, "counts leak onto a pay-at-send tray");
+    assert.match(grid, /owned\?: ReadonlyMap<string, number>;/u);
+    // Zero IS drawn — "you have none of this one" is a fact with an action
+    // attached, and hiding it makes a stock tray feel like it refuses at random.
+    assert.match(grid, /\(owned\.get\(gift\.id\) \?\? 0\)\.toLocaleString\(\)/u);
+  });
+
+  it("offers the shop instead of refusing, and buys only the SHORTFALL", () => {
+    // Holding two Roses and asking for three needs ONE more; charging for
+    // three would take money for stock already owned.
+    assert.match(tray, /onBuyGift\?\.\(selected, quantity - \(held \?\? 0\)\)/u);
+    assert.match(tray, /Get \$\{selected\.name\} · \$\{\(quantity - \(held \?\? 0\)\)/u);
+  });
+
+  it("treats an unknown inventory as unknown, never as zero", () => {
+    /*
+      The same rule `balanceCoins` follows. `owned` absent means this tray has
+      not been told; treating it as nothing would block every send the moment
+      an inventory read was slow, which is the interface inventing a refusal
+      the service never made.
+    */
+    assert.match(tray, /const held = owned\?\.get\(selected\.id\) \?\? null;/u);
+    assert.match(tray, /const shortOfStock = fromStock && held !== null && held < quantity;/u);
+  });
+
+  it("turns the service's own refusal into the shop", () => {
+    // 409 NO_GIFT_IN_STOCK names the gift, so the answer is to open it rather
+    // than apologise. A refused send spends nothing — the stock decrement and
+    // the tip row are one transaction on the service.
+    assert.match(room, /const missing = noGiftInStock\(error\);/u);
+    assert.match(room, /setBuyingGift\(missing\.giftId\)/u);
+  });
+});

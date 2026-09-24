@@ -13,4 +13,5 @@ export {
 } from "./hooks/use-gifts";
 export type { CoinBuyPhase } from "./hooks/use-gifts";
 export { CoinBuySheet } from "./components/coin-buy-sheet";
+export { insufficientCoins, noGiftInStock } from "./lib/api";
 export type { GiftCatalogItem, GiftHolding, GiftPurchase, CoinPurchase } from "./lib/types";

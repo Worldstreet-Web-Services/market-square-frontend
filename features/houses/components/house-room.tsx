@@ -59,7 +59,10 @@ import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gif
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
 import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
-import { CoinBuySheet } from "@/features/gifts";
+import { CoinBuySheet, noGiftInStock, ownedByGift, useGiftInventory } from "@/features/gifts";
+import { giftsComeFromStock } from "@/lib/tip-capability";
+import { useTipCapability } from "@/features/tips";
+import { BuyGiftSheet } from "@/components/layout/buy-gift-sheet";
 import { useCoinBalance } from "@/features/gifts";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
@@ -1133,6 +1136,23 @@ function LiveHouse({
   const [topUpOpen, setTopUpOpen] = useState(false);
   /** How many coins the tray was short, so the buy sheet can offer exactly that. */
   const [topUpNeeded, setTopUpNeeded] = useState(0);
+  /*
+    WHICH ECONOMY IS RUNNING — READ FROM THE SERVICE, NEVER INFERRED.
+
+    `spendGiftsFromInventory` decides whether a gift is something you OWN or
+    something you pay for as you send it. The obvious guess — "the gift routes
+    answer, so gifts must come from stock" — is wrong and expensive: those
+    routes are live for a long while before the switch flips, and a client on
+    the wrong side of it either charges for a rose somebody already bought or
+    offers a tray the service refuses with `NO_GIFT_IN_STOCK`.
+
+    The inventory read only runs in the stock economy and only while the tray
+    is open; on a pay-at-send deployment it never fires at all.
+  */
+  const fromStock = giftsComeFromStock(useTipCapability().data);
+  const giftStock = useGiftInventory(fromStock && giftsOpen);
+  /** The gift the reader tapped but does not own, so they can buy one. */
+  const [buyingGift, setBuyingGift] = useState<string | null>(null);
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
     onGift: giftBursts.receive,
@@ -1209,6 +1229,21 @@ function LiveHouse({
           */
           if (recipientLeftTheRoom(error)) {
             toast.error(`${to.name} left the room — nothing was charged.`);
+            return;
+          }
+          /*
+            OUT OF STOCK IS AN OFFER, NOT A FAILURE.
+
+            409 `NO_GIFT_IN_STOCK` names the gift, so the answer is the shop
+            rather than an apology — the same detour a short coin balance
+            takes. A refused send spends NOTHING: the service's stock
+            decrement and its tip row are one transaction, so there is no
+            half-charged state to explain here.
+          */
+          const missing = noGiftInStock(error);
+          if (missing) {
+            toast.error(`You don't own a ${gift.name} yet.`);
+            setBuyingGift(missing.giftId);
             return;
           }
           toast.error(
@@ -2597,6 +2632,16 @@ function LiveHouse({
           setTopUpNeeded(needed);
           setTopUpOpen(true);
         }}
+        fromStock={fromStock}
+        owned={fromStock ? ownedByGift(giftStock.data) : undefined}
+        onBuyGift={(gift) => setBuyingGift(gift.id)}
+      />
+      {/* Buying the one they tapped, from inside the room — the shop is where
+          the shutters were. Only mounted once something has been chosen. */}
+      <BuyGiftSheet
+        open={buyingGift !== null}
+        giftId={buyingGift}
+        onClose={() => setBuyingGift(null)}
       />
       {/*
         THE COIN PURCHASE, NOT THE KASH ONE.
