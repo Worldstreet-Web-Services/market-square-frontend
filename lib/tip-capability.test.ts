@@ -8,7 +8,7 @@ import {
   tipAmountOutOfBounds,
   tipBlockedBecause,
   tipBoundsMessage,
-  giftsComeFromStock,
+  giftsComeFromCoins,
   tipSurfaceOf,
 } from "./tip-capability.ts";
 
@@ -276,21 +276,22 @@ test("a deployment with ONE switch still applies it to rooms", () => {
  */
 test("the tray's source is read from the service, never inferred", () => {
   /*
-    Both economies cannot be live at once. A client that still charges at send
-    while the service spends stock BILLS SOMEBODY FOR A ROSE THEY ALREADY
-    BOUGHT, and no validation anywhere recovers from that.
+    Both economies cannot be live at once, and being on the wrong side costs
+    real money in BOTH directions: charging KASH while the service debits
+    coins takes it twice, and expecting coins while the service charges KASH
+    shows a balance that never moves.
 
-    The tempting inference — "the gift routes answer, so gifts come from
-    stock" — is wrong: the routes ship live while sending is still
-    charge-at-send. That is precisely the state #310 lands in.
+    The tempting inference — "the coin routes answer, so sending must spend
+    coins" — is wrong: those routes went live hours before this switch and
+    stay live while it is false.
   */
-  assert.equal(giftsComeFromStock({ ...PROD, spendGiftsFromInventory: true }), true);
-  assert.equal(giftsComeFromStock({ ...PROD, spendGiftsFromInventory: false }), false);
+  assert.equal(giftsComeFromCoins({ ...PROD, spendGiftsFromCoins: true }), true);
+  assert.equal(giftsComeFromCoins({ ...PROD, spendGiftsFromCoins: false }), false);
   // Absent is a deployment that has never heard of stock. Different fact from
   // `false`, same behaviour — and neither may open the other.
-  assert.equal(giftsComeFromStock(PROD), false);
-  assert.equal(giftsComeFromStock(null), false);
-  assert.equal(giftsComeFromStock(undefined), false);
+  assert.equal(giftsComeFromCoins(PROD), false);
+  assert.equal(giftsComeFromCoins(null), false);
+  assert.equal(giftsComeFromCoins(undefined), false);
 });
 
 test("`creditedKash` must accept NULL, or the earnings list stops parsing", () => {

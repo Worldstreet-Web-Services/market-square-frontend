@@ -90,7 +90,7 @@ export function GiftGrid({
                 : gift.name
             }
             className={cn(
-              "ws-press flex flex-col items-center rounded-2xl px-1 pb-1.5 pt-1 transition-colors",
+              "ws-press relative flex flex-col items-center rounded-2xl px-1 pb-1.5 pt-1 transition-colors",
               active ? "bg-white/[0.08]" : "hover:bg-white/[0.04]",
               blocked && "cursor-not-allowed opacity-35 hover:bg-transparent"
             )}

@@ -7,6 +7,11 @@ export {
   useGiftInventory,
   useCoinBalance,
   useBuyGift,
+  useBuyCoins,
+  useGiftCapability,
   ownedByGift,
 } from "./hooks/use-gifts";
-export type { GiftCatalogItem, GiftHolding, GiftPurchase } from "./lib/types";
+export type { CoinBuyPhase } from "./hooks/use-gifts";
+export { CoinBuySheet } from "./components/coin-buy-sheet";
+export { insufficientCoins, noGiftInStock } from "./lib/api";
+export type { GiftCatalogItem, GiftHolding, GiftPurchase, CoinPurchase } from "./lib/types";

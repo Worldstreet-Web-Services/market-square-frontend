@@ -500,3 +500,85 @@ describe("forwardToUpstream — null-body statuses", () => {
     assert.notEqual(await response.text(), "");
   });
 });
+
+/**
+ * THE IDEMPOTENCY KEY HAS TO SURVIVE THE HOP.
+ *
+ * This proxy builds its upstream headers as an ALLOWLIST, which is the right
+ * default and silently dropped this one. The client minted a key, sent it, and
+ * the service answered "An Idempotency-Key header is required to buy" for a
+ * request that was carrying one — on a phone, on the buy sheet, with a person
+ * watching (ogazboiz, 2026-09-24).
+ *
+ * Nothing logged it. From the proxy's side nothing went wrong: it forwarded
+ * exactly what it had been told to forward. That is why this is a behavioural
+ * test against the stub rather than a note in the file — the next header added
+ * to a client will be dropped the same way, and only the upstream's own view
+ * of the request can prove otherwise.
+ */
+describe("forwardToUpstream — idempotency", () => {
+  it("passes the caller's key through on a write, verbatim", async () => {
+    const { seen, fetchImpl } = stubUpstream(okEnvelope);
+    const key = "gift:rose:1";
+
+    await forwardToUpstream({
+      req: new Request("http://bff/api/market-square/me/gifts", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer token",
+          "Idempotency-Key": key,
+        },
+        body: JSON.stringify({ giftId: "rose", quantity: 1 }),
+      }),
+      url: "http://upstream/v1/market-square/me/gifts",
+      method: "POST",
+      fetchImpl,
+      logger: silent,
+    });
+
+    assert.equal(seen.length, 1);
+    // Verbatim, and NOT regenerated: a key minted per forward is a new key on
+    // every retry, which is the exact thing the header exists to prevent. Only
+    // the caller knows whether this is the first attempt or the fourth, and a
+    // purchase replayed under a fresh key is a second charge.
+    assert.equal(seen[0].headers["idempotency-key"], key);
+  });
+
+  it("does not invent one when the caller sent none", async () => {
+    // The service refusing a keyless buy is CORRECT, and the proxy quietly
+    // supplying a key would turn that deliberate refusal into a charge.
+    const { seen, fetchImpl } = stubUpstream(okEnvelope);
+
+    await forwardToUpstream({
+      req: new Request("http://bff/api/market-square/me/gifts", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer token" },
+        body: JSON.stringify({ giftId: "rose", quantity: 1 }),
+      }),
+      url: "http://upstream/v1/market-square/me/gifts",
+      method: "POST",
+      fetchImpl,
+      logger: silent,
+    });
+
+    assert.equal(seen[0].headers["idempotency-key"], undefined);
+  });
+
+  it("leaves it off a GET, where it means nothing", async () => {
+    const { seen, fetchImpl } = stubUpstream(okEnvelope);
+
+    await forwardToUpstream({
+      req: new Request("http://bff/api/market-square/me/gifts", {
+        method: "GET",
+        headers: { authorization: "Bearer token", "Idempotency-Key": "stray" },
+      }),
+      url: "http://upstream/v1/market-square/me/gifts",
+      method: "GET",
+      fetchImpl,
+      logger: silent,
+    });
+
+    assert.equal(seen[0].headers["idempotency-key"], undefined);
+  });
+});

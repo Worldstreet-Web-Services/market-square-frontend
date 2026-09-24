@@ -102,7 +102,16 @@ export function GiftSheet({
    * who is trying to spend money, you sell them the means. Blocking a tile
    * tells a willing sender "no"; offering the recharge tells them "here".
    */
-  onTopUp?: () => void;
+  /**
+   * Opens the COIN purchase, and is told how many coins this tray wanted.
+   *
+   * The shortfall travels with it so the buy sheet can offer exactly that
+   * amount first. It used to take no argument and open the KASH top-up, which
+   * is a different currency: somebody with KASH already in their wallet was
+   * sent to buy more KASH and came back with the same zero coins.
+   */
+  onTopUp?: (needed: number) => void;
+
   /**
    * Whether sending this actually costs KASH.
    *
@@ -156,6 +165,19 @@ export function GiftSheet({
   */
   const overBalance = priced && typeof balanceCoins === "number" && total > balanceCoins;
   const needsTopUp = overBalance && Boolean(onTopUp);
+
+  /*
+    COINS ARE THE INVENTORY, so there is nothing per-gift to hold or to count.
+
+    This tray briefly drew a stock count on every tile, back when a gift was
+    something you owned. ogazboiz settled the model — "we are doing it the
+    tiktok way you understand since no inventory" — and the count had nothing
+    left to count: what you hold is COINS, which the balance row already says
+    once rather than fourteen times.
+
+    So the only gate is the coin balance, which is correct, and it already has
+    its detour to the top-up.
+  */
 
   return (
     <Sheet open={open} onClose={onClose} bare>
@@ -272,7 +294,7 @@ export function GiftSheet({
                 type="button"
                 onClick={() => {
                   onClose();
-                  onTopUp();
+                  onTopUp(total);
                 }}
                 className="ws-press text-[13px] font-semibold text-spotlight transition-opacity hover:opacity-80"
               >
@@ -313,14 +335,19 @@ export function GiftSheet({
         <Button
           size="lg"
           className="mt-3 w-full"
-          disabled={(Boolean(recipients) && people.length === 0) || (overBalance && !onTopUp)}
+          disabled={
+            (Boolean(recipients) && people.length === 0) ||
+            (overBalance && !onTopUp)
+          }
           onClick={() => {
-            // Short of KASH sends you to the top-up instead of sending the
-            // gift — the tray closes because the buy sheet is a dialog of its
-            // own and two stacked dialogs is where focus goes to die.
+            // Short of COINS sends you to the coin purchase instead of
+            // sending the gift — and COINS, not KASH: they are different
+            // things, and the top-up that bought KASH left the tray exactly as
+            // empty as it found it. The tray closes because the buy sheet is a
+            // dialog of its own and two stacked dialogs is where focus dies.
             if (needsTopUp) {
               onClose();
-              onTopUp?.();
+              onTopUp?.(total);
               return;
             }
             onSend(selected, quantity, recipient);

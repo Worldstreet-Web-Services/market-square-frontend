@@ -59,7 +59,8 @@ import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gif
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
 import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
-import { KashBuySheet } from "@/features/kash";
+import { CoinBuySheet, insufficientCoins } from "@/features/gifts";
+
 import { useCoinBalance } from "@/features/gifts";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
@@ -1131,6 +1132,9 @@ function LiveHouse({
   /* Short of KASH mid-gift opens the top-up rather than stopping the sender —
      the TikTok shape, and the tray hands over rather than stacking dialogs. */
   const [topUpOpen, setTopUpOpen] = useState(false);
+  /** How many coins the tray was short, so the buy sheet can offer exactly that. */
+  const [topUpNeeded, setTopUpNeeded] = useState(0);
+
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
     onGift: giftBursts.receive,
@@ -1183,6 +1187,26 @@ function LiveHouse({
         return;
       }
 
+      /*
+        ─── ONE TAP, AND NOW LITERALLY ONE CALL ────────────────────────────────
+
+        COINS ARE THE INVENTORY. ogazboiz settled it: "we are doing it the
+        tiktok way you understand since no inventory". So there is no stock to
+        be short of and nothing to buy before sending — the send debits
+        `priceCoins x quantity` from the coin balance and that is the whole
+        gesture.
+
+        This briefly bought the shortfall first, back when a gift was something
+        you held. That was the right client for THAT model and it is dead
+        weight for this one: no stock read, no purchase, no second round trip.
+        The shortfall idea survives, but it is now COINS and it belongs to the
+        top-up sheet that already existed.
+
+        `amountKash` is still sent and is still the gift's own price times the
+        quantity. With the switch off it is what gets charged; with it on the
+        service ignores it and spends coins. One body, correct in both, so
+        nothing here branches on the day it flips.
+      */
       void payGift
         .mutateAsync({
           target: { kind: "stream", id: stream.id, recipient: null },
@@ -1207,6 +1231,25 @@ function LiveHouse({
           */
           if (recipientLeftTheRoom(error)) {
             toast.error(`${to.name} left the room — nothing was charged.`);
+            return;
+          }
+          /*
+            SHORT OF COINS IS AN OFFER, NOT A FAILURE.
+
+            409 `INSUFFICIENT_COINS` carries `needed` and `balance`, so the
+            top-up opens on the exact shortfall rather than a guess — on a tray
+            the person is looking straight at. The SAME code and fields the
+            coin purchase answers with, deliberately, so one handler covers
+            both doors into the same wall.
+
+            A refused send spends NOTHING: the debit and the tip row are one
+            transaction upstream, so there is no half-charged state to explain.
+          */
+          const short = insufficientCoins(error);
+          if (short) {
+            toast.error(`Not enough coins — ${short.needed.toLocaleString()} needed.`);
+            setTopUpNeeded(short.needed - short.balance);
+            setTopUpOpen(true);
             return;
           }
           toast.error(
@@ -2591,9 +2634,25 @@ function LiveHouse({
         priced={giftsArePriced(stream.status)}
         initialRecipientId={giftTo}
         balanceCoins={giftCoins}
-        onTopUp={() => setTopUpOpen(true)}
+        onTopUp={(needed) => {
+          setTopUpNeeded(needed);
+          setTopUpOpen(true);
+        }}
       />
-      <KashBuySheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
+      {/*
+        THE COIN PURCHASE, NOT THE KASH ONE.
+
+        Being short of COINS opened the KASH top-up, which is a different
+        currency: somebody with KASH already in their wallet was sent to buy
+        more KASH and came back with exactly as many coins as before — none.
+        The two are not interchangeable; KASH is the money, coins are what this
+        tray spends, and `CoinBuySheet` is the only place they convert.
+      */}
+      <CoinBuySheet
+        open={topUpOpen}
+        needed={topUpNeeded}
+        onClose={() => setTopUpOpen(false)}
+      />
 
       {isHost && (
         <HandTray

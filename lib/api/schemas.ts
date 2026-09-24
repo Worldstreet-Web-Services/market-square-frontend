@@ -714,27 +714,30 @@ export const TipCapabilitySchema = z.object({
    */
   verifiedRoomRecipientsOnly: z.boolean().optional(),
   /**
-   * WHETHER SENDING A GIFT SPENDS STOCK, OR CHARGES AT THE MOMENT OF SENDING.
+   * WHETHER SENDING A GIFT SPENDS COINS, OR CHARGES KASH AT THE MOMENT OF SENDING.
    *
-   * The two economies cannot both be live, and this says which one is:
-   *   true  — the tray draws from `GET /me/gifts`, a gift must be OWNED, and
-   *           sending moves no money at all (the KASH was paid when the coins
-   *           were bought). The send is confirmed on the way out.
-   *   false — the tray draws from the catalogue and the sender is charged as
-   *           they send, which is what every deployment does today.
+   * COINS ARE THE INVENTORY — there is no gift stock to hold. ogazboiz:
+   * "we are doing it the tiktok way you understand since no inventory". You
+   * buy coins, you tap a rose, coins come off and the rose flies. Nobody owns
+   * three roses, and there is no shopping step between wanting to send and
+   * sending, which is the step TikTok does not have and where senders are lost.
    *
-   * READ, NEVER INFERRED. The obvious guess — "the gift routes answer, so
-   * gifts must come from stock" — is wrong and expensive: a client still
-   * charging at send while the service spends stock bills somebody for a rose
-   * they already bought. The service publishes the answer precisely so the
-   * two halves switch together.
+   *   true  — the send debits `priceCoins x quantity` from the coin balance.
+   *           One call, confirmed on the way out, no signing and no pending.
+   *   false — the sender is charged KASH as they send, signing a transfer and
+   *           waiting for the chain, which is what production does today.
    *
-   * OPTIONAL WITH NO DEFAULT, on the same rule as the flag above: absent means
-   * a deployment that has never heard of stock, which behaves exactly like
-   * `false` but is not the same fact. Callers ask `=== true`, so absent and
-   * false both keep today's behaviour and neither can silently open the other.
+   * READ, NEVER INFERRED. The tempting guess — "the coin routes answer, so
+   * sending must spend coins" — is wrong and expensive in both directions: a
+   * client charging KASH while the service debits coins takes the money twice,
+   * and one expecting coins while the service charges KASH shows a balance
+   * that never moves.
+   *
+   * OPTIONAL WITH NO DEFAULT. Absent means a deployment that has never heard
+   * of the coin economy, which behaves like `false` without being the same
+   * fact. Callers ask `=== true`, so neither can silently open the other.
    */
-  spendGiftsFromInventory: z.boolean().optional(),
+  spendGiftsFromCoins: z.boolean().optional(),
 });
 
 export type TipCapability = z.infer<typeof TipCapabilitySchema>;
