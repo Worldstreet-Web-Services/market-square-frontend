@@ -142,3 +142,14 @@ export const InsufficientCoinsSchema = z.object({
   balance: z.number(),
 });
 export type InsufficientCoins = z.infer<typeof InsufficientCoinsSchema>;
+
+/**
+ * 409 `NO_GIFT_IN_STOCK`, and it names WHICH gift.
+ *
+ * Only reachable once sending spends stock. Tolerant for the same reason as
+ * the shortfall above: a refusal that cannot be parsed is still a refusal.
+ */
+export const NoGiftInStockSchema = z.object({
+  giftId: z.string(),
+});
+export type NoGiftInStock = z.infer<typeof NoGiftInStockSchema>;

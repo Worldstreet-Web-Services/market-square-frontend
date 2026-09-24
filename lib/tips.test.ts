@@ -139,10 +139,16 @@ test("the earnings screen prints what was CREDITED, never the face value", () =>
 
   // And the field has to survive the parse, or the fallback is all there is.
   const api = readFileSync("features/tips/lib/api.ts", "utf8");
-  assert.match(api, /creditedKash: z\.string\(\)\.optional\(\),/);
+  // NULLABLE as well as optional: the service's column is `string | null` and
+  // a tip is always null there, so `.optional()` alone threw on the first
+  // response that carried the field. Three states, no default — absent, null
+  // and a value are three different facts, and the fallback to `amountKash` is
+  // only correct while all three survive the parse. The null case and why it
+  // matters are demonstrated in `lib/tip-capability.test.ts`.
+  assert.match(api, /creditedKash: z\.string\(\)\.nullable\(\)\.optional\(\),/);
   assert.doesNotMatch(
     api,
-    /creditedKash: z\.string\(\)\.optional\(\)\.default\(/,
-    "a default would erase the difference between absent and equal"
+    /creditedKash:.*\.default\(/,
+    "a default would erase the difference between absent, null and equal"
   );
 });

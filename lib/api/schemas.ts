@@ -713,6 +713,28 @@ export const TipCapabilitySchema = z.object({
    * gifting on every service that has never heard of the field.
    */
   verifiedRoomRecipientsOnly: z.boolean().optional(),
+  /**
+   * WHETHER SENDING A GIFT SPENDS STOCK, OR CHARGES AT THE MOMENT OF SENDING.
+   *
+   * The two economies cannot both be live, and this says which one is:
+   *   true  — the tray draws from `GET /me/gifts`, a gift must be OWNED, and
+   *           sending moves no money at all (the KASH was paid when the coins
+   *           were bought). The send is confirmed on the way out.
+   *   false — the tray draws from the catalogue and the sender is charged as
+   *           they send, which is what every deployment does today.
+   *
+   * READ, NEVER INFERRED. The obvious guess — "the gift routes answer, so
+   * gifts must come from stock" — is wrong and expensive: a client still
+   * charging at send while the service spends stock bills somebody for a rose
+   * they already bought. The service publishes the answer precisely so the
+   * two halves switch together.
+   *
+   * OPTIONAL WITH NO DEFAULT, on the same rule as the flag above: absent means
+   * a deployment that has never heard of stock, which behaves exactly like
+   * `false` but is not the same fact. Callers ask `=== true`, so absent and
+   * false both keep today's behaviour and neither can silently open the other.
+   */
+  spendGiftsFromInventory: z.boolean().optional(),
 });
 
 export type TipCapability = z.infer<typeof TipCapabilitySchema>;

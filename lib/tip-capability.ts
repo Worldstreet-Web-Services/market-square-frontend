@@ -48,6 +48,27 @@ export type TipSurface =
   | "room";
 
 /**
+ * DOES SENDING A GIFT SPEND STOCK, OR CHARGE AT THE MOMENT OF SENDING?
+ *
+ * The two economies cannot both be live, and getting it backwards costs
+ * somebody money in a way no validation recovers from: a client that still
+ * charges at send while the service spends stock bills a person for a rose
+ * they had already bought.
+ *
+ * SO IT IS READ, NEVER INFERRED. The tempting guess — "the gift routes answer,
+ * therefore gifts come from stock" — is wrong: the routes can be live while
+ * sending is still charge-at-send, which is exactly the state they ship in.
+ * The service publishes this flag so both halves switch on the same deploy.
+ *
+ * `=== true`, so an ABSENT flag and a false one both keep today's behaviour.
+ * They are different facts — absent is a deployment that has never heard of
+ * stock — but neither may open the other.
+ */
+export function giftsComeFromStock(capability: TipCapability | null | undefined): boolean {
+  return capability?.spendGiftsFromInventory === true;
+}
+
+/**
  * WHICH RULE A TARGET FALLS UNDER — derived, never remembered.
  *
  * `tipBlockedBecause` takes the surface as an argument with a `post` default,

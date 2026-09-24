@@ -12,7 +12,7 @@ import { asset } from "@/lib/square-path";
  * THE GIFT GALLERY — node 492:41810, the panel under the account strip.
  *
  * A grid of 129x160 tiles at a 15 radius on `--color-spotlight`, five to a row
- * and 24 apart, each holding the gift's artwork on a `#1C1C1C` plate, its KASH
+ * and 24 apart, each holding the gift's artwork on a `#1C1C1C` plate, its COIN
  * price beside the coin, and how many of it this person has been sent.
  *
  * ─── WHAT IS REAL HERE, AND WHAT IS NOT ─────────────────────────────────────
@@ -228,8 +228,27 @@ export function ProfileGiftGallery() {
             */}
             <div className="mb-1 mt-3 flex h-4 items-center justify-between px-1">
               <span className="flex items-center gap-1">
+                {/*
+                  SQUARE COINS, NOT KASH. ogazboiz: "here need to show the
+                  square coin instead of ksh you understand the price".
+
+                  The tile printed `0.01` beside a coin, which is the KASH
+                  price wearing the coin's clothes — two units in one label.
+                  Coins are what a person buys, holds and spends; KASH is what
+                  they buy coins WITH. A tray that quotes the wrong one asks
+                  somebody to do the conversion in their head to know whether
+                  they can afford a rose.
+
+                  THE FILE AGREES, and it is the reason this is a bug rather
+                  than a preference: node 543:42115 draws 60 against a quantity
+                  of 3 — twenty a heart, not 0.02.
+
+                  `toLocaleString` because the ladder runs to 50,000 and a
+                  five-figure price without a separator is a number people
+                  misread.
+                */}
                 <span className="tnum text-[12px] font-bold leading-4 text-white">
-                  {gift.priceKash}
+                  {gift.priceCoins.toLocaleString()}
                 </span>
                 {/* The file's own coin, exported rather than substituted — the
                     line-art `IconCoin` is a different object. */}

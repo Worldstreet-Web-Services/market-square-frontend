@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { exceedsBalance, multiplyKash } from "./kash-amount.ts";
 import { readFileSync } from "node:fs";
+import { z } from "zod";
 import {
   canSendTip,
   tipAmountOutOfBounds,
   tipBlockedBecause,
   tipBoundsMessage,
+  giftsComeFromStock,
   tipSurfaceOf,
 } from "./tip-capability.ts";
 
@@ -263,4 +265,69 @@ test("a deployment with ONE switch still applies it to rooms", () => {
   // means "there is one rule here", not "rooms are open". `??`, never `||`.
   assert.equal(tipBlockedBecause(LIVE, unverified, "room"), "unverified-recipient");
   assert.equal(tipBlockedBecause({ ...LIVE, verifiedRoomRecipientsOnly: false }, unverified, "room"), null);
+});
+
+/**
+ * THE SPEND LEG — service `0abd791f`, pushed and unmerged.
+ *
+ * Sending a gift from stock is a THIRD settlement shape, and the simplest:
+ * 201 `confirmed`, no wallet, no pending, because the KASH moved when the
+ * COINS were bought and a send only reassigns who is owed it.
+ */
+test("the tray's source is read from the service, never inferred", () => {
+  /*
+    Both economies cannot be live at once. A client that still charges at send
+    while the service spends stock BILLS SOMEBODY FOR A ROSE THEY ALREADY
+    BOUGHT, and no validation anywhere recovers from that.
+
+    The tempting inference — "the gift routes answer, so gifts come from
+    stock" — is wrong: the routes ship live while sending is still
+    charge-at-send. That is precisely the state #310 lands in.
+  */
+  assert.equal(giftsComeFromStock({ ...PROD, spendGiftsFromInventory: true }), true);
+  assert.equal(giftsComeFromStock({ ...PROD, spendGiftsFromInventory: false }), false);
+  // Absent is a deployment that has never heard of stock. Different fact from
+  // `false`, same behaviour — and neither may open the other.
+  assert.equal(giftsComeFromStock(PROD), false);
+  assert.equal(giftsComeFromStock(null), false);
+  assert.equal(giftsComeFromStock(undefined), false);
+});
+
+test("`creditedKash` must accept NULL, or the earnings list stops parsing", () => {
+  /*
+    THE SERVICE'S COLUMN IS `string | null`, AND A TIP IS ALWAYS NULL THERE.
+    Null means "nothing was withheld on this payment" — every tip ever settled,
+    and every gift sent before the split existed — and it is deliberately not
+    backfilled to `amount_kash`, because "no split applies" and "the split
+    happened to be 100%" are different facts.
+
+    So `.optional()` alone was wrong, and wrong in the loud direction for once:
+    optional admits `undefined` and REJECTS `null`, so the first response
+    carrying the field would have failed the whole list parse and taken the
+    earnings screen down — on a deploy that touched nothing in this repo.
+
+    Demonstrated rather than asserted, because the whole bug is a zod semantic
+    that reads like it should already be covered.
+  */
+  assert.equal(z.string().optional().safeParse(undefined).success, true);
+  assert.equal(z.string().optional().safeParse(null).success, false, "optional does NOT admit null");
+  assert.equal(z.string().nullable().optional().safeParse(null).success, true);
+  assert.equal(z.string().nullable().optional().safeParse(undefined).success, true);
+
+  // And that the field itself is declared that way, with no default under
+  // either — the fallback to `amountKash` is only correct while both states
+  // survive the parse.
+  const api = readFileSync(new URL("../features/tips/lib/api.ts", import.meta.url), "utf8");
+  assert.match(api, /creditedKash: z\.string\(\)\.nullable\(\)\.optional\(\),/);
+  assert.doesNotMatch(api, /creditedKash:.*\.default\(/, "a default erases what null means");
+});
+
+test("a missing gift refuses by NAME, so the tray can offer to buy one", () => {
+  // 409 `{ code: "NO_GIFT_IN_STOCK", giftId }`. A refused send spends nothing:
+  // the stock decrement and the tip row are one transaction on the service, so
+  // this only decides what to SAY.
+  const giftApi = readFileSync(new URL("../features/gifts/lib/api.ts", import.meta.url), "utf8");
+  assert.match(giftApi, /NoGiftInStockSchema\.safeParse\(details\)/);
+  const types = readFileSync(new URL("../features/gifts/lib/types.ts", import.meta.url), "utf8");
+  assert.match(types, /export const NoGiftInStockSchema = z\.object\(\{\s*giftId: z\.string\(\),/);
 });

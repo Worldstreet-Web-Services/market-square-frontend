@@ -1185,7 +1185,10 @@ export function StreamRoom({
                     {giftsPriced && (
                       <span className="tnum mt-0.5 flex items-center gap-1 text-[11px] text-meta">
                         <IconCoin className="h-3 w-3 text-coin" />
-                        {gift.priceKash}
+                        {/* Coins, like every other tile in the app — the strip
+                            and the tray it opens must not quote two units for
+                            the same rose. */}
+                        {gift.priceCoins.toLocaleString()}
                       </span>
                     )}
                   </button>

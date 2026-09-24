@@ -8,11 +8,13 @@ import {
   GiftInventorySchema,
   GiftPurchaseSchema,
   InsufficientCoinsSchema,
+  NoGiftInStockSchema,
   type GiftCapability,
   type GiftCatalogItem,
   type GiftHolding,
   type GiftPurchase,
   type InsufficientCoins,
+  type NoGiftInStock,
 } from "@/features/gifts/lib/types";
 
 /**
@@ -114,5 +116,23 @@ export async function buyGift(input: {
 export function insufficientCoins(error: unknown): InsufficientCoins | null {
   const details = (error as { details?: unknown } | null)?.details;
   const parsed = InsufficientCoinsSchema.safeParse(details);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * THE GIFT NAMED BY A 409 "you do not own that gift".
+ *
+ * `null` for any other failure, or a body we cannot read. Named by the service
+ * so a tray can offer to BUY the missing one rather than showing a generic
+ * error on a surface somebody is looking straight at — the same instinct as
+ * the coin shortfall above.
+ *
+ * A REFUSED SEND SPENDS NOTHING: the service's stock decrement and its tip row
+ * are one transaction, so a failure here leaves the stock intact and writes no
+ * payment. This only decides what to SAY about it.
+ */
+export function noGiftInStock(error: unknown): NoGiftInStock | null {
+  const details = (error as { details?: unknown } | null)?.details;
+  const parsed = NoGiftInStockSchema.safeParse(details);
   return parsed.success ? parsed.data : null;
 }

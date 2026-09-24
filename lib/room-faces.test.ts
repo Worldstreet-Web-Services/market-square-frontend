@@ -342,3 +342,46 @@ test("being short of coins offers the shortfall, and survives an unreadable one"
   assert.match(api, /InsufficientCoinsSchema\.safeParse\(details\)/);
   assert.match(api, /return parsed\.success \? parsed\.data : null;/);
 });
+
+test("every gift surface quotes SQUARE COINS, and none quotes KASH", () => {
+  /*
+    ogazboiz: "here need to show the square coin instead of ksh you understand
+    the price". The gallery printed `0.01` beside the coin glyph — the KASH
+    price wearing the coin's clothes, two units in one label — while the room
+    tray beside it already said 10. The same rose had two prices depending on
+    which screen you were looking at.
+
+    COINS ARE THE UNIT PEOPLE HOLD. KASH is what they buy coins WITH and what a
+    recipient earns; quoting it on a tile asks somebody to do a conversion in
+    their head to know whether they can afford a rose.
+
+    THE DESIGN AGREES, which is what makes this a defect rather than a
+    preference: the buy sheet's own node draws 60 against a quantity of 3 —
+    twenty a heart, not 0.02.
+
+    `priceKash` stays on the gift and is still what goes ON THE WIRE while
+    sending charges at send time, so this pins the RENDER, not the field.
+  */
+  for (const surface of [
+    "components/layout/profile-gift-gallery.tsx",
+    "components/layout/buy-gift-sheet.tsx",
+    "components/ui/gift-grid.tsx",
+    "features/streams/components/stream-room.tsx",
+  ]) {
+    const src = readFileSync(surface, "utf8");
+    assert.doesNotMatch(src, /\{gift\.priceKash\}/, `${surface} still prints a KASH price`);
+    assert.doesNotMatch(
+      src,
+      /\{(?:total|price)\}/,
+      `${surface} prints a bare total — coins run to 50,000 and need a separator`
+    );
+  }
+
+  // And the totals are INTEGER arithmetic, which is the point of the unit:
+  // three Roses is 30, never 0.030000000000000002.
+  const buy = readFileSync("components/layout/buy-gift-sheet.tsx", "utf8");
+  assert.match(buy, /const total = gift\.priceCoins \* quantity;/);
+  assert.doesNotMatch(buy, /multiplyKash/, "the coin total is going through decimal-string maths");
+  const tray = readFileSync("features/streams/components/gift-sheet.tsx", "utf8");
+  assert.match(tray, /selected\.priceCoins \* quantity/);
+});

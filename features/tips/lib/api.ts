@@ -86,17 +86,28 @@ const ReceivedTipSchema = z.object({
    * to both the sender's debit and the author's credit — so this needs no
    * branch on kind and no percentage in the client.
    *
-   * OPTIONAL WITH NO DEFAULT, because absent is its own answer: the field
-   * lands with the gift spend leg and does not exist yet. Until it does, every
-   * receipt falls back to `amountKash`, which is CORRECT rather than merely
-   * safe — today gross and net are the same number.
+   * NULLABLE **AND** OPTIONAL, AND THE TWO ARE DIFFERENT ANSWERS:
+   *   absent  — this deployment has no split at all, the field does not exist
+   *   null    — nothing was withheld on THIS payment: every tip ever settled,
+   *             and every gift sent before the split existed
+   *   a value — what the recipient was credited
+   *
+   * `.optional()` ALONE WOULD HAVE THROWN. The service's column is
+   * `string | null` and a tip is always null there, so the first response
+   * carrying the field would have failed the whole list parse and taken the
+   * earnings screen down — not a silent empty this time, a hard error, on the
+   * day a deploy touched nothing in this repo.
+   *
+   * No default under either, so the fallback to `amountKash` is CORRECT rather
+   * than merely safe: where nothing was withheld, the face value IS the
+   * credit.
    *
    * THE PERCENTAGE DELIBERATELY DOES NOT LIVE HERE. The split is configurable
    * server-side and applies only to gifts; handed the rate instead of the
    * result, this screen would go wrong the day somebody changed it. Same
    * argument as gift prices, pointed at earnings.
    */
-  creditedKash: z.string().optional(),
+  creditedKash: z.string().nullable().optional(),
   // Same `catch` reasoning as `TipResponseSchema`: an unknown status must not
   // fail a list, and it degrades to the one that asserts nothing.
   status: z.enum(["pending", "confirmed", "failed"]).catch("pending"),

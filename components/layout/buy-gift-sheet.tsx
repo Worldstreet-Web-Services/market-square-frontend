@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
-import { multiplyKash } from "@/lib/kash-amount";
 import { asset } from "@/lib/square-path";
 
 /**
@@ -111,13 +110,20 @@ function BuyGiftBody({
 
   const gift = LIVE_GIFTS[index] ?? LIVE_GIFTS[0];
   /*
-    EXACT, never `Number(price) * quantity`. Three Roses at 0.01 is 0.03, and
-    the float answer is 0.030000000000000002 — which the engine rejects for
-    exceeding six places, and which is not the number the buyer was shown.
-    Null falls back to the unit price rather than printing a total this sheet
-    cannot stand behind.
+    PRICED IN SQUARE COINS, AND THAT IS WHAT MAKES THE TOTAL EXACT.
+
+    In KASH this needed decimal-string multiplication: three Roses at 0.01 is
+    0.03, and the float answer is 0.030000000000000002 — a number the engine
+    rejects for exceeding six places and not the one the buyer was shown. A
+    coin is the smallest spendable thing there is, so the ladder is whole
+    numbers and the product is exact by construction rather than by careful
+    handling. Nothing to round, nothing to fall back to.
+
+    It is also the right UNIT to quote: coins are what somebody buys, holds and
+    spends here, and KASH is what they buy coins with. The file draws 60
+    against a quantity of 3 — twenty a heart — which is coins, not KASH.
   */
-  const total = multiplyKash(gift.priceKash, quantity) ?? gift.priceKash;
+  const total = gift.priceCoins * quantity;
   const step = (delta: number) =>
     setQuantity((current) => Math.min(99, Math.max(1, current + delta)));
 
@@ -206,7 +212,7 @@ function BuyGiftBody({
             <div className="flex h-10 flex-1 items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1 ring-1 ring-white/20">
               {/* eslint-disable-next-line @next/next/no-img-element -- the file's coin */}
               <img src={asset("/gifts/coin.svg")} alt="" aria-hidden className="size-6 shrink-0" />
-              <span className="tnum truncate text-[15px] font-semibold text-white">{total}</span>
+              <span className="tnum truncate text-[15px] font-semibold text-white">{total.toLocaleString()}</span>
             </div>
           </div>
         </div>
