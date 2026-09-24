@@ -3465,12 +3465,11 @@ describe("link previews publish only what they should, where they should", () =>
     assert.match(post, /<PostScreen postId=\{post\.uuid\} \/>/);
   });
 
-  it("gives rooms, houses, invites and room codes the generic card only", () => {
+  it("gives houses, invites and room codes the generic card only", () => {
     // A private group's title or picture in a chat app's preview cache would
     // outlive a rename and a revoked invite.
     for (const file of [
       "app/gist-rooms/page.tsx",
-      "app/gist-rooms/[id]/page.tsx",
       "app/live/page.tsx",
       "app/live/[id]/page.tsx",
       "app/houses/page.tsx",
@@ -3479,6 +3478,33 @@ describe("link previews publish only what they should, where they should", () =>
     ]) {
       assert.doesNotMatch(stripComments(read(file)), /generateMetadata|openGraph/, file);
     }
+  });
+
+  it("a gist room gets its own card ONLY when the room is public", () => {
+    /*
+      THE PRIVACY RULE ABOVE SURVIVES THIS, and the reason it does is the
+      gate. A chat app CACHES a preview: a private room's name and cover, once
+      scraped, outlive a rename, a revoked invite and the room itself, sitting
+      in a thread long after the people in it changed their minds.
+
+      What was wrong was applying that to EVERY room. A public room's name and
+      cover are already public — there is nothing for a cache to leak — and
+      withholding them bought no privacy while making every shared link
+      identical, which is what a room link actually looked like in Telegram.
+
+      The gate is the same pair the service gates its own public behaviour on,
+      and the same pair `maySignalRoomChat` reads. An ABSENT field is NOT
+      public: a payload that does not say is one this must not guess about.
+    */
+    const meta = stripComments(read("lib/og-metadata.ts"));
+    assert.match(
+      meta,
+      /return room\.visibility === "public" && room\.audience === "public";/,
+      "the room card is no longer gated on the room being public"
+    );
+    assert.match(meta, /if \(!room \|\| !roomIsPublic\(room\)\) return generic\(roomPath\(id\), "Gist room"\);/);
+    // And the page asks for it rather than hard-coding a title.
+    assert.match(stripComments(read("app/gist-rooms/[id]/page.tsx")), /roomMetadataFor\(result, id, siteOrigin\(process\.env\)\)/);
   });
 
   it("never uses the opengraph-image file convention, which overrides generateMetadata", () => {

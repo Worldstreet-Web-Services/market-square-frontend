@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+
+/** Substring check, used where a regex would need an escaped newline. */
+const s_includes = (haystack: string, needle: string) => haystack.includes(needle);
 import { describe, it } from "node:test";
 import {
   CROP_BUDGET,
@@ -353,7 +356,23 @@ describe("the stage renderer, by construction", () => {
     assert.match(room, /if \(!giftsArePriced\(stream\.data\?\.status\)\) return;/);
     assert.match(room, /giftsPriced \? "bg-coin" : "bg-accent"/);
     assert.match(giftSheet, /showPrices=\{priced\}/);
-    assert.match(giftSheet, /priced \? `Send \$\{selected\.name\} · \$\{formatKash\(total\)\}` : `Send \$\{selected\.name\}`/);
+    // The PRICED branch is the only one that may print a total, and the free
+    // branch must not mention money at all. Pinned as two facts rather than as
+    // one literal string: the label also names the recipient now ("Send a Rose
+    // to Ada"), because a gist room lets you gift anybody in the room, and an
+    // exact-string assertion would have failed for a change that cannot
+    // possibly charge anyone.
+    // The total is COINS now, not KASH — gifts are priced in Square coins and
+    // the tray draws that unit. The rule this pins is unchanged: only the
+    // PRICED branch may print a total, and the free branch may not mention
+    // money at all.
+    assert.ok(
+      s_includes(giftSheet, "? `Send ${selected.name} · ${total.toLocaleString()}`"),
+      "the priced label no longer prints a total"
+    );
+    const freeBranch = giftSheet.slice(giftSheet.indexOf("? `Send ${selected.name} · "));
+    const freeLabel = freeBranch.slice(freeBranch.indexOf(": recipient"), freeBranch.indexOf("</Button>"));
+    assert.doesNotMatch(freeLabel, /total|priceCoins|priceKash/, "the free tray prints a price");
   });
 
   it("removes a guest from ONE place, whichever surface the host is on", () => {
@@ -896,5 +915,162 @@ describe("the host's soft mute on a seat", () => {
     const stage = buildStage(room(publishing(HOST), guest(true, undefined)), HOST);
     assert.equal(stage.length, 2);
     assert.equal(stage[1].mutedByHost, false);
+  });
+});
+
+describe("Gifting anybody in a gist room", () => {
+  /*
+    The gist room had NO gift surface at all: the tray and the flying burst
+    were built for broadcasts and lived inline in `stream-room`, so a room
+    could only "Give a tip" — which moves money quietly and shows the room
+    nothing. A gift is the opposite act; its whole point is that everybody sees
+    it happen and sees who it was for.
+
+    What is pinned here is the SAFETY of shipping it before the service can
+    name a recipient, because that is the part that would cost somebody money
+    if it drifted.
+  */
+  it("prices the room tray, and charges the person who was NAMED", () => {
+    /*
+      This test ran the other way for a week, and the reason it did is the
+      point: `POST /streams/:id/gifts` hardcoded `recipientId = stream.ownerId`,
+      so a priced gift aimed at a named person would have charged the sender
+      and paid the HOST while the screen said somebody else's name.
+
+      The service now carries `toProfileId` — verified in production against
+      the served OpenAPI document, not taken on report — so the tray is priced
+      and the money follows the name.
+
+      WHAT MUST NOT DRIFT, and what this pins:
+        · `toProfileId` is SENT, so the named person is paid rather than the
+          host silently inheriting the money;
+        · the burst and the data-channel packet go out BEFORE the payment and
+          are never retracted — a gift the room has seen is not un-seen
+          because a wallet refused;
+        · a 409 is told apart from a refusal, because the sender did nothing
+          wrong when somebody walks out mid-gift.
+    */
+    const room = source("features/houses/components/house-room.tsx");
+    const tray = room.slice(room.indexOf("<GiftSheet"), room.indexOf("<GiftSheet") + 500);
+    assert.match(tray, /recipients=\{giftRecipients\}/, "the room's tray offers nobody to gift");
+    assert.match(tray, /priced=\{giftsArePriced\(stream\.status\)\}/, "the room tray is free again");
+
+    // The money names the recipient, and the show is not conditional on it.
+    assert.ok(s_includes(room, "toProfileId: to.id"), "the gift pays whoever the route defaults to");
+    assert.ok(
+      room.indexOf("giftBursts.spawn(") < room.indexOf("if (!giftsArePriced(stream.status)) return;"),
+      "the burst is now gated on payment — a gift the room saw must not be un-seen"
+    );
+    assert.ok(
+      s_includes(room, "recipientLeftTheRoom(error)"),
+      "'they left' is reported as a refusal of the sender"
+    );
+  });
+
+  it("never offers to gift yourself, and puts the host first", () => {
+    /*
+      SELF IS REMOVED, NOT DISABLED. The service refuses a self-gift outright
+      ("You cannot tip yourself"), so drawing the row would be drawing a
+      control whose only possible outcome is an error.
+
+      HOST FIRST is what makes the picker safe to ship early: a sender who
+      never looks at the row gifts the person today's route would have paid
+      anyway, so the default cannot be wrong even while the route ignores the
+      choice.
+    */
+    const room = source("features/houses/components/house-room.tsx");
+    const build = room.slice(room.indexOf("const giftRecipients"), room.indexOf("const giftRecipients") + 900);
+    assert.match(build, /id === myId/, "the roster can offer you yourself");
+    assert.match(build, /if \(hostId\) add\(/, "the host is not added first, so the default is arbitrary");
+    assert.match(build, /seen\.has\(id\)/, "a person seated AND in the audience is offered twice");
+  });
+
+  it("names both ends on the burst, because half the event is who it was for", () => {
+    // On a broadcast there was only ever one person a gift could be for, so
+    // the burst named the sender alone. In a room where anybody can be
+    // gifted, the recipient is what the room — and the recipient — is
+    // watching for.
+    const room = source("features/houses/components/house-room.tsx");
+    assert.match(room, /`You → \$\{to\.name\}`/);
+    assert.match(room, /live\.gift\(gift\.id, quantity, to \?/);
+  });
+
+  it("names the recipient even when there is only one, and refuses when there are none", () => {
+    /*
+      The picker was drawn only at `> 1`, on the argument that a control with a
+      single option is a label wearing a control's clothes. Wrong for this
+      surface: the row is not only a chooser, it is the ANSWER to who the gift
+      is going to, and hiding it at one left a sender pressing Send with no
+      statement on screen of who receives it (ogazboiz, 2026-09-24: "how can we
+      select the person we want to gift").
+
+      And NOBODY TO GIFT IS A REAL STATE — a host opens a room and is alone in
+      it until somebody walks in. Sending then would fly a gift addressed to no
+      one, so the action has to refuse and say what is missing.
+    */
+    const sheet = source("features/streams/components/gift-sheet.tsx");
+    assert.match(sheet, /\{people\.length > 0 && \(/, "the picker hides itself when there is one person");
+    assert.ok(
+      s_includes(sheet, "Boolean(recipients) && people.length === 0"),
+      "the empty-room guard is gone"
+    );
+    // An empty room and an empty wallet are DIFFERENT answers, and only one
+    // of them is a refusal. Nobody to gift is terminal; short of KASH hands
+    // over to the top-up, so it only disables when there is no top-up to
+    // offer — see the TikTok note in gift-sheet.
+    assert.ok(
+      s_includes(sheet, "(overBalance && !onTopUp)"),
+      "being short of KASH refuses outright instead of offering the top-up"
+    );
+    assert.match(sheet, /"Nobody else is here yet"/);
+    // A BROADCAST passes no `recipients` at all and must still send, to the
+    // host, exactly as it always did — the guard is on the room shape only.
+    assert.ok(
+      sheet.includes('recipients && people.length === 0'),
+      "the empty-room guard no longer keys on the room shape"
+    );
+  });
+
+  it("tapping a person offers a gift, and only when they resolve", () => {
+    /*
+      The dock's gift button is "pick an object, then a person". Tapping
+      somebody and saying send them a gift is how a person actually arrives at
+      the thought (ogazboiz, 2026-09-24: "how do we give a person gift in a
+      gist room"), so the room offers both doors into ONE tray.
+
+      THE GUARD IS THE IMPORTANT HALF. A host's LiveKit identity is the literal
+      string `broadcaster` and carries no account id, so the id must come from
+      `stream.ownerId` — and anybody who does not resolve to a row the roster
+      already knows is not offered the control at all. A row that quietly fell
+      back to the host would pay the WRONG PERSON while naming another.
+    */
+    const room = source("features/houses/components/house-room.tsx");
+    const sheet = source("features/houses/components/person-sheet.tsx");
+    assert.match(room, /const giftablePersonId = useMemo/);
+    assert.match(room, /livePerson\.isRoomHost \? stream\.ownerId : baseIdentity\(livePerson\.identity\)/);
+    assert.match(room, /giftRecipients\.some\(\(row\) => row\.id === id\) \? id : null/);
+    // Offered only when it resolves — `undefined` removes the row entirely.
+    assert.ok(
+      s_includes(room, "giftablePersonId"),
+      "the gift row is no longer gated on the person resolving"
+    );
+    // Never on yourself: the service refuses a self-gift outright.
+    assert.match(sheet, /\{!isSelf && onGift && \(/);
+    // And the tray opens ON that person rather than on the host.
+    assert.match(room, /initialRecipientId=\{giftTo\}/);
+  });
+
+  it("both rooms draw gift bursts from ONE component", () => {
+    // It was inline in stream-room, which is exactly why the gist room had
+    // none. A second copy is how one of them draws a different burst for the
+    // same packet.
+    const shared = source("features/streams/components/gift-bursts.tsx");
+    assert.match(shared, /export function useGiftBursts\(/);
+    assert.match(shared, /export function GiftBursts\(/);
+    // The catalogue is the authority on artwork, never the wire — a gift this
+    // build has not heard of must draw nothing rather than an empty frame.
+    assert.match(shared, /LIVE_GIFTS\.find\(\(item\) => item\.id === giftId\)/);
+    assert.match(shared, /if \(!gift\) return;/);
+    assert.match(source("features/houses/components/house-room.tsx"), /<GiftBursts items=\{giftBursts\.items\}/);
   });
 });

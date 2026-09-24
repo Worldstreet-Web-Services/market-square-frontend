@@ -108,9 +108,28 @@ describe("the profile's account section is own-profile only", () => {
     );
   });
 
-  it("shows no count rather than a zero", () => {
-    // Same rule as the balance chip and the house member line: absent is not
-    // the same claim as none, and the file's own "0" tiles are mock data.
-    assert.match(gallery, /received !== null &&/, "an uncounted gift must render no number");
+  it("shows a zero for what you OWN and no number for what you were SENT", () => {
+    /*
+      The asymmetry is the whole rule, and it was one-sided before there was
+      anything to own.
+
+      "YOU OWN NONE" IS A FACT WITH AN ACTION ATTACHED — the `+` beside it is
+      how you fix it, and node 1285:79134 draws that 0 explicitly on two
+      tiles. Hiding it would remove the reason the control is there.
+
+      "NOBODY HAS SENT YOU ONE" is closer to unknown, and a confident 0 states
+      something about other people we would rather not claim — the same rule
+      the balance chip and the house member line follow.
+
+      So the count renders whenever it is a number, and WHICH number it is
+      decides whether a zero can occur: owned falls back to 0, received falls
+      back to null.
+    */
+    assert.match(gallery, /count !== null &&/, "an uncounted gift must render no number");
+    assert.match(
+      gallery,
+      /economy === true \? \(owned\.get\(gift\.id\) \?\? 0\) : \(counts\.get\(gift\.id\) \?\? null\)/,
+      "owned and received no longer differ on whether a zero is drawn"
+    );
   });
 });

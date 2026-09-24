@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { sq } from "@/lib/square-path";
@@ -7,7 +8,8 @@ import { shareIntoPostText } from "@/lib/square-link";
 import { Sheet } from "@/components/ui/sheet";
 import { IconShareFacebook, IconShareTelegram, IconShareWhatsApp, IconShareX } from "@/components/ui/share-icons";
 import { IconMsShare } from "@/components/ui/design-icons";
-import { IconLink } from "@/components/ui/icons";
+import { IconDownload, IconLink } from "@/components/ui/icons";
+import { shareCardImage } from "@/lib/share-card-image";
 import { SHARE_TARGETS, shareUrl, type SharePayload, type ShareTarget } from "@/lib/share-targets";
 import { withShareChannel } from "@/lib/utm";
 
@@ -39,12 +41,31 @@ export function ShareSheet({
   onClose,
   payload,
   title = "Share post",
+  card,
 }: {
   open: boolean;
   onClose: () => void;
   payload: SharePayload;
   /** The sheet's heading: "Share post", "Share profile". */
   title?: string;
+  /**
+   * A GENERATED PICTURE this thing can be shared AS — the scheduled room's
+   * invite card, and anything that grows one later.
+   *
+   * Absent on a post or a profile, where there is nothing to attach and the
+   * rows below are the whole story.
+   *
+   * ─── WHY THE CARD GETS ITS OWN ROWS ─────────────────────────────────────
+   * The named destinations cannot carry it. WhatsApp, X, Facebook and
+   * Telegram are reached by a web INTENT — a URL with the text and link in
+   * its query — and an intent cannot attach a file. So those rows share the
+   * link, as they always have, and the picture needs doors of its own:
+   * the device sheet, which can attach it, and a save, which always can.
+   *
+   * Drawn FIRST, because when somebody has a card the card is the thing they
+   * came to send.
+   */
+  card?: { imageUrl: string; fileName: string };
 }) {
   const canNative = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
@@ -67,18 +88,98 @@ export function ShareSheet({
     }
   };
 
+  /*
+    SHARE THE PICTURE, or save it. `shareCardImage` already owns the order —
+    attach the file where the browser takes one, otherwise SAVE it, and only
+    reach for the link when there is no picture at all.
+  */
+  const [busy, setBusy] = useState(false);
+  const sendCard = async () => {
+    if (!card || busy) return;
+    setBusy(true);
+    try {
+      const outcome = await shareCardImage({
+        imageUrl: card.imageUrl,
+        fileName: card.fileName,
+        url: payload.url,
+        title,
+        text: payload.text,
+      });
+      if (outcome === "shared" || outcome === "downloaded") onClose();
+      if (outcome === "downloaded") toast.success("Card saved — attach it to your message");
+      if (outcome === "linked") toast.success("Link shared — the card couldn't be attached here");
+      if (outcome === "failed") toast.error("Couldn't get the card ready — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Always a save, never a share — the row says what it does. */
+  const saveCard = async () => {
+    if (!card || busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(card.imageUrl);
+      if (!response.ok) throw new Error(String(response.status));
+      const href = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = card.fileName;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(href), 0);
+      onClose();
+      toast.success("Card saved");
+    } catch {
+      toast.error("Couldn't get the card ready — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const row =
     "ws-press flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-heading transition-colors hover:bg-white/[0.06]";
 
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="flex flex-col gap-1">
+        {/*
+          THE CARD'S OWN ROWS, above everything, and only where there is one.
+          "Preparing…" while the picture renders: it is generated on request
+          and fetches a cover, and a row that sits there doing nothing reads
+          as a dead control.
+        */}
+        {card && (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void sendCard()}
+              className={row + " disabled:opacity-60"}
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-white">
+                <IconMsShare className="h-5 w-5" />
+              </span>
+              {busy ? "Preparing…" : "Share card"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void saveCard()}
+              className={row + " disabled:opacity-60"}
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-white">
+                <IconDownload className="h-5 w-5" />
+              </span>
+              Save card
+            </button>
+          </>
+        )}
         {canNative && (
           <button type="button" onClick={() => void native()} className={row}>
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-white">
               <IconMsShare className="h-5 w-5" />
             </span>
-            Share via…
+            Share link via…
           </button>
         )}
         {SHARE_TARGETS.map(({ target, label }) => {

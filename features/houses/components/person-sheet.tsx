@@ -67,6 +67,7 @@ export function PersonSheet({
   followSlot,
   safetySlot,
   inviteGateSlot,
+  onGift,
 }: {
   person: PersonTarget | null;
   open: boolean;
@@ -84,6 +85,16 @@ export function PersonSheet({
   ) => React.ReactNode;
   /** Hides the invite row for someone the host blocked (the profile slice knows). */
   inviteGateSlot?: (handle: string, row: React.ReactNode) => React.ReactNode;
+  /**
+   * SEND THIS PERSON A GIFT — absent where gifting is not offered.
+   *
+   * The dock's gift button opens a tray with a "Send to" row, which works but
+   * asks the reader to pick the person AFTER choosing the object. Tapping
+   * somebody and saying "send them a gift" is the way a person actually
+   * arrives at the thought (ogazboiz, 2026-09-24: "how do we give a person
+   * gift in a gist room"), so the room offers both doors into the same tray.
+   */
+  onGift?: (person: PersonTarget) => void;
 }) {
   const me = useMe();
   if (!person) return null;
@@ -197,6 +208,17 @@ export function PersonSheet({
         {/* Someone the host blocked gets no invite row at all: the gate
             wraps whichever state it is in, so the element stays the same. */}
         {!isSelf && inviteRow && (gateHandle && inviteGateSlot ? inviteGateSlot(gateHandle, inviteRow) : inviteRow)}
+
+        {/* Never on yourself: the service refuses a self-gift outright, so the
+            row would be a control whose only outcome is an error. */}
+        {!isSelf && onGift && (
+          <HostRow
+            label="Send a gift"
+            hint="Everyone in the room sees what you sent and who it was for."
+            disabled={false}
+            onClick={() => onGift(person)}
+          />
+        )}
 
         {username && (
           <Link

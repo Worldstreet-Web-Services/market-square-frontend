@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { cn } from "@/lib/cn";
-import { formatKash } from "@/lib/format";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
 import { asset } from "@/lib/square-path";
 
@@ -31,6 +30,7 @@ export function GiftGrid({
   className,
   showPrices = true,
   unavailable,
+  unavailableReason = "too small to send",
 }: {
   /** Null while the reader has chosen an amount some other way. */
   selectedId: string | null;
@@ -54,6 +54,20 @@ export function GiftGrid({
    * minimum — and cannot be tapped into a refusal.
    */
   unavailable?: ReadonlySet<string>;
+  /**
+   * WHY the blocked tiles are blocked, in the reader's words.
+   *
+   * It was hardcoded to "too small to send", which is the TIP SHEET's reason
+   * (a gift under the service's minimum). A room tray blocks for a different
+   * one — you cannot afford it — and a tile that says the wrong reason is
+   * worse than one that says none, because the reader acts on it: they would
+   * go looking for a bigger gift instead of more KASH.
+   *
+   * One reason per surface rather than per tile: a surface blocks for one
+   * cause at a time, and a map keyed by id would invite two causes to
+   * disagree on the same tile.
+   */
+  unavailableReason?: string;
 }) {
   return (
     <div className={cn("grid grid-cols-3 gap-x-2 gap-y-6", className)}>
@@ -69,9 +83,10 @@ export function GiftGrid({
             // unclickable, untabbable and announced (CLAUDE.md).
             disabled={blocked}
             aria-pressed={active}
+            title={blocked ? unavailableReason : undefined}
             aria-label={
               showPrices
-                ? `${gift.name}, ${formatKash(gift.priceKash)}${blocked ? " — too small to send" : ""}`
+                ? `${gift.name}, ${gift.priceCoins.toLocaleString()} coins${blocked ? ` — ${unavailableReason}` : ""}`
                 : gift.name
             }
             className={cn(
@@ -87,7 +102,10 @@ export function GiftGrid({
               <span className="mt-1 flex items-center gap-1">
                 <Image src={asset("/gifts/coin.svg")} alt="" width={9} height={9} aria-hidden />
                 <span className="tnum text-[11px] font-bold leading-4 text-white">
-                  {gift.priceKash}
+                  {/* COINS, not KASH — the unit a reader spends. `toLocaleString`
+                      because the ladder reaches 50,000 and a five-digit run of
+                      bare digits is unreadable at 11px. */}
+                  {gift.priceCoins.toLocaleString()}
                 </span>
               </span>
             ) : (

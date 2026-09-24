@@ -10,5 +10,7 @@ export {
   // The gift gallery's counts — own profile only, see the hook.
   useReceivedTips,
 } from "./hooks/use-tips";
+// "They just left" — a 409 the room tells apart from a refusal. See the module.
+export { recipientLeftTheRoom, RECIPIENT_GONE } from "./lib/availability";
 export type { ReceivedTip } from "./lib/api";
 export type { Tip, TipTarget } from "./lib/types";

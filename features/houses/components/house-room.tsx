@@ -51,9 +51,17 @@ import { CopyRow, CopyCodeRow, CopyCodeChip } from "@/features/houses/components
 import { HandTray } from "@/features/houses/components/hand-tray";
 import { HouseControls } from "@/features/houses/components/house-controls";
 import { HouseHeader } from "@/features/houses/components/house-header";
-import { RecordGistButton, RoomDock } from "@/features/houses/components/room-dock";
+import { RoomDock } from "@/features/houses/components/room-dock";
 import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { RoomReactions, useRoomReactions } from "@/features/houses/components/room-reactions";
+import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bursts";
+import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gift-sheet";
+import { giftsArePriced } from "@/lib/gifts";
+import { multiplyKash } from "@/lib/kash-amount";
+import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
+import { KashBuySheet } from "@/features/kash";
+import { useCoinBalance } from "@/features/gifts";
+import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
 import { PersonSheet, type PersonTarget } from "@/features/houses/components/person-sheet";
@@ -1073,8 +1081,59 @@ function LiveHouse({
   // SAME overlay draws the ones other people send — the data channel now
   // carries the glyph, so an incoming heart and an incoming 🎉 both land here.
   const roomReactions = useRoomReactions();
+  /*
+    ─── GIFTS, WHICH THIS ROOM DID NOT HAVE ───────────────────────────────────
+
+    The tray and the flying burst were built for BROADCASTS and lived inline in
+    `stream-room`, so a gist room had no gifts at all — only "Give a tip",
+    which moves money quietly and shows the room nothing. A gift is the
+    opposite act: the point of it is that everybody sees it happen and sees WHO
+    sent it, which is what lets a host thank somebody without stopping to check
+    a ledger. `GiftBursts` is that overlay, lifted out so both rooms draw the
+    same thing from one place.
+
+    FREE HERE, AND HONEST ABOUT IT. The tray renders unpriced: KASH pricing is
+    behind `MARKET_FLAGS.liveGifts` and the paid path would pay the HOST, since
+    `POST /streams/:id/gifts` hardcodes the recipient to the room's owner and
+    takes no recipient at all. So a per-person gift button would name one
+    person and pay another, and it is not built until the route can say who is
+    being paid. What ships today is the moment, not the money.
+  */
+  const giftBursts = useGiftBursts();
+  const payGift = useSendTip();
+  const [giftsOpen, setGiftsOpen] = useState(false);
+  /*
+    WHO THE TRAY OPENS ON. Null when it was reached from the dock's gift
+    button, which is "pick an object, then a person"; set when it was reached
+    by tapping SOMEBODY, which is "pick a person, then an object". Both doors
+    lead to the same tray rather than to two trays that drift.
+  */
+  const [giftTo, setGiftTo] = useState<string | null>(null);
+  /*
+    THE BALANCE, AND ONLY WHILE THE TRAY IS OPEN. It polls at 15s, and a room
+    is the most expensive surface in the app already — running it for the whole
+    session, per participant, to answer a question nobody is asking until they
+    open the tray would undo the request work this room has just had done to
+    it. `null` while closed is "not known", which the tray treats as "let the
+    service decide" rather than as a shortfall.
+  */
+  /*
+    COINS, NOT KASH — gifts are priced in Square coins now, so the number the
+    tray compares against is the coin balance. Read only while the tray is
+    open: a room is already the most expensive surface in the app, and a
+    balance nobody is looking at is a request nobody needed.
+
+    `null` while the service has no coins yet, which the tray reads as "not
+    known" and therefore blocks nothing. The interface must not invent a
+    shortfall it cannot see; only the service can refuse a spend.
+  */
+  const giftCoins = useCoinBalance(giftsOpen);
+  /* Short of KASH mid-gift opens the top-up rather than stopping the sender —
+     the TikTok shape, and the tray hands over rather than stacking dialogs. */
+  const [topUpOpen, setTopUpOpen] = useState(false);
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
+    onGift: giftBursts.receive,
   });
   // One tap, two destinations: draw it here immediately labelled "You", and
   // broadcast it under your name so the rest of the room sees who sent it —
@@ -1086,6 +1145,149 @@ function LiveHouse({
     },
     [roomReactions, live, myName]
   );
+
+  // One tap, two destinations, exactly as a reaction is: drawn here at once
+  // labelled "You", and broadcast under your name so the rest of the room sees
+  // who sent it. No money leg — see the note above the tray.
+  const sendGift = useCallback(
+    (gift: LiveGift, quantity: number, to: GiftRecipient | null) => {
+      // The burst names BOTH ends. A gift that says only who sent it is the
+      // broadcast shape, where there was only ever one person it could be for;
+      // in a room where anybody can be gifted, "who it was for" is half the
+      // event and is what the recipient is watching for.
+      const label = to ? `You → ${to.name}` : "You";
+      giftBursts.spawn(gift, quantity, label);
+      live.gift(gift.id, quantity, to ? `${myName ?? "Someone"} → ${to.name}` : (myName ?? "Someone"));
+
+      /*
+        ─── AND NOW THE MONEY, WHICH THIS ROOM DID NOT MOVE UNTIL TODAY ───────
+
+        THE SHOW HAPPENS EITHER WAY. The burst and the data-channel packet
+        already went out above, unconditionally, and nothing below retracts
+        them: a gift the room has seen is not un-seen because a wallet refused
+        it. The broadcast makes the same call and for the same reason.
+
+        `toProfileId` IS SENT FOR EVERY RECIPIENT INCLUDING THE HOST. The
+        service exempts the host from its presence check, so naming them is
+        identical to omitting the field — and special-casing the first row
+        would be a second code path earning nothing.
+      */
+      if (!giftsArePriced(stream.status)) return;
+      if (!to) return; // Nothing is charged with nobody named — see the tray.
+
+      const amountKash = multiplyKash(gift.priceKash, quantity);
+      if (!amountKash) {
+        // No exact total, no charge. Rounding would bill an amount the sender
+        // was never shown: three Roses is 0.03, not 0.030000000000000002.
+        toast.error("That quantity can't be priced exactly.");
+        return;
+      }
+
+      void payGift
+        .mutateAsync({
+          target: { kind: "stream", id: stream.id, recipient: null },
+          amountKash,
+          giftId: gift.id,
+          toProfileId: to.id,
+        })
+        .then(() => {
+          // "On its way", never "sent". Production settles `client-signed`:
+          // the sender signs and the tip stays PENDING until the watcher sees
+          // the transfer on-chain. Saying it landed before that is the one
+          // claim this flow may not make.
+          toast.success(`${gift.name} on its way to ${to.name}`);
+        })
+        .catch((error: unknown) => {
+          /*
+            THEY LEFT is not a refusal of the act. The service checks live
+            presence and answers 409 RECIPIENT_NOT_IN_ROOM rather than ever
+            falling back to paying the host — so the sender did nothing wrong,
+            the room simply moved, and the honest answer is to say so and let
+            them choose again rather than to imply they were denied.
+          */
+          if (recipientLeftTheRoom(error)) {
+            toast.error(`${to.name} left the room — nothing was charged.`);
+            return;
+          }
+          toast.error(
+            error instanceof Error && error.message
+              ? error.message
+              : "The gift was shown, but the payment did not go through."
+          );
+        });
+    },
+    [giftBursts, live, myName, stream.status, stream.id, payGift]
+  );
+
+  /*
+    WHO CAN BE GIFTED — the host first, then everyone else in the room, and
+    never yourself.
+
+    `chatMentionables` is already exactly this roster (every seat plus every
+    audience member, de-duplicated and resolved to real profile ids), which is
+    why this needs no read of its own — the same reason the moderator sheet
+    uses it. The host is lifted to the front because a gift with no thought
+    behind it should land on the person today's route would pay anyway, which
+    is what makes the picker safe to ship before the route can name anybody.
+
+    Self is removed rather than disabled: the service refuses a self-gift
+    outright ("You cannot tip yourself"), so offering it would be drawing a
+    control whose only outcome is an error.
+
+    ─── THE BADGE RULE, WHICH NOW DIFFERS BY SURFACE ────────────────────────
+    ogazboiz decided a gist room may pay ANYONE in it, and the service kept
+    that as its own switch rather than widening the existing one:
+
+      verifiedAuthorsOnly          true   — POST tips, unchanged
+      verifiedRoomRecipientsOnly   false  — ROOM gifts, open
+
+    The two differ on purpose. The badge stops an impersonation account
+    collecting on a byline the sender has never met, which is a POST. Here the
+    sender picked a person off a live roster, in a room they are both in, that
+    the host let them into, while that person is speaking — the attack barely
+    exists and the rule's cost would be that most of the room can receive
+    nothing.
+
+    SO THIS PICKER IS CORRECT AS IT STANDS: no filter, nobody greyed out.
+    `tipBlockedBecause(capability, recipient, "room")` reads the room flag and
+    answers null for everyone, so there is nothing for this component to do.
+
+    NOT YET IN PRODUCTION, and the difference matters. That switch is in
+    service PR #308, unmerged and undeployed; prod today publishes only
+    `verifiedAuthorsOnly: true` and no room flag at all. An ABSENT room flag
+    means "this deployment has one switch", so rooms go on obeying the author
+    rule — which is why `tipBlockedBecause` falls back rather than defaulting
+    to open, and why until #308 ships a gift to an unverified person is still
+    refused 403 in prod.
+
+    IF THE ROOM FLAG IS EVER TURNED BACK ON, this picker cannot enforce it.
+    `MentionableMember` is `{ id, displayName, username }` off LiveKit
+    participant metadata and carries no verification; `stream.participants`
+    does carry it but is a SAMPLE OF THREE, so filtering on it would silently
+    offer three people and hide the rest; and `GET /profiles` takes no `ids`
+    filter — passing one does not error, it returns an ordinary page of the
+    directory, so hydrating participant ids would answer with STRANGERS.
+    Closing rooms again therefore needs an `ids` filter first, not a change
+    here.
+
+    DO NOT SWITCH THE MONEY LEG ON UNTIL #308 IS MERGED AND RESTARTED.
+  */
+  const giftRecipients: GiftRecipient[] = useMemo(() => {
+    const hostId = stream.owner?.id ?? null;
+    const seen = new Set<string>();
+    const out: GiftRecipient[] = [];
+    const add = (id: string, name: string, isHost = false) => {
+      if (!id || id === myId || seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, name, isHost });
+    };
+    if (hostId) add(hostId, stream.owner?.displayName || stream.owner?.username || "Host", true);
+    for (const person of chatMentionables) {
+      add(person.id, person.displayName || person.username, person.id === hostId);
+    }
+    return out;
+  }, [chatMentionables, stream.owner, myId]);
+
 
   /* ---- announcements --------------------------------------------------- */
 
@@ -1444,6 +1646,23 @@ function LiveHouse({
     return person.isRoomHost ? person : { ...person, seated: false, micMuted: true, present: presentIds.has(base) };
   }, [person, slots, presentIds]);
 
+  /**
+   * THE OPEN PERSON'S GIFT ID, or null when they cannot be gifted.
+   *
+   * The id rule is the ROSTER'S OWN, reused rather than rewritten: the host is
+   * keyed on `stream.ownerId`, because a host's LiveKit identity is the
+   * literal string `broadcaster` and carries no account id at all. Anybody who
+   * does not resolve to a row the roster already knows is NOT offered a gift
+   * row — a row that quietly fell back to the host would pay the wrong person
+   * while naming another, which is the exact failure `toProfileId` exists to
+   * prevent, arriving through a different door.
+   */
+  const giftablePersonId = useMemo(() => {
+    if (!livePerson) return null;
+    const id = livePerson.isRoomHost ? stream.ownerId : baseIdentity(livePerson.identity);
+    return id && giftRecipients.some((row) => row.id === id) ? id : null;
+  }, [livePerson, giftRecipients, stream.ownerId]);
+
   /*
     A HOUSE MEMBER WHO IS LISTENING OPENS THE SAME SHEET AS THE AUDIENCE. The
     roster slot draws them, and the Audience drops them (they are in
@@ -1711,6 +1930,8 @@ function LiveHouse({
           other people send, one layer. Viewport-fixed, so it is mounted once
           here regardless of which control opened the picker. */}
       <RoomReactions items={roomReactions.items} />
+      {/* Positioned by the room container, not the viewport — see GiftBursts. */}
+      <GiftBursts items={giftBursts.items} />
 
       {/* LEFT COLUMN — 805 in the file, 744 of content inside 32px gutters.
           A COLUMN, not a plain block: the file's bottom bar (129:12197) is the
@@ -2069,7 +2290,25 @@ function LiveHouse({
            removes itself where a tip could not be taken — so a room with no
            tippable host simply has an empty left edge, as the file's host
            frame does before Record Gist is pressed. */
-        primary={isHost ? <RecordGistButton /> : (tipSlot?.(stream.id, stream.owner) ?? null)}
+        /*
+          NO "RECORD GIST" — removed 2026-09-24 at ogazboiz's word, and it was
+          never a working control: it rendered permanently disabled, because
+          recording a room needs LiveKit egress that is not provisioned. A
+          button that has never once been pressable is not a promise of a
+          feature, it is a dead pixel in the one row the host uses most.
+
+          The host's left edge is simply empty now, which is what the file's
+          own host frame draws before Record Gist is pressed. The audience
+          keeps "Give a tip"; a host tipping their own room is refused by the
+          service, so there is nothing to put there in its place. Gifting
+          somebody ELSE in the room is the gift button, which is beside it and
+          is there for everyone including the host.
+        */
+        primary={isHost ? null : (tipSlot?.(stream.id, stream.owner) ?? null)}
+        onGift={() => {
+          setGiftTo(null);
+          setGiftsOpen(true);
+        }}
         mic={
           onStage
             ? {
@@ -2227,6 +2466,24 @@ function LiveHouse({
       */}
       <RoomPhoneBar
         unreadChat={unreadChat}
+        /*
+          EVERY CONTROL THE DOCK HAS, because this bar REPLACES it below `md`
+          rather than summarising it. It shipped with four of them and the dock
+          grew three more — the tip pill, the moderator sheet and the gift tray
+          — so on a phone a host could not appoint a moderator at all and
+          nobody could open the gift tray except by tapping a person first.
+
+          The same handlers and the same guards as the dock above, deliberately
+          written out rather than lifted into a shared object: two call sites
+          that must not drift are better pinned by a test than by indirection
+          that hides which one is missing an argument.
+        */
+        primary={isHost ? null : (tipSlot?.(stream.id, stream.owner) ?? null)}
+        onGift={() => {
+          setGiftTo(null);
+          setGiftsOpen(true);
+        }}
+        onPeople={canManageModerators ? () => setModeratorsOpen(true) : null}
         mic={
           onStage
             ? {
@@ -2305,6 +2562,39 @@ function LiveHouse({
         />
       )}
 
+      {/*
+        THE GIFT TRAY, NOW PRICED — the money leg is on.
+
+        It shipped unpriced because `POST /streams/:id/gifts` hardcoded
+        `recipientId = stream.ownerId`, so a priced gift aimed at a named
+        person would have charged the sender and paid the HOST while the
+        screen said somebody else's name.
+
+        VERIFIED IN PRODUCTION BEFORE FLIPPING, not taken on report. The served
+        OpenAPI document now carries `toProfileId` on this route, described
+        exactly as agreed — optional, absent still means the host, the named
+        person must be present, 409 `RECIPIENT_NOT_IN_ROOM` and NEVER a
+        fallback to the host, host exempt from the presence check, self-gift
+        refused — and `/tips/capability` answers
+        `verifiedRoomRecipientsOnly: false`, so anybody in the room may
+        receive.
+
+        `giftsArePriced` still gates on `MARKET_FLAGS.liveGifts` AND a live
+        status, so a deployment without the flag, or a room that has ended,
+        keeps the free moment rather than pricing something it cannot settle.
+      */}
+      <GiftSheet
+        open={giftsOpen}
+        onClose={() => setGiftsOpen(false)}
+        onSend={sendGift}
+        recipients={giftRecipients}
+        priced={giftsArePriced(stream.status)}
+        initialRecipientId={giftTo}
+        balanceCoins={giftCoins}
+        onTopUp={() => setTopUpOpen(true)}
+      />
+      <KashBuySheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
+
       {isHost && (
         <HandTray
           stream={stream}
@@ -2320,12 +2610,31 @@ function LiveHouse({
         />
       )}
 
+      {/*
+        The gift row on a person is offered ONLY when that person resolves to
+        somebody the roster already knows. The id rule is the roster's own —
+        the host is keyed on `stream.ownerId`, because their LiveKit identity
+        is the literal string `broadcaster` and carries no account id — and
+        anybody who does not resolve is not offered, because a row that
+        silently fell back to the host would gift the WRONG PERSON while
+        naming another. That is the same failure the recipient field exists to
+        prevent, arriving through a different door.
+      */}
       <PersonSheet
         person={livePerson}
         open={person !== null}
         onClose={() => setPerson(null)}
         isHost={isHost}
         hostBusy={resolve.isPending}
+        onGift={
+          giftablePersonId
+            ? () => {
+                setGiftTo(giftablePersonId);
+                setPerson(null);
+                setGiftsOpen(true);
+              }
+            : undefined
+        }
         onMoveDown={(target) => {
           // An approved speaker's LiveKit identity is `<did>#speaker`; the
           // request row is keyed on the bare DID. Comparing them raw never

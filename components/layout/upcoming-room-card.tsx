@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { ShareSheet } from "@/components/ui/share-sheet";
+import { roomShare } from "@/lib/room-card";
+import { api } from "@/lib/square-path";
 import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
@@ -56,6 +58,25 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
   const href = housePath(stream.id);
   const startsAt = stream.scheduledAt;
   const host = stream.owner;
+  /*
+    THE SAME SHARE PAYLOAD `/gist-rooms` BUILDS, from one function.
+
+    This card had the share button and NOT the card, so tapping share on the
+    list offered a picture and tapping share inside the room offered only a
+    link — the same room answering two different ways, with nothing failing to
+    say so. `roomShare` exists so a screen cannot ask for half of it.
+
+    `window` is read here rather than inside the helper because this component
+    also renders on the server, where there is no origin to read; a relative
+    URL in a QR code cannot be scanned from the other device that is the entire
+    point of the card.
+  */
+  const share = roomShare(
+    stream,
+    href,
+    typeof window === "undefined" ? null : window.location.origin,
+    api
+  );
   const topicKey = stream.topics?.[0];
   const topicLabel = topicKey
     ? (topics.data?.find((entry) => entry.key === topicKey)?.label ?? topicKey)
@@ -233,7 +254,8 @@ export function UpcomingRoomCard({ stream }: { stream: Stream }) {
           open
           onClose={() => setSharing(false)}
           title="Share gist room"
-          payload={{ text: `${stream.title} on Square`, url: `${window.location.origin}${href}` }}
+          payload={{ text: `${stream.title} on Square`, url: share.roomUrl }}
+          card={{ imageUrl: share.imageUrl, fileName: share.fileName }}
         />
       )}
     </div>

@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { exceedsBalance, multiplyKash } from "./kash-amount.ts";
+import { readFileSync } from "node:fs";
+import { z } from "zod";
 import {
   canSendTip,
   tipAmountOutOfBounds,
   tipBlockedBecause,
   tipBoundsMessage,
+  giftsComeFromStock,
+  tipSurfaceOf,
 } from "./tip-capability.ts";
 
 /** What production actually publishes today. */
@@ -80,4 +85,249 @@ test("an ABSENT capability is permissive, so a slow lookup never breaks tipping"
 test("an unparseable bound is ignored rather than forbidding everything", () => {
   assert.equal(tipAmountOutOfBounds("5", { ...LIVE, minKash: "abc" }), null);
   assert.equal(tipAmountOutOfBounds("abc", LIVE), null);
+});
+
+/*
+  ─── TWO BADGE RULES, ONE PER SURFACE ────────────────────────────────────────
+
+  The service publishes `verifiedAuthorsOnly` for POST tips and
+  `verifiedRoomRecipientsOnly` for GIST ROOM gifts, and they disagree on
+  purpose. The badge stops an impersonation account collecting on a byline the
+  sender has never met — a POST. In a room the sender picked a person off a
+  live roster, in a room they are both in, that the host let them into, while
+  that person is speaking; the attack barely exists and the rule's cost is that
+  most of the room can receive nothing.
+
+  Reading the wrong flag on the wrong surface is the failure this pins: it
+  would grey out people the service will happily pay, and it would do it
+  silently, because a hidden control raises no error.
+*/
+const ROOMS_OPEN = { ...LIVE, verifiedAuthorsOnly: true, verifiedRoomRecipientsOnly: false };
+const UNVERIFIED = { verification: "none" };
+const VERIFIED = { verification: "verified" };
+
+test("opening ROOMS does not open POSTS", () => {
+  // The service kept these as two switches precisely so one could move without
+  // the other. If the client collapses them, that care is undone on the client
+  // side and post tipping quietly opens to everybody.
+  assert.equal(tipBlockedBecause(ROOMS_OPEN, UNVERIFIED, "room"), null);
+  assert.equal(tipBlockedBecause(ROOMS_OPEN, UNVERIFIED, "post"), "unverified-recipient");
+});
+
+test("the surface defaults to POST, so callers that predate the flag are unchanged", () => {
+  // A new parameter must not quietly change what the surfaces written before
+  // it decide about money.
+  assert.equal(tipBlockedBecause(ROOMS_OPEN, UNVERIFIED), "unverified-recipient");
+  assert.equal(tipBlockedBecause(LIVE, UNVERIFIED), "unverified-recipient");
+});
+
+test("a service with ONE switch still applies it to rooms", () => {
+  /*
+    `undefined` means "this deployment has one switch", NOT "rooms are open".
+    Production today publishes no room flag at all, so a room must go on
+    obeying the author rule — anything else silently opens room gifting on
+    every service that has never heard of the field.
+  */
+  // Stated as ABSENCE rather than by reading the property: `LIVE` is what
+  // production publishes today and it does not carry the field at all, which
+  // is the precise thing being pinned.
+  assert.equal("verifiedRoomRecipientsOnly" in LIVE, false);
+  assert.equal(tipBlockedBecause(LIVE, UNVERIFIED, "room"), "unverified-recipient");
+  assert.equal(tipBlockedBecause(LIVE, VERIFIED, "room"), null);
+});
+
+test("`false` is a real answer and must not fall through to the author rule", () => {
+  // The reason the fallback is `??` and not `||`: with `||`, a room flag of
+  // `false` — the whole point of the change — would be treated as absent and
+  // the author rule would apply, which is the exact bug this enables.
+  assert.equal(tipBlockedBecause(ROOMS_OPEN, UNVERIFIED, "room"), null);
+});
+
+test("a room can still be closed on its own", () => {
+  // The switch is a switch, not a one-way door: rooms closed while posts are
+  // open has to work too, or the pair is not really independent.
+  const roomsClosed = { ...LIVE, verifiedAuthorsOnly: false, verifiedRoomRecipientsOnly: true };
+  assert.equal(tipBlockedBecause(roomsClosed, UNVERIFIED, "room"), "unverified-recipient");
+  assert.equal(tipBlockedBecause(roomsClosed, UNVERIFIED, "post"), null);
+});
+
+test("tipping switched off beats both flags", () => {
+  const off = { ...ROOMS_OPEN, enabled: false };
+  assert.equal(tipBlockedBecause(off, VERIFIED, "room"), "disabled");
+  assert.equal(tipBlockedBecause(off, VERIFIED, "post"), "disabled");
+});
+
+/*
+  ─── AN HONEST TRAY: WHAT YOU CAN AFFORD, NOT JUST WHAT EXISTS ───────────────
+
+  ogazboiz chose pay-at-send over buy-first inventory, so the fix for "it looks
+  fake" is that every tile tells the truth — its real price, and whether this
+  person can send it right now. A grid of fourteen objects, eight of which get
+  refused at the last step, is the same complaint arriving from the other side.
+
+  The comparison is decimal-string arithmetic, never floats: this is money, and
+  `0.1 + 0.2` is the reason.
+*/
+test("a balance that is not known blocks nothing", () => {
+  /*
+    THE MOST IMPORTANT ONE. A balance still loading, or an account read that
+    failed, must not grey out the tray — the interface would be inventing a
+    shortfall it cannot see, and the service is the only thing that can
+    actually refuse a spend. This is the same rule the balance chip and the
+    earnings panel already follow for showing a number at all.
+  */
+  assert.equal(exceedsBalance("5", null), false);
+  assert.equal(exceedsBalance("5", undefined), false);
+  assert.equal(exceedsBalance(null, "1"), false);
+});
+
+test("a tile is blocked by its UNIT price, the button by the TOTAL", () => {
+  /*
+    Two different questions. A gift whose unit price is beyond the balance can
+    never be sent at any quantity, so the tile is inert. A gift that is
+    affordable once and not ten times is a QUANTITY problem — blocking the tile
+    would tell the reader to pick a different gift when lowering the count is
+    what fixes it.
+  */
+  const balance = "1.5";
+  // Unit prices: a Rose at 0.01 is sendable, a Bank at 5 is not.
+  assert.equal(exceedsBalance("0.01", balance), false);
+  assert.equal(exceedsBalance("5", balance), true);
+  // Totals: one Lion at 1 is fine, two are not — same tile, different answer.
+  assert.equal(exceedsBalance(multiplyKash("1", 1) ?? "", balance), false);
+  assert.equal(exceedsBalance(multiplyKash("1", 2) ?? "", balance), true);
+});
+
+test("exactly the balance is affordable", () => {
+  // `> balance`, not `>=`. Spending everything you have is allowed; an
+  // off-by-one here would refuse the one gift somebody saved up for.
+  assert.equal(exceedsBalance("1.5", "1.5"), false);
+  assert.equal(exceedsBalance("1.500001", "1.5"), true);
+});
+
+test("the total is multiplied exactly, so the tray blocks on the real figure", () => {
+  // Three Roses is 0.03, not 0.030000000000000002 — and the second is both
+  // the wrong number and one the engine rejects outright.
+  assert.equal(multiplyKash("0.01", 3), "0.03");
+  assert.equal(exceedsBalance(multiplyKash("0.01", 3) ?? "", "0.03"), false);
+});
+
+/**
+ * PRODUCTION PUBLISHES TWO RULES AND THEY DISAGREE — deployed 2026-09-24:
+ *
+ *   verifiedAuthorsOnly         true   — a byline stays closed
+ *   verifiedRoomRecipientsOnly  false  — a gist room is open to everyone
+ *
+ * They agreed until that deploy, which is why nothing noticed that the room's
+ * own tip pill was asking the AUTHOR rule. The moment they diverged, the
+ * control vanished for an unverified host the service would happily have paid:
+ * no error, no refusal, just a button that was not there.
+ */
+const PROD = { ...LIVE, verifiedRoomRecipientsOnly: false };
+const unverified = { verification: "unverified" };
+
+test("a gist room is a room, and a byline is a byline", () => {
+  // Derived from the target, never chosen by the caller — a `stream` IS the
+  // gist room, since a room is a stream with category 'house'.
+  assert.equal(tipSurfaceOf("stream"), "room");
+  assert.equal(tipSurfaceOf("post"), "post");
+  assert.equal(tipSurfaceOf("profile"), "post");
+});
+
+test("an unverified person in a room can be paid; the same person's byline cannot", () => {
+  assert.equal(tipBlockedBecause(PROD, unverified, "room"), null);
+  assert.equal(tipBlockedBecause(PROD, unverified, "post"), "unverified-recipient");
+  // The whole point of the two flags: one answer must not stand in for the other.
+  assert.notEqual(
+    tipBlockedBecause(PROD, unverified, "room"),
+    tipBlockedBecause(PROD, unverified, "post")
+  );
+});
+
+test("the room's tip control asks the room rule, not the default", () => {
+  /*
+    The gate is in a component, so it is read as source. `tipBlockedBecause`
+    defaults its surface to `post`, which is right for the callers that predate
+    the room rule and wrong for this one — and a default is silent when it is
+    wrong, which is exactly how this shipped.
+  */
+  const button = readFileSync(new URL("../features/tips/components/tip-button.tsx", import.meta.url), "utf8");
+  assert.match(button, /tipBlockedBecause\(capability\.data, target\.recipient, tipSurfaceOf\(target\.kind\)\)/);
+  assert.doesNotMatch(
+    button,
+    /tipBlockedBecause\(capability\.data, target\.recipient\)/,
+    "the room's pill is back on the default surface"
+  );
+});
+
+test("a deployment with ONE switch still applies it to rooms", () => {
+  // `undefined` is not `false`: a service that has never heard of the room flag
+  // means "there is one rule here", not "rooms are open". `??`, never `||`.
+  assert.equal(tipBlockedBecause(LIVE, unverified, "room"), "unverified-recipient");
+  assert.equal(tipBlockedBecause({ ...LIVE, verifiedRoomRecipientsOnly: false }, unverified, "room"), null);
+});
+
+/**
+ * THE SPEND LEG — service `0abd791f`, pushed and unmerged.
+ *
+ * Sending a gift from stock is a THIRD settlement shape, and the simplest:
+ * 201 `confirmed`, no wallet, no pending, because the KASH moved when the
+ * COINS were bought and a send only reassigns who is owed it.
+ */
+test("the tray's source is read from the service, never inferred", () => {
+  /*
+    Both economies cannot be live at once. A client that still charges at send
+    while the service spends stock BILLS SOMEBODY FOR A ROSE THEY ALREADY
+    BOUGHT, and no validation anywhere recovers from that.
+
+    The tempting inference — "the gift routes answer, so gifts come from
+    stock" — is wrong: the routes ship live while sending is still
+    charge-at-send. That is precisely the state #310 lands in.
+  */
+  assert.equal(giftsComeFromStock({ ...PROD, spendGiftsFromInventory: true }), true);
+  assert.equal(giftsComeFromStock({ ...PROD, spendGiftsFromInventory: false }), false);
+  // Absent is a deployment that has never heard of stock. Different fact from
+  // `false`, same behaviour — and neither may open the other.
+  assert.equal(giftsComeFromStock(PROD), false);
+  assert.equal(giftsComeFromStock(null), false);
+  assert.equal(giftsComeFromStock(undefined), false);
+});
+
+test("`creditedKash` must accept NULL, or the earnings list stops parsing", () => {
+  /*
+    THE SERVICE'S COLUMN IS `string | null`, AND A TIP IS ALWAYS NULL THERE.
+    Null means "nothing was withheld on this payment" — every tip ever settled,
+    and every gift sent before the split existed — and it is deliberately not
+    backfilled to `amount_kash`, because "no split applies" and "the split
+    happened to be 100%" are different facts.
+
+    So `.optional()` alone was wrong, and wrong in the loud direction for once:
+    optional admits `undefined` and REJECTS `null`, so the first response
+    carrying the field would have failed the whole list parse and taken the
+    earnings screen down — on a deploy that touched nothing in this repo.
+
+    Demonstrated rather than asserted, because the whole bug is a zod semantic
+    that reads like it should already be covered.
+  */
+  assert.equal(z.string().optional().safeParse(undefined).success, true);
+  assert.equal(z.string().optional().safeParse(null).success, false, "optional does NOT admit null");
+  assert.equal(z.string().nullable().optional().safeParse(null).success, true);
+  assert.equal(z.string().nullable().optional().safeParse(undefined).success, true);
+
+  // And that the field itself is declared that way, with no default under
+  // either — the fallback to `amountKash` is only correct while both states
+  // survive the parse.
+  const api = readFileSync(new URL("../features/tips/lib/api.ts", import.meta.url), "utf8");
+  assert.match(api, /creditedKash: z\.string\(\)\.nullable\(\)\.optional\(\),/);
+  assert.doesNotMatch(api, /creditedKash:.*\.default\(/, "a default erases what null means");
+});
+
+test("a missing gift refuses by NAME, so the tray can offer to buy one", () => {
+  // 409 `{ code: "NO_GIFT_IN_STOCK", giftId }`. A refused send spends nothing:
+  // the stock decrement and the tip row are one transaction on the service, so
+  // this only decides what to SAY.
+  const giftApi = readFileSync(new URL("../features/gifts/lib/api.ts", import.meta.url), "utf8");
+  assert.match(giftApi, /NoGiftInStockSchema\.safeParse\(details\)/);
+  const types = readFileSync(new URL("../features/gifts/lib/types.ts", import.meta.url), "utf8");
+  assert.match(types, /export const NoGiftInStockSchema = z\.object\(\{\s*giftId: z\.string\(\),/);
 });

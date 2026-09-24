@@ -41,13 +41,80 @@ export type TipBlock =
  * lookup has not come back yet would break tipping to fix a message. The
  * service refuses what it must; this only stops us advertising a refusal.
  */
+export type TipSurface =
+  /** A post or a profile — somebody tips a byline. */
+  | "post"
+  /** A gist room — somebody gifts a person off a live roster. */
+  | "room";
+
+/**
+ * DOES SENDING A GIFT SPEND STOCK, OR CHARGE AT THE MOMENT OF SENDING?
+ *
+ * The two economies cannot both be live, and getting it backwards costs
+ * somebody money in a way no validation recovers from: a client that still
+ * charges at send while the service spends stock bills a person for a rose
+ * they had already bought.
+ *
+ * SO IT IS READ, NEVER INFERRED. The tempting guess — "the gift routes answer,
+ * therefore gifts come from stock" — is wrong: the routes can be live while
+ * sending is still charge-at-send, which is exactly the state they ship in.
+ * The service publishes this flag so both halves switch on the same deploy.
+ *
+ * `=== true`, so an ABSENT flag and a false one both keep today's behaviour.
+ * They are different facts — absent is a deployment that has never heard of
+ * stock — but neither may open the other.
+ */
+export function giftsComeFromStock(capability: TipCapability | null | undefined): boolean {
+  return capability?.spendGiftsFromInventory === true;
+}
+
+/**
+ * WHICH RULE A TARGET FALLS UNDER — derived, never remembered.
+ *
+ * `tipBlockedBecause` takes the surface as an argument with a `post` default,
+ * which is safe for the callers that predate the room rule and a trap for the
+ * ones that do not: the room's own tip pill went on reading the AUTHOR rule
+ * for as long as the two flags agreed, and became wrong the moment production
+ * opened rooms (`verifiedRoomRecipientsOnly: false`) while keeping bylines
+ * closed (`verifiedAuthorsOnly: true`). Nothing failed — the control simply
+ * stopped appearing for an unverified host the service would have paid.
+ *
+ * So the mapping lives here, next to the rule it selects, and a caller with a
+ * target derives it rather than choosing it. A gist room is a `stream`; a post
+ * and a profile are both bylines.
+ */
+export function tipSurfaceOf(kind: "post" | "profile" | "stream"): TipSurface {
+  return kind === "stream" ? "room" : "post";
+}
+
 export function tipBlockedBecause(
   capability: TipCapability | null | undefined,
-  recipient: TipRecipient | null | undefined
+  recipient: TipRecipient | null | undefined,
+  /**
+   * WHICH BADGE RULE APPLIES, because the service now publishes two.
+   *
+   * Defaulted to `post` so every existing caller keeps the behaviour it had:
+   * a new parameter must not quietly change what the surfaces that predate it
+   * decide about money.
+   */
+  surface: TipSurface = "post"
 ): TipBlock | null {
   if (!capability) return null;
   if (!capability.enabled) return "disabled";
-  if (!capability.verifiedAuthorsOnly) return null;
+  /*
+    THE ROOM RULE FALLS BACK TO THE AUTHOR RULE WHEN IT IS ABSENT.
+
+    `undefined` means the deployment has one switch, not that rooms are open —
+    so a service that has never heard of the room flag goes on applying the
+    author flag to rooms, which is what production does today. `?? ` rather
+    than `||` deliberately: `false` is a real answer meaning "rooms are open"
+    and must not fall through to the author rule.
+  */
+  const required =
+    surface === "room"
+      ? (capability.verifiedRoomRecipientsOnly ?? capability.verifiedAuthorsOnly)
+      : capability.verifiedAuthorsOnly;
+  if (!required) return null;
   // `verified` ONLY. `lapsed` is a verified account whose payment ran out and
   // it must not be treated as verified anywhere (CLAUDE.md), least of all
   // where money is about to move.

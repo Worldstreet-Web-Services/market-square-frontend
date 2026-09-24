@@ -40,6 +40,22 @@ export const TipSchema = z.object({
    * predates the gift tray.
    */
   giftId: z.string().nullable().optional().default(null),
+  /**
+   * WHO THE SERVICE DECIDED TO PAY — its answer, not the client's request.
+   *
+   * A stream gift can now name anybody in the room (`toProfileId`), and the
+   * one thing a sender must never be shown is a name the client merely HOPED
+   * for. This is read back so a receipt states who was actually credited: if
+   * the field is absent the request was not honoured as sent, and the receipt
+   * says nothing about a recipient rather than repeating the guess.
+   *
+   * NO DEFAULT, and that is the feature switch. `undefined` means "this
+   * service does not carry a recipient on a tip" — an older deployment, where
+   * the host was always paid — which is a different sentence from "it does and
+   * the answer is nobody". Defaulting to null would merge the two and let a
+   * receipt claim the service confirmed something it never said.
+   */
+  toUserId: z.string().nullable().optional(),
 });
 
 export type Tip = z.infer<typeof TipSchema>;

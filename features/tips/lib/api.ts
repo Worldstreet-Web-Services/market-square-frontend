@@ -72,6 +72,42 @@ const ReceivedTipSchema = z.object({
   fromUser: ProfileSchema.nullable().optional().default(null),
   source: TipSourceSchema.nullable().optional().default(null),
   amountKash: z.string(),
+  /**
+   * WHAT THE RECEIVER WAS ACTUALLY CREDITED, which is not always what was sent.
+   *
+   * `amountKash` is the FACE VALUE — the lion the room watched fly, 1 KASH —
+   * and it stays the face value on purpose: quietly reducing it would make the
+   * sender's view and the receiver's view of the same event disagree with no
+   * way to reconcile them. `creditedKash` is the other number: 0.5 KASH after
+   * Square's cut on a gift.
+   *
+   * ON A PLAIN TIP THEY ARE EQUAL. There is no split on a tip — verified on
+   * the service's own ledger pair, which writes the SAME `amountKash` variable
+   * to both the sender's debit and the author's credit — so this needs no
+   * branch on kind and no percentage in the client.
+   *
+   * NULLABLE **AND** OPTIONAL, AND THE TWO ARE DIFFERENT ANSWERS:
+   *   absent  — this deployment has no split at all, the field does not exist
+   *   null    — nothing was withheld on THIS payment: every tip ever settled,
+   *             and every gift sent before the split existed
+   *   a value — what the recipient was credited
+   *
+   * `.optional()` ALONE WOULD HAVE THROWN. The service's column is
+   * `string | null` and a tip is always null there, so the first response
+   * carrying the field would have failed the whole list parse and taken the
+   * earnings screen down — not a silent empty this time, a hard error, on the
+   * day a deploy touched nothing in this repo.
+   *
+   * No default under either, so the fallback to `amountKash` is CORRECT rather
+   * than merely safe: where nothing was withheld, the face value IS the
+   * credit.
+   *
+   * THE PERCENTAGE DELIBERATELY DOES NOT LIVE HERE. The split is configurable
+   * server-side and applies only to gifts; handed the rate instead of the
+   * result, this screen would go wrong the day somebody changed it. Same
+   * argument as gift prices, pointed at earnings.
+   */
+  creditedKash: z.string().nullable().optional(),
   // Same `catch` reasoning as `TipResponseSchema`: an unknown status must not
   // fail a list, and it degrades to the one that asserts nothing.
   status: z.enum(["pending", "confirmed", "failed"]).catch("pending"),
@@ -153,6 +189,26 @@ export async function sendTip(
   amountKash: string,
   /** The gift chosen, if one was. A label the service records, never a price. */
   giftId: string | null = null,
+  /**
+   * WHO IS PAID, on a stream gift — anybody in the room, not just its host.
+   *
+   * ABSENT keeps the service's original behaviour exactly: the host is paid,
+   * because `recipientId` was hardcoded to `stream.ownerId`. So an older
+   * client and a service that has never heard of this field both go on working
+   * and nothing needed a coordinated deploy.
+   *
+   * SEND IT FOR EVERY ROW INCLUDING THE HOST. The service exempts the host
+   * from the presence check — a host whose own heartbeat has lapsed is still
+   * the host — so naming them explicitly behaves identically to omitting the
+   * field. That is deliberate on their side so a picker does not have to
+   * special-case its first row into the no-field form, and a picker that did
+   * would be carrying a second code path for no gain.
+   *
+   * POST AND PROFILE TIPS IGNORE IT. Those routes have their own recipient by
+   * construction — the post's author, the profile itself — so passing it there
+   * would be inventing a parameter the service does not read.
+   */
+  toProfileId: string | null = null,
 ): Promise<CreatedTip> {
   /**
    * Each path written INLINE, never assembled into a variable.
@@ -162,11 +218,13 @@ export async function sendTip(
    * exist upstream reaches production as a mystery 404.
    */
   const body = giftId ? { amountKash, giftId } : { amountKash };
+  // Only the stream route reads a recipient; see the parameter's note.
+  const giftBody = toProfileId ? { ...body, toProfileId } : body;
   const raw =
     target.kind === "post"
       ? await msApi.post(`/posts/${target.id}/tips`, body)
       : target.kind === "stream"
-        ? await msApi.post(`/streams/${target.id}/gifts`, body)
+        ? await msApi.post(`/streams/${target.id}/gifts`, giftBody)
         : await msApi.post(`/profiles/${target.id}/tips`, body);
   const parsed = TipResponseSchema.parse(raw);
   return { tip: adopt(raw, target), toWallet: parsed.toWallet ?? null };

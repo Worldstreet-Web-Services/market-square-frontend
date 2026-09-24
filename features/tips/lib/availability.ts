@@ -51,3 +51,35 @@ export function resetTippingAvailability(): void {
   unavailable = false;
   for (const listener of listeners) listener();
 }
+
+/**
+ * "THEY JUST LEFT" — the one gift refusal that is not the sender's fault.
+ *
+ * A stream gift may name anybody in the room, and the service checks that they
+ * are STILL there against live presence rather than the database (a
+ * `view_sessions` row is written once and left alone, because beats are
+ * flushed in batches, so it would answer "here" for somebody who left minutes
+ * ago — the wrong direction to be wrong in on a payment path). If they have
+ * gone, nobody is paid and it answers 409 `RECIPIENT_NOT_IN_ROOM`.
+ *
+ * IT IS GIVEN ITS OWN CODE RATHER THAN A BARE 403 SO THE CLIENT CAN TELL TWO
+ * DIFFERENT SENTENCES APART. "You may not do this" is final and the honest
+ * response is to stop. "They just left" is not a refusal of the ACT at all —
+ * the sender did nothing wrong, the room simply moved — and the honest
+ * response is to redraw the roster and let them pick again. Collapsing the two
+ * into one "couldn't send that" is how a person is made to feel they did
+ * something wrong by somebody else walking out.
+ *
+ * Deliberately NOT a retry: re-sending to the same person would fail
+ * identically, and silently retargeting the host would pay the wrong person —
+ * which is the failure the recipient field exists to prevent.
+ */
+export const RECIPIENT_GONE = "RECIPIENT_NOT_IN_ROOM";
+
+export function recipientLeftTheRoom(error: unknown): boolean {
+  // The code is read inline rather than through `errorCode`, which lives
+  // behind the `@/` alias: this module is imported directly by the node test
+  // runner, which does not resolve it. It is one property access, and the
+  // shape (`{ code }` on a GatewayApiError) is the same one `errorCode` reads.
+  return (error as { code?: unknown } | null)?.code === RECIPIENT_GONE;
+}

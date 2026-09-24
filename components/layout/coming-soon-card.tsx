@@ -3,14 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
-import { ShareSheet } from "@/components/ui/share-sheet";
 import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { housePath } from "@/features/houses";
 import { clockLabel, shortDateLabel, startsInLabel } from "@/lib/format";
 import type { Stream } from "@/features/streams";
-import { asset } from "@/lib/square-path";
+import { asset, api } from "@/lib/square-path";
+import { ShareSheet } from "@/components/ui/share-sheet";
+import { roomShare } from "@/lib/room-card";
 
 /**
  * HOME'S "COMING SOON" CARD — node 2077:19030 (SQUARE 2.0 Copy), 342 × 106.
@@ -73,6 +74,29 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
       ? (TOPIC_ICONS[topicKey] ?? IconSpark)
       : null;
 
+
+  /*
+    THE SHEET, NOT THE DEVICE'S OWN — ogazboiz, 2026-09-24: "put that old one
+    that it will show share to this share to that instead of the native one".
+
+    Tapping Share went straight to `navigator.share`, which on a desktop is
+    nothing recognisable and on a phone is the OS chooser rather than Square's.
+    The sheet is the app's own list — WhatsApp, X, Facebook, Telegram, Post to
+    Square, Copy link — and the CARD now sits at the top of it as its own two
+    rows, because the named destinations are reached by a web intent and an
+    intent cannot carry a file.
+
+    The card is built from what THIS screen already knows; see `lib/room-card`
+    for why the route takes params rather than reading the room itself.
+    `window.location.origin` because the QR has to be scannable from another
+    device, where a relative path means nothing.
+  */
+  const share = roomShare(
+    stream,
+    href,
+    typeof window === "undefined" ? null : window.location.origin,
+    api
+  );
   return (
     /*
       THE RING IS DRAWN AT THE END OF THIS CARD, NOT HERE — see the last child.
@@ -267,6 +291,18 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           </div>
 
           {/* `Olive Button` — 19 tall, 8.83/4.415 padding, 4 gap, the create ramp. */}
+          {/*
+            SHARE THE CARD, NOT THE LINK.
+
+            This opened a sheet offering a URL, and a URL in a WhatsApp thread
+            is a grey rectangle somebody has to trust before they tap it. The
+            picture IS the invitation — cover, name, start time, host, and a QR
+            for anyone reading it over a shoulder (nodes 2225:20203 / 20207).
+
+            It falls back to the link where a browser will not share a file,
+            and to a download where there is no share sheet at all, so nothing
+            that worked before stopped working.
+          */}
           <button
             type="button"
             onClick={() => setSharing(true)}
@@ -309,12 +345,12 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           open
           onClose={() => setSharing(false)}
           title="Share gist room"
-          payload={{
-            text: `${stream.title} on Square`,
-            url: `${window.location.origin}${href}`,
-          }}
+          payload={{ text: `${stream.title} on Square`, url: share.roomUrl }}
+          card={{ imageUrl: share.imageUrl, fileName: share.fileName }}
         />
       )}
+
+
     </div>
   );
 }

@@ -692,6 +692,49 @@ export const TipCapabilitySchema = z.object({
   minKash: z.string(),
   maxKash: z.string(),
   verifiedAuthorsOnly: z.boolean(),
+  /**
+   * THE SAME QUESTION ASKED OF A ROOM, AND IT IS A DIFFERENT ANSWER.
+   *
+   * `verifiedAuthorsOnly` governs POST tips and stays true: the badge is what
+   * stops an impersonation account collecting on a byline the sender has never
+   * met. In a GIST ROOM the sender picked a person off a live roster, in a
+   * room they are both sitting in, that the host let them into, while that
+   * person is speaking — the impersonation the badge defends against barely
+   * exists, and the rule's cost is that most of the room can receive nothing.
+   *
+   * So the service carries two switches, and the client must read the right
+   * one per surface. Reading the author flag on a room would grey out people
+   * the service will happily pay.
+   *
+   * NO DEFAULT, and that is the feature switch. `undefined` means "this
+   * deployment has ONE switch", so a room must go on obeying
+   * `verifiedAuthorsOnly` — which is exactly what production does today and
+   * cannot regress anyone. Defaulting it to `false` would silently open room
+   * gifting on every service that has never heard of the field.
+   */
+  verifiedRoomRecipientsOnly: z.boolean().optional(),
+  /**
+   * WHETHER SENDING A GIFT SPENDS STOCK, OR CHARGES AT THE MOMENT OF SENDING.
+   *
+   * The two economies cannot both be live, and this says which one is:
+   *   true  — the tray draws from `GET /me/gifts`, a gift must be OWNED, and
+   *           sending moves no money at all (the KASH was paid when the coins
+   *           were bought). The send is confirmed on the way out.
+   *   false — the tray draws from the catalogue and the sender is charged as
+   *           they send, which is what every deployment does today.
+   *
+   * READ, NEVER INFERRED. The obvious guess — "the gift routes answer, so
+   * gifts must come from stock" — is wrong and expensive: a client still
+   * charging at send while the service spends stock bills somebody for a rose
+   * they already bought. The service publishes the answer precisely so the
+   * two halves switch together.
+   *
+   * OPTIONAL WITH NO DEFAULT, on the same rule as the flag above: absent means
+   * a deployment that has never heard of stock, which behaves exactly like
+   * `false` but is not the same fact. Callers ask `=== true`, so absent and
+   * false both keep today's behaviour and neither can silently open the other.
+   */
+  spendGiftsFromInventory: z.boolean().optional(),
 });
 
 export type TipCapability = z.infer<typeof TipCapabilitySchema>;
