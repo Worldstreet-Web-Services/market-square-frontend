@@ -963,6 +963,31 @@ describe("Gifting anybody in a gist room", () => {
     assert.match(room, /live\.gift\(gift\.id, quantity, to \?/);
   });
 
+  it("names the recipient even when there is only one, and refuses when there are none", () => {
+    /*
+      The picker was drawn only at `> 1`, on the argument that a control with a
+      single option is a label wearing a control's clothes. Wrong for this
+      surface: the row is not only a chooser, it is the ANSWER to who the gift
+      is going to, and hiding it at one left a sender pressing Send with no
+      statement on screen of who receives it (ogazboiz, 2026-09-24: "how can we
+      select the person we want to gift").
+
+      And NOBODY TO GIFT IS A REAL STATE — a host opens a room and is alone in
+      it until somebody walks in. Sending then would fly a gift addressed to no
+      one, so the action has to refuse and say what is missing.
+    */
+    const sheet = source("features/streams/components/gift-sheet.tsx");
+    assert.match(sheet, /\{people\.length > 0 && \(/, "the picker hides itself when there is one person");
+    assert.match(sheet, /disabled=\{Boolean\(recipients\) && people\.length === 0\}/);
+    assert.match(sheet, /"Nobody else is here yet"/);
+    // A BROADCAST passes no `recipients` at all and must still send, to the
+    // host, exactly as it always did — the guard is on the room shape only.
+    assert.ok(
+      sheet.includes('recipients && people.length === 0'),
+      "the empty-room guard no longer keys on the room shape"
+    );
+  });
+
   it("both rooms draw gift bursts from ONE component", () => {
     // It was inline in stream-room, which is exactly why the gist room had
     // none. A second copy is how one of them draws a different burst for the

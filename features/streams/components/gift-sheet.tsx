@@ -123,16 +123,22 @@ export function GiftSheet({
           WHO IT IS FOR — a horizontal row of everyone in the room, above the
           tray, because you choose the person before the object.
 
-          Only drawn when there is a choice to make. On a broadcast the gift
-          goes to the host and there is nobody else, so no row appears rather
-          than a row with one selected name in it; a control with a single
-          option is a label wearing a control's clothes.
+          DRAWN WHENEVER THERE IS ANYBODY, including when there is exactly one.
+
+          It was `> 1`, on the argument that a control with a single option is
+          a label wearing a control's clothes. That was wrong for this surface
+          and ogazboiz found it immediately: "how can we select the person we
+          want to gift". The row is not only a chooser, it is the ANSWER to
+          who this is going to — and hiding it at one leaves a sender pressing
+          Send with no statement on screen of who receives it. On a broadcast
+          `recipients` is absent entirely, so nothing is drawn there either
+          way; this only ever fires in a room.
 
           The host is first and is the default. A sender who never looks at
           this row still gifts the person today's route would have paid, which
           is what makes this safe to ship before the route can name anybody.
         */}
-        {people.length > 1 && (
+        {people.length > 0 && (
           <div className="mt-4">
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-grey-600">
               Send to
@@ -199,19 +205,30 @@ export function GiftSheet({
           </div>
         </div>
 
+        {/*
+          NOBODY TO GIFT IS A REAL STATE, not an edge case — a host opens a
+          room and is alone in it until somebody walks in, which is exactly
+          the screen ogazboiz was on. Sending then would fly a gift addressed
+          to no one, so the action says what is missing instead. `recipients`
+          being ABSENT (a broadcast) is a different thing and still sends, to
+          the host, as it always did.
+        */}
         <Button
           size="lg"
           className="mt-3 w-full"
+          disabled={Boolean(recipients) && people.length === 0}
           onClick={() => {
             onSend(selected, quantity, recipient);
             onClose();
           }}
         >
-          {priced
-            ? `Send ${selected.name} · ${formatKash(total)}`
-            : recipient
-              ? `Send ${selected.name} to ${recipient.name}`
-              : `Send ${selected.name}`}
+          {recipients && people.length === 0
+            ? "Nobody else is here yet"
+            : priced
+              ? `Send ${selected.name} · ${formatKash(total)}`
+              : recipient
+                ? `Send ${selected.name} to ${recipient.name}`
+                : `Send ${selected.name}`}
         </Button>
         <p className="mt-2 text-center text-[11px] text-grey-600">
           {priced
