@@ -89,7 +89,20 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
         title: stream.title,
         text: `${stream.title} on Square`,
       });
-      if (outcome === "downloaded") toast.success("Card saved");
+      /*
+        EVERY OUTCOME SAYS SOMETHING EXCEPT A CANCEL.
+
+        This reported only "downloaded" and "failed", so the two most likely
+        results on a desktop — the share sheet opening, or the card being
+        saved after the sheet refused a file — passed in silence and the
+        button read as broken. A control that does its job and says nothing is
+        indistinguishable from one that is dead.
+
+        A CANCEL STAYS SILENT: the person closed the sheet on purpose, and
+        telling them so is the app narrating their own decision back at them.
+      */
+      if (outcome === "downloaded") toast.success("Card saved — attach it to your message");
+      if (outcome === "linked") toast.success("Link shared — the card couldn't be attached here");
       if (outcome === "failed") toast.error("Couldn't get the card ready — try again.");
     } finally {
       setSharing(false);
@@ -318,7 +331,7 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
             type="button"
             disabled={sharing}
             onClick={() => void shareCard()}
-            className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90"
+            className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90 disabled:opacity-70"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
             <img
@@ -327,7 +340,7 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
               aria-hidden
               className="size-[10px] shrink-0"
             />
-            Share
+            {sharing ? "Preparing…" : "Share"}
           </button>
         </div>
       </div>

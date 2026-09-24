@@ -8,17 +8,30 @@
  * QR for anyone who sees it over a shoulder. ogazboiz, 2026-09-24: "share by
  * card so they can invite people".
  *
- * ─── THREE OUTCOMES, IN ORDER OF HOW GOOD THEY ARE ──────────────────────────
+ * ─── THE ORDER IS "KEEP THE PICTURE", NOT "KEEP THE SHARE" ──────────────────
  *  1. SHARED AS A FILE. `navigator.share({ files })` — the picture goes into
- *     the chooser and the recipient gets an image. Only where the browser both
- *     has the API and says it can take THIS file: `canShare` is checked with
- *     the actual file rather than for the function's existence, because iOS
- *     Safari has `share` but refuses files in some versions and the refusal
- *     arrives as a rejected promise halfway through the gesture.
- *  2. SHARED AS A LINK. No file support: fall back to the URL, which is what
- *     the app did before and is still useful.
- *  3. DOWNLOADED. No share sheet at all — desktop, mostly. The picture is
- *     saved so it can be attached by hand.
+ *     the chooser and the recipient gets an image. Only where the browser says
+ *     it can take THIS file: `canShare` is asked with the actual file rather
+ *     than for the function's existence, because iOS Safari has `share` but
+ *     refuses files in some versions.
+ *  2. DOWNLOADED. No file support — desktop, mostly. The card is SAVED so it
+ *     can be attached by hand.
+ *  3. SHARED AS A LINK, last, and only if the picture could not be produced at
+ *     all.
+ *
+ * THE LINK USED TO COME SECOND AND THAT WAS WRONG. A desktop browser has
+ * `share` and refuses files, so the fallback fired every time and quietly
+ * shared a URL — the one thing this function exists to replace. Worse, it
+ * SUCCEEDED, so nothing was said, and the button looked like it had done
+ * nothing at all (ogazboiz, 2026-09-24: "why is the share not clicking
+ * anymore"). A silent success that does the opposite of what was asked is
+ * harder to find than a failure.
+ *
+ * ─── AND `navigator.share` NEEDS A LIVE GESTURE ─────────────────────────────
+ * Awaiting the fetch first spends the transient user activation, so the share
+ * call can reject with `NotAllowedError` through no fault of the person who
+ * clicked. That is not an error worth showing them; it falls to the download,
+ * which needs no activation and still hands them the card.
  *
  * A DISMISSED SHEET IS NOT A FAILURE. `AbortError` means the person changed
  * their mind, and telling them something went wrong when they pressed cancel
@@ -82,18 +95,9 @@ export async function shareCardImage(
     }
   }
 
-  if (typeof nav.share === "function") {
-    try {
-      await nav.share({ url, title, text });
-      return "linked";
-    } catch (error) {
-      if ((error as { name?: string } | null)?.name === "AbortError") return "cancelled";
-    }
-  }
-
-  // No share sheet. Save the picture so it can be attached by hand — which is
-  // the desktop story, and is better than copying a link the person did not
-  // ask for.
+  // The card exists but could not be SHARED as a file: save it, so the person
+  // still has the picture to attach. This needs no user activation, which is
+  // why it is reachable even when the share call was refused for losing one.
   if (file && createObjectURL && typeof document !== "undefined") {
     try {
       const href = createObjectURL(file);
@@ -106,7 +110,18 @@ export async function shareCardImage(
       setTimeout(() => URL.revokeObjectURL(href), 0);
       return "downloaded";
     } catch {
-      return "failed";
+      // Fall through to the link rather than leaving them with nothing.
+    }
+  }
+
+  // LAST, and only when there is no picture to give. A link is what this
+  // function replaced; reaching for it earlier is how the feature disappears.
+  if (typeof nav.share === "function") {
+    try {
+      await nav.share({ url, title, text });
+      return "linked";
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name === "AbortError") return "cancelled";
     }
   }
 

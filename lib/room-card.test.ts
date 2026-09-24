@@ -82,3 +82,94 @@ test("the saved file is named after the ROOM", () => {
   assert.equal(roomCardFileName("   "), "gist-room-square.png");
   assert.equal(roomCardFileName("!!!"), "gist-room-square.png");
 });
+
+/*
+  ─── THE FALLBACK ORDER IS THE FEATURE ──────────────────────────────────────
+
+  This function exists to replace a link with a picture. If the link fallback
+  fires before the download, a desktop browser — which has `share` and refuses
+  files — takes it EVERY TIME, succeeds, and quietly shares the very thing the
+  card was built to replace. That is what happened, and it read as a dead
+  button rather than as a wrong result.
+*/
+import { shareCardImage } from "./share-card-image.ts";
+
+const PNG = new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" });
+const okFetch = (async () => new Response(PNG, { status: 200 })) as unknown as typeof fetch;
+
+test("a browser that refuses FILES saves the card rather than sharing a link", async () => {
+  const shared: unknown[] = [];
+  const clicks: string[] = [];
+  const doc = { createElement: () => ({ set href(_v: string) {}, download: "", click: () => clicks.push("x") }) };
+  const original = globalThis.document;
+  (globalThis as { document?: unknown }).document = doc;
+  try {
+    const outcome = await shareCardImage(
+      { imageUrl: "/card", fileName: "a.png", url: "https://x.test/r" },
+      {
+        navigatorImpl: {
+          share: async (p: unknown) => void shared.push(p),
+          canShare: () => false, // desktop: has share, refuses files
+        } as unknown as Navigator,
+        fetchImpl: okFetch,
+        createObjectURL: () => "blob:x",
+      }
+    );
+    assert.equal(outcome, "downloaded", "a link was shared instead of the card being saved");
+    assert.equal(shared.length, 0, "it shared a URL when it should have saved the picture");
+    assert.equal(clicks.length, 1);
+  } finally {
+    (globalThis as { document?: unknown }).document = original;
+  }
+});
+
+test("a browser that takes files shares the picture", async () => {
+  const shared: { files?: unknown[] }[] = [];
+  const outcome = await shareCardImage(
+    { imageUrl: "/card", fileName: "a.png", url: "https://x.test/r" },
+    {
+      navigatorImpl: {
+        share: async (p: { files?: unknown[] }) => void shared.push(p),
+        canShare: () => true,
+      } as unknown as Navigator,
+      fetchImpl: okFetch,
+      createObjectURL: () => "blob:x",
+    }
+  );
+  assert.equal(outcome, "shared");
+  assert.equal(shared[0]?.files?.length, 1, "the file was not attached");
+});
+
+test("a dismissed sheet is a cancel, not a failure", async () => {
+  // Telling somebody it broke when they pressed cancel is the app arguing
+  // with them.
+  const abort = Object.assign(new Error("no"), { name: "AbortError" });
+  const outcome = await shareCardImage(
+    { imageUrl: "/card", fileName: "a.png", url: "https://x.test/r" },
+    {
+      navigatorImpl: {
+        share: async () => {
+          throw abort;
+        },
+        canShare: () => true,
+      } as unknown as Navigator,
+      fetchImpl: okFetch,
+      createObjectURL: () => "blob:x",
+    }
+  );
+  assert.equal(outcome, "cancelled");
+});
+
+test("no picture at all still shares the link", async () => {
+  // The last resort is reachable, but only when there is genuinely nothing to
+  // attach — a card the route could not render.
+  const outcome = await shareCardImage(
+    { imageUrl: "/card", fileName: "a.png", url: "https://x.test/r" },
+    {
+      navigatorImpl: { share: async () => {} } as unknown as Navigator,
+      fetchImpl: (async () => new Response("no", { status: 500 })) as unknown as typeof fetch,
+      createObjectURL: () => "blob:x",
+    }
+  );
+  assert.equal(outcome, "linked");
+});
