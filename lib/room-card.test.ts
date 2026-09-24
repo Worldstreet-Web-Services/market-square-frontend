@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseRoomCard, roomCardQuery, roomCardFileName } from "./room-card.ts";
+import { readFileSync } from "node:fs";
+import { parseRoomCard, roomCardQuery, roomCardFileName, roomShare } from "./room-card.ts";
 
 const q = (s: string) => new URLSearchParams(s);
 const ROOM = "https://square.tsionark.com/gist-rooms/abc";
@@ -302,4 +303,68 @@ test("the link rides in the TEXT, because a target may drop `url`", async () => 
   assert.equal(seen[0]?.text, "lifestyle on Square\nhttps://x.test/r");
   assert.equal(seen[0]?.url, undefined, "the address would be printed twice");
   assert.equal(seen[0]?.files?.length, 1);
+});
+
+/**
+ * ONE ROOM MUST NOT SHARE TWO DIFFERENT WAYS.
+ *
+ * `/gist-rooms` draws `ComingSoonCard`; a room's own page draws
+ * `UpcomingRoomCard`. Different components on purpose — a wide tile and a
+ * banner — but the same room, link, host and cover behind both.
+ *
+ * The card shipped on one of them. So sharing from the LIST offered a picture
+ * and sharing from INSIDE the room offered only a link, and nothing failed to
+ * say so: the second sheet simply had one fewer row. Reported as "tap share
+ * card, nothing happens", which is what a missing row looks like from the
+ * outside.
+ *
+ * Six copied lines is how that happened, so the payload is one function now.
+ */
+test("a room's share payload is built once and used by both screens", () => {
+  const stream = {
+    title: "Digital Marketing Masterclass",
+    scheduledAt: "2026-09-28T10:00:00.000Z",
+    thumbnailUrl: "https://cdn.test/cover.png",
+    owner: { displayName: "Coach Milash", username: "coachmilash", avatarUrl: "https://cdn.test/a.png" },
+  };
+  const share = roomShare(stream, "/gist-rooms/abc", "https://square.test", (path) => path);
+
+  assert.equal(share.roomUrl, "https://square.test/gist-rooms/abc");
+  assert.equal(share.fileName, "digital-marketing-masterclass-square.png");
+
+  // The card's query must carry everything the picture draws, and the QR has
+  // to point at the ABSOLUTE url — a relative one cannot be scanned from the
+  // other device that is the whole point of the card.
+  const parsed = parseRoomCard(q(share.imageUrl.slice(share.imageUrl.indexOf("?") + 1)));
+  assert.equal(parsed?.url, "https://square.test/gist-rooms/abc");
+  assert.equal(parsed?.title, stream.title);
+  assert.equal(parsed?.startsAt, stream.scheduledAt);
+  assert.equal(parsed?.hostName, "Coach Milash");
+  assert.equal(parsed?.coverUrl, stream.thumbnailUrl);
+});
+
+test("no origin yet means a relative link, never the string `undefined`", () => {
+  // Both screens render on the server first, where `window` does not exist.
+  // The old code read `window.location.origin` straight into a template on one
+  // of them, which is a crash there rather than a bad string.
+  const share = roomShare({ title: "crazy" }, "/gist-rooms/abc", null, (path) => path);
+  assert.equal(share.roomUrl, "/gist-rooms/abc");
+  assert.doesNotMatch(share.imageUrl, /undefined/);
+});
+
+test("both room screens hand the share sheet a card, from the shared builder", () => {
+  for (const screen of [
+    "components/layout/coming-soon-card.tsx",
+    "components/layout/upcoming-room-card.tsx",
+  ]) {
+    const src = readFileSync(new URL(`../${screen}`, import.meta.url), "utf8");
+    assert.match(src, /const share = roomShare\(/, `${screen} builds no share payload`);
+    assert.match(
+      src,
+      /card=\{\{ imageUrl: share\.imageUrl, fileName: share\.fileName \}\}/,
+      `${screen} offers a link but no card`
+    );
+    // And neither assembles the query itself any more — that was the drift.
+    assert.doesNotMatch(src, /roomCardQuery\(/, `${screen} is building the card query again`);
+  }
 });

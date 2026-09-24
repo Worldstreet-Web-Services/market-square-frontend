@@ -107,3 +107,55 @@ export function roomCardFileName(title: string): string {
     .slice(0, 48);
   return `${slug || "gist-room"}-square.png`;
 }
+
+/**
+ * THE WHOLE SHARE PAYLOAD FOR ONE ROOM, built once and used by both screens.
+ *
+ * ─── WHY THIS IS A FUNCTION AND NOT A COPIED BLOCK ───────────────────────────
+ * `/gist-rooms` draws `ComingSoonCard` and a room's own page draws
+ * `UpcomingRoomCard`. They are different components by design — one is a wide
+ * horizontal tile, the other a banner — but they share every input: the same
+ * room, the same link, the same host, the same cover.
+ *
+ * The card shipped on one of them and not the other, so tapping share on the
+ * LIST offered a picture and tapping share INSIDE the room offered only a
+ * link. Same room, two answers, and nothing failed to say so (ogazboiz, via
+ * the backend session: "tap share card -> nothing happens").
+ *
+ * A second copy of six lines is how that happened. One function is how it
+ * stops: a screen that wants to share a room asks for the payload and cannot
+ * accidentally ask for half of it.
+ *
+ * `origin` is passed IN rather than read here, because this runs during the
+ * server render too, where `window` does not exist — and a relative URL in a
+ * QR code is unscannable from the other device that is the whole point of it.
+ */
+export function roomShare(
+  stream: {
+    title: string;
+    scheduledAt?: string | null;
+    thumbnailUrl?: string | null;
+    owner?: { displayName?: string | null; username?: string | null; avatarUrl?: string | null } | null;
+  },
+  href: string,
+  origin: string | null,
+  /** `api()` from `lib/square-path`, so this stays free of the path shim. */
+  toApiPath: (path: string) => string
+): { roomUrl: string; imageUrl: string; fileName: string } {
+  const roomUrl = origin ? `${origin}${href}` : href;
+  const host = stream.owner;
+  return {
+    roomUrl,
+    imageUrl: toApiPath(
+      `/api/room-card?${roomCardQuery({
+        url: roomUrl,
+        title: stream.title,
+        startsAt: stream.scheduledAt ?? null,
+        hostName: host?.displayName || host?.username || null,
+        hostAvatarUrl: host?.avatarUrl ?? null,
+        coverUrl: stream.thumbnailUrl ?? null,
+      })}`
+    ),
+    fileName: roomCardFileName(stream.title),
+  };
+}

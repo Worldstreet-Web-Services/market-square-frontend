@@ -11,7 +11,7 @@ import { clockLabel, shortDateLabel, startsInLabel } from "@/lib/format";
 import type { Stream } from "@/features/streams";
 import { asset, api } from "@/lib/square-path";
 import { ShareSheet } from "@/components/ui/share-sheet";
-import { roomCardFileName, roomCardQuery } from "@/lib/room-card";
+import { roomShare } from "@/lib/room-card";
 
 /**
  * HOME'S "COMING SOON" CARD — node 2077:19030 (SQUARE 2.0 Copy), 342 × 106.
@@ -91,18 +91,12 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
     `window.location.origin` because the QR has to be scannable from another
     device, where a relative path means nothing.
   */
-  const roomUrl = typeof window === "undefined" ? href : `${window.location.origin}${href}`;
-  const cardImage = api(
-    `/api/room-card?${roomCardQuery({
-      url: roomUrl,
-      title: stream.title,
-      startsAt: startsAt ?? null,
-      hostName: host?.displayName || host?.username || null,
-      hostAvatarUrl: host?.avatarUrl ?? null,
-      coverUrl: stream.thumbnailUrl ?? null,
-    })}`
+  const share = roomShare(
+    stream,
+    href,
+    typeof window === "undefined" ? null : window.location.origin,
+    api
   );
-
   return (
     /*
       THE RING IS DRAWN AT THE END OF THIS CARD, NOT HERE — see the last child.
@@ -351,8 +345,8 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           open
           onClose={() => setSharing(false)}
           title="Share gist room"
-          payload={{ text: `${stream.title} on Square`, url: roomUrl }}
-          card={{ imageUrl: cardImage, fileName: roomCardFileName(stream.title) }}
+          payload={{ text: `${stream.title} on Square`, url: share.roomUrl }}
+          card={{ imageUrl: share.imageUrl, fileName: share.fileName }}
         />
       )}
 
