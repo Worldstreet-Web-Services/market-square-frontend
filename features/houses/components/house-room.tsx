@@ -1141,6 +1141,29 @@ function LiveHouse({
     Self is removed rather than disabled: the service refuses a self-gift
     outright ("You cannot tip yourself"), so offering it would be drawing a
     control whose only outcome is an error.
+
+    ─── WHAT THIS ROSTER CANNOT YET ANSWER, AND MUST BEFORE MONEY MOVES ──────
+    PRODUCTION PUBLISHES `verifiedAuthorsOnly: true`. Verified against prod,
+    not assumed: `GET /tips/capability` answers `verifiedAuthorsOnly: true`
+    and `settlement: "client-signed"` there, while this dev stack answers
+    `false` and `"rail"` — so a gift to an UNVERIFIED person is refused 403
+    ("not set up to receive tips"), and local testing cannot see it.
+
+    This picker therefore offers people the service will refuse, the moment
+    the money leg is switched on. It is harmless today because nothing is
+    charged, and it is NOT fixed by filtering here: `MentionableMember` is
+    `{ id, displayName, username }` assembled from LiveKit participant
+    metadata and carries no verification at all, so any filter would be the
+    client inventing a server rule it cannot actually evaluate.
+
+    The rule already exists and is shared — `tipBlockedBecause()` in
+    lib/tip-capability.ts, which `TipButton` uses to hide itself, and which
+    correctly treats `lapsed` as NOT verified. It needs a recipient carrying
+    `verification`. So the fix is to give this roster real profiles (the
+    service has offered to expose the flag on participants), and then pass
+    each row through that one function rather than writing a second rule here.
+
+    DO NOT SWITCH THE MONEY LEG ON UNTIL THAT LANDS.
   */
   const giftRecipients: GiftRecipient[] = useMemo(() => {
     const hostId = stream.owner?.id ?? null;
