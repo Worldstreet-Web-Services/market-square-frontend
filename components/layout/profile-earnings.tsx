@@ -244,12 +244,32 @@ export function ProfileEarnings() {
           </p>
         </div>
 
-        {/* 435:26851 — 131x34, `#F5F5F5` inside a THREE pixel 20%-white ring. */}
+        {/*
+          1285:76793 — 131x34, `#F5F5F5` inside a THREE pixel 20%-white ring,
+          at a 30 radius, 16/10 of padding on an 8 gap.
+
+          TWO THINGS THE EARLIER BUILD MISSED, both read from the node rather
+          than the summary:
+
+          · THE WALLET GLYPH. `empty-wallet-add` at 16, the file's own export —
+            and it is painted `#6C2B09`, the brown of the balance figure, NOT
+            the `#0A0A0A` of the label beside it. That two-tone is deliberate
+            in the file: the glyph belongs to the number it will change, the
+            word belongs to the button. Baked into the asset rather than
+            inherited, because an `<img>` cannot take `currentColor`.
+
+          · THE SHADOW. `0 2 10` at `#785000` 25% — a warm shadow, not a black
+            one, which is what keeps a white pill from looking pasted onto the
+            gold rather than resting on it. A neutral drop shadow here reads as
+            grey dirt against the ramp.
+        */}
         <button
           type="button"
           onClick={() => setBuyOpen(true)}
-          className="ws-press flex h-[34px] shrink-0 items-center gap-2 rounded-full border-[3px] border-white/20 bg-[#F5F5F5] px-4 text-[13px] font-semibold leading-5 text-[#0A0A0A] transition-opacity hover:opacity-90"
+          className="ws-press flex h-[34px] shrink-0 items-center gap-2 rounded-[30px] border-[3px] border-white/20 bg-[#F5F5F5] px-4 text-[13px] font-semibold leading-5 text-[#0A0A0A] shadow-[0_2px_10px_rgba(120,80,0,0.25)] transition-opacity hover:opacity-90"
         >
+          {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+          <img src={asset("/gifts/wallet-add.svg")} alt="" aria-hidden className="h-4 w-4 shrink-0" />
           Buy KASH+
         </button>
       </div>
