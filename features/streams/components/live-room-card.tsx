@@ -6,9 +6,8 @@ import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { housePath } from "@/features/houses";
-import { liveRoomFaces } from "@/features/streams/lib/room-faces";
+import { liveRoomFaces, ROOM_CARD_STALE_MS } from "@/features/streams/lib/room-faces";
 import { useStream } from "@/features/streams/hooks/use-streams";
-import { useConversationMembers } from "@/features/messages";
 import { formatCount } from "@/lib/format";
 import type { Stream } from "@/lib/api/schemas";
 
@@ -74,8 +73,35 @@ export function LiveRoomCard({
     so it drew nothing at all. The name read like the right one. The name is
     not the mechanism.
 
-    ONE READ PER CARD, ONCE. NO POLL — and that is a real difference from
-    `GistRoomCard`, not an oversight copying it.
+    ONE READ PER CARD, AND NO ROSTER — the second half of that was wrong when
+    it was written yesterday, and an audit caught it.
+
+    This used to ALSO call `useConversationMembers(stream.houseConversationId)`
+    to fill the third face tier. That read is uncapped: the route takes no
+    limit and the schema has no cursor, so it returns the WHOLE house — every
+    member as a full profile — and the card draws at most three plates from it.
+
+    It was worse than merely expensive, because of who it ran for. This rail is
+    sorted by `listeners` (live-gist-rooms.tsx), so Home's cards are the
+    BUSIEST rooms — exactly the ones whose `participants` sample already
+    returns its three. The roster tier fills only EMPTY slots, so on every card
+    Home actually shows, the whole download yielded ZERO faces. And with the
+    client's 30s staleTime and `refetchOnWindowFocus`, it was re-paid on every
+    tab return, not once per page view.
+
+    It was also DISHONEST on the rooms where it did draw. A face on a live card
+    says "this person is in the room". A house member who has not joined is not
+    in the room, and that is the same reason `attendees` refuses to pad a
+    replay stack with house members. A quiet room now shows its host alone,
+    which is true, rather than three faces of whom two are elsewhere.
+
+    `GistRoomCard` keeps its roster tier: one card, in a DM or a shared link,
+    where a room is a REFERENCE and the house members are precisely who the
+    invite was addressed to. `liveRoomFaces` already treats `roster` as
+    optional, so the shared rule did not change.
+
+    NO POLL EITHER — a real difference from `GistRoomCard`, not an oversight
+    copying it.
 
     That card polls at 60s because it lives in a DM thread FOR EVER, so it has
     to catch live -> ended by itself or it goes on offering to join a room that
@@ -94,9 +120,10 @@ export function LiveRoomCard({
     not waited on — this works today either way, and collapses to zero extra
     reads if it ever lands.
   */
-  const detail = useStream(stream.id);
-  const houseId = stream.houseConversationId ?? "";
-  const members = useConversationMembers(houseId, Boolean(houseId));
+  // `staleTime` 5 minutes, against the client's 30s default. Who is in a room
+  // is not a counter, and the global `refetchOnWindowFocus` was re-fanning one
+  // request per card on every tab return — O(cards) in a single burst.
+  const detail = useStream(stream.id, false, true, ROOM_CARD_STALE_MS);
   const room = detail.data;
 
   const faces = liveRoomFaces({
@@ -104,9 +131,6 @@ export function LiveRoomCard({
     // The list row's owner until the detail read lands, so the stack is never
     // empty for a beat on first paint.
     owner: room?.owner ?? stream.owner,
-    roster: (members.data?.items ?? []).flatMap((member) =>
-      member.profile ? [member.profile] : []
-    ),
   });
 
   // The detail read is the fresher number once it lands; the list row is what
