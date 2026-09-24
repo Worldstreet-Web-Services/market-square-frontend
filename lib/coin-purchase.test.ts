@@ -16,6 +16,19 @@ import { describe, it } from "node:test";
  */
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
+/**
+ * The file with its COMMENTS removed.
+ *
+ * Twice now an assertion here has matched a word in the prose explaining why
+ * something was removed, rather than the thing itself — a guard that fails on
+ * its own reasoning is worse than none. Anything asserting that code is ABSENT
+ * reads this instead.
+ */
+const code = (p: string) =>
+  read(p)
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .replace(/^\s*\/\/.*$/gmu, "");
+
 describe("being short of coins buys coins", () => {
   const rooms = [
     "features/houses/components/house-room.tsx",
@@ -140,111 +153,55 @@ describe("a deployment with no treasury says so", () => {
 });
 
 /**
- * THE CLIENT IS READY FOR THE STOCK ECONOMY BEFORE THE SERVER FLIPS TO IT.
+ * COINS ARE THE INVENTORY — there is no gift stock, and no step between
+ * wanting to send and sending.
  *
- * ogazboiz asked devops to set `GIFT_SPEND_FROM_INVENTORY=true` alongside the
- * treasury wallet. With the tray still drawing from the catalogue, that would
- * have taken EVERY send down: nobody owns stock yet, so the service's
- * `sendFromStock` path would answer 409 `NO_GIFT_IN_STOCK` for every gift in
- * every room, and the client had no way to say why or offer a fix.
- *
- * Built so the switch is a switch: inert while the flag is false, correct the
- * moment it is true, with no deploy needed in between.
+ * ogazboiz settled the model: "we are doing it the tiktok way you understand
+ * since no inventory". The client briefly bought stock inside the send, which
+ * was the right client for the model that existed that hour. These pin what
+ * replaced it, and in particular that the SEND IS ONE CALL — the thing that
+ * makes a tap feel like TikTok rather than like a shop.
  */
-describe("the tray follows whichever economy the service is running", () => {
-  const tray = read("features/streams/components/gift-sheet.tsx");
+describe("sending spends coins, in one call", () => {
   const room = read("features/houses/components/house-room.tsx");
-  const grid = read("components/ui/gift-grid.tsx");
+  const roomCode = code("features/houses/components/house-room.tsx");
+  const trayCode = code("features/streams/components/gift-sheet.tsx");
+  const gridCode = code("components/ui/gift-grid.tsx");
 
-  it("reads the switch rather than inferring it from the routes answering", () => {
-    assert.match(room, /giftsComeFromStock\(useTipCapability\(\)\.data\)/u);
-    // And the inventory read only happens in that economy, and only while the
-    // tray is open — a pay-at-send deployment never fires it at all.
-    assert.match(room, /useGiftInventory\(fromStock && giftsOpen\)/u);
+  it("buys nothing before sending — the send is the whole gesture", () => {
+    assert.doesNotMatch(roomCode, /buyGiftStock/u, "the room still buys stock before sending");
+    assert.doesNotMatch(roomCode, /useGiftInventory/u, "the room still reads a stock it cannot spend");
+    assert.doesNotMatch(roomCode, /shortfall/u, "a stock shortfall is still being computed");
+    // One call, and it still carries the amount so the SAME body is correct in
+    // both economies — charged when the switch is off, ignored when it is on.
+    assert.match(room, /payGift\s*\.mutateAsync\(\{[\s\S]{0,200}amountKash,/u);
   });
 
-  it("shows what you hold, and only where holding is a thing", () => {
-    assert.match(tray, /owned=\{fromStock \? owned : undefined\}/u, "counts leak onto a pay-at-send tray");
-    assert.match(grid, /owned\?: ReadonlyMap<string, number>;/u);
-    // Zero IS drawn — "you have none of this one" is a fact with an action
-    // attached, and hiding it makes a stock tray feel like it refuses at random.
-    assert.match(grid, /\(owned\.get\(gift\.id\) \?\? 0\)\.toLocaleString\(\)/u);
+  it("has no per-gift counts, because there is nothing per-gift to hold", () => {
+    // What you hold is COINS, which the balance row says once rather than
+    // fourteen times.
+    assert.doesNotMatch(trayCode, /owned/u, "the tray still draws a stock count");
+    assert.doesNotMatch(gridCode, /owned/u, "the grid still draws a stock count");
   });
 
-  it("BUYS INSIDE THE SEND, so one tap is one tap", () => {
+  it("turns a refusal into the top-up, on the exact shortfall", () => {
     /*
-      ogazboiz: "we need it like tiktok way". TikTok has no gift inventory —
-      you buy coins, tap a rose, and it flies. An earlier pass made the tray
-      say "Get Rose" when you held none, which is exactly the shopping step
-      TikTok removed and where senders are lost.
+      409 `INSUFFICIENT_COINS` carries `needed` and `balance` — the SAME code
+      and fields the coin purchase answers with, so one handler covers both
+      doors into the same wall and nobody guesses a number.
 
-      So the room buys the shortfall and sends, as one action. Both calls are
-      instant and neither needs a signature, so to the person nothing happened
-      except a gift flying.
+      A refused send spends nothing: the debit and the tip row are one
+      transaction upstream.
     */
-    assert.match(room, /const shortfall = held === null \? 0 : quantity - held;/u);
-    assert.match(room, /shortfall > 0\s*\?\s*buyGiftStock\.mutateAsync\(\{/u);
-    // Only what is MISSING: holding two Roses and sending three buys ONE.
-    // Charging for three takes money for stock already owned.
-    assert.match(room, /quantity: shortfall,/u);
-    // And the send follows the buy, rather than racing it.
-    assert.ok(
-      room.indexOf("buyGiftStock.mutateAsync") < room.indexOf("payGift.mutateAsync"),
-      "the send no longer waits for the stock it needs"
-    );
+    assert.match(room, /const short = insufficientCoins\(error\);/u);
+    assert.match(room, /setTopUpNeeded\(short\.needed - short\.balance\)/u);
   });
 
-  it("mints a FRESH idempotency key per tap, not a stable one per gift", () => {
-    /*
-      THE ONE SHAPE THAT BREAKS THIS ROUTE. The service returns the FIRST
-      purchase's result for a repeated key and buys NOTHING — by design, it is
-      what makes a retry safe. So a stable key per gift means the second Rose
-      to the same person reports success, adds no stock, and fails at the send.
-      Silently, and only for the most ordinary thing anybody does in a room:
-      send the same gift to the same person twice.
-
-      A key protects ONE INTENT. Two taps are two intents.
-    */
-    assert.match(room, /idempotencyKey: newIntentId\(`gift:\$\{gift\.id\}`\)/u);
-    assert.doesNotMatch(
-      room,
-      /idempotencyKey: `gift:\$\{gift\.id\}:/u,
-      "the buy key is stable across taps again — the second gift will buy nothing"
-    );
-  });
-
-  it("does not let the TRAY shop — owning is shown, never gated on", () => {
-    // The counts inform; coins gate. That is the real limit and it already has
-    // its own detour to the top-up.
-    assert.doesNotMatch(tray, /onBuyGift/u, "the tray is asking people to shop again");
-    assert.doesNotMatch(tray, /You have no \$\{selected\.name\}/u, "a tile is refusing instead of sending");
-  });
-
-  it("keeps the stale-inventory dependency, because a stale one charges twice", () => {
-    // Read inside the send so it is the CURRENT stock. At mount it would buy
-    // a rose the sender already holds, or fail to buy when they are short.
-    assert.match(room, /giftStock\.data, buyGiftStock\]/u, "the send can now read a stale inventory");
-  });
-
-  it("treats an unknown inventory as unknown, never as zero", () => {
-    /*
-      The same rule `balanceCoins` follows. `owned` absent means this tray has
-      not been told; treating it as nothing would block every send the moment
-      an inventory read was slow, which is the interface inventing a refusal
-      the service never made.
-    */
-    // It moved from the tray to the SEND, where the money is: an undefined
-    // `giftStock.data` (still loading, or a failed read) buys NOTHING rather
-    // than buying a rose the sender may already hold.
-    assert.match(room, /const held = fromStock && giftStock\.data \? \(ownedByGift\(giftStock\.data\)\.get\(gift\.id\) \?\? 0\) : null;/u);
-    assert.match(room, /const shortfall = held === null \? 0 : quantity - held;/u);
-  });
-
-  it("turns the service's own refusal into the shop", () => {
-    // 409 NO_GIFT_IN_STOCK names the gift, so the answer is to open it rather
-    // than apologise. A refused send spends nothing — the stock decrement and
-    // the tip row are one transaction on the service.
-    assert.match(room, /const missing = noGiftInStock\(error\);/u);
-    assert.match(room, /setBuyingGift\(missing\.giftId\)/u);
+  it("reads the switch by its current name", () => {
+    // Renamed from `spendGiftsFromInventory` when the model changed. Same
+    // semantics, and still `=== true` so absent cannot open it.
+    const schemas = read("lib/api/schemas.ts");
+    assert.match(schemas, /spendGiftsFromCoins: z\.boolean\(\)\.optional\(\),/u);
+    assert.doesNotMatch(schemas, /spendGiftsFromInventory/u, "the retired key is back");
   });
 });

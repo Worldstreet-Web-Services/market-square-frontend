@@ -31,7 +31,6 @@ export function GiftGrid({
   showPrices = true,
   unavailable,
   unavailableReason = "too small to send",
-  owned,
 }: {
   /** Null while the reader has chosen an amount some other way. */
   selectedId: string | null;
@@ -69,16 +68,6 @@ export function GiftGrid({
    * disagree on the same tile.
    */
   unavailableReason?: string;
-  /**
-   * HOW MANY OF EACH THIS READER OWNS, when the tray spends STOCK.
-   *
-   * Absent on a pay-at-send tray, where owning a gift is not a thing that
-   * exists — so the corner is simply not drawn rather than drawn as a zero.
-   * A zero here IS drawn, because "you have none of this one" is a fact with
-   * an action attached, and hiding it is what makes a stock tray feel like it
-   * is refusing at random.
-   */
-  owned?: ReadonlyMap<string, number>;
 }) {
   return (
     <div className={cn("grid grid-cols-3 gap-x-2 gap-y-6", className)}>
@@ -109,23 +98,6 @@ export function GiftGrid({
             <span className="relative block h-[60px] w-full">
               <Image src={gift.art} alt="" fill sizes="96px" className="object-contain" />
             </span>
-            {owned && (
-              /*
-                THE CORNER COUNT — what you HOLD, over the top-left of the
-                artwork, the way a stack badge reads everywhere else. It is
-                deliberately louder than the price when it is zero: in a stock
-                tray the price is what a gift would cost to BUY, and the count
-                is whether you can send it at all.
-              */
-              <span
-                className={cn(
-                  "tnum absolute left-1 top-1 rounded-full px-1.5 text-[10px] font-bold leading-4",
-                  (owned.get(gift.id) ?? 0) > 0 ? "bg-white/15 text-white" : "bg-white/10 text-white/40"
-                )}
-              >
-                {(owned.get(gift.id) ?? 0).toLocaleString()}
-              </span>
-            )}
             {showPrices ? (
               <span className="mt-1 flex items-center gap-1">
                 <Image src={asset("/gifts/coin.svg")} alt="" width={9} height={9} aria-hidden />

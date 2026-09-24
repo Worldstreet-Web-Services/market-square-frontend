@@ -48,24 +48,27 @@ export type TipSurface =
   | "room";
 
 /**
- * DOES SENDING A GIFT SPEND STOCK, OR CHARGE AT THE MOMENT OF SENDING?
+ * DOES SENDING A GIFT SPEND COINS, OR CHARGE KASH AT THE MOMENT OF SENDING?
  *
- * The two economies cannot both be live, and getting it backwards costs
- * somebody money in a way no validation recovers from: a client that still
- * charges at send while the service spends stock bills a person for a rose
- * they had already bought.
+ * COINS ARE THE INVENTORY. There is no gift stock to hold and no shopping step
+ * before sending — you buy coins, you tap a rose, coins come off. That missing
+ * step is the whole of TikTok's shape, and it is now the product.
  *
- * SO IT IS READ, NEVER INFERRED. The tempting guess — "the gift routes answer,
- * therefore gifts come from stock" — is wrong: the routes can be live while
- * sending is still charge-at-send, which is exactly the state they ship in.
- * The service publishes this flag so both halves switch on the same deploy.
+ * The two economies cannot both be live, and getting it backwards costs real
+ * money in BOTH directions: charging KASH while the service debits coins takes
+ * it twice, and expecting coins while the service charges KASH shows a balance
+ * that never moves.
+ *
+ * SO IT IS READ, NEVER INFERRED. The tempting guess — "the coin routes answer,
+ * therefore sending spends coins" — is wrong: those routes went live hours
+ * before this switch and will stay live while it is false.
  *
  * `=== true`, so an ABSENT flag and a false one both keep today's behaviour.
  * They are different facts — absent is a deployment that has never heard of
- * stock — but neither may open the other.
+ * the coin economy — but neither may open the other.
  */
-export function giftsComeFromStock(capability: TipCapability | null | undefined): boolean {
-  return capability?.spendGiftsFromInventory === true;
+export function giftsComeFromCoins(capability: TipCapability | null | undefined): boolean {
+  return capability?.spendGiftsFromCoins === true;
 }
 
 /**

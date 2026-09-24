@@ -59,17 +59,8 @@ import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gif
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
 import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
-import { newIntentId } from "@/lib/payment-hold";
-import {
-  CoinBuySheet,
-  noGiftInStock,
-  ownedByGift,
-  useBuyGift,
-  useGiftInventory,
-} from "@/features/gifts";
-import { giftsComeFromStock } from "@/lib/tip-capability";
-import { useTipCapability } from "@/features/tips";
-import { BuyGiftSheet } from "@/components/layout/buy-gift-sheet";
+import { CoinBuySheet, insufficientCoins } from "@/features/gifts";
+
 import { useCoinBalance } from "@/features/gifts";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
@@ -1143,25 +1134,7 @@ function LiveHouse({
   const [topUpOpen, setTopUpOpen] = useState(false);
   /** How many coins the tray was short, so the buy sheet can offer exactly that. */
   const [topUpNeeded, setTopUpNeeded] = useState(0);
-  /*
-    WHICH ECONOMY IS RUNNING — READ FROM THE SERVICE, NEVER INFERRED.
 
-    `spendGiftsFromInventory` decides whether a gift is something you OWN or
-    something you pay for as you send it. The obvious guess — "the gift routes
-    answer, so gifts must come from stock" — is wrong and expensive: those
-    routes are live for a long while before the switch flips, and a client on
-    the wrong side of it either charges for a rose somebody already bought or
-    offers a tray the service refuses with `NO_GIFT_IN_STOCK`.
-
-    The inventory read only runs in the stock economy and only while the tray
-    is open; on a pay-at-send deployment it never fires at all.
-  */
-  const fromStock = giftsComeFromStock(useTipCapability().data);
-  const giftStock = useGiftInventory(fromStock && giftsOpen);
-  /** The gift the reader tapped but does not own, so they can buy one. */
-  const [buyingGift, setBuyingGift] = useState<string | null>(null);
-  /** Buys the stock a send is short of, so the tap stays one tap. */
-  const buyGiftStock = useBuyGift();
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
     onGift: giftBursts.receive,
@@ -1215,79 +1188,32 @@ function LiveHouse({
       }
 
       /*
-        ─── ONE TAP, THE WAY TIKTOK DOES IT ────────────────────────────────────
+        ─── ONE TAP, AND NOW LITERALLY ONE CALL ────────────────────────────────
 
-        ogazboiz: "we need it like tiktok way". TikTok has NO gift inventory —
-        you buy coins, you tap a rose, the rose flies and coins come off. You
-        never hold three roses; COINS are the inventory.
+        COINS ARE THE INVENTORY. ogazboiz settled it: "we are doing it the
+        tiktok way you understand since no inventory". So there is no stock to
+        be short of and nothing to buy before sending — the send debits
+        `priceCoins x quantity` from the coin balance and that is the whole
+        gesture.
 
-        The service's model puts a shopping step in the middle: buy coins, buy
-        gift stock, send from stock. That is a coherent model and its ledger is
-        what makes the 50% split honest — but the shopping step is exactly the
-        friction TikTok removed, and it is where senders are lost.
+        This briefly bought the shortfall first, back when a gift was something
+        you held. That was the right client for THAT model and it is dead
+        weight for this one: no stock read, no purchase, no second round trip.
+        The shortfall idea survives, but it is now COINS and it belongs to the
+        top-up sheet that already existed.
 
-        So the STOCK IS BOUGHT INSIDE THE SEND. Tapping a rose you do not own
-        buys precisely the shortfall and sends it, as one action. Both calls
-        are instant and neither needs a signature, so to the person it is one
-        tap: coins off, gift flies. The stock row stays underneath as an
-        accounting fact nobody has to learn.
-
-        BOUGHT ONLY WHAT IS MISSING. Somebody holding two Roses who sends three
-        buys ONE — charging for three would take money for stock they own.
-
-        IF THE BUY SUCCEEDS AND THE SEND FAILS, THEY KEEP THE GIFT. Nothing is
-        lost and nothing is charged twice; the rose is in their stock and the
-        next tap sends it for free. That benign failure is why this is two
-        calls rather than a combined route somebody would have to make atomic.
-
-        Only in the stock economy. While `spendGiftsFromInventory` is false the
-        send charges at send time and there is no stock to be short of.
+        `amountKash` is still sent and is still the gift's own price times the
+        quantity. With the switch off it is what gets charged; with it on the
+        service ignores it and spends coins. One body, correct in both, so
+        nothing here branches on the day it flips.
       */
-      /*
-        AN UNKNOWN INVENTORY BUYS NOTHING. `giftStock.data` is undefined while
-        the read is in flight or after it failed, and treating that as "you
-        own none" would buy a rose the sender may already hold — taking money
-        for stock they have, which is the one mistake this whole path exists
-        to avoid.
-
-        So unknown means DON'T SPEND: the send goes as it is, and the service
-        answers. If they did own it, it sends. If they did not, the 409 below
-        names the gift and opens the shop. Both are honest; guessing is not.
-      */
-      const held = fromStock && giftStock.data ? (ownedByGift(giftStock.data).get(gift.id) ?? 0) : null;
-      const shortfall = held === null ? 0 : quantity - held;
-
-      void (shortfall > 0
-        ? buyGiftStock.mutateAsync({
-            giftId: gift.id,
-            quantity: shortfall,
-            /*
-              A FRESH KEY PER TAP, NOT PER GIFT.
-
-              This was `gift:<id>:<shortfall>:<room>:<recipient>` — stable
-              across taps, which is the one shape that breaks this route. The
-              service returns the FIRST purchase's result for a repeated key
-              and buys nothing, by design, because that is what makes a retry
-              safe. So a second Rose to the same person would have reported
-              success, added no stock, and then failed at the send — silently,
-              and only for somebody sending the same gift to the same person
-              twice, which is the most ordinary thing to do in a room.
-
-              An idempotency key protects ONE INTENT. Two taps are two
-              intents.
-            */
-            idempotencyKey: newIntentId(`gift:${gift.id}`),
-          })
-        : Promise.resolve()
-      )
-        .then(() =>
-          payGift.mutateAsync({
-            target: { kind: "stream", id: stream.id, recipient: null },
-            amountKash,
-            giftId: gift.id,
-            toProfileId: to.id,
-          })
-        )
+      void payGift
+        .mutateAsync({
+          target: { kind: "stream", id: stream.id, recipient: null },
+          amountKash,
+          giftId: gift.id,
+          toProfileId: to.id,
+        })
         .then(() => {
           // "On its way", never "sent". Production settles `client-signed`:
           // the sender signs and the tip stays PENDING until the watcher sees
@@ -1308,18 +1234,22 @@ function LiveHouse({
             return;
           }
           /*
-            OUT OF STOCK IS AN OFFER, NOT A FAILURE.
+            SHORT OF COINS IS AN OFFER, NOT A FAILURE.
 
-            409 `NO_GIFT_IN_STOCK` names the gift, so the answer is the shop
-            rather than an apology — the same detour a short coin balance
-            takes. A refused send spends NOTHING: the service's stock
-            decrement and its tip row are one transaction, so there is no
-            half-charged state to explain here.
+            409 `INSUFFICIENT_COINS` carries `needed` and `balance`, so the
+            top-up opens on the exact shortfall rather than a guess — on a tray
+            the person is looking straight at. The SAME code and fields the
+            coin purchase answers with, deliberately, so one handler covers
+            both doors into the same wall.
+
+            A refused send spends NOTHING: the debit and the tip row are one
+            transaction upstream, so there is no half-charged state to explain.
           */
-          const missing = noGiftInStock(error);
-          if (missing) {
-            toast.error(`You don't own a ${gift.name} yet.`);
-            setBuyingGift(missing.giftId);
+          const short = insufficientCoins(error);
+          if (short) {
+            toast.error(`Not enough coins — ${short.needed.toLocaleString()} needed.`);
+            setTopUpNeeded(short.needed - short.balance);
+            setTopUpOpen(true);
             return;
           }
           toast.error(
@@ -1329,13 +1259,7 @@ function LiveHouse({
           );
         });
     },
-    /*
-      `giftStock.data` IS A DEPENDENCY AND MUST STAY ONE. A stale inventory
-      here buys stock the sender already holds — taking money for a rose they
-      own — or fails to buy when they are short. It is read inside the send
-      precisely so it is the CURRENT stock, not the stock at mount.
-    */
-    [giftBursts, live, myName, stream.status, stream.id, payGift, fromStock, giftStock.data, buyGiftStock]
+    [giftBursts, live, myName, stream.status, stream.id, payGift]
   );
 
   /*
@@ -2714,15 +2638,6 @@ function LiveHouse({
           setTopUpNeeded(needed);
           setTopUpOpen(true);
         }}
-        fromStock={fromStock}
-        owned={fromStock ? ownedByGift(giftStock.data) : undefined}
-      />
-      {/* Buying the one they tapped, from inside the room — the shop is where
-          the shutters were. Only mounted once something has been chosen. */}
-      <BuyGiftSheet
-        open={buyingGift !== null}
-        giftId={buyingGift}
-        onClose={() => setBuyingGift(null)}
       />
       {/*
         THE COIN PURCHASE, NOT THE KASH ONE.

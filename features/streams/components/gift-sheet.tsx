@@ -57,8 +57,6 @@ export function GiftSheet({
   initialRecipientId,
   balanceCoins,
   onTopUp,
-  fromStock = false,
-  owned,
 }: {
   open: boolean;
   onClose: () => void;
@@ -113,21 +111,6 @@ export function GiftSheet({
    * sent to buy more KASH and came back with the same zero coins.
    */
   onTopUp?: (needed: number) => void;
-  /**
-   * WHETHER THIS TRAY SPENDS STOCK RATHER THAN CHARGING AT SEND.
-   *
-   * The service's `spendGiftsFromInventory`, READ and never inferred. The two
-   * economies cannot both be live: with this on a gift is something you
-   * already OWN and sending costs nothing further; with it off a gift is paid
-   * for as it is sent, which is what every deployment does until somebody
-   * flips the switch.
-   *
-   * It is a prop rather than a hook call so this component stays the file's
-   * tray and the ROOM owns the reading — the same way `priced` arrives.
-   */
-  fromStock?: boolean;
-  /** How many of each this reader holds. Only meaningful when `fromStock`. */
-  owned?: ReadonlyMap<string, number>;
 
   /**
    * Whether sending this actually costs KASH.
@@ -184,19 +167,16 @@ export function GiftSheet({
   const needsTopUp = overBalance && Boolean(onTopUp);
 
   /*
-    NOT OWNING IT IS NOT A REFUSAL — THE SEND BUYS IT.
+    COINS ARE THE INVENTORY, so there is nothing per-gift to hold or to count.
 
-    An earlier pass made this tray offer "Get Rose" when you held none, which
-    is the shopping step TikTok removed and the one ogazboiz asked us not to
-    have: "we need it like tiktok way". The room's send now buys exactly the
-    shortfall and sends in one action, so the button stays SEND and the price
-    it shows is what actually comes off the coin balance.
+    This tray briefly drew a stock count on every tile, back when a gift was
+    something you owned. ogazboiz settled the model — "we are doing it the
+    tiktok way you understand since no inventory" — and the count had nothing
+    left to count: what you hold is COINS, which the balance row already says
+    once rather than fourteen times.
 
-    The counts are still drawn on the tiles, because knowing you hold four
-    Roses is worth knowing — but they inform, they do not gate.
-
-    What DOES gate is coins, which is correct: that is the real limit, and it
-    already has its detour to the top-up.
+    So the only gate is the coin balance, which is correct, and it already has
+    its detour to the top-up.
   */
 
   return (
@@ -281,14 +261,10 @@ export function GiftSheet({
         {/* Scrolls, so the quantity row and Send stay put — see the note in
             the post tip sheet. */}
         <div className="mt-6 max-h-[min(46dvh,360px)] overflow-y-auto overscroll-contain">
-          {/* Counts only in the stock economy — owning a gift is not a thing
-              that exists on a pay-at-send tray, so the corner stays empty
-              rather than printing a zero that means nothing. */}
           <GiftGrid
             selectedId={selectedId}
             onSelect={(gift) => setSelectedId(gift.id)}
             showPrices={priced}
-            owned={fromStock ? owned : undefined}
           />
         </div>
 
