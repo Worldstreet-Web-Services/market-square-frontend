@@ -7,12 +7,15 @@ import {
   GiftCatalogSchema,
   GiftInventorySchema,
   GiftPurchaseSchema,
+  CoinPurchaseSchema,
+  CoinTransferSchema,
   InsufficientCoinsSchema,
   NoGiftInStockSchema,
   type GiftCapability,
   type GiftCatalogItem,
   type GiftHolding,
   type GiftPurchase,
+  type CoinPurchase,
   type InsufficientCoins,
   type NoGiftInStock,
 } from "@/features/gifts/lib/types";
@@ -103,6 +106,40 @@ export async function buyGift(input: {
       { "Idempotency-Key": input.idempotencyKey }
     )
   );
+}
+
+/**
+ * BUY COINS WITH KASH. 201 and PENDING — nothing has been paid yet.
+ *
+ * The response carries `toWallet` and `kashPaid`: the caller signs that
+ * transfer themselves and reports it. No amount is sent, only how many COINS
+ * are wanted; the service holds the rate and charges its own number, for the
+ * same reason a gift purchase names no price.
+ *
+ * `Idempotency-Key` is REQUIRED — 400 without it, deliberately, because a key
+ * generated server-side would make every retry a fresh purchase.
+ */
+export async function buyCoins(input: {
+  coins: number;
+  idempotencyKey: string;
+}): Promise<CoinPurchase> {
+  return CoinPurchaseSchema.parse(
+    await msApi.post("/me/coins", { coins: input.coins }, { "Idempotency-Key": input.idempotencyKey })
+  );
+}
+
+/**
+ * Report the transfer the buyer signed. A CLAIM, never proof.
+ *
+ * The service observes the chain itself before crediting anything; this only
+ * tells it which hash to look for. Which is why reporting late is safe and
+ * reporting twice is harmless, and why the hold that survives a failed report
+ * is what makes a retry free rather than a second charge.
+ */
+export async function reportCoinTransfer(purchaseId: string, txHash: string): Promise<string> {
+  return CoinTransferSchema.parse(
+    await msApi.post(`/me/coins/${purchaseId}/transfer`, { txHash })
+  ).status;
 }
 
 /**

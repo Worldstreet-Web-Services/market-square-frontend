@@ -153,3 +153,31 @@ export const NoGiftInStockSchema = z.object({
   giftId: z.string(),
 });
 export type NoGiftInStock = z.infer<typeof NoGiftInStockSchema>;
+
+/**
+ * BUYING COINS IS THE ONLY STEP WHERE REAL MONEY MOVES.
+ *
+ * KASH -> COINS is a signed transfer to the treasury and stays PENDING until
+ * the chain is observed. COINS -> GIFTS moves nothing and settles instantly,
+ * because the money already arrived here. Getting those two the wrong way
+ * round either puts a fake spinner on something already finished, or tells
+ * somebody their coins arrived before anybody paid for them.
+ *
+ * `toWallet` IS THE INSTRUCTION, not a detail: its presence is what says the
+ * SENDER has to sign. The KASH rail exposes mint and burn and no transfer, and
+ * the platform is non-custodial, so no backend can move somebody's money for
+ * them — the same shape a tip already settles through.
+ */
+export const CoinPurchaseSchema = z.object({
+  id: z.string(),
+  coins: z.number(),
+  /** A DECIMAL STRING, never a number — see `TipSchema` for why money is text. */
+  kashPaid: z.string(),
+  status: z.string(),
+  /** Where to send the KASH. Absent means there is nothing for this client to do. */
+  toWallet: z.string().nullable().optional(),
+});
+export type CoinPurchase = z.infer<typeof CoinPurchaseSchema>;
+
+/** What the service says after the buyer reports the transfer they signed. */
+export const CoinTransferSchema = z.object({ status: z.string() });

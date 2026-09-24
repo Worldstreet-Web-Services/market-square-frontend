@@ -59,7 +59,7 @@ import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gif
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
 import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
-import { KashBuySheet } from "@/features/kash";
+import { CoinBuySheet } from "@/features/gifts";
 import { useCoinBalance } from "@/features/gifts";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
@@ -1131,6 +1131,8 @@ function LiveHouse({
   /* Short of KASH mid-gift opens the top-up rather than stopping the sender —
      the TikTok shape, and the tray hands over rather than stacking dialogs. */
   const [topUpOpen, setTopUpOpen] = useState(false);
+  /** How many coins the tray was short, so the buy sheet can offer exactly that. */
+  const [topUpNeeded, setTopUpNeeded] = useState(0);
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
     onGift: giftBursts.receive,
@@ -2591,9 +2593,25 @@ function LiveHouse({
         priced={giftsArePriced(stream.status)}
         initialRecipientId={giftTo}
         balanceCoins={giftCoins}
-        onTopUp={() => setTopUpOpen(true)}
+        onTopUp={(needed) => {
+          setTopUpNeeded(needed);
+          setTopUpOpen(true);
+        }}
       />
-      <KashBuySheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
+      {/*
+        THE COIN PURCHASE, NOT THE KASH ONE.
+
+        Being short of COINS opened the KASH top-up, which is a different
+        currency: somebody with KASH already in their wallet was sent to buy
+        more KASH and came back with exactly as many coins as before — none.
+        The two are not interchangeable; KASH is the money, coins are what this
+        tray spends, and `CoinBuySheet` is the only place they convert.
+      */}
+      <CoinBuySheet
+        open={topUpOpen}
+        needed={topUpNeeded}
+        onClose={() => setTopUpOpen(false)}
+      />
 
       {isHost && (
         <HandTray

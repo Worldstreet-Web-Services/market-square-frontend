@@ -60,7 +60,7 @@ import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-pl
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { GiftSheet } from "@/features/streams/components/gift-sheet";
-import { KashBuySheet } from "@/features/kash";
+import { CoinBuySheet } from "@/features/gifts";
 import { useCoinBalance } from "@/features/gifts";
 import { LIVE_GIFTS, giftsArePriced, type LiveGift } from "@/lib/gifts";
 import { useSendTip } from "@/features/tips";
@@ -511,6 +511,8 @@ export function StreamRoom({
   const giftCoins = useCoinBalance(giftsOpen);
   // See house-room: short of KASH offers the top-up instead of a refusal.
   const [topUpOpen, setTopUpOpen] = useState(false);
+  /** How many coins the tray was short, so the buy sheet can offer exactly that. */
+  const [topUpNeeded, setTopUpNeeded] = useState(0);
   const reactionTimers = useRef<number[]>([]);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [muted, setMuted] = useState(false);
@@ -1424,7 +1426,20 @@ export function StreamRoom({
         governs everything it is meant to govern without also deciding whether
         the dialog exists.
       */}
-      <KashBuySheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
+      {/*
+        THE COIN PURCHASE, NOT THE KASH ONE.
+
+        Being short of COINS opened the KASH top-up, which is a different
+        currency: somebody with KASH already in their wallet was sent to buy
+        more KASH and came back with exactly as many coins as before — none.
+        The two are not interchangeable; KASH is the money, coins are what this
+        tray spends, and `CoinBuySheet` is the only place they convert.
+      */}
+      <CoinBuySheet
+        open={topUpOpen}
+        needed={topUpNeeded}
+        onClose={() => setTopUpOpen(false)}
+      />
       {giftsAvailable && (
         <GiftSheet
           open={giftsOpen}
@@ -1435,7 +1450,10 @@ export function StreamRoom({
              broadcast's tray IS priced once the flag is on, so this is the
              surface where affordability bites first. */
           balanceCoins={giftCoins}
-          onTopUp={() => setTopUpOpen(true)}
+          onTopUp={(needed) => {
+          setTopUpNeeded(needed);
+          setTopUpOpen(true);
+        }}
         />
       )}
     </div>

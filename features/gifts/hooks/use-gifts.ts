@@ -3,7 +3,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { errorCode } from "@/lib/api/envelope";
-import { buyGift, fetchCoinBalance, fetchGiftCatalog, fetchGiftInventory } from "@/features/gifts/lib/api";
+import {
+  buyCoins,
+  buyGift,
+  fetchCoinBalance,
+  fetchGiftCapability,
+  fetchGiftCatalog,
+  fetchGiftInventory,
+  reportCoinTransfer,
+} from "@/features/gifts/lib/api";
+import { KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
+import { encodeErc20Transfer, toBaseUnits } from "@/lib/erc20";
+import { holdKey } from "@/lib/payment-hold";
+import { clearHeldPayment, heldPayment, holdPayment } from "@/lib/payment-store";
+import { useEmbeddedWallet } from "@/hooks/use-wallet";
+import { useEvmSend } from "@/hooks/use-evm-send";
+import { useKashStatus } from "@/hooks/use-kash-status";
 import type { GiftHolding } from "@/features/gifts/lib/types";
 
 const CATALOG_KEY = ["ms", "gift-catalog"] as const;
@@ -128,6 +143,128 @@ export function useBuyGift() {
         balance in this file.
       */
       queryClient.setQueryData(COINS_KEY, result.balance);
+    },
+  });
+}
+
+const CAPABILITY_KEY = ["ms", "gift-capability"] as const;
+
+/**
+ * CAN COINS BE BOUGHT HERE AT ALL, AND AT WHAT RATE.
+ *
+ * `purchasable: false` means no treasury wallet is configured — there is
+ * nowhere to send the money, so every purchase would be refused. That is a
+ * STATE to draw, not an error to swallow: a "Buy coins" button that always
+ * fails is worse than one that says it is not switched on yet.
+ */
+export function useGiftCapability() {
+  return useQuery({
+    queryKey: CAPABILITY_KEY,
+    queryFn: fetchGiftCapability,
+    // The rate and the switch change on a deploy, not on a poll.
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/** Phases a buyer can be shown. Same vocabulary a tip already uses. */
+export type CoinBuyPhase = "creating" | "signing" | "confirming" | "reporting";
+
+/**
+ * BUY COINS WITH KASH — create, sign, report.
+ *
+ * The same three steps, in the same order, for the same reason as a tip:
+ * the KASH rail exposes mint and burn and NO transfer, and the platform is
+ * non-custodial, so the buyer's own wallet is the only thing that can move
+ * their money. The service opens a pending purchase, hands back a wallet and
+ * an amount, and credits nothing until it has seen the chain itself.
+ *
+ * ─── THE HOLD IS WHAT MAKES A RETRY FREE ─────────────────────────────────────
+ * Between signing and reporting there is a window where the money has MOVED
+ * and the service does not know. A retry that started over would sign a second
+ * transfer for coins already paid for. So the hash is written to the hold
+ * BEFORE the confirmation wait — the transfer is already broadcast by then,
+ * and from that moment the only thing that makes a retry safe is that the hash
+ * and the purchase it belongs to were recorded first.
+ *
+ * Keyed on the PURCHASE SIZE, since two different coin packs are two different
+ * intents; the same pack retried is one.
+ */
+export function useBuyCoins() {
+  const queryClient = useQueryClient();
+  const { address: wallet } = useEmbeddedWallet();
+  const { send, waitForReceipt } = useEvmSend();
+  const chain = useKashStatus().data?.chain ?? null;
+
+  return useMutation({
+    mutationFn: async ({
+      coins,
+      onPhase,
+    }: {
+      coins: number;
+      onPhase?: (phase: CoinBuyPhase) => void;
+    }) => {
+      const phase = onPhase ?? (() => {});
+      const key = holdKey(`coins:${coins}`, String(coins));
+      const held = wallet && key ? heldPayment("coins", wallet, key) : null;
+
+      phase("creating");
+      // The key travels with the request, so the same intent retried reaches
+      // the SAME purchase rather than opening a second one.
+      const purchase = await buyCoins({ coins, idempotencyKey: key ?? `coins:${coins}` });
+
+      /*
+        NO WALLET MEANS THERE IS NOTHING TO SIGN. A deployment that settles
+        some other way has already finished by the time it answers, and asking
+        the buyer to sign would be asking them to pay twice.
+      */
+      if (!purchase.toWallet) {
+        void queryClient.invalidateQueries({ queryKey: COINS_KEY });
+        return purchase;
+      }
+      if (!wallet) throw new Error("Sign in to buy coins.");
+      if (!chain?.tokenAddress) {
+        // Without the engine's own token address there is nothing to transfer,
+        // and guessing one sends real money into nothing.
+        throw new Error("Coin purchase isn't configured on this environment yet.");
+      }
+
+      let txHash = (held?.txHash ?? null) as `0x${string}` | null;
+      if (!txHash || held?.ref !== purchase.id) {
+        phase("signing");
+        txHash = await send({
+          to: chain.tokenAddress as `0x${string}`,
+          // The TOKEN's precision, not the API's — see KASH_TOKEN_DECIMALS.
+          data: encodeErc20Transfer(
+            purchase.toWallet,
+            toBaseUnits(purchase.kashPaid, KASH_TOKEN_DECIMALS)
+          ),
+          chainId: chain.chainId,
+        });
+        // Written BEFORE the wait: the transfer is already broadcast.
+        if (key) holdPayment("coins", wallet, { key, txHash, ref: purchase.id });
+
+        phase("confirming");
+        const outcome = await waitForReceipt(txHash, chain.chainId);
+        if (outcome === "reverted") {
+          if (wallet) clearHeldPayment("coins", wallet);
+          throw new Error("That transfer didn't go through. Nothing was charged.");
+        }
+      }
+
+      phase("reporting");
+      await reportCoinTransfer(purchase.id, txHash);
+      if (wallet) clearHeldPayment("coins", wallet);
+
+      /*
+        THE BALANCE IS INVALIDATED, NOT WRITTEN. The opposite call from
+        `useBuyGift`, and deliberately: a gift purchase settles instantly and
+        its response IS the new balance, while this one stays PENDING until the
+        service observes the chain. Writing a number here would credit coins
+        nobody has been given yet.
+      */
+      void queryClient.invalidateQueries({ queryKey: COINS_KEY });
+      return purchase;
     },
   });
 }
