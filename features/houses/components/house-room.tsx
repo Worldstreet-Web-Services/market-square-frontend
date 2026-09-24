@@ -56,6 +56,9 @@ import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { RoomReactions, useRoomReactions } from "@/features/houses/components/room-reactions";
 import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bursts";
 import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gift-sheet";
+import { giftsArePriced } from "@/lib/gifts";
+import { multiplyKash } from "@/lib/kash-amount";
+import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
 import { KashBuySheet, useKashAccount } from "@/features/kash";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
@@ -1096,6 +1099,7 @@ function LiveHouse({
     being paid. What ships today is the moment, not the money.
   */
   const giftBursts = useGiftBursts();
+  const payGift = useSendTip();
   const [giftsOpen, setGiftsOpen] = useState(false);
   /*
     WHO THE TRAY OPENS ON. Null when it was reached from the dock's gift
@@ -1143,8 +1147,65 @@ function LiveHouse({
       const label = to ? `You → ${to.name}` : "You";
       giftBursts.spawn(gift, quantity, label);
       live.gift(gift.id, quantity, to ? `${myName ?? "Someone"} → ${to.name}` : (myName ?? "Someone"));
+
+      /*
+        ─── AND NOW THE MONEY, WHICH THIS ROOM DID NOT MOVE UNTIL TODAY ───────
+
+        THE SHOW HAPPENS EITHER WAY. The burst and the data-channel packet
+        already went out above, unconditionally, and nothing below retracts
+        them: a gift the room has seen is not un-seen because a wallet refused
+        it. The broadcast makes the same call and for the same reason.
+
+        `toProfileId` IS SENT FOR EVERY RECIPIENT INCLUDING THE HOST. The
+        service exempts the host from its presence check, so naming them is
+        identical to omitting the field — and special-casing the first row
+        would be a second code path earning nothing.
+      */
+      if (!giftsArePriced(stream.status)) return;
+      if (!to) return; // Nothing is charged with nobody named — see the tray.
+
+      const amountKash = multiplyKash(gift.priceKash, quantity);
+      if (!amountKash) {
+        // No exact total, no charge. Rounding would bill an amount the sender
+        // was never shown: three Roses is 0.03, not 0.030000000000000002.
+        toast.error("That quantity can't be priced exactly.");
+        return;
+      }
+
+      void payGift
+        .mutateAsync({
+          target: { kind: "stream", id: stream.id, recipient: null },
+          amountKash,
+          giftId: gift.id,
+          toProfileId: to.id,
+        })
+        .then(() => {
+          // "On its way", never "sent". Production settles `client-signed`:
+          // the sender signs and the tip stays PENDING until the watcher sees
+          // the transfer on-chain. Saying it landed before that is the one
+          // claim this flow may not make.
+          toast.success(`${gift.name} on its way to ${to.name}`);
+        })
+        .catch((error: unknown) => {
+          /*
+            THEY LEFT is not a refusal of the act. The service checks live
+            presence and answers 409 RECIPIENT_NOT_IN_ROOM rather than ever
+            falling back to paying the host — so the sender did nothing wrong,
+            the room simply moved, and the honest answer is to say so and let
+            them choose again rather than to imply they were denied.
+          */
+          if (recipientLeftTheRoom(error)) {
+            toast.error(`${to.name} left the room — nothing was charged.`);
+            return;
+          }
+          toast.error(
+            error instanceof Error && error.message
+              ? error.message
+              : "The gift was shown, but the payment did not go through."
+          );
+        });
     },
-    [giftBursts, live, myName]
+    [giftBursts, live, myName, stream.status, stream.id, payGift]
   );
 
   /*
@@ -2473,26 +2534,32 @@ function LiveHouse({
       )}
 
       {/*
-        THE GIFT TRAY. Unpriced, deliberately — `priced` is not passed.
+        THE GIFT TRAY, NOW PRICED — the money leg is on.
 
-        `MARKET_FLAGS.liveGifts` is off, and more importantly the money route
-        cannot yet name a recipient: `POST /streams/:id/gifts` hardcodes
-        `recipientId = stream.ownerId`. A priced gift aimed at a named person
-        would therefore charge the sender and pay the HOST, with the UI saying
-        somebody else's name — money reaching the wrong person behind a screen
-        that claims otherwise, which is the one failure worth holding a feature
-        for.
+        It shipped unpriced because `POST /streams/:id/gifts` hardcoded
+        `recipientId = stream.ownerId`, so a priced gift aimed at a named
+        person would have charged the sender and paid the HOST while the
+        screen said somebody else's name.
 
-        So what ships is the MOMENT: the gift flies, the room sees who sent it
-        and who it was for, and nothing is charged. The recipient is already
-        chosen and already travels on the data channel, so when `toProfileId`
-        lands the money leg is a small change here and the UI does not move.
+        VERIFIED IN PRODUCTION BEFORE FLIPPING, not taken on report. The served
+        OpenAPI document now carries `toProfileId` on this route, described
+        exactly as agreed — optional, absent still means the host, the named
+        person must be present, 409 `RECIPIENT_NOT_IN_ROOM` and NEVER a
+        fallback to the host, host exempt from the presence check, self-gift
+        refused — and `/tips/capability` answers
+        `verifiedRoomRecipientsOnly: false`, so anybody in the room may
+        receive.
+
+        `giftsArePriced` still gates on `MARKET_FLAGS.liveGifts` AND a live
+        status, so a deployment without the flag, or a room that has ended,
+        keeps the free moment rather than pricing something it cannot settle.
       */}
       <GiftSheet
         open={giftsOpen}
         onClose={() => setGiftsOpen(false)}
         onSend={sendGift}
         recipients={giftRecipients}
+        priced={giftsArePriced(stream.status)}
         initialRecipientId={giftTo}
         balanceKash={giftBalance}
         onTopUp={() => setTopUpOpen(true)}

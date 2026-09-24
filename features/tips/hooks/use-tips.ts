@@ -56,6 +56,11 @@ export interface SendTipInput {
   amountKash: string;
   /** The gift the sender chose, so the recipient can see what arrived. */
   giftId?: string | null;
+  /**
+   * WHO in the room is paid — stream gifts only. Absent means the host, which
+   * is what every client that predates the field sends and must go on meaning.
+   */
+  toProfileId?: string | null;
   onPhase?: (phase: TipPhase) => void;
 }
 
@@ -94,9 +99,27 @@ export function useSendTip() {
   const chain = useKashStatus().data?.chain ?? null;
 
   const mutation = useMutation<Tip, unknown, SendTipInput>({
-    mutationFn: async ({ target, amountKash, giftId, onPhase }) => {
+    mutationFn: async ({ target, amountKash, giftId, toProfileId, onPhase }) => {
       const phase = onPhase ?? (() => {});
-      const key = holdKey(`tip:${target.kind}:${target.id}`, amountKash);
+      /*
+        THE RECIPIENT IS PART OF THE HOLD KEY, and it has to be.
+
+        A hold remembers a payment this device already SIGNED but failed to
+        report, so a retry reports it instead of charging again. The key was
+        `tip:<kind>:<id>` plus the amount — which did not distinguish WHO was
+        being paid, because until `toProfileId` a stream gift had exactly one
+        possible recipient: the host.
+
+        Now it does not. Two gifts of the same amount, in the same room, to
+        DIFFERENT people would have collided on one key — and the recovery
+        path would have reported a transfer signed for Ada against a tip
+        created for Kola. That is money credited to the wrong person by the
+        mechanism built to stop money being taken twice.
+
+        Empty string for "the host", so every hold written before this field
+        existed keeps its key and stays recoverable.
+      */
+      const key = holdKey(`tip:${target.kind}:${target.id}:${toProfileId ?? ""}`, amountKash);
 
       /**
        * A payment this attempt already made.
@@ -110,7 +133,7 @@ export function useSendTip() {
       phase("creating");
       let created;
       try {
-        created = await sendTip(target, amountKash, giftId ?? null);
+        created = await sendTip(target, amountKash, giftId ?? null, toProfileId ?? null);
       } catch (error) {
         /**
          * The service already has a tip open for this post and sender — which

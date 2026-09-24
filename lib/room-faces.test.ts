@@ -153,3 +153,30 @@ test("the stream route is the only one given a recipient", () => {
   assert.match(api, /\/posts\/\$\{target\.id\}\/tips`, body\)/);
   assert.match(api, /\/profiles\/\$\{target\.id\}\/tips`, body\)/);
 });
+
+test("the payment hold key distinguishes WHO is being paid", () => {
+  /*
+    A hold remembers a payment this device SIGNED but failed to report, so a
+    retry reports it instead of charging twice. Its key was
+    `tip:<kind>:<id>` plus the amount — which did not name the recipient,
+    because until `toProfileId` a stream gift had exactly one possible one.
+
+    It does not any more. Two gifts of the SAME amount, in the SAME room, to
+    DIFFERENT people would have collided on one key, and the recovery path
+    would have reported a transfer signed for one person against a tip created
+    for another — money credited to the wrong person BY THE MECHANISM BUILT TO
+    STOP MONEY BEING TAKEN TWICE.
+
+    Pinned by reading the source: the hook imports through the `@/` alias,
+    which the node runner does not resolve.
+  */
+  const hooks = readFileSync("features/tips/hooks/use-tips.ts", "utf8");
+  assert.match(
+    hooks,
+    /holdKey\(`tip:\$\{target\.kind\}:\$\{target\.id\}:\$\{toProfileId \?\? ""\}`, amountKash\)/,
+    "the hold key no longer distinguishes recipients"
+  );
+  // Empty string for "the host", so holds written before the field existed
+  // keep their key and stay recoverable.
+  assert.ok(hooks.includes('toProfileId ?? ""'), "an older hold's key changed and became unrecoverable");
+});

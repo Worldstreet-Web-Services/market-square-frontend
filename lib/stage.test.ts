@@ -923,19 +923,41 @@ describe("Gifting anybody in a gist room", () => {
     name a recipient, because that is the part that would cost somebody money
     if it drifted.
   */
-  it("draws the tray UNPRICED in a gist room, because the route pays the host", () => {
+  it("prices the room tray, and charges the person who was NAMED", () => {
     /*
-      `POST /streams/:id/gifts` hardcodes `recipientId = stream.ownerId` and
-      takes no recipient. So a PRICED gift aimed at a named person would charge
-      the sender and pay the HOST while the UI said somebody else's name.
+      This test ran the other way for a week, and the reason it did is the
+      point: `POST /streams/:id/gifts` hardcoded `recipientId = stream.ownerId`,
+      so a priced gift aimed at a named person would have charged the sender
+      and paid the HOST while the screen said somebody else's name.
 
-      The room therefore passes no `priced` prop at all. When the service
-      carries `toProfileId`, that is the one line that changes.
+      The service now carries `toProfileId` — verified in production against
+      the served OpenAPI document, not taken on report — so the tray is priced
+      and the money follows the name.
+
+      WHAT MUST NOT DRIFT, and what this pins:
+        · `toProfileId` is SENT, so the named person is paid rather than the
+          host silently inheriting the money;
+        · the burst and the data-channel packet go out BEFORE the payment and
+          are never retracted — a gift the room has seen is not un-seen
+          because a wallet refused;
+        · a 409 is told apart from a refusal, because the sender did nothing
+          wrong when somebody walks out mid-gift.
     */
     const room = source("features/houses/components/house-room.tsx");
-    const tray = room.slice(room.indexOf("<GiftSheet"), room.indexOf("<GiftSheet") + 400);
+    const tray = room.slice(room.indexOf("<GiftSheet"), room.indexOf("<GiftSheet") + 500);
     assert.match(tray, /recipients=\{giftRecipients\}/, "the room's tray offers nobody to gift");
-    assert.doesNotMatch(tray, /priced/, "the gist room tray is priced while the route pays the host");
+    assert.match(tray, /priced=\{giftsArePriced\(stream\.status\)\}/, "the room tray is free again");
+
+    // The money names the recipient, and the show is not conditional on it.
+    assert.ok(s_includes(room, "toProfileId: to.id"), "the gift pays whoever the route defaults to");
+    assert.ok(
+      room.indexOf("giftBursts.spawn(") < room.indexOf("if (!giftsArePriced(stream.status)) return;"),
+      "the burst is now gated on payment — a gift the room saw must not be un-seen"
+    );
+    assert.ok(
+      s_includes(room, "recipientLeftTheRoom(error)"),
+      "'they left' is reported as a refusal of the sender"
+    );
   });
 
   it("never offers to gift yourself, and puts the host first", () => {
