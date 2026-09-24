@@ -153,6 +153,26 @@ export async function sendTip(
   amountKash: string,
   /** The gift chosen, if one was. A label the service records, never a price. */
   giftId: string | null = null,
+  /**
+   * WHO IS PAID, on a stream gift — anybody in the room, not just its host.
+   *
+   * ABSENT keeps the service's original behaviour exactly: the host is paid,
+   * because `recipientId` was hardcoded to `stream.ownerId`. So an older
+   * client and a service that has never heard of this field both go on working
+   * and nothing needed a coordinated deploy.
+   *
+   * SEND IT FOR EVERY ROW INCLUDING THE HOST. The service exempts the host
+   * from the presence check — a host whose own heartbeat has lapsed is still
+   * the host — so naming them explicitly behaves identically to omitting the
+   * field. That is deliberate on their side so a picker does not have to
+   * special-case its first row into the no-field form, and a picker that did
+   * would be carrying a second code path for no gain.
+   *
+   * POST AND PROFILE TIPS IGNORE IT. Those routes have their own recipient by
+   * construction — the post's author, the profile itself — so passing it there
+   * would be inventing a parameter the service does not read.
+   */
+  toProfileId: string | null = null,
 ): Promise<CreatedTip> {
   /**
    * Each path written INLINE, never assembled into a variable.
@@ -162,11 +182,13 @@ export async function sendTip(
    * exist upstream reaches production as a mystery 404.
    */
   const body = giftId ? { amountKash, giftId } : { amountKash };
+  // Only the stream route reads a recipient; see the parameter's note.
+  const giftBody = toProfileId ? { ...body, toProfileId } : body;
   const raw =
     target.kind === "post"
       ? await msApi.post(`/posts/${target.id}/tips`, body)
       : target.kind === "stream"
-        ? await msApi.post(`/streams/${target.id}/gifts`, body)
+        ? await msApi.post(`/streams/${target.id}/gifts`, giftBody)
         : await msApi.post(`/profiles/${target.id}/tips`, body);
   const parsed = TipResponseSchema.parse(raw);
   return { tip: adopt(raw, target), toWallet: parsed.toWallet ?? null };

@@ -94,3 +94,62 @@ test("attendees is NEVER a source — it is the ended-room field", () => {
   });
   assert.deepEqual(faces, [], "the live card is reading the ended-room field again");
 });
+
+/*
+  ─── THE GIFT RECIPIENT CONTRACT, PINNED BEFORE IT IS LIVE ───────────────────
+
+  `toProfileId` is built (service PR #308) but NOT merged and NOT deployed, so
+  the money leg stays off. What is pinned here is the CLIENT's half of the
+  agreement, because the parts that are easy to get wrong are the parts nobody
+  looks at again once it ships.
+*/
+import { recipientLeftTheRoom, RECIPIENT_GONE } from "../features/tips/lib/availability.ts";
+import { readFileSync } from "node:fs";
+
+test("'they just left' is told apart from 'you may not do this'", () => {
+  // A 409 RECIPIENT_NOT_IN_ROOM is not a refusal of the act — the sender did
+  // nothing wrong and the room simply moved. Collapsing it into a generic
+  // failure makes somebody feel at fault for another person walking out.
+  assert.equal(RECIPIENT_GONE, "RECIPIENT_NOT_IN_ROOM");
+  assert.equal(recipientLeftTheRoom({ code: "RECIPIENT_NOT_IN_ROOM" }), true);
+  assert.equal(recipientLeftTheRoom({ code: "FORBIDDEN" }), false);
+  assert.equal(recipientLeftTheRoom({ code: "RATE_LIMITED" }), false);
+  assert.equal(recipientLeftTheRoom(null), false);
+  assert.equal(recipientLeftTheRoom(new Error("network")), false);
+});
+
+test("toUserId carries NO default, so silence is not mistaken for 'nobody'", () => {
+  /*
+    Pinned by reading the schema rather than by parsing, because
+    `features/tips/lib/types.ts` imports through the `@/` alias, which the node
+    test runner does not resolve.
+
+    NO DEFAULT is the feature switch. A deployment predating the recipient
+    field answers without it, and that is a different sentence from "it carries
+    one and the answer is null". A default would merge the two and let a
+    receipt claim the service confirmed a recipient it never mentioned — which
+    defeats the entire reason the field is read back rather than assumed from
+    what the client sent.
+  */
+  const types = readFileSync("features/tips/lib/types.ts", "utf8");
+  assert.match(types, /toUserId: z\.string\(\)\.nullable\(\)\.optional\(\),/);
+  assert.doesNotMatch(
+    types,
+    /toUserId: z\.string\(\)\.nullable\(\)\.optional\(\)\.default\(/,
+    "an older service's silence now reads as a confirmed recipient"
+  );
+});
+
+// The client sends the recipient for EVERY row including the host: the service
+// exempts the host from its presence check, so naming them explicitly behaves
+// identically to omitting the field, and a picker that special-cased its first
+// row would carry a second code path for no gain.
+test("the stream route is the only one given a recipient", () => {
+  const api = readFileSync("features/tips/lib/api.ts", "utf8");
+  assert.match(api, /const giftBody = toProfileId \? \{ \.\.\.body, toProfileId \} : body;/);
+  assert.match(api, /\/streams\/\$\{target\.id\}\/gifts`, giftBody\)/);
+  // A post's author and a profile itself ARE the recipient by construction —
+  // passing one there would invent a parameter the service does not read.
+  assert.match(api, /\/posts\/\$\{target\.id\}\/tips`, body\)/);
+  assert.match(api, /\/profiles\/\$\{target\.id\}\/tips`, body\)/);
+});
