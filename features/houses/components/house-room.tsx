@@ -1159,11 +1159,29 @@ function LiveHouse({
     The rule already exists and is shared — `tipBlockedBecause()` in
     lib/tip-capability.ts, which `TipButton` uses to hide itself, and which
     correctly treats `lapsed` as NOT verified. It needs a recipient carrying
-    `verification`. So the fix is to give this roster real profiles (the
-    service has offered to expose the flag on participants), and then pass
-    each row through that one function rather than writing a second rule here.
+    `verification`, and `ProfileSchema` has exactly that field.
 
-    DO NOT SWITCH THE MONEY LEG ON UNTIL THAT LANDS.
+    ─── THE OBVIOUS FIX IS A TRAP, SO IT IS WRITTEN DOWN ────────────────────
+    `stream.participants` ALREADY carries verified profile summaries. Feeding
+    this picker from them looks like a one-line fix and is a worse bug than
+    the one it solves: that field is a SAMPLE capped at three, because it
+    exists to draw a face pile. The picker would silently offer three people
+    and hide everyone else — and it would look like it worked.
+
+    The other escape hatch is not there either. `GET /profiles` is a
+    free-text directory and takes no `ids` filter: passing `?ids=a,b` does not
+    error, it IGNORES the parameter and returns an ordinary page of the
+    directory. So hydrating arbitrary participant ids into summaries is not
+    merely unsupported, it fails by silently answering with strangers.
+
+    So there are only two real routes, and both are the service's:
+      · turn `verifiedAuthorsOnly` OFF for rooms, after which this picker is
+        already correct and nothing here changes; or
+      · add an `ids` filter to the profile directory, and then pass each row
+        through `tipBlockedBecause()` so the one shared rule stays the only
+        rule.
+
+    DO NOT SWITCH THE MONEY LEG ON UNTIL ONE OF THOSE LANDS.
   */
   const giftRecipients: GiftRecipient[] = useMemo(() => {
     const hostId = stream.owner?.id ?? null;
