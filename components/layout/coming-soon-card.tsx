@@ -10,9 +10,8 @@ import { housePath } from "@/features/houses";
 import { clockLabel, shortDateLabel, startsInLabel } from "@/lib/format";
 import type { Stream } from "@/features/streams";
 import { asset, api } from "@/lib/square-path";
+import { ShareSheet } from "@/components/ui/share-sheet";
 import { roomCardFileName, roomCardQuery } from "@/lib/room-card";
-import { shareCardImage } from "@/lib/share-card-image";
-import { toast } from "sonner";
 
 /**
  * HOME'S "COMING SOON" CARD — node 2077:19030 (SQUARE 2.0 Copy), 342 × 106.
@@ -63,52 +62,6 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
   const topics = useTopics();
   const [sharing, setSharing] = useState(false);
 
-  /*
-    The card is generated from what THIS screen already knows — see
-    `lib/room-card.ts` for why the route takes params rather than fetching the
-    room itself. `window.location.origin` because the QR has to be scannable
-    from another device, where a relative path means nothing.
-  */
-  const shareCard = async () => {
-    if (sharing) return;
-    setSharing(true);
-    try {
-      const roomUrl = `${window.location.origin}${href}`;
-      const query = roomCardQuery({
-        url: roomUrl,
-        title: stream.title,
-        startsAt: startsAt ?? null,
-        hostName: host?.displayName || host?.username || null,
-        hostAvatarUrl: host?.avatarUrl ?? null,
-        coverUrl: stream.thumbnailUrl ?? null,
-      });
-      const outcome = await shareCardImage({
-        imageUrl: api(`/api/room-card?${query}`),
-        fileName: roomCardFileName(stream.title),
-        url: roomUrl,
-        title: stream.title,
-        text: `${stream.title} on Square`,
-      });
-      /*
-        EVERY OUTCOME SAYS SOMETHING EXCEPT A CANCEL.
-
-        This reported only "downloaded" and "failed", so the two most likely
-        results on a desktop — the share sheet opening, or the card being
-        saved after the sheet refused a file — passed in silence and the
-        button read as broken. A control that does its job and says nothing is
-        indistinguishable from one that is dead.
-
-        A CANCEL STAYS SILENT: the person closed the sheet on purpose, and
-        telling them so is the app narrating their own decision back at them.
-      */
-      if (outcome === "downloaded") toast.success("Card saved — attach it to your message");
-      if (outcome === "linked") toast.success("Link shared — the card couldn't be attached here");
-      if (outcome === "failed") toast.error("Couldn't get the card ready — try again.");
-    } finally {
-      setSharing(false);
-    }
-  };
-
   const href = housePath(stream.id);
   const startsAt = stream.scheduledAt;
   const host = stream.owner;
@@ -120,6 +73,35 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
     topicKey && topicKey !== FIGMA_TOPIC
       ? (TOPIC_ICONS[topicKey] ?? IconSpark)
       : null;
+
+
+  /*
+    THE SHEET, NOT THE DEVICE'S OWN — ogazboiz, 2026-09-24: "put that old one
+    that it will show share to this share to that instead of the native one".
+
+    Tapping Share went straight to `navigator.share`, which on a desktop is
+    nothing recognisable and on a phone is the OS chooser rather than Square's.
+    The sheet is the app's own list — WhatsApp, X, Facebook, Telegram, Post to
+    Square, Copy link — and the CARD now sits at the top of it as its own two
+    rows, because the named destinations are reached by a web intent and an
+    intent cannot carry a file.
+
+    The card is built from what THIS screen already knows; see `lib/room-card`
+    for why the route takes params rather than reading the room itself.
+    `window.location.origin` because the QR has to be scannable from another
+    device, where a relative path means nothing.
+  */
+  const roomUrl = typeof window === "undefined" ? href : `${window.location.origin}${href}`;
+  const cardImage = api(
+    `/api/room-card?${roomCardQuery({
+      url: roomUrl,
+      title: stream.title,
+      startsAt: startsAt ?? null,
+      hostName: host?.displayName || host?.username || null,
+      hostAvatarUrl: host?.avatarUrl ?? null,
+      coverUrl: stream.thumbnailUrl ?? null,
+    })}`
+  );
 
   return (
     /*
@@ -329,9 +311,8 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           */}
           <button
             type="button"
-            disabled={sharing}
-            onClick={() => void shareCard()}
-            className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90 disabled:opacity-70"
+            onClick={() => setSharing(true)}
+            className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
             <img
@@ -340,7 +321,7 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
               aria-hidden
               className="size-[10px] shrink-0"
             />
-            {sharing ? "Preparing…" : "Share"}
+            Share
           </button>
         </div>
       </div>
@@ -364,6 +345,16 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 rounded-[16px] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)]"
       />
+
+      {sharing && (
+        <ShareSheet
+          open
+          onClose={() => setSharing(false)}
+          title="Share gist room"
+          payload={{ text: `${stream.title} on Square`, url: roomUrl }}
+          card={{ imageUrl: cardImage, fileName: roomCardFileName(stream.title) }}
+        />
+      )}
 
 
     </div>
