@@ -41,13 +41,40 @@ export type TipBlock =
  * lookup has not come back yet would break tipping to fix a message. The
  * service refuses what it must; this only stops us advertising a refusal.
  */
+export type TipSurface =
+  /** A post or a profile — somebody tips a byline. */
+  | "post"
+  /** A gist room — somebody gifts a person off a live roster. */
+  | "room";
+
 export function tipBlockedBecause(
   capability: TipCapability | null | undefined,
-  recipient: TipRecipient | null | undefined
+  recipient: TipRecipient | null | undefined,
+  /**
+   * WHICH BADGE RULE APPLIES, because the service now publishes two.
+   *
+   * Defaulted to `post` so every existing caller keeps the behaviour it had:
+   * a new parameter must not quietly change what the surfaces that predate it
+   * decide about money.
+   */
+  surface: TipSurface = "post"
 ): TipBlock | null {
   if (!capability) return null;
   if (!capability.enabled) return "disabled";
-  if (!capability.verifiedAuthorsOnly) return null;
+  /*
+    THE ROOM RULE FALLS BACK TO THE AUTHOR RULE WHEN IT IS ABSENT.
+
+    `undefined` means the deployment has one switch, not that rooms are open —
+    so a service that has never heard of the room flag goes on applying the
+    author flag to rooms, which is what production does today. `?? ` rather
+    than `||` deliberately: `false` is a real answer meaning "rooms are open"
+    and must not fall through to the author rule.
+  */
+  const required =
+    surface === "room"
+      ? (capability.verifiedRoomRecipientsOnly ?? capability.verifiedAuthorsOnly)
+      : capability.verifiedAuthorsOnly;
+  if (!required) return null;
   // `verified` ONLY. `lapsed` is a verified account whose payment ran out and
   // it must not be treated as verified anywhere (CLAUDE.md), least of all
   // where money is about to move.

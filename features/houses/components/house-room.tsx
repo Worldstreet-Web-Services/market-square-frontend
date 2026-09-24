@@ -1142,46 +1142,43 @@ function LiveHouse({
     outright ("You cannot tip yourself"), so offering it would be drawing a
     control whose only outcome is an error.
 
-    ─── WHAT THIS ROSTER CANNOT YET ANSWER, AND MUST BEFORE MONEY MOVES ──────
-    PRODUCTION PUBLISHES `verifiedAuthorsOnly: true`. Verified against prod,
-    not assumed: `GET /tips/capability` answers `verifiedAuthorsOnly: true`
-    and `settlement: "client-signed"` there, while this dev stack answers
-    `false` and `"rail"` — so a gift to an UNVERIFIED person is refused 403
-    ("not set up to receive tips"), and local testing cannot see it.
+    ─── THE BADGE RULE, WHICH NOW DIFFERS BY SURFACE ────────────────────────
+    ogazboiz decided a gist room may pay ANYONE in it, and the service kept
+    that as its own switch rather than widening the existing one:
 
-    This picker therefore offers people the service will refuse, the moment
-    the money leg is switched on. It is harmless today because nothing is
-    charged, and it is NOT fixed by filtering here: `MentionableMember` is
-    `{ id, displayName, username }` assembled from LiveKit participant
-    metadata and carries no verification at all, so any filter would be the
-    client inventing a server rule it cannot actually evaluate.
+      verifiedAuthorsOnly          true   — POST tips, unchanged
+      verifiedRoomRecipientsOnly   false  — ROOM gifts, open
 
-    The rule already exists and is shared — `tipBlockedBecause()` in
-    lib/tip-capability.ts, which `TipButton` uses to hide itself, and which
-    correctly treats `lapsed` as NOT verified. It needs a recipient carrying
-    `verification`, and `ProfileSchema` has exactly that field.
+    The two differ on purpose. The badge stops an impersonation account
+    collecting on a byline the sender has never met, which is a POST. Here the
+    sender picked a person off a live roster, in a room they are both in, that
+    the host let them into, while that person is speaking — the attack barely
+    exists and the rule's cost would be that most of the room can receive
+    nothing.
 
-    ─── THE OBVIOUS FIX IS A TRAP, SO IT IS WRITTEN DOWN ────────────────────
-    `stream.participants` ALREADY carries verified profile summaries. Feeding
-    this picker from them looks like a one-line fix and is a worse bug than
-    the one it solves: that field is a SAMPLE capped at three, because it
-    exists to draw a face pile. The picker would silently offer three people
-    and hide everyone else — and it would look like it worked.
+    SO THIS PICKER IS CORRECT AS IT STANDS: no filter, nobody greyed out.
+    `tipBlockedBecause(capability, recipient, "room")` reads the room flag and
+    answers null for everyone, so there is nothing for this component to do.
 
-    The other escape hatch is not there either. `GET /profiles` is a
-    free-text directory and takes no `ids` filter: passing `?ids=a,b` does not
-    error, it IGNORES the parameter and returns an ordinary page of the
-    directory. So hydrating arbitrary participant ids into summaries is not
-    merely unsupported, it fails by silently answering with strangers.
+    NOT YET IN PRODUCTION, and the difference matters. That switch is in
+    service PR #308, unmerged and undeployed; prod today publishes only
+    `verifiedAuthorsOnly: true` and no room flag at all. An ABSENT room flag
+    means "this deployment has one switch", so rooms go on obeying the author
+    rule — which is why `tipBlockedBecause` falls back rather than defaulting
+    to open, and why until #308 ships a gift to an unverified person is still
+    refused 403 in prod.
 
-    So there are only two real routes, and both are the service's:
-      · turn `verifiedAuthorsOnly` OFF for rooms, after which this picker is
-        already correct and nothing here changes; or
-      · add an `ids` filter to the profile directory, and then pass each row
-        through `tipBlockedBecause()` so the one shared rule stays the only
-        rule.
+    IF THE ROOM FLAG IS EVER TURNED BACK ON, this picker cannot enforce it.
+    `MentionableMember` is `{ id, displayName, username }` off LiveKit
+    participant metadata and carries no verification; `stream.participants`
+    does carry it but is a SAMPLE OF THREE, so filtering on it would silently
+    offer three people and hide the rest; and `GET /profiles` takes no `ids`
+    filter — passing one does not error, it returns an ordinary page of the
+    directory, so hydrating participant ids would answer with STRANGERS.
+    Closing rooms again therefore needs an `ids` filter first, not a change
+    here.
 
-    DO NOT SWITCH THE MONEY LEG ON UNTIL ONE OF THOSE LANDS.
+    DO NOT SWITCH THE MONEY LEG ON UNTIL #308 IS MERGED AND RESTARTED.
   */
   const giftRecipients: GiftRecipient[] = useMemo(() => {
     const hostId = stream.owner?.id ?? null;

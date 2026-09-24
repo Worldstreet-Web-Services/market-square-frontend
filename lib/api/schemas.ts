@@ -692,6 +692,27 @@ export const TipCapabilitySchema = z.object({
   minKash: z.string(),
   maxKash: z.string(),
   verifiedAuthorsOnly: z.boolean(),
+  /**
+   * THE SAME QUESTION ASKED OF A ROOM, AND IT IS A DIFFERENT ANSWER.
+   *
+   * `verifiedAuthorsOnly` governs POST tips and stays true: the badge is what
+   * stops an impersonation account collecting on a byline the sender has never
+   * met. In a GIST ROOM the sender picked a person off a live roster, in a
+   * room they are both sitting in, that the host let them into, while that
+   * person is speaking — the impersonation the badge defends against barely
+   * exists, and the rule's cost is that most of the room can receive nothing.
+   *
+   * So the service carries two switches, and the client must read the right
+   * one per surface. Reading the author flag on a room would grey out people
+   * the service will happily pay.
+   *
+   * NO DEFAULT, and that is the feature switch. `undefined` means "this
+   * deployment has ONE switch", so a room must go on obeying
+   * `verifiedAuthorsOnly` — which is exactly what production does today and
+   * cannot regress anyone. Defaulting it to `false` would silently open room
+   * gifting on every service that has never heard of the field.
+   */
+  verifiedRoomRecipientsOnly: z.boolean().optional(),
 });
 
 export type TipCapability = z.infer<typeof TipCapabilitySchema>;
