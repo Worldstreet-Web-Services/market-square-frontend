@@ -41,15 +41,35 @@ import { Sheet } from "@/components/ui/sheet";
  */
 const QUANTITIES = [1, 5, 10] as const;
 
+/** Somebody a gift can be sent to — the room's own roster, resolved already. */
+export interface GiftRecipient {
+  id: string;
+  name: string;
+  /** Marked in the list, and the default, so a gift with no thought lands right. */
+  isHost?: boolean;
+}
+
 export function GiftSheet({
   open,
   onClose,
   onSend,
   priced = false,
+  recipients,
 }: {
   open: boolean;
   onClose: () => void;
-  onSend: (gift: LiveGift, quantity: number) => void;
+  onSend: (gift: LiveGift, quantity: number, recipient: GiftRecipient | null) => void;
+  /**
+   * WHO CAN BE GIFTED. Absent on a broadcast, where the gift goes to the host
+   * and there is nobody else to choose — the picker is then not drawn at all
+   * rather than drawn with one disabled row.
+   *
+   * Present in a gist room, where the whole point is that you can gift ANYBODY
+   * on the stage or in the audience (ogazboiz, 2026-09-24). The host is first
+   * and is the default, so a sender who ignores the row still pays the person
+   * today's route would have paid anyway.
+   */
+  recipients?: readonly GiftRecipient[];
   /**
    * Whether sending this actually costs KASH.
    *
@@ -63,6 +83,11 @@ export function GiftSheet({
 }) {
   const [selectedId, setSelectedId] = useState(LIVE_GIFTS[0].id);
   const [quantity, setQuantity] = useState<number>(1);
+  // The host leads the roster, so index 0 is the sane default without this
+  // sheet needing to know what a host is.
+  const [toId, setToId] = useState<string | null>(null);
+  const people = recipients ?? [];
+  const recipient = people.find((person) => person.id === toId) ?? people[0] ?? null;
   const selected = LIVE_GIFTS.find((gift) => gift.id === selectedId) ?? LIVE_GIFTS[0];
   // Exact, never `Number(price) * quantity` — three Roses at 0.01 is 0.03, and
   // the float answer is 0.030000000000000002, which the engine rejects for
@@ -93,6 +118,56 @@ export function GiftSheet({
             <IconX className="h-[9px] w-[9px] text-white" />
           </button>
         </div>
+
+        {/*
+          WHO IT IS FOR — a horizontal row of everyone in the room, above the
+          tray, because you choose the person before the object.
+
+          Only drawn when there is a choice to make. On a broadcast the gift
+          goes to the host and there is nobody else, so no row appears rather
+          than a row with one selected name in it; a control with a single
+          option is a label wearing a control's clothes.
+
+          The host is first and is the default. A sender who never looks at
+          this row still gifts the person today's route would have paid, which
+          is what makes this safe to ship before the route can name anybody.
+        */}
+        {people.length > 1 && (
+          <div className="mt-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-grey-600">
+              Send to
+            </p>
+            <div
+              role="radiogroup"
+              aria-label="Who to send this gift to"
+              className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {people.map((person) => {
+                const chosen = person.id === recipient?.id;
+                return (
+                  <button
+                    key={person.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={chosen}
+                    onClick={() => setToId(person.id)}
+                    className={cn(
+                      "ws-press flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
+                      chosen ? "bg-white text-black" : "bg-white/10 text-white hover:bg-white/15"
+                    )}
+                  >
+                    {person.name}
+                    {person.isHost && (
+                      <span className={cn("text-[10px]", chosen ? "text-black/55" : "text-white/55")}>
+                        host
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Scrolls, so the quantity row and Send stay put — see the note in
             the post tip sheet. */}
@@ -128,11 +203,15 @@ export function GiftSheet({
           size="lg"
           className="mt-3 w-full"
           onClick={() => {
-            onSend(selected, quantity);
+            onSend(selected, quantity, recipient);
             onClose();
           }}
         >
-          {priced ? `Send ${selected.name} · ${formatKash(total)}` : `Send ${selected.name}`}
+          {priced
+            ? `Send ${selected.name} · ${formatKash(total)}`
+            : recipient
+              ? `Send ${selected.name} to ${recipient.name}`
+              : `Send ${selected.name}`}
         </Button>
         <p className="mt-2 text-center text-[11px] text-grey-600">
           {priced

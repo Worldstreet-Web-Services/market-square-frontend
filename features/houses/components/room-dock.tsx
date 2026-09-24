@@ -52,6 +52,7 @@ export function RoomDock({
   mic,
   ask,
   onReact,
+  onGift,
   onPeople,
   className,
 }: {
@@ -70,6 +71,17 @@ export function RoomDock({
     onLower: () => void;
   } | null;
   onReact: (emoji: string) => void;
+  /**
+   * OPEN THE GIFT TRAY. Absent on a surface that draws no gifts, so the dock
+   * simply has one fewer button rather than a button that opens nothing.
+   *
+   * It sits beside the reactions rather than inside them because the two are
+   * different acts: a reaction is a feeling and costs nothing to send, a gift
+   * is an OBJECT chosen from a tray and is the thing a host thanks you for.
+   * Folding gifts into the emoji picker would have made the larger act the
+   * harder one to find.
+   */
+  onGift?: () => void;
   /**
    * THE HOST'S PEOPLE BUTTON — node 1285:29830 puts it third in the dock,
    * between the microphone and the reactions, and it is where a host appoints
@@ -162,6 +174,18 @@ export function RoomDock({
           </button>
         )}
 
+        {onGift && (
+          <button
+            type="button"
+            onClick={onGift}
+            aria-label="Send a gift"
+            title="Send a gift"
+            className="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white transition-opacity"
+          >
+            <IconDockGift />
+          </button>
+        )}
+
         <ReactionControl
           onReact={onReact}
           triggerClassName="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white"
@@ -210,5 +234,21 @@ export function RecordGistButton() {
       <IconRecord className="h-4 w-4" />
       Record Gist
     </button>
+  );
+}
+
+/**
+ * The dock's gift mark — a wrapped box at 20 inside the dock's own 40 target,
+ * matching the weight of `IconDockPeople` beside it rather than a heavier
+ * glyph that would pull the eye out of the row.
+ */
+function IconDockGift() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5" fill="none">
+      <path d="M3 9.5h14v7.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M2.5 6.5h15v3h-15z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M10 6.5v11.5" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M10 6.5S8.8 2.5 6.75 2.5a1.9 1.9 0 0 0 0 4H10Zm0 0s1.2-4 3.25-4a1.9 1.9 0 0 1 0 4H10Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
   );
 }
