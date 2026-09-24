@@ -56,7 +56,7 @@ import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { RoomReactions, useRoomReactions } from "@/features/houses/components/room-reactions";
 import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bursts";
 import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gift-sheet";
-import { useKashAccount } from "@/features/kash";
+import { KashBuySheet, useKashAccount } from "@/features/kash";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
@@ -1113,6 +1113,9 @@ function LiveHouse({
     service decide" rather than as a shortfall.
   */
   const giftBalance = useKashAccount(giftsOpen).data?.balance ?? null;
+  /* Short of KASH mid-gift opens the top-up rather than stopping the sender —
+     the TikTok shape, and the tray hands over rather than stacking dialogs. */
+  const [topUpOpen, setTopUpOpen] = useState(false);
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
     onGift: giftBursts.receive,
@@ -2492,7 +2495,9 @@ function LiveHouse({
         recipients={giftRecipients}
         initialRecipientId={giftTo}
         balanceKash={giftBalance}
+        onTopUp={() => setTopUpOpen(true)}
       />
+      <KashBuySheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
 
       {isHost && (
         <HandTray

@@ -6,6 +6,7 @@ import { GiftGrid } from "@/components/ui/gift-grid";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
 import { exceedsBalance, multiplyKash } from "@/lib/kash-amount";
 import { formatKash } from "@/lib/format";
+import { asset } from "@/lib/square-path";
 import { Button } from "@/components/ui/button";
 import { IconX } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/sheet";
@@ -57,6 +58,7 @@ export function GiftSheet({
   recipients,
   initialRecipientId,
   balanceKash,
+  onTopUp,
 }: {
   open: boolean;
   onClose: () => void;
@@ -96,6 +98,14 @@ export function GiftSheet({
    */
   balanceKash?: string | null;
   /**
+   * OPEN THE KASH TOP-UP, when the reader cannot afford what they chose.
+   *
+   * This is the TikTok shape and ogazboiz named it: you do not stop somebody
+   * who is trying to spend money, you sell them the means. Blocking a tile
+   * tells a willing sender "no"; offering the recharge tells them "here".
+   */
+  onTopUp?: () => void;
+  /**
    * Whether sending this actually costs KASH.
    *
    * False today, and the copy follows it exactly. There is no
@@ -122,24 +132,23 @@ export function GiftSheet({
   const total = multiplyKash(selected.priceKash, quantity) ?? selected.priceKash;
 
   /*
-    TWO DIFFERENT QUESTIONS, ASKED IN TWO PLACES.
+    SHORT OF KASH IS NOT A REFUSAL, IT IS A DETOUR.
 
-    A TILE is blocked when its UNIT price is beyond the balance — that gift
-    cannot be sent at any quantity, so it is inert with the reason on it.
+    An earlier pass made unaffordable TILES inert. That was wrong, and
+    ogazboiz named the right shape: "if they don't have, they can still buy —
+    just like TikTok gifting". Blocking a tile tells somebody who is actively
+    trying to spend money "no"; offering the top-up tells them "here". The
+    tiles therefore stay live and priced, and the ACTION changes instead.
 
-    THE BUTTON is refused when the TOTAL is beyond the balance, which is a
-    quantity problem rather than a gift problem: a Rose is affordable and ten
-    Roses may not be. Blocking the tile for that would tell the reader the
-    wrong thing, because lowering the quantity fixes it.
+    Measured on the TOTAL rather than the unit price, because that is the
+    number actually being spent — a Rose you can afford once and not ten times
+    is short by a quantity, and the same detour fixes both.
 
-    Only when the tray is PRICED. On a free tray nothing is spent, so a
-    balance cannot block anything.
+    Only when the tray is PRICED. On a free tray nothing is spent, so a balance
+    cannot be short of anything.
   */
-  const unaffordable =
-    priced && typeof balanceKash === "string"
-      ? new Set(LIVE_GIFTS.filter((g) => exceedsBalance(g.priceKash, balanceKash)).map((g) => g.id))
-      : undefined;
   const overBalance = priced && exceedsBalance(total, balanceKash);
+  const needsTopUp = overBalance && Boolean(onTopUp);
 
   return (
     <Sheet open={open} onClose={onClose} bare>
@@ -227,10 +236,44 @@ export function GiftSheet({
             selectedId={selectedId}
             onSelect={(gift) => setSelectedId(gift.id)}
             showPrices={priced}
-            unavailable={unaffordable}
-            unavailableReason="more KASH than you have"
           />
         </div>
+
+        {/*
+          YOUR BALANCE, WHERE TIKTOK PUTS IT.
+
+          The coin balance sits beside the tray there for a reason: you decide
+          what to send against what you have, and finding out AFTER choosing is
+          the moment that feels like a refusal. Drawn only when the tray is
+          priced and the number is actually known — an unknown balance stays
+          silent rather than printing a zero, the same rule the balance chip
+          and the earnings panel follow.
+
+          "Get more" is the same door the Send button becomes when you are
+          short; it is here too so somebody can top up BEFORE they are told
+          they cannot afford something.
+        */}
+        {priced && typeof balanceKash === "string" && (
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 text-[13px] text-grey-400">
+              {/* eslint-disable-next-line @next/next/no-img-element -- the file's coin */}
+              <img src={asset("/gifts/coin.svg")} alt="" aria-hidden className="size-4 shrink-0" />
+              <span className="tnum text-white">{formatKash(balanceKash)}</span>
+            </span>
+            {onTopUp && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onTopUp();
+                }}
+                className="ws-press text-[13px] font-semibold text-spotlight transition-opacity hover:opacity-80"
+              >
+                Get more
+              </button>
+            )}
+          </div>
+        )}
 
         {/* The commit step the file does not draw — see the note at the top. */}
         <div className="mt-6 flex items-center justify-between gap-3">
@@ -263,16 +306,26 @@ export function GiftSheet({
         <Button
           size="lg"
           className="mt-3 w-full"
-          disabled={(Boolean(recipients) && people.length === 0) || overBalance}
+          disabled={(Boolean(recipients) && people.length === 0) || (overBalance && !onTopUp)}
           onClick={() => {
+            // Short of KASH sends you to the top-up instead of sending the
+            // gift — the tray closes because the buy sheet is a dialog of its
+            // own and two stacked dialogs is where focus goes to die.
+            if (needsTopUp) {
+              onClose();
+              onTopUp?.();
+              return;
+            }
             onSend(selected, quantity, recipient);
             onClose();
           }}
         >
           {recipients && people.length === 0
             ? "Nobody else is here yet"
-            : overBalance
-              ? "Not enough KASH"
+            : needsTopUp
+              ? `Get KASH · ${formatKash(total)} needed`
+              : overBalance
+                ? "Not enough KASH"
             : priced
               ? `Send ${selected.name} · ${formatKash(total)}`
               : recipient

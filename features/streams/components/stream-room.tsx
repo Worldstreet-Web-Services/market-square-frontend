@@ -60,7 +60,7 @@ import { HlsPlayer, type QualityApi } from "@/features/streams/components/hls-pl
 import { LiveKitPlayer } from "@/features/streams/components/livekit-player";
 import { ChatPanel } from "@/features/streams/components/chat-panel";
 import { GiftSheet } from "@/features/streams/components/gift-sheet";
-import { useKashAccount } from "@/features/kash";
+import { KashBuySheet, useKashAccount } from "@/features/kash";
 import { LIVE_GIFTS, giftsArePriced, type LiveGift } from "@/lib/gifts";
 import { useSendTip } from "@/features/tips";
 import { multiplyKash } from "@/lib/kash-amount";
@@ -507,6 +507,8 @@ export function StreamRoom({
   const [giftBursts, setGiftBursts] = useState<GiftBurst[]>([]);
   // Only while the tray is open; the hook polls at 15s. See house-room.
   const giftAccount = useKashAccount(giftsOpen);
+  // See house-room: short of KASH offers the top-up instead of a refusal.
+  const [topUpOpen, setTopUpOpen] = useState(false);
   const reactionTimers = useRef<number[]>([]);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [muted, setMuted] = useState(false);
@@ -1418,6 +1420,7 @@ export function StreamRoom({
         governs everything it is meant to govern without also deciding whether
         the dialog exists.
       */}
+      <KashBuySheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
       {giftsAvailable && (
         <GiftSheet
           open={giftsOpen}
@@ -1428,6 +1431,7 @@ export function StreamRoom({
              broadcast's tray IS priced once the flag is on, so this is the
              surface where affordability bites first. */
           balanceKash={giftBalance}
+          onTopUp={() => setTopUpOpen(true)}
         />
       )}
     </div>

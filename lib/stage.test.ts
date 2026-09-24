@@ -985,9 +985,14 @@ describe("Gifting anybody in a gist room", () => {
       s_includes(sheet, "Boolean(recipients) && people.length === 0"),
       "the empty-room guard is gone"
     );
-    // ...and it now sits beside the affordability refusal rather than being
-    // replaced by it: an empty room and an empty wallet are different answers.
-    assert.ok(s_includes(sheet, "|| overBalance"), "the two refusals were collapsed into one");
+    // An empty room and an empty wallet are DIFFERENT answers, and only one
+    // of them is a refusal. Nobody to gift is terminal; short of KASH hands
+    // over to the top-up, so it only disables when there is no top-up to
+    // offer — see the TikTok note in gift-sheet.
+    assert.ok(
+      s_includes(sheet, "(overBalance && !onTopUp)"),
+      "being short of KASH refuses outright instead of offering the top-up"
+    );
     assert.match(sheet, /"Nobody else is here yet"/);
     // A BROADCAST passes no `recipients` at all and must still send, to the
     // host, exactly as it always did — the guard is on the room shape only.
