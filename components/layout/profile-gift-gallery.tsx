@@ -35,6 +35,28 @@ import { asset } from "@/lib/square-path";
  * balance chip and the house member line. The file draws a "0" on two tiles;
  * that is a mock with mock data behind it, and it is the one place this
  * deliberately does not follow it.
+ *
+ * ─── THE NUMBER IS ABOUT TO MEAN SOMETHING ELSE ─────────────────────────────
+ * WHOEVER WIRES BUYING MUST CHANGE THIS COUNT, and it is easy to miss because
+ * the tile will look correct either way.
+ *
+ * TODAY it is RECEIVED: how many of this gift other people have sent you.
+ * THE DESIGN means OWNED: how many you have bought and can still send. They
+ * are different numbers in the same place, so after buying three Books this
+ * tile would go on showing however many Books somebody else had gifted YOU,
+ * and the purchase would appear to have done nothing (ogazboiz, 2026-09-24,
+ * asking whether a purchase shows up here — it would not).
+ *
+ * AND THE ZERO RULE INVERTS WITH IT. "Nobody has sent you one" is genuinely
+ * unknown-ish and is right to stay blank. "You own none" is a FACT, it is what
+ * makes the `+` legible as the way to fix it, and node 1285:79134 draws it
+ * explicitly on two tiles. So under an inventory model the zero is printed
+ * rather than hidden — the opposite of the rule above, for the opposite
+ * meaning.
+ *
+ * Neither change belongs here yet: there is no catalogue, no inventory and no
+ * purchase route (see `NO_GIFT_PURCHASE`), and inventory is a decision about
+ * whether the platform ISSUES value or ROUTES it, not a set of endpoints.
  */
 
 /** 485:40571 — a 16px white disc holding a 12px `+` in `--color-spotlight`. */
