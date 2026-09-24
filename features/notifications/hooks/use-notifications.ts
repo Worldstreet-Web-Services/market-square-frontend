@@ -46,14 +46,25 @@ export function useNotifications(group?: string, poll = false) {
     getNextPageParam: (last) => last.nextCursor,
     enabled: authenticated,
     refetchInterval: poll ? 30_000 : false,
-    /**
-     * ONLY THE HEAD IS REFETCHED. An infinite query refetches every loaded
-     * page on each tick and on every window focus, so a reader ten pages into
-     * their notifications was re-downloading three hundred rows — each with a
-     * full embedded profile — twice a minute. `maxPages` bounds the window
-     * that a refetch has to replay.
-     */
-    maxPages: 3,
+    /*
+      NO `maxPages` HERE, AND IT IS WORTH SAYING WHY, because it looks like
+      the obvious fix and it is a correctness bug.
+
+      An infinite query refetches EVERY loaded page on each tick and on every
+      window focus, so a reader deep in a list re-downloads all of it. TanStack
+      offers `maxPages` to bound that. But `maxPages` bounds the CACHE, not
+      just the refetch: reaching the limit and fetching the next page DROPS the
+      page at the other end. This list renders `pages.flatMap(...)`
+      (notifications-page.tsx) with no `getPreviousPageParam`, so a bound would
+      make rows the reader had already scrolled past vanish behind them, with
+      no way to fetch them back. It would also move `pages[0].unreadCount` onto
+      a page that is no longer the head.
+
+      The correct shape is the one `use-chat.ts` already uses: a small
+      NON-infinite head query carries the interval, and the infinite history
+      sits at `staleTime: Infinity` beside it. That is a refactor per surface,
+      not a flag, so it is named here rather than half-done.
+    */
   });
 }
 

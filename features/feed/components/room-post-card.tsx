@@ -44,9 +44,25 @@ import { asset } from "@/lib/square-path";
  */
 export function RoomPostCard({ streamId }: { streamId: string }) {
   const topics = useTopics();
-  // Poll only while it is live: a scheduled room hours away does not change,
-  // and an ended one never will.
-  const stream = useStream(streamId, ["while-live", 20_000]);
+  /*
+    Poll only while it is live: a scheduled room hours away does not change,
+    and an ended one never will.
+
+    60s, NOT 20 — and the number is the whole cost of this component. The feed
+    is an infinite list that never unmounts what it has rendered, so every live
+    room post the reader has scrolled past keeps its own interval running for
+    the rest of the session. At 20s that is 3 req/min EACH: ten live rooms in a
+    scrolled feed is 30 req/min on top of the route's own floor, and it grows
+    with scroll depth rather than settling.
+
+    60s is what `GistRoomCard` has always used for the same question on the
+    same route (`LIVE_POLL`), so this is the two surfaces agreeing rather than
+    a new number. What the poll is FOR is catching live -> ended, and being up
+    to a minute late to grey out a card in the middle of a timeline is not a
+    cost anybody can perceive — the card is a link, and the room page has a
+    real closed state for anyone who taps it.
+  */
+  const stream = useStream(streamId, ["while-live", 60_000]);
   const remind = useRemindMe(streamId);
 
   const data = stream.data;

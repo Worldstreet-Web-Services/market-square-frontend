@@ -9,6 +9,7 @@ import {
   laneTopic,
   parseFrame,
   personalTopicOwner,
+  STABLE_MS,
   speakerSignalOf,
   userTopic,
   type SocketLike,
@@ -325,4 +326,118 @@ test("a token that arrives after the socket was replaced is not sent on it", asy
   release("late");
   await flush();
   assert.equal(authFrames(sock).length, 0);
+});
+
+/*
+  ─── A FLAPPING GATEWAY MUST NOT GET A ONE-SECOND HOT LOOP ───────────────────
+
+  `attempt = 0` used to live in `onopen`, and the distinction it missed is the
+  whole defect: an upgrade that SUCCEEDS is not a connection that WORKS. A
+  gateway under load, restarting, or shedding load accepts the socket and drops
+  it milliseconds later — and every one of those cycles restarted the ladder,
+  so the delay stayed `backoffDelay(0)`, about a second, for ever, per tab.
+
+  That is the client making an incident worse precisely while the server is
+  least able to take it. The backoff existed to prevent it and could never fire.
+
+  These tests drive the fake clock, so they pin the ESCALATION rather than the
+  wall time: a socket that never survives `STABLE_MS` must climb the ladder, and
+  one that does must earn a fresh start.
+*/
+test("a socket that opens and immediately drops still escalates the backoff", () => {
+  const sockets: Fake[] = [];
+  let clock = 1_000_000;
+  const gateway = createGateway(
+    "wss://gw.example/",
+    () => {
+      const sock = fakeSocket();
+      sockets.push(sock);
+      return sock;
+    },
+    { now: () => clock }
+  );
+  const delays: number[] = [];
+  const realTimeout = globalThis.setTimeout;
+  // @ts-expect-error — capture the scheduled delay instead of waiting it out.
+  globalThis.setTimeout = (fn: () => void, ms?: number) => {
+    delays.push(ms ?? 0);
+    return 0 as unknown as ReturnType<typeof realTimeout>;
+  };
+  try {
+    gateway.subscribe("market-square:feed:for-you", () => {});
+    // Five accept-then-drop cycles, each lasting 50ms — far under STABLE_MS.
+    for (let i = 0; i < 5; i += 1) {
+      const sock = sockets[sockets.length - 1]!;
+      sock.state = 1;
+      fire(sock, "onopen");
+      clock += 50;
+      fire(sock, "onclose");
+      // The reconnect timer is stubbed, so drive the next attempt by hand.
+      gateway.subscribe("market-square:feed:for-you", () => {});
+    }
+  } finally {
+    globalThis.setTimeout = realTimeout;
+  }
+
+  assert.ok(delays.length >= 3, `expected several reconnect delays, saw ${delays.length}`);
+  // The ladder is 1s, 2s, 4s… with ±25% jitter, so each step must clear the
+  // one before it rather than sitting flat at ~1s for ever.
+  assert.ok(
+    delays[1]! > delays[0]!,
+    `backoff did not escalate: ${delays.join(", ")} — a flapping gateway gets a hot loop`
+  );
+  assert.ok(
+    delays[2]! > delays[1]!,
+    `backoff stopped escalating: ${delays.join(", ")}`
+  );
+  assert.ok(delays.every((d) => d <= BACKOFF_CAP_MS), "a delay exceeded the cap");
+});
+
+test("a connection that lasted earns a fresh ladder", () => {
+  const sockets: Fake[] = [];
+  let clock = 1_000_000;
+  const gateway = createGateway(
+    "wss://gw.example/",
+    () => {
+      const sock = fakeSocket();
+      sockets.push(sock);
+      return sock;
+    },
+    { now: () => clock }
+  );
+  const delays: number[] = [];
+  const realTimeout = globalThis.setTimeout;
+  // @ts-expect-error — see above.
+  globalThis.setTimeout = (fn: () => void, ms?: number) => {
+    delays.push(ms ?? 0);
+    return 0 as unknown as ReturnType<typeof realTimeout>;
+  };
+  try {
+    gateway.subscribe("market-square:feed:for-you", () => {});
+    // Two failures to climb the ladder off zero...
+    for (let i = 0; i < 2; i += 1) {
+      const sock = sockets[sockets.length - 1]!;
+      sock.state = 1;
+      fire(sock, "onopen");
+      clock += 50;
+      fire(sock, "onclose");
+      gateway.subscribe("market-square:feed:for-you", () => {});
+    }
+    const climbed = delays[delays.length - 1]!;
+    // ...then one that stays up well past STABLE_MS and drops.
+    const good = sockets[sockets.length - 1]!;
+    good.state = 1;
+    fire(good, "onopen");
+    clock += STABLE_MS + 5_000;
+    fire(good, "onclose");
+    const afterGood = delays[delays.length - 1]!;
+    assert.ok(
+      afterGood < climbed,
+      `a healthy connection did not reset the backoff: climbed to ${climbed}, then ${afterGood}`
+    );
+    // Back at the bottom of the ladder: 1s ±25%.
+    assert.ok(afterGood <= 1_250, `expected ~1s after a good connection, got ${afterGood}`);
+  } finally {
+    globalThis.setTimeout = realTimeout;
+  }
 });
