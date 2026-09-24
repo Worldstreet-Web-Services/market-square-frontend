@@ -348,18 +348,45 @@ export function KashBuySheet({ open, onClose }: { open: boolean; onClose: () => 
                             : `Buy KASH for $${amount}`}
               </Button>
 
-              {/* Wallet prompts are off (`showWalletUIs: false` in
-                  app/providers.tsx), so THIS BUTTON IS THE CONFIRMATION —
-                  there is no second screen to change your mind on. The copy
-                  has to say that plainly rather than promise a prompt that
-                  will never appear, and it has to state what leaves and what
-                  arrives before the press rather than after it. Selling back
-                  is halted at the treasury today, so "sell it back later"
-                  would be a promise nothing here can keep. */}
+              {/*
+                Wallet prompts are off (`showWalletUIs: false` in
+                app/providers.tsx), so THIS BUTTON IS THE CONFIRMATION — there
+                is no second screen to change your mind on. The copy says that
+                plainly rather than promising a prompt that will never appear,
+                and states what leaves and what arrives BEFORE the press.
+
+                ─── A CORRECTION TO WHAT THIS NOTE USED TO SAY ────────────────
+                It read "selling back is halted at the treasury today". THAT IS
+                NOT TRUE and it was the stated reason, so it is the sentence a
+                future reader would have acted on. Measured against production
+                (`GET square.tsionark.com/api/kash/desk`, twice, on 2026-09-24):
+
+                  paused: { "sale": false, "redeem": FALSE }
+
+                Redemption is live and unpaused on the contract, and there is a
+                `redeem` address beside the sale one. What is actually small is
+                the float — `reserveUsdc` was $212.47, about 30 KASH of
+                redemption at $7 — and a thin reserve is a treasury fact that
+                can change any day, not a halt.
+
+                WHAT IS TRUE FROM HERE, and all the copy may claim: MARKET
+                SQUARE HAS NO REDEEM ROUTE. There is no sell, withdraw, payout
+                or cash-out anywhere in this service, so Square cannot do it
+                for you whatever the contract allows. That is a statement about
+                this app, which we own, rather than about a treasury posture we
+                do not — and it does not go stale the day the reserve is
+                topped up.
+
+                So the copy names Square instead of implying the protocol has
+                closed the door. It still does not promise redemption anywhere
+                else: where somebody can take KASH is not this sheet's claim to
+                make.
+              */}
               <p className="mt-3 text-center text-[12px] leading-[1.5] text-white/40">
                 Buying charges your wallet straight away — there&apos;s no second
                 confirmation. USDC on Base leaves your wallet and KASH arrives in it.
-                Purchases can&apos;t be reversed.
+                Purchases can&apos;t be reversed, and Square can&apos;t sell KASH back
+                for you.
               </p>
             </>
           )}
