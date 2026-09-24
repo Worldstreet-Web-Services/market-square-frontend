@@ -171,11 +171,59 @@ describe("the tray follows whichever economy the service is running", () => {
     assert.match(grid, /\(owned\.get\(gift\.id\) \?\? 0\)\.toLocaleString\(\)/u);
   });
 
-  it("offers the shop instead of refusing, and buys only the SHORTFALL", () => {
-    // Holding two Roses and asking for three needs ONE more; charging for
-    // three would take money for stock already owned.
-    assert.match(tray, /onBuyGift\?\.\(selected, quantity - \(held \?\? 0\)\)/u);
-    assert.match(tray, /Get \$\{selected\.name\} · \$\{\(quantity - \(held \?\? 0\)\)/u);
+  it("BUYS INSIDE THE SEND, so one tap is one tap", () => {
+    /*
+      ogazboiz: "we need it like tiktok way". TikTok has no gift inventory —
+      you buy coins, tap a rose, and it flies. An earlier pass made the tray
+      say "Get Rose" when you held none, which is exactly the shopping step
+      TikTok removed and where senders are lost.
+
+      So the room buys the shortfall and sends, as one action. Both calls are
+      instant and neither needs a signature, so to the person nothing happened
+      except a gift flying.
+    */
+    assert.match(room, /const shortfall = held === null \? 0 : quantity - held;/u);
+    assert.match(room, /shortfall > 0\s*\?\s*buyGiftStock\.mutateAsync\(\{/u);
+    // Only what is MISSING: holding two Roses and sending three buys ONE.
+    // Charging for three takes money for stock already owned.
+    assert.match(room, /quantity: shortfall,/u);
+    // And the send follows the buy, rather than racing it.
+    assert.ok(
+      room.indexOf("buyGiftStock.mutateAsync") < room.indexOf("payGift.mutateAsync"),
+      "the send no longer waits for the stock it needs"
+    );
+  });
+
+  it("mints a FRESH idempotency key per tap, not a stable one per gift", () => {
+    /*
+      THE ONE SHAPE THAT BREAKS THIS ROUTE. The service returns the FIRST
+      purchase's result for a repeated key and buys NOTHING — by design, it is
+      what makes a retry safe. So a stable key per gift means the second Rose
+      to the same person reports success, adds no stock, and fails at the send.
+      Silently, and only for the most ordinary thing anybody does in a room:
+      send the same gift to the same person twice.
+
+      A key protects ONE INTENT. Two taps are two intents.
+    */
+    assert.match(room, /idempotencyKey: newIntentId\(`gift:\$\{gift\.id\}`\)/u);
+    assert.doesNotMatch(
+      room,
+      /idempotencyKey: `gift:\$\{gift\.id\}:/u,
+      "the buy key is stable across taps again — the second gift will buy nothing"
+    );
+  });
+
+  it("does not let the TRAY shop — owning is shown, never gated on", () => {
+    // The counts inform; coins gate. That is the real limit and it already has
+    // its own detour to the top-up.
+    assert.doesNotMatch(tray, /onBuyGift/u, "the tray is asking people to shop again");
+    assert.doesNotMatch(tray, /You have no \$\{selected\.name\}/u, "a tile is refusing instead of sending");
+  });
+
+  it("keeps the stale-inventory dependency, because a stale one charges twice", () => {
+    // Read inside the send so it is the CURRENT stock. At mount it would buy
+    // a rose the sender already holds, or fail to buy when they are short.
+    assert.match(room, /giftStock\.data, buyGiftStock\]/u, "the send can now read a stale inventory");
   });
 
   it("treats an unknown inventory as unknown, never as zero", () => {
@@ -185,8 +233,11 @@ describe("the tray follows whichever economy the service is running", () => {
       an inventory read was slow, which is the interface inventing a refusal
       the service never made.
     */
-    assert.match(tray, /const held = owned\?\.get\(selected\.id\) \?\? null;/u);
-    assert.match(tray, /const shortOfStock = fromStock && held !== null && held < quantity;/u);
+    // It moved from the tray to the SEND, where the money is: an undefined
+    // `giftStock.data` (still loading, or a failed read) buys NOTHING rather
+    // than buying a rose the sender may already hold.
+    assert.match(room, /const held = fromStock && giftStock\.data \? \(ownedByGift\(giftStock\.data\)\.get\(gift\.id\) \?\? 0\) : null;/u);
+    assert.match(room, /const shortfall = held === null \? 0 : quantity - held;/u);
   });
 
   it("turns the service's own refusal into the shop", () => {
