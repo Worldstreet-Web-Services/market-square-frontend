@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { exceedsBalance, multiplyKash } from "./kash-amount.ts";
 import {
   canSendTip,
   tipAmountOutOfBounds,
@@ -150,4 +151,59 @@ test("tipping switched off beats both flags", () => {
   const off = { ...ROOMS_OPEN, enabled: false };
   assert.equal(tipBlockedBecause(off, VERIFIED, "room"), "disabled");
   assert.equal(tipBlockedBecause(off, VERIFIED, "post"), "disabled");
+});
+
+/*
+  ─── AN HONEST TRAY: WHAT YOU CAN AFFORD, NOT JUST WHAT EXISTS ───────────────
+
+  ogazboiz chose pay-at-send over buy-first inventory, so the fix for "it looks
+  fake" is that every tile tells the truth — its real price, and whether this
+  person can send it right now. A grid of fourteen objects, eight of which get
+  refused at the last step, is the same complaint arriving from the other side.
+
+  The comparison is decimal-string arithmetic, never floats: this is money, and
+  `0.1 + 0.2` is the reason.
+*/
+test("a balance that is not known blocks nothing", () => {
+  /*
+    THE MOST IMPORTANT ONE. A balance still loading, or an account read that
+    failed, must not grey out the tray — the interface would be inventing a
+    shortfall it cannot see, and the service is the only thing that can
+    actually refuse a spend. This is the same rule the balance chip and the
+    earnings panel already follow for showing a number at all.
+  */
+  assert.equal(exceedsBalance("5", null), false);
+  assert.equal(exceedsBalance("5", undefined), false);
+  assert.equal(exceedsBalance(null, "1"), false);
+});
+
+test("a tile is blocked by its UNIT price, the button by the TOTAL", () => {
+  /*
+    Two different questions. A gift whose unit price is beyond the balance can
+    never be sent at any quantity, so the tile is inert. A gift that is
+    affordable once and not ten times is a QUANTITY problem — blocking the tile
+    would tell the reader to pick a different gift when lowering the count is
+    what fixes it.
+  */
+  const balance = "1.5";
+  // Unit prices: a Rose at 0.01 is sendable, a Bank at 5 is not.
+  assert.equal(exceedsBalance("0.01", balance), false);
+  assert.equal(exceedsBalance("5", balance), true);
+  // Totals: one Lion at 1 is fine, two are not — same tile, different answer.
+  assert.equal(exceedsBalance(multiplyKash("1", 1) ?? "", balance), false);
+  assert.equal(exceedsBalance(multiplyKash("1", 2) ?? "", balance), true);
+});
+
+test("exactly the balance is affordable", () => {
+  // `> balance`, not `>=`. Spending everything you have is allowed; an
+  // off-by-one here would refuse the one gift somebody saved up for.
+  assert.equal(exceedsBalance("1.5", "1.5"), false);
+  assert.equal(exceedsBalance("1.500001", "1.5"), true);
+});
+
+test("the total is multiplied exactly, so the tray blocks on the real figure", () => {
+  // Three Roses is 0.03, not 0.030000000000000002 — and the second is both
+  // the wrong number and one the engine rejects outright.
+  assert.equal(multiplyKash("0.01", 3), "0.03");
+  assert.equal(exceedsBalance(multiplyKash("0.01", 3) ?? "", "0.03"), false);
 });

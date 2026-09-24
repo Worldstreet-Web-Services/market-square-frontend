@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { GiftGrid } from "@/components/ui/gift-grid";
 import { LIVE_GIFTS, type LiveGift } from "@/lib/gifts";
-import { multiplyKash } from "@/lib/kash-amount";
+import { exceedsBalance, multiplyKash } from "@/lib/kash-amount";
 import { formatKash } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { IconX } from "@/components/ui/icons";
@@ -56,6 +56,7 @@ export function GiftSheet({
   priced = false,
   recipients,
   initialRecipientId,
+  balanceKash,
 }: {
   open: boolean;
   onClose: () => void;
@@ -78,6 +79,22 @@ export function GiftSheet({
    * back to the host, which is the first row.
    */
   initialRecipientId?: string | null;
+  /**
+   * WHAT THIS READER CAN ACTUALLY SPEND, when the tray is priced.
+   *
+   * An honest tray is the whole point of keeping pay-at-send instead of
+   * inventory: every tile tells the truth about its price AND about whether
+   * this person can send it right now. A grid of fourteen objects, eight of
+   * which get refused at the last step, is the "it looks fake" complaint
+   * arriving from a different direction.
+   *
+   * NULL IS "NOT KNOWN", NOT "NOTHING". A balance still loading, or an account
+   * read that failed, must not grey the tray out — that would be the interface
+   * inventing a shortfall it cannot see, and the service is the only thing
+   * that can actually refuse a spend. Unknown leaves everything sendable and
+   * lets the service answer.
+   */
+  balanceKash?: string | null;
   /**
    * Whether sending this actually costs KASH.
    *
@@ -103,6 +120,26 @@ export function GiftSheet({
   // charged. Null falls back to the single price rather than printing a total
   // this sheet cannot stand behind.
   const total = multiplyKash(selected.priceKash, quantity) ?? selected.priceKash;
+
+  /*
+    TWO DIFFERENT QUESTIONS, ASKED IN TWO PLACES.
+
+    A TILE is blocked when its UNIT price is beyond the balance — that gift
+    cannot be sent at any quantity, so it is inert with the reason on it.
+
+    THE BUTTON is refused when the TOTAL is beyond the balance, which is a
+    quantity problem rather than a gift problem: a Rose is affordable and ten
+    Roses may not be. Blocking the tile for that would tell the reader the
+    wrong thing, because lowering the quantity fixes it.
+
+    Only when the tray is PRICED. On a free tray nothing is spent, so a
+    balance cannot block anything.
+  */
+  const unaffordable =
+    priced && typeof balanceKash === "string"
+      ? new Set(LIVE_GIFTS.filter((g) => exceedsBalance(g.priceKash, balanceKash)).map((g) => g.id))
+      : undefined;
+  const overBalance = priced && exceedsBalance(total, balanceKash);
 
   return (
     <Sheet open={open} onClose={onClose} bare>
@@ -190,6 +227,8 @@ export function GiftSheet({
             selectedId={selectedId}
             onSelect={(gift) => setSelectedId(gift.id)}
             showPrices={priced}
+            unavailable={unaffordable}
+            unavailableReason="more KASH than you have"
           />
         </div>
 
@@ -224,7 +263,7 @@ export function GiftSheet({
         <Button
           size="lg"
           className="mt-3 w-full"
-          disabled={Boolean(recipients) && people.length === 0}
+          disabled={(Boolean(recipients) && people.length === 0) || overBalance}
           onClick={() => {
             onSend(selected, quantity, recipient);
             onClose();
@@ -232,6 +271,8 @@ export function GiftSheet({
         >
           {recipients && people.length === 0
             ? "Nobody else is here yet"
+            : overBalance
+              ? "Not enough KASH"
             : priced
               ? `Send ${selected.name} · ${formatKash(total)}`
               : recipient

@@ -56,6 +56,7 @@ import { RoomPhoneBar } from "@/features/houses/components/room-phone-bar";
 import { RoomReactions, useRoomReactions } from "@/features/houses/components/room-reactions";
 import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bursts";
 import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gift-sheet";
+import { useKashAccount } from "@/features/kash";
 import type { LiveGift } from "@/lib/gifts";
 import { SpeakerRequestPanel } from "@/features/houses/components/speaker-request-panel";
 import { OpenHouseSheet } from "@/features/houses/components/open-house-sheet";
@@ -1103,6 +1104,15 @@ function LiveHouse({
     lead to the same tray rather than to two trays that drift.
   */
   const [giftTo, setGiftTo] = useState<string | null>(null);
+  /*
+    THE BALANCE, AND ONLY WHILE THE TRAY IS OPEN. It polls at 15s, and a room
+    is the most expensive surface in the app already — running it for the whole
+    session, per participant, to answer a question nobody is asking until they
+    open the tray would undo the request work this room has just had done to
+    it. `null` while closed is "not known", which the tray treats as "let the
+    service decide" rather than as a shortfall.
+  */
+  const giftBalance = useKashAccount(giftsOpen).data?.balance ?? null;
   const live = useLiveReactions(room, {
     onReceive: (burst, emoji, from) => roomReactions.emit(emoji, burst, from || "Someone"),
     onGift: giftBursts.receive,
@@ -2481,6 +2491,7 @@ function LiveHouse({
         onSend={sendGift}
         recipients={giftRecipients}
         initialRecipientId={giftTo}
+        balanceKash={giftBalance}
       />
 
       {isHost && (

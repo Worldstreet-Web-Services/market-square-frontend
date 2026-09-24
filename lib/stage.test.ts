@@ -981,7 +981,13 @@ describe("Gifting anybody in a gist room", () => {
     */
     const sheet = source("features/streams/components/gift-sheet.tsx");
     assert.match(sheet, /\{people\.length > 0 && \(/, "the picker hides itself when there is one person");
-    assert.match(sheet, /disabled=\{Boolean\(recipients\) && people\.length === 0\}/);
+    assert.ok(
+      s_includes(sheet, "Boolean(recipients) && people.length === 0"),
+      "the empty-room guard is gone"
+    );
+    // ...and it now sits beside the affordability refusal rather than being
+    // replaced by it: an empty room and an empty wallet are different answers.
+    assert.ok(s_includes(sheet, "|| overBalance"), "the two refusals were collapsed into one");
     assert.match(sheet, /"Nobody else is here yet"/);
     // A BROADCAST passes no `recipients` at all and must still send, to the
     // host, exactly as it always did — the guard is on the room shape only.
