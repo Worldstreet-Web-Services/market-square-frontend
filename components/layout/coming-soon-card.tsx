@@ -3,14 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
-import { ShareSheet } from "@/components/ui/share-sheet";
 import { TOPIC_ICONS } from "@/components/ui/topic-tags-field";
 import { IconSpark } from "@/components/ui/icons";
 import { useTopics } from "@/features/discovery";
 import { housePath } from "@/features/houses";
 import { clockLabel, shortDateLabel, startsInLabel } from "@/lib/format";
 import type { Stream } from "@/features/streams";
-import { asset } from "@/lib/square-path";
+import { asset, api } from "@/lib/square-path";
+import { roomCardFileName, roomCardQuery } from "@/lib/room-card";
+import { shareCardImage } from "@/lib/share-card-image";
+import { toast } from "sonner";
 
 /**
  * HOME'S "COMING SOON" CARD — node 2077:19030 (SQUARE 2.0 Copy), 342 × 106.
@@ -60,6 +62,39 @@ export const COMING_SOON_CARD_WIDTH = 342;
 export function ComingSoonCard({ stream }: { stream: Stream }) {
   const topics = useTopics();
   const [sharing, setSharing] = useState(false);
+
+  /*
+    The card is generated from what THIS screen already knows — see
+    `lib/room-card.ts` for why the route takes params rather than fetching the
+    room itself. `window.location.origin` because the QR has to be scannable
+    from another device, where a relative path means nothing.
+  */
+  const shareCard = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const roomUrl = `${window.location.origin}${href}`;
+      const query = roomCardQuery({
+        url: roomUrl,
+        title: stream.title,
+        startsAt: startsAt ?? null,
+        hostName: host?.displayName || host?.username || null,
+        hostAvatarUrl: host?.avatarUrl ?? null,
+        coverUrl: stream.thumbnailUrl ?? null,
+      });
+      const outcome = await shareCardImage({
+        imageUrl: api(`/api/room-card?${query}`),
+        fileName: roomCardFileName(stream.title),
+        url: roomUrl,
+        title: stream.title,
+        text: `${stream.title} on Square`,
+      });
+      if (outcome === "downloaded") toast.success("Card saved");
+      if (outcome === "failed") toast.error("Couldn't get the card ready — try again.");
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const href = housePath(stream.id);
   const startsAt = stream.scheduledAt;
@@ -267,9 +302,22 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
           </div>
 
           {/* `Olive Button` — 19 tall, 8.83/4.415 padding, 4 gap, the create ramp. */}
+          {/*
+            SHARE THE CARD, NOT THE LINK.
+
+            This opened a sheet offering a URL, and a URL in a WhatsApp thread
+            is a grey rectangle somebody has to trust before they tap it. The
+            picture IS the invitation — cover, name, start time, host, and a QR
+            for anyone reading it over a shoulder (nodes 2225:20203 / 20207).
+
+            It falls back to the link where a browser will not share a file,
+            and to a download where there is no share sheet at all, so nothing
+            that worked before stopped working.
+          */}
           <button
             type="button"
-            onClick={() => setSharing(true)}
+            disabled={sharing}
+            onClick={() => void shareCard()}
             className="ws-press flex h-[19px] items-center gap-[4px] rounded-full bg-[linear-gradient(180deg,#9f65fd_0%,#5b05e6_100%)] px-[8.83px] text-[8px] font-medium leading-[10.4px] text-white transition-opacity hover:opacity-90"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
@@ -304,17 +352,7 @@ export function ComingSoonCard({ stream }: { stream: Stream }) {
         className="pointer-events-none absolute inset-0 rounded-[16px] shadow-[inset_0_0_0_0.552px_rgba(255,255,255,0.18)]"
       />
 
-      {sharing && (
-        <ShareSheet
-          open
-          onClose={() => setSharing(false)}
-          title="Share gist room"
-          payload={{
-            text: `${stream.title} on Square`,
-            url: `${window.location.origin}${href}`,
-          }}
-        />
-      )}
+
     </div>
   );
 }
