@@ -141,7 +141,14 @@ describe("a deployment with no treasury says so", () => {
     // `coinsPerKash` lives in two repositories; a pack list written by hand is
     // a third place for it to be wrong.
     assert.match(sheet, /capability\.data\?\.coinsPerKash/u);
-    assert.doesNotMatch(sheet, /\b1000\b/u, "a coin rate is hard-coded in the pack list");
+    // Comment-stripped: this file's own prose now explains the 0-KASH bug in
+    // terms of "a rate of 1000", and a bare match found the explanation rather
+    // than any code.
+    assert.doesNotMatch(
+      code("features/gifts/components/coin-buy-sheet.tsx"),
+      /\b1000\b/u,
+      "a coin rate is hard-coded in the pack list"
+    );
   });
 
   it("promises coins are ON THE WAY, never that they arrived", () => {
@@ -203,5 +210,69 @@ describe("sending spends coins, in one call", () => {
     const schemas = read("lib/api/schemas.ts");
     assert.match(schemas, /spendGiftsFromCoins: z\.boolean\(\)\.optional\(\),/u);
     assert.doesNotMatch(schemas, /spendGiftsFromInventory/u, "the retired key is back");
+  });
+});
+
+/**
+ * A PACK'S PRICE IS MONEY AND MUST BE EXACT.
+ *
+ * The sheet rendered its cheapest pack as "0 KASH" — the 10-coin rung at a
+ * rate of 1000, advertised as free (ogazboiz, 2026-09-24: "why is it showing
+ * 0 dollar"). The cause was `(coins / rate).toFixed(rate % coins === 0 ? 0 : 2)`
+ * with the modulo the wrong way round: `1000 % 10 === 0`, so it rounded to
+ * zero places. Every other rung survived by luck, which is why it looked fine
+ * until the tray sent somebody here for one Rose.
+ */
+describe("the coin sheet prices packs exactly", () => {
+  const sheet = read("features/gifts/components/coin-buy-sheet.tsx");
+
+  /** The component's own conversion, lifted so the arithmetic itself is tested. */
+  const kashFor = (coins: number, rate: number): string => {
+    const whole = Math.floor(coins / rate);
+    const rest = coins % rate;
+    if (rest === 0) return String(whole);
+    return `${whole}.${String(rest).padStart(String(rate).length - 1, "0").replace(/0+$/u, "")}`;
+  };
+
+  it("never prints a real price as nothing", () => {
+    // The rung that shipped broken, first.
+    assert.equal(kashFor(10, 1000), "0.01", "the cheapest pack is free again");
+    assert.equal(kashFor(20, 1000), "0.02");
+    assert.equal(kashFor(150, 1000), "0.15");
+    assert.equal(kashFor(1000, 1000), "1");
+    assert.equal(kashFor(50000, 1000), "50");
+    // Any shortfall the tray can hand over, across the whole ladder.
+    for (const coins of [10, 20, 50, 100, 150, 200, 250, 500, 1000, 50000]) {
+      assert.notEqual(kashFor(coins, 1000), "0", `${coins} coins priced at nothing`);
+    }
+  });
+
+  it("does the arithmetic in integers, never through a float", () => {
+    // Both sides are whole numbers, so the whole part and the remainder are
+    // exact by construction. `toFixed` is what rounded a price to nothing.
+    assert.match(sheet, /const whole = Math\.floor\(coins \/ rate\);/u);
+    assert.match(sheet, /const rest = coins % rate;/u);
+    assert.doesNotMatch(code("features/gifts/components/coin-buy-sheet.tsx"), /toFixed/u, "a price is being rounded again");
+  });
+
+  it("says what the KASH balance IS, since KASH is what it spends", () => {
+    /*
+      It promised "Paid from your KASH balance" and never said what that
+      balance was — so somebody holding 0.14 KASH was offered a 50 KASH pack
+      with nothing to tell them it was out of reach until the wallet refused.
+
+      The same `useKashAccount` the earnings card reads, so the two cannot
+      disagree about one number.
+    */
+    assert.match(sheet, /const kash = useKashAccount\(open\);/u);
+    assert.match(sheet, /formatKash\(kashBalance\)/u);
+  });
+
+  it("marks a pack beyond the wallet, and marks NOTHING when the balance is unknown", () => {
+    // Everywhere else short is a detour; here there is no onward door — this
+    // IS the top-up. But a null balance is "not known", and greying the sheet
+    // over a slow lookup invents a shortfall nobody can see.
+    assert.match(sheet, /kashBalance !== null && exceedsBalance\(kashFor\(coins\), kashBalance\)/u);
+    assert.match(sheet, /disabled=\{buy\.isPending \|\| tooDear\}/u);
   });
 });
