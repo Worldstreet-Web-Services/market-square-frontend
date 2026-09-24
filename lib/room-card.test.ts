@@ -274,3 +274,32 @@ test("the parser takes only what the card needs", () => {
   // is a key anybody who sees the message can read.
   assert.equal(JSON.stringify(room).includes("abc-def-ghi"), false);
 });
+
+test("the link rides in the TEXT, because a target may drop `url`", async () => {
+  /*
+    A share target uses only the fields it understands, and many take `files`
+    and `text` while silently dropping `url`. Telegram did: the message
+    arrived as "lifestyle on Square" with no picture AND NO LINK, so the
+    recipient could not reach the room at all — worse than the link-only share
+    this feature replaced.
+
+    Every target reads `text`, so that is the field the address cannot be lost
+    from. `url` is omitted rather than sent as well, or a target reading both
+    prints the address twice.
+  */
+  const seen: { text?: string; url?: string; files?: unknown[] }[] = [];
+  await shareCardImage(
+    { imageUrl: "/card", fileName: "a.png", url: "https://x.test/r", text: "lifestyle on Square" },
+    {
+      navigatorImpl: {
+        share: async (p: { text?: string; url?: string }) => void seen.push(p),
+        canShare: () => true,
+      } as unknown as Navigator,
+      fetchImpl: okFetch,
+      createObjectURL: () => "blob:x",
+    }
+  );
+  assert.equal(seen[0]?.text, "lifestyle on Square\nhttps://x.test/r");
+  assert.equal(seen[0]?.url, undefined, "the address would be printed twice");
+  assert.equal(seen[0]?.files?.length, 1);
+});

@@ -82,7 +82,20 @@ export async function shareCardImage(
   }
 
   if (file && typeof nav.share === "function") {
-    const payload = { files: [file], title, text, url };
+    /*
+      THE LINK GOES IN THE TEXT, AND `url` IS NOT SENT ALONGSIDE IT.
+
+      A share target is free to use only the fields it understands, and many
+      take `files` and `text` while silently dropping `url`. Telegram did
+      exactly that: the message arrived as "lifestyle on Square" — no picture,
+      and NO LINK, so the recipient could not reach the room at all. That is
+      worse than the link-only share this replaced.
+
+      So the URL is folded into the text and the `url` field is omitted. A
+      target that reads both would otherwise print the address twice; every
+      target reads `text`, so this is the field that cannot be lost.
+    */
+    const payload = { files: [file], title, text: text ? `${text}\n${url}` : url };
     // `canShare` with the FILE, not with the API — see the note above.
     if (typeof nav.canShare !== "function" || nav.canShare(payload)) {
       try {
