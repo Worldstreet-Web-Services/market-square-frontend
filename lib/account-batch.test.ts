@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { decodeFunctionData, parseAbi } from "viem";
 import { encodeErc20Transfer, toBaseUnits } from "./erc20.ts";
 import { KASH_TOKEN_DECIMALS } from "./kash-amount.ts";
-import { encodeExecuteBatch, splitTransferCalls } from "./account-batch.ts";
+import { encodeExecuteBatch, splitTransferCalls, transferCallsForLegs } from "./account-batch.ts";
 
 /*
   PAYING THE CREATOR IN THE SAME TRANSACTION THAT TAKES THE FEE.
@@ -134,6 +134,125 @@ test("an empty batch is refused, and so is a bad address", () => {
   assert.throws(() => encodeExecuteBatch([]), /empty batch/u);
   assert.throws(
     () => encodeExecuteBatch([{ to: "0xnope" as `0x${string}`, data: "0x" }]),
+    /not an EVM address/u
+  );
+});
+
+/*
+  THE LEGS THE SERVICE NAMES — the contract in service ADR #314.
+
+  A LIST with roles rather than two named fields, because the split is
+  configurable: at a 100% share the platform leg is simply absent, and a third
+  leg could exist later without changing the shape.
+*/
+
+const toBase = (amount: string) => toBaseUnits(amount, KASH_TOKEN_DECIMALS);
+const fromLegs = (total: string, legs: Array<{ toWallet: string; amountKash: string }>) =>
+  transferCallsForLegs({
+    token: TOKEN,
+    legs,
+    totalKash: total,
+    toBase,
+    encodeTransfer: encodeErc20Transfer,
+  });
+
+test("a lion's legs become one batch that pays both", () => {
+  const legs = decodeBatch(
+    encodeExecuteBatch(
+      fromLegs("1", [
+        { toWallet: CREATOR, amountKash: "0.5" },
+        { toWallet: TREASURY, amountKash: "0.5" },
+      ])
+    )
+  );
+  assert.equal(legs.length, 2);
+  assert.equal(legs[0].recipient.toLowerCase(), CREATOR.toLowerCase());
+  assert.equal(legs[0].amount, toBase("0.5"));
+  assert.equal(legs[1].recipient.toLowerCase(), TREASURY.toLowerCase());
+});
+
+test("legs that do not sum to the price are REFUSED, never adjusted", () => {
+  /*
+    The service asserts this and so does the client, because the client is what
+    SIGNS. A signature is the last point at which the sender's agreement is
+    still revocable — if the legs do not add up to what they were shown, the
+    honest act is to refuse rather than to send and reconcile afterwards. Money
+    that has moved cannot be un-agreed.
+
+    Which side is wrong is not knowable from here, so neither is trusted.
+  */
+  assert.throws(
+    () =>
+      fromLegs("1", [
+        { toWallet: CREATOR, amountKash: "0.5" },
+        { toWallet: TREASURY, amountKash: "0.4" }, // 0.1 short
+      ]),
+    /but the gift costs/u
+  );
+  assert.throws(
+    () =>
+      fromLegs("1", [
+        { toWallet: CREATOR, amountKash: "0.5" },
+        { toWallet: TREASURY, amountKash: "0.6" }, // 0.1 over
+      ]),
+    /but the gift costs/u
+  );
+});
+
+test("`0.5` and `0.50` are the same amount, because the check is in base units", () => {
+  // Compared as decimal TEXT these differ and the send would be refused for a
+  // split that is exactly right.
+  const calls = fromLegs("1.00", [
+    { toWallet: CREATOR, amountKash: "0.50" },
+    { toWallet: TREASURY, amountKash: "0.5" },
+  ]);
+  assert.equal(calls.length, 2);
+});
+
+test("a 100% share sends ONE leg, which is the shape the service promises", () => {
+  // At 100% the platform leg is absent from the response entirely — not
+  // present as a zero — so the batch is a single transfer.
+  const calls = fromLegs("1", [{ toWallet: CREATOR, amountKash: "1" }]);
+  assert.equal(calls.length, 1);
+
+  // And a zero leg that did arrive writes no call: a transfer of nothing is
+  // gas spent to move nothing.
+  const withZero = fromLegs("1", [
+    { toWallet: CREATOR, amountKash: "1" },
+    { toWallet: TREASURY, amountKash: "0" },
+  ]);
+  assert.equal(withZero.length, 1);
+});
+
+test("the whole ladder splits and sums, including the sub-unit rungs", () => {
+  for (const [total, share] of [
+    ["0.01", "0.005"],
+    ["0.02", "0.01"],
+    ["0.15", "0.075"],
+    ["1", "0.5"],
+    ["50", "25"],
+  ] as const) {
+    const fee = (Number(total) - Number(share)).toFixed(8).replace(/0+$/u, "").replace(/\.$/u, "");
+    const legs = decodeBatch(
+      encodeExecuteBatch(
+        fromLegs(total, [
+          { toWallet: CREATOR, amountKash: share },
+          { toWallet: TREASURY, amountKash: fee },
+        ])
+      )
+    );
+    const moved = legs.reduce((sum, leg) => sum + leg.amount, 0n);
+    assert.equal(moved, toBase(total), `${total} KASH moved ${moved}`);
+  }
+});
+
+test("a bad wallet in a leg is refused rather than encoded", () => {
+  assert.throws(
+    () =>
+      fromLegs("1", [
+        { toWallet: "0xnope", amountKash: "0.5" },
+        { toWallet: TREASURY, amountKash: "0.5" },
+      ]),
     /not an EVM address/u
   );
 });

@@ -139,3 +139,57 @@ export function splitTransferCalls(input: {
   }
   return calls;
 }
+
+/**
+ * THE CALLS FOR A SPLIT THE SERVICE NAMED, and the check that it adds up.
+ *
+ * The service sends a LIST with roles rather than two fields, because the
+ * split is configurable: at a 100% share the platform leg simply is not there,
+ * and a third leg could exist later without changing this shape. So this maps
+ * legs to calls and never assumes how many there are.
+ *
+ * ─── THE LEGS MUST SUM TO THE PRICE, AND IT IS CHECKED HERE ──────────────────
+ * The service asserts it and so does this, because the client is what SIGNS.
+ * A signature is the last place the sender's agreement is still revocable: if
+ * the legs do not add up to what they were shown, the honest act is to refuse
+ * rather than to send and reconcile afterwards. Money that has moved cannot be
+ * un-agreed.
+ *
+ * Compared in base units, never as decimal strings — `0.5` and `0.50` are the
+ * same amount and different text.
+ *
+ * A ZERO LEG WRITES NO CALL. A transfer of nothing is gas spent to move
+ * nothing, and the service already drops a zero share rather than sending it —
+ * this is the second half of the same rule, in case it ever does.
+ */
+export function transferCallsForLegs(input: {
+  token: `0x${string}`;
+  legs: readonly { toWallet: string; amountKash: string }[];
+  /** The whole price the sender agreed to, as a decimal string. */
+  totalKash: string;
+  toBase: (amount: string) => bigint;
+  encodeTransfer: (to: string, amount: bigint) => `0x${string}`;
+}): BatchCall[] {
+  const { token, legs, totalKash, toBase, encodeTransfer } = input;
+  if (legs.length === 0) throw new Error("a split with no legs pays nobody");
+
+  const total = toBase(totalKash);
+  const sum = legs.reduce((running, leg) => running + toBase(leg.amountKash), 0n);
+  if (sum !== total) {
+    // Refused, not adjusted. Which side is wrong is not knowable from here, and
+    // signing either would move money the sender never agreed to.
+    throw new Error(`the split pays ${sum} but the gift costs ${total}`);
+  }
+
+  const calls: BatchCall[] = [];
+  for (const leg of legs) {
+    const amount = toBase(leg.amountKash);
+    if (amount <= 0n) continue;
+    if (!EVM_ADDRESS.test(leg.toWallet)) {
+      throw new Error(`not an EVM address: ${leg.toWallet}`);
+    }
+    calls.push({ to: token, data: encodeTransfer(leg.toWallet, amount) });
+  }
+  if (calls.length === 0) throw new Error("every leg was zero");
+  return calls;
+}

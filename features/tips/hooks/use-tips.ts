@@ -11,6 +11,7 @@ import {
 } from "@/features/tips/lib/api";
 import { KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
 import { encodeErc20Transfer, toBaseUnits } from "@/lib/erc20";
+import { encodeExecuteBatch, transferCallsForLegs } from "@/lib/account-batch";
 import { holdKey } from "@/lib/payment-hold";
 import { clearHeldPayment, heldPayment, holdPayment } from "@/lib/payment-store";
 import { useEmbeddedWallet } from "@/hooks/use-wallet";
@@ -166,15 +167,55 @@ export function useSendTip() {
       let txHash = (held?.txHash ?? null) as `0x${string}` | null;
       if (!txHash) {
         phase("signing");
-        txHash = await send({
-          to: chain.tokenAddress as `0x${string}`,
-          // The TOKEN's precision, not the API's — see KASH_TOKEN_DECIMALS.
-          data: encodeErc20Transfer(
-            created.toWallet,
-            toBaseUnits(created.tip.amountKash, KASH_TOKEN_DECIMALS),
-          ),
-          chainId: chain.chainId,
-        });
+        /*
+          ONE TRANSACTION THAT PAYS THE CREATOR AND TAKES THE FEE.
+
+          When the service names LEGS, the money is split — and it is paid as a
+          single batched call from the sender's own account rather than as two
+          transfers. Two transfers would mean the money RESTS at the platform
+          in between, which is a float, a liability, a payout somebody has to
+          sign, and a creator's earnings being a promise rather than a payment.
+          ogazboiz: "it should go the remaining 50 percent to the reciever".
+
+          The batch goes TO THE SENDER'S OWN ADDRESS: their embedded wallet is
+          upgraded in place via EIP-7702 to the shared SimpleAccount, so
+          `executeBatch` is a call on themselves. Same address, same balance,
+          gas sponsored — see `use-evm-send`.
+
+          ATOMIC IS THE POINT. Both legs land or neither does, so a half-paid
+          gift is unreachable rather than merely unlikely.
+
+          NO LEGS IS THE OLD PATH, unchanged: one transfer of the whole amount
+          to `toWallet`. That is what every deployment does until the service
+          ships the split, so absent is compatibility rather than an error.
+        */
+        const batched = created.legs
+          ? transferCallsForLegs({
+              token: chain.tokenAddress as `0x${string}`,
+              legs: created.legs,
+              totalKash: created.tip.amountKash,
+              toBase: (amount) => toBaseUnits(amount, KASH_TOKEN_DECIMALS),
+              encodeTransfer: encodeErc20Transfer,
+            })
+          : null;
+
+        txHash = await send(
+          batched
+            ? {
+                to: wallet as `0x${string}`,
+                data: encodeExecuteBatch(batched),
+                chainId: chain.chainId,
+              }
+            : {
+                to: chain.tokenAddress as `0x${string}`,
+                // The TOKEN's precision, not the API's — see KASH_TOKEN_DECIMALS.
+                data: encodeErc20Transfer(
+                  created.toWallet,
+                  toBaseUnits(created.tip.amountKash, KASH_TOKEN_DECIMALS),
+                ),
+                chainId: chain.chainId,
+              }
+        );
         /**
          * Written BEFORE the confirmation wait. The transfer is already
          * broadcast; from here the only thing that makes a retry safe is that

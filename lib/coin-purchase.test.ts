@@ -354,3 +354,43 @@ describe("room chat is delivered, not polled for", () => {
     assert.match(panel, /onSuccess: \(sent\) => \{[\s\S]{0,300}if \(sent\) publishChat\(sent\);/u);
   });
 });
+
+/**
+ * THE SEND PAYS BOTH PARTIES IN ONE TRANSACTION.
+ *
+ * ogazboiz: "it should go the remaining 50 percent to the reciever". Two
+ * transfers would mean the money rests at the platform in between — a float, a
+ * liability, a payout somebody has to sign. One batch means it never stops.
+ */
+describe("a split gift is paid as one batched call", () => {
+  const hook = read("features/tips/hooks/use-tips.ts");
+  const api = read("features/tips/lib/api.ts");
+
+  it("batches to the sender's OWN address, not to the token", () => {
+    /*
+      The embedded wallet is upgraded in place via EIP-7702 to the shared
+      SimpleAccount, so `executeBatch` is a call on THEMSELVES. Sending the
+      batch calldata to the token address instead would be a transfer call the
+      token does not have.
+    */
+    assert.match(hook, /to: wallet as `0x\$\{string\}`,\s*data: encodeExecuteBatch\(batched\)/u);
+  });
+
+  it("falls back to ONE transfer when the service names no legs", () => {
+    // Absent legs is the compatibility path — every deployment that has not
+    // shipped the split — not an error.
+    assert.match(hook, /const batched = created\.legs/u);
+    assert.match(hook, /: null;/u);
+    assert.match(hook, /data: encodeErc20Transfer\(\s*created\.toWallet,/u);
+  });
+
+  it("reads the legs off the response, and keeps toWallet working", () => {
+    // `toWallet` stays at the top level carrying the RECIPIENT's wallet, so
+    // nothing that reads it today breaks — cheaper than a coordinated deploy.
+    assert.match(api, /legs: parsed\.settlement\?\.legs \?\? null,/u);
+    assert.match(api, /toWallet: parsed\.toWallet \?\? null,/u);
+    // A list with roles, because a 100% share drops the platform leg entirely.
+    assert.match(api, /kind: z\.literal\("split"\)/u);
+    assert.match(api, /role: z\.string\(\)/u);
+  });
+});
