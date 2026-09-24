@@ -2443,7 +2443,7 @@ function LiveHouse({
             Gistroom Chat
           </h2>
           <div className="min-h-0 flex-1">
-            <ChatPanel stream={stream} variant="room" members={chatMentionables} />
+            <ChatPanel stream={stream} variant="room" members={chatMentionables} liveRoom={room} />
           </div>
         </div>
         </div>
@@ -2577,7 +2577,7 @@ function LiveHouse({
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <ChatPanel stream={stream} variant="room" members={chatMentionables} />
+            <ChatPanel stream={stream} variant="room" members={chatMentionables} liveRoom={room} />
           </div>
         </div>
       </Sheet>
