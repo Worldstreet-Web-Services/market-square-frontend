@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { errorCode } from "@/lib/api/envelope";
-import { Avatar } from "@/components/ui/avatar";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { useAcceptInvite, useInvitePreview } from "@/features/messages/hooks/use-messages";
 import { inviteState } from "@/features/messages/lib/invites";
@@ -63,8 +62,48 @@ export function JoinPage({ token }: { token: string }) {
 
   return (
     <div className="px-4 py-10 md:px-8">
-      <section className="ws-card mx-auto flex max-w-[420px] flex-col items-center gap-3 px-6 py-8 text-center">
-        <Avatar name={name} seed={house.id} src={house.imageUrl} size={72} />
+      <section className="ws-card mx-auto max-w-[420px] overflow-hidden text-center">
+        {/*
+          THE HOUSE'S PICTURE IS A BANNER, NOT AN AVATAR.
+
+          It was a 72px disc, which is the shape of a person. A house's
+          `imageUrl` is a COVER — wide, composed, with its name often set into
+          the artwork — and cropping it to a circle threw away most of it and
+          made the one thing the reader is being invited into the smallest
+          element on the card (ogazboiz, 2026-09-24: "normally houses are just
+          the background picture, so for this invite we are going to make it a
+          banner so it will fill the top").
+
+          The same call `house-profile-screen` already made and argued: a house
+          has exactly ONE image, so drawing it twice — a banner behind and a
+          disc in front — prints the same picture a few pixels apart. The
+          banner IS the picture; the name sits under it.
+
+          Full bleed, so the card is `overflow-hidden` with its padding moved
+          onto the content below rather than sitting on the section.
+        */}
+        <div className="relative aspect-[420/160] w-full bg-[#101012]">
+          {house.imageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- media hosts are unknown at build time */
+            <img src={house.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+          ) : (
+            /* The same coverless treatment the house page draws, rather than a
+               second invention: a house with no picture still has a top. */
+            <div
+              aria-hidden
+              className="absolute inset-0 bg-[linear-gradient(160deg,#241640_0%,#101012_70%)]"
+            />
+          )}
+          {/* NO FADE INTO THE CARD, deliberately. A gradient down to the
+              card's colour is the obvious polish and it cannot be done
+              honestly here: `ws-card` is `rgba(255,255,255,0.05)`, a
+              TRANSLUCENT white over whatever is behind it, so there is no
+              fixed colour to fade to. Picking `--color-raised` would blend
+              into a surface the card is not, and the seam would show as a
+              band rather than hide. A clean edge is correct. */}
+        </div>
+
+      <div className="flex flex-col items-center gap-3 px-6 pb-8 pt-5">
         <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-meta">
           You&apos;re invited to join
         </p>
@@ -111,6 +150,7 @@ export function JoinPage({ token }: { token: string }) {
             <p className="text-[14px] leading-5 text-grey-300">You can&apos;t join this house with this link.</p>
           )}
         </div>
+      </div>
       </section>
     </div>
   );
