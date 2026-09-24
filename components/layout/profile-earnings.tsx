@@ -83,7 +83,23 @@ const SOURCE_ICON = { room: IconMic, stream: IconLive, post: IconQuote } as cons
 
 /** 435:27558 — 741x62 at a 15 radius, 3% white behind a 10% hairline. */
 function EarnedRow({ tip }: { tip: ReceivedTip }) {
-  const { amountKash, giftId, createdAt, fromUser, source } = tip;
+  const { amountKash, creditedKash, giftId, createdAt, fromUser, source } = tip;
+  /*
+    THE EARNINGS SCREEN PRINTS WHAT WAS CREDITED, NOT WHAT WAS SENT.
+
+    This is the one screen a person checks before believing they earned
+    something, so the number on it has to be the number in their balance.
+    `amountKash` is the gift's FACE VALUE — a 1000-coin lion is 1 KASH — while
+    a gift's receiver is credited half of it. Printing the face value would
+    overstate every gift receipt by double, on the day of a deploy that touched
+    nothing in this file.
+
+    ON A TIP THE TWO ARE EQUAL, so there is no branch on kind here: the service
+    writes the same amount to both ledger legs and no split exists. The
+    fallback is therefore CORRECT and not merely defensive — `creditedKash`
+    lands with the gift spend leg, and until it does these are one number.
+  */
+  const earnedKash = creditedKash ?? amountKash;
   const gift = giftOf(giftId);
   /*
     THREE STATES, NOT TWO. A tip with no `giftId` is a plain typed amount; a
@@ -152,7 +168,7 @@ function EarnedRow({ tip }: { tip: ReceivedTip }) {
         <span className="flex min-w-0 items-center gap-2">
           <span className="flex shrink-0 items-center gap-1">
             <span className="tnum text-[12px] leading-5 text-white/50">
-              {formatKash(amountKash)}
+              {formatKash(earnedKash)}
             </span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={asset("/gifts/coin-stack.svg")} alt="" aria-hidden className="h-3 w-3 shrink-0" />

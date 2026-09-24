@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   DEFAULT_TIP_KASH,
@@ -107,4 +108,41 @@ test("preset selection compares canonical amounts", () => {
   // An unparseable side is never "the same" as anything, including itself.
   assert.equal(isSameTipAmount("", ""), false);
   assert.equal(isSameTipAmount("abc", "abc"), false);
+});
+
+test("the earnings screen prints what was CREDITED, never the face value", () => {
+  /*
+    A GIFT'S RECEIVER IS NOT CREDITED WHAT THE ROOM SAW FLY. `amountKash` is
+    the face value — a 1000-coin lion is 1 KASH — and Square keeps half of a
+    gift, so the receiver gets 0.5. Print the face value and every gift receipt
+    on the one screen people check before believing they earned something is
+    overstated by double.
+
+    IT WOULD HAVE BROKEN WITHOUT THIS FILE CHANGING. Today the two numbers are
+    equal, because no split exists on a tip: the service writes the SAME
+    `amountKash` to the sender's debit and the author's credit. The day the
+    gift spend leg deploys, the same field on the same screen starts meaning
+    something else. So this is pinned now, while it still passes trivially.
+
+    The fallback is what makes it correct BEFORE the field exists rather than
+    merely safe: `creditedKash` is optional with no default, and absent means
+    a deployment with no split, where the face value IS the credit.
+  */
+  const earnings = readFileSync("components/layout/profile-earnings.tsx", "utf8");
+  assert.match(earnings, /const earnedKash = creditedKash \?\? amountKash;/);
+  assert.match(earnings, /\{formatKash\(earnedKash\)\}/);
+  assert.doesNotMatch(
+    earnings,
+    /formatKash\(amountKash\)/,
+    "the face value must never be printed as earnings"
+  );
+
+  // And the field has to survive the parse, or the fallback is all there is.
+  const api = readFileSync("features/tips/lib/api.ts", "utf8");
+  assert.match(api, /creditedKash: z\.string\(\)\.optional\(\),/);
+  assert.doesNotMatch(
+    api,
+    /creditedKash: z\.string\(\)\.optional\(\)\.default\(/,
+    "a default would erase the difference between absent and equal"
+  );
 });

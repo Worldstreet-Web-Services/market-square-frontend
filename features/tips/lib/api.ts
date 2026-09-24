@@ -72,6 +72,31 @@ const ReceivedTipSchema = z.object({
   fromUser: ProfileSchema.nullable().optional().default(null),
   source: TipSourceSchema.nullable().optional().default(null),
   amountKash: z.string(),
+  /**
+   * WHAT THE RECEIVER WAS ACTUALLY CREDITED, which is not always what was sent.
+   *
+   * `amountKash` is the FACE VALUE — the lion the room watched fly, 1 KASH —
+   * and it stays the face value on purpose: quietly reducing it would make the
+   * sender's view and the receiver's view of the same event disagree with no
+   * way to reconcile them. `creditedKash` is the other number: 0.5 KASH after
+   * Square's cut on a gift.
+   *
+   * ON A PLAIN TIP THEY ARE EQUAL. There is no split on a tip — verified on
+   * the service's own ledger pair, which writes the SAME `amountKash` variable
+   * to both the sender's debit and the author's credit — so this needs no
+   * branch on kind and no percentage in the client.
+   *
+   * OPTIONAL WITH NO DEFAULT, because absent is its own answer: the field
+   * lands with the gift spend leg and does not exist yet. Until it does, every
+   * receipt falls back to `amountKash`, which is CORRECT rather than merely
+   * safe — today gross and net are the same number.
+   *
+   * THE PERCENTAGE DELIBERATELY DOES NOT LIVE HERE. The split is configurable
+   * server-side and applies only to gifts; handed the rate instead of the
+   * result, this screen would go wrong the day somebody changed it. Same
+   * argument as gift prices, pointed at earnings.
+   */
+  creditedKash: z.string().optional(),
   // Same `catch` reasoning as `TipResponseSchema`: an unknown status must not
   // fail a list, and it degrades to the one that asserts nothing.
   status: z.enum(["pending", "confirmed", "failed"]).catch("pending"),
