@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { LIVE_GIFTS } from "@/lib/gifts";
+import { BuyGiftSheet } from "@/components/layout/buy-gift-sheet";
 import { useReceivedTips } from "@/features/tips";
+import { ownedByGift, useBuyGift, useGiftEconomy, useGiftInventory } from "@/features/gifts";
+import { toast } from "sonner";
 import { asset } from "@/lib/square-path";
 
 /**
@@ -34,46 +38,88 @@ import { asset } from "@/lib/square-path";
  * that is a mock with mock data behind it, and it is the one place this
  * deliberately does not follow it.
  *
- * ─── THE NUMBER IS RECEIVED, AND NOW PERMANENTLY SO ─────────────────────────
- * It was worth writing down while inventory was open, because the count would
- * have had to change meaning — from "how many people sent you" to "how many
- * you own". Inventory was DECIDED AGAINST on 2026-09-24, so the question is
- * closed: this is how many of that gift other people have sent you, it is the
- * only meaning it will have, and there is no purchase that could move it.
+ * ─── THE NUMBER IS ABOUT TO MEAN SOMETHING ELSE ─────────────────────────────
+ * WHOEVER WIRES BUYING MUST CHANGE THIS COUNT, and it is easy to miss because
+ * the tile will look correct either way.
  *
- * The zero rule stays as it is for the same reason. "Nobody has sent you one"
- * is close enough to unknown that a blank is the honest draw — the same rule
- * the balance chip and the house member line follow. It is only "you own
- * none", a fact with an action attached, that would have wanted a printed 0,
- * and that reading is gone with the `+`.
+ * TODAY it is RECEIVED: how many of this gift other people have sent you.
+ * THE DESIGN means OWNED: how many you have bought and can still send. They
+ * are different numbers in the same place, so after buying three Books this
+ * tile would go on showing however many Books somebody else had gifted YOU,
+ * and the purchase would appear to have done nothing (ogazboiz, 2026-09-24,
+ * asking whether a purchase shows up here — it would not).
+ *
+ * AND THE ZERO RULE INVERTS WITH IT. "Nobody has sent you one" is genuinely
+ * unknown-ish and is right to stay blank. "You own none" is a FACT, it is what
+ * makes the `+` legible as the way to fix it, and node 1285:79134 draws it
+ * explicitly on two tiles. So under an inventory model the zero is printed
+ * rather than hidden — the opposite of the rule above, for the opposite
+ * meaning.
+ *
+ * Neither change belongs here yet: there is no catalogue, no inventory and no
+ * purchase route (see `NO_GIFT_PURCHASE`), and inventory is a decision about
+ * whether the platform ISSUES value or ROUTES it, not a set of endpoints.
  */
 
+/** 485:40571 — a 16px white disc holding a 12px `+` in `--color-spotlight`. */
+function AddGiftButton({ name, onOpen }: { name: string; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Buy a ${name}`}
+      className="ws-press grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white"
+    >
+      <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden>
+        <path d="M6 2.625v6.75M2.625 6h6.75" stroke="#7E3BEB" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * WHY THE `+` OPENS A TRAY BUT CANNOT YET PAY.
+ *
+ * Node 1285:83137 answers what this control is, and it is not what the earlier
+ * build assumed. It is not "send this gift to this profile" — it is "BUY Gift
+ * - Book", with a quantity stepper, a running total and "Proceed to Pay".
+ *
+ * That is a DIFFERENT ECONOMIC MODEL from the one the service runs today, and
+ * the difference is the whole reason this is gated rather than wired:
+ *
+ *   TODAY — a gift is paid for AT SEND TIME. `POST /streams/:id/gifts` takes
+ *   `{ amountKash, giftId }` and charges the sender then and there. Nothing is
+ *   owned before or after; the money and the gesture are one act.
+ *
+ *   THE DESIGN — a gift is BOUGHT UP FRONT into a stock you hold, and the tile
+ *   count is how many you own. Sending one later spends from that stock. That
+ *   is the Bigo/TikTok shape, and it is coherent — it is also why the room's
+ *   tray shows no prices yet.
+ *
+ * The second needs three things the service does not have. Probed, not
+ * assumed: `GET /me/gifts`, `/gifts`, `/me/gift-inventory` and `/gifts/catalog`
+ * all answer NOT_FOUND, and `/purchases` buys KASH WITH USDC — it is the
+ * top-up flow, not a way to buy an item with KASH.
+ *
+ * So the tray opens, because browsing the catalogue at full size is real and
+ * works; and the pay action is disabled WITH ITS REASON, because a button that
+ * takes money it cannot take is the one failure worth refusing outright. It
+ * comes alive the day a catalogue, an inventory and a purchase route land.
+ */
+const NO_GIFT_PURCHASE = "Buying gifts isn't available yet";
+
 /*
-  ─── THERE IS NO `+`, AND THAT IS A DECISION RATHER THAN A GAP ───────────────
+  ONE KEY PER INTENT, not per request.
 
-  Node 1285:79134 draws a `+` on every tile and 1285:83137 is the tray it
-  opens: "Buy Gift - Book", a quantity stepper, "Proceed to Pay". Both were
-  built. Both are removed, because on 2026-09-24 ogazboiz chose PAY-AT-SEND
-  over buy-first inventory — "just the honest tray".
-
-  The two models are incompatible and the `+` only makes sense in one of them:
-
-    PAY-AT-SEND (chosen) — a gift is paid for at the moment it is sent, in a
-    room, to a person. Nothing is owned before or after. There is no stock to
-    add to, so a `+` on a tile would open a purchase that the service has no
-    route for and that the platform has decided not to build.
-
-    BUY-FIRST — you buy into a stock and spend it later. Rejected knowingly:
-    value would leave the buyer NOW and reach the recipient LATER, and on a
-    non-custodial platform nothing can hold it in between, so Square would
-    have to ISSUE the value rather than move it.
-
-  Leaving a `+` that can never buy anything would be exactly the complaint
-  that started this ("so it won't look fake"), so the control is gone rather
-  than disabled. `BuyGiftSheet` goes with it; it is in the history if the
-  decision is ever revisited, and rebuilding it against a real purchase route
-  is a better job than maintaining it against none.
+  An idempotency key exists so a retry of the SAME purchase cannot charge
+  twice. Minted per render or per attempt it would be a new key each time and
+  would protect nothing — the same rule `postKashPurchase` follows. Keyed on
+  the gift and the quantity so buying three Roses and then three more is two
+  intents, while retrying the first is one.
 */
+function buyKey(giftId: string, quantity: number): string {
+  return `gift:${giftId}:${quantity}`;
+}
 
 export function ProfileGiftGallery() {
   /*
@@ -91,6 +137,28 @@ export function ProfileGiftGallery() {
     settled by construction, so the query is simply on.
   */
   const tips = useReceivedTips(true);
+  /*
+    ─── THE COUNT IS WHAT YOU OWN, ONCE THERE IS SOMETHING TO OWN ────────────
+
+    ogazboiz chose the TikTok shape: buy gifts, hold them, spend them in a
+    room. So the number on a tile is HOW MANY YOU HAVE — that is what makes
+    the `+` legible as the way to get more, and what makes sending one mean
+    something was spent.
+
+    UNTIL THE SERVICE CARRIES AN INVENTORY it falls back to what it has always
+    counted: how many of that gift other people have SENT you. The two are
+    different numbers and the fallback is deliberate rather than accidental —
+    a gallery of blanks would look broken, and this one is at least true of
+    something. `economy` is undefined while the lookup is in flight, so the
+    tile does not flicker between two meanings on every load.
+  */
+  const economy = useGiftEconomy();
+  const inventory = useGiftInventory(economy === true);
+  const owned = ownedByGift(inventory.data);
+  const buy = useBuyGift();
+  // Which tile opened the tray, or null. The id rather than a boolean, so
+  // reopening on a different gift lands on THAT gift.
+  const [buying, setBuying] = useState<string | null>(null);
 
   const counts = new Map<string, number>();
   for (const tip of tips.data ?? []) {
@@ -115,7 +183,15 @@ export function ProfileGiftGallery() {
     */
     <div className="grid grid-cols-[repeat(auto-fill,129px)] justify-center gap-6 px-4 py-6 md:px-8">
       {LIVE_GIFTS.map((gift) => {
-        const received = counts.get(gift.id) ?? null;
+        /*
+          OWNED shows a ZERO and received does not, and the asymmetry is the
+          point. "You own none" is a FACT with an action attached — the `+`
+          beside it is how you fix it, and node 1285:79134 draws that 0
+          explicitly. "Nobody has sent you one" is closer to unknown, and a
+          confident 0 there states something about other people we would
+          rather not claim.
+        */
+        const count = economy === true ? (owned.get(gift.id) ?? 0) : (counts.get(gift.id) ?? null);
         return (
           <div
             key={gift.id}
@@ -162,17 +238,57 @@ export function ProfileGiftGallery() {
               </span>
 
               <span className="flex items-center gap-1">
-                {received !== null && (
+                {count !== null && (
                   <span className="tnum text-[12px] font-semibold leading-4 text-white">
-                    {received}
+                    {count}
                   </span>
                 )}
+                <AddGiftButton name={gift.name} onOpen={() => setBuying(gift.id)} />
               </span>
             </div>
           </div>
         );
       })}
 
+      <BuyGiftSheet
+        open={buying !== null}
+        giftId={buying}
+        onClose={() => setBuying(null)}
+        /*
+          THE PURCHASE IS REAL when the service carries one, and says why it
+          cannot when it does not — never a button that looks tappable and
+          quietly does nothing.
+
+          `economy === undefined` is the lookup still in flight, and it neither
+          enables nor explains: a sheet that flashed "not available" for a
+          moment on every open would be lying half the time.
+        */
+        onConfirm={
+          economy === true
+            ? (gift, quantity) => {
+                buy.mutate(
+                  { giftId: gift.id, quantity, idempotencyKey: buyKey(gift.id, quantity) },
+                  {
+                    onSuccess: (result) => {
+                      toast.success(
+                        `${quantity} ${gift.name}${quantity > 1 ? "s" : ""} added — you have ${result.owned ?? quantity}`
+                      );
+                      setBuying(null);
+                    },
+                    onError: (error: unknown) =>
+                      toast.error(
+                        error instanceof Error && error.message
+                          ? error.message
+                          : "That purchase didn't go through."
+                      ),
+                  }
+                );
+              }
+            : undefined
+        }
+        busy={buy.isPending}
+        disabledReason={economy === false ? NO_GIFT_PURCHASE : undefined}
+      />
     </div>
   );
 }

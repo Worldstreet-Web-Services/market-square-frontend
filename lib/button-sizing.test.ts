@@ -57,6 +57,20 @@ const DESIGN_LOCKED = new Set<string>([
   // The house banner's 38 overflow trigger and the 48 "View all" disc, both
   // the file's own geometry on a surface built to its pixels.
   "components/layout/house-profile-screen.tsx",
+  /*
+    Buy-a-gift (1285:83137). Its ACTION uses the scale — `ws-btn-lg` is
+    exactly the node's 48 at 16px — but the dialog's three other controls sit
+    below the scale's smallest tier on purpose: a 43 round close, and 32
+    chevrons that float ON the artwork at its vertical centre. Widening those
+    to the 44 floor would push the chevrons off the picture they belong to and
+    make the close heavier than the title beside it.
+
+    WORTH KNOWING RATHER THAN HIDING: 32 is under the touch floor. Neither is
+    a lone route to anything — the dialog closes on backdrop and Escape (it is
+    built on `Sheet`), and the chevrons only walk a catalogue the grid behind
+    them already lists in full, one tap away.
+  */
+  "components/layout/buy-gift-sheet.tsx",
 ]);
 
 // Lower this as batches migrate. Target: 0. Raise ONLY by adding to

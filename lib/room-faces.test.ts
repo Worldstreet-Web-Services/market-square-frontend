@@ -180,3 +180,67 @@ test("the payment hold key distinguishes WHO is being paid", () => {
   // keep their key and stay recoverable.
   assert.ok(hooks.includes('toProfileId ?? ""'), "an older hold's key changed and became unrecoverable");
 });
+
+/*
+  ─── THE GIFT ECONOMY: BUY, HOLD, SPEND ─────────────────────────────────────
+
+  ogazboiz, 2026-09-24: "just like tiktok gift system — they can buy and hold
+  them and when they are in the gist room they can send it to someone, and
+  again and buy kash". So a gift is an OBJECT you own, and the client is built
+  for that now; the service's three routes do not exist yet, and every caller
+  treats their absence as a feature switch rather than an error.
+*/
+test("the gift economy is THREE states, not two", () => {
+  /*
+    `undefined` while the lookup is in flight, `false` once a 404 has been
+    seen, `true` once the route answers. A control that hid itself while the
+    read was still in the air would flicker on every load, and one that hid on
+    a network blip would remove a feature over a dropped packet — so only a
+    NOT_FOUND is allowed to turn it off.
+  */
+  const hooks = readFileSync("features/gifts/hooks/use-gifts.ts", "utf8");
+  assert.match(hooks, /if \(query\.isSuccess\) return true;/);
+  assert.match(hooks, /errorCode\(query\.error\) === "NOT_FOUND" \? false : undefined/);
+  assert.match(hooks, /return undefined;/);
+});
+
+test("a purchase never counts up optimistically", () => {
+  /*
+    Every other mutation in this app flips something the reader can see and
+    rolls it back on failure. This one MOVES MONEY, and a count that rose
+    before the charge landed is a claim that a purchase happened. The new
+    quantity comes from the service's own answer.
+  */
+  const hooks = readFileSync("features/gifts/hooks/use-gifts.ts", "utf8");
+  assert.doesNotMatch(hooks, /onMutate/, "the gift count is optimistic — it must not be");
+  assert.match(hooks, /invalidateQueries\(\{ queryKey: INVENTORY_KEY \}\)/);
+  // Buying spends KASH, so every surface showing a balance is stale.
+  assert.match(hooks, /invalidateQueries\(\{ queryKey: \["kash", "account"\] \}\)/);
+});
+
+test("the client never names a gift's price", () => {
+  /*
+    `LIVE_GIFTS` is ours and stays ours for ARTWORK — artwork must never come
+    off the wire, because the sender is another browser whose build may be
+    ahead of this one. The PRICE is the service's: the moment a gift id
+    selects a price, a client naming both could post `bank` for a penny and
+    show the room the most expensive animation in the tray.
+  */
+  const api = readFileSync("features/gifts/lib/api.ts", "utf8");
+  // The REQUEST BODY, not the file: the note above `buyGift` names `priceKash`
+  // precisely to say it is the service's, so a blanket search matches the
+  // explanation rather than the defect.
+  const body = api.slice(api.indexOf("export async function buyGift"));
+  const posted = body.slice(body.indexOf('"/me/gifts"'), body.indexOf("Idempotency-Key"));
+  assert.doesNotMatch(posted, /price/i, "the client is sending a price it must not choose");
+  assert.match(posted, /\{ giftId: input\.giftId, quantity: input\.quantity \}/);
+});
+
+test("an idempotency key is one per INTENT, not one per attempt", () => {
+  // A key minted per render or per retry is a new key each time and protects
+  // nothing. Keyed on the gift and the quantity, so three Roses then three
+  // more is two intents while retrying the first is one.
+  const gallery = readFileSync("components/layout/profile-gift-gallery.tsx", "utf8");
+  assert.match(gallery, /function buyKey\(giftId: string, quantity: number\): string \{/);
+  assert.match(gallery, /return `gift:\$\{giftId\}:\$\{quantity\}`;/);
+});
