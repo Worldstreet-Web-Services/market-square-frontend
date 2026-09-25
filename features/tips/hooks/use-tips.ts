@@ -248,7 +248,14 @@ export function useSendTip() {
       // totals the service decides to show there) and nothing else we cache —
       // the post's own tallies do not carry tips, so sweeping the feed would
       // refetch every timeline on screen to change nothing.
-      queryClient.invalidateQueries({ queryKey: ["ms", "profile", tip.recipient.username] });
+      /*
+        Only when the tip NAMED a profile. A gist room gift carries no
+        `Profile` for its recipient (see `TipSchema.recipient`), and there is
+        nothing to invalidate for somebody this response cannot name.
+      */
+      if (tip.recipient) {
+        queryClient.invalidateQueries({ queryKey: ["ms", "profile", tip.recipient.username] });
+      }
     },
   });
 
