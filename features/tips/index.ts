@@ -11,6 +11,6 @@ export {
   useReceivedTips,
 } from "./hooks/use-tips";
 // "They just left" — a 409 the room tells apart from a refusal. See the module.
-export { recipientLeftTheRoom, tipAlreadyInFlight, RECIPIENT_GONE } from "./lib/availability";
+export { recipientLeftTheRoom, recipientCannotHoldKash, tipAlreadyInFlight, RECIPIENT_GONE } from "./lib/availability";
 export type { ReceivedTip } from "./lib/api";
 export type { Tip, TipTarget } from "./lib/types";

@@ -58,7 +58,7 @@ import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bu
 import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gift-sheet";
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
-import { useSendTip, recipientLeftTheRoom , tipAlreadyInFlight } from "@/features/tips";
+import { useSendTip, recipientLeftTheRoom , tipAlreadyInFlight , recipientCannotHoldKash } from "@/features/tips";
 import { CoinBuySheet, insufficientCoins } from "@/features/gifts";
 
 import { useCoinBalance } from "@/features/gifts";
@@ -1254,6 +1254,20 @@ function LiveHouse({
             So this says what is true and what it is NOT: nothing was charged,
             and it is not something the sender did wrong.
           */
+          /*
+            THEIR WALLET CANNOT HOLD KASH. The service named a non-EVM address
+            for the recipient leg, and signing it would send Base tokens to an
+            address that cannot receive them. Refused before the wallet, so
+            nothing was charged — and retrying cannot help, because it is their
+            account that needs an EVM address, not this attempt that needs
+            repeating.
+          */
+          if (recipientCannotHoldKash(error)) {
+            toast.error(
+              `${to.name} can't receive gifts yet — their wallet isn't set up for KASH. Nothing was charged.`
+            );
+            return;
+          }
           if (tipAlreadyInFlight(error)) {
             toast.error(
               `A gift to ${to.name} is still being processed — nothing was charged. Try someone else, or come back to them shortly.`
