@@ -276,3 +276,121 @@ describe("the coin sheet prices packs exactly", () => {
     assert.match(sheet, /disabled=\{buy\.isPending \|\| tooDear\}/u);
   });
 });
+
+/**
+ * THE ROOM'S CHAT POLL WAS 55% OF ALL ROOM TRAFFIC.
+ *
+ * A viewer in a live gist room made ~22 requests a MINUTE, and 12 of them were
+ * the 5-second chat poll — spent mostly on being told nothing had changed. At
+ * 1,000 viewers that is ~200 requests a second, continuously, against one API
+ * and one Postgres, which is the real reason a room could not hold a thousand
+ * people. The audio was never the constraint.
+ */
+describe("room chat is delivered, not polled for", () => {
+  const hook = read("features/streams/hooks/use-live-chat.ts");
+  const panel = read("features/streams/components/chat-panel.tsx");
+  const room = read("features/houses/components/house-room.tsx");
+
+  it("carries the MESSAGE, not a refetch signal", () => {
+    /*
+      The house pattern for gateway frames is "a frame is a refetch signal, the
+      poll stays the floor", and it is right for a feed. It is WRONG here, and
+      the arithmetic is why: a refetch signal makes every viewer fetch on every
+      message, so N viewers and M messages is N x M requests. At 1,000 viewers
+      and ten messages a minute that is 10,000 a minute — WORSE than the poll
+      it replaced.
+
+      Carrying the message makes it O(1) in viewers: LiveKit fans one packet
+      out to everybody, which is what it is for.
+    */
+    assert.match(hook, /JSON\.stringify\(\{ id: message\.id, text: message\.text, createdAt: message\.createdAt \}\)/u);
+    assert.match(panel, /queryClient\.setQueryData\(\["ms", "stream", stream\.id, "chat"\]/u);
+    assert.doesNotMatch(
+      code("features/streams/hooks/use-live-chat.ts"),
+      /invalidateQueries/u,
+      "chat went back to a refetch signal — that is N x M requests"
+    );
+  });
+
+  it("takes the author from LIVEKIT, never from the packet", () => {
+    /*
+      Anything arriving is another browser, not our server. A heart carries no
+      identity to forge; a MESSAGE does. `DataReceived` hands over the sending
+      participant, whose identity our own service signed into their token — so
+      the author is a lookup, not a claim. Without this, anyone in the room
+      could publish a line as somebody else.
+    */
+    assert.match(hook, /if \(typeof identity !== "string" \|\| identity\.length === 0\) return;/u);
+    assert.match(panel, /const authorId = baseIdentity\(packet\.fromIdentity\);/u);
+    // And the payload's own idea of who sent it is never read.
+    assert.doesNotMatch(code("features/streams/hooks/use-live-chat.ts"), /parsed.*author/u);
+  });
+
+  it("clamps everything a peer can set, and drops its own echo", () => {
+    assert.match(hook, /id\.length > MAX_ID/u);
+    assert.match(hook, /text\.length > MAX_TEXT/u);
+    // Our own packet carries nothing new — we already hold the stored message.
+    assert.match(hook, /if \(participant\?\.isLocal\) return;/u);
+  });
+
+  it("keeps the poll as a FLOOR, so a dropped packet heals", () => {
+    // 5s -> 30s only when a room is connected. Without one — a feed card, a
+    // broadcast nobody joined — nothing changes and the poll carries the panel
+    // exactly as before.
+    assert.match(panel, /const live = Boolean\(liveRoom\);/u);
+    assert.match(panel, /useChat\(stream\.id, stream\.status === "live", live \? 30_000 : undefined\)/u);
+    // Both room panels get the connection, or the desktop column silently
+    // keeps polling while the phone sheet does not.
+    assert.equal(
+      [...room.matchAll(/liveRoom=\{room\}/gu)].length,
+      2,
+      "a room chat panel is still on the fast poll"
+    );
+  });
+
+  it("publishes only AFTER the service accepted the message", () => {
+    // The packet is an early copy of a message that already exists, so a
+    // failed post publishes nothing and a dropped packet costs only latency.
+    assert.match(panel, /onSuccess: \(sent\) => \{[\s\S]{0,300}if \(sent\) publishChat\(sent\);/u);
+  });
+});
+
+/**
+ * THE SEND PAYS BOTH PARTIES IN ONE TRANSACTION.
+ *
+ * ogazboiz: "it should go the remaining 50 percent to the reciever". Two
+ * transfers would mean the money rests at the platform in between — a float, a
+ * liability, a payout somebody has to sign. One batch means it never stops.
+ */
+describe("a split gift is paid as one batched call", () => {
+  const hook = read("features/tips/hooks/use-tips.ts");
+  const api = read("features/tips/lib/api.ts");
+
+  it("batches to the sender's OWN address, not to the token", () => {
+    /*
+      The embedded wallet is upgraded in place via EIP-7702 to the shared
+      SimpleAccount, so `executeBatch` is a call on THEMSELVES. Sending the
+      batch calldata to the token address instead would be a transfer call the
+      token does not have.
+    */
+    assert.match(hook, /to: wallet as `0x\$\{string\}`,\s*data: encodeExecuteBatch\(batched\)/u);
+  });
+
+  it("falls back to ONE transfer when the service names no legs", () => {
+    // Absent legs is the compatibility path — every deployment that has not
+    // shipped the split — not an error.
+    assert.match(hook, /const batched = created\.legs/u);
+    assert.match(hook, /: null;/u);
+    assert.match(hook, /data: encodeErc20Transfer\(\s*created\.toWallet,/u);
+  });
+
+  it("reads the legs off the response, and keeps toWallet working", () => {
+    // `toWallet` stays at the top level carrying the RECIPIENT's wallet, so
+    // nothing that reads it today breaks — cheaper than a coordinated deploy.
+    assert.match(api, /legs: parsed\.settlement\?\.legs \?\? null,/u);
+    assert.match(api, /toWallet: parsed\.toWallet \?\? null,/u);
+    // A list with roles, because a 100% share drops the platform leg entirely.
+    assert.match(api, /kind: z\.literal\("split"\)/u);
+    assert.match(api, /role: z\.string\(\)/u);
+  });
+});

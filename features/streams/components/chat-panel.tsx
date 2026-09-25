@@ -18,7 +18,11 @@ import {
   IconRoomSend,
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
+import { useQueryClient } from "@tanstack/react-query";
+import type { Room } from "livekit-client";
 import { useChat, useChatHistory, useChatReaction, useSendChat } from "@/features/streams/hooks/use-chat";
+import { useLiveChat, useLiveChatPublish } from "@/features/streams/hooks/use-live-chat";
+import { baseIdentity } from "@/features/streams/lib/stage";
 import { useMentionTyping } from "@/hooks/use-mention-typing";
 import { useMe } from "@/hooks/use-me";
 import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
@@ -106,8 +110,19 @@ export function ChatPanel({
   moderation,
   showTopViewers = false,
   members = [],
+  liveRoom = null,
 }: {
   stream: Stream;
+  /**
+   * THE ROOM'S LIVE CONNECTION, when this panel is inside one.
+   *
+   * Present, chat is DELIVERED over the data channel every participant is
+   * already on, and the interval drops to a slow floor. Absent — a feed card,
+   * a broadcast without a joined room — nothing changes and the poll carries
+   * the panel exactly as it did. See `use-live-chat` for why the message
+   * travels rather than a refetch signal.
+   */
+  liveRoom?: Room | null;
   /**
    * EVERYONE IN THE ROOM, for the @ picker.
    *
@@ -142,7 +157,52 @@ export function ChatPanel({
   moderation?: ChatModeration;
   showTopViewers?: boolean;
 }) {
-  const chat = useChat(stream.id, stream.status === "live");
+  const queryClient = useQueryClient();
+  /*
+    THE POLL IS A FLOOR, NOT THE TRANSPORT, once a room is connected.
+
+    12 requests a minute per viewer — 55% of all room traffic — spent mostly
+    on being told nothing had changed. With live delivery the interval exists
+    only to heal a dropped packet, so 30 seconds is enough and the saving is
+    the other 10. Without a room it stays exactly what it was.
+  */
+  const live = Boolean(liveRoom);
+  const chat = useChat(stream.id, stream.status === "live", live ? 30_000 : undefined);
+
+  /*
+    A MESSAGE FROM SOMEBODY ELSE, delivered rather than fetched.
+
+    Written straight into the head page so the line appears at once. The poll
+    still replaces it with the service's own row within 30 seconds, which is
+    what makes this safe: a peer can at worst show a line that vanishes, never
+    create one. The author is resolved from the people actually in the room —
+    LiveKit's identity is authenticated, so this is a lookup and not a claim.
+  */
+  const publishChat = useLiveChatPublish(liveRoom ?? null);
+  useLiveChat(liveRoom ?? null, (packet) => {
+    const authorId = baseIdentity(packet.fromIdentity);
+    const author = members.find((member) => member.id === authorId) ?? null;
+    queryClient.setQueryData(["ms", "stream", stream.id, "chat"], (current: unknown) => {
+      if (typeof current !== "object" || current === null || !("items" in current)) return current;
+      const page = current as { items: ChatMessage[] };
+      // The poll may have arrived first; one message, one row.
+      if (page.items.some((item) => item.id === packet.id)) return current;
+      const arrived: ChatMessage = {
+        id: packet.id,
+        streamId: stream.id,
+        authorId,
+        text: packet.text,
+        status: "active",
+        createdAt: packet.createdAt,
+        author: author ? { id: author.id, username: author.username, displayName: author.displayName } : null,
+        replyTo: null,
+        reactions: [],
+        myReaction: null,
+      } as unknown as ChatMessage;
+      // Newest first, matching the page the service returns.
+      return { ...page, items: [arrived, ...page.items] };
+    });
+  });
   // ADR-0009 over the top of it: the interval stays the floor, the frame makes
   // it immediate. Inert until the service publishes the room's topic.
   useRoomChatSignal(stream.id, stream, stream.status === "live");
@@ -352,7 +412,11 @@ export function ChatPanel({
             : {}),
         },
         {
-        onSuccess: () => {
+        onSuccess: (sent) => {
+          // Tell the room at once. AFTER the service accepted it, never
+          // instead: the packet is an early copy of a message that already
+          // exists, so a failed post publishes nothing.
+          if (sent) publishChat(sent);
           typing.reset();
           setReplyTo(null);
           // Saying something is opting back into the live edge: nobody types a

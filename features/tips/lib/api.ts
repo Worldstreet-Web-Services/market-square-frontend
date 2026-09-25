@@ -165,7 +165,40 @@ const TipResponseSchema = z.object({
    * and the platform is non-custodial — so this is how a real tip settles.
    */
   toWallet: z.string().optional(),
+  /**
+   * HOW THIS PAYMENT IS SPLIT, when it is.
+   *
+   * A LIST WITH ROLES, not two named fields, and the service chose that shape
+   * for a reason worth keeping: the split is configurable, so at a 100% share
+   * the platform leg VANISHES rather than arriving as a zero — and a list lets
+   * a third leg exist later without changing anything here.
+   *
+   * Absent means the old single transfer: pay `toWallet` the whole amount.
+   * That is what every deployment does until the service names the legs, so
+   * absent is the compatibility path rather than an error.
+   */
+  settlement: z
+    .object({
+      kind: z.literal("split"),
+      legs: z
+        .array(
+          z.object({
+            role: z.string(),
+            toWallet: z.string(),
+            amountKash: z.string(),
+          })
+        )
+        .min(1),
+    })
+    .optional(),
 });
+
+/** One destination of a split payment, as the service named it. */
+export interface SettlementLeg {
+  role: string;
+  toWallet: string;
+  amountKash: string;
+}
 
 function adopt(raw: unknown, target: TipTarget): Tip {
   const parsed = TipResponseSchema.parse(raw);
@@ -178,10 +211,17 @@ function adopt(raw: unknown, target: TipTarget): Tip {
   });
 }
 
-/** A created tip, plus the wallet to pay when the sender must settle it. */
+/** A created tip, plus what the sender must pay to settle it. */
 export interface CreatedTip {
   tip: Tip;
   toWallet: string | null;
+  /**
+   * The legs of a split payment, when the service named them.
+   *
+   * Null is the single-transfer path — pay `toWallet` the whole amount — which
+   * is what happens on any deployment that has not shipped the split yet.
+   */
+  legs: SettlementLeg[] | null;
 }
 
 export async function sendTip(
@@ -227,7 +267,11 @@ export async function sendTip(
         ? await msApi.post(`/streams/${target.id}/gifts`, giftBody)
         : await msApi.post(`/profiles/${target.id}/tips`, body);
   const parsed = TipResponseSchema.parse(raw);
-  return { tip: adopt(raw, target), toWallet: parsed.toWallet ?? null };
+  return {
+    tip: adopt(raw, target),
+    toWallet: parsed.toWallet ?? null,
+    legs: parsed.settlement?.legs ?? null,
+  };
 }
 
 /**
