@@ -79,58 +79,43 @@ describe("a group member row", () => {
  * apart meant recognising their avatar — and an admin speaking for the house
  * read exactly like anybody else talking.
  */
-describe("a group message's sender line", () => {
+describe("a group run's sender line", () => {
   const thread = read("features/messages/components/thread.tsx");
 
   it("names the sender, with their check and their role", () => {
-    assert.match(thread, /\{sender\.displayName\}/u, "a group bubble still shows no name");
-    assert.match(thread, /<VerifiedBadge verification=\{sender\.verification\}/u);
-    assert.match(thread, /<MemberRoleChip role=\{roleOf\?\.\(message\.senderId\) \?\? ""\} \/>/u);
+    assert.match(thread, /\{senders\.get\(run\.senderId\)!\.displayName\}/u);
+    assert.match(thread, /verification=\{senders\.get\(run\.senderId\)!\.verification\}/u);
+    assert.match(thread, /<MemberRoleChip role=\{roleOf\(run\.senderId\) \?\? ""\} \/>/u);
   });
 
-  it("only in a group, only for OTHER people, and only on the first of a run", () => {
+  it("sits ABOVE THE RUN, never wrapping a bubble", () => {
     /*
-      A 1:1 has one other person, so naming them above every bubble labels a
-      conversation that already has a title, and nobody needs telling which
-      messages are their own.
+      THIS IS THE WHOLE BUG, TWICE OVER. A bubble is capped at
+      `max-w-[min(85%,480px)]`, and 85% resolves against ITS PARENT. Wrapping a
+      bubble in a column to stack a name on top made that parent the column,
+      which is shrink-to-fit — so the cap became 85% of the NAME's width.
+      "okay" rendered as three stacked letters under a short name and correctly
+      under a long one, which is why it looked like a text bug rather than a
+      layout one.
 
-      THE RUN GATE IS `firstOfRun`, NOT `tail`, AND THIS TEST ONCE PINNED THE
-      BUG. `tail` reads like "continues the previous message" and is actually
-      `group && !mine` — it decides whether the bubble draws its notch, and it
-      is TRUE for every message from somebody else in a group. So
-      `group && !mine && !tail` is a condition and its own negation: the line
-      never rendered once.
-
-      The first version of this test asserted that exact source text and
-      PASSED, because a source match proves the code says something, not that
-      it does anything. The gate is named after what it means now, and the
-      assertion below would fail if `tail` came back.
+      Above the run, the bubble is a direct child of its row again and the
+      percentage means what it always meant.
     */
-    assert.match(thread, /\{group && !mine && firstOfRun && sender \?/u);
-    assert.match(thread, /firstOfRun=\{index === 0\}/u, "the run's first message is not marked");
     assert.doesNotMatch(
       thread,
-      /!mine && !tail && sender/u,
-      "the name is gated on `!tail` again, which can never be true"
+      /flex (min-w-0 )?flex-col items-start gap-1">\s*<span className="flex max-w/u,
+      "the name wraps the bubble again — the 85% cap will resolve against it"
     );
+    // The row renders the bubble directly, with nothing between.
+    assert.match(thread, /\n      \{content\}\n/u);
   });
 
-  it("does not squeeze the bubble it sits above", () => {
-    /*
-      The bubble was a direct flex item of the row and sized itself. Wrapping
-      it in a column that could shrink below its content let the row squeeze it
-      to one character wide, so "okay" rendered as four stacked letters.
-
-      `min-width: auto` is the default for a flex item and is exactly what the
-      bubble had before — so the column must NOT carry `min-w-0`. The name is
-      capped instead, which is the only thing that needed constraining.
-    */
-    assert.match(thread, /<div className="flex flex-col items-start gap-1">\s*\{?\/?\*?[\s\S]{0,40}<span className="flex max-w-\[240px\]/u);
-    assert.doesNotMatch(
-      thread,
-      /<div className="flex min-w-0 flex-col items-start gap-1">/u,
-      "the sender column can shrink below its content again — the bubble will collapse"
-    );
+  it("draws once per run, and never for your own messages", () => {
+    // A run IS consecutive messages from one sender, so once per run is once
+    // per name — no index and no first-of check. And nobody needs telling
+    // which messages are their own.
+    assert.match(thread, /\{group && !\(me\.data && run\.senderId === me\.data\.id\) && senders\.get\(run\.senderId\) && \(/u);
+    assert.doesNotMatch(thread, /firstOfRun/u, "the abandoned first-of-run prop is back");
   });
 
   it("reads the role off the SAME roster the faces come from", () => {

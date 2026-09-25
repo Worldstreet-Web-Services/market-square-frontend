@@ -2008,8 +2008,6 @@ function MessageRow({
   onReply,
   onJump,
   nameOf,
-  roleOf,
-  firstOfRun = false,
   flash,
   onOpenSnap,
   openingSnap,
@@ -2035,19 +2033,6 @@ function MessageRow({
   onJump: (messageId: string) => void;
   /** A sender id as a name — "You" for the reader. */
   nameOf: (senderId: string) => string;
-  /** This sender's role in the house, for the line above their bubble. */
-  roleOf?: (senderId: string) => string | null;
-  /**
-   * The first message of a run from one sender — where the name belongs.
-   *
-   * NOT `tail`. `tail` reads like "continues the previous message" and is
-   * actually `group && !mine`: it decides whether the bubble draws its notch,
-   * and it is TRUE for every message from somebody else in a group. Gating a
-   * name on `!tail` therefore never renders — the two conditions are the same
-   * one negated. The list already groups by sender, so this is simply the
-   * first of that group.
-   */
-  firstOfRun?: boolean;
   /** Briefly true after a quote tap landed here. */
   flash: boolean;
 }) {
@@ -2292,61 +2277,7 @@ function MessageRow({
           </span>
         )
       )}
-      {/*
-        WHO SAID IT, AND WHAT THEY ARE HERE — the line above somebody else's
-        bubble in a group.
-
-        A group showed a FACE and never a NAME, so telling two people apart
-        meant recognising their avatar — and an admin speaking for the house
-        read exactly like anybody else talking (ogazboiz, pointing at Telegram:
-        "i can see name and the role this is what i am saying").
-
-        ONLY IN A GROUP, AND ONLY FOR OTHER PEOPLE. A 1:1 has one other person
-        and naming them above every bubble is a label on a conversation that
-        already has a title; and nobody needs telling which messages are their
-        own.
-
-        ONLY ON THE FIRST OF A RUN, because repeating a name down eight
-        consecutive messages is the noise every chat app learned to drop. The
-        list already groups by sender, so this is the first of that group.
-
-        IT IS NOT `tail`. That name reads like "continues the previous
-        message" and is actually `group && !mine` — it decides the bubble's
-        notch. Gating on `!tail` meant gating on the negation of the same
-        condition, so the line never rendered once (ogazboiz: "i cant see the
-        name and the role why").
-
-        The NAME truncates and the chip does not: an ellipsis still names
-        somebody, a clipped "Admin" claims something false.
-      */}
-      {group && !mine && firstOfRun && sender ? (
-        /*
-          NO `min-w-0` ON THIS COLUMN, and that is the whole of it.
-
-          The bubble used to be a direct flex item of the row and sized itself.
-          Wrapping it in a column that could shrink below its content let the
-          row squeeze it to the width of one character, so "okay" rendered as
-          four stacked letters (ogazboiz: "why is the test like that even
-          though they type normal"). `min-width: auto` is the default for a
-          flex item and is exactly what the bubble had before — taking it away
-          is what broke it.
-
-          The NAME is capped instead, so a long one truncates rather than
-          widening the row to fit it.
-        */
-        <div className="flex flex-col items-start gap-1">
-          <span className="flex max-w-[240px] items-center gap-1.5 pl-1">
-            <span className="truncate text-[12px] font-semibold leading-4 text-white/90">
-              {sender.displayName}
-            </span>
-            <VerifiedBadge verification={sender.verification} className="h-3 w-3 shrink-0" />
-            <MemberRoleChip role={roleOf?.(message.senderId) ?? ""} />
-          </span>
-          {content}
-        </div>
-      ) : (
-        content
-      )}
+      {content}
       {/* A removed message has nothing to answer. The announcement bubble is
           the service's, and answering it is answering nobody. */}
       {!removed && !invite && (
@@ -3535,12 +3466,44 @@ export function Thread({
                 turn in the conversation. */}
             {groupBySender(day.messages).map((run) => (
               <div key={run.key} className="flex flex-col gap-4">
-                {run.messages.map((message, index) => (
+                {/*
+                  WHO SAID IT, AND WHAT THEY ARE HERE — once per RUN, above it.
+
+                  A group showed a FACE and never a NAME, so telling two people
+                  apart meant recognising their avatar, and an admin speaking
+                  for the house read exactly like anybody else talking.
+
+                  IT SITS ABOVE THE RUN RATHER THAN INSIDE A MESSAGE, and that
+                  is not tidiness — it is the only place it does not break the
+                  bubble. A bubble is capped at `max-w-[min(85%,480px)]`, and
+                  85% resolves against ITS PARENT. Wrapping a bubble in a
+                  column to stack a name on top made that parent the column,
+                  which is shrink-to-fit — so the cap became 85% of the NAME's
+                  width: "okay" rendered as three stacked letters under a short
+                  name, and correctly under a long one (ogazboiz: "why is the
+                  test like that even though they type normal").
+
+                  Above the run, the bubble is a direct child of its row again
+                  and the percentage means what it always meant.
+
+                  A run is already consecutive messages from one sender, so
+                  once per run IS once per name — no index, no first-of check.
+                */}
+                {group && !(me.data && run.senderId === me.data.id) && senders.get(run.senderId) && (
+                  <span className="flex max-w-[240px] items-center gap-1.5 pl-1">
+                    <span className="truncate text-[12px] font-semibold leading-4 text-white/90">
+                      {senders.get(run.senderId)!.displayName}
+                    </span>
+                    <VerifiedBadge
+                      verification={senders.get(run.senderId)!.verification}
+                      className="h-3 w-3 shrink-0"
+                    />
+                    <MemberRoleChip role={roleOf(run.senderId) ?? ""} />
+                  </span>
+                )}
+                {run.messages.map((message) => (
                   <MessageRow
                     key={message.id}
-                    /* A RUN is already consecutive messages from one sender,
-                       so the first of one is where the name goes. */
-                    firstOfRun={index === 0}
                     message={message}
                     mine={Boolean(me.data && message.senderId === me.data.id)}
                     group={group}
@@ -3549,7 +3512,6 @@ export function Thread({
                     onReply={setReplyTo}
                     onJump={jumpTo}
                     nameOf={nameOf}
-                    roleOf={roleOf}
                     flash={flashId === message.id}
                     onOpenSnap={openSnap}
                     openingSnap={openingSnapId === message.id}
