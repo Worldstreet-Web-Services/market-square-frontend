@@ -1,3 +1,5 @@
+import { accountIdTail, isAccountId } from "../../../lib/account-id.ts";
+
 /**
  * The stage is a LIST of publishers, never "the remote participant".
  *
@@ -189,7 +191,7 @@ function toSlot(participant: StageParticipant, role: "host" | "guest"): StageSlo
 /**
  * What captions a tile.
  *
- * LiveKit carries an identity (our Privy DID, because permissions key off it)
+ * LiveKit carries an identity (the account id, because permissions key off it)
  * and an optional name. When the name is missing the raw DID was rendered, so a
  * guest appeared as `did:privy:cmtad9ojl00m80dl2lkl4erib` — unreadable, and it
  * leaks an account id to everyone watching. A short, stable stand-in is better
@@ -220,8 +222,7 @@ export function participantLabel(name: string | undefined, identity: string): st
   if (given) return given;
   // Approved speakers join as `<did>#speaker`, so drop the suffix first.
   const base = baseIdentity(identity);
-  const tail = base.slice(-4).toUpperCase();
-  return base.startsWith("did:") ? `Guest ${tail}` : base;
+  return isAccountId(base) ? `Guest ${accountIdTail(base)}` : base;
 }
 
 /**

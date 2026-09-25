@@ -2,6 +2,7 @@
 
 import { GENDER_OPTIONS } from "@/lib/gender";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Avatar } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/button";
@@ -9,9 +10,16 @@ import { errorCode } from "@/lib/api/envelope";
 import { cn } from "@/lib/cn";
 import { useMe } from "@/hooks/use-me";
 import { usePeople } from "@/features/discovery";
+import { useMigrationLinked } from "@/features/migrate";
 import { PersonQuickActions, useUpdateMe } from "@/features/profile";
 import { hasSeenWelcome } from "@/components/layout/welcome/welcome-flow";
-import { asset } from "@/lib/square-path";
+import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
+import {
+  dismissMoveOffer,
+  moveOfferDismissed,
+  shouldOfferLegacyMove,
+} from "@/lib/legacy-move-offer";
+import { asset, sq } from "@/lib/square-path";
 import { fetchVapidPublicKey, pushSupported, subscribeThisBrowser } from "@/lib/push-client";
 
 /**
@@ -121,6 +129,12 @@ export function OnboardingFlow() {
     const stored = Number(read(STEP_KEY));
     return Number.isFinite(stored) && stored > 0 && stored <= STEPS ? stored : 0;
   });
+  const [offerDeclined, setOfferDeclined] = useState(() =>
+    typeof window === "undefined" ? false : moveOfferDismissed()
+  );
+  // Whether this account has already been joined to an old one. Null while it
+  // is loading or cannot be told, which still offers — see the hook.
+  const alreadyLinked = useMigrationLinked();
 
   const profile = me.data ?? null;
   if (!profile) return null;
@@ -162,6 +176,17 @@ export function OnboardingFlow() {
   */
   const entry = mustClaim ? 1 : profile.hasOnboarded || hasSeenWelcome() ? 2 : 0;
   const current = step === 0 ? entry : step;
+  /*
+    Before the handle, not after. Claiming one is what turns the empty profile
+    Square provisioned on sign-in into somebody's account, and from that moment
+    an old account can no longer move onto this id — see lib/legacy-move-offer.
+  */
+  const offerMove = shouldOfferLegacyMove({
+    mustClaim,
+    legacyAvailable: !DEMO_AUTH && Boolean(LEGACY_PRIVY_APP_ID),
+    dismissed: offerDeclined,
+    alreadyLinked: alreadyLinked === true,
+  });
 
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-grey-900">
@@ -180,7 +205,17 @@ export function OnboardingFlow() {
           />
 
           <div className="w-full max-w-[600px] rounded-[34px] border border-white/10 bg-white/[0.03] p-6">
-            {current === 1 && <ClaimStep onDone={() => go(2)} />}
+            {current === 1 &&
+              (offerMove ? (
+                <BringOldAccountStep
+                  onNew={() => {
+                    dismissMoveOffer();
+                    setOfferDeclined(true);
+                  }}
+                />
+              ) : (
+                <ClaimStep onDone={() => go(2)} />
+              ))}
             {current === 2 && (
               <PermissionsStep
                 // Already onboarded and just here for the browser's permissions:
@@ -343,6 +378,49 @@ function Welcome({ onContinue }: { onContinue: () => void }) {
  * service reads that as a clear. Nothing is invented for them, and they can set
  * it later from the profile editor.
  */
+/**
+ * BRING YOUR OLD ACCOUNT — shown in the claim slot, before the handle.
+ *
+ * Square provisioned an empty profile under this Decane id the moment the
+ * reader signed in. That shell is absorbed when an old account is linked, but
+ * only while it stays untouched — and claiming a handle is exactly what makes
+ * it somebody's account, after which the two can never be joined without a
+ * human. See `lib/legacy-move-offer`.
+ *
+ * So the question comes first, and the two answers lead opposite ways: linking
+ * returns their old handle, so there is nothing to invent; "I'm new here" is
+ * remembered on this browser and never asked again.
+ */
+function BringOldAccountStep({ onNew }: { onNew: () => void }) {
+  const router = useRouter();
+  return (
+    <>
+      <CardHead
+        title="Had a Square account before?"
+        subtitle="Upgrade it now and your handle, followers and posts come with it."
+        step={1}
+      />
+      <div className="mt-10 space-y-3">
+        <StepButton onClick={() => router.push(sq("/move-account"))}>
+          Upgrade your account
+        </StepButton>
+        <button
+          type="button"
+          onClick={onNew}
+          className="ws-press mx-auto flex h-[49px] w-full max-w-[440px] items-center justify-center rounded-full text-[16px] font-medium leading-[27.81px] text-[#999999] transition-colors hover:text-white"
+        >
+          I&apos;m new here
+        </button>
+      </div>
+      {/* Said plainly, because it is the whole reason this screen exists and
+          the cost of finding out later is two accounts. */}
+      <p className="mt-6 text-center text-[13px] leading-normal text-[#777777]">
+        Choosing a new name first means an old account can no longer be upgraded into this one.
+      </p>
+    </>
+  );
+}
+
 function ClaimStep({ onDone }: { onDone: () => void }) {
   const me = useMe();
   const update = useUpdateMe();

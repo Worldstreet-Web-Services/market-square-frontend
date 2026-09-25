@@ -11,12 +11,12 @@ import { forwardEvmRpcRead } from "@/lib/server/evm-rpc";
 // prediction pool state and market structs, perp allowances, Polymarket
 // collateral, and the eth_getCode/nonce reads in the sponsored 7702 send path.
 //
-// Reads only. Signing and broadcast go through Privy and the bundler, never
+// Reads only. Signing and broadcast go through the wallet and the bundler, never
 // here, so nothing that reaches this endpoint can move funds.
 //
 // Auth-gated like the Solana and Polygon proxies.
-// Privy's same-origin fetch carries the privy-token cookie, so the client needs
-// no header plumbing.
+// The same-origin fetch carries the decane-token cookie (DecaneTokenBridge),
+// so the client needs no header plumbing.
 
 // What the read paths actually call: state reads, the receipt poll
 // (waitForTransactionReceipt), and gas estimation. Deliberately no

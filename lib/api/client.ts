@@ -1,7 +1,7 @@
 "use client";
 
-import { getAccessToken } from "@privy-io/react-auth";
 import { DEMO_AUTH } from "@/lib/auth-mode";
+import { currentAccessToken } from "@/lib/auth-token";
 import { apiError } from "@/lib/api/envelope";
 import {
   getAuthSnapshot,
@@ -39,15 +39,15 @@ async function failureScope(response: Response): Promise<RateLimitScope | null> 
   }
 }
 
-// Fetch wrapper for our BFF routes. Attaches the Privy access token so the
+// Fetch wrapper for our BFF routes. Attaches the Decane access token so the
 // server can verify the caller and forward it upstream. In demo mode there is
-// no Privy session; the fixture BFF treats a tokenless request as the demo
+// no session; the fixture BFF treats a tokenless request as the demo
 // user, so requests go out bare.
 //
 // Two very different "no token" cases:
-// - Privy still initializing: wait quietly for readiness, then retry the
+// - the session still hydrating: wait quietly for readiness, then retry the
 //   token. Never surfaces to the user.
-// - Privy ready but the session is gone (expired): signal the SessionGuard
+// - ready but the session is gone (expired): signal the SessionGuard
 //   (which toasts once, clears cached identity and routes to /auth) and throw
 //   a typed SESSION_EXPIRED so callers render a real message, not plumbing.
 export async function apiFetch(
@@ -79,11 +79,11 @@ export async function apiFetch(
     return demo;
   }
 
-  let accessToken = await getAccessToken().catch(() => null);
+  let accessToken = currentAccessToken();
   if (opts.requireAuth && !accessToken) {
-    // Give Privy a chance to finish warming up before judging the session.
+    // Give the session a chance to finish hydrating before judging it.
     await waitForAuthReady();
-    accessToken = await getAccessToken().catch(() => null);
+    accessToken = currentAccessToken();
     if (!accessToken) {
       const { ready, authenticated } = getAuthSnapshot();
       if (ready && !authenticated) {
@@ -149,8 +149,46 @@ export async function apiFetch(
     if (watched) recordCircuitFailure(undefined);
     throw error;
   }
+  if (response.status === 401) await noticeUpgradedAccount(response);
   if (!watched) return response;
   if (response.ok) recordCircuitSuccess();
   else recordCircuitFailure(response.status, await failureScope(response));
   return response;
+}
+
+/**
+ * The one 401 that is not "sign in again": ACCOUNT_UPGRADED means the service
+ * has retired the sign-in this request rode on, because the account moved to
+ * its upgraded one — here, or in the Market app, which shares it. The token
+ * that just failed will fail identically forever, so it is dropped here
+ * rather than resent on every poll, and the guard is told the real reason.
+ *
+ * Reads a clone: the caller still owns the body.
+ */
+async function noticeUpgradedAccount(response: Response): Promise<void> {
+  let code: unknown;
+  try {
+    const body = (await response.clone().json()) as { error?: { code?: unknown } } | null;
+    code = body?.error?.code;
+  } catch {
+    return;
+  }
+  if (code !== "ACCOUNT_UPGRADED") return;
+  forgetLegacySession();
+  markSessionExpired("upgraded");
+}
+
+/**
+ * A browser from before the move can still carry the old provider's cookie,
+ * and the BFF reads it when there is no bearer. Once the service has said the
+ * account moved, that cookie only buys the same refusal again.
+ */
+function forgetLegacySession(): void {
+  try {
+    for (const name of ["privy-token", "privy-id-token"]) {
+      document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+    }
+  } catch {
+    // No document, or cookies unavailable: nothing to forget.
+  }
 }

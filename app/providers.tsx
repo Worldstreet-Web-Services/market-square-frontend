@@ -1,76 +1,77 @@
 "use client";
 
 import { useState } from "react";
-import { PrivyProvider } from "@privy-io/react-auth";
+import { DecaneKit } from "decane-connect-kit";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { createQueryClient } from "@/lib/query-client";
 import { DEMO_AUTH } from "@/lib/auth-mode";
-import { asset } from "@/lib/square-path";
-import { privyAppId } from "@/lib/privy-app-id";
+import { useDecaneCredentials } from "@/hooks/use-decane-credentials";
+import { DecaneRecoveryHost } from "@/components/providers/decane-recovery-host";
+import { DecaneTokenBridge } from "@/components/providers/decane-token-bridge";
+import {
+  collectRotatedRecoveryPassword,
+  deliverRecoveryFile,
+  promptForRecoveryFile,
+  promptPin,
+  promptUnlockPassword,
+} from "@/lib/decane-recovery";
 
-/*
-  A WELL-FORMED ID, WHATEVER THE ENVIRONMENT SAYS.
-
-  `PrivyProvider` throws on a malformed id rather than degrading, and it wraps
-  the whole tree — so the throw lands while Next prerenders and fails the
-  BUILD. This used to fall back only on an EMPTY value, which let CI's
-  deliberate `ci-placeholder` through and broke every gates run on every
-  branch. `privyAppId` checks the shape instead. In demo mode Privy is mounted
-  but never used (useAuth short-circuits).
-*/
-const PRIVY_APP_ID = privyAppId(process.env.NEXT_PUBLIC_PRIVY_APP_ID);
+/**
+ * The chains the embedded wallet holds value on, in Decane's chain-id format.
+ * Base is where every Square payment happens; mainnet and Solana are there so
+ * one Decane identity is the same wallet set it is in wsws.
+ */
+const DECANE_CHAINS = ["evm:8453", "evm:1", "solana:mainnet"];
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
   if (DEMO_AUTH) return <>{children}</>;
+  return <DecaneAuthProvider>{children}</DecaneAuthProvider>;
+}
+
+/**
+ * Decane, configured the way wsws configures it — both apps are one identity.
+ *
+ * `showStatusOverlay: false` for the same reason `showWalletUIs: false` was set
+ * under Privy: the app owns what the reader sees. The recovery callbacks are
+ * not optional: without `promptUnlockPassword` a device with no passkey cannot
+ * open its wallet, and without `onRecoveryRotated` the kit refuses to run
+ * recovery at all. `DecaneRecoveryHost` renders the dialogs they wait on.
+ *
+ * The kit cannot mount without its key, and everything below calls kit hooks,
+ * so nothing renders until the one same-origin round trip for it lands.
+ */
+function DecaneAuthProvider({ children }: { children: React.ReactNode }) {
+  const decane = useDecaneCredentials();
+  if (!decane) return <div className="min-h-dvh bg-[#0F0F0F]" aria-busy="true" />;
   return (
-    <PrivyProvider
-      appId={PRIVY_APP_ID}
+    <DecaneKit
       config={{
-        loginMethods: ["google", "twitter", "email"],
-        /**
-         * The embedded wallet, configured the same way wsws configures it.
-         *
-         * Both apps run on ONE Privy app id, so a reader who has signed into
-         * either already has this wallet and Market Square simply reads it —
-         * which is what makes a balance earned over there spendable here. What
-         * this block fixes is the reader who only ever signs in HERE: relying
-         * on the dashboard's own create-on-login setting means Market Square's
-         * behaviour is defined somewhere this repo cannot see, and a money
-         * surface that silently does nothing for a whole class of user is the
-         * worst way to find that out. Stated here, both apps mint the same
-         * wallet on the same terms, and if the dashboard already does it this
-         * is a no-op.
-         *
-         * `showWalletUIs: false` is not cosmetic and is also wsws's setting.
-         * A sponsored purchase is TWO wallet interactions — the one-time 7702
-         * delegation signature and the userOperation — and a modal in front of
-         * each turns one deliberate act into a sequence the reader has to
-         * decode. The confirmation lives in our own sheet instead, which names
-         * the amount, the price, the fee, where the token lands and that it
-         * cannot be reversed, and the button is the last step. That is the
-         * trade being made: the app owns the confirmation, so the app has to
-         * be the one that tells the truth before it.
-         */
-        embeddedWallets: {
-          showWalletUIs: false,
-          ethereum: { createOnLogin: "users-without-wallets" },
-          // Solana is minted too, matching wsws exactly, so one identity is
-          // one identity across both products. Nothing here spends it —
-          // `lib/buy-routes.ts` refuses Solana destinations, because Market
-          // Square has no Solana send path to deliver with.
-          solana: { createOnLogin: "users-without-wallets" },
-        },
-        appearance: {
-          theme: "#0c0c0e",
-          accentColor: "#d4d4d8",
-          // One brand asset everywhere, including the Privy dialog.
-          logo: asset("/logo.svg"),
+        appId: decane.appId,
+        mode: "social",
+        theme: "dark",
+        social: {
+          apiKey: decane.apiKey,
+          authMethods: ["google", "email", "x"],
+          chains: DECANE_CHAINS,
+          showStatusOverlay: false,
+          // No passkey or password at sign-in. Square is a place people read
+          // and post first; the wallet is protected at the moment it is first
+          // used (hooks/use-evm-send, lib/wallet-protection), not as the price
+          // of getting in the door.
+          deferDeviceProtection: true,
+          onRecoveryRotated: collectRotatedRecoveryPassword,
+          onRecoveryFileReady: deliverRecoveryFile,
+          promptForRecoveryFile,
+          promptPin,
+          promptUnlockPassword,
         },
       }}
     >
       {children}
-    </PrivyProvider>
+      <DecaneTokenBridge />
+      <DecaneRecoveryHost />
+    </DecaneKit>
   );
 }
 

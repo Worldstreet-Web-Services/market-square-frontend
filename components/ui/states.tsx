@@ -205,5 +205,10 @@ export function SignInPrompt({
 /** True when this failure is only "you are not signed in". */
 export function isAuthError(error: unknown): boolean {
   const code = errorCode(error);
-  return code === "UNAUTHORIZED" || code === "SESSION_EXPIRED" || code === "AUTH_NOT_READY";
+  return (
+    code === "UNAUTHORIZED" ||
+    code === "SESSION_EXPIRED" ||
+    code === "ACCOUNT_UPGRADED" ||
+    code === "AUTH_NOT_READY"
+  );
 }

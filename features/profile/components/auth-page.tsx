@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { profileHref } from "@/lib/profile-href";
 import { atHandle } from "@/lib/handle";
-import { DEMO_AUTH } from "@/lib/auth-mode";
+import { DEMO_AUTH, LEGACY_PRIVY_APP_ID } from "@/lib/auth-mode";
+import { linkRetryPending } from "@/lib/migration-link";
 import { useAuth } from "@/hooks/use-auth";
 import { useLogout } from "@/hooks/use-logout";
 import { useMe } from "@/hooks/use-me";
@@ -25,12 +26,25 @@ export function AuthPage() {
   // Where an expired session should land the user again after signing in.
   const rawReturnTo = searchParams.get("returnTo");
   const returnTo = rawReturnTo?.startsWith("/") ? rawReturnTo : null;
+  // Sent here by the guard because the service retired the old sign-in: the
+  // account moved to its upgraded one, and the card should say so.
+  const upgraded = searchParams.get("upgraded") === "1";
 
   /* Signed out, this route IS the design's sign-in card (Desktop 40) — the
      same one the welcome sequence ends on, so an expired session and a first
      visit land on one surface rather than two that drift. The column below is
      only ever the SIGNED-IN state: where to go next, and how to sign out. */
-  if (ready && !authenticated) return <SignInCard />;
+  if (ready && !authenticated) {
+    return (
+      <SignInCard
+        notice={
+          upgraded
+            ? "Your account has been upgraded. Sign in with your new account and everything is where you left it."
+            : undefined
+        }
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-[80dvh] items-center justify-center px-6">
@@ -75,6 +89,18 @@ export function AuthPage() {
               {profile && (
                 <Button variant="secondary" className="w-full" onClick={() => router.push(profileHref(profile))}>
                   My profile
+                </Button>
+              )}
+              {/* Accounts from before the move to Decane: sign into the old one
+                  once and its profile comes across. Louder while a link that
+                  met an outage still needs finishing. */}
+              {!DEMO_AUTH && LEGACY_PRIVY_APP_ID && (
+                <Button
+                  variant={linkRetryPending() ? "primary" : "secondary"}
+                  className="w-full"
+                  onClick={() => router.push(sq("/move-account"))}
+                >
+                  {linkRetryPending() ? "Finish your upgrade" : "Upgrade your account"}
                 </Button>
               )}
               {!DEMO_AUTH && (

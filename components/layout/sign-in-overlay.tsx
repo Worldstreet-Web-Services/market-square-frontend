@@ -10,28 +10,16 @@ import {
   subscribeSignIn,
 } from "@/lib/signin-store";
 
-/**
- * THE APP'S ONE SIGN-IN SURFACE, over whatever the reader was looking at.
- *
- * Mounted once beside the composer and the ticker sheet — the same pattern, for
- * the same reason: `useAuth().login` is called from a dozen places that have no
- * business knowing what a sign-in card looks like, so the card is owned here
- * and opened through a module store (`lib/signin-store.ts`, which carries the
- * why).
- *
- * It composes across slices — the card belongs to `features/profile`, which
- * owns identity — so it lives in the layout layer like `home-screen` and
- * `messages-screen`.
- *
- * ─── IT IS DISMISSIBLE, AND THAT IS DELIBERATE ──────────────────────────────
- * A reader reaches this by tapping a like, a follow, or Sign in — none of which
- * is a commitment to sign in. Closing puts them back exactly where they were,
- * with their scroll intact, which is the one thing the vendor modal did well.
- *
- * `z-[80]` sits under the welcome sequence (90) and the splash (100), both of
- * which own the screen outright when they are up, and over every piece of app
- * chrome, the highest of which is 60.
- */
+/*
+  THE SIGN-IN, AND NOTHING AFTER IT.
+
+  This used to hold one more screen: a device that could hold a passkey was
+  offered one here, on the way out, because every sign-in passed through. The
+  wallet is now protected at the moment it is first USED instead (a tip, a
+  gift, a purchase — see lib/wallet-protection), with the kit asking for no
+  passkey or password at sign-in at all. So the overlay's job ends when the
+  sign-in lands: it closes, and the reader is in.
+*/
 export function SignInOverlay() {
   const open = useSyncExternalStore(subscribeSignIn, getSignInOpen, getSignInOpenServer);
   const { authenticated } = useAuth();
@@ -47,7 +35,6 @@ export function SignInOverlay() {
   }, [authenticated]);
 
   if (!open || authenticated) return null;
-
   return (
     <div
       role="dialog"

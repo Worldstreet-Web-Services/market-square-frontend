@@ -41,6 +41,34 @@ export interface ForwardResult {
   contentType: string;
 }
 
+/**
+ * Does this Authorization header carry a Decane token?
+ *
+ * Since the move to Decane, a browser can hold a NEW Decane session and still
+ * carry the OLD account's `privy-id-token` cookie. Forwarding that beside the
+ * Decane bearer would hand the service the old account's wallet for the new
+ * identity — so the Privy identity token travels only with a Privy session.
+ *
+ * Read WITHOUT verifying, and that is enough: it decides only whether to
+ * forward an extra header, and the service verifies whatever it is given.
+ * Decane tokens carry a `project_id` and no `iss`; Privy's carry `iss:
+ * privy.io` — the same peek the service's own verifier routes on.
+ */
+export function isDecaneBearer(authorization: string | null): boolean {
+  if (!authorization?.startsWith("Bearer ")) return false;
+  const payload = authorization.slice("Bearer ".length).split(".")[1];
+  if (!payload) return false;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      iss?: unknown;
+      project_id?: unknown;
+    };
+    return claims.iss === undefined && typeof claims.project_id === "string";
+  } catch {
+    return false;
+  }
+}
+
 /** Privy's signed identity token — carries the linked accounts, including the wallet. */
 const PRIVY_IDENTITY_HEADER = "privy-id-token";
 
@@ -158,7 +186,7 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
   const identity =
     req.headers.get(PRIVY_IDENTITY_HEADER) ??
     cookieValue(req.headers.get("cookie"), PRIVY_IDENTITY_HEADER);
-  if (identity) headers[PRIVY_IDENTITY_HEADER] = identity;
+  if (identity && !isDecaneBearer(auth)) headers[PRIVY_IDENTITY_HEADER] = identity;
 
   /**
    * THE CALLER'S IDEMPOTENCY KEY, FORWARDED VERBATIM ON WRITES.

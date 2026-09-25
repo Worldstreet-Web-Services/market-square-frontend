@@ -20,7 +20,7 @@ export const AdminAnnouncementPageSchema = z.object({
  * Admin console contracts.
  *
  * Every /admin route is enforced server-side against `profiles.is_admin`; the
- * dashboard authenticates as an admin USER with a normal Privy token. No
+ * dashboard authenticates as an admin USER with a normal session token. No
  * internal admin key ever reaches the browser — the gateway strips it anyway.
  *
  * Queues hydrate their subject profile where the service provides one. Where

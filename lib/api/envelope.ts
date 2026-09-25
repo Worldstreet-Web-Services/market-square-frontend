@@ -96,6 +96,10 @@ export function errorMessage(error: unknown, fallback: string): string {
       return "Sign in to continue.";
     case "SESSION_EXPIRED":
       return "Session expired — sign in again.";
+    // The service retired the old sign-in because the account moved to its
+    // upgraded one. Not an expiry: the same sign-in would be refused again.
+    case "ACCOUNT_UPGRADED":
+      return "Your account has been upgraded — sign in with your new account.";
     case "AUTH_NOT_READY":
       return "Still connecting — try again in a moment.";
     // Somebody's "Messages from" setting refused this chat. The service's own

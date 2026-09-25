@@ -1328,7 +1328,7 @@ function TopBarActions() {
     of the chrome is where every product in this category puts it, and it is
     the one piece of furniture a signed-out visitor still has.
 
-    Nothing at all while Privy is settling: a Sign in button that appears for
+    Nothing at all while the session is settling: a Sign in button that appears for
     half a second and is replaced by an avatar is worse than a moment of
     nothing.
   */
@@ -1962,7 +1962,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
         should just be looking at the square.
 
         Gated on `ready && !authenticated`, not on `!authenticated` alone: while
-        Privy is still settling, `authenticated` is false for everyone, and
+        the session is still settling, `authenticated` is false for everyone, and
         hiding the rail on that would pull the whole layout sideways under a
         signed-in reader and then push it back. Boot happens under the splash,
         so nobody sees the rail appear.

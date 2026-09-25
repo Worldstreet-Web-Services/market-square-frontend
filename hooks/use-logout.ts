@@ -9,7 +9,7 @@ import { getRoomSession } from "@/lib/room-session-store";
 import { sq } from "@/lib/square-path";
 
 // One logout flow for every surface: confirm if a broadcast is on air, then
-// Privy logout, drop every cached query (identity, tickets, feeds), clear the
+// session logout, drop every cached query (identity, tickets, feeds), clear the
 // broadcast signal, and land on /auth.
 export function useLogout(): () => Promise<void> {
   const { logout } = useAuth();

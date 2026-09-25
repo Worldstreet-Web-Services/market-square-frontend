@@ -34,6 +34,7 @@ test("the codes a reader can act on keep their own copy", () => {
   for (const [code, expected] of [
     ["UNAUTHORIZED", "Sign in to continue."],
     ["SESSION_EXPIRED", "Session expired — sign in again."],
+    ["ACCOUNT_UPGRADED", "Your account has been upgraded — sign in with your new account."],
     ["FORBIDDEN", "You don't have access to that."],
     ["NOT_FOUND", "That wasn't found — it may have been removed."],
     ["RATE_LIMITED", "Slow down — try again in a moment."],

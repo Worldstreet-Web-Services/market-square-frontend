@@ -7,6 +7,7 @@ import { SplashScreen } from "@/components/layout/splash-screen";
 import { SignInOverlay } from "@/components/layout/sign-in-overlay";
 import { asset } from "@/lib/square-path";
 import { WelcomeGate } from "@/components/layout/welcome/welcome-gate";
+import { MigrationGate } from "@/components/layout/migration-gate";
 import "./globals.css";
 
 const geist = Geist({
@@ -152,17 +153,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${geist.variable} ${roboto.variable} ${inter.variable} ${manrope.variable}`}>
       <body className="ws-wash min-h-dvh">
         <Providers>
-          {/* Above everything, including the bare routes the shell steps out of
-              — a splash that the live room could render over would be a splash
-              that only covers some of the boot. */}
-          <SplashScreen />
-          {/* Under the splash, over the app: what a first-time, signed-out
-              visitor to the front door sees once the boot sequence ends. */}
-          <WelcomeGate />
-          {/* The app's one sign-in surface, opened from anywhere by
-              `useAuth().login`. Under the welcome, over everything else. */}
-          <SignInOverlay />
-          <AppShell>{children}</AppShell>
+          {/* Nothing that talks to Square renders until the service has said
+              whether an old account is waiting for this sign-in — see
+              components/layout/migration-gate. */}
+          <MigrationGate>
+            {/* Above everything, including the bare routes the shell steps out of
+                — a splash that the live room could render over would be a splash
+                that only covers some of the boot. */}
+            <SplashScreen />
+            {/* Under the splash, over the app: what a first-time, signed-out
+                visitor to the front door sees once the boot sequence ends. */}
+            <WelcomeGate />
+            {/* The app's one sign-in surface, opened from anywhere by
+                `useAuth().login`. Under the welcome, over everything else. */}
+            <SignInOverlay />
+            <AppShell>{children}</AppShell>
+          </MigrationGate>
         </Providers>
       </body>
     </html>

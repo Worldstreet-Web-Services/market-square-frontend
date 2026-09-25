@@ -1,6 +1,7 @@
 export { ProfilePage } from "./components/profile-page";
 export { SpotlightPage } from "./components/spotlight-page";
 export { AuthPage } from "./components/auth-page";
+export { AuthCallbackPage } from "./components/auth-callback-page";
 export { SignInCard } from "./components/sign-in-card";
 export { VerificationCard } from "./components/verification-card";
 export { ClaimUsernameGate } from "./components/claim-username-gate";

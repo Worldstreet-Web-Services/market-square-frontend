@@ -1,9 +1,9 @@
 "use client";
 
 // Client-side session signal shared between the api client (not a hook) and
-// the shell's SessionGuard (a component). The guard mirrors Privy's
-// ready/authenticated pair in here; the api client uses it to tell "Privy is
-// still warming up" (wait quietly) apart from "the session is gone" (log the
+// the shell's SessionGuard (a component). The guard mirrors the session's
+// ready/authenticated pair in here; the api client uses it to tell "the session
+// is still hydrating" (wait quietly) apart from "the session is gone" (log the
 // user out properly, once).
 
 interface AuthSnapshot {
@@ -25,7 +25,6 @@ let snapshot: AuthSnapshot = { ready: false, authenticated: false };
  */
 let everAuthenticated = false;
 const readyWaiters = new Set<() => void>();
-const expiryListeners = new Set<() => void>();
 
 export function setAuthSnapshot(next: AuthSnapshot): void {
   snapshot = next;
@@ -49,7 +48,7 @@ export function hasHeldSession(): boolean {
   return everAuthenticated;
 }
 
-// Resolves when Privy reports ready (or after the timeout, so a broken
+// Resolves when the session reports ready (or after the timeout, so a broken
 // provider can never hang a request forever).
 export function waitForAuthReady(timeoutMs = 8000): Promise<void> {
   if (snapshot.ready) return Promise.resolve();
@@ -66,13 +65,28 @@ export function waitForAuthReady(timeoutMs = 8000): Promise<void> {
   });
 }
 
+/**
+ * Why the session is gone.
+ *
+ * "expired" is the ordinary case: the token aged out. "upgraded" is the
+ * service saying this account has MOVED — the person upgraded (here or in the
+ * Market app, which shares the account), and whatever this browser still
+ * holds belongs to the old sign-in. Telling them their session "expired" is
+ * untrue and sends them back to the same dead door; the word that helps is
+ * "sign in with your new account".
+ */
+export type SessionEndReason = "expired" | "upgraded";
+
+type ExpiryListener = (reason: SessionEndReason) => void;
+const expiryListeners = new Set<ExpiryListener>();
+
 // Fired by the api client when a call discovers the session is gone. The
 // SessionGuard owns the actual logout UX (toast once, clear cache, redirect).
-export function markSessionExpired(): void {
-  expiryListeners.forEach((listener) => listener());
+export function markSessionExpired(reason: SessionEndReason = "expired"): void {
+  expiryListeners.forEach((listener) => listener(reason));
 }
 
-export function onSessionExpired(listener: () => void): () => void {
+export function onSessionExpired(listener: ExpiryListener): () => void {
   expiryListeners.add(listener);
   return () => expiryListeners.delete(listener);
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useLoginWithEmail, useLoginWithOAuth } from "@privy-io/react-auth";
+import { useEffect, useState } from "react";
+import { useSocialAuth, useSocialWallet } from "decane-connect-kit";
 import { Spinner } from "@/components/ui/button";
 import { SquareLockup } from "@/components/ui/square-mark";
 import { DEMO_AUTH } from "@/lib/auth-mode";
@@ -10,19 +10,15 @@ import { cn } from "@/lib/cn";
 /**
  * THE SIGN-IN CARD — Desktop 40, the end of the welcome sequence.
  *
- * ─── NOBODY IS TOLD ABOUT PRIVY, AND THAT IS THE POINT ──────────────────────
- * The page this replaces had a button reading "Continue with Privy" and a line
- * under it explaining what Privy was. Privy is our auth vendor; it is not a
- * thing the reader has, wants, or should have to understand. It is now entirely
- * behind the two controls the design draws — the Ark button, and an email
- * — via the HEADLESS hooks (`useLoginWithOAuth`, `useLoginWithEmail`) rather
- * than `usePrivy().login()`, which opens Privy's own branded modal on top of
- * this card. That modal is the whole reason those hooks exist, and it is the
- * one thing that would give the vendor away.
+ * ─── NOBODY IS TOLD ABOUT THE AUTH VENDOR, AND THAT IS THE POINT ────────────
+ * The page this replaces had a button reading "Continue with Privy". Our auth
+ * vendor — Decane now — is not a thing the reader has, wants, or should have
+ * to understand. It is entirely behind the two controls the design draws — the
+ * Ark button, and an email — driven HEADLESSLY through `useSocialAuth()` rather
+ * than the kit's own wallet modal, which would give the vendor away.
  *
- * `showWalletUIs: false` is already set in `app/providers.tsx` for the same
- * reason on the money side, so this is the app's existing posture, not a new
- * one. Same shape wsws-frontend uses.
+ * `showStatusOverlay: false` is set in `app/providers.tsx` for the same reason
+ * on the wallet side. Same shape wsws-frontend uses.
  *
  * ─── THE ONE PLACE THE FILE RUNS OUT ────────────────────────────────────────
  * Email sign-in is two steps — send a code, then enter it — and the file draws
@@ -47,11 +43,11 @@ import { cn } from "@/lib/cn";
 /**
  * THE ARK LOCKUP — the button's mark, replacing Google's.
  *
- * Ark and Market Square run on ONE Privy app id, so the account somebody signs
+ * Ark and Market Square run on ONE Decane identity, so the account somebody signs
  * in with here IS their Ark account: a balance earned in one is spendable in
  * the other, and this button is the door to both. Naming Google on it named our
  * identity vendor rather than the thing the reader gets — the same objection
- * the note above makes to ever saying "Privy" on this card.
+ * the note above makes to ever naming the vendor on this card.
  *
  * ─── IT IS A WORDMARK, AND THAT DECIDES THE COPY ────────────────────────────
  * There is NO icon-only Ark mark. Every piece of Ark artwork in either repo is
@@ -69,7 +65,7 @@ import { cn } from "@/lib/cn";
  * than the #8E8E93 label, exactly as the full-colour Google mark did.
  *
  * ─── WHAT DID NOT CHANGE ────────────────────────────────────────────────────
- * The FLOW. This is still `initOAuth({ provider: "google" })` and pressing it
+ * The FLOW. This is still a Google sign-in (`signInWithGoogle()`) and pressing it
  * still opens Google's account chooser. That is not a mismatch being papered
  * over: Google is how you prove who you are, Ark is the account you land in.
  * If a second provider is ever added, this button becomes the one that offers
@@ -124,34 +120,119 @@ function CardButton({
   );
 }
 
-function PrivyForm() {
-  const { initOAuth, loading: oauthLoading } = useLoginWithOAuth();
-  const { sendCode, loginWithCode, state } = useLoginWithEmail();
+function DecaneForm() {
+  const {
+    signInWithGoogle,
+    googleLoading,
+    sendEmailCode,
+    confirmEmailCode,
+    emailLoading,
+    canUsePasskey,
+    signInWithPasskey,
+    error: kitError,
+  } = useSocialAuth();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [step, setStep] = useState<"email" | "code" | "password">("email");
   const [error, setError] = useState<string | null>(null);
+  const [googleFailed, setGoogleFailed] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
 
-  const busy = state.status === "sending-code" || state.status === "submitting-code";
+  /*
+    THE OTHER WAY BACK IN.
+
+    A device can be set up to open a session from a password alone — no
+    provider, no emailed code. Whether THIS device is, is a question only the
+    kit can answer and only asynchronously, so it is asked once on mount and
+    the affordance simply is not drawn until the answer is yes.
+  */
+  const wallet = useSocialWallet();
+  const [canUsePassword, setCanUsePassword] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void wallet
+      .canUnlockWithPassword()
+      .then((can) => {
+        if (live) setCanUsePassword(can);
+      })
+      .catch(() => {
+        // Cannot tell: leave it undrawn. The ordinary ways in are all present.
+      });
+    return () => {
+      live = false;
+    };
+  }, [wallet]);
+
+  const submitPassword = async () => {
+    if (password.length === 0) return;
+    setError(null);
+    setPasswordBusy(true);
+    try {
+      await wallet.unlockWithPassword(password);
+    } catch {
+      // The kit distinguishes a wrong password from a broken one; the reader
+      // can only act on the first, and retyping is the action either way.
+      setError("That password didn't open this device. Try again.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  /*
+    THE WAY BACK IN FOR SOMEBODY WHO HAS BEEN HERE.
+
+    Signing out clears the remembered session but deliberately leaves the
+    passkey-wrapped share on the device, so a returning reader can be signed
+    straight back in with one biometric prompt — no redirect, no emailed code.
+    `canUsePasskey` is the kit saying this device holds such a share for the
+    account that signed out; it is false on a new device and for PIN-only
+    wallets, so this never appears where it would fail.
+
+    Without it, everyone who signed out was pushed back through Google or an
+    email code even while holding a perfectly good passkey.
+  */
+  const passkey = async () => {
+    setError(null);
+    setPasskeyBusy(true);
+    try {
+      await signInWithPasskey();
+    } catch (err) {
+      // Dismissing the authenticator sheet is a decision, not a failure, and
+      // the other ways in are still on screen underneath.
+      const name = (err as { name?: string })?.name;
+      if (name !== "NotAllowedError" && name !== "UserCancelledError") {
+        setError("That didn't work. Try another way in.");
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
+
+  const busy = emailLoading;
   // Not a validator — just enough to stop an obviously empty submit. The
   // service decides what a real address is, and says so.
   const emailLooksReal = /.+@.+\..+/.test(email.trim());
 
   const google = async () => {
     setError(null);
-    try {
-      await initOAuth({ provider: "google" });
-    } catch {
-      // Never name the vendor in a message the reader sees.
-      setError("Couldn't reach Google just then. Try again.");
-    }
+    setGoogleFailed(false);
+    // A full-page redirect: on success the page navigates away and this never
+    // settles in place. A failure BEFORE leaving is recorded on the kit's own
+    // `error` rather than thrown, so it is read from there once this returns.
+    await signInWithGoogle();
+    setGoogleFailed(true);
   };
+  // Never the kit's message: it names the vendor.
+  const googleError =
+    googleFailed && kitError && !googleLoading ? "Couldn't reach Google just then. Try again." : null;
 
   const submitEmail = async () => {
     if (!emailLooksReal) return;
     setError(null);
     try {
-      await sendCode({ email: email.trim() });
+      await sendEmailCode(email.trim());
       setStep("code");
     } catch {
       setError("We couldn't send that code. Check the address and try again.");
@@ -161,12 +242,59 @@ function PrivyForm() {
   const submitCode = async () => {
     setError(null);
     try {
-      await loginWithCode({ code });
+      await confirmEmailCode(email.trim(), code);
     } catch {
       setCode("");
       setError("That code didn't match. Check it and try again.");
     }
   };
+
+  if (step === "password") {
+    return (
+      <form
+        className="contents"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submitPassword();
+        }}
+      >
+        <div className="mt-[61px] px-[27px]">
+          <p className="text-[14px] leading-[18px] text-[#999999]">
+            The password you set on this device.
+          </p>
+          <label htmlFor="ms-password" className="mt-6 block text-[14px] font-medium text-white">
+            Password
+          </label>
+          <input
+            id="ms-password"
+            autoFocus
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            className={cn(FIELD, "mt-2.5")}
+          />
+          {error && <p className="mt-3 text-[13px] text-danger">{error}</p>}
+        </div>
+        <div className="mt-auto px-[80px] pt-8">
+          <CardButton type="submit" busy={passwordBusy} disabled={password.length === 0}>
+            {passwordBusy ? "Opening…" : "Continue"}
+          </CardButton>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setPassword("");
+              setStep("email");
+            }}
+            className="mt-4 w-full text-center text-[14px] text-[#999999] transition-colors hover:text-white"
+          >
+            Use another way in
+          </button>
+        </div>
+      </form>
+    );
+  }
 
   if (step === "code") {
     return (
@@ -219,7 +347,7 @@ function PrivyForm() {
               type="button"
               disabled={busy}
               className="text-[#999999] transition-colors hover:text-white disabled:opacity-50"
-              onClick={() => void sendCode({ email: email.trim() })}
+              onClick={() => void sendEmailCode(email.trim()).catch(() => {})}
             >
               Resend code
             </button>
@@ -237,17 +365,57 @@ function PrivyForm() {
         void submitEmail();
       }}
     >
+      {/* Offered first when it exists, because it is the shortest way back and
+          costs one prompt. The file's own button follows it as the way in for
+          everybody else. */}
+      {canUsePasskey && (
+        <div className="mt-[61px] flex justify-center px-6">
+          <button
+            type="button"
+            onClick={() => void passkey()}
+            disabled={passkeyBusy}
+            className="ws-press flex h-[54px] w-full max-w-[346px] items-center justify-center gap-2.5 rounded-[34px] bg-white text-[16px] font-semibold tracking-[-0.01em] text-[#0F0F0F] transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {passkeyBusy ? <Spinner className="h-5 w-5" /> : null}
+            {passkeyBusy ? "Waiting for your passkey…" : "Sign in with your passkey"}
+          </button>
+        </div>
+      )}
+
+      {/* The other way back, for a device set up to open from a password
+          alone. A link rather than a second big button: it is the fallback for
+          the passkey, not a third equal option. */}
+      {canUsePassword && (
+        <div className="mt-4 flex justify-center px-6">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setStep("password");
+            }}
+            className="text-[14px] font-medium text-[#999999] underline-offset-4 transition-colors hover:text-white hover:underline"
+          >
+            Sign in with your device password
+          </button>
+        </div>
+      )}
+
       {/* `btn-google` — 346x54, radius 34, #000 at 20% under a #000 12% hairline. */}
-      <div className="mt-[61px] flex justify-center px-6">
+      <div
+        className={cn(
+          "flex justify-center px-6",
+          canUsePasskey || canUsePassword ? "mt-4" : "mt-[61px]"
+        )}
+      >
         <button
           type="button"
           onClick={() => void google()}
-          disabled={oauthLoading}
+          disabled={googleLoading}
           className="ws-press flex h-[54px] w-full max-w-[346px] items-center justify-center gap-2.5 rounded-[34px] border border-black/[0.12] bg-black/20 text-[16px] font-semibold tracking-[-0.01em] text-[#8E8E93] transition-colors hover:bg-black/30 disabled:opacity-60"
         >
           {/* 14px tall, so the 5:1 lockup lands at ~70 wide and the pair still
               fits the 346 button on the narrowest phone. */}
-          {oauthLoading ? (
+          {googleLoading ? (
             <Spinner className="h-5 w-5" />
           ) : (
             <ArkMark className="h-[14px] w-[70px] shrink-0" />
@@ -269,7 +437,9 @@ function PrivyForm() {
           placeholder="Enter Email"
           className={cn(FIELD, "mt-2.5")}
         />
-        {error && <p className="mt-3 text-[13px] text-danger">{error}</p>}
+        {(error ?? googleError) && (
+          <p className="mt-3 text-[13px] text-danger">{error ?? googleError}</p>
+        )}
       </div>
 
       {/* The file leaves 98px of air here and puts Continue 28px off the card's
@@ -289,22 +459,33 @@ function PrivyForm() {
   );
 }
 
-/** No Privy provider is mounted in demo mode, so its hooks cannot be called. */
+/** No Decane provider is mounted in demo mode, so its hooks cannot be called. */
 function DemoForm() {
   return (
     <div className="mt-[61px] px-[27px]">
       <p className="text-[14px] leading-[18px] text-[#999999]">
         This build runs with a demo session — there is no sign-in to do. Set
-        <code className="mx-1 text-white">NEXT_PUBLIC_PRIVY_APP_ID</code>
+        <code className="mx-1 text-white">NEXT_PUBLIC_DECANE_APP_ID</code>
         to enable real accounts.
       </p>
     </div>
   );
 }
 
-const Form = DEMO_AUTH ? DemoForm : PrivyForm;
+const Form = DEMO_AUTH ? DemoForm : DecaneForm;
 
-export function SignInCard({ onSkip }: { onSkip?: () => void }) {
+export function SignInCard({
+  onSkip,
+  notice,
+}: {
+  onSkip?: () => void;
+  /**
+   * One line above the form for a reader who was sent here for a reason —
+   * "your account has been upgraded, sign in with the new one". Absent for
+   * a first visit, which needs no explaining.
+   */
+  notice?: string;
+}) {
   return (
     /* The file centres the CARD in the viewport, not the card plus its lockup:
        the card runs 269-757 in a 1024 frame, whose midpoint is the frame's. The
@@ -335,6 +516,15 @@ export function SignInCard({ onSkip }: { onSkip?: () => void }) {
           </div>
         </div>
 
+        {notice && (
+          <p
+            role="status"
+            className="mx-6 mt-5 rounded-2xl border border-spotlight/30 bg-spotlight/10 px-4 py-3 text-[14px] leading-[20px] text-white"
+          >
+            {notice}
+          </p>
+        )}
+
         <Form />
       </div>
 
@@ -345,7 +535,7 @@ export function SignInCard({ onSkip }: { onSkip?: () => void }) {
         <button
           type="button"
           onClick={onSkip}
-          className="mt-6 text-[14px] text-[#999999] transition-colors hover:text-white"
+          className="mt-4 text-[14px] text-[#999999] transition-colors hover:text-white"
         >
           Look around first
         </button>
