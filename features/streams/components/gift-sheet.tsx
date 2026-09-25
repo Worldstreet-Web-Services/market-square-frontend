@@ -127,7 +127,34 @@ export function GiftSheet({
   const [quantity, setQuantity] = useState<number>(1);
   // The host leads the roster, so index 0 is the sane default without this
   // sheet needing to know what a host is.
-  const [toId, setToId] = useState<string | null>(initialRecipientId ?? null);
+  /*
+    WHO THIS GIFT IS FOR — AND WHY IT IS NOT PLAIN `useState(initialRecipientId)`.
+
+    `useState` captures its argument ONCE, at mount. `house-room` renders this
+    sheet UNCONDITIONALLY — only `open` hides it — so the sheet mounts with the
+    room and never mounts again. Tapping "Gift" on somebody sets `giftTo` in
+    the room, the prop changes, and `toId` kept the value it had at mount:
+    null. `recipient` then fell through to `people[0]`.
+
+    So the sheet could send a gift to THE FIRST PERSON IN THE ROSTER instead of
+    the person whose Gift button was pressed. Real money to the wrong human,
+    and silent — the tray names whoever it resolved, so it looks deliberate.
+    That is exactly the failure `toProfileId` and `giftablePersonId` were added
+    to prevent, arriving through this component's own state instead.
+
+    The caller's choice is therefore the SOURCE, and an in-sheet pick overrides
+    it only until the caller names somebody else. Reset during render rather
+    than in an effect — React's documented way to adjust state when a prop
+    changes, and it avoids the cascading re-render an effect would cause.
+  */
+  const [picked, setPicked] = useState<string | null>(null);
+  const [lastNamed, setLastNamed] = useState<string | null>(initialRecipientId ?? null);
+  if ((initialRecipientId ?? null) !== lastNamed) {
+    setLastNamed(initialRecipientId ?? null);
+    setPicked(null);
+  }
+  const toId = picked ?? initialRecipientId ?? null;
+  const setToId = setPicked;
   const people = recipients ?? [];
   const recipient = people.find((person) => person.id === toId) ?? people[0] ?? null;
   const selected = LIVE_GIFTS.find((gift) => gift.id === selectedId) ?? LIVE_GIFTS[0];

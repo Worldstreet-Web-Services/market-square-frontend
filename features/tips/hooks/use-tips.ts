@@ -165,7 +165,29 @@ export function useSendTip() {
 
       // A held hash is one this app produced, so it is already 0x-prefixed.
       let txHash = (held?.txHash ?? null) as `0x${string}` | null;
-      if (!txHash) {
+      /*
+        THE HOLD MUST BELONG TO THIS TIP, and until now nobody checked.
+
+        The hold key canonicalises the AMOUNT — `tip:<kind>:<id>:<toProfileId>`
+        plus the amount — so two identical gifts (same gift, same person, same
+        room) produce the SAME key. Reusing a held hash on `!txHash` alone
+        therefore reported gift #1's transfer against gift #2's tip, and signed
+        nothing: ONE PAYMENT, TWO TIPS. Worse, the two tips agree on amount and
+        on both parties, so the reconciler has no way to notice — it would
+        settle the second against a transfer that already paid for the first.
+
+        The coin purchase has had this guard all along
+        (`features/gifts/hooks/use-gifts.ts`: `!txHash || held?.ref !== purchase.id`).
+        The tip path was the one that did not, and it is the path that can be
+        fired repeatedly at the same person on purpose.
+
+        A hold whose `ref` names a different tip is not ours to spend: sign
+        again. That is correct even when it costs a second signature, because
+        two gifts ARE two payments — the thing that must never happen is two
+        gifts claiming one.
+      */
+      if (!txHash || held?.ref !== created.tip.tipId) {
+        txHash = null;
         phase("signing");
         /*
           ONE TRANSACTION THAT PAYS THE CREATOR AND TAKES THE FEE.
