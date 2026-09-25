@@ -9,7 +9,7 @@ import {
   reportTipTransfer,
   sendTip,
 } from "@/features/tips/lib/api";
-import { KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
+import { compareKashAmounts, KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
 import { encodeErc20Transfer, toBaseUnits } from "@/lib/erc20";
 import { encodeExecuteBatch, transferCallsForLegs } from "@/lib/account-batch";
 import { holdKey } from "@/lib/payment-hold";
@@ -161,6 +161,35 @@ export function useSendTip() {
         // Without the engine's own token address there is nothing to transfer
         // and guessing one sends real money into nothing.
         throw new Error("Tipping isn't configured on this environment yet.");
+      }
+
+      /*
+        SIGN WHAT THE SENDER AGREED TO, NEVER WHAT CAME BACK.
+
+        The request carries `amountKash` — the total the tray showed and the
+        reader committed to. Everything below then signs
+        `created.tip.amountKash`, which is the SERVICE'S ECHO of it, and
+        nothing compared the two.
+
+        `transferCallsForLegs` does check that the legs sum to the total, but
+        the total it checks against is that same echo — so it proves the split
+        is internally consistent and says nothing about whether it matches the
+        amount anybody saw. A wrong or altered echo would be signed as readily
+        as a right one.
+
+        A signature is the last point at which the sender's agreement is still
+        revocable. So an echo that is not the committed amount is refused here,
+        before the wallet is ever asked — the same rule `lib/account-batch.ts`
+        applies to the legs, applied one level up to the total they sum to.
+
+        Compared in BASE UNITS, never as text: `0.5` and `0.50` are the same
+        money and different strings, and refusing that pair would break a send
+        that is exactly right.
+      */
+      if (compareKashAmounts(created.tip.amountKash, amountKash) !== 0) {
+        throw new Error(
+          `This gift came back priced at ${created.tip.amountKash} KASH, not the ${amountKash} you chose. Nothing was charged.`
+        );
       }
 
       // A held hash is one this app produced, so it is already 0x-prefixed.

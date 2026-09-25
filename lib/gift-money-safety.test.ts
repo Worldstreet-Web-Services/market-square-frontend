@@ -98,3 +98,41 @@ test("the reset happens during render, never in an effect", () => {
   const sheet = code("features/streams/components/gift-sheet.tsx");
   assert.doesNotMatch(sheet, /useEffect\([^)]*setPicked/u, "no effect-driven reset");
 });
+
+/* ── SIGN WHAT WAS AGREED, NOT WHAT CAME BACK ─────────────────────────────── */
+
+test("the echoed amount is checked against the committed one before signing", () => {
+  /*
+    The request carries the total the tray showed. Everything after it signed
+    `created.tip.amountKash` — the SERVICE'S ECHO — and nothing compared them.
+
+    `transferCallsForLegs` does verify the legs sum to the total, but that
+    total IS the echo, so it proves internal consistency and says nothing about
+    whether the figure matches what anybody saw. A signature is the last point
+    at which the sender's agreement is still revocable, so a mismatch has to be
+    refused before the wallet is asked.
+  */
+  const tips = code("features/tips/hooks/use-tips.ts");
+  assert.match(
+    tips,
+    /compareKashAmounts\(created\.tip\.amountKash, amountKash\) !== 0/u,
+    "an echo that is not the committed amount must never reach the wallet"
+  );
+  const guard = tips.indexOf("compareKashAmounts(created.tip.amountKash");
+  const signs = tips.indexOf("await send(");
+  assert.ok(guard !== -1 && signs !== -1 && guard < signs, "the check must precede the signature");
+});
+
+test("the comparison is in base units, so 0.5 and 0.50 are the same money", () => {
+  /*
+    Text comparison would refuse a send that is exactly right. `compareKashAmounts`
+    pads both fractions and compares as integers — the same reason
+    `lib/account-batch.ts` compares legs in base units rather than as strings.
+  */
+  const tips = code("features/tips/hooks/use-tips.ts");
+  assert.doesNotMatch(
+    tips,
+    /created\.tip\.amountKash\s*!==\s*amountKash/u,
+    "string inequality would reject 0.5 against 0.50"
+  );
+});
