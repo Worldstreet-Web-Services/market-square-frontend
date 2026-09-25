@@ -76,6 +76,10 @@ const GLYPHS: Partial<Record<MarketNotification["kind"], string>> = {
   repost: asset("/notifications/notif-post.svg"),
   bookmark: asset("/notifications/notif-post.svg"),
   tip_received: asset("/gifts/coin-stack.svg"),
+  // THE MONEY MARK, not a gift. The payload names no `giftId`, so any of
+  // the fourteen gift images would be this row claiming a gift nobody
+  // chose — the same rule the body copy follows.
+  gift_received: asset("/gifts/coin-stack.svg"),
   ticket_purchased: asset("/gifts/coin-stack.svg"),
   // Chat-shaped events take the file's mention mark, which is the glyph it
   // draws on "Mentioned in Gistroom chat".
@@ -128,6 +132,8 @@ function headline(item: MarketNotification): string {
       return "Saved to Arkmarks";
     case "tip_received":
       return "You were tipped";
+    case "gift_received":
+      return "You were sent a gift";
     case "ticket_purchased":
       return "Ticket sold";
     case "verification_resolved":
@@ -180,6 +186,12 @@ function describe(item: MarketNotification): string {
       // no amount or gift, so this says the true general thing and the tips
       // list (Earnings) carries the detail.
       return `${who} sent you a tip.`;
+    case "gift_received":
+      // WHAT ARRIVED, NOT WHICH GIFT. The payload carries the sender, the
+      // room and nothing else — no `giftId` and no amount — so naming a
+      // gift here would be inventing one. Earnings carries the detail, the
+      // way it does for a tip.
+      return `${who} sent you a gift.`;
     case "wink":
       // Says what happened and nothing about what it obliges. A wink is an
       // opening, not a request, and copy that implies otherwise ("wants to

@@ -35,6 +35,24 @@ export const NotificationKindSchema = z
      */
     "tip_received",
     /**
+     * Somebody sent you a gift.
+     *
+     * LISTED BEFORE THE SERVICE SENDS ONE — the lesson the three notes around
+     * this enum keep drawing, applied in advance for once. The kind ships on
+     * service #317 and is not deployed yet; without this line every gift would
+     * arrive through `.catch("follow")` and tell a creator who had just been
+     * PAID that they had gained a follower.
+     *
+     * Its own kind rather than `tip_received`, which is the service's choice
+     * and the right one: a tip is an amount, a gift is an object somebody
+     * chose, and they read differently to the person receiving one.
+     *
+     * Recorded on SETTLEMENT, not on the send — until both legs land nobody
+     * has been paid, so a row before that would be a claim the service cannot
+     * stand behind.
+     */
+    "gift_received",
+    /**
      * Somebody winked at you — a one-tap signal of interest, addressed to you
      * rather than to something you posted.
      *
