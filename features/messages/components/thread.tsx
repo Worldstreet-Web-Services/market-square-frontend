@@ -2008,6 +2008,7 @@ function MessageRow({
   onReply,
   onJump,
   nameOf,
+  roleOf,
   flash,
   onOpenSnap,
   openingSnap,
@@ -2033,6 +2034,8 @@ function MessageRow({
   onJump: (messageId: string) => void;
   /** A sender id as a name — "You" for the reader. */
   nameOf: (senderId: string) => string;
+  /** This sender's role in the house, for the line above their bubble. */
+  roleOf?: (senderId: string) => string | null;
   /** Briefly true after a quote tap landed here. */
   flash: boolean;
 }) {
@@ -2277,7 +2280,41 @@ function MessageRow({
           </span>
         )
       )}
-      {content}
+      {/*
+        WHO SAID IT, AND WHAT THEY ARE HERE — the line above somebody else's
+        bubble in a group.
+
+        A group showed a FACE and never a NAME, so telling two people apart
+        meant recognising their avatar — and an admin speaking for the house
+        read exactly like anybody else talking (ogazboiz, pointing at Telegram:
+        "i can see name and the role this is what i am saying").
+
+        ONLY IN A GROUP, AND ONLY FOR OTHER PEOPLE. A 1:1 has one other person
+        and naming them above every bubble is a label on a conversation that
+        already has a title; and nobody needs telling which messages are their
+        own.
+
+        ONLY ON THE FIRST OF A RUN. `tail` marks a bubble that continues the
+        same speaker, and repeating the name down eight consecutive messages is
+        the noise every chat app learned to drop.
+
+        The NAME truncates and the chip does not: an ellipsis still names
+        somebody, a clipped "Admin" claims something false.
+      */}
+      {group && !mine && !tail && sender ? (
+        <div className="flex min-w-0 flex-col items-start gap-1">
+          <span className="flex min-w-0 max-w-full items-center gap-1.5 pl-1">
+            <span className="truncate text-[12px] font-semibold leading-4 text-white/90">
+              {sender.displayName}
+            </span>
+            <VerifiedBadge verification={sender.verification} className="h-3 w-3 shrink-0" />
+            <MemberRoleChip role={roleOf?.(message.senderId) ?? ""} />
+          </span>
+          {content}
+        </div>
+      ) : (
+        content
+      )}
       {/* A removed message has nothing to answer. The announcement bubble is
           the service's, and answering it is answering nobody. */}
       {!removed && !invite && (
@@ -3234,6 +3271,17 @@ export function Thread({
   // A 1:1 has no roster request; its two people are the reader and the peer.
   if (!group && conversation.peer) senders.set(conversation.peer.id, conversation.peer);
 
+  /**
+   * WHAT THIS SENDER IS IN THIS HOUSE — owner, admin, or nothing.
+   *
+   * Read off the SAME roster the faces come from, so a bubble and the members
+   * sheet can never disagree about who runs the place. Undefined until the
+   * roster lands, which is why the chip appears a moment after the avatar
+   * rather than the name waiting for it.
+   */
+  const roleOf = (senderId: string): string | null =>
+    members.data?.items.find((row) => row.profile?.id === senderId)?.role ?? null;
+
   /** A sender id as the name a quote or the reply strip prints. */
   const nameOf = (senderId: string): string => {
     if (me.data && senderId === me.data.id) return "You";
@@ -3466,6 +3514,7 @@ export function Thread({
                     onReply={setReplyTo}
                     onJump={jumpTo}
                     nameOf={nameOf}
+                    roleOf={roleOf}
                     flash={flashId === message.id}
                     onOpenSnap={openSnap}
                     openingSnap={openingSnapId === message.id}

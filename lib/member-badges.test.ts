@@ -70,3 +70,38 @@ describe("a group member row", () => {
     assert.match(chip, /<ChipShell>Admin<\/ChipShell>/u);
   });
 });
+
+/**
+ * A GROUP MESSAGE SAYS WHO SAID IT.
+ *
+ * ogazboiz, pointing at Telegram: "i can see name and the role this is what i
+ * am saying". A group showed a FACE and never a NAME, so telling two people
+ * apart meant recognising their avatar — and an admin speaking for the house
+ * read exactly like anybody else talking.
+ */
+describe("a group message's sender line", () => {
+  const thread = read("features/messages/components/thread.tsx");
+
+  it("names the sender, with their check and their role", () => {
+    assert.match(thread, /\{sender\.displayName\}/u, "a group bubble still shows no name");
+    assert.match(thread, /<VerifiedBadge verification=\{sender\.verification\}/u);
+    assert.match(thread, /<MemberRoleChip role=\{roleOf\?\.\(message\.senderId\) \?\? ""\} \/>/u);
+  });
+
+  it("only in a group, only for OTHER people, and only on the first of a run", () => {
+    /*
+      A 1:1 has one other person, so naming them above every bubble labels a
+      conversation that already has a title. Nobody needs telling which
+      messages are their own. And `tail` marks a bubble continuing the same
+      speaker — repeating the name down eight consecutive messages is the noise
+      every chat app learned to drop.
+    */
+    assert.match(thread, /\{group && !mine && !tail && sender \?/u);
+  });
+
+  it("reads the role off the SAME roster the faces come from", () => {
+    // A bubble and the members sheet must never disagree about who runs the
+    // place, so there is one source rather than two lookups.
+    assert.match(thread, /members\.data\?\.items\.find\(\(row\) => row\.profile\?\.id === senderId\)\?\.role \?\? null/u);
+  });
+});
