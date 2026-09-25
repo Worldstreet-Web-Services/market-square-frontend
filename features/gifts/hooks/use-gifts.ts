@@ -6,7 +6,6 @@ import { errorCode } from "@/lib/api/envelope";
 import {
   buyCoins,
   buyGift,
-  fetchCoinBalance,
   fetchGiftCapability,
   fetchGiftCatalog,
   fetchGiftInventory,
@@ -18,6 +17,8 @@ import { holdKey } from "@/lib/payment-hold";
 import { clearHeldPayment, heldPayment, holdPayment } from "@/lib/payment-store";
 import { useEmbeddedWallet } from "@/hooks/use-wallet";
 import { useEvmSend } from "@/hooks/use-evm-send";
+import { useKashAccount } from "@/features/kash";
+import { coinsFromKash } from "@/lib/coins-from-kash";
 import { useKashStatus } from "@/hooks/use-kash-status";
 import type { GiftHolding } from "@/features/gifts/lib/types";
 
@@ -100,13 +101,36 @@ export function useGiftInventory(enabled = true) {
  */
 export function useCoinBalance(enabled = true): number | null {
   const { authenticated } = useAuth();
-  const query = useQuery({
-    queryKey: COINS_KEY,
-    queryFn: fetchCoinBalance,
-    enabled: enabled && authenticated,
-    retry: false,
-  });
-  return query.isSuccess ? query.data : null;
+
+  /*
+    ─── DERIVED, FULL STOP. THERE IS NO STORED BALANCE TO READ ────────────────
+
+    A coin is a VIEW of the KASH somebody holds, at the service's own rate.
+    Not gated on anything, because there is nothing left for the old display
+    to be right about — verified on the service's `origin/main`, not assumed:
+
+      · `spendCoinsOnGift` exists in the repository layer and has NO CALLER in
+        any service. Nothing spends a stored coin balance.
+      · `tip-service` — which is where a gift actually goes — contains no coin
+        read and no coin debit on either path.
+
+    So the stored balance is credited by a purchase and spent by NOTHING. It
+    was never what a send drew on, which is why ogazboiz could send a gift and
+    watch the recipient get their 50% while this number sat at zero.
+
+    ─── AND WHY IT IS NOT GATED ON `spendGiftsFromCoins` ──────────────────────
+    That was the first version of this and it was inverted. The flag names the
+    MONEY path, not the display:
+
+      true   pay at the send, split into the recipient's leg and the fee
+      false  the old single-leg path — recipient 100%, Square 0%
+
+    So gating the derived display on `=== false` would have tied a display fix
+    to turning Square's revenue off. The flag stays exactly where it is.
+  */
+  const kash = useKashAccount(enabled && authenticated);
+  const rate = useGiftCapability().data?.coinsPerKash ?? null;
+  return coinsFromKash(kash.data?.balance, rate);
 }
 
 /** `giftId -> how many I own`, for the surfaces that render a count per tile. */
