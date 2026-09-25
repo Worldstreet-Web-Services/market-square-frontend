@@ -803,7 +803,7 @@ export function PostCard({
       {repostedBy && (
         <p className="mb-2 flex items-center gap-1.5 pl-1 text-[12px] text-white/50">
           <IconMsRepost className="h-3.5 w-3.5 shrink-0" />
-          <Link href={profileHref(repostedBy)} className="truncate hover:underline">
+          <Link href={profileHref(repostedBy)} prefetch={false} className="truncate hover:underline">
             {repostedBy.displayName}
           </Link>
           <span>reposted</span>
@@ -821,7 +821,7 @@ export function PostCard({
       */}
       <header className="flex items-center gap-3 md:h-[43.9px]">
         {author ? (
-          <TransitionLink href={profileHref(author)} className="shrink-0">
+          <TransitionLink href={profileHref(author)} prefetch={false} className="shrink-0">
             <Avatar
               name={author.displayName}
               seed={author.id}
@@ -843,7 +843,7 @@ export function PostCard({
             {author && (
               <>
                 <Link
-                  href={profileHref(author)}
+                  href={profileHref(author)} prefetch={false}
                   className="truncate text-[14.8px] font-bold leading-[14.1px] text-white hover:underline"
                 >
                   {author.displayName}

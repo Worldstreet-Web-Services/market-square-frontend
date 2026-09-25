@@ -268,7 +268,7 @@ function CommentRow({
       )}
     >
       {author ? (
-        <Link href={profileHref(author)} className="shrink-0">
+        <Link href={profileHref(author)} prefetch={false} className="shrink-0">
           <Avatar name={author.displayName} seed={author.id} src={author.avatarUrl} size={size} />
         </Link>
       ) : (
@@ -278,7 +278,7 @@ function CommentRow({
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[14px]">
           {author ? (
             <>
-              <Link href={profileHref(author)} className="font-bold text-heading hover:underline">
+              <Link href={profileHref(author)} prefetch={false} className="font-bold text-heading hover:underline">
                 {author.displayName}
               </Link>
               <VerifiedBadge verification={author.verification} className="h-3.5 w-3.5 shrink-0" />
@@ -298,7 +298,7 @@ function CommentRow({
         <div className="mt-0.5 text-[15px] leading-normal text-body">
           {reply && answering && (
             <Link
-              href={profileHref(answering)}
+              href={profileHref(answering)} prefetch={false}
               className="mr-1 font-semibold text-create hover:underline"
             >
               {atHandle(answering.username) ?? answering.displayName}

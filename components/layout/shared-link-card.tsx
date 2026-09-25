@@ -97,7 +97,7 @@ function ProfilePreview({ username, href }: { username: string; href: string }) 
   const person = profile.data;
   return (
     <Link
-      href={sq(`/u/${username}`)}
+      href={sq(`/u/${username}`)} prefetch={false}
       onClick={(event) => event.stopPropagation()}
       className={SHELL}
       data-shared-link={href}

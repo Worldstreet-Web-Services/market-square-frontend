@@ -19,6 +19,14 @@
  * to be short. The service holds a released username for its owner for 30
  * days, during which those links keep resolving.
  *
+ * ─── A LINK BUILT HERE IS USUALLY ONE OF MANY ────────────────────────────────
+ * A person link is drawn once per message, per post, per comment and per
+ * @mention, and Next prefetches every `<Link>` that enters the viewport. So a
+ * link inside a repeating row carries `prefetch={false}`, and only the
+ * one-per-screen links — a thread header, a room's owner — keep the default.
+ * `lib/person-link-prefetch.test.ts` holds the reasoning and the list, and
+ * fails when a new list forgets.
+ *
  * Pure, so `node --test` pins it.
  */
 
