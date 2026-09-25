@@ -75,6 +75,34 @@ export function CoinBuySheet({
   const buy = useBuyCoins();
   const [phase, setPhase] = useState<CoinBuyPhase | null>(null);
   const [chosen, setChosen] = useState<number | null>(null);
+  /*
+    A PURCHASE THAT HAS BEEN PAID FOR AND IS WAITING ON THE CHAIN.
+
+    ogazboiz paid THREE TIMES for one pack of coins, roughly two minutes
+    apart, and every payment was real: 0.01 KASH each, all three on Base,
+    all three to the treasury. The settlement bug took his money once. The
+    SILENCE took it the other two times — the sheet toasted "on their way"
+    and closed, he landed back on a tray still reading 0 coins, and the
+    only control in front of him was Buy again.
+
+    So the sheet now STAYS OPEN and says it is waiting. Any step where
+    money leaves before the thing arrives needs a visible in-between, or
+    people pay again — which is a rule about payments, not about coins.
+  */
+  const [awaiting, setAwaiting] = useState<{ coins: number; from: number } | null>(null);
+
+  /*
+    THE NOTICE CLEARS WHEN THE THING IT PROMISED ARRIVES, and not on a
+    timer. `from` is the balance at the moment of paying, so this waits for it
+    to actually RISE rather than for it to be non-zero — a buyer who already
+    held coins would otherwise never see the notice at all.
+
+    DERIVED, not stored and cleared in an effect. Clearing it from an effect
+    sets state during render and cascades, and the answer is a pure function
+    of two things already on screen: what they paid for, and what the balance
+    has done since. Nothing to synchronise, so nothing to synchronise it with.
+  */
+  const waiting = awaiting !== null && !(balance !== null && balance > awaiting.from);
 
   const rate = capability.data?.coinsPerKash ?? null;
   /*
@@ -202,7 +230,7 @@ export function CoinBuySheet({
 
             <button
               type="button"
-              disabled={chosen === null || buy.isPending || purchasable === undefined}
+              disabled={chosen === null || buy.isPending || purchasable === undefined || waiting}
               onClick={() => {
                 if (chosen === null) return;
                 buy.mutate(
@@ -216,7 +244,9 @@ export function CoinBuySheet({
                         landed would be claiming a balance nobody has yet.
                       */
                       toast.success(`${chosen.toLocaleString()} coins are on their way`);
-                      onClose();
+                      // NOT `onClose()`. Closing is what sent him back to a tray
+                      // reading 0 coins with Buy as the only thing to press.
+                      setAwaiting({ coins: chosen, from: balance ?? 0 });
                     },
                     onError: (error) => {
                       setPhase(null);
@@ -227,14 +257,40 @@ export function CoinBuySheet({
               }}
               className="ws-press ws-btn-lg grid w-full place-items-center rounded-full bg-spotlight font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {phase ? SAYS[phase] : chosen === null ? "Pick an amount" : "Buy coins"}
+              {waiting
+                ? "Waiting for your coins"
+                : phase
+                  ? SAYS[phase]
+                  : chosen === null
+                    ? "Pick an amount"
+                    : "Buy coins"}
             </button>
 
-            {/* The one thing a buyer must not be surprised by: this signs a
-                real transfer from their own wallet. */}
-            <p className="text-center text-[12px] leading-4 text-meta">
-              Paid from your KASH balance. You&rsquo;ll confirm the transfer yourself.
-            </p>
+            {waiting && awaiting !== null ? (
+              /*
+                THE IN-BETWEEN THAT WAS MISSING, and the reason it is worded
+                this firmly. The balance above still reads 0 at this point and
+                will until the service observes the transfer — so the one thing
+                this has to do is answer "did it work?" before the buyer
+                answers it themselves by paying again.
+
+                It names the amount, because "your coins are coming" with a
+                balance of 0 on the same screen reads as a failure.
+              */
+              <p className="text-center text-[12px] leading-4 text-meta">
+                <span className="font-semibold text-white">
+                  You paid for {awaiting.coins.toLocaleString()} coins.
+                </span>{" "}
+                They appear once the transfer confirms, which can take a moment.
+                Your balance still shows 0 until then &mdash; don&rsquo;t buy again.
+              </p>
+            ) : (
+              /* The one thing a buyer must not be surprised by: this signs a
+                 real transfer from their own wallet. */
+              <p className="text-center text-[12px] leading-4 text-meta">
+                Paid from your KASH balance. You&rsquo;ll confirm the transfer yourself.
+              </p>
+            )}
           </>
         )}
       </div>
