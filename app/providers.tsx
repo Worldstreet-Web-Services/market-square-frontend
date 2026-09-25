@@ -9,6 +9,7 @@ import { DEMO_AUTH } from "@/lib/auth-mode";
 import { useDecaneCredentials } from "@/hooks/use-decane-credentials";
 import { DecaneRecoveryHost } from "@/components/providers/decane-recovery-host";
 import { DecaneTokenBridge } from "@/components/providers/decane-token-bridge";
+import { SquareHandoff } from "@/components/providers/square-handoff";
 import {
   collectRotatedRecoveryPassword,
   deliverRecoveryFile,
@@ -43,7 +44,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
  */
 function DecaneAuthProvider({ children }: { children: React.ReactNode }) {
   const decane = useDecaneCredentials();
-  if (!decane) return <div className="min-h-dvh bg-[#0F0F0F]" aria-busy="true" />;
+  if (!decane)
+    return <div className="min-h-dvh bg-[#0F0F0F]" aria-busy="true" />;
   return (
     <DecaneKit
       config={{
@@ -69,6 +71,7 @@ function DecaneAuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      <SquareHandoff />
       <DecaneTokenBridge />
       <DecaneRecoveryHost />
     </DecaneKit>
