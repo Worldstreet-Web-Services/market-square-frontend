@@ -63,7 +63,7 @@ import { GiftSheet } from "@/features/streams/components/gift-sheet";
 import { CoinBuySheet } from "@/features/gifts";
 import { useCoinBalance } from "@/features/gifts";
 import { LIVE_GIFTS, giftsArePriced, type LiveGift } from "@/lib/gifts";
-import { useSendTip } from "@/features/tips";
+import { useSendTip , tipAlreadyInFlight } from "@/features/tips";
 import { multiplyKash } from "@/lib/kash-amount";
 import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
 import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
@@ -674,6 +674,18 @@ export function StreamRoom({
           toast.success(`${gift.name} on its way to ${host.displayName ?? host.username}`);
         })
         .catch((error: unknown) => {
+          /*
+            A TIP THE SERVICE STILL HAS OPEN — see `tipAlreadyInFlight`.
+            Nothing here can finish it and paying again would not help, so it
+            says what is true: nothing was charged, and it is not the sender's
+            fault.
+          */
+          if (tipAlreadyInFlight(error)) {
+            toast.error(
+              "That gift is still being processed — nothing was charged. Come back to it shortly."
+            );
+            return;
+          }
           toast.error(
             error instanceof Error && error.message
               ? error.message
