@@ -139,3 +139,39 @@ export function Pill({
     </span>
   );
 }
+
+/**
+ * WHAT SOMEBODY IS IN THIS PLACE — Owner, Admin, and whatever comes next.
+ *
+ * ─── NOT `RoleChip`, AND THE DIFFERENCE IS THE POINT ─────────────────────────
+ * `RoleChip` above draws a PLATFORM role — Ambassador, WorldStreet. That is
+ * true of the person on every screen in the app. This is a MEMBERSHIP role:
+ * the same person is an owner here and an ordinary member of the next group,
+ * so it cannot be folded into `ROLE_LABEL` without a chip claiming to be about
+ * the person when it is only about this room.
+ *
+ * ─── A ROLE IS NOT AN IDENTITY EITHER ────────────────────────────────────────
+ * The verified check belongs to the person, is granted by the platform, and
+ * follows them out of any group. It is drawn as a MARK; this is a labelled
+ * chip. Nobody should be able to mistake one for the other.
+ *
+ * ─── AND A MEMBER GETS NO CHIP ───────────────────────────────────────────────
+ * A column repeating "Member" down every row is noise that makes the two rows
+ * that matter harder to find. Absence is the default, and absence reads.
+ *
+ * ─── OWNER IS LOUDER THAN ADMIN, BY ONE STEP ─────────────────────────────────
+ * There is exactly one owner and they alone can hand the group over, so that
+ * chip carries the brand ramp. An admin is one of several and stays neutral —
+ * which is `ChipShell`'s own default, so admin is the shared shape untouched.
+ * Two tones rather than a palette: a third colour would imply a third rank
+ * nobody has.
+ */
+export function MemberRoleChip({ role }: { role: string }) {
+  if (role === "owner") {
+    return <ChipShell className="border-create/40 bg-create/15 text-create">Owner</ChipShell>;
+  }
+  if (role === "admin") return <ChipShell>Admin</ChipShell>;
+  // Everything else — `member`, and anything the service adds that this build
+  // has not heard of — draws nothing rather than guessing a label for it.
+  return null;
+}

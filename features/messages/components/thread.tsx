@@ -15,6 +15,7 @@ import { PostText } from "@/components/ui/post-text";
 import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
 import { replyExcerpt } from "@/lib/message-reply";
 import { Avatar } from "@/components/ui/avatar";
+import { MemberRoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
@@ -644,8 +645,37 @@ function MembersSheet({
                 <div key={profile?.id ?? `member-${index}`} className="flex items-start gap-3">
                   <Avatar name={profile?.displayName ?? "?"} seed={profile?.id} src={profile?.avatarUrl} size={38} />
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-[14px] font-semibold text-white">
-                      {profile?.displayName ?? "Former member"}
+                    {/*
+                      NAME, THEN WHO THEY ARE, THEN WHAT THEY ARE HERE.
+
+                      The check belongs to the PERSON and travels with them
+                      everywhere, so it sits tight against the name. The role
+                      chip belongs to this GROUP — the same person is an
+                      ordinary member elsewhere — so it follows the identity
+                      rather than joining it. That order is what stops a chip
+                      reading as part of somebody's name.
+
+                      The role used to be an uppercase word pinned to the row's
+                      RIGHT EDGE. On a long name it ended up a column away from
+                      the person it described, which reads as a table heading
+                      rather than a badge (ogazboiz: "it will show next to the
+                      person like a badge").
+
+                      The NAME truncates and the badges do not: an ellipsis on
+                      a name still names somebody, while half a check or a
+                      clipped "Admin" says something false.
+                    */}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-[14px] font-semibold text-white">
+                        {profile?.displayName ?? "Former member"}
+                      </span>
+                      {profile && (
+                        <VerifiedBadge
+                          verification={profile.verification}
+                          className="h-3.5 w-3.5 shrink-0"
+                        />
+                      )}
+                      <MemberRoleChip role={member.role} />
                     </span>
                     {atHandle(profile?.username) && (
                       <span className="truncate text-[12px] text-meta">{atHandle(profile?.username)}</span>
@@ -675,14 +705,6 @@ function MembersSheet({
                       </div>
                     )}
                   </div>
-                  {/* The service's own words. Members carry no chip — a column
-                      of the same word is noise. */}
-                  {member.role === "owner" && (
-                    <span className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-create">Owner</span>
-                  )}
-                  {member.role === "admin" && (
-                    <span className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-grey-300">Admin</span>
-                  )}
                 </div>
               );
             })
