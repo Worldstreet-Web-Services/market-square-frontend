@@ -188,6 +188,31 @@ export async function forwardToUpstream(options: ForwardOptions): Promise<Forwar
     cookieValue(req.headers.get("cookie"), PRIVY_IDENTITY_HEADER);
   if (identity && !isDecaneBearer(auth)) headers[PRIVY_IDENTITY_HEADER] = identity;
 
+  /**
+   * THE CALLER'S IDEMPOTENCY KEY, FORWARDED VERBATIM ON WRITES.
+   *
+   * This proxy builds its upstream headers as an ALLOWLIST — accept, the
+   * request id, the bearer, the identity token — which is the right default
+   * and silently dropped this one. The client minted a key, sent it, and the
+   * service answered "An Idempotency-Key header is required to buy" for a
+   * request that carried one. Nothing logged it, because from the proxy's side
+   * nothing went wrong: it forwarded exactly what it had been told to forward.
+   *
+   * WHY THE CALLER'S AND NOT ONE MINTED HERE: a key generated per forward is a
+   * new key on every retry, which is precisely what the header exists to
+   * prevent. Only the caller knows whether this request is the first attempt
+   * or the fourth, and this is money — a purchase replayed under a fresh key
+   * is a second charge.
+   *
+   * Safe to pass through: the service scopes a key to the authenticated user,
+   * so one caller cannot reach another's purchase with a guessed value. The
+   * KASH proxy has forwarded it on POST since it shipped, for the same reason.
+   */
+  const idempotencyKey = req.headers.get("idempotency-key");
+  if (idempotencyKey && method !== "GET" && method !== "HEAD") {
+    headers["idempotency-key"] = idempotencyKey;
+  }
+
   let body: ArrayBuffer | undefined;
   if (method !== "GET" && method !== "HEAD") {
     if (isMultipart && !multipartBoundary(contentType)) {

@@ -20,6 +20,7 @@ import {
   shouldOfferLegacyMove,
 } from "@/lib/legacy-move-offer";
 import { asset, sq } from "@/lib/square-path";
+import { fetchVapidPublicKey, pushSupported, subscribeThisBrowser } from "@/lib/push-client";
 
 /**
  * ONBOARDING — nodes 107:1821, 122:2906, 125:3616 and 126:3769.
@@ -546,9 +547,7 @@ function PermissionsStep({ onDone }: { onDone: () => void }) {
     rather than claiming a state we could not read.
   */
   const [mic, setMic] = useState<PermState>("idle");
-  // Read, not set: the row is disabled, so nothing here can change it — but it
-  // still shows the truth if the permission was granted elsewhere.
-  const [notify] = useState<PermState>(() => {
+  const [notify, setNotify] = useState<PermState>(() => {
     if (typeof Notification === "undefined") return "unsupported";
     return Notification.permission === "granted"
       ? "granted"
@@ -591,6 +590,36 @@ function PermissionsStep({ onDone }: { onDone: () => void }) {
   };
 
 
+  /*
+    THE NOTIFICATION ASK, WHICH THIS ROW SPENT MONTHS NOT MAKING.
+
+    It was drawn and disabled on the grounds that nothing consumed the grant —
+    no service worker, no subscription, no route to register a device against —
+    and that spending the browser's ONE prompt on a promise we could not keep
+    would burn the real ask for ever. All three now exist: `public/sw.js`,
+    `pushManager.subscribe`, and `POST /me/push-subscriptions`.
+
+    IT STILL DOES NOT ASK BLIND. `subscribeThisBrowser` needs the deployment's
+    VAPID key, and a deployment without one cannot deliver anything — so the
+    key is read FIRST and the row stays disabled, with the reason, when there
+    is none. The prompt is only spent where a wink can actually arrive.
+  */
+  const askNotify = async () => {
+    if (!pushSupported()) return setNotify("unsupported");
+    try {
+      const key = await fetchVapidPublicKey();
+      // No key means this deployment cannot deliver a push. Say nothing, ask
+      // nothing, and leave the browser's single prompt unspent.
+      if (!key) return setNotify("unsupported");
+      const allowed = await subscribeThisBrowser(key);
+      setNotify(allowed ? "granted" : "denied");
+    } catch {
+      // A failed subscribe is not a refusal: the grant may have been given and
+      // the recording lost. Read the browser back rather than claim either.
+      setNotify(Notification.permission === "granted" ? "granted" : "idle");
+    }
+  };
+
   return (
     <>
       <CardHead
@@ -607,31 +636,12 @@ function PermissionsStep({ onDone }: { onDone: () => void }) {
           state={mic}
           onAsk={askMic}
         />
-        {/*
-          DRAWN AND DISABLED, and this one is a judgement call worth reading.
-
-          The permission prompt itself would work — but NOTHING CONSUMES IT.
-          There is no service worker in this app, no push subscription, and no
-          route on the service to register a device against (checked: no
-          `/push`, `/subscriptions` or `/devices` anywhere in the spec). So the
-          row's own promise — "so you know when someone winked at you" — is one
-          nothing can keep today.
-
-          Asking anyway would be worse than not asking. A browser gives a site
-          ONE notification prompt: Chrome and Safari will not re-prompt after a
-          dismissal, and Chrome additionally blocks sites that ask without
-          cause. Spending that single ask before push exists means the real ask,
-          on the day a wink can actually reach somebody, never happens at all.
-
-          Enable it the moment there is a service worker and a device-registration
-          route — the wiring is a two-line `askNotify` away.
-        */}
         <PermissionRow
           art={asset("/onboarding/perm-bell.png")}
           title="Notifications"
           body="Allow notifications so you know when someone winked at you"
           state={notify}
-          disabledReason="Push notifications aren't wired up yet — we'll ask when they can actually reach you."
+          onAsk={askNotify}
         />
         <PermissionRow
           art={asset("/onboarding/perm-contact.png")}

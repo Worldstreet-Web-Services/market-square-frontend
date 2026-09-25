@@ -9,6 +9,9 @@
 
 export type MessagesFrom = "no_one" | "everyone" | "verified";
 
+/** Who may add you to a house. `following` is a relationship, not a badge. */
+export type AddToHousesFrom = "no_one" | "everyone" | "following";
+
 export type LocationPrecision = "city_region_country" | "region_country" | "country" | "continent";
 
 export interface PrivacySettings {
@@ -47,7 +50,13 @@ export interface SettingsShape {
     emailDigest?: boolean;
     pushGroups?: PushGroupSettings;
   };
-  chat: { messagesFrom: MessagesFrom; allowHouseMembers: boolean; allowPastAudience: boolean };
+  chat: {
+    messagesFrom: MessagesFrom;
+    allowHouseMembers: boolean;
+    allowPastAudience: boolean;
+    /** Absent until the service enforces it — see the schema. */
+    addToHousesFrom?: AddToHousesFrom;
+  };
   /** Absent on a service without stage 3. */
   privacy?: PrivacySettings;
 }

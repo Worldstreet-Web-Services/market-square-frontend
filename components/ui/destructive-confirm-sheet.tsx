@@ -25,6 +25,7 @@ export function DestructiveConfirmSheet({
   confirmLabel,
   onConfirm,
   loading = false,
+  secondary,
 }: {
   open: boolean;
   onClose: () => void;
@@ -33,12 +34,35 @@ export function DestructiveConfirmSheet({
   confirmLabel: string;
   onConfirm: () => void;
   loading?: boolean;
+  /**
+   * A THIRD DOOR, for when the destructive act is not the only way out.
+   *
+   * Some confirmations are genuinely binary — do the irreversible thing, or
+   * stay. Others only LOOK binary because nobody built the middle option: a
+   * host leaving a room with a moderator in it does not have to close it, but
+   * with two buttons they had to.
+   *
+   * Drawn ABOVE the pair and full width, because when it exists it is usually
+   * the answer. `hint` says what happens if they take it, which is the part a
+   * safe option still owes the reader.
+   */
+  secondary?: { label: string; hint?: string; onClick: () => void; loading?: boolean };
 }) {
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <p className="text-[13px] leading-5 text-body">{body}</p>
+      {secondary && (
+        <div className="mt-4 flex flex-col gap-1">
+          <Button className="w-full" loading={secondary.loading} onClick={secondary.onClick}>
+            {secondary.label}
+          </Button>
+          {secondary.hint && (
+            <p className="px-1 text-[11px] leading-4 text-meta">{secondary.hint}</p>
+          )}
+        </div>
+      )}
       <div className="mt-5 flex gap-2">
-        <Button variant="ghost" className="flex-1" autoFocus onClick={onClose}>
+        <Button variant="ghost" className="flex-1" autoFocus={!secondary} onClick={onClose}>
           Stay
         </Button>
         <Button

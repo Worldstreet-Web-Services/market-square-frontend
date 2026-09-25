@@ -38,6 +38,39 @@ const DESIGN_LOCKED = new Set<string>([
   // Home's "Coming Soon" card is node 1542:3294 pixel for pixel — the 89-tall
   // cover and the 28-tall Share carry the file's own heights, not the scale.
   "components/layout/coming-soon-card.tsx",
+  // A gist room posted to the feed (2082:20198 / 20246 / 1356:32947). Its
+  // three actions are 40 tall in all three states — the card's own geometry,
+  // four under the touch floor and four over the scale's smallest desktop
+  // tier, so neither `ws-btn-sm` nor `ws-btn-md` is the file's number.
+  "features/feed/components/room-post-card.tsx",
+  /*
+    A house member's tile (1285:36955). Its wink and follow controls are the
+    file's own 24px discs, sized to overlap a 104-wide photo — a badge on a
+    face, not a button in a row, and widening them to the 44 floor would push
+    them off the picture they belong to. WORTH KNOWING RATHER THAN HIDING:
+    24 is a little over half the touch floor, so these are the smallest real
+    controls in the app. They are also duplicates — the same wink and follow
+    live at full size on the person's profile, one tap away through the same
+    tile — so nobody is locked out of the action by missing them.
+  */
+  "components/layout/house-member-tile.tsx",
+  // The house banner's 38 overflow trigger and the 48 "View all" disc, both
+  // the file's own geometry on a surface built to its pixels.
+  "components/layout/house-profile-screen.tsx",
+  /*
+    Buy-a-gift (1285:83137). Its ACTION uses the scale — `ws-btn-lg` is
+    exactly the node's 48 at 16px — but the dialog's three other controls sit
+    below the scale's smallest tier on purpose: a 43 round close, and 32
+    chevrons that float ON the artwork at its vertical centre. Widening those
+    to the 44 floor would push the chevrons off the picture they belong to and
+    make the close heavier than the title beside it.
+
+    WORTH KNOWING RATHER THAN HIDING: 32 is under the touch floor. Neither is
+    a lone route to anything — the dialog closes on backdrop and Escape (it is
+    built on `Sheet`), and the chevrons only walk a catalogue the grid behind
+    them already lists in full, one tap away.
+  */
+  "components/layout/buy-gift-sheet.tsx",
 ]);
 
 // Lower this as batches migrate. Target: 0. Raise ONLY by adding to

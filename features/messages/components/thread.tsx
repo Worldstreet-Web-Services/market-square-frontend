@@ -15,6 +15,7 @@ import { PostText } from "@/components/ui/post-text";
 import { mentionCandidates, type MentionableMember } from "@/lib/mentionable-members";
 import { replyExcerpt } from "@/lib/message-reply";
 import { Avatar } from "@/components/ui/avatar";
+import { MemberRoleChip, VerifiedBadge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/button";
 import { MediaFrame } from "@/components/ui/media-frame";
 import { InlineVideo } from "@/components/ui/inline-video";
@@ -93,7 +94,7 @@ import {
   type MessageReplyTo,
 } from "@/features/messages/lib/types";
 import type { Profile } from "@/lib/api/schemas";
-import { asset } from "@/lib/square-path";
+import { asset, sq } from "@/lib/square-path";
 
 /**
  * The conversation pane — the right-hand 751px column of the Messages screen.
@@ -372,8 +373,22 @@ function ThreadHeader({
             {/* QA: the person's or group's name is the page's heading, so it is set
                 like one — 16px, up from the file's 12. */}
             <h1 className="truncate text-[16px] font-bold leading-6 text-white">
-              {/* A one-to-one chat's name opens that person, like their face. */}
-              {!group && peer?.username ? (
+              {/*
+                A NAME HERE OPENS THE THING IT NAMES — a person's opens their
+                profile, and a house's opens the house.
+
+                Only the first was true. Once you joined a house it lived in
+                your inbox and there was no route back to its page at all: not
+                the members, the description or the replays you looked at
+                before deciding to join (ogazboiz, 2026-09-23: "when i have
+                join the house how can i see the profile"). The page existed
+                and became unreachable the moment you used it.
+              */}
+              {group ? (
+                <Link href={sq(`/houses/${conversation.id}`)} className="hover:underline">
+                  {title}
+                </Link>
+              ) : peer?.username ? (
                 <Link href={profileHref(peer)} className="hover:underline">
                   {title}
                 </Link>
@@ -630,8 +645,37 @@ function MembersSheet({
                 <div key={profile?.id ?? `member-${index}`} className="flex items-start gap-3">
                   <Avatar name={profile?.displayName ?? "?"} seed={profile?.id} src={profile?.avatarUrl} size={38} />
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-[14px] font-semibold text-white">
-                      {profile?.displayName ?? "Former member"}
+                    {/*
+                      NAME, THEN WHO THEY ARE, THEN WHAT THEY ARE HERE.
+
+                      The check belongs to the PERSON and travels with them
+                      everywhere, so it sits tight against the name. The role
+                      chip belongs to this GROUP — the same person is an
+                      ordinary member elsewhere — so it follows the identity
+                      rather than joining it. That order is what stops a chip
+                      reading as part of somebody's name.
+
+                      The role used to be an uppercase word pinned to the row's
+                      RIGHT EDGE. On a long name it ended up a column away from
+                      the person it described, which reads as a table heading
+                      rather than a badge (ogazboiz: "it will show next to the
+                      person like a badge").
+
+                      The NAME truncates and the badges do not: an ellipsis on
+                      a name still names somebody, while half a check or a
+                      clipped "Admin" says something false.
+                    */}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-[14px] font-semibold text-white">
+                        {profile?.displayName ?? "Former member"}
+                      </span>
+                      {profile && (
+                        <VerifiedBadge
+                          verification={profile.verification}
+                          className="h-3.5 w-3.5 shrink-0"
+                        />
+                      )}
+                      <MemberRoleChip role={member.role} />
                     </span>
                     {atHandle(profile?.username) && (
                       <span className="truncate text-[12px] text-meta">{atHandle(profile?.username)}</span>
@@ -661,14 +705,6 @@ function MembersSheet({
                       </div>
                     )}
                   </div>
-                  {/* The service's own words. Members carry no chip — a column
-                      of the same word is noise. */}
-                  {member.role === "owner" && (
-                    <span className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-create">Owner</span>
-                  )}
-                  {member.role === "admin" && (
-                    <span className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-grey-300">Admin</span>
-                  )}
                 </div>
               );
             })
@@ -3198,6 +3234,17 @@ export function Thread({
   // A 1:1 has no roster request; its two people are the reader and the peer.
   if (!group && conversation.peer) senders.set(conversation.peer.id, conversation.peer);
 
+  /**
+   * WHAT THIS SENDER IS IN THIS HOUSE — owner, admin, or nothing.
+   *
+   * Read off the SAME roster the faces come from, so a bubble and the members
+   * sheet can never disagree about who runs the place. Undefined until the
+   * roster lands, which is why the chip appears a moment after the avatar
+   * rather than the name waiting for it.
+   */
+  const roleOf = (senderId: string): string | null =>
+    members.data?.items.find((row) => row.profile?.id === senderId)?.role ?? null;
+
   /** A sender id as the name a quote or the reply strip prints. */
   const nameOf = (senderId: string): string => {
     if (me.data && senderId === me.data.id) return "You";
@@ -3419,6 +3466,41 @@ export function Thread({
                 turn in the conversation. */}
             {groupBySender(day.messages).map((run) => (
               <div key={run.key} className="flex flex-col gap-4">
+                {/*
+                  WHO SAID IT, AND WHAT THEY ARE HERE — once per RUN, above it.
+
+                  A group showed a FACE and never a NAME, so telling two people
+                  apart meant recognising their avatar, and an admin speaking
+                  for the house read exactly like anybody else talking.
+
+                  IT SITS ABOVE THE RUN RATHER THAN INSIDE A MESSAGE, and that
+                  is not tidiness — it is the only place it does not break the
+                  bubble. A bubble is capped at `max-w-[min(85%,480px)]`, and
+                  85% resolves against ITS PARENT. Wrapping a bubble in a
+                  column to stack a name on top made that parent the column,
+                  which is shrink-to-fit — so the cap became 85% of the NAME's
+                  width: "okay" rendered as three stacked letters under a short
+                  name, and correctly under a long one (ogazboiz: "why is the
+                  test like that even though they type normal").
+
+                  Above the run, the bubble is a direct child of its row again
+                  and the percentage means what it always meant.
+
+                  A run is already consecutive messages from one sender, so
+                  once per run IS once per name — no index, no first-of check.
+                */}
+                {group && !(me.data && run.senderId === me.data.id) && senders.get(run.senderId) && (
+                  <span className="flex max-w-[240px] items-center gap-1.5 pl-1">
+                    <span className="truncate text-[12px] font-semibold leading-4 text-white/90">
+                      {senders.get(run.senderId)!.displayName}
+                    </span>
+                    <VerifiedBadge
+                      verification={senders.get(run.senderId)!.verification}
+                      className="h-3 w-3 shrink-0"
+                    />
+                    <MemberRoleChip role={roleOf(run.senderId) ?? ""} />
+                  </span>
+                )}
                 {run.messages.map((message) => (
                   <MessageRow
                     key={message.id}

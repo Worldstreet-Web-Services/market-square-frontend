@@ -45,3 +45,20 @@ export const loadOgProfile = cache(async (username: string): Promise<OgFetchResu
   if (!isProfileUsername(username)) return UNAVAILABLE;
   return read(`/profiles/${encodeURIComponent(username)}`);
 });
+
+/**
+ * A GIST ROOM, for the card its link unfurls into.
+ *
+ * Shared to Telegram or WhatsApp, a room link was showing the app's generic
+ * "Square" preview — no name, no time, no host — because this page had no
+ * metadata of its own (ogazboiz, 2026-09-24: "i share the card to telegram
+ * but i did not see the card ... and i cant even see the card itself").
+ *
+ * The same `isUuid` guard as a post, for the same reason: a route param
+ * arrives decoded, so a traversal would otherwise normalise into another
+ * service's path.
+ */
+export const loadOgRoom = cache(async (id: string): Promise<OgFetchResult> => {
+  if (!isUuid(id)) return UNAVAILABLE;
+  return read(`/streams/${encodeURIComponent(id.toLowerCase())}`);
+});

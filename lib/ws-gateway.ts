@@ -113,6 +113,38 @@ export function speakerSignalOf(frame: GatewayFrame | null): SpeakerSignal | nul
   return null;
 }
 
+/* ─── THE ROOM'S CHAT SIGNAL, on the room's own public topic ─────────────────
+ * `market-square:stream:<id>` says "this room's chat changed". Like every
+ * other frame here it is a REFETCH SIGNAL and nothing more: only the stream id
+ * is read out of it, never a message, an author or a body. The chat renders
+ * from `GET /streams/:id/chat` exactly as it does on the poll, so a forged or
+ * stale frame can cause at most one extra read — it can never put words in
+ * somebody's mouth, which is the whole reason the payload is not carried.
+ *
+ * PUBLIC, not personal. A room's chat is read anonymously (the service answers
+ * that route with no token), and every participant needs the same signal, so
+ * one public topic per room serves them all. `user:<id>` is for things that
+ * concern ONE reader — an invitation, their own mute — and a room's chat is
+ * not one of those.
+ *
+ * The poll stays the floor. An unconfigured gateway, a refused socket and a
+ * dropped one are all invisible: the chat keeps its own interval and the
+ * signal only makes it feel immediate.
+ */
+export const ROOM_CHAT_CHANGED = "roomChatChanged";
+
+/** A room's public topic, or null without an id. */
+export function roomChatTopic(streamId: string | null | undefined): string | null {
+  return streamId ? `market-square:stream:${streamId}` : null;
+}
+
+/** The stream whose chat changed, or null for anything else. */
+export function roomChatSignalOf(frame: GatewayFrame | null): string | null {
+  if (!frame || frame.type !== ROOM_CHAT_CHANGED) return null;
+  const streamId = frame.data.streamId;
+  return typeof streamId === "string" && streamId.length > 0 ? streamId : null;
+}
+
 export const PING_MS = 25_000;
 export const BACKOFF_CAP_MS = 30_000;
 
@@ -144,7 +176,19 @@ export type TokenSource = () => Promise<string | null>;
 export interface GatewayOptions {
   /** Absent: an anonymous client, public topics only. */
   getToken?: TokenSource;
+  /** Injected so the stability window can be pinned in a test. */
+  now?: () => number;
 }
+
+/**
+ * HOW LONG A CONNECTION MUST LAST TO COUNT AS A SUCCESS, before the backoff is
+ * allowed to start over.
+ *
+ * Longer than `PING_MS`, so a socket only earns the reset by surviving at
+ * least one ping — by which point it has actually carried traffic rather than
+ * merely completed an upgrade.
+ */
+export const STABLE_MS = 30_000;
 
 const OPEN = 1;
 const PERSONAL_PREFIX = "user:";
@@ -189,11 +233,13 @@ export interface Gateway {
  * the next personal topic, and the poll stays the floor.
  */
 export function createGateway(url: string, makeSocket: SocketFactory, options: GatewayOptions = {}): Gateway {
-  const { getToken } = options;
+  const { getToken, now = Date.now } = options;
   const listeners = new Map<string, Set<(frame: GatewayFrame) => void>>();
   let socket: SocketLike | null = null;
   let opened = 0;
   let attempt = 0;
+  /** When the live socket opened, or 0 when none is open. See `onopen`. */
+  let openedAt = 0;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let closedOnPurpose = false;
@@ -264,7 +310,26 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
     authenticating = false;
     answered = false;
     next.onopen = () => {
-      attempt = 0;
+      /*
+        THE BACKOFF RESET DOES NOT LIVE HERE ANY MORE, and that was the bug.
+
+        An upgrade that SUCCEEDS is not the same thing as a connection that
+        WORKS. A gateway under load — or one being restarted, or one shedding
+        load on purpose — accepts the socket and drops it milliseconds later.
+        Resetting `attempt` on open meant every one of those cycles started the
+        ladder again, so the delay was `backoffDelay(0)` forever: about one
+        second, for ever, per tab, with no escalation of any kind.
+
+        Measured against a fake socket that accepts then drops: 37-57 upgrades
+        per minute per visible tab, where the ladder's own steady state at the
+        30s cap is 2.6. A 14-22x amplification, applied by every client at once,
+        precisely while the gateway is least able to take it. The backoff was
+        written to prevent this and could never fire.
+
+        So `openedAt` is recorded here and the reset moved into `onclose`,
+        where the connection's lifetime is known.
+      */
+      openedAt = now();
       // Everything subscribed before or during the outage, again — the
       // personal topics once the gateway has verified who this is.
       const topics = hearable();
@@ -304,6 +369,10 @@ export function createGateway(url: string, makeSocket: SocketFactory, options: G
       if (pingTimer) clearInterval(pingTimer);
       pingTimer = null;
       if (closedOnPurpose || listeners.size === 0) return;
+      // A connection that lasted counts as a success and earns a fresh ladder.
+      // One that did not is another failure, whatever the upgrade reported.
+      if (openedAt > 0 && now() - openedAt >= STABLE_MS) attempt = 0;
+      openedAt = 0;
       const delay = backoffDelay(attempt);
       attempt += 1;
       reconnectTimer = setTimeout(() => {

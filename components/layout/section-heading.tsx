@@ -64,22 +64,32 @@ export function SectionHeading({
 
 /** The pill — a link when it goes somewhere, a button when it opens something.
  *
- * It wears the shared Button `secondary` skin — a white/15 hairline over a
- * white/5 fill with a solid-white label — so it reads as a real button rather
- * than the near-invisible tint the earlier build used. But a section-header
- * "View more" is a COMPACT secondary action, not a 44px CTA, so it sits one
- * step BELOW the button scale's smallest tier at a fixed 28px — deliberately
- * under the touch floor, which is why section-heading.tsx is allowlisted in
- * lib/button-sizing.test.ts. Every section's "View more" is still this one
- * button at this one size. */
+ * NODE 1295:147022 (SQUARE 2.0 Copy): 124 x 32, a full radius over white at
+ * 4%, 10 of gap, 4/10 of padding, the label at 16/24 beside the file's own
+ * 16px arrow. Every section's "View more" is still this ONE button at this one
+ * size — four sections share it, so changing it here changes all of them,
+ * which is the point of it being one object.
+ *
+ * TWO THINGS THE NEW NODE REVERSES, both deliberate on its part:
+ *   · there is NO border. The previous build added a white/15 hairline
+ *     because the tint alone read as near-invisible; the file goes back to
+ *     the tint, so the hairline is gone.
+ *   · the label grows from 11 to 16. At 16/24 on 4 of padding the pill is
+ *     exactly the node's 32 tall — still below the 44 touch floor, which is
+ *     why this file stays allowlisted in lib/button-sizing.test.ts, but four
+ *     pixels closer to it than the 28 it used to be.
+ *
+ * The face is Geist, not the file's Roboto: Roboto is loaded for the two
+ * surfaces whose design actually sets them in it (app/layout.tsx says so and
+ * says nothing else may reach for it), and a section action is not one. */
 function SectionAction({ label, href, onPress }: { label: string; href?: string; onPress?: () => void }) {
   const className =
-    "ws-press inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 font-[family-name:var(--font-heading)] text-[11px] font-semibold tracking-[0.01em] text-white transition-colors hover:bg-white/10";
+    "ws-press inline-flex h-[32px] shrink-0 items-center gap-[10px] rounded-full bg-white/[0.04] px-[10px] text-[16px] font-semibold leading-[24px] text-white transition-colors hover:bg-white/10";
   const inner = (
     <>
       {label}
       {/* eslint-disable-next-line @next/next/no-img-element -- the file's own export */}
-      <img src={asset("/home/view-more-arrow.svg")} alt="" aria-hidden className="h-3 w-3" />
+      <img src={asset("/home/view-more-arrow.svg")} alt="" aria-hidden className="size-[16px] shrink-0" />
     </>
   );
   return href ? (

@@ -46,14 +46,27 @@ export { useKashStatus } from "@/hooks/use-kash-status";
  * The reader's own KASH account. Disabled until there is a wallet, so a
  * signed-out visitor never fires an authed call that could only 401.
  */
-export function useKashAccount() {
+/**
+ * @param enabled  OFF while nothing is showing the balance.
+ *
+ * This polls every 15s, which is the shortest interval outside a live room,
+ * and it is mounted on surfaces where the number is only wanted while a tray
+ * is OPEN. A gift tray in a room is opened for a few seconds and closed; the
+ * poll running for the whole session would add four requests a minute to the
+ * most expensive surface in the app, per participant, to answer a question
+ * nobody is asking most of the time.
+ *
+ * Defaulted ON so every existing caller — the balance chip, the earnings
+ * panel — is unchanged.
+ */
+export function useKashAccount(enabled = true) {
   const { address } = useEmbeddedWallet();
 
   const query = useQuery({
     queryKey: ["kash", "account", address],
     queryFn: () => getKashAccount(address as string),
-    enabled: Boolean(address),
-    refetchInterval: ACCOUNT_POLL_MS,
+    enabled: enabled && Boolean(address),
+    refetchInterval: enabled ? ACCOUNT_POLL_MS : false,
     retry: false,
   });
 

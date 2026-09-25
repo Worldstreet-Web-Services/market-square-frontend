@@ -180,12 +180,21 @@ export function useStream(
   id: string,
   poll: boolean | number | readonly ["while-live", number] = false,
   /** Off while there is no id to read — the shell's room session before a room is entered. */
-  enabled = true
+  enabled = true,
+  /**
+   * OVERRIDE THE CLIENT'S 30s DEFAULT, for readers that are not watching a
+   * counter. The default pairs with `refetchOnWindowFocus`, so a LIST of cards
+   * each holding one of these re-fans one request per card on every tab
+   * return — O(cards) in a burst. A card wants a long stale window; the room
+   * session, which is watching status, wants the default. Undefined inherits.
+   */
+  staleTime?: number
 ) {
   return useQuery({
     queryKey: ["ms", "stream", id],
     queryFn: () => fetchStream(id),
     enabled,
+    ...(staleTime === undefined ? {} : { staleTime }),
     refetchInterval: Array.isArray(poll)
       ? (query) => (query.state.data?.status === "live" ? poll[1] : false)
       : poll === false
@@ -660,7 +669,31 @@ export function useBanFromChat(streamId: string) {
  * the honest interim, and it is written down so the next person knows which
  * one this is.
  */
-const SPEAKER_POLL_MS = 8_000;
+/*
+  THE FLOOR UNDER A SIGNAL THAT IS LIVE, not the mechanism.
+
+  `speakerInvited`, `speakerRequestChanged` and `speakerMuted` are published on
+  `user:<did>` and consumed in `components/layout/room-session.tsx`, which
+  invalidates both speaker keys the moment a frame lands. So a raised hand
+  already reaches the host over the socket; this interval only covers a socket
+  that is unconfigured, refused or dropped.
+
+  VERIFIED PUBLISHED rather than assumed, because a consumer existing says
+  nothing about anything writing to it — the mistake that cost an afternoon on
+  `peakViewers`. The service calls `personal.send(...)` at three sites, and one
+  layer under that `personalSignal` is a no-op that DISCARDS everything unless
+  `RABBITMQ_URL` is set. All three signals share that single if-block, so they
+  cannot be independently off: realtime DM chat has been live in production
+  since 2026-09-09, which means the block ran. The 2026-09-21 incident is the
+  independent corroboration — a dead RabbitMQ channel was 500ing writes, and a
+  broker that is not configured cannot have a dead channel.
+
+  8s was the right number when the interval WAS the mechanism. At 30s a
+  dropped socket costs a host half a minute to see a raised hand, which is the
+  degraded path rather than the normal one, and it saves ~11 requests a minute
+  per host.
+*/
+const SPEAKER_POLL_MS = 30_000;
 
 export function useMySpeakerRequest(streamId: string, enabled: boolean) {
   const { ready, authenticated } = useAuth();
@@ -814,14 +847,35 @@ export function useSpeakerInvites(streamId: string, enabled: boolean) {
 /**
  * The host's approved speakers, by row. The seat that settles an accepted
  * invitation, read from the service rather than waiting on the LiveKit grant.
+ *
+ * ─── SLOWER THAN THE PENDING QUEUE, ON PURPOSE ───────────────────────────────
+ * The two lists look alike and change for completely different reasons.
+ *
+ * PENDING arrives from OTHER PEOPLE — somebody raises a hand and the host has
+ * no other way to learn of it, so that queue is genuinely event-driven and
+ * keeps the short poll.
+ *
+ * APPROVED changes when the HOST ACTS, and `useResolveSpeakerRequest`
+ * invalidates `["ms","stream",id,"speaker-requests"]` on success — a PREFIX of
+ * this key, so seating or moving somebody down refreshes this list
+ * immediately, not on the next tick. The poll is only covering the one case
+ * the host did not cause: a guest accepting an invitation. And even that shows
+ * instantly in the room, because accepting makes them a LiveKit participant
+ * and the roster is live.
+ *
+ * So the short poll was re-asking a question the mutation had already
+ * answered. At 8s it was 7.5 requests a minute per host for a list that is
+ * usually identical to the last one.
  */
+const SEATED_POLL_MS = 30_000;
+
 export function useSeatedSpeakers(streamId: string, enabled: boolean) {
   return useQuery({
     queryKey: ["ms", "stream", streamId, "speaker-requests", "approved"],
     queryFn: () => fetchSeatedSpeakers(streamId),
     enabled,
     retry: false,
-    refetchInterval: enabled ? SPEAKER_POLL_MS : false,
+    refetchInterval: enabled ? SEATED_POLL_MS : false,
   });
 }
 

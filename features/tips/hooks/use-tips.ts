@@ -11,6 +11,7 @@ import {
 } from "@/features/tips/lib/api";
 import { KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
 import { encodeErc20Transfer, toBaseUnits } from "@/lib/erc20";
+import { encodeExecuteBatch, transferCallsForLegs } from "@/lib/account-batch";
 import { holdKey } from "@/lib/payment-hold";
 import { clearHeldPayment, heldPayment, holdPayment } from "@/lib/payment-store";
 import { useEmbeddedWallet } from "@/hooks/use-wallet";
@@ -56,6 +57,11 @@ export interface SendTipInput {
   amountKash: string;
   /** The gift the sender chose, so the recipient can see what arrived. */
   giftId?: string | null;
+  /**
+   * WHO in the room is paid — stream gifts only. Absent means the host, which
+   * is what every client that predates the field sends and must go on meaning.
+   */
+  toProfileId?: string | null;
   onPhase?: (phase: TipPhase) => void;
 }
 
@@ -94,9 +100,27 @@ export function useSendTip() {
   const chain = useKashStatus().data?.chain ?? null;
 
   const mutation = useMutation<Tip, unknown, SendTipInput>({
-    mutationFn: async ({ target, amountKash, giftId, onPhase }) => {
+    mutationFn: async ({ target, amountKash, giftId, toProfileId, onPhase }) => {
       const phase = onPhase ?? (() => {});
-      const key = holdKey(`tip:${target.kind}:${target.id}`, amountKash);
+      /*
+        THE RECIPIENT IS PART OF THE HOLD KEY, and it has to be.
+
+        A hold remembers a payment this device already SIGNED but failed to
+        report, so a retry reports it instead of charging again. The key was
+        `tip:<kind>:<id>` plus the amount — which did not distinguish WHO was
+        being paid, because until `toProfileId` a stream gift had exactly one
+        possible recipient: the host.
+
+        Now it does not. Two gifts of the same amount, in the same room, to
+        DIFFERENT people would have collided on one key — and the recovery
+        path would have reported a transfer signed for Ada against a tip
+        created for Kola. That is money credited to the wrong person by the
+        mechanism built to stop money being taken twice.
+
+        Empty string for "the host", so every hold written before this field
+        existed keeps its key and stays recoverable.
+      */
+      const key = holdKey(`tip:${target.kind}:${target.id}:${toProfileId ?? ""}`, amountKash);
 
       /**
        * A payment this attempt already made.
@@ -110,7 +134,7 @@ export function useSendTip() {
       phase("creating");
       let created;
       try {
-        created = await sendTip(target, amountKash, giftId ?? null);
+        created = await sendTip(target, amountKash, giftId ?? null, toProfileId ?? null);
       } catch (error) {
         /**
          * The service already has a tip open for this post and sender — which
@@ -143,15 +167,55 @@ export function useSendTip() {
       let txHash = (held?.txHash ?? null) as `0x${string}` | null;
       if (!txHash) {
         phase("signing");
-        txHash = await send({
-          to: chain.tokenAddress as `0x${string}`,
-          // The TOKEN's precision, not the API's — see KASH_TOKEN_DECIMALS.
-          data: encodeErc20Transfer(
-            created.toWallet,
-            toBaseUnits(created.tip.amountKash, KASH_TOKEN_DECIMALS),
-          ),
-          chainId: chain.chainId,
-        });
+        /*
+          ONE TRANSACTION THAT PAYS THE CREATOR AND TAKES THE FEE.
+
+          When the service names LEGS, the money is split — and it is paid as a
+          single batched call from the sender's own account rather than as two
+          transfers. Two transfers would mean the money RESTS at the platform
+          in between, which is a float, a liability, a payout somebody has to
+          sign, and a creator's earnings being a promise rather than a payment.
+          ogazboiz: "it should go the remaining 50 percent to the reciever".
+
+          The batch goes TO THE SENDER'S OWN ADDRESS: their embedded wallet is
+          upgraded in place via EIP-7702 to the shared SimpleAccount, so
+          `executeBatch` is a call on themselves. Same address, same balance,
+          gas sponsored — see `use-evm-send`.
+
+          ATOMIC IS THE POINT. Both legs land or neither does, so a half-paid
+          gift is unreachable rather than merely unlikely.
+
+          NO LEGS IS THE OLD PATH, unchanged: one transfer of the whole amount
+          to `toWallet`. That is what every deployment does until the service
+          ships the split, so absent is compatibility rather than an error.
+        */
+        const batched = created.legs
+          ? transferCallsForLegs({
+              token: chain.tokenAddress as `0x${string}`,
+              legs: created.legs,
+              totalKash: created.tip.amountKash,
+              toBase: (amount) => toBaseUnits(amount, KASH_TOKEN_DECIMALS),
+              encodeTransfer: encodeErc20Transfer,
+            })
+          : null;
+
+        txHash = await send(
+          batched
+            ? {
+                to: wallet as `0x${string}`,
+                data: encodeExecuteBatch(batched),
+                chainId: chain.chainId,
+              }
+            : {
+                to: chain.tokenAddress as `0x${string}`,
+                // The TOKEN's precision, not the API's — see KASH_TOKEN_DECIMALS.
+                data: encodeErc20Transfer(
+                  created.toWallet,
+                  toBaseUnits(created.tip.amountKash, KASH_TOKEN_DECIMALS),
+                ),
+                chainId: chain.chainId,
+              }
+        );
         /**
          * Written BEFORE the confirmation wait. The transfer is already
          * broadcast; from here the only thing that makes a retry safe is that

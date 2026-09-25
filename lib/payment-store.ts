@@ -33,8 +33,14 @@ import {
 /**
  * One namespace per kind of payment, so a stranded tip can never be replayed
  * as a ticket. They are stored under separate keys for that reason alone.
+ *
+ * `coins` is buying SQUARE COINS with KASH — a signed transfer to the
+ * treasury, pending until the chain is observed. It is separate from `tip`
+ * even though both are a KASH transfer signed by the same wallet, because the
+ * two recovery paths report to different routes: replaying a stranded coin
+ * purchase as a tip would pay a stranger the money somebody spent on coins.
  */
-export type PaymentNamespace = "kash" | "token" | "tip" | "ticket";
+export type PaymentNamespace = "kash" | "token" | "tip" | "ticket" | "coins";
 
 function storageKey(namespace: PaymentNamespace, wallet: string): string {
   return `ms.payment.${namespace}.${wallet.toLowerCase()}`;

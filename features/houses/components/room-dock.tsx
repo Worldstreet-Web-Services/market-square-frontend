@@ -1,7 +1,12 @@
 "use client";
 
 import { IconHand } from "@/components/ui/icons";
-import { IconRecord, IconRoomMic, IconRoomMicOff } from "@/components/ui/room-icons";
+import {
+  IconRoomGift,
+  IconRoomMic,
+  IconRoomMicOff,
+  IconRoomPeople,
+} from "@/components/ui/room-icons";
 import { ReactionControl } from "@/features/houses/components/reaction-control";
 import { cn } from "@/lib/cn";
 
@@ -52,6 +57,8 @@ export function RoomDock({
   mic,
   ask,
   onReact,
+  onGift,
+  onPeople,
   className,
 }: {
   /** The file's left-hand pill: `Record Gist` for a host, `Give a tip` for everyone else. */
@@ -69,6 +76,28 @@ export function RoomDock({
     onLower: () => void;
   } | null;
   onReact: (emoji: string) => void;
+  /**
+   * OPEN THE GIFT TRAY. Absent on a surface that draws no gifts, so the dock
+   * simply has one fewer button rather than a button that opens nothing.
+   *
+   * It sits beside the reactions rather than inside them because the two are
+   * different acts: a reaction is a feeling and costs nothing to send, a gift
+   * is an OBJECT chosen from a tray and is the thing a host thanks you for.
+   * Folding gifts into the emoji picker would have made the larger act the
+   * harder one to find.
+   */
+  onGift?: () => void;
+  /**
+   * THE HOST'S PEOPLE BUTTON — node 1285:29830 puts it third in the dock,
+   * between the microphone and the reactions, and it is where a host appoints
+   * a moderator (ogazboiz: "that is where the host will give someone in the
+   * space a moderator").
+   *
+   * Null for everybody else, and for a host on a service that does not carry
+   * moderators yet — so the dock simply has one fewer button rather than a
+   * button that cannot work.
+   */
+  onPeople: (() => void) | null;
   className?: string;
 }) {
   return (
@@ -135,6 +164,33 @@ export function RoomDock({
           </button>
         )}
 
+        {/* `vuesax/outline/people`, 20 inside the dock's own 40 target. It sits
+            between the microphone and the reactions exactly as the file draws
+            it — the order is the file's, not a preference. */}
+        {onPeople && (
+          <button
+            type="button"
+            onClick={onPeople}
+            aria-label="Manage moderators"
+            title="Add or remove a moderator"
+            className="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white transition-opacity"
+          >
+            <IconRoomPeople />
+          </button>
+        )}
+
+        {onGift && (
+          <button
+            type="button"
+            onClick={onGift}
+            aria-label="Send a gift"
+            title="Send a gift"
+            className="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white transition-opacity"
+          >
+            <IconRoomGift />
+          </button>
+        )}
+
         <ReactionControl
           onReact={onReact}
           triggerClassName="ws-glass-pill ws-press flex h-10 w-10 items-center justify-center rounded-full text-white"
@@ -150,16 +206,3 @@ export function RoomDock({
  * Exported so the room can hand it to `primary` beside the tip slot without
  * either of them knowing about the other.
  */
-export function RecordGistButton() {
-  return (
-    <button
-      type="button"
-      disabled
-      title="Recording a gist room needs egress, which is not provisioned yet."
-      className="ws-press flex h-10 shrink-0 items-center gap-2 rounded-full bg-[linear-gradient(90deg,var(--color-create)_0%,var(--color-create-deep)_100%)] px-3 text-[12px] font-medium leading-4 text-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1),0_1px_3px_0_rgba(0,0,0,0.1)] disabled:opacity-40"
-    >
-      <IconRecord className="h-4 w-4" />
-      Record Gist
-    </button>
-  );
-}

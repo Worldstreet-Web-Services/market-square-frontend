@@ -413,3 +413,151 @@ export function profileMetadataFor(result: OgFetchResult | null, username: strin
   const profile = result.status === "ok" ? parseOgProfile(result.data) : null;
   return profile ? buildProfileMetadata(profile, username) : genericProfileMetadata(username);
 }
+
+/* ─── A GIST ROOM ──────────────────────────────────────────────────────────── */
+
+export interface OgRoom {
+  id: string;
+  /** `public` only where BOTH are public — see `roomMetadataFor`. */
+  visibility: string | null;
+  audience: string | null;
+  title: string | null;
+  scheduledAt: string | null;
+  status: string | null;
+  hostName: string | null;
+  hostAvatarUrl: string | null;
+  coverUrl: string | null;
+}
+
+export function roomPath(id: string): string {
+  return sq(`/gist-rooms/${id}`);
+}
+
+/** Only the fields the card and the caption need, and nothing is required. */
+export function parseOgRoom(data: unknown): OgRoom | null {
+  if (!data || typeof data !== "object") return null;
+  const raw = data as Record<string, unknown>;
+  const id = typeof raw.id === "string" ? raw.id : null;
+  if (!id) return null;
+  const owner = (raw.owner ?? null) as Record<string, unknown> | null;
+  const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return {
+    id,
+    visibility: str(raw.visibility),
+    audience: str(raw.audience),
+    title: str(raw.title),
+    scheduledAt: str(raw.scheduledAt),
+    status: str(raw.status),
+    hostName: str(owner?.displayName) ?? str(owner?.username),
+    hostAvatarUrl: str(owner?.avatarUrl),
+    coverUrl: str(raw.thumbnailUrl),
+  };
+}
+
+/**
+ * WHEN IT STARTS, in the caption a chat app prints under the picture.
+ *
+ * Deliberately not a countdown: a preview is SCRAPED ONCE and cached by the
+ * platform, so "starts in 3 hours" freezes and is wrong for everyone who sees
+ * the message later. An absolute time stays true.
+ */
+function roomWhen(room: OgRoom): string | null {
+  if (room.status === "live") return "Live now";
+  if (!room.scheduledAt) return null;
+  const ms = Date.parse(room.scheduledAt);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  });
+}
+
+/**
+ * THE LINK UNFURLS AS THE CARD — which is the only way the picture reaches
+ * Telegram, WhatsApp or X at all.
+ *
+ * Those apps are reached by a web INTENT carrying a URL; an intent cannot
+ * attach a file. So the file-share path can only ever work through the device
+ * chooser. What DOES work everywhere is the preview: the platform fetches the
+ * link, reads these tags, and renders the picture itself. Pointing `og:image`
+ * at `/api/room-card` makes sharing the LINK and sharing the CARD the same
+ * act.
+ *
+ * ABSOLUTE, because a scraper has no page to resolve a relative path against.
+ * `siteOrigin` is the canonical host, so a preview scraped from a preview
+ * deployment still names the address that will serve it.
+ */
+export function buildRoomMetadata(room: OgRoom, origin: string): ShareMetadata {
+  const url = roomPath(room.id);
+  const name = room.title ?? "A gist room";
+  const title = `${name} on ${SITE_NAME}`;
+  const when = roomWhen(room);
+  const host = room.hostName ? `Hosted by ${room.hostName}` : null;
+  const description =
+    clampDescription([when, host].filter(Boolean).join(" · ")) ||
+    `A gist room on ${SITE_NAME}.`;
+
+  const query = new URLSearchParams({ url: `${origin}${url}`, title: name });
+  if (room.scheduledAt) query.set("at", room.scheduledAt);
+  if (room.hostName) query.set("host", room.hostName);
+  if (room.hostAvatarUrl) query.set("avatar", room.hostAvatarUrl);
+  if (room.coverUrl) query.set("cover", room.coverUrl);
+
+  const image: OgImage = {
+    url: `${origin}${sq(`/api/room-card?${query.toString()}`)}`,
+    // The card's own 400x356 at 3x. Declared honestly rather than as 1200x630:
+    // a platform that trusts the numbers and gets a different shape letterboxes
+    // or crops, and cropping this card cuts the QR off.
+    width: 1200,
+    height: 1068,
+    type: "image/png",
+    alt: `${name} — a gist room on ${SITE_NAME}`,
+  };
+
+  return {
+    title: { absolute: title },
+    description,
+    alternates: { canonical: url },
+    openGraph: { type: "article", siteName: SITE_NAME, title, description, url, images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
+  };
+}
+
+/**
+ * A ROOM'S OWN CARD, BUT ONLY WHERE THE ROOM IS PUBLIC.
+ *
+ * Rooms were given the generic card deliberately, and the reason survives
+ * this change intact: A CHAT APP CACHES A PREVIEW. A private room's name and
+ * cover, once scraped, outlive a rename, a revoked invite and the room
+ * itself — sitting in a message thread long after the people in it have
+ * changed their minds. That is a leak no amount of usefulness pays for.
+ *
+ * What was wrong was applying it to every room. A PUBLIC room's name and
+ * cover are already public; there is nothing for a cache to leak, and hiding
+ * them bought no privacy while making every shared link look identical.
+ *
+ * The gate is `visibility === "public" && audience === "public"` — the same
+ * pair `maySignalRoomChat` uses, and the same pair the SERVICE gates its own
+ * public behaviour on. Not an independent judgement, and it must not drift
+ * into one. An ABSENT field is not public: a payload that does not say is a
+ * payload this must not guess about.
+ */
+export function roomIsPublic(room: OgRoom): boolean {
+  return room.visibility === "public" && room.audience === "public";
+}
+
+export function roomMetadataFor(
+  result: OgFetchResult | null,
+  id: string,
+  origin: string
+): ShareMetadata | "not-found" {
+  if (!result) return generic(roomPath(id), "Gist room");
+  if (result.status === "not-found") return "not-found";
+  const room = result.status === "ok" ? parseOgRoom(result.data) : null;
+  if (!room || !roomIsPublic(room)) return generic(roomPath(id), "Gist room");
+  return buildRoomMetadata(room, origin);
+}

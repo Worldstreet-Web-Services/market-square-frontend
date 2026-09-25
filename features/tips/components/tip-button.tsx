@@ -9,7 +9,7 @@ import { IconMsGift } from "@/components/ui/design-icons";
 import { TipSheet } from "@/features/tips/components/tip-sheet";
 import { useTippingUnavailable } from "@/features/tips/lib/availability";
 import { useTipCapability } from "@/features/tips/hooks/use-tips";
-import { tipBlockedBecause } from "@/lib/tip-capability";
+import { tipBlockedBecause, tipSurfaceOf } from "@/lib/tip-capability";
 import type { TipTarget } from "@/features/tips/lib/types";
 
 /**
@@ -80,10 +80,20 @@ export function TipButton({
    * gift, confirmed, and was refused at the last step. Same rule as the two
    * cases above — a control that can only fail is worse than no control.
    *
+   * WHICH RULE, THOUGH, IS THE TARGET'S TO SAY. Production now publishes two
+   * and they DISAGREE: `verifiedAuthorsOnly: true` for a byline,
+   * `verifiedRoomRecipientsOnly: false` for a gist room, because somebody who
+   * picked a person off a live roster in a room they are both in is not the
+   * impersonation the badge exists to stop. Reading the author rule here hid
+   * the room's own tip pill from an unverified host the service would have
+   * paid — a control missing, with nothing failing anywhere to say so. So the
+   * surface is DERIVED from the target rather than defaulted.
+   *
    * A capability we could not read leaves the button alone, because the
    * alternative is hiding tipping everywhere over a failed lookup.
    */
-  if (tipBlockedBecause(capability.data, target.recipient) !== null) return null;
+  if (tipBlockedBecause(capability.data, target.recipient, tipSurfaceOf(target.kind)) !== null)
+    return null;
 
   // The 404 can also arrive MID-FLOW, from this very sheet. Hiding the button
   // then must not take the open dialog down with it: the person pressed Send

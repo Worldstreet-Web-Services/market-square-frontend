@@ -7,6 +7,8 @@ import { cn } from "@/lib/cn";
 import { shareLink } from "@/lib/share-link";
 import { fitScale } from "@/lib/fit-scale";
 import { useMe } from "@/hooks/use-me";
+import { useUnread } from "@/hooks/use-unread";
+import { useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "@/components/ui/avatar";
 import { IconFriendsClose, IconProfileWink } from "@/components/ui/profile-icons";
 import { IconDownload, IconSend, IconShare } from "@/components/ui/icons";
@@ -90,7 +92,39 @@ export function FriendsPopup() {
   // Held HERE, above the fan, so the composer outlives the popup it came from:
   // posting closes the fan, and the sheet must not close with it.
   const [draft, setDraft] = useState<CardDraft | null>(null);
+  /*
+    NO POLL. This component is mounted in `ShellFrame`, so it renders on every
+    route for every signed-in reader. A 30s interval here was 2 req/min per
+    user, all session, on every page, to keep a fan warm that opens at most
+    once — and it is an infinite query, so a reader several pages deep
+    re-downloaded every loaded page on each tick. It was also invisible: no
+    screen showed it, and it made the app's measured idle floor a third lower
+    than the truth (5.33 believed, 7.33 actual).
+
+    REFRESHED BY THE EVENT INSTEAD. `useUnread` already polls once every 45s
+    for the whole shell, for every reader, and it carries a notification count.
+    When that count RISES something has actually happened, and that is the only
+    moment this list is stale — so the list is invalidated then, and never
+    otherwise. A poll asking twice a minute whether anything happened is
+    replaced by a read that happens when it did.
+
+    The cost of the refresh is therefore zero requests in the common case, and
+    exactly one when there is something new to show. No new interval: it rides
+    a poll the shell was paying for regardless.
+  */
   const notifications = useNotifications("social");
+  const client = useQueryClient();
+  const unreadCount = useUnread().data?.notifications ?? 0;
+  const lastSeenCount = useRef(unreadCount);
+  useEffect(() => {
+    // Only on a RISE. A fall is this reader marking things read, which the
+    // mark-read mutation already reconciles, and refetching on it would undo
+    // the optimistic clear.
+    if (unreadCount > lastSeenCount.current) {
+      client.invalidateQueries({ queryKey: ["ms", "notifications"] });
+    }
+    lastSeenCount.current = unreadCount;
+  }, [unreadCount, client]);
   const markRead = useMarkNotificationsRead();
   const [fan, setFan] = useState<FriendsMoment[]>([]);
   const [index, setIndex] = useState(0);

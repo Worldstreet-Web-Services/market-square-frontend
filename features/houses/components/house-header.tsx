@@ -272,7 +272,24 @@ export function HouseHeader({
             {/* 129:11900 — 16/24 at `white/50`, stepped down with the title so
                 the pair keeps its proportion instead of the subtitle crowding
                 a smaller heading. */}
-            <p className="text-[14px] leading-5 text-white/50 max-md:shrink-0 md:text-[16px] md:leading-6">{meta}</p>
+            {/*
+              A DIV, NOT A `<p>`, and it is not a style preference.
+
+              `meta` is a SLOT — the caller decides what goes in it, and the
+              room puts a face pile there (`AvatarStack`, whose every avatar is
+              a `div`). A `<p>` may contain only phrasing content, so the
+              browser CLOSES it early when a `div` arrives: the server sends one
+              tree, the browser parses a different one, and React reports a
+              hydration mismatch. The nesting was the cause and the mismatch was
+              only the symptom.
+
+              Nothing about it was ever a paragraph — it is one line of meta
+              beside a title — so no semantics are lost, and Tailwind's reset
+              already zeroes a `<p>`'s margins, which is why the two render
+              identically. A slot's wrapper must accept whatever the slot is
+              allowed to hold.
+            */}
+            <div className="text-[14px] leading-5 text-white/50 max-md:shrink-0 md:text-[16px] md:leading-6">{meta}</div>
           </div>
 
           {/* 38px circles, gap 16. `ws-glass-pill` is the file's own material —

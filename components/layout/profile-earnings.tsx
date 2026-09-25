@@ -83,7 +83,23 @@ const SOURCE_ICON = { room: IconMic, stream: IconLive, post: IconQuote } as cons
 
 /** 435:27558 — 741x62 at a 15 radius, 3% white behind a 10% hairline. */
 function EarnedRow({ tip }: { tip: ReceivedTip }) {
-  const { amountKash, giftId, createdAt, fromUser, source } = tip;
+  const { amountKash, creditedKash, giftId, createdAt, fromUser, source } = tip;
+  /*
+    THE EARNINGS SCREEN PRINTS WHAT WAS CREDITED, NOT WHAT WAS SENT.
+
+    This is the one screen a person checks before believing they earned
+    something, so the number on it has to be the number in their balance.
+    `amountKash` is the gift's FACE VALUE — a 1000-coin lion is 1 KASH — while
+    a gift's receiver is credited half of it. Printing the face value would
+    overstate every gift receipt by double, on the day of a deploy that touched
+    nothing in this file.
+
+    ON A TIP THE TWO ARE EQUAL, so there is no branch on kind here: the service
+    writes the same amount to both ledger legs and no split exists. The
+    fallback is therefore CORRECT and not merely defensive — `creditedKash`
+    lands with the gift spend leg, and until it does these are one number.
+  */
+  const earnedKash = creditedKash ?? amountKash;
   const gift = giftOf(giftId);
   /*
     THREE STATES, NOT TWO. A tip with no `giftId` is a plain typed amount; a
@@ -152,7 +168,7 @@ function EarnedRow({ tip }: { tip: ReceivedTip }) {
         <span className="flex min-w-0 items-center gap-2">
           <span className="flex shrink-0 items-center gap-1">
             <span className="tnum text-[12px] leading-5 text-white/50">
-              {formatKash(amountKash)}
+              {formatKash(earnedKash)}
             </span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={asset("/gifts/coin-stack.svg")} alt="" aria-hidden className="h-3 w-3 shrink-0" />
@@ -244,12 +260,32 @@ export function ProfileEarnings() {
           </p>
         </div>
 
-        {/* 435:26851 — 131x34, `#F5F5F5` inside a THREE pixel 20%-white ring. */}
+        {/*
+          1285:76793 — 131x34, `#F5F5F5` inside a THREE pixel 20%-white ring,
+          at a 30 radius, 16/10 of padding on an 8 gap.
+
+          TWO THINGS THE EARLIER BUILD MISSED, both read from the node rather
+          than the summary:
+
+          · THE WALLET GLYPH. `empty-wallet-add` at 16, the file's own export —
+            and it is painted `#6C2B09`, the brown of the balance figure, NOT
+            the `#0A0A0A` of the label beside it. That two-tone is deliberate
+            in the file: the glyph belongs to the number it will change, the
+            word belongs to the button. Baked into the asset rather than
+            inherited, because an `<img>` cannot take `currentColor`.
+
+          · THE SHADOW. `0 2 10` at `#785000` 25% — a warm shadow, not a black
+            one, which is what keeps a white pill from looking pasted onto the
+            gold rather than resting on it. A neutral drop shadow here reads as
+            grey dirt against the ramp.
+        */}
         <button
           type="button"
           onClick={() => setBuyOpen(true)}
-          className="ws-press flex h-[34px] shrink-0 items-center gap-2 rounded-full border-[3px] border-white/20 bg-[#F5F5F5] px-4 text-[13px] font-semibold leading-5 text-[#0A0A0A] transition-opacity hover:opacity-90"
+          className="ws-press flex h-[34px] shrink-0 items-center gap-2 rounded-[30px] border-[3px] border-white/20 bg-[#F5F5F5] px-4 text-[13px] font-semibold leading-5 text-[#0A0A0A] shadow-[0_2px_10px_rgba(120,80,0,0.25)] transition-opacity hover:opacity-90"
         >
+          {/* eslint-disable-next-line @next/next/no-img-element -- the node's own export */}
+          <img src={asset("/gifts/wallet-add.svg")} alt="" aria-hidden className="h-4 w-4 shrink-0" />
           Buy KASH+
         </button>
       </div>

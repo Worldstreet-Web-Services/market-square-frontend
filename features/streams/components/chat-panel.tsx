@@ -18,8 +18,14 @@ import {
   IconRoomSend,
   IllustrationEmptyChat,
 } from "@/components/ui/room-icons";
+import { useQueryClient } from "@tanstack/react-query";
+import type { Room } from "livekit-client";
 import { useChat, useChatHistory, useChatReaction, useSendChat } from "@/features/streams/hooks/use-chat";
+import { useLiveChat, useLiveChatPublish } from "@/features/streams/hooks/use-live-chat";
+import { baseIdentity } from "@/features/streams/lib/stage";
 import { useMentionTyping } from "@/hooks/use-mention-typing";
+import { useMe } from "@/hooks/use-me";
+import { useRoomChatSignal } from "@/features/streams/hooks/use-room-chat-signal";
 import { isReplySwipe, SWIPE_TRIGGER, swipeCommits, swipeOffset } from "@/lib/swipe-reply";
 import { DEFAULT_REACTION } from "@/lib/reactions";
 import { MentionPicker } from "@/components/ui/mention-picker";
@@ -104,8 +110,19 @@ export function ChatPanel({
   moderation,
   showTopViewers = false,
   members = [],
+  liveRoom = null,
 }: {
   stream: Stream;
+  /**
+   * THE ROOM'S LIVE CONNECTION, when this panel is inside one.
+   *
+   * Present, chat is DELIVERED over the data channel every participant is
+   * already on, and the interval drops to a slow floor. Absent — a feed card,
+   * a broadcast without a joined room — nothing changes and the poll carries
+   * the panel exactly as it did. See `use-live-chat` for why the message
+   * travels rather than a refetch signal.
+   */
+  liveRoom?: Room | null;
   /**
    * EVERYONE IN THE ROOM, for the @ picker.
    *
@@ -140,7 +157,55 @@ export function ChatPanel({
   moderation?: ChatModeration;
   showTopViewers?: boolean;
 }) {
-  const chat = useChat(stream.id, stream.status === "live");
+  const queryClient = useQueryClient();
+  /*
+    THE POLL IS A FLOOR, NOT THE TRANSPORT, once a room is connected.
+
+    12 requests a minute per viewer — 55% of all room traffic — spent mostly
+    on being told nothing had changed. With live delivery the interval exists
+    only to heal a dropped packet, so 30 seconds is enough and the saving is
+    the other 10. Without a room it stays exactly what it was.
+  */
+  const live = Boolean(liveRoom);
+  const chat = useChat(stream.id, stream.status === "live", live ? 30_000 : undefined);
+
+  /*
+    A MESSAGE FROM SOMEBODY ELSE, delivered rather than fetched.
+
+    Written straight into the head page so the line appears at once. The poll
+    still replaces it with the service's own row within 30 seconds, which is
+    what makes this safe: a peer can at worst show a line that vanishes, never
+    create one. The author is resolved from the people actually in the room —
+    LiveKit's identity is authenticated, so this is a lookup and not a claim.
+  */
+  const publishChat = useLiveChatPublish(liveRoom ?? null);
+  useLiveChat(liveRoom ?? null, (packet) => {
+    const authorId = baseIdentity(packet.fromIdentity);
+    const author = members.find((member) => member.id === authorId) ?? null;
+    queryClient.setQueryData(["ms", "stream", stream.id, "chat"], (current: unknown) => {
+      if (typeof current !== "object" || current === null || !("items" in current)) return current;
+      const page = current as { items: ChatMessage[] };
+      // The poll may have arrived first; one message, one row.
+      if (page.items.some((item) => item.id === packet.id)) return current;
+      const arrived: ChatMessage = {
+        id: packet.id,
+        streamId: stream.id,
+        authorId,
+        text: packet.text,
+        status: "active",
+        createdAt: packet.createdAt,
+        author: author ? { id: author.id, username: author.username, displayName: author.displayName } : null,
+        replyTo: null,
+        reactions: [],
+        myReaction: null,
+      } as unknown as ChatMessage;
+      // Newest first, matching the page the service returns.
+      return { ...page, items: [arrived, ...page.items] };
+    });
+  });
+  // ADR-0009 over the top of it: the interval stays the floor, the frame makes
+  // it immediate. Inert until the service publishes the room's topic.
+  useRoomChatSignal(stream.id, stream, stream.status === "live");
   const send = useSendChat(stream.id);
   /*
     THE LIST IS READ OLDEST → NEWEST, and the page arrives the other way round.
@@ -347,7 +412,11 @@ export function ChatPanel({
             : {}),
         },
         {
-        onSuccess: () => {
+        onSuccess: (sent) => {
+          // Tell the room at once. AFTER the service accepted it, never
+          // instead: the packet is an early copy of a message that already
+          // exists, so a failed post publishes nothing.
+          if (sent) publishChat(sent);
           typing.reset();
           setReplyTo(null);
           // Saying something is opting back into the live edge: nobody types a
@@ -404,6 +473,8 @@ export function ChatPanel({
   const overlay = variant === "overlay";
   const theater = variant === "theater";
   const room = variant === "room";
+  // Who is reading, so a room's chat can mirror the reader's own lines.
+  const me = useMe();
 
   return (
     <div
@@ -499,6 +570,13 @@ export function ChatPanel({
                 key={message.id}
                 message={message}
                 isHost={message.authorId === stream.ownerId}
+                /*
+                  `=== true` is not available here — `me.data?.id` is undefined
+                  while the reader loads, and an undefined id must never equal
+                  an undefined author. Comparing a LOADED id only: a signed-out
+                  reader owns nothing, so nothing mirrors, which is right.
+                */
+                mine={Boolean(me.data?.id) && message.authorId === me.data?.id}
                 onReply={setReplyTo}
                 onLove={(target, loved) =>
                   gate(() => love.mutate({ messageId: target.id, emoji: DEFAULT_REACTION, loved }))
@@ -819,9 +897,29 @@ export function ChatPanel({
  * at 13/20, and the clock at Medium 12/16 in 40% white pinned to the bubble's
  * bottom-right. Then 8px and the 16px heart.
  *
- * Every bubble is the same purple, the author's own included: the file draws
- * no self/other distinction, and a gist room's chat is a room talking rather
- * than a two-sided thread.
+ * ─── NO BUBBLE, AND THE READER'S OWN LINE MIRRORS ───────────────────────────
+ * It used to be a purple bubble per message, the reader's own included. It now
+ * reads the way a live stream's chat reads — just the words over the room
+ * (ogazboiz, 2026-09-23: "remove that background it should just be like how
+ * live stream text just the text").
+ *
+ * Those two asks pull against each other and the mirror is what reconciles
+ * them. A stream's chat is ALL left-aligned, and that is exactly why it scans:
+ * every line begins on the same edge, so the eye runs down one column. In a
+ * bubble chat the right-hand side works because the BUBBLE carries the
+ * identity — the coloured block says whose it is before you read a word. Take
+ * the bubble away AND right-align and you get ragged text hanging off nothing.
+ *
+ * So the whole ROW mirrors, not just the text: avatar, name, quote, words and
+ * the controls all swap sides together. A mirrored line reads as deliberate;
+ * text alone shunted right reads as a bug. That is also why the reply quote
+ * moves its rule from the left border to the right — a rule on the far side
+ * from its text is a box that lost its contents.
+ *
+ * Legibility replaces the bubble rather than simply going away: the panel sits
+ * over a room, and a bubble was doing work the background can no longer be
+ * trusted to do. A text shadow carries it, which is what every live chat over
+ * video does.
  *
  * THE HEART IS INERT, and deliberately visible. The file puts a per-message
  * reaction on every row; nothing in the service backs one — there is no
@@ -834,6 +932,7 @@ export function ChatPanel({
 function RoomBubble({
   message,
   isHost,
+  mine,
   onReply,
   onLove,
   dragX,
@@ -843,6 +942,8 @@ function RoomBubble({
 }: {
   message: ChatMessage;
   isHost: boolean;
+  /** Did the reader write this one? The whole row mirrors when they did. */
+  mine: boolean;
   /** Make this message the composer's reply target. */
   onReply: (message: ChatMessage) => void;
   /** Toggle the reader's love on it. */
@@ -860,7 +961,13 @@ function RoomBubble({
 
   return (
     <li
-      className="relative flex items-end gap-2 touch-pan-y"
+      className={cn(
+        "relative flex items-start gap-2 touch-pan-y",
+        // The mirror. Reversing the ROW moves the avatar, the words and both
+        // controls together, so the reader's own line is a considered right
+        // edge rather than text that drifted.
+        mine && "flex-row-reverse"
+      )}
       style={{ transform: dragX ? `translateX(${dragX}px)` : undefined }}
       onPointerDown={(event) => onDragStart(message, event)}
       onPointerMove={onDragMove}
@@ -872,7 +979,7 @@ function RoomBubble({
       {dragX > 8 && (
         <span
           aria-hidden
-          className="absolute -left-1 bottom-2 text-white/50"
+          className={cn("absolute bottom-2 text-white/50", mine ? "-right-1" : "-left-1")}
           style={{ opacity: Math.min(1, dragX / SWIPE_TRIGGER) }}
         >
           <svg viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -885,14 +992,23 @@ function RoomBubble({
         <Avatar name={name} seed={message.authorId} src={message.author?.avatarUrl} size={24} />
       </span>
 
-      <div className="flex min-w-0 max-w-[calc(100%-4rem)] items-end gap-[10px] rounded-[16px] rounded-bl-[2px] bg-spotlight p-3">
-        <div className="flex min-w-0 flex-col justify-center gap-2">
-          <p className="flex min-w-0 items-center gap-1">
-            <span className="truncate text-[14px] font-semibold leading-5 tracking-[-0.006em] text-white">
+      <div
+        className={cn(
+          "flex min-w-0 max-w-[calc(100%-4.5rem)] flex-col gap-0.5 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]",
+          mine && "items-end"
+        )}
+      >
+        <div className="flex min-w-0 flex-col gap-0.5">
+          {/* ONE META LINE, then the words under it — the shape every chat over
+              video uses, and the shape the bubble was previously holding. The
+              clock joins it rather than floating beside the text: with no
+              bubble there is no inner corner for it to sit in. */}
+          <p className={cn("flex min-w-0 items-center gap-1", mine && "flex-row-reverse")}>
+            <span className="truncate text-[13px] font-semibold leading-5 tracking-[-0.006em] text-white">
               {name}
             </span>
             {message.author && (
-              <span className="shrink-0 text-[12px] leading-5 tracking-[-0.006em] text-white/60">
+              <span className="shrink-0 text-[11px] leading-5 tracking-[-0.006em] text-white/55">
                 {atHandle(message.author.username)}
               </span>
             )}
@@ -901,22 +1017,32 @@ function RoomBubble({
                 Host
               </span>
             )}
+            <span className="tnum shrink-0 text-[11px] font-medium leading-4 tracking-[-0.005em] text-white/40">
+              {clockTime(message.createdAt)}
+            </span>
           </p>
           {/* WHAT THIS ANSWERS, above the words that answer it. A removed
               original keeps its quote and says so: a reply to nothing reads
               as a non-sequitur. */}
           {message.replyTo && (
-            <p className="min-w-0 truncate rounded-md border-l-2 border-white/40 bg-black/15 px-2 py-1 text-[12px] leading-4 text-white/70">
+            <p
+              className={cn(
+                "min-w-0 truncate rounded-md bg-black/25 px-2 py-1 text-[12px] leading-4 text-white/70",
+                mine ? "border-r-2 border-white/40 text-right" : "border-l-2 border-white/40"
+              )}
+            >
               {message.replyTo.deleted ? "Message deleted" : message.replyTo.text}
             </p>
           )}
-          <p className="break-words text-[13px] leading-5 tracking-[-0.006em] text-white">
+          <p
+            className={cn(
+              "break-words text-[13px] leading-5 tracking-[-0.006em] text-white/95",
+              mine && "text-right"
+            )}
+          >
             {message.text}
           </p>
         </div>
-        <span className="tnum shrink-0 self-end text-[12px] font-medium leading-4 tracking-[-0.005em] text-white/40">
-          {clockTime(message.createdAt)}
-        </span>
       </div>
 
       {/* REPLY — a real control, not a hover-only one. The swipe is the
@@ -928,7 +1054,7 @@ function RoomBubble({
         onClick={() => onReply(message)}
         aria-label={"Reply to " + name}
         title="Reply"
-        className="ws-press shrink-0 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
+        className="ws-press shrink-0 self-start pt-0.5 text-white/40 transition-colors hover:text-white/80"
       >
         <svg aria-hidden viewBox="0 0 14 14" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="M5 3 1.5 6.5 5 10" />
@@ -944,7 +1070,7 @@ function RoomBubble({
         onClick={() => onLove(message, !loved)}
         aria-pressed={loved}
         aria-label={loved ? `Remove your love from ${name}'s message` : `Love ${name}'s message`}
-        className="ws-press flex shrink-0 items-center gap-0.5 self-end pb-1 text-white/40 transition-colors hover:text-white/80"
+        className="ws-press flex shrink-0 items-center gap-0.5 self-start pt-0.5 text-white/40 transition-colors hover:text-white/80"
       >
         {/* FILLED once the reader has loved it — a tinted outline reads as a
             hover state, not as an act somebody took. */}
