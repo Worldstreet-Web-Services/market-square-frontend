@@ -63,7 +63,7 @@ import { GiftSheet } from "@/features/streams/components/gift-sheet";
 import { CoinBuySheet } from "@/features/gifts";
 import { useCoinBalance } from "@/features/gifts";
 import { LIVE_GIFTS, giftsArePriced, type LiveGift } from "@/lib/gifts";
-import { useSendTip , tipAlreadyInFlight , recipientCannotHoldKash } from "@/features/tips";
+import { useSendTip , tipAlreadyInFlight , recipientCannotHoldKash , GIFT_PHASE_SAYS } from "@/features/tips";
 import { multiplyKash } from "@/lib/kash-amount";
 import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
 import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
@@ -661,17 +661,25 @@ export function StreamRoom({
         toast.error("That quantity can't be priced exactly.");
         return;
       }
+      // One toast for the whole send — see the note in house-room. Without a
+      // phase the sender saw nothing between the tap and the settle, and a
+      // payment waiting on a wallet prompt looked like one that never ran.
+      const toastId = `gift:${streamId}:${Date.now()}`;
       void payGift
         .mutateAsync({
           target: { kind: "stream", id: streamId, recipient: host },
           amountKash,
           giftId: gift.id,
+          onPhase: (phase) => {
+            const says = GIFT_PHASE_SAYS[phase];
+            if (says) toast.loading(says, { id: toastId });
+          },
         })
         .then(() => {
           // "On its way", never "sent". The service holds the gift `pending`
           // until the watcher sees the transfer on-chain, and saying it landed
           // before that is the one claim this flow may not make.
-          toast.success(`${gift.name} on its way to ${host.displayName ?? host.username}`);
+          toast.success(`${gift.name} on its way to ${host.displayName ?? host.username}`, { id: toastId });
         })
         .catch((error: unknown) => {
           /*
@@ -681,21 +689,18 @@ export function StreamRoom({
             fault.
           */
           if (recipientCannotHoldKash(error)) {
-            toast.error(
-              "That person can't receive gifts yet — their wallet isn't set up for KASH. Nothing was charged."
-            );
+            toast.error("That person can't receive gifts yet — their wallet isn't set up for KASH. Nothing was charged.", { id: toastId });
             return;
           }
           if (tipAlreadyInFlight(error)) {
-            toast.error(
-              "That gift is still being processed — nothing was charged. Come back to it shortly."
-            );
+            toast.error("That gift is still being processed — nothing was charged. Come back to it shortly.", { id: toastId });
             return;
           }
           toast.error(
             error instanceof Error && error.message
               ? error.message
               : "The gift was shown, but the payment did not go through.",
+            { id: toastId }
           );
         });
     },

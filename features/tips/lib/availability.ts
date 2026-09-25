@@ -144,3 +144,27 @@ export function recipientCannotHoldKash(error: unknown): boolean {
   const message = error instanceof Error ? error.message : "";
   return /not an EVM address/u.test(message);
 }
+
+/**
+ * WHAT A GIFT IS WAITING ON, in the sender's words.
+ *
+ * `useSendTip` has reported these four phases since it was written and the
+ * gift path passed no `onPhase` at all — so between the tap and the money
+ * settling the sender saw NOTHING. The tray closes on send, so there was not
+ * even a spinner to look at.
+ *
+ * That is why a send stuck at the wallet prompt was indistinguishable from a
+ * send that never happened: a gift created on the service, `txHash: null`, a
+ * balance that did not move, and no way for anybody to tell whether it was
+ * broken or merely waiting. Hours went into that question.
+ *
+ * `signing` is the one that earns this. It means a passkey, PIN or password
+ * sheet is open somewhere and the payment is waiting on a human — which is
+ * information the sender needs and had no way to receive.
+ */
+export const GIFT_PHASE_SAYS: Record<string, string> = {
+  creating: "Opening your gift…",
+  signing: "Confirm it in your wallet…",
+  confirming: "Waiting for the network…",
+  reporting: "Almost there…",
+};
