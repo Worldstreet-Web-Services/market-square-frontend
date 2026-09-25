@@ -203,7 +203,7 @@ function SegmentView({ segment, link }: { segment: Segment; link: string }) {
       // then just looks broken.
       return (
         <Link
-          href={segment.id ? profileHref({ id: segment.id, username: segment.handle }) : sq(`/u/${segment.handle}`)}
+          href={segment.id ? profileHref({ id: segment.id, username: segment.handle }) : sq(`/u/${segment.handle}`)} prefetch={false}
           className={link}
         >
           {segment.value}

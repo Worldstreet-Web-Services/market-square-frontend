@@ -79,7 +79,7 @@ export function WhoToFollowRail() {
         {suggestions.map((row) => (
           <li key={row.profile.id}>
             <Link
-              href={profileHref(row.profile)}
+              href={profileHref(row.profile)} prefetch={false}
               className="ws-rail-row flex items-center gap-3 px-4 py-3"
             >
               <Avatar

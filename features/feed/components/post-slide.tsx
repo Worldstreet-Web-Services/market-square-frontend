@@ -245,7 +245,7 @@ export function PostSlide({
         <div className="min-w-0 flex-1 pr-20">
           {author && (
             <Link
-              href={profileHref(author)}
+              href={profileHref(author)} prefetch={false}
               className="pointer-events-auto flex items-center gap-2"
             >
               <Avatar

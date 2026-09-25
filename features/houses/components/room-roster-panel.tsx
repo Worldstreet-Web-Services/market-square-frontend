@@ -137,7 +137,7 @@ function RowIdentity({
   const className = "flex min-w-0 flex-1 items-center gap-[9px]";
   if (!username) return <span className={className}>{children}</span>;
   return (
-    <Link href={sq(`/u/${username}`)} className={className}>
+    <Link href={sq(`/u/${username}`)} prefetch={false} className={className}>
       {children}
     </Link>
   );

@@ -2260,7 +2260,7 @@ function MessageRow({
       {group && !mine && (
         sender?.username ? (
           <Link
-            href={profileHref(sender)}
+            href={profileHref(sender)} prefetch={false}
             aria-label={`View ${sender.displayName}'s profile`}
             className="ws-press flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[25%] border-[0.63px] border-white/20 bg-white/10"
           >

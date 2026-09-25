@@ -824,12 +824,12 @@ function StoryViewer({
         </div>
 
         <div className="relative z-20 flex items-center gap-3 px-3 py-3">
-          <Link href={profileHref(group)} onClick={close}>
+          <Link href={profileHref(group)} prefetch={false} onClick={close}>
             <Avatar name={group.displayName} seed={group.id} src={group.avatarUrl} size={32} />
           </Link>
           <div className="min-w-0 flex-1">
             <Link
-              href={profileHref(group)}
+              href={profileHref(group)} prefetch={false}
               onClick={close}
               className="ws-text-shadow block truncate text-sm font-bold text-white"
             >
