@@ -83,3 +83,35 @@ export function recipientLeftTheRoom(error: unknown): boolean {
   // shape (`{ code }` on a GatewayApiError) is the same one `errorCode` reads.
   return (error as { code?: unknown } | null)?.code === RECIPIENT_GONE;
 }
+
+/**
+ * A TIP THE SERVICE STILL CONSIDERS IN PROGRESS.
+ *
+ * One tip in flight per (target, sender, recipient), which is the guard that
+ * stops a double-tap paying twice — right, and not the thing to weaken. But a
+ * send that fails BEFORE the transfer is broadcast leaves that row pending
+ * with no payment behind it, and nothing on the service ends that state except
+ * success: there is no TTL, no sweep and no cancel. So the sender is refused
+ * every further attempt at that person, forever.
+ *
+ * ogazboiz hit it twice in a row: *"IT DID NOT WORK I SEND COIN TO THIS PERSON
+ * BUT IT DID NOT WORK THEN AFTER THAT I SAY LET ME SEND... THIS AGAIN WHAT IS
+ * HAPPENING"*, staring at a raw `{"code":"CONFLICT"}` body.
+ *
+ * The client CANNOT resolve this on its own. `use-tips` already resumes an
+ * open tip when it is holding a payment for it — but that only exists once a
+ * transfer was broadcast, and here none was. The conflict carries `tipId` and
+ * nothing else: no `toWallet`, no `settlement.legs`, and there is no route
+ * that reads a single tip. So there is nowhere to send the money even if we
+ * wanted to finish it.
+ *
+ * Hence this exists only to SAY SO honestly. The one thing the interface must
+ * not do is imply the sender did something wrong, or that paying again would
+ * help — it would not; it is refused before it reaches a wallet.
+ *
+ * The code is read inline for the same reason as above: `errorCode` lives
+ * behind the `@/` alias, which the node test runner does not resolve.
+ */
+export function tipAlreadyInFlight(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "CONFLICT";
+}

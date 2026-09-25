@@ -58,7 +58,7 @@ import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bu
 import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gift-sheet";
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
-import { useSendTip, recipientLeftTheRoom } from "@/features/tips";
+import { useSendTip, recipientLeftTheRoom , tipAlreadyInFlight } from "@/features/tips";
 import { CoinBuySheet, insufficientCoins } from "@/features/gifts";
 
 import { useCoinBalance } from "@/features/gifts";
@@ -1245,6 +1245,21 @@ function LiveHouse({
             A refused send spends NOTHING: the debit and the tip row are one
             transaction upstream, so there is no half-charged state to explain.
           */
+          /*
+            A TIP THE SERVICE STILL HAS OPEN. Nothing here can finish it: the
+            conflict names a `tipId` and nothing else, and no route reads a
+            single tip, so there is nowhere to send the money. Paying again
+            would not help — it is refused before it reaches a wallet.
+
+            So this says what is true and what it is NOT: nothing was charged,
+            and it is not something the sender did wrong.
+          */
+          if (tipAlreadyInFlight(error)) {
+            toast.error(
+              `A gift to ${to.name} is still being processed — nothing was charged. Try someone else, or come back to them shortly.`
+            );
+            return;
+          }
           const short = insufficientCoins(error);
           if (short) {
             toast.error(`Not enough coins — ${short.needed.toLocaleString()} needed.`);
