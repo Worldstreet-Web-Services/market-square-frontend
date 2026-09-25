@@ -1,4 +1,5 @@
 // Wallet protection at the moment it is first needed.
+// (Requires decane-connect-kit 2.23.0: deferDeviceProtection + protectDevice.)
 //
 // Sign-in asks for no passkey or password (app/providers.tsx sets
 // deferDeviceProtection), so a new reader gets in the door with nothing in
