@@ -124,7 +124,24 @@ export type ReceivedTip = z.infer<typeof ReceivedTipSchema>;
 
 export async function fetchReceivedTips(): Promise<ReceivedTip[]> {
   const page = ReceivedTipsSchema.parse(
-    await msApi.authedGet("/me/tips/received", { limit: 200 })
+    /*
+      100 IS THE SERVICE'S CEILING, NOT A PREFERENCE.
+
+      This asked for 200 and got a 400 back on every load:
+
+        {"code":"VALIDATION_ERROR","details":[
+          {"path":"limit","message":"Too big: expected number to be <=100"}]}
+
+      So the earnings list has been empty for everybody with a tip — not
+      because they have none, but because the request was refused before it
+      could answer. A number chosen to mean "plenty" turned into a hard
+      failure, and it failed the same way every time rather than degrading.
+
+      Asking for the maximum the service accepts is the honest ceiling. If
+      somebody ever passes 100 received tips this needs the cursor the route
+      already offers, not a bigger number — there is no bigger number.
+    */
+    await msApi.authedGet("/me/tips/received", { limit: 100 })
   );
   return page.items;
 }
