@@ -115,3 +115,32 @@ export function recipientLeftTheRoom(error: unknown): boolean {
 export function tipAlreadyInFlight(error: unknown): boolean {
   return (error as { code?: unknown } | null)?.code === "CONFLICT";
 }
+
+/**
+ * THE RECIPIENT'S WALLET CANNOT HOLD KASH — a non-EVM address on an EVM rail.
+ *
+ * The service answered a gift with this recipient leg:
+ *
+ *   {"role":"recipient",
+ *    "toWallet":"c8rdvzg7vkr8bd9xkletsbmozthrwktv1qfshvlxuygf",
+ *    "amountKash":"0.005"}
+ *
+ * Forty-four characters, no `0x` — a Solana- or Tron-shaped address. KASH is
+ * an ERC-20 on Base, so that address cannot receive it: a transfer encoded
+ * for it would either revert or, worse, succeed into an address nobody holds
+ * the key to on this chain. `lib/account-batch.ts` refuses it before signing
+ * and that refusal is CORRECT — this only gives the refusal words.
+ *
+ * A Decane account carries `addresses.evm`, `addresses.solana` and
+ * `addresses.tron`, so a profile whose stored wallet came from the wrong one
+ * of those three is not an exotic case; it is a data problem that will repeat
+ * until the service stores the EVM address for an EVM rail.
+ *
+ * Told apart from every other failure because the sender did nothing wrong
+ * and retrying cannot help: the person they chose cannot be paid in this
+ * currency until their account carries an EVM address.
+ */
+export function recipientCannotHoldKash(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return /not an EVM address/u.test(message);
+}

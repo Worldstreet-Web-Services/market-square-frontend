@@ -63,7 +63,7 @@ import { GiftSheet } from "@/features/streams/components/gift-sheet";
 import { CoinBuySheet } from "@/features/gifts";
 import { useCoinBalance } from "@/features/gifts";
 import { LIVE_GIFTS, giftsArePriced, type LiveGift } from "@/lib/gifts";
-import { useSendTip , tipAlreadyInFlight } from "@/features/tips";
+import { useSendTip , tipAlreadyInFlight , recipientCannotHoldKash } from "@/features/tips";
 import { multiplyKash } from "@/lib/kash-amount";
 import { GuestSpeakerControl } from "@/features/streams/components/guest-speaker-control";
 import { MarketPulse, type PulseCounts } from "@/features/streams/components/market-pulse";
@@ -680,6 +680,12 @@ export function StreamRoom({
             says what is true: nothing was charged, and it is not the sender's
             fault.
           */
+          if (recipientCannotHoldKash(error)) {
+            toast.error(
+              "That person can't receive gifts yet — their wallet isn't set up for KASH. Nothing was charged."
+            );
+            return;
+          }
           if (tipAlreadyInFlight(error)) {
             toast.error(
               "That gift is still being processed — nothing was charged. Come back to it shortly."

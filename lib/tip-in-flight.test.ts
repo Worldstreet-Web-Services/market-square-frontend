@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
-import { tipAlreadyInFlight, recipientLeftTheRoom } from "../features/tips/lib/availability.ts";
+import { tipAlreadyInFlight, recipientLeftTheRoom, recipientCannotHoldKash } from "../features/tips/lib/availability.ts";
 
 /*
   A SEND THAT FAILED BEFORE BROADCASTING LEAVES A TIP THE SERVICE CALLS OPEN.
@@ -69,4 +69,53 @@ test("it never tells the sender to pay again", () => {
     assert.ok(message, `${rel}: no message in the branch`);
     assert.doesNotMatch(message[1], /try again|retry/iu, `${rel}: must not promise a retry that is refused`);
   }
+});
+
+/* ── A RECIPIENT WHOSE WALLET CANNOT HOLD KASH ────────────────────────────── */
+
+test("a non-EVM recipient wallet is recognised, and refused before signing", () => {
+  /*
+    The service answered a real gift with this recipient leg:
+
+      {"role":"recipient",
+       "toWallet":"c8rdvzg7vkr8bd9xkletsbmozthrwktv1qfshvlxuygf",
+       "amountKash":"0.005"}
+
+    Forty-four characters, no `0x` — Solana- or Tron-shaped. KASH is an ERC-20
+    on Base, so that address cannot receive it. `lib/account-batch.ts` refuses
+    the leg before anything is signed, which is the correct behaviour: a
+    transfer encoded for it would revert at best and burn at worst.
+  */
+  assert.equal(recipientCannotHoldKash(new Error("not an EVM address: c8rdvzg7vkr8bd9x")), true);
+  assert.equal(recipientCannotHoldKash(new Error("insufficient funds")), false);
+  assert.equal(recipientCannotHoldKash({ code: "CONFLICT" }), false);
+  assert.equal(recipientCannotHoldKash(null), false);
+});
+
+test("the refusal is worded for the sender, and never blames them", () => {
+  /*
+    The sender did nothing wrong and retrying cannot help — it is the
+    recipient's account that needs an EVM address. So the copy says whose
+    problem it is, and says nothing was charged.
+  */
+  for (const rel of rooms) {
+    const source = readFileSync(`${root}${rel}`, "utf8").replace(/\/\*[\s\S]*?\*\//gu, "");
+    assert.match(source, /recipientCannotHoldKash\(error\)/u, `${rel} must handle it`);
+    const branch = source.slice(source.indexOf("recipientCannotHoldKash(error)"));
+    const message = /toast\.error\(\s*([\s\S]*?)\);/u.exec(branch);
+    assert.ok(message, `${rel}: no message`);
+    assert.match(message[1], /isn't set up for KASH/u, "say what is actually wrong");
+    assert.match(message[1], /[Nn]othing was charged/u, "and that no money moved");
+    assert.doesNotMatch(message[1], /try again|retry/iu, "a retry cannot fix their wallet");
+  }
+});
+
+test("the guard that produces it still exists in account-batch", () => {
+  // The predicate matches on that module's message. If the message changes,
+  // this branch silently stops firing and the sender sees raw text again.
+  assert.match(
+    readFileSync(`${root}lib/account-batch.ts`, "utf8"),
+    /throw new Error\(`not an EVM address: \$\{leg\.toWallet\}`\)/u,
+    "the leg guard and the predicate that reads it must stay in step"
+  );
 });
