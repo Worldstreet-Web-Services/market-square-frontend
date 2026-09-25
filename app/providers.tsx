@@ -55,6 +55,11 @@ function DecaneAuthProvider({ children }: { children: React.ReactNode }) {
           authMethods: ["google", "email", "x"],
           chains: DECANE_CHAINS,
           showStatusOverlay: false,
+          // No passkey or password at sign-in. Square is a place people read
+          // and post first; the wallet is protected at the moment it is first
+          // used (hooks/use-evm-send, lib/wallet-protection), not as the price
+          // of getting in the door.
+          deferDeviceProtection: true,
           onRecoveryRotated: collectRotatedRecoveryPassword,
           onRecoveryFileReady: deliverRecoveryFile,
           promptForRecoveryFile,

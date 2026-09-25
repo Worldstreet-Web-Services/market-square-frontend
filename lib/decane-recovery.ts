@@ -65,6 +65,11 @@ export type RecoveryRequest =
       // null = the user backed out. Offered on unlock only: a device being set
       // up has no working state to return to, so that one must be completed.
       resolve: (password: string | null) => void;
+    }
+  | {
+      /** "Protect your wallet" before a first transaction: proceed, or not now. */
+      kind: "protect";
+      resolve: (proceed: boolean) => void;
     };
 
 export interface RecoveryFileSupply {
@@ -140,6 +145,16 @@ function looksLikeFirstPinOnThisDevice(): boolean {
 }
 
 /** Thrown when the user dismisses the unlock-password dialog. */
+/**
+ * The explainer before the wallet is protected on this device. Sign-in asks
+ * for no passkey or password (deferDeviceProtection); the first transaction
+ * does, and this is the sentence that says why before the authenticator sheet
+ * or the password dialog appears. Resolves false for "not now".
+ */
+export function askToProtectWallet(): Promise<boolean> {
+  return new Promise((resolve) => enqueue({ kind: "protect", resolve }));
+}
+
 export class UnlockPasswordCancelledError extends Error {
   constructor() {
     super("Unlock cancelled");

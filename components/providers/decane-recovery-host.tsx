@@ -346,6 +346,31 @@ function UnlockPasswordDialog({
   );
 }
 
+function ProtectDialog({ request }: { request: Extract<RecoveryRequest, { kind: "protect" }> }) {
+  const answer = (proceed: boolean) => {
+    request.resolve(proceed);
+    completeRecoveryRequest(request);
+  };
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <div className="text-[19px] font-bold text-white">Protect your wallet</div>
+        <p className="mt-1.5 text-[13.5px] font-normal text-white/55">
+          This is the first time your wallet is being used on this device. Add a passkey — your
+          fingerprint, face or device PIN — so only you can use it here. If this device
+          can&apos;t hold a passkey, you&apos;ll set a password instead. It takes a few seconds.
+        </p>
+      </div>
+      <button onClick={() => answer(true)} className={PRIMARY} autoFocus>
+        Continue
+      </button>
+      <button onClick={() => answer(false)} className={SECONDARY}>
+        Not now
+      </button>
+    </div>
+  );
+}
+
 export function DecaneRecoveryHost() {
   const request = useRecoveryRequest();
 
@@ -376,6 +401,8 @@ export function DecaneRecoveryHost() {
           <PinDialog request={request} />
         ) : request.kind === "password" ? (
           <UnlockPasswordDialog request={request} />
+        ) : request.kind === "protect" ? (
+          <ProtectDialog request={request} />
         ) : (
           <PasswordDialog request={request} />
         )}
