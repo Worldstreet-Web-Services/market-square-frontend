@@ -21,8 +21,15 @@ const TOKEN = "0xdf6FD1F6C28e5C08Eb41bD4C8733E394b28680D5" as const;
 const CREATOR = "0x1111111111111111111111111111111111111111" as const;
 const TREASURY = "0x0B51864341d548958c8dbB79b5c29e3E79e155ad" as const;
 
+/*
+  THE ABI THE DEPLOYED ACCOUNT EXPOSES — a struct array, not three parallel
+  arrays. Read out of `0xe6cae83bde06e4c305530e199d7217f42808555b`, the
+  implementation our 7702 accounts delegate to: `34fcd5be` present,
+  `47e1da2a` absent.
+*/
 const BATCH_ABI = parseAbi([
-  "function executeBatch(address[] dest, uint256[] value, bytes[] func)",
+  "struct Call { address target; uint256 value; bytes data; }",
+  "function executeBatch(Call[] calls)",
 ]);
 const TRANSFER_ABI = parseAbi(["function transfer(address to, uint256 amount)"]);
 
@@ -30,11 +37,11 @@ const TRANSFER_ABI = parseAbi(["function transfer(address to, uint256 amount)"])
 function decodeBatch(data: `0x${string}`) {
   const { functionName, args } = decodeFunctionData({ abi: BATCH_ABI, data });
   assert.equal(functionName, "executeBatch");
-  const [dest, value, func] = args as [readonly string[], readonly bigint[], readonly `0x${string}`[]];
-  return dest.map((to, i) => {
-    const inner = decodeFunctionData({ abi: TRANSFER_ABI, data: func[i] });
+  const [calls] = args as [readonly { target: string; value: bigint; data: `0x${string}` }[]];
+  return calls.map((call) => {
+    const inner = decodeFunctionData({ abi: TRANSFER_ABI, data: call.data });
     const [recipient, amount] = inner.args as [string, bigint];
-    return { to, value: value[i], recipient, amount };
+    return { to: call.target, value: call.value, recipient, amount };
   });
 }
 
@@ -254,5 +261,31 @@ test("a bad wallet in a leg is refused rather than encoded", () => {
         { toWallet: TREASURY, amountKash: "0.5" },
       ]),
     /not an EVM address/u
+  );
+});
+
+
+/*
+  THE SELECTOR IS PART OF THE CONTRACT.
+
+  The previous encoder used `executeBatch(address[],uint256[],bytes[])`, on
+  the authority of a comment. The deployed implementation does not have that
+  function — and an absent selector does not revert, it falls through to the
+  account's fallback, which succeeds and executes nothing.
+
+  So every split gift reported success, moved no KASH, and burned ~82k gas
+  doing nothing. A comment cannot check a deployed contract. This can.
+*/
+test("the batch calls the function the deployed account actually has", () => {
+  const data = encodeExecuteBatch(split("1", "0.5"));
+  assert.equal(
+    data.slice(0, 10),
+    "0x34fcd5be",
+    "executeBatch((address,uint256,bytes)[]) — the struct form the implementation exposes"
+  );
+  assert.notEqual(
+    data.slice(0, 10),
+    "0x47e1da2a",
+    "the three-array form is ABSENT from the account and silently does nothing"
   );
 });
