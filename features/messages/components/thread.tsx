@@ -3234,6 +3234,17 @@ export function Thread({
   // A 1:1 has no roster request; its two people are the reader and the peer.
   if (!group && conversation.peer) senders.set(conversation.peer.id, conversation.peer);
 
+  /**
+   * WHAT THIS SENDER IS IN THIS HOUSE — owner, admin, or nothing.
+   *
+   * Read off the SAME roster the faces come from, so a bubble and the members
+   * sheet can never disagree about who runs the place. Undefined until the
+   * roster lands, which is why the chip appears a moment after the avatar
+   * rather than the name waiting for it.
+   */
+  const roleOf = (senderId: string): string | null =>
+    members.data?.items.find((row) => row.profile?.id === senderId)?.role ?? null;
+
   /** A sender id as the name a quote or the reply strip prints. */
   const nameOf = (senderId: string): string => {
     if (me.data && senderId === me.data.id) return "You";
@@ -3455,6 +3466,41 @@ export function Thread({
                 turn in the conversation. */}
             {groupBySender(day.messages).map((run) => (
               <div key={run.key} className="flex flex-col gap-4">
+                {/*
+                  WHO SAID IT, AND WHAT THEY ARE HERE — once per RUN, above it.
+
+                  A group showed a FACE and never a NAME, so telling two people
+                  apart meant recognising their avatar, and an admin speaking
+                  for the house read exactly like anybody else talking.
+
+                  IT SITS ABOVE THE RUN RATHER THAN INSIDE A MESSAGE, and that
+                  is not tidiness — it is the only place it does not break the
+                  bubble. A bubble is capped at `max-w-[min(85%,480px)]`, and
+                  85% resolves against ITS PARENT. Wrapping a bubble in a
+                  column to stack a name on top made that parent the column,
+                  which is shrink-to-fit — so the cap became 85% of the NAME's
+                  width: "okay" rendered as three stacked letters under a short
+                  name, and correctly under a long one (ogazboiz: "why is the
+                  test like that even though they type normal").
+
+                  Above the run, the bubble is a direct child of its row again
+                  and the percentage means what it always meant.
+
+                  A run is already consecutive messages from one sender, so
+                  once per run IS once per name — no index, no first-of check.
+                */}
+                {group && !(me.data && run.senderId === me.data.id) && senders.get(run.senderId) && (
+                  <span className="flex max-w-[240px] items-center gap-1.5 pl-1">
+                    <span className="truncate text-[12px] font-semibold leading-4 text-white/90">
+                      {senders.get(run.senderId)!.displayName}
+                    </span>
+                    <VerifiedBadge
+                      verification={senders.get(run.senderId)!.verification}
+                      className="h-3 w-3 shrink-0"
+                    />
+                    <MemberRoleChip role={roleOf(run.senderId) ?? ""} />
+                  </span>
+                )}
                 {run.messages.map((message) => (
                   <MessageRow
                     key={message.id}
