@@ -6,7 +6,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { errorMessage } from "@/lib/api/envelope";
 import { asset } from "@/lib/square-path";
 import { useBuyCoins, useCoinBalance, useGiftCapability, type CoinBuyPhase } from "@/features/gifts";
-import { useKashAccount } from "@/features/kash";
+import { KashBuySheet, useKashAccount } from "@/features/kash";
 import { exceedsBalance } from "@/lib/kash-amount";
 import { formatKash } from "@/lib/format";
 
@@ -57,6 +57,9 @@ export function CoinBuySheet({
   onClose: () => void;
   needed?: number;
 }) {
+  // Kept as a one-line escape hatch: flip to `true` only if a deployment is
+  // ever found whose service really does spend a stored coin balance.
+  const keepLegacyPurchase = false;
   const capability = useGiftCapability();
   const balance = useCoinBalance(open);
   /*
@@ -147,6 +150,30 @@ export function CoinBuySheet({
     const frac = String(rest).padStart(String(rate).length - 1, "0").replace(/0+$/u, "");
     return `${whole}.${frac}`;
   };
+
+  /*
+    ─── THERE IS NOTHING TO BUY HERE. HAND OVER TO THE KASH TOP-UP ────────────
+
+    ogazboiz: *"SOMETHING LIKE THIS IS NOT SUPPOSED TO BE THERE AGAIN THIS
+    SCREEN... AND THAT GET MORE IS FOR THEM TO GET THE COIN WHICH UNDER THE
+    HOOD IS FOR THEM TO BUY KASH"*.
+
+    A coin is a view of KASH, so "get more coins" IS "get more KASH". The
+    conversion step does not move — it stops existing.
+
+    Unconditional, because a coin purchase buys something nothing spends:
+    `spendCoinsOnGift` has no caller in any service, and `tip-service`, where a
+    gift actually goes, never reads a coin balance. This sheet was selling a
+    number with no use, and taking real KASH for it.
+
+    The note below is the OPPOSITE rule and was right for the economy it was
+    written in, when a conversion step existed and skipping it sent somebody to
+    buy KASH and come back with no more coins than before. Both are kept: which
+    applies is not taste, it is whatever the service actually spends.
+  */
+  if (!keepLegacyPurchase) {
+    return <KashBuySheet open={open} onClose={onClose} />;
+  }
 
   return (
     <Sheet open={open} onClose={onClose} title="Get Square Coins">
