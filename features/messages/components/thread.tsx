@@ -2320,8 +2320,22 @@ function MessageRow({
         somebody, a clipped "Admin" claims something false.
       */}
       {group && !mine && firstOfRun && sender ? (
-        <div className="flex min-w-0 flex-col items-start gap-1">
-          <span className="flex min-w-0 max-w-full items-center gap-1.5 pl-1">
+        /*
+          NO `min-w-0` ON THIS COLUMN, and that is the whole of it.
+
+          The bubble used to be a direct flex item of the row and sized itself.
+          Wrapping it in a column that could shrink below its content let the
+          row squeeze it to the width of one character, so "okay" rendered as
+          four stacked letters (ogazboiz: "why is the test like that even
+          though they type normal"). `min-width: auto` is the default for a
+          flex item and is exactly what the bubble had before — taking it away
+          is what broke it.
+
+          The NAME is capped instead, so a long one truncates rather than
+          widening the row to fit it.
+        */
+        <div className="flex flex-col items-start gap-1">
+          <span className="flex max-w-[240px] items-center gap-1.5 pl-1">
             <span className="truncate text-[12px] font-semibold leading-4 text-white/90">
               {sender.displayName}
             </span>

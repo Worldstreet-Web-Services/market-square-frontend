@@ -115,6 +115,24 @@ describe("a group message's sender line", () => {
     );
   });
 
+  it("does not squeeze the bubble it sits above", () => {
+    /*
+      The bubble was a direct flex item of the row and sized itself. Wrapping
+      it in a column that could shrink below its content let the row squeeze it
+      to one character wide, so "okay" rendered as four stacked letters.
+
+      `min-width: auto` is the default for a flex item and is exactly what the
+      bubble had before — so the column must NOT carry `min-w-0`. The name is
+      capped instead, which is the only thing that needed constraining.
+    */
+    assert.match(thread, /<div className="flex flex-col items-start gap-1">\s*\{?\/?\*?[\s\S]{0,40}<span className="flex max-w-\[240px\]/u);
+    assert.doesNotMatch(
+      thread,
+      /<div className="flex min-w-0 flex-col items-start gap-1">/u,
+      "the sender column can shrink below its content again — the bubble will collapse"
+    );
+  });
+
   it("reads the role off the SAME roster the faces come from", () => {
     // A bubble and the members sheet must never disagree about who runs the
     // place, so there is one source rather than two lookups.
