@@ -58,7 +58,7 @@ import { GiftBursts, useGiftBursts } from "@/features/streams/components/gift-bu
 import { GiftSheet, type GiftRecipient } from "@/features/streams/components/gift-sheet";
 import { giftsArePriced } from "@/lib/gifts";
 import { multiplyKash } from "@/lib/kash-amount";
-import { useSendTip, recipientLeftTheRoom , tipAlreadyInFlight , recipientCannotHoldKash } from "@/features/tips";
+import { useSendTip, recipientLeftTheRoom , tipAlreadyInFlight , recipientCannotHoldKash , GIFT_PHASE_SAYS } from "@/features/tips";
 import { CoinBuySheet, insufficientCoins } from "@/features/gifts";
 
 import { useCoinBalance } from "@/features/gifts";
@@ -1207,19 +1207,37 @@ function LiveHouse({
         service ignores it and spends coins. One body, correct in both, so
         nothing here branches on the day it flips.
       */
+      /*
+        ONE TOAST THAT LIVES FOR THE WHOLE SEND.
+
+        The gift path reported no phase at all, and the tray closes on send —
+        so between the tap and the money settling the sender saw NOTHING. A
+        payment waiting at a wallet prompt looked exactly like a payment that
+        never happened, which is the question that cost a day.
+
+        Held open on one id so the phases replace each other rather than
+        stacking, and so the final success or failure lands in the same place
+        the reader is already looking. If it sits on "Confirm it in your
+        wallet" then that is the truth: something is open and waiting on them.
+      */
+      const toastId = `gift:${stream.id}:${to.id}:${Date.now()}`;
       void payGift
         .mutateAsync({
           target: { kind: "stream", id: stream.id, recipient: null },
           amountKash,
           giftId: gift.id,
           toProfileId: to.id,
+          onPhase: (phase) => {
+            const says = GIFT_PHASE_SAYS[phase];
+            if (says) toast.loading(says, { id: toastId });
+          },
         })
         .then(() => {
           // "On its way", never "sent". Production settles `client-signed`:
           // the sender signs and the tip stays PENDING until the watcher sees
           // the transfer on-chain. Saying it landed before that is the one
           // claim this flow may not make.
-          toast.success(`${gift.name} on its way to ${to.name}`);
+          toast.success(`${gift.name} on its way to ${to.name}`, { id: toastId });
         })
         .catch((error: unknown) => {
           /*
@@ -1230,7 +1248,7 @@ function LiveHouse({
             them choose again rather than to imply they were denied.
           */
           if (recipientLeftTheRoom(error)) {
-            toast.error(`${to.name} left the room — nothing was charged.`);
+            toast.error(`${to.name} left the room — nothing was charged.`, { id: toastId });
             return;
           }
           /*
@@ -1263,29 +1281,23 @@ function LiveHouse({
             repeating.
           */
           if (recipientCannotHoldKash(error)) {
-            toast.error(
-              `${to.name} can't receive gifts yet — their wallet isn't set up for KASH. Nothing was charged.`
-            );
+            toast.error(`${to.name} can't receive gifts yet — their wallet isn't set up for KASH. Nothing was charged.`, { id: toastId });
             return;
           }
           if (tipAlreadyInFlight(error)) {
-            toast.error(
-              `A gift to ${to.name} is still being processed — nothing was charged. Try someone else, or come back to them shortly.`
-            );
+            toast.error(`A gift to ${to.name} is still being processed — nothing was charged. Try someone else, or come back to them shortly.`, { id: toastId });
             return;
           }
           const short = insufficientCoins(error);
           if (short) {
-            toast.error(`Not enough coins — ${short.needed.toLocaleString()} needed.`);
+            toast.error(`Not enough coins — ${short.needed.toLocaleString()} needed.`, { id: toastId });
             setTopUpNeeded(short.needed - short.balance);
             setTopUpOpen(true);
             return;
           }
-          toast.error(
-            error instanceof Error && error.message
+          toast.error(error instanceof Error && error.message
               ? error.message
-              : "The gift was shown, but the payment did not go through."
-          );
+              : "The gift was shown, but the payment did not go through.", { id: toastId });
         });
     },
     [giftBursts, live, myName, stream.status, stream.id, payGift]
