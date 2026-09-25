@@ -42,7 +42,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
     <article className="ws-post p-3">
       <header className="flex items-center gap-2.5 px-1">
         {owner ? (
-          <TransitionLink href={profileHref(owner)} className="shrink-0">
+          <TransitionLink href={profileHref(owner)} prefetch={false} className="shrink-0">
             <Avatar name={owner.displayName} seed={owner.id} src={owner.avatarUrl} size={36} />
           </TransitionLink>
         ) : (
@@ -55,7 +55,7 @@ function StreamFeedCard({ stream }: { stream: FeedStream }) {
             {owner ? (
               <>
                 <Link
-                  href={profileHref(owner)}
+                  href={profileHref(owner)} prefetch={false}
                   className="truncate text-[14px] font-bold text-heading hover:underline"
                 >
                   {owner.displayName}

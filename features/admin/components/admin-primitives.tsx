@@ -147,7 +147,7 @@ export function PersonCell({
     );
   }
   return (
-    <Link href={profileHref(profile)} className="flex min-w-0 items-center gap-2.5">
+    <Link href={profileHref(profile)} prefetch={false} className="flex min-w-0 items-center gap-2.5">
       <Avatar name={profile.displayName} src={profile.avatarUrl} size={size} />
       <span className="min-w-0">
         <span className="flex items-center gap-1.5">

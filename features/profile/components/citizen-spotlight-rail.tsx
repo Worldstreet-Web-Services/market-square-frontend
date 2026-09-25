@@ -90,7 +90,7 @@ export function CitizenSpotlightRail() {
         {people.map((row) => (
           <li key={row.profile.id}>
             <Link
-              href={profileHref(row.profile)}
+              href={profileHref(row.profile)} prefetch={false}
               className="flex items-center gap-[9px] rounded-xl border border-white/10 bg-white/[0.03] p-2"
             >
               <Avatar name={row.profile.displayName} seed={row.profile.id} src={row.profile.avatarUrl} size={38} />

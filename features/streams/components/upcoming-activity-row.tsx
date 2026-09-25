@@ -37,7 +37,7 @@ export function ActivityRow({ activity }: { activity: Activity }) {
         <p className="mt-0.5 text-[13px] text-body">{formatDateTime(activity.startsAt)}</p>
         {host && (
           <Link
-            href={profileHref(host)}
+            href={profileHref(host)} prefetch={false}
             className="mt-1.5 flex items-center gap-1.5 text-[12px] text-meta hover:text-body"
           >
             <Avatar name={host.displayName} src={host.avatarUrl} size={18} />

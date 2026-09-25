@@ -264,7 +264,7 @@ export function PalCard({
       </button>
 
       <Link
-        href={profileHref(profile)}
+        href={profileHref(profile)} prefetch={false}
         tabIndex={interactive ? undefined : -1}
         className="absolute block overflow-hidden"
         style={{

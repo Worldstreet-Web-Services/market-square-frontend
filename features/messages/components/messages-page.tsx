@@ -217,7 +217,7 @@ function Inbox({
                     {conversation.invitedBy ? (
                       <>
                         <Link
-                          href={sq(profileHref(conversation.invitedBy))}
+                          href={sq(profileHref(conversation.invitedBy))} prefetch={false}
                           className="ws-press font-semibold text-white/80 hover:underline"
                         >
                           {conversation.invitedBy.displayName || conversation.invitedBy.username}
