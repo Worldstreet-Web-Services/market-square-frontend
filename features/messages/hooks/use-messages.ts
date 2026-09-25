@@ -42,9 +42,49 @@ import {
 } from "@/features/messages/lib/open-conversation";
 import type { Profile } from "@/lib/api/schemas";
 
-// The service publishes `market-square.message.sent` for the ws-gateway
-// without the body, so realtime is only ever a "refetch" signal. Until that
-// exists an open thread polls on the same cadence as the live room's chat.
+/*
+  THE SIGNAL EXISTS AND THIS CLIENT CANNOT HEAR IT YET.
+
+  This comment used to say the service publishes `market-square.message.sent`
+  and that the poll stood in "until that exists". Both halves were wrong, and
+  wrongly reassuring. Corrected against the service on `origin/main`, not
+  against a description of it:
+
+   · `market-square.message.sent` was published once per RECIPIENT to the
+     domain exchange, which no client-facing consumer reads. The worker's own
+     wildcard binding matched it, found no handler and dropped it — a message
+     in a 500-person group fired 500 publishes that reached nobody. The
+     service's own record of this is `apps/market-square/src/ports/
+     chat-signal.ts`, written by whoever replaced it.
+   · What is live is `chatMessageArrived` on `market-square:conversation:<id>`,
+     carrying `{ conversationId, messageId }` and no body — ONE publish per
+     message, fanned out by the gateway, so the cost of speaking no longer
+     grows with the number of people who will hear it. Published from
+     `conversation-service.ts` on the send path. ADR-0009 Stage 2.
+
+  So the blocker is on OUR side, and it is not a `useRoomChatSignal` copy.
+  That topic looks public-shaped and is not: the gateway checks the
+  `market-square:conversation:` prefix BEFORE its generic `<service>:<channel>`
+  public rule, and refuses a subscribe without an authenticated socket AND a
+  signed grant naming that conversation (`apps/ws-gateway/src/hub/topics.ts`).
+  That ordering is deliberate — reaching the public branch would hand every
+  private thread to anyone who opens a socket.
+
+  `lib/ws-gateway-shared.ts` knows two modes: public topics subscribed on open,
+  and personal `user:<id>` topics behind an `authenticate` frame. A grant is a
+  THIRD mode — fetch `GET /realtime/grant`, present it, and re-present it when
+  a socket reopens, because the grant is per conversation and not per session.
+
+  Until that is built, this is the mechanism rather than a floor, and it stays
+  at 5s. A slower interval with no subscriber behind it is a straight downgrade
+  for every reader, paid now for a benefit that does not exist — subscriber
+  first, confirm frames in prod, relax only after, which is the order ADR-0009
+  and the room chat signal both used.
+
+  What was actually costing the most here was never this poll: an open thread
+  re-renders on every tick, and each re-render used to re-prefetch a profile
+  page for every avatar on screen. See `lib/person-link-prefetch.test.ts`.
+*/
 const THREAD_POLL_MS = 5_000;
 
 /**
