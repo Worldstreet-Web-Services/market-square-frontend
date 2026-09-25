@@ -91,12 +91,28 @@ describe("a group message's sender line", () => {
   it("only in a group, only for OTHER people, and only on the first of a run", () => {
     /*
       A 1:1 has one other person, so naming them above every bubble labels a
-      conversation that already has a title. Nobody needs telling which
-      messages are their own. And `tail` marks a bubble continuing the same
-      speaker — repeating the name down eight consecutive messages is the noise
-      every chat app learned to drop.
+      conversation that already has a title, and nobody needs telling which
+      messages are their own.
+
+      THE RUN GATE IS `firstOfRun`, NOT `tail`, AND THIS TEST ONCE PINNED THE
+      BUG. `tail` reads like "continues the previous message" and is actually
+      `group && !mine` — it decides whether the bubble draws its notch, and it
+      is TRUE for every message from somebody else in a group. So
+      `group && !mine && !tail` is a condition and its own negation: the line
+      never rendered once.
+
+      The first version of this test asserted that exact source text and
+      PASSED, because a source match proves the code says something, not that
+      it does anything. The gate is named after what it means now, and the
+      assertion below would fail if `tail` came back.
     */
-    assert.match(thread, /\{group && !mine && !tail && sender \?/u);
+    assert.match(thread, /\{group && !mine && firstOfRun && sender \?/u);
+    assert.match(thread, /firstOfRun=\{index === 0\}/u, "the run's first message is not marked");
+    assert.doesNotMatch(
+      thread,
+      /!mine && !tail && sender/u,
+      "the name is gated on `!tail` again, which can never be true"
+    );
   });
 
   it("reads the role off the SAME roster the faces come from", () => {

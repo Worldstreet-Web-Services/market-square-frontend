@@ -2009,6 +2009,7 @@ function MessageRow({
   onJump,
   nameOf,
   roleOf,
+  firstOfRun = false,
   flash,
   onOpenSnap,
   openingSnap,
@@ -2036,6 +2037,17 @@ function MessageRow({
   nameOf: (senderId: string) => string;
   /** This sender's role in the house, for the line above their bubble. */
   roleOf?: (senderId: string) => string | null;
+  /**
+   * The first message of a run from one sender — where the name belongs.
+   *
+   * NOT `tail`. `tail` reads like "continues the previous message" and is
+   * actually `group && !mine`: it decides whether the bubble draws its notch,
+   * and it is TRUE for every message from somebody else in a group. Gating a
+   * name on `!tail` therefore never renders — the two conditions are the same
+   * one negated. The list already groups by sender, so this is simply the
+   * first of that group.
+   */
+  firstOfRun?: boolean;
   /** Briefly true after a quote tap landed here. */
   flash: boolean;
 }) {
@@ -2294,14 +2306,20 @@ function MessageRow({
         already has a title; and nobody needs telling which messages are their
         own.
 
-        ONLY ON THE FIRST OF A RUN. `tail` marks a bubble that continues the
-        same speaker, and repeating the name down eight consecutive messages is
-        the noise every chat app learned to drop.
+        ONLY ON THE FIRST OF A RUN, because repeating a name down eight
+        consecutive messages is the noise every chat app learned to drop. The
+        list already groups by sender, so this is the first of that group.
+
+        IT IS NOT `tail`. That name reads like "continues the previous
+        message" and is actually `group && !mine` — it decides the bubble's
+        notch. Gating on `!tail` meant gating on the negation of the same
+        condition, so the line never rendered once (ogazboiz: "i cant see the
+        name and the role why").
 
         The NAME truncates and the chip does not: an ellipsis still names
         somebody, a clipped "Admin" claims something false.
       */}
-      {group && !mine && !tail && sender ? (
+      {group && !mine && firstOfRun && sender ? (
         <div className="flex min-w-0 flex-col items-start gap-1">
           <span className="flex min-w-0 max-w-full items-center gap-1.5 pl-1">
             <span className="truncate text-[12px] font-semibold leading-4 text-white/90">
@@ -3503,9 +3521,12 @@ export function Thread({
                 turn in the conversation. */}
             {groupBySender(day.messages).map((run) => (
               <div key={run.key} className="flex flex-col gap-4">
-                {run.messages.map((message) => (
+                {run.messages.map((message, index) => (
                   <MessageRow
                     key={message.id}
+                    /* A RUN is already consecutive messages from one sender,
+                       so the first of one is where the name goes. */
+                    firstOfRun={index === 0}
                     message={message}
                     mine={Boolean(me.data && message.senderId === me.data.id)}
                     group={group}
