@@ -9,7 +9,7 @@ import {
   reportTipTransfer,
   sendTip,
 } from "@/features/tips/lib/api";
-import { KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
+import { compareKashAmounts, KASH_TOKEN_DECIMALS } from "@/lib/kash-amount";
 import { encodeErc20Transfer, toBaseUnits } from "@/lib/erc20";
 import { encodeExecuteBatch, transferCallsForLegs } from "@/lib/account-batch";
 import { holdKey } from "@/lib/payment-hold";
@@ -163,9 +163,60 @@ export function useSendTip() {
         throw new Error("Tipping isn't configured on this environment yet.");
       }
 
+      /*
+        SIGN WHAT THE SENDER AGREED TO, NEVER WHAT CAME BACK.
+
+        The request carries `amountKash` — the total the tray showed and the
+        reader committed to. Everything below then signs
+        `created.tip.amountKash`, which is the SERVICE'S ECHO of it, and
+        nothing compared the two.
+
+        `transferCallsForLegs` does check that the legs sum to the total, but
+        the total it checks against is that same echo — so it proves the split
+        is internally consistent and says nothing about whether it matches the
+        amount anybody saw. A wrong or altered echo would be signed as readily
+        as a right one.
+
+        A signature is the last point at which the sender's agreement is still
+        revocable. So an echo that is not the committed amount is refused here,
+        before the wallet is ever asked — the same rule `lib/account-batch.ts`
+        applies to the legs, applied one level up to the total they sum to.
+
+        Compared in BASE UNITS, never as text: `0.5` and `0.50` are the same
+        money and different strings, and refusing that pair would break a send
+        that is exactly right.
+      */
+      if (compareKashAmounts(created.tip.amountKash, amountKash) !== 0) {
+        throw new Error(
+          `This gift came back priced at ${created.tip.amountKash} KASH, not the ${amountKash} you chose. Nothing was charged.`
+        );
+      }
+
       // A held hash is one this app produced, so it is already 0x-prefixed.
       let txHash = (held?.txHash ?? null) as `0x${string}` | null;
-      if (!txHash) {
+      /*
+        THE HOLD MUST BELONG TO THIS TIP, and until now nobody checked.
+
+        The hold key canonicalises the AMOUNT — `tip:<kind>:<id>:<toProfileId>`
+        plus the amount — so two identical gifts (same gift, same person, same
+        room) produce the SAME key. Reusing a held hash on `!txHash` alone
+        therefore reported gift #1's transfer against gift #2's tip, and signed
+        nothing: ONE PAYMENT, TWO TIPS. Worse, the two tips agree on amount and
+        on both parties, so the reconciler has no way to notice — it would
+        settle the second against a transfer that already paid for the first.
+
+        The coin purchase has had this guard all along
+        (`features/gifts/hooks/use-gifts.ts`: `!txHash || held?.ref !== purchase.id`).
+        The tip path was the one that did not, and it is the path that can be
+        fired repeatedly at the same person on purpose.
+
+        A hold whose `ref` names a different tip is not ours to spend: sign
+        again. That is correct even when it costs a second signature, because
+        two gifts ARE two payments — the thing that must never happen is two
+        gifts claiming one.
+      */
+      if (!txHash || held?.ref !== created.tip.tipId) {
+        txHash = null;
         phase("signing");
         /*
           ONE TRANSACTION THAT PAYS THE CREATOR AND TAKES THE FEE.
@@ -248,7 +299,14 @@ export function useSendTip() {
       // totals the service decides to show there) and nothing else we cache —
       // the post's own tallies do not carry tips, so sweeping the feed would
       // refetch every timeline on screen to change nothing.
-      queryClient.invalidateQueries({ queryKey: ["ms", "profile", tip.recipient.username] });
+      /*
+        Only when the tip NAMED a profile. A gist room gift carries no
+        `Profile` for its recipient (see `TipSchema.recipient`), and there is
+        nothing to invalidate for somebody this response cannot name.
+      */
+      if (tip.recipient) {
+        queryClient.invalidateQueries({ queryKey: ["ms", "profile", tip.recipient.username] });
+      }
     },
   });
 

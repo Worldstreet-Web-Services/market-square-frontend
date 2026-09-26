@@ -83,3 +83,88 @@ export function recipientLeftTheRoom(error: unknown): boolean {
   // shape (`{ code }` on a GatewayApiError) is the same one `errorCode` reads.
   return (error as { code?: unknown } | null)?.code === RECIPIENT_GONE;
 }
+
+/**
+ * A TIP THE SERVICE STILL CONSIDERS IN PROGRESS.
+ *
+ * One tip in flight per (target, sender, recipient), which is the guard that
+ * stops a double-tap paying twice — right, and not the thing to weaken. But a
+ * send that fails BEFORE the transfer is broadcast leaves that row pending
+ * with no payment behind it, and nothing on the service ends that state except
+ * success: there is no TTL, no sweep and no cancel. So the sender is refused
+ * every further attempt at that person, forever.
+ *
+ * ogazboiz hit it twice in a row: *"IT DID NOT WORK I SEND COIN TO THIS PERSON
+ * BUT IT DID NOT WORK THEN AFTER THAT I SAY LET ME SEND... THIS AGAIN WHAT IS
+ * HAPPENING"*, staring at a raw `{"code":"CONFLICT"}` body.
+ *
+ * The client CANNOT resolve this on its own. `use-tips` already resumes an
+ * open tip when it is holding a payment for it — but that only exists once a
+ * transfer was broadcast, and here none was. The conflict carries `tipId` and
+ * nothing else: no `toWallet`, no `settlement.legs`, and there is no route
+ * that reads a single tip. So there is nowhere to send the money even if we
+ * wanted to finish it.
+ *
+ * Hence this exists only to SAY SO honestly. The one thing the interface must
+ * not do is imply the sender did something wrong, or that paying again would
+ * help — it would not; it is refused before it reaches a wallet.
+ *
+ * The code is read inline for the same reason as above: `errorCode` lives
+ * behind the `@/` alias, which the node test runner does not resolve.
+ */
+export function tipAlreadyInFlight(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "CONFLICT";
+}
+
+/**
+ * THE RECIPIENT'S WALLET CANNOT HOLD KASH — a non-EVM address on an EVM rail.
+ *
+ * The service answered a gift with this recipient leg:
+ *
+ *   {"role":"recipient",
+ *    "toWallet":"c8rdvzg7vkr8bd9xkletsbmozthrwktv1qfshvlxuygf",
+ *    "amountKash":"0.005"}
+ *
+ * Forty-four characters, no `0x` — a Solana- or Tron-shaped address. KASH is
+ * an ERC-20 on Base, so that address cannot receive it: a transfer encoded
+ * for it would either revert or, worse, succeed into an address nobody holds
+ * the key to on this chain. `lib/account-batch.ts` refuses it before signing
+ * and that refusal is CORRECT — this only gives the refusal words.
+ *
+ * A Decane account carries `addresses.evm`, `addresses.solana` and
+ * `addresses.tron`, so a profile whose stored wallet came from the wrong one
+ * of those three is not an exotic case; it is a data problem that will repeat
+ * until the service stores the EVM address for an EVM rail.
+ *
+ * Told apart from every other failure because the sender did nothing wrong
+ * and retrying cannot help: the person they chose cannot be paid in this
+ * currency until their account carries an EVM address.
+ */
+export function recipientCannotHoldKash(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return /not an EVM address/u.test(message);
+}
+
+/**
+ * WHAT A GIFT IS WAITING ON, in the sender's words.
+ *
+ * `useSendTip` has reported these four phases since it was written and the
+ * gift path passed no `onPhase` at all — so between the tap and the money
+ * settling the sender saw NOTHING. The tray closes on send, so there was not
+ * even a spinner to look at.
+ *
+ * That is why a send stuck at the wallet prompt was indistinguishable from a
+ * send that never happened: a gift created on the service, `txHash: null`, a
+ * balance that did not move, and no way for anybody to tell whether it was
+ * broken or merely waiting. Hours went into that question.
+ *
+ * `signing` is the one that earns this. It means a passkey, PIN or password
+ * sheet is open somewhere and the payment is waiting on a human — which is
+ * information the sender needs and had no way to receive.
+ */
+export const GIFT_PHASE_SAYS: Record<string, string> = {
+  creating: "Opening your gift…",
+  signing: "Confirm it in your wallet…",
+  confirming: "Waiting for the network…",
+  reporting: "Almost there…",
+};

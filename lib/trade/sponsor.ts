@@ -68,8 +68,41 @@ export async function sendSponsoredEvmCalls({
   // Bundler transport: ONLY the ERC-4337 UserOperation methods
   // (eth_sendUserOperation, eth_estimateUserOperationGas, …) go here, through
   // our Alchemy proxy.
+  /*
+    ─── A SEND IS NEVER RETRIED. THIS IS THE WHOLE POINT OF THIS BLOCK ─────────
+
+    `retryCount: 0`, and it is load-bearing. viem's http transport defaults to
+    THREE retries and retries on 408, 429, 502 and 504 — which is exactly the
+    set our bundler proxy returns when Alchemy is throttled (429 passed
+    through), unreachable (502) or slower than the proxy's 30s ceiling (504).
+
+    `eth_sendUserOperation` is NOT IDEMPOTENT. If a userOperation reaches
+    Alchemy and executes, but our proxy has already given up waiting for the
+    answer, a retry submits a SECOND userOperation — and because the account's
+    nonce advanced when the first one executed, the second is perfectly valid
+    and executes too. One tap, two payments, and nothing in the client ever
+    sees an error.
+
+    ogazboiz: "no i paid once still pay again". Three transfers left his wallet
+    that night, 0.01 KASH each, 34 and 17 blocks apart — about 68 and 34
+    seconds, which is the shape of a 30s proxy timeout plus a retry, not of a
+    person tapping. All three were single-leg transfers to the treasury, so
+    none was a recipient being paid their share. Alchemy was rate limiting that
+    same evening, which is what made the retries fire at all.
+
+    The cost of not retrying is that a genuinely dropped send surfaces as an
+    error the buyer retries DELIBERATELY, having seen it fail. That is the
+    correct trade: a retry the person chose cannot charge them twice without
+    their knowing, and a retry the transport chose can.
+
+    This also covers the estimate methods, which ARE idempotent and could
+    safely retry. Splitting them onto a second transport to win that back would
+    buy a little latency on a bad day and put the send one config edit away
+    from being retryable again. Not worth it.
+  */
   const transport = http(`${BUNDLER_PATH}/${target.network}`, {
     fetchOptions: { headers: { Authorization: `Bearer ${accessToken}` } },
+    retryCount: 0,
   });
 
   // Read client: ALL plain node reads (eth_getCode, eth_getTransactionCount, gas

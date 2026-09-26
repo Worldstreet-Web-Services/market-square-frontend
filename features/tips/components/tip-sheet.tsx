@@ -447,11 +447,26 @@ export function TipSheet({
           {receiptGift && (
             <p className="-mt-1 text-[13px] text-white/50">{receiptGift.name}</p>
           )}
+          {/*
+            NAMED ONLY WHEN THE TIP NAMES SOMEBODY. A gist room gift carries no
+            `Profile` for its recipient — the room knows who from its own
+            roster and never loads one — so the receipt says what happened
+            without inventing a name for it. "Sent" alone is true; "Sent to
+            undefined" is the bug this replaces.
+          */}
           <p className="text-[14px] text-body">
-            {receipt.status === "settled" ? "Sent to " : "On its way to "}
-            <span className="font-bold text-white">
-              {atHandle(receipt.recipient.username) ?? receipt.recipient.displayName}
-            </span>
+            {receipt.recipient ? (
+              <>
+                {receipt.status === "settled" ? "Sent to " : "On its way to "}
+                <span className="font-bold text-white">
+                  {atHandle(receipt.recipient.username) ?? receipt.recipient.displayName}
+                </span>
+              </>
+            ) : receipt.status === "settled" ? (
+              "Sent"
+            ) : (
+              "On its way"
+            )}
           </p>
           {receipt.status === "pending" && (
             <p className="text-[12px] text-white/40">

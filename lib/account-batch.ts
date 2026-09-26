@@ -35,12 +35,42 @@ import { encodeFunctionData, type Abi } from "viem";
  */
 
 /**
- * `executeBatch(address[] dest, uint256[] value, bytes[] func)` — the v0.7
- * SimpleAccount signature.
+ * `executeBatch((address target, uint256 value, bytes data)[] calls)` — the
+ * ABI THE DEPLOYED ACCOUNT ACTUALLY EXPOSES.
  *
- * Three parallel arrays rather than an array of structs: that is the ABI the
- * deployed implementation exposes, and an encoder that guesses a nicer shape
- * produces calldata the account reverts on.
+ * ─── THIS WAS THE THREE-ARRAY FORM, AND IT SILENTLY DID NOTHING ──────────────
+ * It encoded `executeBatch(address[],uint256[],bytes[])`, selector `47e1da2a`,
+ * on the authority of a comment saying that was what the implementation
+ * exposed. After the move to Decane the account is delegated to
+ * `0xe6cae83bde06e4c305530e199d7217f42808555b`, and reading that contract's
+ * bytecode settles it:
+ *
+ *   34fcd5be  PRESENT  executeBatch((address,uint256,bytes)[])
+ *   b61d27f6  PRESENT  execute(address,uint256,bytes)
+ *   47e1da2a  ABSENT   executeBatch(address[],uint256[],bytes[])
+ *
+ * ─── AND AN ABSENT SELECTOR DOES NOT REVERT ──────────────────────────────────
+ * That is the whole reason this hid. Calling a function an account does not
+ * implement falls through to its FALLBACK, which returns successfully and
+ * executes nothing. So every split gift produced:
+ *
+ *   tx status          SUCCESS
+ *   UserOperationEvent success = true
+ *   KASH transfers     ZERO
+ *   gasUsed            ~82k, the cost of a fallback and nothing else
+ *
+ * A payment that reported success, moved no money, and left the sender's
+ * balance untouched to the last digit — while the service held a txHash it
+ * would wait on for ever, because the legs it needs to observe were never
+ * transferred. Hours of hunting went past this, on both sides, because every
+ * single signal said the send had worked.
+ *
+ * ─── SO THE SELECTOR IS PART OF THE CONTRACT, AND IT IS PINNED ───────────────
+ * The old comment asserted the opposite of the truth and was believed. A
+ * comment cannot check a deployed contract; the test beside this file does,
+ * by asserting the encoded selector is `0x34fcd5be`. If the account
+ * implementation changes again, that assertion is what fails — not a gift
+ * that quietly moves nothing.
  */
 const EXECUTE_BATCH_ABI = [
   {
@@ -48,9 +78,15 @@ const EXECUTE_BATCH_ABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "dest", type: "address[]" },
-      { name: "value", type: "uint256[]" },
-      { name: "func", type: "bytes[]" },
+      {
+        name: "calls",
+        type: "tuple[]",
+        components: [
+          { name: "target", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "data", type: "bytes" },
+        ],
+      },
     ],
     outputs: [],
   },
@@ -81,11 +117,7 @@ export function encodeExecuteBatch(calls: readonly BatchCall[]): `0x${string}` {
   return encodeFunctionData({
     abi: EXECUTE_BATCH_ABI,
     functionName: "executeBatch",
-    args: [
-      calls.map((call) => call.to),
-      calls.map((call) => call.value ?? 0n),
-      calls.map((call) => call.data),
-    ],
+    args: [calls.map((call) => ({ target: call.to, value: call.value ?? 0n, data: call.data }))],
   });
 }
 

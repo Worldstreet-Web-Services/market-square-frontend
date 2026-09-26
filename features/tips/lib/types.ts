@@ -23,7 +23,31 @@ import { ProfileSchema } from "@/lib/api/schemas";
 export const TipSchema = z.object({
   tipId: z.string(),
   amountKash: z.string(),
-  recipient: ProfileSchema,
+  /**
+   * WHO WAS PAID — NULLABLE, because a gist room does not always know.
+   *
+   * `TipTarget.recipient` has been `Profile | null` all along, and `adopt()`
+   * copies it straight in. `ProfileSchema` alone therefore contradicted the
+   * type that feeds it, and TypeScript could not see the contradiction because
+   * `.parse()` takes `unknown`.
+   *
+   * It fired the moment a gist room sent a gift. `house-room` passes
+   * `recipient: null` — the room resolves who is being gifted from its own
+   * roster and never loads a full `Profile` for them — so the SERVICE accepted
+   * the gift with 201 and THIS CLIENT then threw a Zod error over it:
+   *
+   *   [{"expected":"object","code":"invalid_type","path":["recipient"],
+   *     "message":"Invalid input: expected object, received null"}]
+   *
+   * The gift was sent. The burst played. The sender was shown a parse failure
+   * for a payment that had already succeeded — which is the worst shape a
+   * schema error can take on a money path.
+   *
+   * Null is "not named here", never "nobody was paid": the service always has
+   * a recipient, and `toProfileId` said who. Every reader below treats it that
+   * way, and the receipt falls back to what the room already knows.
+   */
+  recipient: ProfileSchema.nullable(),
   /**
    * The service's own word for where the tip got to. `catch` rather than a
    * hard enum: a status this build has never heard of must not blow up the
